@@ -175,8 +175,13 @@ required reviews or checks — one maintainer pushes directly), secret
 scanning + push protection on, Dependabot alerts + security updates on,
 private vulnerability reporting on (SECURITY.md relies on it).
 
-**Slice 4: cut-over half DONE** (remotes switched, the private repo is the
-ops repo by rename). Remaining: clone `secure-test-ops` beside this
-checkout, replace its tree with `_ops-staging/` (requests, the go-live
-checklist) plus a README pointing here, one commit; then delete the
-staging folder from this Mac. Slice 5's rules already live in CLAUDE.md.
+**Slice 4 DONE 2026-09-04 evening.** Remotes switched (above); the ops
+repository cloned to `~/code/secure-test-ops`, its 738-file tree removed
+and replaced with `requests/`, the go-live checklist and a README that
+says what it is (the pre-release history + the internal files) and what
+never goes there (student data, secrets) — two commits (`171fa69` the
+removal, `7bfa945` the files: a shell glob error split what was meant to
+be one), pushed; the local staging folder deleted after a `diff -r`
+against the clone. Slice 5's rules live in the public CLAUDE.md. **Batch
+2b is complete.** The doc commit `da9d136` on the public `main` records
+slice 3; this paragraph rides the next push.
