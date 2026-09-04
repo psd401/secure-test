@@ -153,5 +153,30 @@ values), the placeholder rule in CLAUDE.md, the squash, and the `git
 grep` review before any public push. Slice 3 wires the staged scan as a
 pre-commit hook and a GitHub Action.
 
-Next: slice 3 (James creates the public repository; Claude drafts README
-/ SECURITY.md / CODEOWNERS / the hook + Action), then slice 4 cut-over.
+**Slice 3 DONE 2026-09-04 evening.** Prep commit `265bd52` on the private
+history (README for outsiders, SECURITY.md, CODEOWNERS, `.githooks/pre-commit`
++ a root `prepare` script that sets `core.hooksPath`, `.github/workflows/scan.yml`
+= gitleaks over history + tree and an identifier `git grep` sweep; the OSPI
+GTSA PDF replaced by a link and its test by a 60-page hand-built fixture;
+the desktop-screenshot PoC frame removed). Decision on the way (James):
+the private repository was **renamed** to `psd401/secure-test-ops` rather
+than a new ops repo being created, so the name `psd401/secure-test` went
+to the public one and the full history stays reachable; the ops repo is
+to be slimmed to the internal files (slice 4). Public repo created with
+`gh repo create` (MIT, wiki off); the export of the tree was swept once
+more (gitleaks clean; every scan-report pattern absent bar the placeholder
+ARN in the context example). **Published** by James running the scratchpad
+script: private `main` pushed to the ops repo, one orphan root commit
+`3bd723c` "Initial public commit" pushed as `main`, this checkout reset to
+it with `origin` = public and `ops` = private. First `scan` workflow run:
+success (CodeQL default setup also ran). Repository settings applied via
+the API: `main` protected (no force-push, no deletion, linear history; no
+required reviews or checks — one maintainer pushes directly), secret
+scanning + push protection on, Dependabot alerts + security updates on,
+private vulnerability reporting on (SECURITY.md relies on it).
+
+**Slice 4: cut-over half DONE** (remotes switched, the private repo is the
+ops repo by rename). Remaining: clone `secure-test-ops` beside this
+checkout, replace its tree with `_ops-staging/` (requests, the go-live
+checklist) plus a README pointing here, one commit; then delete the
+staging folder from this Mac. Slice 5's rules already live in CLAUDE.md.
