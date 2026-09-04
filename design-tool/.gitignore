@@ -1,0 +1,23 @@
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Build / cache
+dist/
+.turbo/
+
+# Env
+.env
+.env*.local
+
+# Logs
+*.log
+
+# Local-fs asset storage (slice 10; ADR 0008). Path is configurable via
+# STORAGE_LOCAL_ROOT; default ./storage at the design-tool root.
+# Anchored to repo-root-relative so it doesn't shadow lib/storage/ source.
+/storage/
+
+# Slice 65: test uploads write here (localFsProvider fallback path).
+/storage-test/

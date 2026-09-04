@@ -1,0 +1,2 @@
+ALTER TABLE "assessments" ADD COLUMN "assigned_scope" text DEFAULT 'teacher' NOT NULL;--> statement-breakpoint
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_assigned_scope_check" CHECK (assigned_scope IN ('teacher', 'school', 'district'));

@@ -1,0 +1,2699 @@
+{
+  "generated_from": "docs/AccommodationData.xlsx Dropdown_Lookup sheet (via docs/scripts/parse-tide-xlsx.py)",
+  "rows": [
+    {
+      "subject": "ELA-CAT",
+      "tool": "American Sign Language Videos",
+      "value": "Off",
+      "code": "TDS_ASL0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "American Sign Language Videos",
+      "value": "ON",
+      "code": "TDS_ASL1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Braille Transcriptions",
+      "value": "Off",
+      "code": "TDS_AudioScript0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Braille Transcriptions",
+      "value": "On",
+      "code": "TDS_AudioScript1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Braille Type",
+      "value": "No Braille",
+      "code": "TDS_BT0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Braille Type",
+      "value": "UEB Contracted",
+      "code": "TDS_BT_UCN"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Braille Type",
+      "value": "UEB Uncontracted",
+      "code": "TDS_BT_UXN"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Closed Captioning",
+      "value": "Off",
+      "code": "TDS_ClosedCap0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Closed Captioning",
+      "value": "On",
+      "code": "TDS_ClosedCap1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Black on White",
+      "code": "TDS_CC0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Black on Rose",
+      "code": "TDS_CCMagenta"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Medium Gray on Light Gray",
+      "code": "TDS_CCMedGrayLtGray"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Red on White",
+      "code": "TDS_CCRedW"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Reverse Contrast",
+      "code": "TDS_CCInvert"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "White on Red",
+      "code": "TDS_CCWhiteR"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Yellow on Black",
+      "code": "TDS_CCYellowBlk"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Color Contrast",
+      "value": "Yellow on Blue",
+      "code": "TDS_CCYellowB"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Digital Notepad",
+      "value": "On",
+      "code": "TDS_SCNotepadHtml"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Digital Notepad",
+      "value": "Off",
+      "code": "TDS_SC0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Emboss",
+      "value": "None",
+      "code": "TDS_Emboss0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Emboss",
+      "value": "Stimuli+Items",
+      "code": "TDS_Emboss_Stim&TDS_Emboss_Item"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "English Glossary",
+      "value": "On",
+      "code": "TDS_KG1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "English Glossary",
+      "value": "Off",
+      "code": "TDS_KG0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Expandable Items",
+      "value": "On",
+      "code": "TDS_ExpandableItems1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Expandable Items",
+      "value": "Off",
+      "code": "TDS_ExpandableItems0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Expandable Stimuli",
+      "value": "On",
+      "code": "TDS_ExpandablePassages1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Expandable Stimuli",
+      "value": "Off",
+      "code": "TDS_ExpandablePassages0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Highlighter",
+      "value": "On",
+      "code": "TDS_HighlightColors"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Highlighter",
+      "value": "OFF",
+      "code": "TDS_Highlight0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Language",
+      "value": "English",
+      "code": "ENU"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Language",
+      "value": "Braille",
+      "code": "ENU-Braille"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Line Reader",
+      "value": "On",
+      "code": "TDS_LR1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Line Reader",
+      "value": "Hybrid Masking Tool",
+      "code": "TDS_LR1&TDS_LR_Enhanced"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Line Reader",
+      "value": "Off",
+      "code": "TDS_LR0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mark for Review",
+      "value": "On",
+      "code": "TDS_MfR1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mark for Review",
+      "value": "Off",
+      "code": "TDS_MfR0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Masking",
+      "value": "Off",
+      "code": "TDS_Masking0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Masking",
+      "value": "On",
+      "code": "TDS_Masking1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "System Default",
+      "code": "TDS_MP_Off"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Black",
+      "code": "TDS_MP_Black_XL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Green",
+      "code": "TDS_MP_Green_XL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Red",
+      "code": "TDS_MP_Red_XL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large White",
+      "code": "TDS_MP_White_XL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Yellow",
+      "code": "TDS_MP_Yellow_XL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Large Black",
+      "code": "TDS_MP_Black_L"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Large Green",
+      "code": "TDS_MP_Green_L"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Large Red",
+      "code": "TDS_MP_Red_L"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Large White",
+      "code": "TDS_MP_White_L"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Mouse Pointer",
+      "value": "Large Yellow",
+      "code": "TDS_MP_Yellow_L"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "None (Default)",
+      "code": "NEA0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Alternate Response Options",
+      "code": "NEA_AR"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Braille",
+      "code": "NEA_Braille"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Large Print",
+      "code": "NEA_IEP_LP"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Standard",
+      "code": "NEA_IEP"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Read Aloud Stimuli - English",
+      "code": "NEA_RA_Stimuli"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Read Aloud Stimuli+Items - English",
+      "code": "NEA_RA_Stimuli&Items"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Sensory Items",
+      "code": "NEA_SI"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Speech-to-Text",
+      "code": "NEA_STT"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Word Completion",
+      "code": "NEA_WordPred"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "None (Default)",
+      "code": "NEDS0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Amplification",
+      "code": "NEDS_Amplify"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Color Overlay",
+      "code": "NEDS_CO"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Magnification Device",
+      "code": "NEDS_Mag"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Medical Supports",
+      "code": "NEDS_MedDev"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Noise Buffers",
+      "code": "NEDS_NoiseBuf"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Printed test directions in English",
+      "code": "NEDS_PrintDirs"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - English",
+      "code": "NEDS_RA_Items"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Scribe Items",
+      "code": "NEDS_SC_Items"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Separate Setting",
+      "code": "NEDS_SS"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Simplified Test Directions",
+      "code": "NEDS_SimpDirs"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated Test Directions",
+      "code": "NEDS_TransDirs"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated test directions in ASL",
+      "code": "NEDS_TransDirs_ASL"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Permissive Mode",
+      "value": "Off",
+      "code": "TDS_PM0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Permissive Mode",
+      "value": "On",
+      "code": "TDS_PM1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Print on Demand",
+      "value": "None (default)",
+      "code": "TDS_PoD0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Print on Demand",
+      "value": "Items",
+      "code": "TDS_PoD_Item"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Print on Demand",
+      "value": "Stimuli",
+      "code": "TDS_PoD_Stim"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Print on Demand",
+      "value": "Stimuli+Items",
+      "code": "TDS_PoD_Stim&TDS_PoD_Item"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Speech-to-Text",
+      "value": "Off",
+      "code": "TDS_Dictation_0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Speech-to-Text",
+      "value": "On",
+      "code": "TDS_Dictation_1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Streamline Interface Mode",
+      "value": "Off",
+      "code": "TDS_SLM0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Streamline Interface Mode",
+      "value": "On",
+      "code": "TDS_SLM1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Strikethrough",
+      "value": "On",
+      "code": "TDS_ST1&TDS_ST_Enhanced"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Strikethrough",
+      "value": "Off",
+      "code": "TDS_ST0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "Off",
+      "code": "TDS_TTSCR0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "On",
+      "code": "TDS_TTSCR1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "None (Default)",
+      "code": "TDS_TTS0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Items",
+      "code": "TDS_TTS_Item"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli",
+      "code": "TDS_TTS_Stim"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli+Items",
+      "code": "TDS_TTS_Stim&TDS_TTS_Item"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Word Completion",
+      "value": "Off",
+      "code": "TDS_CoWriter0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Word Completion",
+      "value": "On",
+      "code": "TDS_CoWriter1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "1X (Default)",
+      "code": "TDS_PS_L0"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "05X (Streamlined Mode Only)",
+      "code": "TDS_PS_L5"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "1.5X",
+      "code": "TDS_PS_L1"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "1.75X",
+      "code": "TDS_PS_L2"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "10X (Streamlined Mode Only)",
+      "code": "TDS_PS_L6"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "15X (Streamlined Mode Only)",
+      "code": "TDS_PS_L7"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "2.5X",
+      "code": "TDS_PS_L3"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "20X (Streamlined Mode Only)",
+      "code": "TDS_PS_L8"
+    },
+    {
+      "subject": "ELA-CAT",
+      "tool": "Zoom Test Level",
+      "value": "3X",
+      "code": "TDS_PS_L4"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "American Sign Language Videos",
+      "value": "Off",
+      "code": "TDS_ASL0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "American Sign Language Videos",
+      "value": "ON",
+      "code": "TDS_ASL1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Braille Type",
+      "value": "No Braille",
+      "code": "TDS_BT0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Braille Type",
+      "value": "UEB Contracted",
+      "code": "TDS_BT_UCN"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Braille Type",
+      "value": "UEB Uncontracted",
+      "code": "TDS_BT_UXN"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Closed Captioning",
+      "value": "Off",
+      "code": "TDS_ClosedCap0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Closed Captioning",
+      "value": "On",
+      "code": "TDS_ClosedCap1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Black on White",
+      "code": "TDS_CC0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Black on Rose",
+      "code": "TDS_CCMagenta"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Medium Gray on Light Gray",
+      "code": "TDS_CCMedGrayLtGray"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Red on White",
+      "code": "TDS_CCRedW"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Reverse Contrast",
+      "code": "TDS_CCInvert"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "White on Red",
+      "code": "TDS_CCWhiteR"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Yellow on Black",
+      "code": "TDS_CCYellowBlk"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Color Contrast",
+      "value": "Yellow on Blue",
+      "code": "TDS_CCYellowB"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Emboss",
+      "value": "None",
+      "code": "TDS_Emboss0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Emboss",
+      "value": "Stimuli+Items",
+      "code": "TDS_Emboss_Stim&TDS_Emboss_Item"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "English Glossary",
+      "value": "On",
+      "code": "TDS_KG1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "English Glossary",
+      "value": "Off",
+      "code": "TDS_KG0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Expandable Items",
+      "value": "On",
+      "code": "TDS_ExpandableItems1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Expandable Items",
+      "value": "Off",
+      "code": "TDS_ExpandableItems0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Expandable Stimuli",
+      "value": "On",
+      "code": "TDS_ExpandablePassages1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Expandable Stimuli",
+      "value": "Off",
+      "code": "TDS_ExpandablePassages0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Global Notes",
+      "value": "On",
+      "code": "TDS_GN1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Global Notes",
+      "value": "Off",
+      "code": "TDS_GN0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Highlighter",
+      "value": "On",
+      "code": "TDS_HighlightColors"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Highlighter",
+      "value": "OFF",
+      "code": "TDS_Highlight0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Language",
+      "value": "English",
+      "code": "ENU"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Language",
+      "value": "Braille",
+      "code": "ENU-Braille"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Line Reader",
+      "value": "On",
+      "code": "TDS_LR1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Line Reader",
+      "value": "Hybrid Masking Tool",
+      "code": "TDS_LR1&TDS_LR_Enhanced"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Line Reader",
+      "value": "Off",
+      "code": "TDS_LR0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mark for Review",
+      "value": "On",
+      "code": "TDS_MfR1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mark for Review",
+      "value": "Off",
+      "code": "TDS_MfR0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Masking",
+      "value": "Off",
+      "code": "TDS_Masking0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Masking",
+      "value": "On",
+      "code": "TDS_Masking1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "System Default",
+      "code": "TDS_MP_Off"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Black",
+      "code": "TDS_MP_Black_XL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Green",
+      "code": "TDS_MP_Green_XL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Red",
+      "code": "TDS_MP_Red_XL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large White",
+      "code": "TDS_MP_White_XL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Yellow",
+      "code": "TDS_MP_Yellow_XL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Large Black",
+      "code": "TDS_MP_Black_L"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Large Green",
+      "code": "TDS_MP_Green_L"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Large Red",
+      "code": "TDS_MP_Red_L"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Large White",
+      "code": "TDS_MP_White_L"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Mouse Pointer",
+      "value": "Large Yellow",
+      "code": "TDS_MP_Yellow_L"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "None (Default)",
+      "code": "NEA0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Alternate Response Options",
+      "code": "NEA_AR"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Scribe Full Write",
+      "code": "NEA_SC_WritItems"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Sensory Items",
+      "code": "NEA_SI"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Speech-to-Text",
+      "code": "NEA_STT"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Word Completion",
+      "code": "NEA_WordPred"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "None (Default)",
+      "code": "NEDS0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Amplification",
+      "code": "NEDS_Amplify"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Bilingual Dictionary",
+      "code": "NEDS_BD"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Color Overlay",
+      "code": "NEDS_CO"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Magnification Device",
+      "code": "NEDS_Mag"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Medical Supports",
+      "code": "NEDS_MedDev"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Noise Buffers",
+      "code": "NEDS_NoiseBuf"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Printed test directions in English",
+      "code": "NEDS_PrintDirs"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - English",
+      "code": "NEDS_RA_Items"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli - English",
+      "code": "NEDS_RA_Stimuli"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli+Items - English",
+      "code": "NEDS_RA_Stimuli&Items"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Scribe Items",
+      "code": "NEDS_SC_Items"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Separate Setting",
+      "code": "NEDS_SS"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Simplified Test Directions",
+      "code": "NEDS_SimpDirs"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated Test Directions",
+      "code": "NEDS_TransDirs"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated test directions in ASL",
+      "code": "NEDS_TransDirs_ASL"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Permissive Mode",
+      "value": "Off",
+      "code": "TDS_PM0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Permissive Mode",
+      "value": "On",
+      "code": "TDS_PM1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Print on Demand",
+      "value": "None (default)",
+      "code": "TDS_PoD0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Print on Demand",
+      "value": "Items",
+      "code": "TDS_PoD_Item"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Print on Demand",
+      "value": "Stimuli",
+      "code": "TDS_PoD_Stim"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Print on Demand",
+      "value": "Stimuli+Items",
+      "code": "TDS_PoD_Stim&TDS_PoD_Item"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Speech-to-Text",
+      "value": "Off",
+      "code": "TDS_Dictation_0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Speech-to-Text",
+      "value": "On",
+      "code": "TDS_Dictation_1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Streamline Interface Mode",
+      "value": "Off",
+      "code": "TDS_SLM0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Streamline Interface Mode",
+      "value": "On",
+      "code": "TDS_SLM1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Strikethrough",
+      "value": "On",
+      "code": "TDS_ST1&TDS_ST_Enhanced"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Strikethrough",
+      "value": "Off",
+      "code": "TDS_ST0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "Off",
+      "code": "TDS_TTSCR0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "On",
+      "code": "TDS_TTSCR1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "None (Default)",
+      "code": "TDS_TTS0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Items",
+      "code": "TDS_TTS_Item"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli",
+      "code": "TDS_TTS_Stim"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli+Items",
+      "code": "TDS_TTS_Stim&TDS_TTS_Item"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Word Completion",
+      "value": "Off",
+      "code": "TDS_CoWriter0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Word Completion",
+      "value": "On",
+      "code": "TDS_CoWriter1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "1X (Default)",
+      "code": "TDS_PS_L0"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "05X (Streamlined Mode Only)",
+      "code": "TDS_PS_L5"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "1.5X",
+      "code": "TDS_PS_L1"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "1.75X",
+      "code": "TDS_PS_L2"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "10X (Streamlined Mode Only)",
+      "code": "TDS_PS_L6"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "15X (Streamlined Mode Only)",
+      "code": "TDS_PS_L7"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "2.5X",
+      "code": "TDS_PS_L3"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "20X (Streamlined Mode Only)",
+      "code": "TDS_PS_L8"
+    },
+    {
+      "subject": "ELA-PT",
+      "tool": "Zoom Test Level",
+      "value": "3X",
+      "code": "TDS_PS_L4"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "100s Number Table",
+      "value": "Off",
+      "code": "TDS_NB0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "100s Number Table",
+      "value": "On",
+      "code": "TDS_NB1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "American Sign Language Videos",
+      "value": "Off",
+      "code": "TDS_ASL0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "American Sign Language Videos",
+      "value": "ON",
+      "code": "TDS_ASL1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Braille Type",
+      "value": "No Braille",
+      "code": "TDS_BT0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Braille Type",
+      "value": "UEB Contracted with Nemeth Math",
+      "code": "TDS_BT_UCN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Braille Type",
+      "value": "UEB Contracted with UEB Math",
+      "code": "TDS_BT_UCT"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Braille Type",
+      "value": "UEB Uncontracted with Nemeth Math",
+      "code": "TDS_BT_UXN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Braille Type",
+      "value": "UEB Uncontracted with UEB Math",
+      "code": "TDS_BT_UXT"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Black on White",
+      "code": "TDS_CC0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Black on Rose",
+      "code": "TDS_CCMagenta"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Medium Gray on Light Gray",
+      "code": "TDS_CCMedGrayLtGray"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Red on White",
+      "code": "TDS_CCRedW"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Reverse Contrast",
+      "code": "TDS_CCInvert"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "White on Red",
+      "code": "TDS_CCWhiteR"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Yellow on Black",
+      "code": "TDS_CCYellowBlk"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Color Contrast",
+      "value": "Yellow on Blue",
+      "code": "TDS_CCYellowB"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Digital Notepad",
+      "value": "On",
+      "code": "TDS_SCNotepadHtml"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Digital Notepad",
+      "value": "Off",
+      "code": "TDS_SC0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Emboss",
+      "value": "None",
+      "code": "TDS_Emboss0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Emboss",
+      "value": "Stimuli+Items",
+      "code": "TDS_Emboss_Stim&TDS_Emboss_Item"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "English Glossary",
+      "value": "On",
+      "code": "TDS_KG1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "English Glossary",
+      "value": "Off",
+      "code": "TDS_KG0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Expandable Items",
+      "value": "On",
+      "code": "TDS_ExpandableItems1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Expandable Items",
+      "value": "Off",
+      "code": "TDS_ExpandableItems0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Expandable Stimuli",
+      "value": "On",
+      "code": "TDS_ExpandablePassages1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Expandable Stimuli",
+      "value": "Off",
+      "code": "TDS_ExpandablePassages0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Highlighter",
+      "value": "On",
+      "code": "TDS_HighlightColors"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Highlighter",
+      "value": "OFF",
+      "code": "TDS_Highlight0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Illustration Glossaries",
+      "value": "Off",
+      "code": "TDS_KI0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Illustration Glossaries",
+      "value": "On",
+      "code": "TDS_KI1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Language",
+      "value": "English",
+      "code": "ENU"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Language",
+      "value": "Braille",
+      "code": "ENU-Braille"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Language",
+      "value": "Spanish",
+      "code": "ESN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Language Display",
+      "value": "Switch between Spanish only or English only",
+      "code": "TDS_LD_Toggle"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Language Display",
+      "value": "Show Spanish above English",
+      "code": "TDS_LD_Stacked"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Line Reader",
+      "value": "On",
+      "code": "TDS_LR1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Line Reader",
+      "value": "Hybrid Masking Tool",
+      "code": "TDS_LR1&TDS_LR_Enhanced"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Line Reader",
+      "value": "Off",
+      "code": "TDS_LR0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mark for Review",
+      "value": "On",
+      "code": "TDS_MfR1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mark for Review",
+      "value": "Off",
+      "code": "TDS_MfR0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Masking",
+      "value": "Off",
+      "code": "TDS_Masking0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Masking",
+      "value": "On",
+      "code": "TDS_Masking1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "System Default",
+      "code": "TDS_MP_Off"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Black",
+      "code": "TDS_MP_Black_XL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Green",
+      "code": "TDS_MP_Green_XL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Red",
+      "code": "TDS_MP_Red_XL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large White",
+      "code": "TDS_MP_White_XL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Yellow",
+      "code": "TDS_MP_Yellow_XL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Large Black",
+      "code": "TDS_MP_Black_L"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Large Green",
+      "code": "TDS_MP_Green_L"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Large Red",
+      "code": "TDS_MP_Red_L"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Large White",
+      "code": "TDS_MP_White_L"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Mouse Pointer",
+      "value": "Large Yellow",
+      "code": "TDS_MP_Yellow_L"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Multiplication Table",
+      "value": "Off",
+      "code": "TDS_MP0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Multiplication Table",
+      "value": "On",
+      "code": "TDS_MP2"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "None (Default)",
+      "code": "NEA0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "100s Number Table",
+      "code": "NEA_NumTbl"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Abacus",
+      "code": "NEA_Abacus"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Alternate Response Options",
+      "code": "NEA_AR"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Braille Graphics",
+      "code": "NEA_Braille_Graphics"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Multiplication Table",
+      "code": "NEA_MT"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Braille",
+      "code": "NEA_Braille"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Large Print",
+      "code": "NEA_IEP_LP"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Spanish SBA",
+      "code": "NEA_SBA_PNPSpan"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Standard",
+      "code": "NEA_IEP"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Sensory Items",
+      "code": "NEA_SI"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Specialized Calculator",
+      "code": "NEA_Calc"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Speech-to-Text",
+      "code": "NEA_STT"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Word Completion",
+      "code": "NEA_WordPred"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "None (Default)",
+      "code": "NEDS0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Amplification",
+      "code": "NEDS_Amplify"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Color Overlay",
+      "code": "NEDS_CO"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Illustration Glossary",
+      "code": "NEDS_TIllustration"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Magnification Device",
+      "code": "NEDS_Mag"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Medical Supports",
+      "code": "NEDS_MedDev"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Noise Buffers",
+      "code": "NEDS_NoiseBuf"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Printed test directions in English",
+      "code": "NEDS_PrintDirs"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - English",
+      "code": "NEDS_RA_Items"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - Spanish",
+      "code": "NEDS_RA_Items_ESN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli - English",
+      "code": "NEDS_RA_Stimuli"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli - Spanish",
+      "code": "NEDS_RA_Stimuli_ESN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli+Items - English",
+      "code": "NEDS_RA_Stimuli&Items"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli+Items - Spanish",
+      "code": "NEDS_RA_Stimuli&Items_ESN"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Scribe Items",
+      "code": "NEDS_SC_Items"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Separate Setting",
+      "code": "NEDS_SS"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Simplified Test Directions",
+      "code": "NEDS_SimpDirs"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated Test Directions",
+      "code": "NEDS_TransDirs"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated test directions in ASL",
+      "code": "NEDS_TransDirs_ASL"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Permissive Mode",
+      "value": "Off",
+      "code": "TDS_PM0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Permissive Mode",
+      "value": "On",
+      "code": "TDS_PM1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Print on Demand",
+      "value": "None (default)",
+      "code": "TDS_PoD0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Print on Demand",
+      "value": "Items",
+      "code": "TDS_PoD_Item"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Print on Demand",
+      "value": "Stimuli",
+      "code": "TDS_PoD_Stim"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Print on Demand",
+      "value": "Stimuli+Items",
+      "code": "TDS_PoD_Stim&TDS_PoD_Item"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Speech-to-Text",
+      "value": "Off",
+      "code": "TDS_Dictation_0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Speech-to-Text",
+      "value": "On",
+      "code": "TDS_Dictation_1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Speech-to-Text Language",
+      "value": "English only",
+      "code": "en-us"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Speech-to-Text Language",
+      "value": "English & Spanish",
+      "code": "es-mx&en-us"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Streamline Interface Mode",
+      "value": "Off",
+      "code": "TDS_SLM0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Streamline Interface Mode",
+      "value": "On",
+      "code": "TDS_SLM1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Strikethrough",
+      "value": "On",
+      "code": "TDS_ST1&TDS_ST_Enhanced"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Strikethrough",
+      "value": "Off",
+      "code": "TDS_ST0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "Off",
+      "code": "TDS_TTSCR0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "On",
+      "code": "TDS_TTSCR1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "None (Default)",
+      "code": "TDS_TTS0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Items",
+      "code": "TDS_TTS_Item"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli",
+      "code": "TDS_TTS_Stim"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli+Items",
+      "code": "TDS_TTS_Stim&TDS_TTS_Item"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "None (Default)",
+      "code": "TDS_KT0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Arabic",
+      "code": "TDS_KT_ar"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Burmese",
+      "code": "TDS_KT_my"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Cantonese",
+      "code": "TDS_KT_zh-yue"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Filipino",
+      "code": "TDS_KT_tl"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Hmong",
+      "code": "TDS_KT_hmn"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Korean",
+      "code": "TDS_KT_ko"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Mandarin",
+      "code": "TDS_KT_zh-cn"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Punjabi",
+      "code": "TDS_KT_pa"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Russian",
+      "code": "TDS_KT_ru"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Somali",
+      "code": "TDS_KT_so"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Spanish",
+      "code": "TDS_KT_es"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Ukrainian",
+      "code": "TDS_KT_uk"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Translated Glossaries",
+      "value": "Vietnamese",
+      "code": "TDS_KT_vi"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Word Completion",
+      "value": "Off",
+      "code": "TDS_CoWriter0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Word Completion",
+      "value": "On",
+      "code": "TDS_CoWriter1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "1X (Default)",
+      "code": "TDS_PS_L0"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "05X (Streamlined Mode Only)",
+      "code": "TDS_PS_L5"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "1.5X",
+      "code": "TDS_PS_L1"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "1.75X",
+      "code": "TDS_PS_L2"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "10X (Streamlined Mode Only)",
+      "code": "TDS_PS_L6"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "15X (Streamlined Mode Only)",
+      "code": "TDS_PS_L7"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "2.5X",
+      "code": "TDS_PS_L3"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "20X (Streamlined Mode Only)",
+      "code": "TDS_PS_L8"
+    },
+    {
+      "subject": "Mathematics",
+      "tool": "Zoom Test Level",
+      "value": "3X",
+      "code": "TDS_PS_L4"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Black on White",
+      "code": "TDS_CC0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Black on Rose",
+      "code": "TDS_CCMagenta"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Medium Gray on Light Gray",
+      "code": "TDS_CCMedGrayLtGray"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Red on White",
+      "code": "TDS_CCRedW"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Reverse Contrast",
+      "code": "TDS_CCInvert"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "White on Red",
+      "code": "TDS_CCWhiteR"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Yellow on Black",
+      "code": "TDS_CCYellowBlk"
+    },
+    {
+      "subject": "Science",
+      "tool": "Color Contrast",
+      "value": "Yellow on Blue",
+      "code": "TDS_CCYellowB"
+    },
+    {
+      "subject": "Science",
+      "tool": "Digital Notepad",
+      "value": "On",
+      "code": "TDS_SCNotepadHtml"
+    },
+    {
+      "subject": "Science",
+      "tool": "Digital Notepad",
+      "value": "Off",
+      "code": "TDS_SC0"
+    },
+    {
+      "subject": "Science",
+      "tool": "English Glossary",
+      "value": "On",
+      "code": "TDS_KG1"
+    },
+    {
+      "subject": "Science",
+      "tool": "English Glossary",
+      "value": "Off",
+      "code": "TDS_KG0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Expandable Items",
+      "value": "On",
+      "code": "TDS_ExpandableItems1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Expandable Items",
+      "value": "Off",
+      "code": "TDS_ExpandableItems0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Expandable Stimuli",
+      "value": "On",
+      "code": "TDS_ExpandablePassages1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Expandable Stimuli",
+      "value": "Off",
+      "code": "TDS_ExpandablePassages0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Highlighter",
+      "value": "On",
+      "code": "TDS_HighlightColors"
+    },
+    {
+      "subject": "Science",
+      "tool": "Highlighter",
+      "value": "OFF",
+      "code": "TDS_Highlight0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Language",
+      "value": "English",
+      "code": "ENU"
+    },
+    {
+      "subject": "Science",
+      "tool": "Language",
+      "value": "Spanish",
+      "code": "ESN"
+    },
+    {
+      "subject": "Science",
+      "tool": "Language Display",
+      "value": "Switch between Spanish only or English only",
+      "code": "TDS_LD_Toggle"
+    },
+    {
+      "subject": "Science",
+      "tool": "Language Display",
+      "value": "Show Spanish above English",
+      "code": "TDS_LD_Stacked"
+    },
+    {
+      "subject": "Science",
+      "tool": "Line Reader",
+      "value": "On",
+      "code": "TDS_LR1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Line Reader",
+      "value": "Hybrid Masking Tool",
+      "code": "TDS_LR1&TDS_LR_Enhanced"
+    },
+    {
+      "subject": "Science",
+      "tool": "Line Reader",
+      "value": "Off",
+      "code": "TDS_LR0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mark for Review",
+      "value": "On",
+      "code": "TDS_MfR1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mark for Review",
+      "value": "Off",
+      "code": "TDS_MfR0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Masking",
+      "value": "Off",
+      "code": "TDS_Masking0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Masking",
+      "value": "On",
+      "code": "TDS_Masking1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "System Default",
+      "code": "TDS_MP_Off"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Black",
+      "code": "TDS_MP_Black_XL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Green",
+      "code": "TDS_MP_Green_XL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Red",
+      "code": "TDS_MP_Red_XL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large White",
+      "code": "TDS_MP_White_XL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Extra Large Yellow",
+      "code": "TDS_MP_Yellow_XL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Large Black",
+      "code": "TDS_MP_Black_L"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Large Green",
+      "code": "TDS_MP_Green_L"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Large Red",
+      "code": "TDS_MP_Red_L"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Large White",
+      "code": "TDS_MP_White_L"
+    },
+    {
+      "subject": "Science",
+      "tool": "Mouse Pointer",
+      "value": "Large Yellow",
+      "code": "TDS_MP_Yellow_L"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "None (Default)",
+      "code": "NEA0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Abacus",
+      "code": "NEA_Abacus"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Alternate Response Options",
+      "code": "NEA_AR"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "American Sign Language (ASL)",
+      "code": "NEA_ASL"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Braille",
+      "code": "NEA_Braille"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Large Print",
+      "code": "NEA_IEP_LP"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Spanish WCAS",
+      "code": "NEA_WCAS_PNPSpan"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Paper Pencil Standard",
+      "code": "NEA_IEP"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Sensory Items",
+      "code": "NEA_SI"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Specialized Calculator",
+      "code": "NEA_Calc"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Speech-to-Text",
+      "code": "NEA_STT"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Accommodations",
+      "value": "Word Completion",
+      "code": "NEA_WordPred"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "None (Default)",
+      "code": "NEDS0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Amplification",
+      "code": "NEDS_Amplify"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Bilingual Dictionary",
+      "code": "NEDS_BD"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Color Overlay",
+      "code": "NEDS_CO"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Magnification Device",
+      "code": "NEDS_Mag"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Medical Supports",
+      "code": "NEDS_MedDev"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Noise Buffers",
+      "code": "NEDS_NoiseBuf"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Printed test directions in English",
+      "code": "NEDS_PrintDirs"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - English",
+      "code": "NEDS_RA_Items"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Items - Spanish",
+      "code": "NEDS_RA_Items_ESN"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli - English",
+      "code": "NEDS_RA_Stimuli"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli - Spanish",
+      "code": "NEDS_RA_Stimuli_ESN"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli+Items - English",
+      "code": "NEDS_RA_Stimuli&Items"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Read Aloud Stimuli+Items - Spanish",
+      "code": "NEDS_RA_Stimuli&Items_ESN"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Scribe Items",
+      "code": "NEDS_SC_Items"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Separate Setting",
+      "code": "NEDS_SS"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Simplified Test Directions",
+      "code": "NEDS_SimpDirs"
+    },
+    {
+      "subject": "Science",
+      "tool": "Non-Embedded Designated Supports",
+      "value": "Translated Test Directions",
+      "code": "NEDS_TransDirs"
+    },
+    {
+      "subject": "Science",
+      "tool": "Permissive Mode",
+      "value": "Off",
+      "code": "TDS_PM0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Permissive Mode",
+      "value": "On",
+      "code": "TDS_PM1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Print on Demand",
+      "value": "None (default)",
+      "code": "TDS_PoD0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Print on Demand",
+      "value": "Items",
+      "code": "TDS_PoD_Item"
+    },
+    {
+      "subject": "Science",
+      "tool": "Print on Demand",
+      "value": "Stimuli",
+      "code": "TDS_PoD_Stim"
+    },
+    {
+      "subject": "Science",
+      "tool": "Print on Demand",
+      "value": "Stimuli+Items",
+      "code": "TDS_PoD_Stim&TDS_PoD_Item"
+    },
+    {
+      "subject": "Science",
+      "tool": "Speech-to-Text",
+      "value": "Off",
+      "code": "TDS_Dictation_0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Speech-to-Text",
+      "value": "On",
+      "code": "TDS_Dictation_1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Speech-to-Text Language",
+      "value": "English only",
+      "code": "en-us"
+    },
+    {
+      "subject": "Science",
+      "tool": "Speech-to-Text Language",
+      "value": "English & Spanish",
+      "code": "es-mx&en-us"
+    },
+    {
+      "subject": "Science",
+      "tool": "Streamline Interface Mode",
+      "value": "Off",
+      "code": "TDS_SLM0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Streamline Interface Mode",
+      "value": "On",
+      "code": "TDS_SLM1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Strikethrough",
+      "value": "On",
+      "code": "TDS_ST1&TDS_ST_Enhanced"
+    },
+    {
+      "subject": "Science",
+      "tool": "Strikethrough",
+      "value": "Off",
+      "code": "TDS_ST0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "Off",
+      "code": "TDS_TTSCR0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Student Responses)",
+      "value": "On",
+      "code": "TDS_TTSCR1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "None (Default)",
+      "code": "TDS_TTS0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Items",
+      "code": "TDS_TTS_Item"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli",
+      "code": "TDS_TTS_Stim"
+    },
+    {
+      "subject": "Science",
+      "tool": "Text-to-Speech (Test Content)",
+      "value": "Stimuli+Items",
+      "code": "TDS_TTS_Stim&TDS_TTS_Item"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "None (Default)",
+      "code": "TDS_KT0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Arabic",
+      "code": "TDS_KT_ar"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Burmese",
+      "code": "TDS_KT_my"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Cantonese",
+      "code": "TDS_KT_zh-yue"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Filipino",
+      "code": "TDS_KT_tl"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Hmong",
+      "code": "TDS_KT_hmn"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Korean",
+      "code": "TDS_KT_ko"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Mandarin",
+      "code": "TDS_KT_zh-cn"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Punjabi",
+      "code": "TDS_KT_pa"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Russian",
+      "code": "TDS_KT_ru"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Somali",
+      "code": "TDS_KT_so"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Spanish",
+      "code": "TDS_KT_es"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Ukrainian",
+      "code": "TDS_KT_uk"
+    },
+    {
+      "subject": "Science",
+      "tool": "Translated Glossaries",
+      "value": "Vietnamese",
+      "code": "TDS_KT_vi"
+    },
+    {
+      "subject": "Science",
+      "tool": "Word Completion",
+      "value": "Off",
+      "code": "TDS_CoWriter0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Word Completion",
+      "value": "On",
+      "code": "TDS_CoWriter1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "1X (Default)",
+      "code": "TDS_PS_L0"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "05X (Streamlined Mode Only)",
+      "code": "TDS_PS_L5"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "1.5X",
+      "code": "TDS_PS_L1"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "1.75X",
+      "code": "TDS_PS_L2"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "10X (Streamlined Mode Only)",
+      "code": "TDS_PS_L6"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "15X (Streamlined Mode Only)",
+      "code": "TDS_PS_L7"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "2.5X",
+      "code": "TDS_PS_L3"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "20X (Streamlined Mode Only)",
+      "code": "TDS_PS_L8"
+    },
+    {
+      "subject": "Science",
+      "tool": "Zoom Test Level",
+      "value": "3X",
+      "code": "TDS_PS_L4"
+    }
+  ],
+  "subjects": [
+    "ELA-CAT",
+    "ELA-PT",
+    "Mathematics",
+    "Science"
+  ]
+}

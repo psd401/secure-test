@@ -1,0 +1,8 @@
+ps_id,ssid,email,first_name,last_name,grade,school_id,enroll_status
+1001,WA-FIX-1001,Ada.Fixture@edtools.psd401.net,Ada,Fixture,9,200,0
+1002,WA-FIX-1002,ben.sample@edtools.psd401.net,Ben,Sample,9,200,0
+1003,WA-FIX-1003,cy.example@edtools.psd401.net,Cy,Example,10,200,0
+1004,WA-FIX-1004,dee.placeholder@edtools.psd401.net,Dee,Placeholder,9,200,0
+1005,,eli.noemail@edtools.psd401.net,Eli,Nossid,5,100,0
+1006,WA-FIX-1006,,Fay,Noemail,5,100,0
+1007,WA-FIX-1007,gus.transferred@edtools.psd401.net,Gus,Transferred,9,200,2

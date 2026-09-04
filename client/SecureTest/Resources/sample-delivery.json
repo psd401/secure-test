@@ -1,0 +1,182 @@
+{
+  "test_id": "2a4bd69d-8447-4dcd-b6f2-87af7d87e9fd",
+  "title": "Delivery Fixture",
+  "items": [
+    {
+      "type": "multiple_choice_single",
+      "id": "c5d2d4fc-5d3c-4158-80fc-a0c364ff0d60",
+      "stem": "Which organelle produces ATP?",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "Mitochondrion"
+        },
+        {
+          "id": "c2",
+          "text": "Ribosome"
+        },
+        {
+          "id": "c3",
+          "text": "Golgi apparatus"
+        }
+      ]
+    },
+    {
+      "type": "multiple_choice_multi",
+      "id": "a2d8844d-aa94-4cdf-ad39-aa8e06c3ce6b",
+      "stem": "Select all prime numbers. </script><b>not markup</b>",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "2"
+        },
+        {
+          "id": "c2",
+          "text": "4"
+        },
+        {
+          "id": "c3",
+          "text": "7"
+        }
+      ]
+    },
+    {
+      "type": "short_text",
+      "id": "520861bb-4262-4d68-86c0-64952d726e52",
+      "stem": "Name the process shown here: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)"
+    },
+    {
+      "type": "essay",
+      "id": "ed5daf91-1559-4f47-b1aa-d6bb88840b28",
+      "stem": "Explain how the author builds their argument. Use $E = mc^2$ if relevant.",
+      "max_word_count": 400,
+      "placeholder": "Write your response here…",
+      "rubric": {
+        "style": "analytic",
+        "criteria": [
+          {
+            "id": "cr1",
+            "name": "Use of evidence",
+            "levels": [
+              {
+                "id": "l1",
+                "label": "Emerging",
+                "points": 1,
+                "descriptor": "Cites no evidence."
+              },
+              {
+                "id": "l2",
+                "label": "Proficient",
+                "points": 3,
+                "descriptor": "Cites relevant evidence."
+              }
+            ]
+          }
+        ],
+        "student_visibility": {
+          "during_test": true
+        }
+      }
+    },
+    {
+      "type": "match",
+      "id": "191a9647-e148-49b5-aa94-2163a3460b83",
+      "stem": "Match each animal to its young.",
+      "lefts": [
+        {
+          "id": "p1",
+          "text": "Dog"
+        },
+        {
+          "id": "p2",
+          "text": "Cat"
+        },
+        {
+          "id": "p3",
+          "text": "Cow"
+        }
+      ],
+      "rights": [
+        {
+          "id": "p1",
+          "text": "Puppy"
+        },
+        {
+          "id": "p2",
+          "text": "Kitten"
+        },
+        {
+          "id": "p3",
+          "text": "Calf"
+        }
+      ]
+    },
+    {
+      "type": "order",
+      "id": "fb9deb02-dc3a-4378-b7eb-d2009b813403",
+      "stem": "Put the water-cycle stages in order.",
+      "entries": [
+        {
+          "id": "e1",
+          "label": "Evaporation"
+        },
+        {
+          "id": "e2",
+          "label": "Condensation"
+        },
+        {
+          "id": "e3",
+          "label": "Precipitation"
+        },
+        {
+          "id": "e4",
+          "label": "Collection"
+        }
+      ]
+    },
+    {
+      "type": "hotspot",
+      "id": "146732df-8bff-4eab-8e97-25bbbb6fdeb0",
+      "stem": "Click the nucleus.",
+      "image_asset_id": "33333333-3333-4333-8333-333333333333",
+      "regions": [
+        {
+          "id": "r1",
+          "x": 0.1,
+          "y": 0.1,
+          "w": 0.25,
+          "h": 0.25
+        },
+        {
+          "id": "r2",
+          "x": 0.6,
+          "y": 0.55,
+          "w": 0.3,
+          "h": 0.3
+        }
+      ]
+    },
+    {
+      "type": "drawing_upload",
+      "id": "93e4f877-cdb2-4d79-8fc9-1ef337693a57",
+      "stem": "Sketch the free-body diagram.",
+      "canvas": {
+        "width": 1000,
+        "height": 700
+      }
+    }
+  ],
+  "assets": {
+    "33333333-3333-4333-8333-333333333333": {
+      "content_type": "image/png",
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    }
+  },
+  "accommodations": {
+    "color_contrast": "Black on Rose",
+    "spell_check": "On"
+  },
+  "construct_altering": [
+    "spell_check"
+  ]
+}

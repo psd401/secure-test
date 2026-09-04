@@ -1,0 +1,27 @@
+{
+  "name": "poc-b-infra",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "poc-b": "bin/poc-b.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "diff": "cdk diff"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8",
+    "@types/node": "^20",
+    "aws-cdk": "^2",
+    "esbuild": "^0.28.0",
+    "ts-node": "^10",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2",
+    "constructs": "^10"
+  }
+}

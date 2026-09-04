@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy to cdk.context.json (gitignored) and fill in real values before `bunx cdk deploy`. `bunx cdk synth` also works with the placeholder values below, as long as no AWS lookup (e.g. a real availability-zones cache entry for your account) is required.",
+
+  "availability-zones:account=111111111111:region=us-west-2": [
+    "us-west-2a",
+    "us-west-2b",
+    "us-west-2c",
+    "us-west-2d"
+  ],
+  "oidcWebClientId": "000000000000-example-web.apps.googleusercontent.com",
+  "oidcNativeClientId": "000000000000-example-native.apps.googleusercontent.com",
+  "mwaaProducerRoleArn": "arn:aws:iam::111111111111:role/service-role/example-mwaa-execution-role",
+  "domainName": "example.invalid",
+  "guardrailId": "abcdefghijkl"
+}

@@ -1,0 +1,66 @@
+name: scan
+
+# Two gates on every push and pull request: gitleaks over the whole history
+# with the repo's identifier-aware config, and a grep sweep for the patterns
+# gitleaks cannot shape (a hostname, a person's name). The sweep list mirrors
+# CLAUDE.md's "Contributing / what stays out of this repo".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: gitleaks over the full history
+        run: gitleaks git --config .gitleaks.toml --no-banner --redact .
+      - name: gitleaks over the tree
+        run: gitleaks dir --config .gitleaks.toml --no-banner --redact .
+
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identifier sweep over tracked files
+        run: |
+          set -u
+          fail=0
+          # Patterns that must never appear in a tracked file. Extend when a
+          # review finds a new shape; keep each one a plain ERE. Synthetic
+          # fixtures use the real domains on purpose (role-from-domain is
+          # product logic), so the student rule matches only digit-only
+          # local parts — the shape a real student account has — and there
+          # is no staff-address rule: a named address has no fixed shape,
+          # review catches those.
+          for p in \
+            'arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:' \
+            '\b[0-9]{12}\b.*(aws://|--profile)' \
+            '[0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com' \
+            '\b[0-9]{4,10}@edtools\.psd401\.net' \
+            'securetest\.psd401\.ai' \
+            '\b168\.212\.[0-9]+\.[0-9]+\b' \
+            'docs/requests/' ; do
+            hits=$(git grep -nIE -- "$p" -- \
+              ':!.github/workflows/scan.yml' ':!.gitleaks.toml' \
+              ':!docs/public-release-plan.md' \
+              ':!design-tool/infra/cdk.context.json.example' || true)
+            if [ -n "$hits" ]; then
+              echo "::error::pattern matched: $p"; echo "$hits"; fail=1
+            fi
+          done
+          exit $fail

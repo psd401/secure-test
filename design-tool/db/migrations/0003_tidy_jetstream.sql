@@ -1,0 +1,1 @@
+ALTER TABLE "assessments" ADD COLUMN "construct_altering" jsonb DEFAULT '[]'::jsonb NOT NULL;

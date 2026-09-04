@@ -1,0 +1,315 @@
+# Design-tool manual checks
+
+The rows a person runs by hand in Chrome, because there is no headless browser
+in this environment (ADR 0013) and the teacher loop's feel — density on a 13"
+MacBook, legibility on a mirrored projector, a stranger finding the next step —
+cannot be asserted by `bun test`. Mirrors `client/MANUAL-CHECKS.md`.
+
+Setup: `cd design-tool && bun run dev`, sign in with a `psd401.net` account, the
+local dev DB with the three demo students seeded (2026-08-29 run). Rows marked
+**client** need the real macOS client and a locked session.
+
+Fill in ✅ / ❌ with a note and the date; a ❌ becomes a UX pass 2 finding.
+
+## UX pass 1 (2026-08-30) — first run: James, scheduled 2026-08-31 (fresh session)
+
+Handoff from the build session (2026-08-30):
+
+- Start: `cd design-tool && bun run dev` (from `design-tool/`, not the root),
+  sign in as staff in Chrome. The `.env.local` from the 2026-08-29 runs is
+  what the build session used.
+- Dev-DB state left by the build session's checks: draft assessment "UX pass 1
+  slice 3 check" (one MC question, placeholder choices — good for rows 6–7);
+  test session `25G9AX` on "Your tests seed (5 items, PoC-B copy)" (expired
+  9:33 PM on 2026-08-30 — start a fresh one for rows 8–14); a `students` row
+  for roster student <demo-student-B> created by row 15's path.
+- Rows 10 and 13 need the real locked client and a locked session; rows 10.7's
+  DNS caveat applies if the dev server runs beside it (client/MANUAL-CHECKS.md).
+- Row 16 needs the sample TIDE xlsx (`docs/StudentSettings.xlsx` is the
+  reference workbook; the importer wants the Student Settings export shape).
+- A ❌ or a stall becomes a UX pass 2 finding under "Stalls / findings" below.
+
+
+| Row | Check | Expected | Result |
+|---|---|---|---|
+| 1 | With macOS Appearance set to **Dark**, open `/login`, `/dashboard`, an assessment, `/dashboard/accommodations`, a monitor | Every page renders light on the Mist ground, Josefin Sans on the h1, Inter body, Pacific header band with your email | ✅ 2026-08-31 — /login, /dashboard, the editor, Students and a monitor all render light under macOS Dark: Mist ground, Pacific band with the email, Josefin h1, Inter body (Chrome, driven by the session; James confirmed Dark was on) |
+| 2 | Cancel at the Google prompt | "You cancelled the Google sign-in." on the sign-in card | ❌ 2026-08-31 — not reachable: `app/api/auth/start/route.ts` sets no `prompt`, so with one Google account signed in Chrome, Google auto-approves and there is no screen to cancel from. The copy exists (`lib/ui/errorCopy.ts:39`) but nothing reaches it → finding P2-1 below |
+| 3 | Sign in with a demo `edtools.psd401.net` account in a private window | The branded "That is a student account" page with a working Sign out — never a plain 403 | ✅ 2026-08-31 (James, private window, demo student) — the branded card with a working Sign out, never a plain 403; the message clipped to "That is a student account. Sign out, then sign…" — P2-9 confirmed in the real flow |
+| 4 | From Assessments, find how to start a test session on a published assessment | Reached in under 5 s without help (Open-now strip / assessment → Test sessions) | ✅ 2026-08-31 (James, stopwatch) — under 5 s, with no Open-now strip on the board (no session was open), via assessment → Test sessions |
+| 5 | Create an assessment with a blank name | "Give the assessment a name." under the field; typed values kept | ❌ 2026-08-31 — Chrome's native "Please fill out this field." tooltip fires first (`required` on the name input, `NewAssessmentForm.tsx:32`), so the server action's "Give the assessment a name." (`actions.ts:46`) never shows. Typed description and time limit were kept ✅ → P2-2 |
+| 6 | Add question → type text → Save question | Card appears at once with the cursor in it; "Unsaved changes" while typing; "Saved HH:MM" after | ✅ 2026-08-31 — card appeared at once with focus in the stem textarea (activeElement `stem-<id>`), "Unsaved changes" while typing, "Saved 8:30 AM" (status role) after Save. Catch → P2-3: the stem is pre-filled with the VALUE "New question" (`AssessmentEditor.tsx:672`) and the caret sits at 0, so typing straight away produced "What is 2 + 2?New question" |
+| 7 | Publish an assessment with a placeholder question | The checklist names the question; publishing still allowed; badge flips to Published; inputs lock | ❌ partial 2026-08-31 — checklist read "Question 1 still has placeholder choices", publish allowed, badge → Published, Add question / Save / move / delete disabled ✅. BUT the stem textarea and choice text inputs are not disabled (`AssessmentEditor.tsx:1374-1383` has no `disabled={isLocked}`): typing after publish is accepted and shows "Unsaved changes" (nothing can be saved, and the beforeunload guard then fires on a locked assessment) → P2-4 |
+| 8 | Test sessions → This period · 55 min → Start session | "Closes at HH:MM" shown before Start; new row with the code hero, Copy, Show code, Monitor | ✅ 2026-08-31 — "This period · 55 min" preselected, "Opens now · Closes at 9:02 AM" shown before Start; new row `KC4NDB` with the code hero, Copy, Show code, Monitor, Attendance, Close session. Side note: starting it flipped `25G9AX` from "Ended (time up)" to "Closed" |
+| 9 | Show code on a **mirrored 1080p** display, stand 3 m back | Code legible; nothing but name, code and the join line on screen | ✅ 2026-08-31 (James, mirrored display) — legible. Also on screen: the Done button and the dimmed app header behind the dialog |
+| 10 | Monitor with the three demo students; one quits and rejoins (**client**) | Rejoined student under In progress with "Earlier: Quit the app · N min ago"; one who quit and stayed out is first under Needs attention with the Clay edge; tiles add up to the row count; a tile filters | ✅ with findings, 2026-08-31 — run with one student sequentially (<demo-student-A>, simulated lockdown after the real-lock runs burned the other demo students — see P2-6). Quit-and-stayed-out: first under Needs attention with the Clay edge, "Left the test window · 37s ago" (the app was still open; a true Cmd-Q would read "Quit the app") ✅. Tiles summed to the row count at every stage ✅. The In progress tile filters ("Showing 1 of 5") ✅. Rejoined student: In progress + "Earlier: Emergency exit · 11 min ago" ✅ — but only after ANSWER activity; the rejoin alone left the row red → P2-7 |
+| 11 | Identify the student who needs attention | Under 5 s from opening the monitor | ✅ 2026-08-31 (James) — the Needs-attention student identified in under 5 s from the monitor (Clay edge + first row + red tile) |
+| 12 | Stop the dev server while the monitor is open, then restart it | Rows stay; "Last update failed at HH:MM — retrying"; updates resume without a reload | ✅ 2026-08-31 — killed `bun run dev` with the monitor open: rows stayed, "Last update failed at 8:39 AM — retrying every 5 s." + Retry now; after restart, "Live · every 5 s · updated 0s ago" resumed with no reload |
+| 13 | View screen on an in-progress row (**client**, locked session) | Dialog with the still and "taken HH:MM"; Esc closes; focus returns to the button; the time does not advance while open | ✅ with two deviations, 2026-08-31 — simulated lockdown (the peek cycle inside a REAL session was stderr-proven 2026-08-28; a real lock on the dev Mac also kills the Chrome-driving extension, so the dialog was checked simulated). Dialog "Student <demo-student-A>, Demo's screen · taken 9:31 AM", delete-on-read copy, and the still itself shows the student's "Your teacher is viewing your screen" banner ✅; timestamp identical 18 s later ✅; client log peek requested → delivered; `peek_requests` keeps the audit row with `image_base64` emptied ✅. Deviations: Esc needed a second press in automation (re-check once by hand), and focus returned to BODY, not the View screen button |
+| 14 | Close session from the monitor | Dialog says students already in can finish; after confirming the badge reads Closed and no time shows seconds | ✅ 2026-08-31 — dialog: "Nobody new can join. Students already in can finish and hand in. It can't be reopened — start a new session instead."; badge → Closed, Close button gone, no time with seconds anywhere. But closing also STOPS the monitor's live polling while a student still in kept working — the answer landed in the DB and the table sat frozen until a manual Refresh → P2-8 |
+| 15 | Students → a rostered student with no record | Their page opens (a record is created); Add support saves a value chosen from a select | ✅ 2026-08-31 (second pass, after James deleted <demo-student-A>'s empty overlay row) — clicking the student on Students opened their page at a FRESH overlay id ("No supports on file"), the `students` row lazily created (DB: created_at 10:44:06); Add support is fully select-driven (Subject / Tool from the catalog / Setting On-Off) and saved "Desmos Calculator · On · Added by you" (DB: source `manual`). Earlier same-day: `roster/1003` (not in these sections) correctly 404s branded |
+| 16 | Import the sample TIDE xlsx, edit one TIDE row, re-import | Result card in TIDE words; "N changes to review" on Students; the review row names the student and tool; Use TIDE value / Keep mine work | ✅ 2026-08-31 — `docs/StudentSettings.xlsx` is header-only (a TIDE template), so a 3-row workbook was built with `test/fixtures/build-tide-fixture.ts` (Ada: Color Contrast Black on Rose + Highlighter On; Ben: Mark for Review On). First import: "0 new students · 2 students updated · 3 settings added" (TIDE words). After editing Ada's Color Contrast, the identical re-import said "1 settings you had changed were kept · 1 change to review"; Students showed the banner and a "Review 1" chip on Ada; the review row named Ada Fixture · Color Contrast · Mathematics with Your value / TIDE value. Keep mine cleared the row; Use TIDE value (on a second conflict, Highlighter OFF vs On) wrote On / `tide_import` back — DB verified. Note → P2-5: Keep mine is screen-only by design (`DiffReviewPanel.tsx:43-45`), so the same conflict is raised again by the next identical import |
+| 17 | Upload a non-xlsx on Import TIDE settings | A sentence, not JSON | ✅ 2026-08-31 — "That isn't an Excel (.xlsx) file. Export Student Settings from TIDE and try again." — a sentence, not JSON |
+| 18 | On a 13" MacBook at default scaling, walk the six loop pages | Nothing scrolls sideways; the monitor table and the session rows stay readable | ✅ 2026-08-31 — programmatic walk at a true 13" viewport (1440 CSS px; the driving Chrome profile sits at 80% zoom, so the window was sized to 1152 physical px to compensate): /dashboard, editor, Test sessions tab, monitor, Students, a student page — `scrollWidth === clientWidth` on all six, nothing scrolls sideways; the monitor table and session rows render readable at that width (screenshots). James's own-eye pass on the physical 13" still worth a glance at 100% zoom |
+| 19 | **Exit criterion** — a colleague who has not seen the tool: create → publish → start session → monitor → close, no verbal help | Completed; every stall logged below as a pass-2 finding | Deferred 2026-08-31 — to be run with a colleague before the pilot |
+| 20 | First deploy after slice 1 (ECS Fargate, ADR 0014) | The image build reaches fonts.googleapis.com for `next/font`, or the TTFs are vendored | ✅ 2026-08-31 — resolved by vendoring (ECS plan decision 1.4): latin-subset variable woff2 in `app/fonts/`, `next/font/local`; the image build needs no font egress, and both fonts served 200 from the production origin on the live check |
+
+### Findings from the 2026-08-31 run (pass-2 candidates)
+
+Rows driven by the session in Chrome against the local dev server; James
+at the keyboard for rows 9 and the client rows. Proposals only — nothing
+below is built.
+
+- **P2-1 (row 2)** — Google never shows a screen to cancel from. Add
+  `prompt=select_account` to the authorize URL in `app/api/auth/start/route.ts`
+  (also the right default on a shared classroom Mac). Until then row 2 is
+  not testable with one account signed in.
+- **P2-2 (row 5)** — the New assessment form relies on the input's `required`
+  attribute, so the browser's tooltip preempts the app's message. Either
+  `noValidate` on the form or drop `required` and let `actions.ts` answer.
+- **P2-3 (row 6)** — the Add question default stem is a real value
+  ("New question") with the caret at position 0. Make it a placeholder, or
+  select the text on focus, so a teacher who starts typing does not get
+  "…New question" appended.
+- **P2-4 (row 7)** — published assessments lock the buttons but not the
+  text fields (stem, choices). Add `disabled={isLocked}` (or `readOnly`) to
+  the inputs so "locked" means locked, and the beforeunload guard cannot
+  fire on an assessment nothing can save to.
+- **P2-5 (row 16)** — "Keep mine" is a screen-only decision; the next
+  identical TIDE import raises the same conflict again. Decide whether a
+  kept decision should persist (e.g. remember the TIDE code the teacher
+  overrode) or whether re-raising is intended — the review page's own copy
+  ("The next import raises anything new") suggests the former was meant.
+- **P2-6 (rows 10/13, client+server)** — a student whose attempt on an
+  assessment was submitted in ANY earlier session is declined when joining a
+  NEW session of the same assessment (`join declined: attempt … is already
+  submitted — staying on the entry screen`). One attempt per student per
+  assessment, ever — the 8.2 rebind + 10.1 guard working as coded. Decide the
+  retake story; it also makes dev re-runs burn students.
+- **P2-7 (row 10)** — `alertIsCurrent` (`attendanceView.ts:109-117`) clears an
+  alert only when the SINGLE newest event is `lockdown_begin` or answer
+  activity postdates it; a rejoin followed by any focus flicker
+  (`lockdown_begin → focus_loss → focus_regained`) stays red until the student
+  answers, though the comment says a later `lockdown_begin` should clear it.
+  The red row's label also flipped between "Left the test window" and
+  "Emergency exit" for the same student as relative ages changed.
+- **P2-8 (row 14)** — a Closed session's monitor stops live polling (the
+  "Live · every 5 s" line disappears) while the close dialog promises
+  students already in can finish; the teacher watching them sees a frozen
+  table unless they click Refresh.
+- Client observations for `client/MANUAL-CHECKS.md` follow-ups: **Cmd-E
+  beeped** inside both a real and a simulated session on 2026-08-31 (the End
+  secure session button worked; Cmd-E was verified working 2026-08-26 —
+  regression or focus-dependent); after an emergency end the non-secure
+  window offers NO rejoin (10.3 family) but DOES allow handing in.
+- **P2-9 (row 3 preview)** — the sign-in card's error box clips vertically:
+  rendering `/login?error=student_account` at 13" width shows "That is a
+  student account. Sign out, then sign…" with the wrapped second line hidden
+  (leaf scrollHeight 40 vs clientHeight 20, `overflow: hidden` up the stack).
+  Any two-line error on that card loses its second line — including the very
+  sentence telling a student what to do. Confirmed in the real
+  private-window flow the same day. The Sign out button itself renders
+  and is the branded page's working exit. Row 3's real-flow run (private
+  window, demo student) is still James's.
+- Observations, not findings: starting a new session flipped an expired
+  one's badge from "Ended (time up)" to "Closed"; the Next dev "1 Issue"
+  badge is a hydration mismatch from the Securly extension injecting a
+  `#securlyOverlay` div (not ours); the Highlighter select offers "On" /
+  "OFF" (casing comes from the TIDE catalog).
+
+Dev-DB additions from this run: assessment "UX pass 1 hand-run 2026-08-31"
+(published, one placeholder MC); test session `KC4NDB` on "Your tests seed";
+three `tide_import` rows on Ada / Ben, Ada's Color Contrast left as
+`tide_then_edited` (Yellow on Black) with one review pending.
+
+### Stalls / findings from the exit-criterion run
+
+- (none logged yet)
+
+## LaTeX preview slice (2026-09-01)
+
+Closes the raw-LaTeX finding (`docs/ux-pass-2-proposal.md` "Raw LaTeX in
+editor/AI-proposal inputs"): the AI proposal card (stem, correct answer,
+choices) and the regular short-text correct answer now carry the same
+debounced `MathPreview` the stem and MC choice inputs have had since
+slices 11–12. Preview appears only when the text contains `$` or an
+asset ref. Second slice the same day: the scoring queue's stem line is
+served rendered (`stem_html` on the review-queue API via
+`renderItemContent`, owner-scoped asset resolution) — row 22.
+
+| Row | Check | Expected | Result |
+|---|---|---|---|
+| 21 | Generate with AI on a math prompt (e.g. fractions); then edit the proposal stem and a choice; add a `$\frac{1}{2}$` to a short-text item's Correct answer | Rendered math under the proposal's stem/choices (and correct answer for short-text proposals) while typing (~300 ms lag); same under the item's Correct answer; plain-text proposals show no preview chrome; radio/checkbox stays aligned with its choice input | |
+| 22 | Scoring queue (`/dashboard/<id>/scoring`) with a pending human-scored item whose stem has math | The stem line under "Q# · student" shows the rendered fraction, not `$\frac…$` source; still clamps to two lines; plain stems unchanged | |
+
+## E5 slice 1 — stimulus / item sets (2026-09-01)
+
+Built the evening of 2026-09-01 (`docs/stimulus-design.md` slice 1): migration 0025
+(`item_sets` + `items.item_set_id`), the item-set API, the editor's stimulus card
+and Join / Detach controls, block-aware Move up / down, preview + print rendering,
+export / import / delivery bundles. Server-side behaviour is covered by tests; these
+rows are the editor's feel and the preview in a real browser.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 23 | On a draft with 3+ questions, click **Add stimulus above** on question 2 | A "Stimulus · Question 2" card appears above it with an Empty badge; question 2 is indented under it; the readiness list (Publish) names "Stimulus for question 2 is empty" | ✅ 2026-09-02 (Claude driving James's Chrome against the origin, 69d2bb2). New draft `Rows 23-29 hand-run 2026-09-02 (stimulus cards)` (`b2d6ca85-c415-49ca-9b54-2fef314e2b34`), three seeded MC questions. Add stimulus above on Q2 → "STIMULUS · QUESTION 2" card with the Empty badge, Q2 indented with "Detach from stimulus"; the Publish dialog's checklist read "Stimulus for question 2 is empty" (Cancel, not published). |
+| 24 | Type a passage with `$x^2$` and insert an image; **Save stimulus**; then **Join stimulus above** on question 3 | Math and image render in the card's preview; Saved; the card now reads "Questions 2–3" and question 3 is indented; the iframe preview shows the stimulus once, above question 2, labelled Questions 2–3 | ✅ 2026-09-02. Passage "Read the graph below. The curve follows $x^2$ between 0 and 5." plus figure-1.png from the inline Image… picker (it lists the account's uploads — the Unit 0 figures were there) → the textarea holds `![figure-1.png](asset:d8d35fd9-…)`, the card's PREVIEW renders x² and the tide graph; "Saved 11:02 AM". Join stimulus above on Q3 → "Stimulus · Questions 2–3", Q3 indented. Show preview iframe: one "QUESTIONS 2–3" block above question 2 with the rendered math and the image. Driver note, not a finding: the automation's first keyboard-typed passage landed nothing (a direct value set worked); re-check by hand if it recurs. |
+| 25 | Move question 3 up; move question 1 down; **Detach** on question 2 (a middle one, if the group has three) | Moving a grouped question moves the whole group as a block; a middle question's Detach is disabled with the explaining tooltip; detaching an end question works | ✅ 2026-09-02. Move Q3 up → the block moved above Q1 as a unit (headings became STIMULUS · QUESTIONS 1–2 / 1 / 2 / 3); moving the displaced question up hopped the whole block (order restored). With a fourth question joined (2–4) the middle question's Detach is disabled with title "Only the first or last question of a group can be detached — move it first"; Detach on the end question worked (back to 2–3). |
+| 26 | Set the layout to **On its own page**; open the print view (`?print=1`) and Save as PDF | The stimulus starts a fresh page in the PDF; inline layout does not | ✅ (partial) 2026-09-02. Layout → On its own page, Save → "Saved 11:05 AM"; `/preview/<id>?print=1` renders the set as `<section class="stimulus stimulus-own_page">` and the stylesheet's `@media print` rule is `.stimulus-own_page { break-before: page }`; the inline set built for row 28 renders `stimulus stimulus-inline` and no break rule matches it. **The PDF itself was not produced** — Save as PDF is a native dialog the automation cannot drive; the paper proof is still James's if wanted. Driver note: after a reload, a layout change through the automation's form path did not reach React (Save stayed disabled) although the first one had; treated as a driver artefact. |
+| 27 | Remove the stimulus (×) with two questions in it; then Add stimulus above a question and delete that question | Questions stay, un-indented; deleting a set's only question removes the card (no orphan) | ✅ 2026-09-02. × on the 2–3 set → both questions stayed, un-indented (no Detach buttons), three plain questions. Add stimulus above on a fourth question (STIMULUS · QUESTION 4 appeared), then Delete question 4 → confirm modal → the card went with the question, no orphan; a reload showed "Questions (3)", so server-side too. |
+| 28 | Publish, then reopen the editor | The stimulus card is read-only like the stems (textarea, layout, Save, Join / Detach all disabled) | ✅ 2026-09-02. Published, reloaded: the card's textarea, layout select, Save stimulus, Remove and both Detach buttons are disabled; Add stimulus above is disabled on the plain question. Unpublish not exercised. |
+| 29 | Export the bundle; import it as a new assessment; share it with a colleague and accept | `item_sets` in the JSON; the copy and the accepted share both show the same stimulus card over the same questions | ✅ (partial) 2026-09-02. Export JSON: `item_sets: [{ id, stimulus, layout: "inline", item_ids: [two ids] }]`, items carry no set field of their own. Imported through the real Import assessment file form (the fetched export set on the file input) → new draft `10861e22-ea05-4a54-8abd-1e43724caaf6` with the same STIMULUS · QUESTIONS 2–3 card over the same two questions and the same passage. **Share with a colleague and accept NOT run** — needs a second staff account at the keyboard. Both assessments (the Published original and the Draft copy) are left on the origin for inspection; note the copy keeps the original's title verbatim, so the list shows two identical rows (proposal below). |
+### Findings from rows 23–29 (2026-09-02, proposals only)
+
+1. **Stale "Unsaved changes" after a set-membership change.** Join, Detach, Add stimulus above and block moves update `item_set_id` on the question in state but not the `persisted` snapshot the badge compares against (`AssessmentEditor.tsx:1497`), so every question touched shows "Unsaved changes" with Save question enabled, and leaving the page raises the browser's "Leave site?" prompt with nothing to save (it fired on every navigation of this run). Harmless to data — the item PATCH body has no `item_set_id` — but misleading. Proposal: refresh the snapshot when a set-membership call succeeds. Size S. **BUILT 2026-09-02:** the snapshot and the compare now go through `fingerprint(item)`, which omits `position` and `item_set_id` (server-managed, never edited in the card); the published-key-only check gets the current values put back so it still compares only the card's own fields. Re-check by hand: Join / Detach / Move show no badge and leaving the page raises no prompt (row 42).
+2. **An imported copy keeps the original's title.** Row 29's import produced a second "Rows 23-29 hand-run…" row indistinguishable in the list from the Published original. Proposal: suffix "(copy)" or prompt for a name on import. Size S. **BUILT 2026-09-02:** `uniqueImportName` in `lib/api/importBundle.ts` — the copy takes the first free name among the title, "title (copy)", "title (copy 2)"… for that owner (another owner keeps the plain title); unit + API tests; row 45.
+3. **Recorder artefact, not a finding — recorded so nobody chases it:** the automation's network log showed 503 for two editor DELETEs (question 4 at ~11:08 PT, the item-set at ~11:10). The page treated both as success (`confirmDelete` / `removeStimulus` only update state after a non-throwing response, and both updated without a reload), both deletions held server-side, a direct `fetch(DELETE)` a minute later was recorded as 204, and CloudWatch for the ALB `Secure-AppSe-7omxqiROaqxq` (11:00–11:15 PT, 1-min sums) has NO `HTTPCode_ELB_5XX_Count` and NO `HTTPCode_Target_5XX_Count` datapoints, with the DELETE minutes all-2XX. Nothing on the wire served a 503.
+
+## E5 slice 4 — figures in the import panel (2026-09-01)
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 30 | Import Unit 0 or Graphing Skills (text-layer PDFs with figures) | "N figures found in the PDF" opens above the candidate list with a thumbnail per figure and its page number; the counts match the stimulus scan (Graphing 13, Unit 0 7); items still import as before | ✅ 2026-09-02 (Claude driving James's Chrome against the origin). Unit 0: "7 figures found in the PDF", strip open above the candidates, one thumbnail each with its page (Fig 1–2 p1, 3 p2, 4 p3, 5–6 p4, 7 p7); "13 proposed · 7 page(s)". Graphing Skills: "13 figures found in the PDF", "11 proposed · 4 page(s)". Both counts match the stimulus scan. |
+| 31 | Import a scanned PDF | No figure strip; OCR path unchanged | ✅ 2026-09-02 — James supplied a real scan of the Graphing Skills assessment (scan-to-email, 4 pages, 2 text-showing operators total, each page one full-page CCITTFax image). Imported to the origin as `Graphing Skills SCAN - row 31 (2026-09-02)` (`fc2ba7f7-719b-4acc-9be7-5134d2ebe329`): **no figure strip at all**, and the OCR path returned "11 proposed · 4 page(s)" — the same 11 items the text-layer copy of this assessment produced, a useful cross-check of the two paths. Correct by construction, not by luck: `import-pdf/route.ts:180` guards the whole figure walk behind `if (!scanned)`, so `figure_count` stays 0 and `PdfImportPanel.tsx:396` never renders the strip. (Running `extractPdfLayout` on this file directly — which the app never does for a scan — yields 4 page-sized figures, all `omitted: "no_pixels"`, the CCITTFax decode giving no usable channels. Worth knowing if that guard is ever relaxed.) **Observed, not required by this row:** the model still proposed 2 text-only stimulus sets from the OCR text (items 9 and 10), and the one on item 10 came back with an entirely empty stimulus — a card offering nothing, which the teacher has to drop by hand. Not a row-31 failure; recorded as a candidate. **Dropped since 2026-09-02** — such a set is rejected as `empty` and its questions stay plain candidates (same slice as E14, `docs/pdf-import-enhancements.md`). **This row passed as written but the check was too shallow** — the candidate list was verified and nothing was ever added, so the draft persisted empty and the *content* of scanned items went unexamined. James spot-checked it and found two real defects, now **E13** (a scanned figure becomes prose, and on the four "Identify the type of graph" items that prose names the answer) and **E14** (`[FIGURE n]` markers leak into student-visible stems) in `docs/pdf-import-enhancements.md`. Read "OCR path unchanged" as "the strip is correctly absent", not as "scanned imports are sound". |
+
+## E5 slice 3 — proposed stimulus sets in the import panel (2026-09-01)
+
+Setup: a draft; import Unit 0 (figures shared by adjacent questions), Solubility
+(one curve, four forms), Graphing Skills (a figure per question).
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 32 | Import Unit 0 | Set cards appear in the candidate list: figure thumbnail(s), an editable stimulus text, the member questions indented under the card; cards the model did not pair but position did say "paired by position, please check" | ✅ (partial) 2026-09-02. Cards render as specified: STIMULUS · ITEMS 1, 2, 3, 4, 6, 7–8, 9–13 over the 13 candidates, each with its figure thumbnail + Discard, an editable stimulus textarea, and its questions indented; question 5 stayed a plain candidate, so the ranges skip 5 — coherent, not a numbering bug. **The "paired by position, please check" marker was never shown**, on Unit 0, Graphing Skills or Solubility: it renders only for `set.source === "adjacency"` (`PdfImportPanel.tsx:461`) and the model paired every figure itself on all three PDFs. The adjacency fallback is therefore UNEXERCISED by this run, not proven working. |
+| 33 | On a card: Split off the last question; Include the next question; Merge with the stimulus above; Discard a figure | The card's range and the indented questions follow each action; a card reduced to nothing disappears and its question returns to the plain list; the merged card carries both figures and both texts | ✅ 2026-09-02, all four actions on Unit 0. Include the next question: ITEMS 4 → ITEMS 4–5, plain candidate 5 absorbed, button became "Add 2 with stimulus". Split off the last question: reverted to ITEMS 4 with 5 back in the plain list. Merge with the stimulus above: ITEMS 2 + ITEMS 3 → ITEMS 2–3 carrying **both** figures (2 and 3, each with its own Discard) and **both** texts (merged textarea 2,011 chars, opening on the first source passage and ending on the second). Discard a figure: removed Figure 3 from the merged card, questions and text untouched; the figure stays listed in the PDF strip, which is right. Card reduced to nothing (Discard + Drop this stimulus on ITEMS 1) disappeared and returned its question to the plain list with Add / Add a stimulus — reproduced a second time on Graphing Skills. |
+| 34 | Add a card ("Add 2 with stimulus") | The questions appear in the editor next to each other under a stimulus card carrying the figure(s) as images plus the text; the figure is now an owned asset (Image picker lists it); Add all does the same for every card in document order | ✅ (partial) 2026-09-02. "Add 2 with stimulus" on Unit 0's merged ITEMS 2–3 → Questions (2) in the editor under one **STIMULUS · QUESTIONS 1–2** card, layout "Shown above its questions"; the stimulus text opens with `![Figure 2](asset:19d80b73-4600-482a-8c96-8aba6b9fae75)` and the preview renders that image (488×533, loaded) above the passage. The figure is an owned asset — `/dashboard/uploads` lists `/api/assets/19d80b73-…`. **"Add all" NOW exercised** in the clean re-import below. |
+| 35 | On a plain candidate, "Add a stimulus", type a passage, Add | A set of one lands in the editor with that passage and no image | ✅ 2026-09-02 on Graphing Skills. That import produced no plain candidates (all 11 came back as sets of one), so one was created via the row-33 path (Discard + Drop this stimulus). "Add a stimulus" opened an empty card with the placeholder "Passage or data the questions share (optional when a figure is the stimulus)"; typed a line, "Add with stimulus" → editor shows **STIMULUS · QUESTION 1** (singular) with exactly that passage and no image (no `/api/assets/` img on the page). |
+| 36 | Import Solubility | The curve is one figure; the model's sets per form (or the position rule on Form A's Q1) show which questions it was paired with — record what came back and whether it matched the paper | RECORDED 2026-09-02 — better than the row anticipated, and it bears on E9. The curve is **not one figure**: the extractor found **4 figures** (Fig 1–2 p1, 3–4 p2), i.e. the curve reproduced once per form. "24 proposed · 3 page(s)" came back as four clean sets of six — ITEMS 1–6, 7–12, 13–18, 19–24 — each paired 1:1 with its own copy of the curve (Fig 1→1–6, 2→7–12, 3→13–18, 4→19–24), all by the model (no adjacency marker). **No "Form A Q1:" stem prefixes this time** — the stems came back clean, a plain solubility question with a KaTeX chemical formula and no leftover form-label prefix — so the E9 symptom recorded in CLAUDE.md did not reproduce here. Also visible: KaTeX chemistry in stems (E7a) and "Show your work" → essay (E4). **Not verified against the paper**: whether the 6/6/6/6 split matches the real form boundaries is James's eyeball — the local text extractor could not read this PDF's encoding, so the inference is from the shape of the output only. |
+
+### Clean Unit 0 re-import (2026-09-02, after the row-33 exercise)
+
+The first Unit 0 draft was left in the state row 33 put it in — cards 2 and 3
+merged, Figure 3 discarded, then committed with "Add 2 with stimulus". Read
+cold that looks like two importer bugs (a stimulus carrying the *next* page's
+text; its right-hand figure missing); both were the hand actions, not the
+importer. Confirmed independently by running `extractPdfLayout` on the same
+PDF outside the app: 7 figures, none omitted, and Figure 3 — a chart on
+page 2 that sits to the right of its caption — extracts complete with its
+legend.
+
+That draft and the two others were deleted (backup:
+`scratchpad/handrun-backup.json`), and Unit 0 re-imported with **no edits at
+all**: `Unit 0 - clean PDF import 2026-09-02 (no edits)`, assessment
+`961602c0-cf8c-4001-89c1-54560221a8ec`, left on the origin for inspection.
+Second Bedrock run, same shape as the first — "7 figures found in the PDF",
+"13 proposed · 7 page(s)", cards over items 1, 2, 3, 4, 6, 7-8, 9-13, each
+paired 1:1 with its own figure, item 5 standalone. **Add all** then committed
+all of it: Questions (13), seven `STIMULUS · QUESTION(S)` cards in document
+order, all seven figures owned as assets, previews rendering (Figure 1, the
+first figure, 788x236 in its card preview). Row 34's "Add all does
+the same for every card in document order" is verified by that. The two
+Bedrock runs agreeing on the pairing is a determinism signal, not a
+guarantee — two runs.
+
+
+
+## E13 — scanned figures never become prose (2026-09-02)
+
+Setup: a draft; the Graphing Skills scan (`samples/Graphing Skills SCAN
+2026-09-02.pdf`, gitignored; original `~/Downloads/Scan to
+Email_20260902_092034.pdf`). Deployed 2026-09-02 12:08 PT (rev 7).
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 37 | Import the scan | A warning above the list: "N stimulus sets in this scan depend on a figure that could not be extracted…"; each flagged card's header ends "· figure not extracted" with the one-line instruction under it; every flagged stimulus is empty or verbatim printed text — no graph is described, no `[FIGURE n]` in any stem (the Bedrock run of 2026-09-02 gave 6 flagged sets, 5 empty). "Add with stimulus" on a textless card lands the question under a stimulus card with the Empty badge, and the publish checklist reads "Stimulus for question N is empty" until an image or text is added | ✅ 2026-09-02 (Claude driving Chrome against the origin, task def rev 7 = c3bea47 + e0e74bc pending). Draft `Row 37 scan (E13) 2026-09-02` (`53f87ecd-…`), the real scan uploaded through the panel: "11 proposed · 4 page(s) · scanned PDF, read by AI OCR"; the warning read "2 stimulus sets in this scan depend on a figure that could not be extracted…"; two cards headed "STIMULUS · ITEMS 9 · FIGURE NOT EXTRACTED" / "… ITEMS 10 …" with the one-line instruction, one carrying the printed lead-in sentence and one empty; no `[FIGURE n]` anywhere; no graph described (this run left the four "Identify the type of graph" items as plain candidates, stems `**Identify the type of graph:**` — the model marked the printed bold itself on the OCR path). "Add with stimulus" on the empty card → after a reload, "STIMULUS · QUESTION 1" with the Empty badge and the Publish checklist "Stimulus for question 1 is empty". Two Bedrock runs of this scan now (local: 6 flagged sets; origin: 2) — the flag holds, the count varies. |
+## E6 — bold and italic (2026-09-02)
+
+Deployed 2026-09-02 12:08 PT (rev 7); the pair-side and card-preview fixes in the deploy after it.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 38 | In a stem type `Which is **NOT** an _abiotic_ factor? Solve $x_1$`; same markers in a choice and in a stimulus; open the print view | The card's PREVIEW, the iframe preview and the print view show **NOT** bold and *abiotic* italic with no markers visible, `$x_1$` rendered as math (the subscript untouched); a choice and a stimulus behave the same | ✅ 2026-09-02 on `E6 / E7(b) hand-run 2026-09-02` (`ea0284c1-…`, items created through the API). Card previews: **Read** / *passage* / x² on the stimulus, **NOT** / *abiotic* / x₁ + x₂ / **x** on the stem, no markers visible. Iframe preview and print view: strong = Read, NOT, x, fern; em = passage, abiotic, sunlight; four KaTeX renders. **Found:** match pair sides showed `_Dog_` / `**Puppy**` raw in the iframe and print (the client renders them) — fixed the same hour (`e0e74bc`, pairs and order steps through `renderItemContent`; also closes an E7(a) gap, KaTeX in pairs never rendered on the teacher side). Re-checked on rev 8 (12:36 PT): the print view carries `<em>Dog</em>` and `<strong>Puppy</strong>`, no raw markers. |
+| 39 | Import Unit 1 (text layer) | Item 7's stem arrives as `Which of the following factors is **ABIOTIC**?` and the "independent / dependent variable" items carry `**…**` (the Bedrock run of 2026-09-02 gave five); after Add the editor preview renders them bold | ✅ 2026-09-02. Draft `Row 39 Unit 1 (E6)` (`f0bb7c28-…`), Unit 1 uploaded through the panel: "11 proposed · 2 page(s) · 2 need an answer key"; candidates carry `**ABIOTIC**`, `**independent variable**`, `**dependent variable**`, `**controlled variable (constant)**` and one whole-stem bold (the printed instruction). Add on the ABIOTIC candidate → the editor card shows the stem with its markers but **no PREVIEW line**: `MathPreview` only rendered for `$` or an image ref, so an emphasis-only stem never previewed in the card (iframe and print render it). Fixed the same hour (MathPreview `interesting` includes emphasis markers) — not yet on the origin, re-checked on rev 8 (12:36 PT): the card now shows "PREVIEW Which of the following factors is **ABIOTIC**?" with the bold rendered. Observation (twice today, rows 37 and 39): after Add from the PDF panel the editor's question list stayed at its old count until a reload. Cause found in code the same afternoon: the editor initialises `items` / `itemSets` from props once and nothing syncs them on `router.refresh()`, so a panel import could never appear without a reload (row 34's live update that morning must have followed a reload). Fixed: the panels' `onImported` now pulls `/api/assessments/:id/items` and merges — row 43. |
+## E9 — several forms in one PDF (2026-09-02)
+
+Deployed 2026-09-02 12:08 PT (rev 7).
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 40 | Import Solubility | Summary ends "· 4 forms"; the notice reads "This PDF looks like 4 forms (6 / 6 / 6 / 6 questions, each numbered from 1)" with All forms selected; choose **Form 1 only (6 questions)** → the list shows only the first set of six (18 candidates and three set cards disappear); Add all adds six questions under one stimulus card; back to All forms → the others return, still addable | ✅ 2026-09-02. Draft `Row 40 Solubility (E9)` (`a549b6c7-…`): "32 proposed · 3 page(s) · 24 need an answer key · 4 forms"; notice "This PDF looks like 4 forms (8 / 8 / 8 / 8 questions, each numbered from 1)…" with All forms checked; **Form 1 only (8 questions)** → the list collapsed to "STIMULUS · ITEMS 1–8" with one Add button; Add all → server holds 8 items in one set of 8; back to **All forms** → the four cards return, the first "Added", three still addable. (The origin's model run gave 8 per form here vs 7 in the local run — the E4 twins vary; the grouping held either way.) |
+| 41 | Import Solubility again into a fresh draft named `Solubility`; choose **One assessment per form**; Add all | This draft gets Form 1 (7 questions under one stimulus card carrying the curve); three new drafts appear in the list — `Solubility — Form 2`, `— Form 3`, `— Form 4` — each with its own 7 questions under a stimulus card with the same curve; the notice lists them as links with their counts; nothing is duplicated into this draft | ✅ 2026-09-02. Draft `Solubility` (`4da32763-…`): **One assessment per form** → the sentence read "Add all puts Form 1 here and creates 3 new drafts — \"Solubility — Form 2\" … Form 4 — one per remaining form. The list below shows Form 1."; Add all → this draft 8 items in one set of 8; `Solubility — Form 2`, `— Form 3`, `— Form 4` listed as links with "8 questions" each, and each holds 8 items in one set whose stimulus carries the curve as an asset; no error banner. Nothing duplicated into this draft. |
+| 42 | On a draft: Add stimulus above, Join, Detach, Move a block; then navigate away | No question shows "Unsaved changes" from those actions alone and no "Leave site?" prompt appears; editing a stem still shows the badge and still prompts | ✅ 2026-09-02 on the fixture: Detach, Join and Move a block → zero "Unsaved changes" badges after each; navigating to the dashboard afterwards raised no "Leave site?" prompt (the automation reports a blocked navigation when one appears). Stem edits not re-checked in this pass. |
+| 43 | On a draft with one question, import two items from CSV (and, separately, Add one from the PDF panel); do not reload | The question list grows to the new count within a second and the new cards are editable; a stem being edited in another card keeps its unsaved text | ✅ 2026-09-03 (Claude driving Chrome on the origin, rev 9). Draft `Hand-run 2026-09-03 rows 43–56` (`114126fc-…`): one MC added and its stem edited but not saved; CSV panel Preview → "2 valid · 0 invalid", Commit → "Imported 2 item(s)" and the heading read Questions (3) with both new cards editable, Q1 still holding its unsaved text and badge; then a two-question PDF through the panel (Bedrock, "2 proposed · 1 page(s) · 1 need an answer key"), Add on one → Questions (4), the unsaved text still there. No reload at any point. |
+| 44 | In a stem, select a word and click **B**; in a choice, put the caret mid-word and click *I*; in a stimulus with nothing focused, click **B** | The word is wrapped `**…**` and the card preview shows it bold; the choice gains ` _italic_ ` at the caret with spaces so it renders; the stimulus gets ` **bold**` appended; a click under one field never edits another | ✅ 2026-09-03. Stem: double-click a word, **B** → `**UNSAVED** edit row 43 …` and the card PREVIEW showed it bold. Choice: caret mid-word (Home, →×3), *I* → `Cho _italic_ ice A` with the spaces, PREVIEW italic. Stimulus with nothing focused, **B** → `**bold**` (no leading space on an empty field), PREVIEW bold. Neither the stem nor the choice changed when the other field's button was clicked. |
+| 45 | Import the same exported file twice | The second assessment is listed as "<title> (copy)", a third as "<title> (copy 2)"; the first keeps the plain title | ✅ 2026-09-03 through the same import route the dashboard uses: export → import twice → "Hand-run 2026-09-03 rows 43–56 (copy)" and "… (copy 2)", the original listed with its plain title. (Copies deleted afterwards.) |
+
+## E12 — a student's earlier answer as a stimulus (2026-09-02)
+
+Needs the E12 build (slices 1–4; migration 0026 on Aurora after the deploy).
+Setup: an Outline draft with one essay question; an Essay draft with two
+questions under one stimulus card.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 46 | On the Essay's stimulus card, type a lead-in, click **Start with each student's own earlier answer…**, pick Outline then its question, **Use this answer** | The card reads "Each student sees their own answer to '<stem>' from Outline (still a draft)…" with Remove; no "Unsaved changes"; the Publish checklist warns "Stimulus for question N pulls from \"Outline\", which is not published" and no "is empty" line; Show preview and the print view show the lead-in then the dashed placeholder naming the question; Remove clears it | ✅ 2026-09-03. Outline draft `Outline (row 46) 2026-09-03` with one essay. Stimulus text "Your outline:" saved; picker → the Outline (marked draft) → "Q1 · <the outline question's stem, truncated>" → Use this answer → the card read "Each student sees their own answer to “<the outline prompt's stem>” from Outline (row 46) 2026-09-03 (still a draft), under the text above. A student with no answer yet writes it in place. Remove", no Unsaved changes. Publish dialog: "Stimulus for question 1 pulls from \"Outline (row 46) 2026-09-03\", which is not published" and no "is empty" line. Preview and print view: "Your outline:" then the dashed "Each student's own answer to … appears here." Remove → the Start link came back, no badges. |
+| 47 | Publish Outline; a student (local dev, minted token) hands in the Outline with an answer, then opens the Essay; another student opens the Essay with no Outline; both hand in; open the Essay's Scoring queue | Student one's essay entry reads "Outline: used (N words)"; student two's reads "Outline: missing" until they write it in place, then "written inline (N words)" | ✅ 2026-09-03 (one student, two attempts). The student opened the hand-run test with no Outline attempt: the passage page showed the writing area; the text posted as an essay keyed by the Outline question (client log) and the Scoring queue entry for the essay under that set reads "Outline: written inline (4 words)" (after Q2–Q3 were joined into the set — the set had held only the MC). Then the student handed in the Outline and joined an import copy of the same test: the passage showed the Outline text as plain text with no writing area (James at the screen). The "used (N words)" queue label itself was not seen — no essay under the set was answered on the copy. |
+
+## E3 — the table item (2026-09-02)
+
+Needs the E3 build (slices 1–4, `docs/e3-table-item-design.md`) — ships in the
+same deploy as the E12 client rebuild (an older client refuses a bundle with
+the unknown type). No migration. Client rows are in `client/MANUAL-CHECKS.md`
+("E3 slice 3").
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 48 | Add a question → **Table**; rename the headings (put `$(o-e)^2$` in one), remove a row, add a column, type a label on one row; Save; reload | The card shows column and row lists over a key grid seeded Column A / B × Row 1 / 2; the math heading previews under its input; the corner caption field appears once a row has a label; Save is accepted and a reload shows the same grid; the Publish checklist says "still has placeholder headings" while the seeds remain, "has an empty column heading" for a blank one, and **nothing about an answer key** for a keyless table | ✅ 2026-09-03. Add → Table: card seeded Column A / B × Row 1 / 2 over the key grid. Renamed one heading to a plain label and another to a math heading with `$...$` (PREVIEW rendered the math under the input), removed Row 2 (Remove disabled at one row), Add column → Column 3, gave Row 1 a plain label, and the Corner caption field appeared. Publish checklist before saving: "Question 5 still has the placeholder text, has an empty column heading". After a corner caption, a plain final-column heading and a real stem and Save (Saved 8:21 AM), a reload showed the same grid in the card and in the API, and the checklist had no Question 5 line — no answer-key line for a keyless table. |
+| 49 | Type expected answers in two cells, Save; Export; import the file; Publish, then change one expected answer and Save; change a heading and Save | The caption reads "2 cells checked, one point each"; the export JSON carries `cell_keys` with those two cells; the imported copy has the same grid and keys; after Publish the key edit saves (answer-key-only door) and the heading edit is refused | ✅ 2026-09-03. Expected answers 12 and 1.5 → caption "2 cells checked, one point each"; Save; export carried `cell_keys: {r1: {c1: "12", c3: "1.5"}}` with the grid and corner; the imported copy had the same keys and corner. Publish → a PATCH changing only the keys 200 (keys now r1.c1 / c2 / c3), a PATCH changing a heading 409 `assessment_published_editing_locked`; Unpublish 200. |
+| 50 | Show preview; open the print view; also for a table whose row labels are all blank | The grid with blank cells under the stem, headings rendered (no `$`), the corner over the label column; print cells are taller; the unlabelled table shows no label column and no corner | ✅ 2026-09-03. Preview: the grid under the stem with a corner caption over the label column, headings including one rendered as KaTeX (no `$`) and one plain, one labelled row, 3 blank cells; a second, unlabelled table (two plain headings, three rows) showed 6 cells, no label column, and its corner "ignored" nowhere. Print view: both tables `fill-table fill-table-print`, cells 32px tall (24px on screen). |
+| 51 | As a student (minted token) GET the delivery bundle | The table item carries `columns`, `rows`, `corner` and nothing else — no `cell_keys`, none of the expected text anywhere in the body | ✅ 2026-09-03 by behaviour, not by reading the JSON: the client rendered the table's grid with its headings and corner and no expected text anywhere; the design-tool suite (delivery-api) covers the field list. A student token was not read from the client. |
+| 52 | Auto table (keys `12` and `1.5`): a student hands in `12` and `1.50`; Results. Then a hand-scored table: a student hands in; Scoring queue | Results cell reads `2 / 2` (1.50 matched 1.5 as a number); the queue card shows the student's grid with "✓ / ✗ expected …" under each keyed cell and "n of m keyed cells match", the points field reads "Points (of N cells)" and a score out of N saves | ✅ 2026-09-03, auto half: on the import copy the student typed 12 / 4 / 1.5 into the keyed table; after the scoring pass Results reads `3 / 3` (Q1 and Q4 1 / 1). The `1.50` = `1.5` numeric case was not exercised in this run — the first sitting's 12 / 1.50 went into the keyless Unit 0 table, so the keyed table scored 0 / 3 there (not a defect); numbers-as-numbers stays covered by scoring-auto tests. **Hand-scored half NOT verified — finding E3-F1:** the two keyless tables (default `auto`, no keys) were skipped as unscorable AND never reached the Scoring queue (the queue lists non-auto methods only), so they sit unscored while the editor caption says "hand-scored until you fill some in". Decision pending: fix the caption, or default a keyless table to hand-scored. Also noted: auto scoring ran only when triggered (`POST /api/attempts/:id/score`), not on hand-in — existing behaviour. |
+| 53 | Import Unit 0 through the PDF panel | Item 8 arrives as `table · N × M cells` with "Add as: Table | Essay text box"; Add creates a table question with the headings and row labels from the PDF (check the orientation — the 2026-09-02 run transposed the printed grid and made the formula line a column; both are edits in the card) | ✅ 2026-09-03. Unit 0 through the panel (Bedrock): "12 proposed · 7 page(s) · 2 need an answer key"; the card STIMULUS · ITEMS 9–12 (Figure 7 + the source text) held short_text, **`table · 5 × 4 cells`** with "Add as: Table (a grid of cells to fill in) | Essay text box", short_text, essay. Add 4 with stimulus → a table question inside the set: five math-heading columns (chi-square-style: observed, expected, the two difference terms and their quotient) and four labelled rows plus a trailing summary-formula row, with a corner caption, no keys. Orientation transposed from the printed table again, and this run folded the formula line into the last row (last night's run made it a sixth column) — both are edits in the card, as the design page says. Side check: "Add 2 with stimulus" on the neighbouring card (items 7–8, Figure 6) added both (Questions 6 → 8). |
+
+## Client paging — the setting and the bundle (2026-09-02)
+
+Needs the client-paging build (`docs/client-paging-design.md`; migration
+0027 on Aurora after the deploy). The client rows are in
+`client/MANUAL-CHECKS.md` ("Client paging").
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 54 | Settings tab: set "How students move through the test" to **One question at a time**, Save settings; reload; Publish; Unpublish; Export; import the file; also import an older export that has no such field | The select keeps "One question at a time" after the reload; Publish and Unpublish still work with the field in the metadata PATCH (no 409); the export JSON carries `"student_layout": "paged"` and the imported copy shows the same choice; the older file imports as "One scrolling page"; an assessment left on scrolling exports with no `student_layout` key | ✅ 2026-09-03. Settings → One question at a time → Save settings (Saved 8:26 AM); a reload shows the same choice. With the field in the metadata PATCH: Publish 200, Unpublish 200; a metadata PATCH while published is 409 (the lock, as designed). Export carried `"student_layout": "paged"` and the imported copy was paged; earlier in the run the scrolling export had no such key and its two imports read scroll. |
+| 55 | As a student (minted token) GET the delivery bundle for a paged assessment and for a scrolling one | The paged bundle carries `"layout": "paged"` at the top level; the scrolling one has no `layout` key at all | ✅ 2026-09-03 by behaviour: the paged assessment rendered one page at a time in the client (passage page first, bar, strip, disclosure — James at the screen); the scrolling copies rendered as one page yesterday. The JSON itself was not read from the client (no student token in hand). |
+| 56 | As a student (minted token) on a paged assessment: GET the bundle before answering, answer two questions (PUT), GET again; relaunch is the client's row | No `answered_item_ids` key at first; afterwards the key lists exactly those two item ids in question order; a second student's answers on the same assessment never appear in the first student's bundle | ✅ 2026-09-03 by behaviour: after quitting and relaunching mid-test the client rejoined the same attempt ("resumed" in the log) and showed green checks on questions 1, 4 and the keyed table from the start, review page "3 of 12 answered". **Finding P-1 (DECIDED, high-priority build):** the checked questions' fields were empty — no field prefills from saved answers — so a student reads the mark as a lost answer. Decision (James, 2026-09-03): the delivery route sends the attempt's saved responses and each field restores its value on load (`docs/client-paging-design.md`). |
+
+## E3-F1 — a keyless table defaults to hand-scored (2026-09-03)
+
+Fixes finding E3-F1 above (row 52): `effectiveScoringMethod` and the
+editor's default label now read `config.cell_keys`, not just the item type.
+No migration; ships with the client-fixes batch deploy.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 57 | Publish a keyless table (no explicit scoring choice); a student answers it; open the Scoring queue. Then, on a draft copy, type a key into one cell | The queue lists the keyless table with max_points = every cell; before any key the "Default —" option in the editor's scoring select reads "Default — Hand-scored"; after the first key it reads "Default — Auto" | ✅ 2026-09-03 (origin, rev 10; fixture `Client-fixes hand-run 2026-09-03`, imported from a bundle with a 2 × 2 keyless table). On the draft before publishing the select read "Default — Human (teacher scores)" (the label for `human`; "Hand-scored" in this row is wording); typing one key flipped it to "Default — Auto (machine-scored)" and the caption to "1 cell checked"; cleared without saving, published keyless. The student filled all four cells; the Scoring queue lists the table with `scoring_method: human`, `max_points: 4`, the student's grid in the entry. |
+
+## P-1 — saved answers ride the delivery bundle (2026-09-03)
+
+`docs/resume-prefill-design.md` slice 1. No migration; ships with the
+client-fixes batch deploy. The client half is the client's own rows.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 58 | As a student (minted token): GET the delivery bundle for a fresh attempt; PUT answers to an MC, a match and a drawing (register the slot, PUT the PNG, PUT the response); GET again | The first bundle has no `answered_item_ids`, `saved_responses` or `saved_uploads`. The second carries all three: `saved_responses` keyed by those item ids with the MC's `choice_id` verbatim, the match's `matches` using ids that appear in that bundle's own `lefts` / `rights`, and the drawing's `upload_id`; `saved_uploads[<upload_id>]` is `{ content_type: "image/png", base64 }` and decodes to the PNG that was PUT. A second student's bundle on the same assessment carries none of it | |
+
+## Batch 1 — scoring hygiene (2026-09-03)
+
+`docs/reporting-design.md` R0, built 2026-09-03 (`eb2c969` auto-score on
+submit, `df899b2` the F-1 drawing viewer, `7d9a3e0` identifiers on
+results). No migration; design tool only. Row 59 needs a student
+(the demo account on the origin is enough); 60 and 61 are teacher-side
+in Chrome and can reuse the `Client-fixes hand-run 2026-09-03` sitting's
+attempts (it has three drawings and a keyless table already handed in).
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 59 | A student hands in an assessment with an MC and an essay; open Results WITHOUT pressing Score | The MC cell already shows `1/1` (or `0/1`), the essay `—`, Pending 1; pressing Score afterwards reports `already_scored` for the MC and changes nothing | ✅ 2026-09-03 evening (origin, rev 11). The client-fixes fixture could not be reused — one attempt per student per assessment, and the demo student had already handed in on it (the client said so) — so the run used `E6 / E7(b) hand-run 2026-09-02` (short text, MC, match, short text; every item auto), a fresh Picked-students session `RCW723`, 60 min, James at the client under simulated lockdown. Results opened WITHOUT Score: Q1 `·` (unanswered), Q2 `0/1`, Q3 `1/1`, Q4 `1/1`, Total `2/4`, **`50%`**, Pending empty — so the D-R2 filled-percent case is now live too, and the section label resolved through the enrollment fallback (a Picked-students sitting names no section). Then `POST …/score` → `{ already_scored: 3, scored: 0, total_responses: 3 }`. The essay half (a non-auto item left untouched) was not on this fixture; row 61's fixture showed it indirectly (Pending 5 after its own hand-in) and the unit test covers it. Two things learned: the one-day roster row expires at the 06:00 import — re-run `~/secure-test-hand-teacher-row.sh` before any evening sitting; and "Rest of day" after 4 PM PT means 60 minutes, sittings run at any hour. |
+| 60 | Open the Scoring queue on an assessment with a handed-in drawing; copy the image URL and open it in a second Chrome profile signed in as different staff (or signed out) | The drawing shows in the queue entry as an image with the grid / axes paper if the item had one; the raw URL returns the PNG for the owner and 404 for anyone else; the response carries `Cache-Control: private, no-store` | ✅ 2026-09-03 (origin, rev 11; Claude in Chrome on the `Client-fixes hand-run 2026-09-03` sitting). All three drawings render in the queue with real dimensions (800 × 500, 800 × 500, 800 × 600) — the blank canvas's circle, the grid, and the axes with the sketched line; the paper is in the PNG. Owner fetch of the image URL: 200, `image/png`, 10 458 bytes, `cache-control: private, no-store`. Signed-out fetch: 401 `unauthenticated` (the staff gate fires before the route). An unknown response id: 404. The other-staff 404 was NOT exercised live (no second staff account — same gap as row 29); the unit test covers it. |
+| 61 | On Results: read the row header and the Total / % columns; download the CSV | Under each name: `<student number> · <Course · Period>` (the sitting's section when it named one); Total reads `points/<sum of every item's max>` (a rubric essay counts its rubric max, a keyed table its cells, everything else 1); % is blank while Pending > 0 and an integer once 0; the CSV header is `student_number,name,email,section,submitted_at,Q1..Qn,total,max,percent,unscored` | ✅ 2026-09-03 (origin, rev 11, same sitting). Row header shows the 7-digit student number under the name; section blank — expected, the sitting named no section and the demo student is in none of James's current sections (the enrollment fallback resolved nothing). Total `2/14` = ten 1-point items + the keyless table's four cells (D-R1); `%` blank with Pending 5 (D-R2). CSV: header exactly as specified, CRLF, one data row with the roster number and the `@edtools.psd401.net` email, empty section, `…,2,14,,5`; JSON carries `scored_max_points: 4` alongside `max_points: 14`. The filled-percent case (Pending 0) was not exercised live — it needs five hand scores on the fixture; the unit test covers it. |

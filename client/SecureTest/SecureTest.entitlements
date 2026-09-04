@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- AAC-2a (2026-08-27): only the restricted AAC key lives here. The sandbox
+     keys (app-sandbox, user-selected read-only, network client) are synthesized
+     from the target's ENABLE_* build settings and MERGED with this file at
+     signing time - do not duplicate them here, and do not let Xcode rewrite
+     this file (its 2026-08-27 auto-write also dropped the SecureTestCore
+     package references from the pbxproj; docs/phase-7-slices.md "Xcode note").
+     Verify the merge after any signing change:
+       codesign -d --entitlements - <built .app>
+     must show this key AND all three sandbox keys. -->
+<dict>
+	<key>com.apple.developer.automatic-assessment-configuration</key>
+	<true/>
+</dict>
+</plist>

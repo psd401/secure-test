@@ -1,0 +1,24 @@
+# Context for design-tool/Dockerfile (built from repo root). Keeps the
+# context to the workspace manifests + design-tool + packages sources.
+**/node_modules
+**/.next
+**/.env*
+.git
+client
+docs
+poc-a-aac-capture
+poc-b-test-loop
+poc-c-classlink-sso
+BuildAnEducationalAssessmentApp
+storage
+storage-test
+# design-tool locals that must not reach the image: dev-uploaded assets,
+# the CDK app, build caches.
+design-tool/storage
+design-tool/storage-test
+design-tool/infra
+design-tool/tsconfig.tsbuildinfo
+# Never in the image: gitignored teacher PDFs and the test tree (both were
+# being swept in by the standalone trace — 38 MB of samples/ in the ECR image).
+design-tool/samples
+design-tool/test

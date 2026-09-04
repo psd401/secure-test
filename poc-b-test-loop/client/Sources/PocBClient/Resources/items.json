@@ -1,0 +1,74 @@
+{
+  "test_id": "poc-b-sample-test",
+  "title": "PoC-B sample assessment",
+  "items": [
+    {
+      "id": "q1",
+      "stem": "What is 7 + 5?",
+      "choices": [
+        { "id": "a", "text": "11" },
+        { "id": "b", "text": "12" },
+        { "id": "c", "text": "13" },
+        { "id": "d", "text": "14" }
+      ],
+      "correct_choice_id": "b"
+    },
+    {
+      "id": "q2",
+      "stem": "Which of these is a primary color?",
+      "choices": [
+        { "id": "a", "text": "Green" },
+        { "id": "b", "text": "Orange" },
+        { "id": "c", "text": "Red" },
+        { "id": "d", "text": "Purple" }
+      ],
+      "correct_choice_id": "c"
+    },
+    {
+      "id": "q3",
+      "stem": "The capital of Washington State is...",
+      "choices": [
+        { "id": "a", "text": "Seattle" },
+        { "id": "b", "text": "Spokane" },
+        { "id": "c", "text": "Olympia" },
+        { "id": "d", "text": "Tacoma" }
+      ],
+      "correct_choice_id": "c"
+    },
+    {
+      "id": "q4",
+      "type": "multiple_choice_multi",
+      "stem": "Select ALL of the following that are primary colors.",
+      "choices": [
+        { "id": "r", "text": "Red" },
+        { "id": "g", "text": "Green" },
+        { "id": "b", "text": "Blue" },
+        { "id": "y", "text": "Yellow" }
+      ],
+      "correct_choice_ids": ["r", "b", "y"]
+    },
+    {
+      "id": "q5",
+      "type": "short_text",
+      "stem": "Name the largest ocean on Earth.",
+      "correct_answer": "Pacific"
+    },
+    {
+      "id": "q6",
+      "stem": "Compute $\\frac{1}{2} + \\frac{1}{3}$. (Slice 13 KaTeX smoke.)",
+      "choices": [
+        { "id": "a", "text": "$\\frac{2}{5}$" },
+        { "id": "b", "text": "$\\frac{5}{6}$" },
+        { "id": "c", "text": "$\\frac{1}{6}$" },
+        { "id": "d", "text": "$1$" }
+      ],
+      "correct_choice_id": "b"
+    },
+    {
+      "id": "q7",
+      "type": "short_text",
+      "stem": "A right triangle has legs 3 and 4. The hypotenuse $c$ satisfies $$c^2 = 3^2 + 4^2$$ — what is $c$?",
+      "correct_answer": "5"
+    }
+  ]
+}

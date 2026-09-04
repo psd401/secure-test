@@ -1,0 +1,9 @@
+node_modules
+cdk.out
+dist
+*.tsbuildinfo
+.env
+.env.local
+# Real account id, OAuth client ids, MWAA role ARN, production hostname —
+# see cdk.context.json.example for the shape and a placeholder to copy.
+cdk.context.json

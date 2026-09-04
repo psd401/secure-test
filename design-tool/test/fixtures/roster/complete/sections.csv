@@ -1,0 +1,5 @@
+ps_id,school_id,course_code,course_name,term_id,period_expression
+5001,200,MAT101,Algebra 1,3100,3(A)
+5002,200,SCI201,Biology,3100,4(A)
+5003,200,ENG101,English 9,3100,1(A)
+5004,100,ELE500,Grade 5 Homeroom,3000,HR

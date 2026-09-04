@@ -1,0 +1,12 @@
+{
+  "format_version": 1,
+  "snapshot_id": "fixture-2026-08-26",
+  "generated_at": "2026-08-26T09:00:00Z",
+  "source": "test fixture — fictional people, not a warehouse export",
+  "files": {
+    "students": { "path": "students.csv", "rows": 7, "sha256": "6b43e7f233d53888a5dd6335e2914e89032a1fa2dbb6990f66e6fabf2e31a352" },
+    "sections": { "path": "sections.csv", "rows": 4, "sha256": "0744464bb2f6c62b6c55e769e87bfa7c9085e40f63cab5815f909752329bcc28" },
+    "section_teachers": { "path": "section_teachers.csv", "rows": 5, "sha256": "ef8a6217d8dd9a11bc4045199c02e4570b9bc3c75a7d6b95ea9bade602563352" },
+    "enrollments": { "path": "enrollments.csv", "rows": 8, "sha256": "2c316f6d0997d32f37b2cfad80fdbcc15d52c4886dee835166702dcb82eac14b" }
+  }
+}

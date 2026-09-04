@@ -1,0 +1,1 @@
+ALTER TABLE "items" ADD COLUMN "config" jsonb DEFAULT '{}'::jsonb NOT NULL;

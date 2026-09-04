@@ -1,0 +1,12 @@
+{
+  "name": "secure-test",
+  "private": true,
+  "packageManager": "bun@1.3.6",
+  "workspaces": [
+    "packages/*",
+    "design-tool"
+  ],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true"
+  }
+}

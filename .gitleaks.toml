@@ -1,0 +1,96 @@
+title = "secure-test gitleaks config"
+
+# Extends gitleaks' default ruleset (credential-shaped secrets: API keys,
+# private keys, bearer tokens, connection strings with embedded
+# passwords). The default ruleset is silent on everything this repo
+# actually needs to keep out — AWS account ids, a district NAT address,
+# real staff/student emails, a production hostname, Google OAuth client
+# ids, personal names — because those are identifier/PII-shaped, not
+# credential-shaped. The rules below close that gap for the patterns
+# named in docs/public-release-plan.md's scan (slice 1) and CLAUDE.md's
+# "Contributing" section (slice 5). This is a backstop, not a substitute
+# for review: a hostname or a person's name has no fixed shape the way a
+# private key does, so these rules catch common cases, not every case.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "psd-student-domain-numeric-email"
+description = "A student Google account (digit-only local part @edtools.psd401.net) — real students authenticate with their PowerSchool student number as the local part; named local parts (ada.fixture@, teacher.one@, ...) are synthetic test fixtures and don't match this."
+regex = '''\b[0-9]{4,10}@edtools\.psd401\.net\b'''
+tags = ["student-pii"]
+
+[[rules]]
+id = "roster-id-near-keyword"
+description = "A 9-digit number near an SSID/student-number/PowerSchool-id field name"
+regex = '''(?i)(?:ssid|student_number|ps_id|student number)[\s\S]{0,40}\b[0-9]{9}\b|\b[0-9]{9}\b[\s\S]{0,40}(?i)(?:ssid|student_number|ps_id|student number)'''
+tags = ["student-pii"]
+
+[[rules]]
+id = "md-digit-run-7-or-9"
+description = "A 7- or 9-digit run in a markdown file — the shapes a PowerSchool student number (7) or an SSID (9) take"
+regex = '''\b[0-9]{7}\b|\b[0-9]{9}\b'''
+path = '''\.md$'''
+tags = ["student-pii"]
+
+[[rules]]
+id = "aws-account-id-in-context"
+description = "A 12-digit number next to an AWS-account-shaped context (aws://, arn:aws:, an ECR registry, --profile, or the word 'account')"
+regex = '''(?i)(?:aws://|arn:aws:|\.dkr\.ecr\.|--profile|account)[\s\S]{0,40}\b[0-9]{12}\b|\b[0-9]{12}\b[\s\S]{0,40}(?i)(?:aws://|arn:aws:|\.dkr\.ecr\.|--profile|account)'''
+tags = ["district-infra"]
+
+[[rules]]
+id = "google-oauth-client-id"
+description = "A Google OAuth client id (<10+ digit project number>-<random>.apps.googleusercontent.com) — this shape only matches real Google-issued ids; the repo's synthetic test fixtures (123-abc..., web-client-id..., somebody-elses-client...) have no long numeric prefix and don't match"
+regex = '''\b[0-9]{10,}-[a-zA-Z0-9]+\.apps\.googleusercontent\.com\b'''
+tags = ["district-infra"]
+
+# Global allowlist — applies to every rule above (and to the extended
+# default rules).
+[allowlist]
+description = "Known-synthetic values and paths that intentionally hold real values but are never committed"
+regexes = [
+  # Repeated-digit placeholders used throughout the codebase for
+  # synthetic AWS account ids / role numbers / OAuth client-id prefixes
+  # (e.g. 111111111111, 000000000000). Go's RE2 has no backreferences, so
+  # this is spelled out as "6 of the same digit in a row" for each digit
+  # rather than `(\d)\1{5,}`.
+  '''000000|111111|222222|333333|444444|555555|666666|777777|888888|999999''',
+  # Short git commit hashes that happen to be all-digits (hex is a
+  # superset of decimal, so a 7-character short SHA occasionally lands
+  # here by coincidence) — indistinguishable from a real 7-digit number
+  # by shape alone; each was checked individually against `git log` to
+  # confirm it names a real commit, not a student number, before being
+  # added. Rule md-digit-run-7-or-9 will keep surfacing new ones; that's
+  # expected — check each with `git log <hash>` and add it here (or, if
+  # it truly is student data, remove it and fix the source line instead).
+  '''6807421''',
+  '''8689851''',
+  '''5907048''',
+  '''4125620''',
+]
+paths = [
+  # Real values live here on purpose (gitignored — see each path's own
+  # .gitignore entry and comment) so local dev / deploy keeps working;
+  # scanning them is scanning exactly what git will never track, not the
+  # public tree this config exists to protect. A directory scan
+  # (`gitleaks dir` / `detect --no-git`) reads gitignored files too, which
+  # is why the check that matches a commit is the staged form:
+  # `gitleaks git --pre-commit --staged --config .gitleaks.toml`.
+  '''design-tool/infra/cdk\.context\.json$''',
+  '''^_ops-staging/''',
+  '''(^|/)\.env[^/]*$''',
+  '''(^|/)\.next/''',
+  # Build output / dependency directories — never source, occasionally
+  # large enough to make a full scan slow, and not what "the tracked
+  # tree" means here.
+  '''node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)cdk\.out/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.build/''',
+  '''(^|/)\.swiftpm/''',
+  '''(^|/)DerivedData/''',
+  '''(^|/)storage(-test)?/''',
+  '''(^|/)poc-frames/''',
+]

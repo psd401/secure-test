@@ -1,0 +1,220 @@
+{
+  "test_id": "01ce897b-a55f-4aff-9de7-968f4183465a",
+  "title": "Delivery Fixture",
+  "items": [
+    {
+      "type": "multiple_choice_single",
+      "id": "c0dc145d-35af-4ca7-915f-6a281dc40986",
+      "stem": "Which organelle produces ATP?",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "Mitochondrion"
+        },
+        {
+          "id": "c2",
+          "text": "Ribosome"
+        },
+        {
+          "id": "c3",
+          "text": "Golgi apparatus"
+        }
+      ]
+    },
+    {
+      "type": "multiple_choice_multi",
+      "id": "2a1ce688-54da-4c55-aa3c-d01a97bf7866",
+      "stem": "Select all prime numbers. </script><b>not markup</b>",
+      "choices": [
+        {
+          "id": "c1",
+          "text": "2"
+        },
+        {
+          "id": "c2",
+          "text": "4"
+        },
+        {
+          "id": "c3",
+          "text": "7"
+        }
+      ]
+    },
+    {
+      "type": "short_text",
+      "id": "c7d5c2e6-4b0a-40b3-aedd-e9bc402473ee",
+      "stem": "Name the process shown here: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)"
+    },
+    {
+      "type": "essay",
+      "id": "54c7908c-330d-4fd8-a1db-6ba6d854b39f",
+      "stem": "Explain how the author builds their argument. Use $E = mc^2$ if relevant.",
+      "max_word_count": 400,
+      "placeholder": "Write your response here…",
+      "rubric": {
+        "style": "analytic",
+        "criteria": [
+          {
+            "id": "cr1",
+            "name": "Use of evidence",
+            "levels": [
+              {
+                "id": "l1",
+                "label": "Emerging",
+                "points": 1,
+                "descriptor": "Cites no evidence."
+              },
+              {
+                "id": "l2",
+                "label": "Proficient",
+                "points": 3,
+                "descriptor": "Cites relevant evidence."
+              }
+            ]
+          }
+        ],
+        "student_visibility": {
+          "during_test": true
+        }
+      }
+    },
+    {
+      "type": "match",
+      "id": "90f1fafa-2cb9-4b8a-8a13-04314569298d",
+      "stem": "Match each animal to its young.",
+      "lefts": [
+        {
+          "id": "3e8dfc54ea73c11e72ff916f",
+          "text": "Dog"
+        },
+        {
+          "id": "2c957ec6762754c250365a5c",
+          "text": "Cat"
+        },
+        {
+          "id": "c16c17a3e3faf14b80aa1713",
+          "text": "Cow"
+        }
+      ],
+      "rights": [
+        {
+          "id": "bce79b6a720c02e533d8c66c",
+          "text": "Kitten"
+        },
+        {
+          "id": "c141bbd1f317f97505b8608f",
+          "text": "Puppy"
+        },
+        {
+          "id": "cd0701aa227e14cee60eda49",
+          "text": "Calf"
+        }
+      ]
+    },
+    {
+      "type": "order",
+      "id": "1c7df834-66fe-4ddb-9bca-ac91580510df",
+      "stem": "Put the water-cycle stages in order.",
+      "entries": [
+        {
+          "id": "697ad40a869e629a6715b842",
+          "label": "Collection"
+        },
+        {
+          "id": "9b344f09a36795958bb89df5",
+          "label": "Evaporation"
+        },
+        {
+          "id": "ac31504cdb0c9afa9c75c105",
+          "label": "Condensation"
+        },
+        {
+          "id": "e7814c282b577e427f78919b",
+          "label": "Precipitation"
+        }
+      ]
+    },
+    {
+      "type": "hotspot",
+      "id": "2d2028f2-6d8c-401b-8fdd-b5bd7589aae6",
+      "stem": "Click the nucleus.",
+      "image_asset_id": "33333333-3333-4333-8333-333333333333",
+      "regions": [
+        {
+          "id": "r1",
+          "x": 0.1,
+          "y": 0.1,
+          "w": 0.25,
+          "h": 0.25
+        },
+        {
+          "id": "r2",
+          "x": 0.6,
+          "y": 0.55,
+          "w": 0.3,
+          "h": 0.3
+        }
+      ]
+    },
+    {
+      "type": "drawing_upload",
+      "id": "7d235df9-b4c4-4448-a241-a39600cffc59",
+      "stem": "Sketch the free-body diagram.",
+      "canvas": {
+        "width": 1000,
+        "height": 700,
+        "background": "axes"
+      }
+    },
+    {
+      "type": "table",
+      "id": "8341b894-6665-4e36-8cce-2488a99aa6ce",
+      "stem": "Enter the counts from your chi-square work.",
+      "columns": [
+        {
+          "id": "c1",
+          "label": "Observed (o)"
+        },
+        {
+          "id": "c2",
+          "label": "Expected (e)"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r1",
+          "label": "Middle"
+        },
+        {
+          "id": "r2",
+          "label": "**Total**"
+        }
+      ],
+      "corner": "Chamber position"
+    }
+  ],
+  "item_sets": [
+    {
+      "id": "55555555-5555-4555-8555-555555555555",
+      "stimulus": "Cells at work: ![cell diagram](asset:33333333-3333-4333-8333-333333333333) Use the diagram for the next two questions.",
+      "layout": "own_page",
+      "item_ids": [
+        "2a1ce688-54da-4c55-aa3c-d01a97bf7866",
+        "c7d5c2e6-4b0a-40b3-aedd-e9bc402473ee"
+      ]
+    }
+  ],
+  "assets": {
+    "33333333-3333-4333-8333-333333333333": {
+      "content_type": "image/png",
+      "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    }
+  },
+  "accommodations": {
+    "color_contrast": "Black on Rose",
+    "spell_check": "On"
+  },
+  "construct_altering": [
+    "spell_check"
+  ]
+}

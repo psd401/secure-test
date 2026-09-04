@@ -1,0 +1,1 @@
+ALTER TABLE "assessments" ADD COLUMN "allow_clipboard" boolean DEFAULT false NOT NULL;

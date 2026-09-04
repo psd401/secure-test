@@ -1,0 +1,11 @@
+{
+  "issuer": "https://launchpad.classlink.com",
+  "authEndpoint": "https://launchpad.classlink.com/oauth2/v2/auth",
+  "tokenEndpoint": "https://launchpad.classlink.com/oauth2/v2/token",
+  "clientId": "REPLACE_WITH_PARTNER_PORTAL_APP_CLIENT_ID",
+  "redirectURI": "securetestpoc://callback",
+  "scopes": ["openid", "profile", "email", "oneroster"],
+  "usePKCE": true,
+  "callbackURLScheme": "securetestpoc"
+}
+

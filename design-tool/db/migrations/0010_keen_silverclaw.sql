@@ -1,0 +1,2 @@
+ALTER TABLE "guardrail_events" DROP CONSTRAINT "guardrail_events_surface_check";--> statement-breakpoint
+ALTER TABLE "guardrail_events" ADD CONSTRAINT "guardrail_events_surface_check" CHECK (surface IN ('item-gen', 'math-translate', 'essay-score'));

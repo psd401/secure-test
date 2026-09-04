@@ -1,0 +1,452 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA00000000000000000000A1 /* SecureTestCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA00000000000000000000A2 /* SecureTestCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		295587772FBD4D260051684B /* SecureTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SecureTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		295587792FBD4D260051684B /* SecureTest */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SecureTest;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		295587742FBD4D260051684B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA00000000000000000000A1 /* SecureTestCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2955876E2FBD4D260051684B = {
+			isa = PBXGroup;
+			children = (
+				295587792FBD4D260051684B /* SecureTest */,
+				295587782FBD4D260051684B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		295587782FBD4D260051684B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				295587772FBD4D260051684B /* SecureTest.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		295587762FBD4D260051684B /* SecureTest */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 295587852FBD4D280051684B /* Build configuration list for PBXNativeTarget "SecureTest" */;
+			buildPhases = (
+				295587732FBD4D260051684B /* Sources */,
+				295587742FBD4D260051684B /* Frameworks */,
+				295587752FBD4D260051684B /* Resources */,
+				AA00000000000000000000B1 /* Stamp build commit */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				295587792FBD4D260051684B /* SecureTest */,
+			);
+			name = SecureTest;
+			packageProductDependencies = (
+				AA00000000000000000000A2 /* SecureTestCore */,
+			);
+			productName = SecureTest;
+			productReference = 295587772FBD4D260051684B /* SecureTest.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2955876F2FBD4D260051684B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					295587762FBD4D260051684B = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = 295587722FBD4D260051684B /* Build configuration list for PBXProject "SecureTest" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2955876E2FBD4D260051684B;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA00000000000000000000A3 /* XCLocalSwiftPackageReference "SecureTestCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 295587782FBD4D260051684B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				295587762FBD4D260051684B /* SecureTest */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		295587752FBD4D260051684B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+/* Release plan slice 1: the git sha of the build goes into the GENERATED
+   Info.plist (GENERATE_INFOPLIST_FILE = YES, so there is no plist file to
+   edit). About shows it, and docs/observability-design.md puts the same
+   stamp on every error line. Runs AFTER Copy Bundle Resources and BEFORE
+   signing, so the plist it edits is the one that gets sealed. Hand-written:
+   never add this through Xcode's UI (docs/phase-7-slices.md "Xcode note"). */
+		AA00000000000000000000B1 /* Stamp build commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp build commit";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -u\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\nSHA=$(git -C \"$SRCROOT\" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)\n[ -n \"$SHA\" ] || SHA=unknown\nif [ ! -f \"$PLIST\" ]; then\n  echo \"warning: no Info.plist at $PLIST; PSDBuildCommit not stamped\"\n  exit 0\nfi\nif /usr/libexec/PlistBuddy -c \"Print :PSDBuildCommit\" \"$PLIST\" >/dev/null 2>&1; then\n  /usr/libexec/PlistBuddy -c \"Set :PSDBuildCommit $SHA\" \"$PLIST\"\nelse\n  /usr/libexec/PlistBuddy -c \"Add :PSDBuildCommit string $SHA\" \"$PLIST\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		295587732FBD4D260051684B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		295587832FBD4D280051684B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 87DL7L9GU6;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		295587842FBD4D280051684B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 87DL7L9GU6;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		295587862FBD4D280051684B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 87DL7L9GU6;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				/* Overrides the project-level YES for THIS TARGET ONLY, and only
+				   for BUILD-TIME script phases - it has nothing to do with
+				   ENABLE_APP_SANDBOX above, which still ships the app sandbox.
+				   The "Stamp build commit" phase edits the generated Info.plist
+				   inside the .app; under the script sandbox that write fails
+				   with "Error Opening Destination: ... [Operation not
+				   permitted]" and the phase silently stamps nothing. Declaring
+				   the plist in outputPaths would grant the write but collides
+				   with ProcessInfoPlistFile ("Multiple commands produce
+				   .../Contents/Info.plist"), so the sandbox is the setting that
+				   gives. Revisit if any script phase ever takes untrusted input. */
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				CODE_SIGN_ENTITLEMENTS = SecureTest/SecureTest.entitlements;
+				/* AAC-2a (2026-08-27) -> real App ID (2026-09-03): the client signed against
+				   PoC-A's App ID while James's portal role could not create this one or enable
+				   the restricted AAC capability on it (admin-only). An admin created it
+				   2026-09-03, so the borrow is over and PoC-A keeps its own identifier.
+				   The AAC entitlement is granted PER APP ID. If this identifier ever points at
+				   an App ID without the capability, the build can still sign and
+				   RealLockdownSession.binaryHasEntitlement goes false - the app then selects
+				   the SIMULATED session, the Mac never locks, and a hand-run looks like it
+				   passed. So after ANY signing change, verify on the built app:
+				     codesign -d --entitlements - <built .app>
+				   must show the AAC key AND all three sandbox keys. */
+				PRODUCT_BUNDLE_IDENTIFIER = net.psd401.securetest.client;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		295587872FBD4D280051684B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				/* Release signing (client-release-plan.md slice 1). Manual and
+				   Developer ID, because the shipping build is distributed outside
+				   the App Store and the restricted AAC entitlement needs an
+				   embedded Developer ID provisioning profile for THIS App ID
+				   (gotcha 2 in that plan). PROVISIONING_PROFILE_SPECIFIER below
+				   is a PLACEHOLDER name - James creates the profile in the
+				   portal and renames it here if he calls it something else;
+				   until it exists, `xcodebuild archive` fails on the missing
+				   profile and that is the expected state. Debug stays Automatic
+				   so the dev loop is untouched. */
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				PROVISIONING_PROFILE_SPECIFIER = "SecureTest Developer ID";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 87DL7L9GU6;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				/* Overrides the project-level YES for THIS TARGET ONLY, and only
+				   for BUILD-TIME script phases - it has nothing to do with
+				   ENABLE_APP_SANDBOX above, which still ships the app sandbox.
+				   The "Stamp build commit" phase edits the generated Info.plist
+				   inside the .app; under the script sandbox that write fails
+				   with "Error Opening Destination: ... [Operation not
+				   permitted]" and the phase silently stamps nothing. Declaring
+				   the plist in outputPaths would grant the write but collides
+				   with ProcessInfoPlistFile ("Multiple commands produce
+				   .../Contents/Info.plist"), so the sandbox is the setting that
+				   gives. Revisit if any script phase ever takes untrusted input. */
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				CODE_SIGN_ENTITLEMENTS = SecureTest/SecureTest.entitlements;
+				/* AAC-2a (2026-08-27) -> real App ID (2026-09-03): the client signed against
+				   PoC-A's App ID while James's portal role could not create this one or enable
+				   the restricted AAC capability on it (admin-only). An admin created it
+				   2026-09-03, so the borrow is over and PoC-A keeps its own identifier.
+				   The AAC entitlement is granted PER APP ID. If this identifier ever points at
+				   an App ID without the capability, the build can still sign and
+				   RealLockdownSession.binaryHasEntitlement goes false - the app then selects
+				   the SIMULATED session, the Mac never locks, and a hand-run looks like it
+				   passed. So after ANY signing change, verify on the built app:
+				     codesign -d --entitlements - <built .app>
+				   must show the AAC key AND all three sandbox keys. */
+				PRODUCT_BUNDLE_IDENTIFIER = net.psd401.securetest.client;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA00000000000000000000A3 /* XCLocalSwiftPackageReference "SecureTestCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SecureTestCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA00000000000000000000A2 /* SecureTestCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SecureTestCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCConfigurationList section */
+		295587722FBD4D260051684B /* Build configuration list for PBXProject "SecureTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				295587832FBD4D280051684B /* Debug */,
+				295587842FBD4D280051684B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		295587852FBD4D280051684B /* Build configuration list for PBXNativeTarget "SecureTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				295587862FBD4D280051684B /* Debug */,
+				295587872FBD4D280051684B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2955876F2FBD4D260051684B /* Project object */;
+}

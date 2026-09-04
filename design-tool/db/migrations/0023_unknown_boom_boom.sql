@@ -1,0 +1,1 @@
+ALTER TABLE "student_accommodations" ADD COLUMN "kept_against_tide_code" text;

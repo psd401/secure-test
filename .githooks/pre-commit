@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit: scan the staged changes with gitleaks using the repo's
+# identifier-aware config. Install once per clone with
+#   git config core.hooksPath .githooks
+# (the root package.json's `prepare` script does this on `bun install`).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed (brew install gitleaks)." >&2
+  echo "pre-commit: refusing to commit unscanned changes to a public repository." >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --config .gitleaks.toml --no-banner --redact

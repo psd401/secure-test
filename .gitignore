@@ -1,0 +1,75 @@
+# macOS
+.DS_Store
+
+# Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+# Match xcuserdata at any depth — without **/, the *.xcodeproj/xcuserdata
+# pattern is root-relative and misses nested xcodeprojs like
+# poc-a-aac-capture/PocA/PocA.xcodeproj/.
+**/xcuserdata/
+
+# Teacher-provided sample assessments — never public
+design-tool/samples/
+
+# Built only inside the Fargate image (Dockerfile bundles db/migrate.ts)
+design-tool/db/migrate.mjs
+
+# Node / CDK / bun
+node_modules/
+cdk.out/
+*.tsbuildinfo
+.env
+.env.local
+bun.lockb
+.aws-sam/
+
+# TypeScript build output (workspace packages)
+packages/*/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code per-developer settings
+.claude/
+
+# Apple sample project (Build an Educational Assessment App) — local reference
+# only; not our code, has its own .git, available at:
+# https://developer.apple.com/documentation/automaticassessmentconfiguration/build_an_educational_assessment_app
+BuildAnEducationalAssessmentApp/
+
+# PoC artifacts
+poc-frames/
+*.log
+
+# Uploaded asset blobs from the local-fs storage provider (ADR 0008). Root is
+# STORAGE_LOCAL_ROOT, defaulting to ./storage RELATIVE TO CWD — so it lands in
+# design-tool/ when dev is run from there and at the repo root when it isn't,
+# which is the running mistake CLAUDE.md calls out. design-tool/.gitignore
+# already pins its own copy; this catches the stray root one. No leading or
+# internal slash, so it matches at any depth.
+storage/
+# The upload tests' STORAGE_LOCAL_ROOT (./storage-test, also cwd-relative), so
+# a `bun test` run from the repo root lands it here too.
+storage-test/
+
+# PoC-C config (contains client_id — do not commit)
+poc-c-classlink-sso/client/config.json
+poc-c-classlink-sso/client/.poc-c-config.json
+
+# Early/exploratory thinking — kept locally for possible revisit, not repo-worthy
+docs/comparison-respondus.md
+
+# Public-release scrub (docs/public-release-plan.md slice 2): internal
+# files that stay on disk for the move into the private secure-test-ops
+# repo but must never be tracked here — IT/vendor request drafts naming
+# people and dates, real staff emails + section-load data, day-of hand-run
+# scripts. See _ops-staging/README.md.
+_ops-staging/

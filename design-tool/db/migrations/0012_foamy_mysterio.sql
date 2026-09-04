@@ -1,0 +1,2 @@
+ALTER TABLE "students" ADD COLUMN "classlink_sourced_id" text;--> statement-breakpoint
+ALTER TABLE "students" ADD CONSTRAINT "students_owner_sub_classlink_sourced_id_unq" UNIQUE("owner_sub","classlink_sourced_id");

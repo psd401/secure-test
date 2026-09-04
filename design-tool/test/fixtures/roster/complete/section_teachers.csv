@@ -1,0 +1,6 @@
+section_ps_id,teacher_ps_id,teacher_email,role_name,priority_order,start_date,end_date
+5001,301,Teacher.One@psd401.net,Lead Teacher,1,2020-09-01,2099-06-30
+5001,303,teacher.three@psd401.net,Co-Teacher,2,2020-09-01,2021-06-30
+5002,302,teacher.two@psd401.net,Lead Teacher,1,2020-09-01,2099-06-30
+5003,301,teacher.one@psd401.net,Lead Teacher,1,2020-09-01,2099-06-30
+5004,304,teacher.four@psd401.net,Lead Teacher,1,2020-09-01,2099-06-30

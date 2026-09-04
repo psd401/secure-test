@@ -1,0 +1,6 @@
+# Scope bun test discovery to the real suite. Without this, `bun test`
+# also sweeps infra/cdk.out/asset.*/ — the CDK image-asset staging dirs
+# hold full repo copies (created by the first Fargate deploy, 2026-08-31)
+# whose duplicated tests double-run and fail on .dockerignore'd paths.
+[test]
+root = "test"

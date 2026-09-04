@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+/* KaTeX styling for editor live math previews (slice 11; ADR 0009).
+   Next.js webpack handles the font URLs in the package CSS. The preview
+   iframe inlines its own copy via lib/preview/katexCss.ts. */
+@import "katex/dist/katex.min.css";
+
+/* UX pass 1, slice 1 (docs/ux-pass-1-proposal.md §1). Light only for pass 1:
+   the `.dark` variant is declared so shadcn's `dark:` utilities compile, but
+   nothing ever adds the class. (The previous nested `@media { @theme }` block
+   was unsupported by Tailwind v4 and shipped ONLY the dark grayscale tokens —
+   every teacher saw #0a0a0a regardless of OS setting.) */
+@custom-variant dark (&:is(.dark *));
+
+/* KaTeX parse failures in the live math preview — on the status tokens
+   since UX pass 1, slice 9 (was #cc0000 on #ffeeee). */
+.math-error {
+  color: var(--danger-foreground);
+  background: var(--danger);
+  padding: 0 4px;
+  border-radius: 2px;
+  font-family: monospace;
+}
+
+/* PSD palette (psd-branding skill) mapped onto shadcn's semantic tokens.
+   Ratios in the proposal's token table are WCAG 2.x contrast, computed. */
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+
+  --background: #f3f8fa; /* "Mist": Ocean/Whulge hue at 97.5% lightness (q1.1, 2026-08-30) */
+  --foreground: #25424c; /* Pacific — 10.00:1 on Mist */
+  --card: #ffffff;
+  --card-foreground: #25424c;
+  --popover: #ffffff;
+  --popover-foreground: #25424c;
+  --primary: #466857; /* Cedar — white on it 6.22:1 (q1.2) */
+  --primary-foreground: #ffffff;
+  --secondary: #eeebe4; /* Sea Foam */
+  --secondary-foreground: #25424c;
+  --muted: #eeebe4; /* Sea Foam — 1.14:1 vs the page, so skeletons/headers stay visible */
+  --muted-foreground: #5a6c73; /* Pacific hue, sized to pass AA on Sea Foam (4.61:1) */
+  --accent: #eaf3ec; /* Sea Glass at 15% — hover/selected wash */
+  --accent-foreground: #25424c;
+  --destructive: #a04034; /* "Clay" — the palette has no red; white on it 6.41:1 */
+  --destructive-foreground: #ffffff;
+  --border: #cddadf; /* decorative hairline, Pacific hue */
+  --input: #7d888d; /* field boundary — ≥3.05:1 on every surface (WCAG 1.4.11) */
+  --ring: #346780; /* Whulge */
+
+  /* Status set — text on tint, every pair ≥4.5:1. Monitor/session badges
+     (slices 6–7) use these instead of Tailwind amber/red/green. */
+  --success: #e9edeb;
+  --success-foreground: #466857;
+  --warning: #f1ece4;
+  --warning-foreground: #8d5d1c; /* "Ochre" — derived */
+  --danger: #f4e8e7;
+  --danger-foreground: #a04034;
+  --info: #e7edf0;
+  --info-foreground: #346780;
+  --neutral: #eef0f1;
+  --neutral-foreground: #5a6c73;
+
+  /* Brand accents. Sea Glass is decoration only — it fails as text
+     (2.96:1 on white); --brand-ink is the darkened form that can carry text. */
+  --brand: #6ca18a;
+  --brand-ink: #40745e;
+  /* App-shell header band (slice 2): Pacific with Skylight text, 10.26:1 (q1.5). */
+  --band: #25424c;
+  --band-foreground: #fffaec;
+}
+
+@theme inline {
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading:
+    var(--font-josefin-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-neutral: var(--neutral);
+  --color-neutral-foreground: var(--neutral-foreground);
+
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-band: var(--band);
+  --color-band-foreground: var(--band-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1 {
+    font-family: var(--font-heading);
+  }
+  /* Native checkbox / radio keep their platform shape but take the brand
+     colour (UX pass 1, slice 9); Radix Checkbox/RadioGroup are pass 2. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--primary);
+  }
+}

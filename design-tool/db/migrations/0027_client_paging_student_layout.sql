@@ -1,0 +1,2 @@
+ALTER TABLE "assessments" ADD COLUMN "student_layout" text DEFAULT 'scroll' NOT NULL;--> statement-breakpoint
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_student_layout_check" CHECK (student_layout IN ('scroll', 'paged'));
