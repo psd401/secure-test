@@ -8,7 +8,11 @@ export type SaveState =
   | { kind: "idle" }
   | { kind: "saving" }
   | { kind: "saved"; at: Date }
-  | { kind: "failed"; message: string };
+  | { kind: "failed"; message: string }
+  // Batch 3 slice 3: a confirmation whose text isn't "Saved <time>" — the
+  // feedback dialog's "Thanks — sent." reuses this line rather than adding a
+  // toast system.
+  | { kind: "success"; message: string };
 
 /**
  * UX pass 1 (docs/ux-pass-1-proposal.md §2.3 "SUCCESS"): the line beside a
@@ -36,6 +40,11 @@ export function StatusLine({ state, className }: { state: SaveState; className?:
         <>
           <CircleAlert className="size-4 text-destructive" aria-hidden />
           <span className="text-destructive">{state.message}</span>
+        </>
+      ) : state.kind === "success" ? (
+        <>
+          <CheckCircle2 className="size-4 text-success-foreground" aria-hidden />
+          <span className="text-muted-foreground">{state.message}</span>
         </>
       ) : null}
     </span>

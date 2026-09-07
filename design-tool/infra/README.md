@@ -120,7 +120,8 @@ bunx cdk destroy
   deploy — click it once or the subscription never delivers.** The
   `taskRole` gets `sns:Publish` scoped to this one topic (nothing
   broader); the topic ARN is injected into the container as
-  `NOTIFY_TOPIC_ARN` for a later slice's feedback publish.
+  `NOTIFY_TOPIC_ARN`, with `NOTIFY_PROVIDER=sns`, for slice 3's feedback
+  publish (`POST /api/feedback`; dev and tests default to `mock`).
 - The app's log group (`AppService`'s `AppLogGroup`, `/ecs/secure-test-design-tool-<env>`)
   is now explicit, with **30-day retention** and `RemovalPolicy.DESTROY` —
   it replaced the CDK-generated group, which had no retention and grew

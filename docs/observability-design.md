@@ -366,3 +366,75 @@ itself, the drain against a real server, the monitor lighting up and the
 ("Observability slice 4"), NONE run — including the debug crash trigger,
 which is a Session-menu item present only under
 `SECURE_TEST_DEBUG_CRASH=1`.
+
+**Slice 3 BUILT 2026-09-07 — feedback.** `lib/notify/` follows the
+`lib/storage/` provider shape exactly: a `NotifyPublisher` interface
+(`publish(subject, body)`), `mockProvider.ts` (default, records calls in a
+`notifications[]` array with a `resetMockNotifications()` test seam),
+`snsProvider.ts` (`@aws-sdk/client-sns`'s `PublishCommand` against
+`NOTIFY_TOPIC_ARN`, region from `NOTIFY_REGION || AWS_REGION || us-west-2`,
+credentials off the standard chain — the task role once deployed, same as
+`s3Provider.ts` and the Bedrock client), and `provider.ts` selecting by
+`NOTIFY_PROVIDER` (`mock` default, `sns` the only other id). The dependency
+is `@aws-sdk/client-sns` pinned `^3.1069.0` to match the other AWS SDK
+packages already in `package.json` (resolved 3.1127.0 by `bun add`).
+`NOTIFY_PROVIDER` and `NOTIFY_TOPIC_ARN`/`NOTIFY_REGION` were NOT added to
+`.env.local.example` — that path is denied to this session by permission
+settings regardless of tool, so the two vars are documented here instead:
+`NOTIFY_PROVIDER=sns` (else it stays `mock`), `NOTIFY_TOPIC_ARN=<the topic
+from slice 1's infra>`, optional `NOTIFY_REGION` (defaults to
+`AWS_REGION || us-west-2`).
+
+`POST /api/feedback` (`requireStaff()`; no `STUDENT_ROUTES` entry needed —
+`test/auth-role-enforcement.test.ts` enumerates it from disk and a plain
+staff route is its default case) validates `{ message: string (1..2000,
+trimmed), path: string (≤500) }` with zod, reads `user_agent` off the
+request header (≤500, truncated), reads `app_commit` from
+`process.env.APP_COMMIT ?? null` (no existing build-commit constant on the
+server side — `/api/health` reads nothing and the client's `AppVersion`
+stamp has no server equivalent), inserts one `feedback` row with `sub` /
+`email` / `role` off the session, then calls `getNotifyPublisher().publish()`
+with subject `[secure-test] Feedback from <role>` and a plain-text body
+(who/where/when/message/commit — nothing else). A throwing publisher is
+caught, logged as `feedback_publish_failed` (`sub`, the row's id, the
+truncated error message) via `lib/log.ts`, and the route still answers `200
+{ ok: true, id }` — the row is the record, per the design page.
+
+UI: `AppHeader` gained a "Send feedback" button (staff-only, because
+`AppHeader` itself only renders for a staff session — `app/dashboard/layout.tsx`
+already gates it) opening `FeedbackDialog` (`components/app/FeedbackDialog.tsx`):
+the shadcn/Radix `Dialog` used by `ShareDialog`/`PublishDialog` (Escape and
+focus-trap come from Radix for free; `onOpenAutoFocus` is overridden to focus
+the textarea specifically), a read-only `path` field, a `Textarea` capped at
+2000 characters with a live "n / 2000" counter, Send / Cancel. `StatusLine`
+gained a `{ kind: "success"; message: string }` variant (parallel to the
+existing `failed` shape) so the dialog can show "Thanks — sent." without a
+new toast system; on success the dialog closes ~900ms later, on failure it
+shows "Could not send. Try again." and stays open.
+
+Tests: design-tool 1172 → **1180 pass**, 0 fail (8 added in
+`test/feedback-api.test.ts`, following `test/client-errors-api.test.ts`'s
+shape): empty/too-long/missing-path validation, a student session 403, a row
+written from the session's sub/email/role, the mock publisher's recorded call
+containing the message/email/path and nothing header/token-shaped, a throwing
+publisher still yielding 200 with a `feedback_publish_failed` log line, and
+the mock publisher's own record-keeping. `bun run typecheck` clean. No render
+test for `FeedbackDialog`: the repo's one `.tsx` test
+(`test/error-boundaries.test.tsx`) only exercises static server-rendered
+markup via `renderToStaticMarkup`, and there is no jsdom/testing-library
+harness for a stateful client component with hooks, so a UI test was skipped
+rather than bolting one on ad hoc — this is called out, not silently
+dropped. Hand-run rows 62–66 are new in
+`docs/design-tool-manual-checks.md` ("Observability slice 3 (feedback)"),
+NONE run — the email-arrival half of row 64 additionally waits on slice 1's
+topic being deployed with a confirmed subscription.
+
+**Slice 3 review note (2026-09-07):** the container now gets
+`NOTIFY_PROVIDER=sns` from infra beside `NOTIFY_TOPIC_ARN` (the agent's
+route read it but nothing set it). `feedback.app_commit` reads
+`APP_COMMIT`, which nothing injects yet — the server has no build stamp
+(the client's `PSDBuildCommit` has no server twin). Follow-up: a Docker
+build arg → `APP_COMMIT` in the image, surfaced on `/api/health` too.
+`.env.local.example` could not be edited from the session (`.env*` is
+denied); James adds `NOTIFY_PROVIDER=mock` / `NOTIFY_TOPIC_ARN=` /
+`NOTIFY_REGION=` lines by hand.

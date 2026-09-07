@@ -22,6 +22,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.1069.0",
     "@aws-sdk/client-s3": "^3.1069.0",
     "@aws-sdk/client-secrets-manager": "^3.1069.0",
+    "@aws-sdk/client-sns": "^3.1069.0",
     "@aws-sdk/s3-request-presigner": "3.1070.0",
     "@secure-test/schema": "workspace:*",
     "class-variance-authority": "^0.7.1",

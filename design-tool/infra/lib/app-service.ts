@@ -199,6 +199,9 @@ export class AppService extends Construct {
       // Observability slice 1: feedback (a later slice) publishes here;
       // the sns:Publish grant above is scoped to the same ARN.
       NOTIFY_TOPIC_ARN: props.notifyTopic.topicArn,
+      // Slice 3: the feedback route publishes through the sns provider
+      // (mock is the default everywhere else — tests, dev).
+      NOTIFY_PROVIDER: "sns",
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;

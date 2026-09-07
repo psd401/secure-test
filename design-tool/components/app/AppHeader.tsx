@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { FeedbackDialog } from "@/components/app/FeedbackDialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,6 +32,7 @@ const NAV = [
 
 export function AppHeader({ identity }: { identity: string }) {
   const pathname = usePathname();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
     <header className="bg-band text-band-foreground">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-1 px-6">
@@ -70,6 +73,15 @@ export function AppHeader({ identity }: { identity: string }) {
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setFeedbackOpen(true)}
+            className="text-band-foreground hover:bg-band-foreground/10 hover:text-band-foreground"
+          >
+            Send feedback
+          </Button>
           <span className="text-band-foreground/80">{identity}</span>
           <form action="/api/auth/logout" method="post">
             <Button
@@ -83,6 +95,7 @@ export function AppHeader({ identity }: { identity: string }) {
           </form>
         </div>
       </div>
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </header>
   );
 }
