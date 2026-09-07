@@ -872,6 +872,7 @@ and there is no delete path; roadmap finding 2026-09-07).
 | Join a sitting whose attempt is already submitted | refused client-side: `join declined: attempt … is already submitted — staying on the entry screen` (finding 10.1) | ✅ 2026-09-07 — seen on the `E6 / E7(b)` sitting during the (simulated) first launch, on the origin |
 | KaTeX in the real session | sub/superscripts render in stems | ✅ 2026-09-07 — James: subscripts and superscripts displayed correctly in `Chemistry sample` |
 | Predictive text in the essay inside the REAL session (finding 8.4) | no inline completion with `predictiveKeyboard=false` | **OPEN** 2026-09-07 — James did not watch for it; re-check on the next real sitting before closing 8.4 |
+| Install `SecureTest-1.0.0.pkg` from the v1.0.0 release on a district Mac (Jamf or by hand), launch `/Applications/SecureTest.app` | Gatekeeper opens it with no warning; sign in, join, one real session (`REAL AEAssessmentSession` → `DID BEGIN` → hand in → `DID END`), no TCC prompt; About reads `1.0.0 (c719eb586e45)` | NOT RUN 2026-09-07 — waits on a district Mac (release plan slice 4's last row) |
 
 Wanted after seeing the signed app (James, 2026-09-07), for batch 4's UI
 pass: brand the grey AAC background, the home (entry) screen and the

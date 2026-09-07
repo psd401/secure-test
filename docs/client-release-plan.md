@@ -207,3 +207,22 @@ line), and an attempt is unique per assessment + student with no delete
 path (roadmap finding 2026-09-07). One archive-time warning to clear in
 slice 4: no `LSApplicationCategoryType`. The export sits in the session
 scratchpad only; nothing tracked changed for this slice.
+
+**Slice 4 DONE 2026-09-07 (bar the hand-install row)**, same morning, on
+the same exported app: `pkgbuild --identifier net.psd401.securetest.client
+--version 1.0.0 --install-location /` signed with the Developer ID Installer
+cert (`pkgutil --check-signature`: distribution cert, trusted timestamp);
+the pkg notarized (Accepted) and stapled — a second submission, separate
+from the app's; `gh release create v1.0.0` on the public `psd401/secure-test`
+with the single asset `SecureTest-1.0.0.pkg`, target `main` (= `c719eb5`,
+the commit the build stamped), one-line notes;
+`/releases/latest/download/SecureTest-1.0.0.pkg` answers `HTTP/2 302`
+unauthenticated, so Installomator can fetch it. The classifier blocked the
+`gh release create` from the session; James ran it. `client/RELEASING.md`
+written (inputs, version rule, steps, the entitlement list to check, the
+`.env.local` simulate gotcha, the hand-install row). **Still open:** install
+the pkg by hand on one district Mac and repeat the lockdown row from
+`/Applications/SecureTest.app` (row in `client/MANUAL-CHECKS.md` "Signed
+build"). Slice 5 (IT handoff drafts, ops repo) next: Installomator label
+fragment, Jamf policy + fleet scope (IT asked which group), "no PPPC
+needed" (D-R4), the dictation DDM is ready on IT's side.
