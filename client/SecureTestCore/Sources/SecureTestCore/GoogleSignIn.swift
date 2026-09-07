@@ -262,6 +262,14 @@ public actor GoogleSignInFlow {
             // account_not_allowed is the one a student can act on: wrong
             // Google account. Everything else is the server's to explain.
             log("sign-in: exchange refused \(status) \(code ?? "-")")
+            // Observability slice 4: nobody is signed in yet, so this cannot
+            // be an event — the file is the only channel it has, and it
+            // drains after whatever sign-in eventually succeeds.
+            ClientErrorLog.shared?.record(
+                kind: "signin_exchange_refused",
+                message: "exchange refused",
+                context: ["status": String(status), "code": code ?? "-"]
+            )
             throw SignInError.exchangeRefused(status: status, code: code)
         }
     }

@@ -198,3 +198,58 @@ deploy.
 ## Progress
 
 Nothing built. Slice 1 first (it is what every other slice publishes to).
+
+**Slice 4 (Client) BUILT 2026-09-07.** `errors.log` exists:
+`ClientErrorLog` (Core) opens
+`~/Library/Application Support/SecureTest/errors.log` — the sandbox
+container, beside `responses.sqlite` — once at launch and keeps the
+descriptor for the life of the process, writing one JSON object per line
+(`occurred_at`, `kind`, `message` capped at 2 000, `context`,
+`app_version`, `app_commit`, `attempt_id` when one is open) synchronously
+under a lock. `AppDelegate.logError(kind:message:context:)` is the
+companion to `log`: the file line, the same text on stderr through the
+sink's `echo`, and — while an attempt is open — a `client_error` attempt
+event through the existing `AttemptEventReporter` (D-4; the kind is in
+`retriedKinds`, and a `client_error` that cannot be posted is guarded
+against manufacturing another). Every failure-shaped site the page lists
+calls it: `BUNDLE FETCH FAILED`, `BUNDLE REJECTED`, `SUBMIT FAILED` (plus
+the "answers still unsent" refusal), `DRAWING UPLOAD FAILED`, both
+`SPOOL FAILED`s, `responses DROPPED`, the whole `BLOCKED …` family
+(through one `blocked(_:detail:)` helper, stderr text unchanged), `event
+<kind> not delivered`, a failed join (list and code), a failed
+`my-sittings`, a failed sign-in and a refused token exchange, and a peek
+upload that never landed. The version stamp is `AppVersion` (slice 1 of
+the release plan) handed to Core as `AppBuildStamp`.
+
+Crash capture is `CrashReporter` (D-11, best effort, no symbolication):
+`NSSetUncaughtExceptionHandler` plus handlers for SIGABRT / SIGSEGV /
+SIGBUS / SIGILL / SIGTRAP. Every line those can write is built ahead of
+time in ordinary code and parked in C memory; the handler scans a
+six-slot array, `write(2)`s the matching buffer to the already-open
+descriptor, and re-raises with `SIG_DFL`. Nothing else — no allocation,
+no Swift String, no lock. The lines carry the signal name from a static
+table, the version stamp and the attempt id, and deliberately carry NO
+`occurred_at` (a handler cannot read a clock); the drain stamps its own
+time on those. The attempt id is re-prepared when an attempt starts and
+when the entry screen returns, and the superseded buffers are leaked on
+purpose rather than freed under a possible concurrent signal.
+`lockdown.onUnrecoverable` writes its own parked line the same way before
+`exit(70)`.
+
+The drain (`ClientErrorDrain`) runs after a successful sign-in — and once
+at entry, for the `--token` dev path — detached and never awaited. It
+reads the file, posts batches of 50 to `POST /api/client-errors` through
+`APIClient.postClientErrors`, and removes lines from the FRONT only for
+what the server accepted, so a mid-way failure keeps the rest and a line
+appended while a POST was in flight is never dropped. `AttemptEventKind`
+gained `client_error`; the Swift `detail` stayed `[String: String]`,
+which the `{ kind, message }` shape needs nothing more than.
+
+Tests: `swift test` 365 → 387 (new `ClientErrorLogTests`,
+`ClientErrorDrainTests`, `CrashReporterTests`; the existing wire-name
+test gained `client_error`). `xcodebuild … build` green. The signal path
+itself, the drain against a real server, the monitor lighting up and the
+`exit(70)` line are twelve hand-run rows in `client/MANUAL-CHECKS.md`
+("Observability slice 4"), NONE run — including the debug crash trigger,
+which is a Session-menu item present only under
+`SECURE_TEST_DEBUG_CRASH=1`.

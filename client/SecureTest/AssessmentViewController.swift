@@ -53,6 +53,17 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// "Loading your test…" notice and then the real page.
     private var pendingHostLoads = 0
 
+    /// Observability slice 4: the `BLOCKED …` family in one place. The stderr
+    /// text is unchanged — the file line is the addition. `what` is the short
+    /// stable token that becomes the error kind's context; nothing from the
+    /// page's content ever goes in (redaction rule, design page).
+    private func blocked(_ what: String, detail: String = "") {
+        log("BLOCKED \(what)\(detail.isEmpty ? "" : ": \(detail)")")
+        var context = ["what": what]
+        if !detail.isEmpty { context["detail"] = detail }
+        AppDelegate.logError(kind: "blocked", message: what, context: context)
+    }
+
     /// Kept so later slices can resolve an item id back to the item it answers
     /// (word caps, required-item checks) without re-parsing the payload.
     private(set) var bundle: DeliveryBundle?
@@ -135,6 +146,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     // Refusing beats rendering a partial test: a student handed
                     // fewer items than assigned has no way to know.
                     self.log("BUNDLE FETCH FAILED: \(error)")
+                    AppDelegate.logError(
+                        kind: "bundle_fetch_failed",
+                        message: "\(error)",
+                        context: ["assessment_id": assessmentID]
+                    )
                     self.loadHostPage(Self.noticePage(
                         "This test could not be opened.",
                         detail: SessionEntryViewController.message(for: error)
@@ -191,6 +207,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             // rendering a partial test: a student handed fewer items than
             // assigned has no way to know.
             log("BUNDLE REJECTED: \(error)")
+            AppDelegate.logError(kind: "bundle_rejected", message: "\(error)")
             return Self.noticePage(
                 "This assessment could not be opened.",
                 detail: "The test package is not readable by this version of the app."
@@ -367,7 +384,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             return
         }
         guard message.name == Self.responseChannel else {
-            log("BLOCKED message on unexpected channel: \(message.name)")
+            blocked("message on unexpected channel", detail: message.name)
             return
         }
         do {
@@ -378,7 +395,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             // The page is ours, so a malformed message means a renderer bug —
             // but this is the one boundary the document can reach the host
             // through, so it validates rather than trusts.
-            log("BLOCKED malformed response message: \(error)")
+            blocked("malformed response message", detail: "\(error)")
         }
     }
 
@@ -389,6 +406,14 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     private func noteDropped(_ result: ResponseSpool.FlushResult) -> ResponseSpool.FlushResult {
         if result.dropped > 0 {
             log("responses DROPPED: \(result.dropped) refused permanently by the server (attempt already handed in?)")
+            // Slice 4: the single most consequential client failure there is
+            // — a student's answers refused for good. In-attempt, so it also
+            // lights "Needs attention" on the teacher's monitor (D-4).
+            AppDelegate.logError(
+                kind: "responses_dropped",
+                message: "\(result.dropped) response(s) refused permanently by the server",
+                context: ["dropped": String(result.dropped)]
+            )
         }
         return result
     }
@@ -418,6 +443,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 let flushed = self.noteDropped(await spool.flush(using: client))
                 guard flushed.remaining == 0 else {
                     self.log("submit refused: \(flushed.remaining) answers still unsent")
+                    AppDelegate.logError(
+                        kind: "submit_blocked",
+                        message: "\(flushed.remaining) answer(s) still unsent",
+                        context: ["remaining": String(flushed.remaining)]
+                    )
                     self.reportSubmit(ok: false)
                     return
                 }
@@ -430,6 +460,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 self.reportSubmit(ok: true)
             } catch {
                 self.log("SUBMIT FAILED: \(error)")
+                AppDelegate.logError(kind: "submit_failed", message: "\(error)")
                 self.reportSubmit(ok: false)
             }
         }
@@ -460,7 +491,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
               let itemID = payload["item_id"] as? String,
               let dataURL = payload["data_url"] as? String,
               let bytes = Self.pngBytes(fromDataURL: dataURL) else {
-            log("BLOCKED malformed drawing message")
+            blocked("malformed drawing message")
             return
         }
 
@@ -490,6 +521,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 self.reportDrawing(itemID: itemID, ok: true)
             } catch {
                 self.log("DRAWING UPLOAD FAILED: \(error)")
+                AppDelegate.logError(
+                    kind: "drawing_upload_failed",
+                    message: "\(error)",
+                    context: ["item_id": itemID]
+                )
                 self.reportDrawing(itemID: itemID, ok: false)
             }
         }
@@ -540,6 +576,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 }
             } catch {
                 self.log("SPOOL FAILED: \(error)")
+                AppDelegate.logError(kind: "spool_failed", message: "\(error)")
             }
         }
     }
@@ -556,7 +593,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
         guard let payload = body as? [String: Any],
               let itemID = payload["item_id"] as? String else {
-            log("BLOCKED malformed withdraw message")
+            blocked("malformed withdraw message")
             return
         }
         log("withdraw: item=\(itemID)")
@@ -573,6 +610,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 }
             } catch {
                 self.log("SPOOL FAILED: \(error)")
+                AppDelegate.logError(kind: "spool_failed", message: "\(error)")
             }
         }
     }
@@ -612,7 +650,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        log("BLOCKED attempt to open a second web view")
+        blocked("attempt to open a second web view")
         return nil
     }
 
@@ -625,7 +663,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping ([URL]?) -> Void
     ) {
-        log("BLOCKED file picker request")
+        blocked("file picker request")
         completionHandler(nil)
     }
 
@@ -638,7 +676,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping () -> Void
     ) {
-        log("BLOCKED js alert")
+        blocked("js alert")
         completionHandler()
     }
 
@@ -648,7 +686,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (Bool) -> Void
     ) {
-        log("BLOCKED js confirm")
+        blocked("js confirm")
         completionHandler(false)
     }
 
@@ -659,7 +697,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (String?) -> Void
     ) {
-        log("BLOCKED js prompt")
+        blocked("js prompt")
         completionHandler(nil)
     }
 
@@ -688,7 +726,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             decisionHandler(.allow)
             return
         }
-        log("BLOCKED navigation: \(absolute)")
+        blocked("navigation", detail: absolute)
         decisionHandler(.cancel)
     }
 }
