@@ -438,3 +438,27 @@ build arg → `APP_COMMIT` in the image, surfaced on `/api/health` too.
 `.env.local.example` could not be edited from the session (`.env*` is
 denied); James adds `NOTIFY_PROVIDER=mock` / `NOTIFY_TOPIC_ARN=` /
 `NOTIFY_REGION=` lines by hand.
+
+**DEPLOYED 2026-09-07 ~09:57 PT — task def rev 12, rollout COMPLETED,
+/api/health 200 with `x-request-id`; Aurora at 0028 via migrate-aurora
+(the script already reads the new log group).** First `cdk deploy` stopped
+at the IAM approval prompt (the backgrounded `!` command had no TTY —
+`--require-approval never` on the re-run) and its `next build` warned
+that `serverError.ts` pulled `node:crypto` into the Edge instrumentation
+bundle → `6dc7418` gates `onRequestError` on `NEXT_RUNTIME` with a dynamic
+import (the Next 16 doc pattern).
+
+**Slice 5 rows, teacher side, 2026-09-07 (Claude in Chrome on the origin):**
+rows 62–68 in `docs/design-tool-manual-checks.md`. Feedback: dialog / counter
+/ Cancel / Escape / draft-cleared ✅; send → 200, no publish-failure line, but
+the confirmation shows INSIDE the dialog and it stays open (finding **O-1**:
+the row expected the StatusLine + close — decide); no-session 401 ✅, the
+student 403 half unit-tested only. Server error: **not forceable** on the
+origin (every id-taking route validates first) — row 67 stays open until a
+real 500 or a debug throw behind an env knob. Alarm path: one synthetic
+`level:"error"` line put into the log group → `ServerErrorsAlarm` ALARM 77 s
+later and the SNS action executed ✅. **Email delivery unproven: the
+subscription was `PendingConfirmation`** — James confirms, then one feedback
+send is the last teacher-side check. Client rows ("Observability slice 4",
+`client/MANUAL-CHECKS.md`) wait on James at the keyboard with the rebuilt
+app (`SECURE_TEST_DEBUG_CRASH=1` for the crash row).
