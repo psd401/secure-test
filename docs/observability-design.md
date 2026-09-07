@@ -185,13 +185,13 @@ deploy.
 
 - **D-2 (James) transport = SNS email.** D-3 (James) in-house. D-4 (James)
   `client_error` attempt-event kind.
-- **D-8 (recommended) log retention 30 days.** Versus 90: operational
+- **D-8 (James, 2026-09-07: accepted) log retention 30 days.** Versus 90: operational
   logs only; the tables hold what a report needs.
-- **D-9 (recommended) one topic** for alarms and feedback; James filters
+- **D-9 (James, 2026-09-07: accepted) one topic** for alarms and feedback; James filters
   by subject.
-- **D-10 (recommended) no admin errors page in v1**; revisit with the role
+- **D-10 (James, 2026-09-07: accepted) no admin errors page in v1**; revisit with the role
   model.
-- **D-11 (recommended) crash capture is best effort**, no symbolication,
+- **D-11 (James, 2026-09-07: accepted) crash capture is best effort**, no symbolication,
   no third-party crash reporter; the signal line plus the last error lines
   are what a classroom Mac can honestly give.
 

@@ -4,9 +4,14 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
+import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sns from "aws-cdk-lib/aws-sns";
 import { Construct } from "constructs";
 
 export interface AppServiceProps {
@@ -40,6 +45,11 @@ export interface AppServiceProps {
    * origin — a rename costs cert, one GCP redirect URI,
    * OIDC_REDIRECT_URI, SECURE_TEST_SERVER and one re-sign-in). */
   readonly domainName: string;
+  /** Observability slice 1 (docs/observability-design.md): the shared
+   * alarm/feedback topic. Granted sns:Publish on the task role, exposed as
+   * NOTIFY_TOPIC_ARN, and the target for every alarm this construct
+   * creates. */
+  readonly notifyTopic: sns.ITopic;
 }
 
 /** Name of the James-created app secret (slice 3). Keys:
@@ -123,6 +133,26 @@ export class AppService extends Construct {
       }),
     );
 
+    // Observability slice 1: feedback (a later slice) and any future
+    // server-side publish go through this one grant, scoped to the shared
+    // topic — nothing broader.
+    this.taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["sns:Publish"],
+        resources: [props.notifyTopic.topicArn],
+      }),
+    );
+
+    // Observability slice 1: an explicit log group (30-day retention —
+    // logs may carry student ids per request/session, the DB tables are
+    // the durable record) in place of the CDK-generated one, which had no
+    // retention and grew forever.
+    const logGroup = new logs.LogGroup(this, "AppLogGroup", {
+      logGroupName: `/ecs/secure-test-design-tool-${props.envName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const cluster = new ecs.Cluster(this, "Cluster", {
       vpc: props.vpc,
       containerInsightsV2: ecs.ContainerInsights.DISABLED,
@@ -166,6 +196,9 @@ export class AppService extends Construct {
       // slice 3). Must match the redirect URI James adds to the web OAuth
       // client in GCP.
       OIDC_REDIRECT_URI: `https://${props.domainName}/api/auth/callback`,
+      // Observability slice 1: feedback (a later slice) publishes here;
+      // the sns:Publish grant above is scoped to the same ARN.
+      NOTIFY_TOPIC_ARN: props.notifyTopic.topicArn,
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;
@@ -229,6 +262,12 @@ export class AppService extends Construct {
           // NODE_ENV=production is baked into the image (Dockerfile).
           environment,
           secrets,
+          // Observability slice 1: the explicit group above, in place of
+          // the pattern's generated (retention-less) one.
+          logDriver: ecs.LogDriver.awsLogs({
+            logGroup,
+            streamPrefix: "app",
+          }),
         },
         // ADR 0014: public subnets, public IPs, no NAT. The service SG the
         // pattern creates admits ONLY the ALB SG on 3000.
@@ -272,6 +311,64 @@ export class AppService extends Construct {
       ec2.Port.tcp(5432),
       "Design-tool Fargate service",
     );
+
+    // Observability slice 1 (docs/observability-design.md): a structured
+    // `level: "error"` log line is worth a metric the moment it's shipped
+    // (slice 2), even though nothing writes one yet.
+    const errorMetricFilter = new logs.MetricFilter(this, "ErrorMetricFilter", {
+      logGroup,
+      metricNamespace: "SecureTest",
+      metricName: "ServerErrors",
+      filterPattern: logs.FilterPattern.stringValue("$.level", "=", "error"),
+      metricValue: "1",
+    });
+
+    new cloudwatch.Alarm(this, "ServerErrorsAlarm", {
+      metric: errorMetricFilter.metric({
+        statistic: "sum",
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription:
+        'One or more `level: "error"` log lines in the last 5 minutes.',
+    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+
+    new cloudwatch.Alarm(this, "TargetGroup5xxAlarm", {
+      metric: this.service.targetGroup.metrics.httpCodeTarget(
+        elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+        { statistic: "sum", period: cdk.Duration.minutes(5) },
+      ),
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription:
+        "5 or more ALB target-group 5xx responses in the last 5 minutes.",
+    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+
+    // "Is anything serving?" — the ALB's HealthyHostCount on the target
+    // group, which is free and already there (RunningTaskCount would need
+    // Container Insights on the cluster). 2 x 1-minute periods: a deploy's
+    // stop-then-start (minHealthyPercent 100 / maxHealthyPercent 200 above)
+    // must not itself page. Missing data = breaching: no datapoints means
+    // the target group is gone, which is the worst case.
+    new cloudwatch.Alarm(this, "HealthyHostCountAlarm", {
+      metric: this.service.targetGroup.metrics.healthyHostCount({
+        statistic: "Minimum",
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 1,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      alarmDescription:
+        "Fewer than 1 healthy target behind the ALB for 2 consecutive minutes.",
+    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
 
     new cdk.CfnOutput(this, "AlbDnsName", {
       value: this.service.loadBalancer.loadBalancerDnsName,

@@ -1,5 +1,7 @@
 import * as path from "node:path";
 import * as cdk from "aws-cdk-lib";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -7,6 +9,7 @@ import * as lambdaNodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sns from "aws-cdk-lib/aws-sns";
 import { Construct } from "constructs";
 
 export interface RosterSyncProps {
@@ -26,6 +29,9 @@ export interface RosterSyncProps {
    * (the data engineer's reply, 2026-08-27). Put-only under roster/, like the managed
    * policy below. */
   readonly producerRoleArns?: readonly string[];
+  /** Observability slice 1 (docs/observability-design.md): the shared
+   * alarm/feedback topic — the importer's Errors alarm publishes here. */
+  readonly notifyTopic: sns.ITopic;
 }
 
 // Slice 76 (ADR 0017): the roster extract bucket and the importer it triggers.
@@ -167,6 +173,23 @@ export class RosterSync extends Construct {
       new s3n.LambdaDestination(this.fn),
       { prefix, suffix: "/manifest.json" },
     );
+
+    // Observability slice 1: one or more importer failures in a 5-minute
+    // window is worth an email — a bad or missing snapshot means the
+    // roster silently goes stale.
+    new cloudwatch.Alarm(this, "ImporterErrorsAlarm", {
+      metric: this.fn.metricErrors({
+        statistic: "sum",
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription:
+        "One or more roster importer Lambda errors in the last 5 minutes.",
+    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
 
     new cdk.CfnOutput(this, "RosterBucketName", {
       value: this.bucket.bucketName,

@@ -109,6 +109,43 @@ variables do not survive between lines there — use a normal terminal.)
 bunx cdk destroy
 ```
 
+## Observability (slice 1, `docs/observability-design.md`)
+
+- Context key **`notifyEmail`** (see `cdk.context.json.example`) — the
+  address subscribed to the alarm topic. Required, same shape as
+  `domainName` / `guardrailId`: the stack throws a clear error at
+  synth/deploy time if it's missing.
+- One SNS topic, `secure-test-notify-<env>`, with an email subscription to
+  `notifyEmail`. **AWS emails that address a confirmation link on first
+  deploy — click it once or the subscription never delivers.** The
+  `taskRole` gets `sns:Publish` scoped to this one topic (nothing
+  broader); the topic ARN is injected into the container as
+  `NOTIFY_TOPIC_ARN` for a later slice's feedback publish.
+- The app's log group (`AppService`'s `AppLogGroup`, `/ecs/secure-test-design-tool-<env>`)
+  is now explicit, with **30-day retention** and `RemovalPolicy.DESTROY` —
+  it replaced the CDK-generated group, which had no retention and grew
+  forever.
+- Four alarms, all publishing to the topic above:
+  - **ServerErrorsAlarm** — a CloudWatch metric filter on the log group
+    matching `{ $.level = "error" }` (namespace `SecureTest`, metric
+    `ServerErrors`); sum ≥ 1 over one 5-minute period. Nothing emits this
+    shape of log line yet (slice 2 does); the alarm is in place first so
+    slice 2 lights it up rather than building it.
+  - **TargetGroup5xxAlarm** — the ALB target group's
+    `HTTPCode_Target_5XX_Count`, sum ≥ 5 over 5 minutes.
+  - **HealthyHostCountAlarm** — the ALB target group's `HealthyHostCount`
+    (minimum) < 1 for two consecutive 1-minute periods, missing data
+    treated as breaching. Chosen over ECS `RunningTaskCount`, which lives
+    under `ECS/ContainerInsights` and would have meant enabling Container
+    Insights on the cluster (a paid, cluster-wide change) for one metric;
+    Container Insights stays `DISABLED`.
+  - **ImporterErrorsAlarm** (on `RosterSync`) — the roster importer
+    Lambda's `Errors` metric, sum ≥ 1 over 5 minutes. The roster stack and
+    the app stack are the same CDK stack (`RosterSync` and `AppService`
+    are both constructs inside `DesignToolStack`), so the topic is passed
+    to both as a construct prop — no cross-stack export/import needed.
+- The circuit breaker (`circuitBreaker: { rollback: true }`) is unchanged.
+
 ## Open questions (carried from the slice plan)
 
 - 24.1 Aurora vs RDS vs DynamoDB long-term cost — measure idle + active spend over the first month before committing.

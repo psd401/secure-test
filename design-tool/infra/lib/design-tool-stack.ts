@@ -3,6 +3,8 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import { Construct } from "constructs";
 import { RosterSync } from "./roster-sync";
 import { AppService } from "./app-service";
@@ -25,6 +27,10 @@ export interface DesignToolStackProps extends cdk.StackProps {
   /** Bedrock guardrail id (ADR 0011 / 0012), from cdk context — a
    * district resource id, so it is not committed to source. */
   readonly guardrailId?: string;
+  /** Observability slice 1 (docs/observability-design.md, D-9): the email
+   * address subscribed to the alarm/feedback SNS topic. A personal
+   * address, so it comes from cdk context, not source. */
+  readonly notifyEmail?: string;
 }
 
 // Aurora Postgres Serverless v2 cluster for the design tool (Slice 24).
@@ -209,6 +215,25 @@ export class DesignToolStack extends cdk.Stack {
         "Managed policy granting Put/Get/Delete on the asset bucket — attach to the app role or a testing IAM user.",
     });
 
+    // --- Observability slice 1 (docs/observability-design.md, D-9): one
+    // SNS topic for both alarm actions and (a later slice's) feedback
+    // publish — James filters by subject in one inbox rather than juggling
+    // several. notifyEmail is required, same shape as domainName /
+    // guardrailId above: a personal address is not committed to source.
+    if (!props.notifyEmail) {
+      throw new Error(
+        "DesignToolStack requires notifyEmail (context key `notifyEmail`, " +
+          "or --context notifyEmail=<address>) — see cdk.context.json.example.",
+      );
+    }
+    const notifyTopic = new sns.Topic(this, "NotifyTopic", {
+      topicName: `secure-test-notify-${envName}`,
+      displayName: "Secure Test alerts",
+    });
+    notifyTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription(props.notifyEmail),
+    );
+
     // --- Roster sync (Slice 76, ADR 0017): the extract bucket the warehouse
     // DAG writes to, and the importer Lambda its manifest triggers. Connects
     // to the cluster above with its credentials secret, from inside the VPC
@@ -222,6 +247,7 @@ export class DesignToolStack extends cdk.Stack {
       vpc,
       databaseSecurityGroup: securityGroup,
       producerRoleArns: props.producerRoleArns,
+      notifyTopic,
     });
 
     // --- App compute (ECS deploy slices 2-4, docs/ecs-deploy-plan.md):
@@ -261,6 +287,7 @@ export class DesignToolStack extends cdk.Stack {
       oidcWebClientId: props.oidcWebClientId,
       oidcNativeClientId: props.oidcNativeClientId,
       domainName: props.domainName,
+      notifyTopic,
     });
   }
 }

@@ -59,4 +59,9 @@ new DesignToolStack(app, "SecureTestDesignTool", {
   // Bedrock guardrail id (ADR 0011) — a district resource id, read from
   // context like the others; the stack refuses to synth without it.
   guardrailId: app.node.tryGetContext("guardrailId") as string | undefined,
+  // Observability slice 1 (docs/observability-design.md, D-9): the address
+  // that gets alarm + feedback email. A personal address, so it lives in
+  // context rather than tracked source; the stack refuses to synth without
+  // it — see cdk.context.json.example.
+  notifyEmail: app.node.tryGetContext("notifyEmail") as string | undefined,
 });
