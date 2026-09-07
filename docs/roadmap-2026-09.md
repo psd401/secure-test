@@ -77,6 +77,12 @@ Not a finding but recorded here: `client/MANUAL-CHECKS.md` Clear-answer row
 "Clear on a never-answered item" cannot be exercised — the button is
 disabled until a choice is made, by design.
 
+## Finding from the 2026-09-07 signed-build run (James: "put a delete path on our roadmap"; nothing built)
+
+| Finding | What | Where | Size |
+|---|---|---|---|
+| **No way to delete an attempt** | Attempts are unique per (assessment, student) (`attempts_assessment_student_unq`), and `POST /api/attempts` resumes the existing one — a submitted attempt included — for any later sitting of the same assessment (finding 10.1). Nothing under `app/api/attempts/` deletes, so a student who has handed in can never sit the same assessment again, and a hand-run has to move to an assessment the student has never attempted (or import a copy). Needed: a teacher-facing "Delete attempt" on the results / monitor row, owner-only, confirm first, that removes the attempt, its responses, uploads (S3 objects too), events and scores, and writes an audit row; the next join then creates a fresh attempt. The same path is what a teacher reaches for on a wrong-student join or a retake. | **5** (reporting R1, per-student view; may move ahead as a small design-tool slice since every hand-run on a reused fixture needs it) | S |
+
 ## Decisions (James, 2026-09-03)
 
 - **D-0 pilot timing.** No date; "soon is the hope." Consequence: nothing

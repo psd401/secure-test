@@ -836,12 +836,43 @@ starting, because two rows compare against it.
 
 | Check | Expect | Result |
 |---|---|---|
-| Launch the built app and look at the Dock | The PSD emblem in white on a dark Pacific rounded tile — not the generic blank-page macOS app icon | |
-| Reveal `SecureTest.app` in Finder, and look at it in icon view and in a Get Info window | The same tile, sharp at every size; the Get Info name reads "Secure Test" | |
-| Secure Test → About Secure Test | A standard About panel: "Secure Test", and a version line reading `1.0.0 (<sha>)` where `<sha>` is the 12-character sha the build stamped. No second version line repeating "1" | |
-| Close About; check the app menu itself | The first item is "About Secure Test", then a separator, then "Quit Secure Test" (Cmd-Q) — and Cmd-Q still ends a live session the way it did before | |
-| The main window's title bar | "Secure Test" (unchanged by this slice — the row is here to catch a regression from the display-name change) | |
-| Sign in: press Sign in with Google and look at the top of the sheet | A dark Pacific header strip carrying the white PSD emblem at the left, then "Sign in with your school account" in white, and Cancel at the right. The Google page below is unchanged, and sign-in completes as before | |
-| With the sheet open, press Cmd-Q | Still tears the sheet down and quits — no beep (the `AuthSheetWindow` catch is untouched by the header change) | |
-| In a sitting, have the teacher request a peek and watch the student's notice strip | The strip is PSD Whulge (a mid blue-teal), not the previous indigo, and the text is still readable on it | |
-| Look at the peek frame the teacher receives for that same request | The strip appears in the captured image in the same Whulge — `cacheDisplay` still paints it | |
+| Launch the built app and look at the Dock | The PSD emblem in white on a dark Pacific rounded tile — not the generic blank-page macOS app icon | ✅ 2026-09-07 — the notarized Developer ID build (`1.0.0 (c719eb586e45)`), James at the screen: the emblem tile in the Dock |
+| Reveal `SecureTest.app` in Finder, and look at it in icon view and in a Get Info window | The same tile, sharp at every size; the Get Info name reads "Secure Test" | Not looked at 2026-09-07 |
+| Secure Test → About Secure Test | A standard About panel: "Secure Test", and a version line reading `1.0.0 (<sha>)` where `<sha>` is the 12-character sha the build stamped. No second version line repeating "1" | ✅ 2026-09-07 — "Secure Test", `1.0.0 (c719eb586e45)` matching the stamp in the exported app's Info.plist |
+| Close About; check the app menu itself | The first item is "About Secure Test", then a separator, then "Quit Secure Test" (Cmd-Q) — and Cmd-Q still ends a live session the way it did before | Not looked at 2026-09-07 (Cmd-Q not pressed this run; hand-in ended the session) |
+| The main window's title bar | "Secure Test" (unchanged by this slice — the row is here to catch a regression from the display-name change) | Not looked at 2026-09-07 |
+| Sign in: press Sign in with Google and look at the top of the sheet | A dark Pacific header strip carrying the white PSD emblem at the left, then "Sign in with your school account" in white, and Cancel at the right. The Google page below is unchanged, and sign-in completes as before | ✅ 2026-09-07 — Pacific header with the emblem; sign-in completed under the hardened runtime (real ClassLink + MFA) |
+| With the sheet open, press Cmd-Q | Still tears the sheet down and quits — no beep (the `AuthSheetWindow` catch is untouched by the header change) | Not run 2026-09-07 |
+| In a sitting, have the teacher request a peek and watch the student's notice strip | The strip is PSD Whulge (a mid blue-teal), not the previous indigo, and the text is still readable on it | Not run 2026-09-07 (no peek requested) |
+| Look at the peek frame the teacher receives for that same request | The strip appears in the captured image in the same Whulge — `cacheDisplay` still paints it | Not run 2026-09-07 |
+
+## Signed build — the notarized Developer ID app (release plan slice 2, 2026-09-07)
+
+`docs/client-release-plan.md` slice 2. The app under test is the
+`xcodebuild archive` → `-exportArchive` (method developer-id) → `notarytool
+submit` (Accepted) → `stapler staple` output of `c719eb5`, signed with the
+profile IT issued 2026-09-04 (`SecureTest Developer ID`, AAC capability,
+expires 2044-08-30; Xcode's double-click did not install it — copied by UUID
+into `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`). Launched
+through `client/scripts/launch-client.ts` against the origin with
+`SECURE_TEST_SIMULATE_LOCKDOWN=` blanked (the variable sits in
+`design-tool/.env.local`, and the launcher forwards it — the first launch of
+the day ran SIMULATED for that reason; check the log's `lockdown session:`
+line before trusting a run). Demo student, one-day teacher row inserted by
+the ad-hoc script, `Chemistry sample` (16 items — an assessment the student
+had never attempted, because an attempt is unique per assessment + student
+and there is no delete path; roadmap finding 2026-09-07).
+
+| Check | Expect | Result |
+|---|---|---|
+| Static checks on the exported app | `codesign -d --entitlements -` lists AAC + app-sandbox + network.client + files.user-selected.read-only; `Contents/embedded.provisionprofile` present; `codesign -vvv --deep --strict` valid; `spctl -a -vv` accepted, `source=Notarized Developer ID` after stapling; Info.plist carries `PSDBuildCommit` | ✅ 2026-09-07 — all six, before and after notarization (four entitlement keys plus the profile's application- and team-identifier) |
+| Launch, sign in, join — any TCC or permission prompt | None (D-R4: self-render monitoring needs no Screen Recording) | ✅ 2026-09-07 — none at any point. **D-R4 CONFIRMED: no TCC grant, no PPPC profile needed for the shipping client** |
+| Join a sitting on the entitled, hardened-runtime build | log: `lockdown session: REAL AEAssessmentSession (entitled binary)` → `begin() called` → `DID BEGIN`; the Mac visibly locks | ✅ 2026-09-07 — exact sequence; menu bar / Dock / switching gone |
+| Answer and hand in inside the session | responses saved (`response: item=… type=…`), `handed in`, then `lockdown ending: hand-in confirmed` → `end() called` → `DID END`; the Mac comes back | ✅ 2026-09-07 — two essays + two short texts saved, handed in, clean `DID END`, desktop back |
+| Join a sitting whose attempt is already submitted | refused client-side: `join declined: attempt … is already submitted — staying on the entry screen` (finding 10.1) | ✅ 2026-09-07 — seen on the `E6 / E7(b)` sitting during the (simulated) first launch, on the origin |
+| KaTeX in the real session | sub/superscripts render in stems | ✅ 2026-09-07 — James: subscripts and superscripts displayed correctly in `Chemistry sample` |
+| Predictive text in the essay inside the REAL session (finding 8.4) | no inline completion with `predictiveKeyboard=false` | **OPEN** 2026-09-07 — James did not watch for it; re-check on the next real sitting before closing 8.4 |
+
+Wanted after seeing the signed app (James, 2026-09-07), for batch 4's UI
+pass: brand the grey AAC background, the home (entry) screen and the
+hand-in buttons — recorded in `docs/client-ui-pass-design.md` §D.

@@ -146,6 +146,9 @@ meaning what it means.
   and give it a visible focus ring that meets 2.4.7 / 2.4.11 instead of
   hiding it.
 - A VoiceOver pass over one full paged test as a row block.
+- **Wanted after the first signed build (James, 2026-09-07):** brand the
+  grey ground the app shows inside an AAC session, the home / entry screen,
+  and the hand-in buttons — the PSD tokens from §A on the AppKit side too.
 
 **Not touched:** anything in `LockedDownWebView`'s suppressions, the
 sign-in UA, the CSP, the `cacheDisplay` draw path, the hand-in copy

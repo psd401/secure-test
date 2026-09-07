@@ -138,8 +138,10 @@ batched IT afternoon.
 - **D-R3 (James, 2026-09-03)** display name and icon ship in this first
   package and may change later — TCC keys on bundle id + signing identity,
   not the name.
-- **D-R4 (to confirm in slice 2)** whether the shipping client needs any
-  TCC grant. Expected: none (self-render monitoring).
+- **D-R4 CONFIRMED 2026-09-07 (slice 2)** the shipping client needs NO TCC
+  grant: a real session on the notarized build showed no prompt at launch,
+  sign-in, join, lockdown or hand-in. IT's offered PPPC profile is not
+  needed; say so in the handoff (slice 5).
 
 ## Progress
 
@@ -174,3 +176,34 @@ is present and prints its name / team / expiry; `--repo` for the release
 repository with an unauthenticated `curl` check of `/releases/latest`.
 Snippets exercised against the Debug app (list, diff, restricted grep).
 Slice 4 waits for the public repository.
+
+**Slice 2 DONE 2026-09-07** (James at the keyboard for Keychain / notarytool,
+this session driving the build): IT delivered the profile 2026-09-04
+(`SecureTest Developer ID`, App ID `net.psd401.securetest.client`, Developer
+ID, AAC capability, `ProvisionsAllDevices`, expires 2044-08-30) plus the
+note that the Developer ID Application + Installer certs issued in March
+(private keys on this Mac, LessonLens signed with them, expire 2031-03-19)
+are the ones to use — `find-identity` shows exactly one of each. Xcode's
+double-click did NOT install the profile; copying it by UUID into
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles/` did. Then, with
+no project change: `xcodebuild archive` (Release, generic/platform=macOS)
+succeeded; `-exportArchive` with method `developer-id` / manual /
+`Developer ID Application` / the profile mapped to the bundle id; the
+exported app carries all four of our entitlement keys plus the profile's
+identifiers, `embedded.provisionprofile`, the runtime flag, and `spctl`
+accepted it; `notarytool submit --wait` (keychain profile `notarytool`, the
+LessonLens one) came back Accepted; `stapler staple` worked; `spctl` now
+says `source=Notarized Developer ID`. Build stamp `1.0.0 (c719eb586e45)`.
+The real-session row block ran on that app against the origin
+(`Chemistry sample`, demo student): `REAL AEAssessmentSession` → `DID BEGIN`
+→ four responses → handed in → `DID END`, no TCC prompt anywhere (D-R4
+confirmed), KaTeX sub/superscripts fine; the predictive-text check (8.4)
+stays OPEN — not watched for. Rows in `client/MANUAL-CHECKS.md` "Signed
+build"; five of the nine branding rows closed, four not looked at. Two
+gotchas for slice 4 / `client/RELEASING.md`: `SECURE_TEST_SIMULATE_LOCKDOWN`
+lives in `design-tool/.env.local` and the launcher forwards it (blank it on
+the command line for a real session, and read the log's `lockdown session:`
+line), and an attempt is unique per assessment + student with no delete
+path (roadmap finding 2026-09-07). One archive-time warning to clear in
+slice 4: no `LSApplicationCategoryType`. The export sits in the session
+scratchpad only; nothing tracked changed for this slice.
