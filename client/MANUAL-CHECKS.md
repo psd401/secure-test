@@ -877,3 +877,35 @@ and there is no delete path; roadmap finding 2026-09-07).
 Wanted after seeing the signed app (James, 2026-09-07), for batch 4's UI
 pass: brand the grey AAC background, the home (entry) screen and the
 hand-in buttons — recorded in `docs/client-ui-pass-design.md` §D.
+
+## Observability slice 4 — `errors.log`, the drain, crash capture (2026-09-07)
+
+`docs/observability-design.md` slice 4. The sink's line shape and the drain's
+batching ARE covered by `swift test` (Core). What is not, and cannot be, is
+everything below: each row needs a running app, a real server, and — for two
+of them — a process that dies.
+
+The file under test is
+`~/Library/Containers/net.psd401.securetest.client/Data/Library/Application Support/SecureTest/errors.log`
+(the sandbox container's Application Support, beside `responses.sqlite`). JSON
+lines; read it with `tail -n 5 <that path>`. Every line carries `kind`,
+`message`, `app_version`, `app_commit`, and `attempt_id` when an attempt was
+open.
+
+The crash row needs the app launched with `SECURE_TEST_DEBUG_CRASH=1`, which
+is the only thing that puts **Session → Trigger Debug Crash (SIGABRT)** on the
+menu. A shipped build has no such item.
+
+| Check | Expect | Result |
+|---|---|---|
+| Launch the app and look at stderr | `[security] errors.log open at …/SecureTest/errors.log` — the sink opened. (If it says "errors.log unavailable", every row below is moot and that is the finding) | Not run |
+| Signed OUT, enter a wrong session code and press Join | On screen: the usual join message. In `errors.log`: one new line, `"kind":"join_failed"`, `"context":{"via":"code"}`, this build's `app_version` / `app_commit`, and no `attempt_id` | Not run |
+| Now sign in with Google (student account) | Within a second or two of the sign-in landing, stderr says `[security] errors: client-error drain sent N of N line(s)` and `errors.log` is EMPTY. Server side: a `client_error_events` row for that `join_failed` carrying this build's `app_commit` | Not run |
+| Repeat the failed join with the SERVER STOPPED, then sign in against the stopped server | Nothing sent, and `errors.log` still holds the line — a failure keeps the file. Start the server and sign in again: it drains then | Not run |
+| Launch with `SECURE_TEST_DEBUG_CRASH=1`, sign in, join a sitting, then Session → Trigger Debug Crash (SIGABRT) | The app dies at once (macOS may show its own crash report — that is the OS, not us). `errors.log` gained ONE line: `"kind":"crash"`, `"message":"fatal signal SIGABRT"`, this build's version and commit, and the `attempt_id` of the sitting just joined. It has NO `occurred_at` — a signal handler cannot read a clock | Not run |
+| Relaunch and sign in after that crash | The drain sends the crash line; the server row carries `occurred_at` stamped at drain time (documented, not a bug) and `context.attempt_id` naming the attempt that died | Not run |
+| Cause an error INSIDE an attempt — simplest is to join, stop the server, then answer an item (`SPOOL FAILED` / `responses DROPPED`) | The teacher's monitor row for that student flips to **Needs attention** while the sitting is still open (D-4, the `client_error` attempt event). The same error is also one line in `errors.log` | Not run |
+| Same run, teacher side: open that attempt's event history | A `client_error` event with detail `{ kind, message }` — the kind is the short token (`spool_failed`, `responses_dropped`), not prose | Not run |
+| `exit(70)`: launch with `SECURE_TEST_SIMULATE_LOCKDOWN=hangs`, join a sitting, press Cmd-E and wait out the teardown escalation | stderr: `lockdown UNRECOVERABLE — exiting`, process exits 70. `errors.log` gained one line, `"kind":"lockdown_unrecoverable"`, carrying the attempt id — written the same pre-formatted way the crash line is, because the main thread is presumed gone | Not run |
+| Leave the attempt (Back to your tests), then cause any error on the entry screen | The new line has NO `attempt_id` — the binding is cleared when the attempt screen is torn down | Not run |
+| Look at a line whose `message` came from a long error | Truncated at 2 000 characters; and nothing in any line is response text, a stem, a choice, a student name or a token (the design page's redaction rule) | Not run |

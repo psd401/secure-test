@@ -289,6 +289,28 @@ public actor APIClient {
         )
     }
 
+    /// Observability slice 4: `POST /api/client-errors` — student session,
+    /// NOT attempt-scoped, so it carries what happened on the sign-in screen,
+    /// a failed join, and the previous launch's crash. Max 50 per request;
+    /// the batching is the drain's job.
+    ///
+    /// A line with no `occurred_at` (the pre-formatted crash line, which had
+    /// no clock to read from a signal handler) is stamped with the drain's own
+    /// time rather than dropped.
+    public func postClientErrors(_ entries: [ClientErrorEntry]) async throws -> Int {
+        let fallback = ClientErrorLog.iso8601(Date())
+        let body: [String: Any] = [
+            "errors": entries.map { $0.jsonObject(occurredAtFallback: fallback) }
+        ]
+        let data = try await sendRaw(
+            path: "/api/client-errors",
+            method: "POST",
+            rawBody: try JSONSerialization.data(withJSONObject: body),
+        )
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return (object?["accepted"] as? Int) ?? entries.count
+    }
+
     /// On-demand peek: "does my teacher want a look?" — the PeekResponder's
     /// 5 s poll. Only a request younger than the server's pending TTL comes
     /// back, and null means no.

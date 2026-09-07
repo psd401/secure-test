@@ -156,6 +156,9 @@ final class AttemptEventReporterTests: XCTestCase {
             [
                 "quit", "emergency_exit", "focus_loss", "focus_regained",
                 "lockdown_begin", "lockdown_end", "lockdown_failed", "lockdown_interrupted",
+                // Observability slice 4 (D-4). The server's CHECK constraint
+                // and ALERT_EVENT_KINDS gained it in the same batch.
+                "client_error",
             ]
         )
     }

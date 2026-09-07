@@ -36,6 +36,10 @@ final class SessionEntryViewController: NSObject {
     private var rows: [SittingRowModel] = []
     private var rowButtons: [NSButton] = []
     private var loadingSittings = false
+    /// Observability slice 4: fired after a sign-in succeeds, which is the
+    /// first moment this process can post what `errors.log` collected while it
+    /// had no session — including the previous launch's crash line.
+    var onSignedIn: (() -> Void)?
 
     init(
         client: APIClient,
@@ -206,6 +210,7 @@ final class SessionEntryViewController: NSObject {
             // still works (and will explain itself at join, as before).
             listStatusLabel.stringValue = "No test list for this account."
             log("my-sittings failed: \(error)")
+            AppDelegate.logError(kind: "sittings_failed", message: "\(error)")
         }
     }
 
@@ -292,6 +297,11 @@ final class SessionEntryViewController: NSObject {
                 for button in rowButtons { button.isEnabled = true }
                 statusLabel.stringValue = Self.message(for: error)
                 log("join failed: \(error)")
+                AppDelegate.logError(
+                    kind: "join_failed",
+                    message: "\(error)",
+                    context: ["via": "list", "test_session_id": row.testSessionID]
+                )
                 if case APIError.notAuthenticated = error {
                     await refreshSignInState()
                 }
@@ -312,12 +322,17 @@ final class SessionEntryViewController: NSObject {
                 signedInAs = session.email
                 statusLabel.stringValue = ""
                 log("signed in as role \(session.role)")
+                // Slice 4: the drain's trigger — this is the first moment the
+                // process has a token for errors recorded without one.
+                onSignedIn?()
             } catch let error as SignInError {
                 statusLabel.stringValue = Self.message(for: error)
                 log("sign-in failed: \(error)")
+                AppDelegate.logError(kind: "signin_failed", message: "\(error)")
             } catch {
                 statusLabel.stringValue = "Could not sign in. Tell your teacher."
                 log("sign-in failed: \(error)")
+                AppDelegate.logError(kind: "signin_failed", message: "\(error)")
             }
             await refreshSignInState()
         }
@@ -364,6 +379,11 @@ final class SessionEntryViewController: NSObject {
                 joinButton.isEnabled = true
                 statusLabel.stringValue = Self.message(for: error)
                 log("join failed: \(error)")
+                AppDelegate.logError(
+                    kind: "join_failed",
+                    message: "\(error)",
+                    context: ["via": "code"]
+                )
                 if case APIError.notAuthenticated = error {
                     await refreshSignInState()
                 }

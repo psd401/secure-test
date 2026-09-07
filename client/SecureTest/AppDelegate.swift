@@ -69,6 +69,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var peekResponder: PeekResponder?
     private var attemptHandedIn = false
 
+    /// Observability slice 4 (`docs/observability-design.md`): this build's
+    /// identity, on every error line and every pre-formatted crash line.
+    static let buildStamp = AppBuildStamp(version: AppVersion.marketing, commit: AppVersion.commit)
+
+    /// Observability slice 4, D-4: the reporter `logError` posts a
+    /// `client_error` event through when an attempt is open. Static because
+    /// the sink's `onRecord` hook is a plain closure reached from anywhere,
+    /// including Core; it tracks `eventReporter` exactly.
+    nonisolated(unsafe) static var activeEventReporter: AttemptEventReporter?
+
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
@@ -91,6 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "WebContinuousSpellCheckingEnabled": true
         ])
+        // Observability slice 4: FIRST, before anything that could fail —
+        // the sink and the crash handlers are what make the rest of this
+        // launch legible on a Mac nobody is watching.
+        Self.installErrorSink()
         Self.purgeLegacyKeychainToken()
         installMainMenu()
 
@@ -251,6 +265,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         peekResponder?.stop()
         peekResponder = nil
         eventReporter = nil
+        Self.activeEventReporter = nil
+        // Slice 4: no attempt is open, so neither an error line nor a crash
+        // line should claim one.
+        ClientErrorLog.shared?.attemptID = nil
+        CrashReporter.prepare(stamp: Self.buildStamp, attemptID: nil)
         controller = nil
         attemptHandedIn = false
         seedTokenFromLaunchArgumentsIfPresent()
@@ -285,9 +304,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             )
         }
+        // Slice 4: the drain runs after a sign-in succeeds — and once here,
+        // for the dev/CI path where `--token` seeded a session already.
+        entry.onSignedIn = { [weak self] in
+            self?.drainClientErrors(using: client)
+        }
         self.entry = entry
         window?.contentView = entry.view
         screen = .entry
+        drainClientErrors(using: client)
     }
 
     private func showAssessment(source: AssessmentViewController.Source) {
@@ -298,12 +323,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Slice 92: the reporter lives exactly as long as the attempt is
             // the thing on screen. The offline --bundle path stays silent.
             eventReporter = AttemptEventReporter(api: client, attemptID: attemptID, log: Self.log)
+            Self.activeEventReporter = eventReporter
+            // Slice 4: from here an error line names the attempt, and so does
+            // the crash line — which is re-prepared because a signal handler
+            // cannot read the id at the time it fires.
+            ClientErrorLog.shared?.attemptID = attemptID
+            CrashReporter.prepare(stamp: Self.buildStamp, attemptID: attemptID)
             peekResponder?.stop()
             peekResponder = makePeekResponder(client: client, attemptID: attemptID, controller: controller)
             peekResponder?.start()
         } else {
             isServerDelivered = false
             eventReporter = nil
+            Self.activeEventReporter = nil
             peekResponder?.stop()
             peekResponder = nil
         }
@@ -453,6 +485,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // process exit is the only safe reach (PoC-A finding #11's lesson).
         lockdown.onUnrecoverable = {
             Self.log("lockdown UNRECOVERABLE — exiting")
+            // Slice 4: the ONE line this exit can leave behind. Same
+            // mechanism as the signal handlers — a pre-formatted buffer
+            // written to an already-open descriptor — because the main
+            // thread is presumed gone and nothing else would survive.
+            CrashReporter.writeUnrecoverableLine()
             exit(70)
         }
         return lockdown
@@ -641,6 +678,90 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         FileHandle.standardError.write(Data("[security] \(message)\n".utf8))
     }
 
+    // MARK: errors (observability slice 4)
+
+    /// Open `errors.log` and arm the crash handlers.
+    ///
+    /// Failure here is not fatal and must not be: a student whose container
+    /// is unwritable still gets the whole app, just without the file. Every
+    /// `logError` call still reaches stderr in that case.
+    private static func installErrorSink() {
+        do {
+            let sink = try ClientErrorLog(
+                fileURL: ClientErrorLog.defaultFileURL(),
+                stamp: buildStamp
+            )
+            // The `[security]` channel keeps showing everything it showed
+            // before this slice; the file is an addition, not a move.
+            sink.echo = { message in AppDelegate.log(message) }
+            // D-4: an error hit WHILE an attempt is open also goes to the
+            // teacher's monitor, fire-and-forget. Outside an attempt there is
+            // no reporter and the file is the only channel — which is the
+            // whole reason the file exists.
+            sink.onRecord = { entry in
+                AppDelegate.activeEventReporter?.report(
+                    .clientError,
+                    detail: ["kind": entry.kind, "message": entry.message]
+                )
+            }
+            ClientErrorLog.shared = sink
+            CrashReporter.install(log: sink, stamp: buildStamp)
+            log("errors.log open at \(sink.fileURL.path)")
+        } catch {
+            log("errors.log unavailable (\(error)) — errors go to stderr only")
+        }
+    }
+
+    /// The companion to `log`: one JSON line in `errors.log`, the same text on
+    /// stderr, and — when an attempt is open — a `client_error` event on the
+    /// teacher's monitor.
+    ///
+    /// `kind` is a short stable token (`join_failed`, `submit_failed`), not
+    /// prose; `message` is what went wrong, truncated by the sink. Redaction
+    /// rule from the design page: never response text, stems, choices, names
+    /// or tokens — ids, statuses and error descriptions only.
+    nonisolated static func logError(
+        kind: String,
+        message: String,
+        context: [String: String] = [:]
+    ) {
+        guard let sink = ClientErrorLog.shared else {
+            log("\(kind): \(message)")
+            return
+        }
+        sink.record(kind: kind, message: message, context: context)
+    }
+
+    /// Send whatever `errors.log` collected while nobody was signed in.
+    ///
+    /// This is the only moment the client HAS a session token for errors that
+    /// happened without one: the sign-in screen's failures, a failed join, and
+    /// the previous launch's crash line. Detached and never awaited — a slow
+    /// or dead server must not hold the entry screen.
+    private func drainClientErrors(using client: APIClient) {
+        guard let sink = ClientErrorLog.shared else { return }
+        Task.detached(priority: .utility) {
+            guard await client.isSignedIn() else { return }
+            await ClientErrorDrain.drain(
+                log: sink,
+                api: client,
+                report: { AppDelegate.log("errors: \($0)") }
+            )
+        }
+    }
+
+    /// The hand-run's crash trigger (`SECURE_TEST_DEBUG_CRASH=1`). Gated on
+    /// the environment variable at menu-build time, so a shipped app has no
+    /// menu item at all rather than a disabled one.
+    private static var debugCrashEnabled: Bool {
+        ProcessInfo.processInfo.environment["SECURE_TEST_DEBUG_CRASH"] == "1"
+    }
+
+    @objc private func triggerDebugCrash() {
+        Self.log("SECURE_TEST_DEBUG_CRASH — raising SIGABRT on purpose")
+        CrashReporter.triggerDebugCrash()
+    }
+
     /// The standard About panel, with the build stamp in the version line.
     ///
     /// `.version` is set to "" on purpose: AppKit renders `.applicationVersion`
@@ -721,6 +842,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         endSession.target = self
         endSession.isEnabled = false
         endSessionItem = endSession
+        // Observability slice 4: the crash path cannot be unit-tested (a
+        // raised SIGSEGV takes the test runner with it), so it is hand-run
+        // instead — and needs a way to be raised on purpose. Present ONLY
+        // when SECURE_TEST_DEBUG_CRASH=1, so a shipped app has no such item.
+        if Self.debugCrashEnabled {
+            sessionMenu.addItem(.separator())
+            let crash = sessionMenu.addItem(
+                withTitle: "Trigger Debug Crash (SIGABRT)",
+                action: #selector(triggerDebugCrash),
+                keyEquivalent: ""
+            )
+            crash.target = self
+            crash.isEnabled = true
+        }
         sessionMenuItem.submenu = sessionMenu
         mainMenu.addItem(sessionMenuItem)
 

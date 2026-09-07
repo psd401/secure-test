@@ -13,6 +13,12 @@ public enum AttemptEventKind: String, CaseIterable, Sendable {
     case lockdownEnd = "lockdown_end"
     case lockdownFailed = "lockdown_failed"
     case lockdownInterrupted = "lockdown_interrupted"
+    /// Observability slice 4, D-4: an error the client hit WHILE an attempt
+    /// was open. It lands in `errors.log` like every other error; this is the
+    /// copy that reaches the teacher's monitor live, because `client_error`
+    /// is in the server's ALERT_EVENT_KINDS and lights "Needs attention".
+    /// Detail is `{ kind, message }`.
+    case clientError = "client_error"
 }
 
 /// Slice 92: fire-and-forget event reporting for the teacher monitor.
@@ -39,6 +45,10 @@ public final class AttemptEventReporter: @unchecked Sendable {
     public static let retriedKinds: Set<AttemptEventKind> = [
         .lockdownBegin, .lockdownEnd, .lockdownFailed, .lockdownInterrupted,
         .emergencyExit,
+        // Slice 4: an error worth a teacher's attention gets the same retry
+        // budget as the lifecycle — a network fault is exactly the condition
+        // that produces one and would otherwise lose it.
+        .clientError,
     ]
     private static let maxAttempts = 4
 
@@ -93,6 +103,17 @@ public final class AttemptEventReporter: @unchecked Sendable {
                         // Dropped after the budget. Events are telemetry, not
                         // answers; nothing blocks or queues past this point.
                         log("event \(kind.rawValue) not delivered: \(error)")
+                        // Observability slice 4: the drop is itself a
+                        // failure-shaped site. Guarded against the obvious
+                        // loop — a client_error that cannot be posted must
+                        // not manufacture another client_error.
+                        if kind != .clientError {
+                            ClientErrorLog.shared?.record(
+                                kind: "event_not_delivered",
+                                message: "\(error)",
+                                context: ["event_kind": kind.rawValue]
+                            )
+                        }
                     }
                 }
             }

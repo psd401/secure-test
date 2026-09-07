@@ -139,6 +139,14 @@ public final class PeekResponder: @unchecked Sendable {
                 // Dropped by design: the monitor reads "unavailable" and the
                 // teacher clicks again.
                 log("peek image not delivered (\(peekID)): \(error)")
+                // Observability slice 4: a teacher who asked for a look and
+                // got nothing has no way to tell a refusal from a stalled
+                // student without this.
+                ClientErrorLog.shared?.record(
+                    kind: "peek_upload_failed",
+                    message: "\(error)",
+                    context: ["peek_id": peekID]
+                )
             }
         }
     }
