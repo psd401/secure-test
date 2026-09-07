@@ -197,6 +197,13 @@
       "when": 1788404074891,
       "tag": "0027_client_paging_student_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788797989824,
+      "tag": "0028_observability_tables",
+      "breakpoints": true
     }
   ]
 }

@@ -628,6 +628,12 @@ export const ATTEMPT_EVENT_KINDS = [
   "lockdown_end",
   "lockdown_failed",
   "lockdown_interrupted",
+  // Batch 3 slice 2 (D-4): an error the client hit DURING an attempt. The
+  // out-of-attempt errors go to client_error_events via /api/client-errors;
+  // this kind exists so an in-attempt failure reaches the teacher live
+  // through the reporter that is already retrying lifecycle kinds.
+  // detail is { kind, message } — never response text, never a stem.
+  "client_error",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -641,6 +647,7 @@ export const ALERT_EVENT_KINDS = [
   "focus_loss",
   "lockdown_failed",
   "lockdown_interrupted",
+  "client_error",
 ] as const;
 
 export const attempt_events = pgTable(
@@ -660,7 +667,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error')`,
     ),
   }),
 );
@@ -1069,3 +1076,126 @@ export const assessment_shares = pgTable(
   }),
 );
 export type AssessmentShareRow = typeof assessment_shares.$inferSelect;
+
+// --- Observability (batch 3, docs/observability-design.md) -----------------
+//
+// Three tables, one migration (0028). They share a redaction contract, stated
+// once here and enforced at each write boundary:
+//
+//   NEVER stored: request or response bodies, query strings, headers, tokens,
+//   response text, item stems or choices, student names.
+//   Stored: `sub`, uuids, route paths, status codes, digests, messages and
+//   stacks truncated to 2 000 characters, and a stack hash for grouping.
+//
+// RETENTION: rows are never expired today — the same warning `guardrail_events`
+// carries. One retention sweep covering all four tables is the follow-up; the
+// CloudWatch log group is capped at 30 days (D-8) but the database is the
+// record, so nothing here is deleted by that.
+
+/** Truncation ceiling shared by every free-text column in this section. */
+export const OBSERVABILITY_TEXT_MAX = 2000;
+
+/**
+ * One row per unhandled server error, written by `onRequestError`
+ * (`instrumentation.ts`) beside the JSON log line that carries the same
+ * fields. `request_id` is the handle a teacher reads off the error screen as
+ * "ref", so a screenshot maps to a row and to a CloudWatch line.
+ *
+ * A write failure here is swallowed: the log line is the primary record and a
+ * database that is already unhappy must not turn one 500 into two.
+ */
+export const server_error_events = pgTable(
+  "server_error_events",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    /** Minted in proxy.ts (or the ALB's x-amzn-trace-id). Null if absent. */
+    request_id: text("request_id"),
+    /** Resource path only — the query string is dropped at the boundary. */
+    route: text("route").notNull(),
+    method: text("method").notNull(),
+    status: integer("status").notNull(),
+    /** React/Next's error digest — what the boundary shows the user. */
+    digest: text("digest"),
+    message: text("message").notNull(),
+    /** sha-256 of the normalised stack, for grouping without reading it. */
+    stack_hash: text("stack_hash"),
+    /** Truncated to OBSERVABILITY_TEXT_MAX. */
+    stack: text("stack"),
+    /** The session's sub when there was one; never an email, never a name. */
+    sub: text("sub"),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    createdAtIdx: index("server_error_events_created_at_idx").on(t.created_at),
+    requestIdIdx: index("server_error_events_request_id_idx").on(t.request_id),
+  }),
+);
+
+/**
+ * The macOS client's error log, drained after a signed-in launch to
+ * `POST /api/client-errors`. Out-of-attempt by design: a failed sign-in, a
+ * refused bundle, or a crash captured on the previous run has no attempt to
+ * hang off, which is exactly what `attempt_events` cannot carry.
+ *
+ * `occurred_at` is the CLIENT's clock (that is the point — the line was
+ * written before this launch); `received_at` is server-stamped, and ordering
+ * or alerting uses that one.
+ */
+export const client_error_events = pgTable(
+  "client_error_events",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    sub: text("sub").notNull(),
+    app_version: text("app_version").notNull(),
+    app_commit: text("app_commit").notNull(),
+    /** A short code from the client (`bundle_rejected`, `signal_SIGABRT`). */
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    /** Small bag of ids/counts, capped at 4 KB and dropped if bigger. */
+    context: jsonb("context").$type<Record<string, unknown>>(),
+    occurred_at: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    received_at: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    receivedAtIdx: index("client_error_events_received_at_idx").on(t.received_at),
+    subIdx: index("client_error_events_sub_idx").on(t.sub),
+  }),
+);
+
+/**
+ * "Send feedback" from the teacher header (slice 3). The row is the record;
+ * the SNS email is only the notification, so a publish failure never fails the
+ * request. Students have no button — they tell the teacher.
+ */
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    sub: text("sub").notNull(),
+    /** The sender's verified session email — staff only, never a student. */
+    email: text("email").notNull(),
+    role: text("role").notNull(),
+    /** The path they were on, so a report has a place attached. */
+    path: text("path").notNull(),
+    message: text("message").notNull(),
+    user_agent: text("user_agent"),
+    app_commit: text("app_commit"),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    createdAtIdx: index("feedback_created_at_idx").on(t.created_at),
+  }),
+);
+
+export type ServerErrorEventRow = typeof server_error_events.$inferSelect;
+export type ServerErrorEventInsert = typeof server_error_events.$inferInsert;
+export type ClientErrorEventRow = typeof client_error_events.$inferSelect;
+export type ClientErrorEventInsert = typeof client_error_events.$inferInsert;
+export type FeedbackRow = typeof feedback.$inferSelect;
+export type FeedbackInsert = typeof feedback.$inferInsert;

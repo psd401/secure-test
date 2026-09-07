@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { ATTEMPT_EVENT_KINDS, attempt_events } from "@/db/schema";
+import {
+  ATTEMPT_EVENT_KINDS,
+  OBSERVABILITY_TEXT_MAX,
+  attempt_events,
+} from "@/db/schema";
+import { truncate } from "@/lib/log";
 import { requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { UUID_RE } from "@/lib/uuid";
@@ -14,6 +19,26 @@ const Body = z.object({
   kind: z.enum(ATTEMPT_EVENT_KINDS),
   detail: z.record(z.string(), z.unknown()).optional(),
 });
+
+/**
+ * Batch 3 slice 2 (D-4): `client_error` carries `{ kind, message }` and
+ * nothing else. The message is truncated to the observability ceiling and the
+ * rest of the bag is dropped — `detail` is displayed to a teacher in the
+ * monitor, so this is the boundary where a client cannot put a stem, an
+ * answer, or a token in front of one.
+ */
+function normaliseDetail(
+  kind: string,
+  detail: Record<string, unknown> | undefined,
+): Record<string, unknown> | null {
+  if (kind !== "client_error") return detail ?? null;
+  const errorKind = typeof detail?.kind === "string" ? detail.kind.slice(0, 120) : "unknown";
+  const message =
+    typeof detail?.message === "string"
+      ? truncate(detail.message, OBSERVABILITY_TEXT_MAX)
+      : "";
+  return { kind: errorKind, message };
+}
 
 /**
  * Slice 91: the client's event report — quit, emergency exit, focus changes,
@@ -55,7 +80,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     .values({
       attempt_id: access.attempt.id,
       kind: body.kind,
-      detail: body.detail ?? null,
+      detail: normaliseDetail(body.kind, body.detail),
     })
     .returning();
 

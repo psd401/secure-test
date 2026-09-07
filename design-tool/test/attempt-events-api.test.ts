@@ -253,3 +253,81 @@ describe("attendance folding", () => {
     expect(ada.alert).toBeNull();
   });
 });
+
+// Batch 3 slice 2 (D-4): an error the client hit DURING an attempt rides the
+// existing, retrying events pipe so the teacher sees it live. The
+// out-of-attempt errors go to /api/client-errors instead.
+describe("the client_error kind", () => {
+  test("is accepted and reaches the teacher as a Needs-attention alert", async () => {
+    const assessment = await seedAssessment();
+    const sitting = await createSitting(assessment.id);
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { sessionId: sitting.id });
+
+    principal = studentPrincipal(STUDENT.email);
+    const res = await postEvent(attempt.id, {
+      kind: "client_error",
+      detail: { kind: "drawing_upload_failed", message: "DRAWING UPLOAD FAILED: 500" },
+    });
+    expect(res.status).toBe(201);
+
+    const stored = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.detail).toEqual({
+      kind: "drawing_upload_failed",
+      message: "DRAWING UPLOAD FAILED: 500",
+    });
+
+    const ada = (await attendance(sitting.id)).rows.find((r) => r.ps_id === STUDENT.ps_id)!;
+    expect(ada.alert?.kind).toBe("client_error");
+    expect(ada.last_event?.kind).toBe("client_error");
+  });
+
+  test("detail is reduced to { kind, message }, truncated, with nothing else kept", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+
+    principal = studentPrincipal(STUDENT.email);
+    expect(
+      (
+        await postEvent(attempt.id, {
+          kind: "client_error",
+          detail: {
+            kind: "spool_failed",
+            message: "m".repeat(9000),
+            // The monitor renders detail: a client must not be able to put an
+            // answer or a stem in front of a teacher through this door.
+            response_text: "the student's essay",
+          },
+        })
+      ).status,
+    ).toBe(201);
+
+    const stored = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    const detail = stored[0]!.detail as { kind: string; message: string };
+    expect(Object.keys(detail).sort()).toEqual(["kind", "message"]);
+    expect(detail.kind).toBe("spool_failed");
+    expect(detail.message).toHaveLength(2000);
+  });
+
+  test("a sticky alert: it survives a later focus_regained", async () => {
+    const assessment = await seedAssessment();
+    const sitting = await createSitting(assessment.id);
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { sessionId: sitting.id });
+
+    principal = studentPrincipal(STUDENT.email);
+    expect(
+      (await postEvent(attempt.id, { kind: "client_error", detail: { kind: "x", message: "y" } }))
+        .status,
+    ).toBe(201);
+    expect((await postEvent(attempt.id, { kind: "focus_regained" })).status).toBe(201);
+
+    const ada = (await attendance(sitting.id)).rows.find((r) => r.ps_id === STUDENT.ps_id)!;
+    expect(ada.alert?.kind).toBe("client_error");
+  });
+});

@@ -95,6 +95,11 @@ export function eventLabel(kind: string): string {
       return "Lockdown failed";
     case "lockdown_interrupted":
       return "Lockdown interrupted";
+    // Batch 3 slice 2 (D-4): the app hit an error mid-test. Teacher-facing
+    // wording, not the client's error code — the code and message are on the
+    // row's detail for anyone reading the table behind it.
+    case "client_error":
+      return "The app hit a problem";
     default:
       return kind;
   }
