@@ -117,7 +117,19 @@ bunx cdk destroy
   synth/deploy time if it's missing.
 - One SNS topic, `secure-test-notify-<env>`, with an email subscription to
   `notifyEmail`. **AWS emails that address a confirmation link on first
-  deploy — click it once or the subscription never delivers.** The
+  deploy — click it once or the subscription never delivers.**
+  **Do NOT confirm by clicking the link (2026-09-07 lesson):** every SNS
+  email carries a one-click Unsubscribe link, and the district mail path's
+  link scanner follows it — the first confirmed subscription was
+  unsubscribed within a minute of the first alarm email, twice. Confirm
+  from the CLI instead, with authenticated unsubscribe, so the link needs
+  an AWS-signed request:
+  `aws sns confirm-subscription --topic-arn <arn> --token <Token= from the
+  confirmation URL> --authenticate-on-unsubscribe true`. The CLI-made
+  subscription is outside CloudFormation's control (the stack's own
+  `AWS::SNS::Subscription` was deleted by the unsubscribe); a future
+  `cdk deploy` recreates the stack's pending one beside it — harmless,
+  leave the pending one unconfirmed or delete it. The
   `taskRole` gets `sns:Publish` scoped to this one topic (nothing
   broader); the topic ARN is injected into the container as
   `NOTIFY_TOPIC_ARN`, with `NOTIFY_PROVIDER=sns`, for slice 3's feedback

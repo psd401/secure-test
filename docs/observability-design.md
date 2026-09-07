@@ -451,8 +451,7 @@ import (the Next 16 doc pattern).
 **Slice 5 rows, teacher side, 2026-09-07 (Claude in Chrome on the origin):**
 rows 62–68 in `docs/design-tool-manual-checks.md`. Feedback: dialog / counter
 / Cancel / Escape / draft-cleared ✅; send → 200, no publish-failure line, but
-the confirmation shows INSIDE the dialog and it stays open (finding **O-1**:
-the row expected the StatusLine + close — decide); no-session 401 ✅, the
+the confirmation shows inline in the dialog, which then closes on its own (O-1 withdrawn on the second pass); no-session 401 ✅, the
 student 403 half unit-tested only. Server error: **not forceable** on the
 origin (every id-taking route validates first) — row 67 stays open until a
 real 500 or a debug throw behind an env knob. Alarm path: one synthetic
@@ -462,3 +461,10 @@ subscription was `PendingConfirmation`** — James confirms, then one feedback
 send is the last teacher-side check. Client rows ("Observability slice 4",
 `client/MANUAL-CHECKS.md`) wait on James at the keyboard with the rebuilt
 app (`SECURE_TEST_DEBUG_CRASH=1` for the crash row).
+
+**SNS gotcha 2026-09-07:** the click-confirmed subscription was unsubscribed
+within a minute of the first alarm email — twice — by the district mail
+path's link scanner following the one-click Unsubscribe link every SNS email
+carries. Fix: `aws sns confirm-subscription … --authenticate-on-unsubscribe
+true` with the token from the confirmation URL (infra README has the
+recipe); the CLI-made subscription lives outside the stack.
