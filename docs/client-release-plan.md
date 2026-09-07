@@ -226,3 +226,12 @@ the pkg by hand on one district Mac and repeat the lockdown row from
 build"). Slice 5 (IT handoff drafts, ops repo) next: Installomator label
 fragment, Jamf policy + fleet scope (IT asked which group), "no PPPC
 needed" (D-R4), the dictation DDM is ready on IT's side.
+
+**Slice 5 DRAFTED 2026-09-07** (internal — see the ops repository): the
+reply to IT (profile worked, v1.0.0 published, no PPPC per D-R4, hold the
+dictation DDM for the scope), the Installomator `securetest` label fragment
+(with the blocking-process caveat: an update must never land on a locked
+Mac), and the Jamf policy ask. The fleet scope is James's to name. Decision
+(James, 2026-09-07): the v1.0.0 floor stays `LSMinimumSystemVersion 26.5`
+(IT's DDM floor is 26.4; Macs on 26.4 update first). Batch 2 is complete
+except the hand-install row on a district Mac.
