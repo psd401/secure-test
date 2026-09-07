@@ -197,4 +197,110 @@ deploy.
 
 ## Progress
 
-Nothing built. Slice 1 first (it is what every other slice publishes to).
+Slice 1 (infra) first: it is what every other slice publishes to.
+
+**Slice 2 BUILT 2026-09-07 — server errors + tables.** Migration
+`0028_observability_tables.sql` creates `server_error_events`,
+`client_error_events` and `feedback` (each indexed on its time column, each
+carrying the "rows are never expired today" note `guardrail_events` has) and
+replaces the `attempt_events` kind CHECK so it admits `client_error`; applied
+to the local test database, NOT yet to dev or Aurora. `ATTEMPT_EVENT_KINDS`
+and `ALERT_EVENT_KINDS` in `design-tool/db/schema.ts` gained `client_error` in
+the same commit — the closed set lives there, not in `packages/schema` (that
+package holds the item/delivery wire formats and never knew about event
+kinds), so nothing there changed and no `dist` rebuild is part of this slice.
+
+What landed beside the migration:
+
+- `lib/log.ts` — JSON-lines logger in `consoleJsonLogger`'s shape with a
+  `level` added (`error` / `warn` / `info`), an injectable sink for tests, and
+  the redaction contract written out at the top: `sub`, uuids, route paths,
+  methods, statuses, digests, counts, truncated messages and stack hashes may
+  be logged; bodies, query strings, headers, tokens, response text and stems
+  may not. `routeOf` and `truncate` are the two mechanical helpers; the rest
+  is review.
+- `lib/observability/serverError.ts` + `instrumentation.ts` — Next 16's
+  `onRequestError` (its docs are
+  `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/instrumentation.md`;
+  note it hands over no status, so the row records 500). One `level: "error"`,
+  `event: "request_error"` line and one `server_error_events` row per
+  unhandled error, sharing route / method / status / digest / message / stack
+  hash / request id / sub. A failing row write logs
+  `request_error_not_recorded` and resolves — the log line is the primary
+  record and an unhandled rejection inside Next's error handler would be
+  worse. `db/client` and `db/schema` are imported lazily so the hook stays
+  loadable in the Edge runtime.
+- `lib/observability/requestId.ts` + `proxy.ts` — the id is the ALB's
+  `x-amzn-trace-id` when present, else a uuid; an inbound value that is not
+  id-shaped is discarded. It is set on the request (so `onRequestError` reads
+  it back out of the headers) and echoed as the `x-request-id` response
+  header. The matcher had to widen from `/dashboard` to
+  `/((?!_next/static|_next/image|favicon.ico|icon.png|.*\.woff2$).*)`;
+  `isProtected` still decides who gets the auth treatment, so no auth
+  behaviour moved.
+- `app/error.tsx`, `app/global-error.tsx`, and `proxy.ts`'s misconfigured
+  page — three surfaces, one wording, one "ref". `global-error` replaces the
+  root layout so it renders its own document with inline styles (no
+  globals.css); the proxy's page is hand-written HTML for the same reason and
+  replaces the old `text/plain` 500.
+- `POST /api/client-errors` — contract below.
+- `POST /api/attempts/[attemptId]/events` accepts `client_error`, and reduces
+  its `detail` to `{ kind, message }` (message truncated to 2 000) at the
+  write boundary: the monitor renders `detail`, so this is where a client is
+  stopped from putting an answer or a stem in front of a teacher.
+  `eventLabel("client_error")` is "The app hit a problem".
+
+Tests: design-tool 1135 → **1172 pass**, 0 fail (37 added — the logger's line
+shape and the redaction helpers; `onRequestError`'s line + row with an
+injected writer, the swallowed DB failure, truncation, the dropped query
+string, stack-hash grouping; the three boundaries rendering the ref;
+`/api/client-errors` validation / cap / rows / student-only; `client_error`
+accepted, folded into attendance as a sticky alert, and labelled).
+`bun run typecheck` clean. `/api/client-errors` was added to
+`STUDENT_ROUTES` in `test/auth-role-enforcement.test.ts`.
+
+Not done here and still open for slice 1 / 5: nothing is deployed, the
+migration has not run on dev or Aurora, and there is no log group, metric
+filter, alarm or SNS topic yet (slice 1). No retention sweep for the new
+tables (the whole-batch follow-up).
+
+### `POST /api/client-errors` — the contract slice 4 writes against
+
+Student session required (bearer or cookie); a staff session gets 403, no
+session 401. Not attempt-scoped.
+
+```
+POST /api/client-errors
+Authorization: Bearer <session JWT>
+Content-Type: application/json
+
+{ "errors": [
+    { "kind": "bundle_rejected",            // ≤ 120 chars, a short code
+      "message": "BUNDLE REJECTED: …",      // truncated server-side to 2000
+      "context": { "attempt_id": "…" },     // optional; ≤ 4 KB of JSON
+      "occurred_at": "2026-09-06T18:22:04Z",// ISO 8601 with an offset
+      "app_version": "1.0.0",
+      "app_commit": "abc1234" } ] }
+```
+
+- At most **50** entries per request. More → **413**
+  `{ "ok": false, "error": "too_many_entries", "max": 50 }` and nothing is
+  stored, so the client should split the batch rather than drop the file.
+- A malformed body (empty array, missing field, non-ISO `occurred_at`) →
+  **400** `{ "ok": false, "error": "invalid_body" }`, nothing stored.
+- A `context` whose JSON exceeds 4 KB is replaced by
+  `{ "dropped": "context_too_large" }` — half a bag is worse than none.
+- Success → **200** `{ "accepted": n }`. The insert is one statement, so
+  there is no partial batch and the client's "truncate `errors.log` on 200,
+  keep it otherwise" rule is safe.
+- `sub` is taken from the session and never from the body. `received_at` is
+  server-stamped; `occurred_at` is the client's clock, which is the point.
+- Never send response text, stems, choices, tokens or student names — the
+  server does not filter the message, and the redaction rule is the client's
+  to keep.
+
+In-attempt errors do NOT come here: they go to
+`POST /api/attempts/[attemptId]/events` as
+`{ "kind": "client_error", "detail": { "kind": "<code>", "message": "<text>" } }`
+so the teacher's monitor shows "Needs attention" live. `detail` is reduced to
+exactly those two fields server-side; anything else is dropped.

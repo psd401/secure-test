@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   IDLE_AFTER_MS,
   alertIsCurrent,
+  eventLabel,
   studentState,
   type AttendanceRow,
 } from "../app/dashboard/[id]/attendanceView";
@@ -75,5 +76,34 @@ describe("studentState (UX pass 1 slices 6–7, SM-11)", () => {
     expect(studentState(row({ last_activity_at: iso(-IDLE_AFTER_MS - 1) }), T0)).toBe("idle");
     expect(studentState(row({}), T0)).toBe("in_progress");
     expect(studentState(row({ status: "not_joined", last_activity_at: null, started_at: null }), T0)).toBe("not_joined");
+  });
+});
+
+// Batch 3 slice 2 (D-4): client_error is an alert kind, so the row reads
+// "Needs attention" the same way a quit does, and it gets teacher-facing words
+// rather than the client's error code.
+describe("client_error in the attendance view", () => {
+  test("needs attention, and is sticky like the other alert kinds", () => {
+    const r = row({
+      alert: { kind: "client_error", at: iso(-2 * 60_000) },
+      last_event: { kind: "client_error", at: iso(-2 * 60_000) },
+      last_activity_at: iso(-5 * 60_000),
+    });
+    expect(alertIsCurrent(r)).toBe(true);
+    expect(studentState(r, T0)).toBe("needs_attention");
+  });
+
+  test("a later lockdown_begin demotes it to history, like every other alert", () => {
+    const r = row({
+      alert: { kind: "client_error", at: iso(-10 * 60_000) },
+      last_lockdown_begin_at: iso(-9 * 60_000),
+      last_event: { kind: "lockdown_begin", at: iso(-9 * 60_000) },
+      last_activity_at: null,
+    });
+    expect(alertIsCurrent(r)).toBe(false);
+  });
+
+  test("reads as words, not as the client's error code", () => {
+    expect(eventLabel("client_error")).toBe("The app hit a problem");
   });
 });

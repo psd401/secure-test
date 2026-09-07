@@ -69,6 +69,10 @@ const STUDENT_ROUTES = new Set([
   join("api", "assessments", "[id]", "delivery"),
   join("api", "attempts", "[attemptId]", "responses", "[itemId]", "upload-url"),
   join("api", "attempts", "[attemptId]", "responses", "[itemId]", "upload"),
+  // Batch 3 slice 2: the client's error drain. Student-authed but NOT
+  // attempt-scoped — a failed sign-in or a crash on the previous launch has
+  // no attempt to post against.
+  join("api", "client-errors"),
 ]);
 
 function findRouteFiles(dir: string): string[] {
