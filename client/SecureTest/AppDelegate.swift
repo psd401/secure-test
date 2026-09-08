@@ -133,6 +133,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "Secure Test"
+        // Batch 4 slice D: the window's own ground is Pacific, so the frame
+        // the student sees while a bundle loads, between screens, and after
+        // "End secure session" is district colour rather than system grey
+        // (James, 2026-09-07 — `docs/client-ui-pass-design.md` §D).
+        window.backgroundColor = PSDColor.pacific
+        // The minimum that keeps the entry card whole: the 520-pt card plus
+        // its 24-pt margins either side, and enough height for the header,
+        // the account row, three two-line sitting rows, the code row and the
+        // status block. Below this the card would clip rather than reflow.
+        window.contentMinSize = NSSize(width: 720, height: 620)
         window.center()
         self.window = window
 
@@ -533,17 +543,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 28))
         let label = NSTextField(labelWithString: "")
         label.font = .systemFont(ofSize: 11)
-        label.textColor = .secondaryLabelColor
+        label.textColor = PSDColor.inkSoft
         label.alignment = .right
         label.frame = NSRect(x: 0, y: 6, width: 170, height: 16)
         view.addSubview(label)
-        let button = NSButton(
+        // Slice D: the same Whulge primary as the entry screen's Join. It is
+        // the only action in the titlebar during a session, and the exit path
+        // should be the most findable thing there. Title, target, action and
+        // the Cmd-E companion are unchanged — this is styling only.
+        let button = PSDPrimaryButton(
             title: "End secure session",
             target: self,
             action: #selector(emergencyEndLockdown)
         )
-        button.bezelStyle = .rounded
-        button.controlSize = .small
+        button.setAccessibilityLabel("End secure session")
         button.frame = NSRect(x: 178, y: 1, width: 136, height: 24)
         view.addSubview(button)
 
@@ -563,13 +576,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installBackToTestsAccessoryIfNeeded() {
         guard backToTestsAccessory == nil, let window, screen == .serverAttempt else { return }
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 150, height: 28))
-        let button = NSButton(
+        // Slice D: primary — after the session is down this IS the next step.
+        let button = PSDPrimaryButton(
             title: "Back to your tests",
             target: self,
             action: #selector(backToTests)
         )
-        button.bezelStyle = .rounded
-        button.controlSize = .small
+        button.setAccessibilityLabel("Back to your tests")
         button.frame = NSRect(x: 0, y: 1, width: 144, height: 24)
         view.addSubview(button)
         let accessory = NSTitlebarAccessoryViewController()

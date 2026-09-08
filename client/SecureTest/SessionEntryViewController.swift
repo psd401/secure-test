@@ -14,20 +14,33 @@ import SecureTestCore
 /// Slice 84: the list is `GET /api/me/sittings` rendered from
 /// `SittingRowModel` (in the package, tested); a row's Join/Resume calls
 /// `startAttempt(testSessionID:)` directly — listed sittings never redeem.
+///
+/// Batch 4 slice D (`docs/client-ui-pass-design.md` §D) rebuilt the layout on
+/// Auto Layout: a white card centred on the Pacific ground, headed like the
+/// sign-in sheet (white emblem, app name), with the list rows full width on
+/// TWO lines — which is what closes the 250-px truncation finding
+/// (`docs/phase-7-slices.md`, "Also noted for UX pass 1"). Every control
+/// carries an accessibility label. No behaviour on this screen changed: the
+/// same controls, the same actions, the same copy.
 final class SessionEntryViewController: NSObject {
     let view: NSView
-    private let signInButton = NSButton()
+    private let card = NSView()
+    private let signInButton: PSDPrimaryButton
     private let signOutButton = NSButton()
     private let signedInLabel = NSTextField(labelWithString: "")
+    private let accountRow = NSStackView()
     private let testsHeader = NSTextField(labelWithString: "Your tests")
+    private let testsRow = NSStackView()
     private let refreshButton = NSButton()
     private let listStatusLabel = NSTextField(labelWithString: "")
     private let listScroll = NSScrollView()
     private let listStack = NSStackView()
+    private let separator = NSBox()
     private let codeHeader = NSTextField(labelWithString: "Or enter a code from your teacher")
     private let codeField = NSTextField()
+    private let codeRow = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "")
-    private let joinButton = NSButton()
+    private let joinButton: PSDPrimaryButton
     private let onJoined: (_ assessmentID: String, _ attemptID: String) -> Void
     private let client: APIClient
     private let signIn: (() async throws -> SignedInSession)?
@@ -41,6 +54,10 @@ final class SessionEntryViewController: NSObject {
     /// had no session — including the previous launch's crash line.
     var onSignedIn: (() -> Void)?
 
+    /// The card never grows past this: a column of text a student reads at a
+    /// glance, not a full-width sprawl on a 27-inch lab iMac.
+    private static let cardWidth: CGFloat = 520
+
     init(
         client: APIClient,
         signIn: (() async throws -> SignedInSession)?,
@@ -51,49 +68,136 @@ final class SessionEntryViewController: NSObject {
         self.signIn = signIn
         self.log = log
         self.onJoined = onJoined
+        self.signInButton = PSDPrimaryButton(title: "Sign in with Google", target: nil, action: nil)
+        self.joinButton = PSDPrimaryButton(title: "Join", target: nil, action: nil)
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 560))
-        self.view = container
+        let ground = NSView(frame: NSRect(x: 0, y: 0, width: 980, height: 700))
+        ground.wantsLayer = true
+        // §D, James 2026-09-07: the app's ground is Pacific, here and behind
+        // the web view, so nothing the student sees is undressed grey.
+        ground.layer?.backgroundColor = PSDColor.pacific.cgColor
+        self.view = ground
         super.init()
 
-        signInButton.frame = NSRect(x: 40, y: 510, width: 200, height: 36)
-        signInButton.title = "Sign in with Google"
-        signInButton.bezelStyle = .rounded
         signInButton.target = self
         signInButton.action = #selector(startSignIn)
-        container.addSubview(signInButton)
+        signInButton.setAccessibilityLabel("Sign in with your school Google account")
 
-        signedInLabel.frame = NSRect(x: 40, y: 516, width: 290, height: 20)
-        signedInLabel.textColor = .secondaryLabelColor
-        signedInLabel.font = .systemFont(ofSize: 12)
-        signedInLabel.lineBreakMode = .byTruncatingMiddle
-        container.addSubview(signedInLabel)
+        joinButton.target = self
+        joinButton.action = #selector(join)
+        joinButton.keyEquivalent = "\r"
+        joinButton.setAccessibilityLabel("Join the test with the session code you typed")
 
-        signOutButton.frame = NSRect(x: 340, y: 510, width: 80, height: 30)
+        buildCard()
+        layOut(in: ground)
+
+        Task { @MainActor in
+            await refreshSignInState()
+        }
+    }
+
+    // MARK: layout (slice D)
+
+    /// A flexible gap in a horizontal stack. The lowest hugging priority
+    /// there is, so this is what stretches and every real control keeps its
+    /// intrinsic width.
+    private static func spacer() -> NSView {
+        let view = NSView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        view.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        view.setAccessibilityElement(false)
+        return view
+    }
+
+    /// The card: a Pacific header strip carrying the white emblem and the app
+    /// name — the same shape as the sign-in sheet's header
+    /// (`WebViewAuthPresenter.makeSheetContent`) — over a white body holding
+    /// every control in one vertical stack.
+    private func buildCard() {
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.wantsLayer = true
+        card.layer?.backgroundColor = PSDColor.paper.cgColor
+        card.layer?.cornerRadius = 12
+        card.layer?.masksToBounds = true
+
+        let header = NSView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+        header.wantsLayer = true
+        header.layer?.backgroundColor = PSDColor.pacific.cgColor
+
+        let emblem = NSImageView()
+        emblem.translatesAutoresizingMaskIntoConstraints = false
+        emblem.image = NSImage(named: "psd-emblem-white")
+        emblem.imageScaling = .scaleProportionallyUpOrDown
+        emblem.setAccessibilityLabel("Peninsula School District")
+        header.addSubview(emblem)
+
+        // Josefin Sans is the PSD heading face but the app ships no font files
+        // (the web page inlines its own); the system face at heading weight is
+        // the AppKit stand-in, deliberately.
+        let wordmark = NSTextField(labelWithString: "Secure Test")
+        wordmark.translatesAutoresizingMaskIntoConstraints = false
+        wordmark.font = .systemFont(ofSize: 20, weight: .semibold)
+        wordmark.textColor = PSDColor.skylight
+        wordmark.setAccessibilityRole(.staticText)
+        header.addSubview(wordmark)
+
+        NSLayoutConstraint.activate([
+            header.heightAnchor.constraint(equalToConstant: 56),
+            emblem.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 20),
+            emblem.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            emblem.widthAnchor.constraint(equalToConstant: 24),
+            emblem.heightAnchor.constraint(equalToConstant: 24),
+            wordmark.leadingAnchor.constraint(equalTo: emblem.trailingAnchor, constant: 12),
+            wordmark.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            wordmark.trailingAnchor.constraint(lessThanOrEqualTo: header.trailingAnchor, constant: -20),
+        ])
+
+        // The account row: signed out shows the button, signed in shows who
+        // and a way out. Both live in the stack; visibility is the switch.
         signOutButton.title = "Sign out"
         signOutButton.bezelStyle = .rounded
-        signOutButton.font = .systemFont(ofSize: 11)
+        signOutButton.controlSize = .small
         signOutButton.target = self
         signOutButton.action = #selector(signOut)
-        container.addSubview(signOutButton)
+        signOutButton.setAccessibilityLabel("Sign out of this Mac")
 
-        testsHeader.frame = NSRect(x: 40, y: 468, width: 200, height: 24)
+        signedInLabel.textColor = PSDColor.inkSoft
+        signedInLabel.font = .systemFont(ofSize: 12)
+        signedInLabel.lineBreakMode = .byTruncatingMiddle
+        signedInLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        accountRow.orientation = .horizontal
+        accountRow.alignment = .centerY
+        accountRow.spacing = 12
+        accountRow.addArrangedSubview(signInButton)
+        accountRow.addArrangedSubview(signedInLabel)
+        accountRow.addArrangedSubview(Self.spacer())
+        accountRow.addArrangedSubview(signOutButton)
+
         testsHeader.font = .systemFont(ofSize: 16, weight: .semibold)
-        container.addSubview(testsHeader)
-
-        refreshButton.frame = NSRect(x: 340, y: 466, width: 80, height: 28)
+        testsHeader.textColor = PSDColor.pacific
         refreshButton.title = "Refresh"
         refreshButton.bezelStyle = .rounded
-        refreshButton.font = .systemFont(ofSize: 11)
+        refreshButton.controlSize = .small
         refreshButton.target = self
         refreshButton.action = #selector(refreshSittings)
-        container.addSubview(refreshButton)
+        refreshButton.setAccessibilityLabel("Refresh the list of your tests")
+
+        testsRow.orientation = .horizontal
+        testsRow.alignment = .centerY
+        testsRow.spacing = 12
+        testsRow.addArrangedSubview(testsHeader)
+        testsRow.addArrangedSubview(Self.spacer())
+        testsRow.addArrangedSubview(refreshButton)
 
         // The list: a vertical stack in a scroll view. Rows are rebuilt whole
         // on every load — the list is small and diffing it buys nothing.
-        listScroll.frame = NSRect(x: 40, y: 220, width: 380, height: 240)
+        listScroll.translatesAutoresizingMaskIntoConstraints = false
         listScroll.hasVerticalScroller = true
         listScroll.drawsBackground = false
+        listScroll.setAccessibilityLabel("Your tests")
         listStack.orientation = .vertical
         listStack.alignment = .leading
         listStack.spacing = 8
@@ -104,41 +208,94 @@ final class SessionEntryViewController: NSObject {
             listStack.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             listStack.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
             listStack.topAnchor.constraint(equalTo: clip.topAnchor),
+            // Three two-line rows plus their spacing: the minimum that keeps
+            // the list a list rather than a peephole.
+            listScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 196),
         ])
-        container.addSubview(listScroll)
 
-        listStatusLabel.frame = NSRect(x: 40, y: 428, width: 380, height: 24)
-        listStatusLabel.textColor = .secondaryLabelColor
+        listStatusLabel.textColor = PSDColor.inkSoft
         listStatusLabel.font = .systemFont(ofSize: 12)
-        container.addSubview(listStatusLabel)
+        listStatusLabel.lineBreakMode = .byWordWrapping
+        listStatusLabel.maximumNumberOfLines = 2
 
-        codeHeader.frame = NSRect(x: 40, y: 178, width: 340, height: 20)
+        separator.boxType = .separator
+
         codeHeader.font = .systemFont(ofSize: 13, weight: .semibold)
-        codeHeader.textColor = .secondaryLabelColor
-        container.addSubview(codeHeader)
+        codeHeader.textColor = PSDColor.inkSoft
 
-        codeField.frame = NSRect(x: 40, y: 130, width: 220, height: 32)
         codeField.font = .monospacedSystemFont(ofSize: 20, weight: .regular)
         codeField.placeholderString = "ABC234"
         codeField.alignment = .center
-        container.addSubview(codeField)
+        codeField.setAccessibilityLabel("Session code")
+        // VoiceOver reads this after the label, which is where the "what do I
+        // type here" answer belongs (the placeholder is an example, not help).
+        codeField.setAccessibilityHelp("The six-character code your teacher read out. Press Join when you have typed it.")
+        codeField.toolTip = "The code your teacher read out"
 
-        joinButton.frame = NSRect(x: 272, y: 128, width: 108, height: 36)
-        joinButton.title = "Join"
-        joinButton.bezelStyle = .rounded
-        joinButton.target = self
-        joinButton.action = #selector(join)
-        joinButton.keyEquivalent = "\r"
-        container.addSubview(joinButton)
+        codeRow.orientation = .horizontal
+        codeRow.alignment = .centerY
+        codeRow.spacing = 12
+        codeRow.addArrangedSubview(codeField)
+        codeRow.addArrangedSubview(joinButton)
+        codeRow.addArrangedSubview(Self.spacer())
+        NSLayoutConstraint.activate([
+            codeField.widthAnchor.constraint(equalToConstant: 220),
+            codeField.heightAnchor.constraint(equalToConstant: 32),
+        ])
 
-        statusLabel.frame = NSRect(x: 40, y: 40, width: 380, height: 70)
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = PSDColor.inkSoft
         statusLabel.maximumNumberOfLines = 3
-        container.addSubview(statusLabel)
+        statusLabel.lineBreakMode = .byWordWrapping
+        statusLabel.setAccessibilityLabel("Status")
+        // 4.1.3 / 1.4.1: a status here is words, never a colour change, and
+        // VoiceOver is told when they change.
+        statusLabel.setAccessibilityRole(.staticText)
 
-        Task { @MainActor in
-            await refreshSignInState()
+        let body = NSStackView(views: [
+            accountRow, testsRow, listScroll, listStatusLabel,
+            separator, codeHeader, codeRow, statusLabel,
+        ])
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.spacing = 14
+        body.translatesAutoresizingMaskIntoConstraints = false
+        body.setHuggingPriority(.defaultLow, for: .horizontal)
+
+        card.addSubview(header)
+        card.addSubview(body)
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: card.topAnchor),
+            header.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+            body.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 20),
+            body.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            body.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            body.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20),
+        ])
+        for row in [accountRow, testsRow, codeRow] {
+            row.translatesAutoresizingMaskIntoConstraints = false
+            row.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
+        for full in [listScroll, listStatusLabel, separator, statusLabel] as [NSView] {
+            full.translatesAutoresizingMaskIntoConstraints = false
+            full.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
+        }
+    }
+
+    /// Centred, capped at `cardWidth`, and allowed to shrink with the window
+    /// so the card never runs off the edge at the minimum size.
+    private func layOut(in ground: NSView) {
+        ground.addSubview(card)
+        let width = card.widthAnchor.constraint(equalToConstant: Self.cardWidth)
+        width.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            card.centerXAnchor.constraint(equalTo: ground.centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: ground.centerYAnchor),
+            width,
+            card.widthAnchor.constraint(lessThanOrEqualTo: ground.widthAnchor, constant: -48),
+            card.topAnchor.constraint(greaterThanOrEqualTo: ground.topAnchor, constant: 24),
+            card.bottomAnchor.constraint(lessThanOrEqualTo: ground.bottomAnchor, constant: -24),
+        ])
     }
 
     /// Three states: no sign-in configured (token from the launch arguments,
@@ -162,6 +319,7 @@ final class SessionEntryViewController: NSObject {
         for control in [testsHeader, refreshButton, listStatusLabel] as [NSView] {
             control.isHidden = !signedIn
         }
+        testsRow.isHidden = !signedIn
         listScroll.isHidden = !signedIn
         joinButton.isEnabled = signedIn
         codeField.isEnabled = signedIn
@@ -226,17 +384,23 @@ final class SessionEntryViewController: NSObject {
         listStack.layoutSubtreeIfNeeded()
     }
 
+    /// One sitting, on two lines: the assessment on top, "<code · where —
+    /// teacher> · closes <time>" underneath, both across the card's full
+    /// width. The single 250-px line was the truncation finding.
     private func rowView(for row: SittingRowModel, index: Int) -> NSView {
-        let rowView = NSView()
-        rowView.translatesAutoresizingMaskIntoConstraints = false
-        rowView.widthAnchor.constraint(equalToConstant: 364).isActive = true
-        rowView.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.wantsLayer = true
+        container.layer?.backgroundColor = PSDColor.seaFoam.cgColor
+        container.layer?.cornerRadius = 8
+        container.layer?.borderWidth = 1
+        container.layer?.borderColor = PSDColor.driftwood.cgColor
 
         let title = NSTextField(labelWithString: row.title)
         title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.textColor = PSDColor.pacific
         title.lineBreakMode = .byTruncatingTail
-        title.frame = NSRect(x: 0, y: 28, width: 250, height: 18)
-        rowView.addSubview(title)
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let detailText = [row.detail, row.expiryLabel()]
             .compactMap { $0 }
@@ -244,31 +408,73 @@ final class SessionEntryViewController: NSObject {
             .joined(separator: " · ")
         let detail = NSTextField(labelWithString: detailText)
         detail.font = .systemFont(ofSize: 11)
-        detail.textColor = .secondaryLabelColor
+        detail.textColor = PSDColor.inkSoft
         detail.lineBreakMode = .byTruncatingTail
-        detail.frame = NSRect(x: 0, y: 6, width: 250, height: 16)
-        rowView.addSubview(detail)
+        detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        let text = NSStackView(views: [title, detail])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 2
+        text.translatesAutoresizingMaskIntoConstraints = false
+
+        let trailing: NSView
         switch row.state {
         case .done:
-            let done = NSTextField(labelWithString: "Done ✓")
-            done.font = .systemFont(ofSize: 12, weight: .semibold)
-            done.textColor = .secondaryLabelColor
-            done.alignment = .right
-            done.frame = NSRect(x: 264, y: 16, width: 100, height: 18)
-            rowView.addSubview(done)
+            // Text AND a symbol, never the tick alone: state is not carried by
+            // a glyph or a colour on its own (WCAG 1.4.1).
+            let label = NSTextField(labelWithString: "Done")
+            label.font = .systemFont(ofSize: 12, weight: .semibold)
+            label.textColor = PSDColor.cedar
+            let tick = NSImageView()
+            tick.image = NSImage(
+                systemSymbolName: "checkmark.circle.fill",
+                accessibilityDescription: "Handed in"
+            )
+            tick.contentTintColor = PSDColor.cedar
+            tick.imageScaling = .scaleProportionallyUpOrDown
+            tick.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                tick.widthAnchor.constraint(equalToConstant: 16),
+                tick.heightAnchor.constraint(equalToConstant: 16),
+            ])
+            let done = NSStackView(views: [label, tick])
+            done.orientation = .horizontal
+            done.alignment = .centerY
+            done.spacing = 6
+            done.setAccessibilityLabel("\(row.title): handed in")
+            trailing = done
         case .join, .resume:
-            let button = NSButton()
-            button.title = row.state == .resume ? "Resume" : "Join"
-            button.bezelStyle = .rounded
-            button.frame = NSRect(x: 264, y: 10, width: 100, height: 32)
-            button.target = self
-            button.action = #selector(joinListedSitting(_:))
+            let button = PSDPrimaryButton(
+                title: row.state == .resume ? "Resume" : "Join",
+                target: self,
+                action: #selector(joinListedSitting(_:))
+            )
             button.tag = index
-            rowView.addSubview(button)
+            button.setAccessibilityLabel(
+                "\(row.state == .resume ? "Resume" : "Join") \(row.title)"
+            )
             rowButtons.append(button)
+            trailing = button
         }
-        return rowView
+        trailing.translatesAutoresizingMaskIntoConstraints = false
+        trailing.setContentHuggingPriority(.required, for: .horizontal)
+        trailing.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        container.addSubview(text)
+        container.addSubview(trailing)
+        NSLayoutConstraint.activate([
+            container.widthAnchor.constraint(equalTo: listStack.widthAnchor),
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            text.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            text.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            text.trailingAnchor.constraint(equalTo: trailing.leadingAnchor, constant: -12),
+            trailing.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            trailing.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        container.setAccessibilityRole(.group)
+        container.setAccessibilityLabel("\(row.title). \(detailText)")
+        return container
     }
 
     @objc private func joinListedSitting(_ sender: NSButton) {

@@ -136,9 +136,8 @@ final class WebViewAuthPresenter: NSObject, WKNavigationDelegate, WKUIDelegate {
         // for it to read against; the title goes white to match. Nothing
         // below the header changes — the web view is still Google's page.
         header.wantsLayer = true
-        header.layer?.backgroundColor = NSColor(
-            srgbRed: 0x25 / 255.0, green: 0x42 / 255.0, blue: 0x4C / 255.0, alpha: 1.0
-        ).cgColor
+        // Slice D: the same literal, now named once in `PSDColor`.
+        header.layer?.backgroundColor = PSDColor.pacific.cgColor
 
         let emblem = NSImageView(frame: NSRect(x: 16, y: 10, width: 20, height: 20))
         emblem.image = NSImage(named: "psd-emblem-white")

@@ -112,6 +112,14 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         self.webView.allowsLinkPreview = false
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 980, height: 700))
+        // Batch 4 slice D: the ground behind and around the web view is
+        // Pacific, so what shows before the first paint, in the gap between
+        // host loads, and after "End secure session" is district colour and
+        // not system grey (James, 2026-09-07). The web view still covers the
+        // whole container, so this changes no pixel the page itself owns —
+        // including the `cacheDisplay` peek frame.
+        container.wantsLayer = true
+        container.layer?.backgroundColor = PSDColor.pacific.cgColor
         webView.frame = container.bounds
         webView.autoresizingMask = [.width, .height]
         container.addSubview(webView)
@@ -215,14 +223,51 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
     }
 
+    /// The notice pages (loading / bundle failed / no bundle) on the PSD
+    /// palette.
+    ///
+    /// Passed through `PageShell.document(styles:)` — an existing hook —
+    /// rather than edited into `PageShell.baseStyles`, which the theme-layer
+    /// slice (A) owns. Every colour reads a token with the literal as its
+    /// fallback, so this page is correct both before slice A lands and after,
+    /// when `:root` supplies the same values.
+    ///
+    /// TODO (slice A follow-up): once the theme layer is in, drop the
+    /// fallbacks here and let the tokens stand alone.
+    static let noticeStyles = """
+    body { background: var(--paper, #ffffff); color: var(--ink, #25424c); }
+    .notice { max-width: 560px; margin: 8vh auto 0; }
+    .notice h1 {
+      font: 600 24px var(--font-heading, -apple-system, system-ui, sans-serif);
+      color: var(--ink, #25424c);
+      margin: 0 0 20px;
+    }
+    .notice-card {
+      background: var(--panel, #eeebe4);
+      border: 1px solid var(--panel-line, #d7cdbe);
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+    .notice-message { margin: 0; font-size: 17px; line-height: 1.4; }
+    .notice-detail {
+      margin: 10px 0 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--ink-soft, #5a6c73);
+    }
+    """
+
     private static func noticePage(_ message: String, detail: String) -> String {
         PageShell.document(
             title: "Secure Test",
+            styles: [noticeStyles],
             body: """
-            <h1>Secure Test</h1>
-            <div class="item">
-              <p class="stem">\(HTMLEscape.text(message))</p>
-              <p class="stem" style="color:#6b6b70;font-size:14px">\(HTMLEscape.text(detail))</p>
+            <div class="notice">
+              <h1>Secure Test</h1>
+              <div class="notice-card">
+                <p class="notice-message">\(HTMLEscape.text(message))</p>
+                <p class="notice-detail">\(HTMLEscape.text(detail))</p>
+              </div>
             </div>
             """
         )
@@ -743,9 +788,8 @@ private final class PeekBannerView: NSView {
         // systemIndigo: the strip is district chrome, and a system colour
         // shifts with the OS accent. Literal sRGB so the captured peek frame
         // is the same colour on every Mac.
-        NSColor(srgbRed: 0x34 / 255.0, green: 0x67 / 255.0, blue: 0x80 / 255.0, alpha: 1.0)
-            .withAlphaComponent(0.92)
-            .setFill()
+        // Slice D: the same literal, now named once in `PSDColor`.
+        PSDColor.whulge.withAlphaComponent(0.92).setFill()
         bounds.fill()
     }
 }
