@@ -476,3 +476,17 @@ James at the keyboard: 16 (A) + 28 (B) + 18 (D) + 12 (E) rows in
 `client/MANUAL-CHECKS.md`, no deploy needed (client only). The first E row
 is a gate: whether an in-page drag survives `LockedDownWebView`'s
 unregistered drag types could not be proven headlessly.
+
+## Findings from the 2026-09-08 sitting (James at the client; nothing built yet except S-0)
+
+| # | What | Where | Size |
+|---|---|---|---|
+| **S-0** | Sign-in hang: `rowView` activated the row-width constraint before the row joined the stack → `NSGenericException` inside the sign-in Task → main actor dead. FIXED `a755671`. | done | — |
+| **S-1** | Order drag-and-drop: drag follows the pointer, the drop never lands under a real AAC session (`LockedDownWebView` refuses the drag session's drop). Build the planned fallback: pointer tracking (`pointerdown` / `pointermove` / `pointerup`) driving the same `move()`, no HTML5 drag events; keep the buttons. | slice E follow-up | S |
+| **S-2** | The session-code field and "Join" show before sign-in; hide them until signed in (the pre-slice-D behaviour). | slice D follow-up | XS |
+| **S-3** | Order rows: too close to the stem and too small — larger row type (1rem), more top margin, taller rows. | slice A follow-up | XS |
+| **S-4** | Short-text math preview shows raw KaTeX error markup (`\mathrm{…`) on malformed input. Show a plain message ("Can't read that as math yet") and keep the last good render; `throwOnError: false` output must never reach the student. | slice A follow-up | XS |
+| **S-5** | Hotspot: the selected region's fill is too subtle — stronger fill (accent at ~35%) plus a 3px outline. | batch 0b follow-up | XS |
+| **S-6** | James: a calculator-style keypad for math entry, and handwriting recognition from the touchpad for short-text math. Keypad = a design note + a slice (M). Handwriting = a spike (Vision `VNRecognizeTextRequest` on a canvas stroke image, or PencilKit is iOS-only) — post-pilot unless the spike is cheap. | new — decide | M / spike |
+| **S-7** | James: drawing tools on the drawing item — pen size, colour, eraser, undo. A design note first (the PNG contract with the paper background stays). | new — decide | M |
+| — | Finding 8.4 CLOSED: no predictive text in the essay under a real session with `predictiveKeyboard=false`. | — | — |

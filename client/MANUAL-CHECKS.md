@@ -910,6 +910,46 @@ menu. A shipped build has no such item.
 | Leave the attempt (Back to your tests), then cause any error on the entry screen | The new line has NO `attempt_id` — the binding is cleared when the attempt screen is torn down | Not run |
 | Look at a line whose `message` came from a long error | Truncated at 2 000 characters; and nothing in any line is response text, a stem, a choice, a student name or a token (the design page's redaction rule) | Not run |
 
+## Client sitting 2026-09-08 — results across the open row blocks
+
+One real AAC sitting on the origin (James at the client, Claude on the
+teacher side; fixture `Client rows hand-run 2026-09-08`, section-scoped
+sitting, Debug build of `a755671`): `REAL AEAssessmentSession` → `DID BEGIN`
+→ 23 responses across all ten items → handed in → `DID END`, no line in
+`errors.log`. The first two launches hung on "Loading…" — the slice D
+constraint defect fixed in `a755671` (see that commit; the lesson: an ObjC
+exception inside a main-actor Task silently kills the main actor). What
+each open block got from the sitting:
+
+- **Batch 0b** — slice 1 (hotspot CSS): picture visible, regions clickable,
+  multi-select posts (8 hotspot responses) ✅; **the selected fill is too
+  subtle** (finding S-5). Slice 2 (math preview on every answer): the
+  preview rendered; on malformed notation it shows raw `\mathrm{…` KaTeX
+  error markup (finding S-4). Slice 3 (match mark on completion): three
+  pairs posted; the mark itself was not watched.
+- **Observability slice 4** — the sink opened at launch and stayed empty
+  (nothing failed); the drain, the crash trigger and the in-attempt error
+  rows are NOT run yet (need `SECURE_TEST_DEBUG_CRASH=1` and a forced
+  failure).
+- **Slice A (theme)** — the page rendered on the tokens (James: Q7–Q10
+  "all displays and functionality as expected"); **order rows sit too close
+  to the stem and are too small** (finding S-3); the finish block, pips and
+  focus ring were not called out either way.
+- **Slice B (accommodations)** — NOT run (second pass with the overlay).
+- **Slice D (entry screen)** — Pacific ground, white card, emblem, two
+  rows, Join: ✅ ("good"); **the session-code field shows before sign-in**
+  (finding S-2 — the old controller hid it); the hang fix above.
+- **Slice E (drag-and-drop)** — **the gate FAILED under a real session:
+  drag starts and the row follows the pointer, the drop never lands — the
+  row snaps back** (finding S-1, the predicted `LockedDownWebView` outcome;
+  the Move buttons still worked — 3 order responses posted). Fallback =
+  pointer tracking driving the same `move()`.
+- **Finding 8.4 CLOSED** — no predictive text appeared in the essay inside
+  the real session with `predictiveKeyboard=false` (Q6), on this build.
+- **New asks (James):** a calculator-style keypad for math entry and
+  handwriting input from the touchpad on short-text math (S-6); drawing
+  tools — pen size / colour, eraser, undo — on the drawing item (S-7).
+
 ## Client UI pass — slice A (theme) (2026-09-07)
 
 `docs/client-ui-pass-design.md` §A, decisions D-A1 (palette mapping) and D-A2
