@@ -557,3 +557,45 @@ treatment (S-9); and full screen by default asked (S-8). Six hotspot,
 three order and one short-text responses posted; the session was ended
 with the emergency control and the attempt left in progress for the
 crash / drain rows.
+
+**Fix slice S-8 / S-9 / S-5b BUILT 2026-09-08** (three small fixes from a
+second sitting the same day; a "Findings from the 2026-09-08 sitting" table
+was expected here but had not been recorded when this slice started — the
+three items below came directly from the task brief instead, and this
+paragraph is the only record of them).
+
+- **S-9** (`AssessmentPage.swift` `itemStyles`) — the match item had NO
+  rules at all (the same class of gap slice A found in `.finish` and the
+  essay box): rows sat flush under the stem at browser-default size. Added
+  `.match { margin-top: 1rem }`, `.match-row` (`min-height: 2.75rem`,
+  `padding: 0.6rem 0.75rem`, `gap: 0.75rem`, `font-size: 1rem`, `0.5rem`
+  between rows) and `.match-select` (`font: inherit`, `padding: 0.4rem
+  0.6rem`, `min-width: 12rem`) — sizing in `rem` so it scales under
+  `data-zoom`, colours from slice A tokens. Markup and response posting
+  (`matchField`) untouched.
+- **S-5b** — the hotspot `.selected` wash was `--accent` at 45% opacity,
+  read as a near-solid block over the picture. Changed to `color-mix(in
+  srgb, var(--accent) 30%, transparent)`; the 3px border and the inset
+  paper hairline are unchanged.
+- **S-8** (`client/SecureTest/AppDelegate.swift` only) — the main window
+  now enters full screen once it is on screen at launch
+  (`window.toggleFullScreen(nil)` after `makeKeyAndOrderFront`), and again
+  as a backstop when the lockdown state reaches `.active` (DID BEGIN) if it
+  somehow is not already full screen. `window.collectionBehavior` gained
+  `.fullScreenPrimary`, without which `toggleFullScreen` is a no-op.
+  `enterFullScreenAtLaunchIfNeeded()` is guarded on `window.styleMask`
+  rather than a one-shot flag, so calling it from both sites is idempotent
+  — `toggleFullScreen` only performs the zero-to-one transition, never the
+  reverse. `SECURE_TEST_NO_FULLSCREEN=1` skips it entirely (documented in
+  `client/README.md`'s Running it section), for `--bundle` / dev runs.
+  `contentMinSize` is unchanged; exiting full screen is a macOS window
+  affordance the app does not intercept — the AAC session, not the window
+  state, is what locks the Mac.
+
+None of `LockedDownWebView`, the CSP, the exit paths (button, Cmd-E,
+Cmd-Q, watchdog), `cacheDisplay`, or `PageShell`'s token block were
+touched. `swift test` 438 → 438 (no new Core tests — CSS-only plus an
+AppKit-only change neither package's test target can drive headlessly, per
+`client/README.md`'s ADR 0013 note); `xcodebuild` green. Nothing hand-run:
+three new rows under "Fix slices S-1…S-9 (2026-09-08)" in
+`client/MANUAL-CHECKS.md`.

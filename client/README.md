@@ -107,6 +107,20 @@ renderers become unobservable the moment a server is required. It opens no
 attempt, reports no events and never locks down; the menu item is disabled for
 as long as a server-delivered attempt is on screen (`OfflineBundle.canOpen`).
 
+**Full screen at launch (fix slice S-8).** The main window enters macOS full
+screen as soon as it is on screen, and again as a backstop when a lockdown
+session becomes active if it somehow is not already full screen. This is
+independent of the AAC lockdown itself — it just removes the windowed chrome
+before and between attempts — and exiting full screen is never blocked by the
+app. Set `SECURE_TEST_NO_FULLSCREEN=1` to keep the window windowed, which is
+usually what you want for `--bundle` / dev runs so repeated relaunches do not
+each fight the fullscreen animation:
+
+```bash
+SECURE_TEST_NO_FULLSCREEN=1 \
+  ./SecureTest.app/Contents/MacOS/SecureTest --bundle path/to/delivery-bundle.json
+```
+
 ## Lockdown posture
 
 Ported from PoC-B, where each item below was verified by hand

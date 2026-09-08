@@ -118,15 +118,26 @@ public enum AssessmentPage {
       border-color: color-mix(in srgb, var(--accent) 55%, transparent);
     }
     .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-    /* Fix slice S-5 (2026-09-08 sitting): the selected region was too close to the hover
-       wash to read as chosen on a busy picture. It is now a heavier fill with an inset
-       paper hairline so the border reads against dark artwork too; hover stays lighter. */
+    /* Fix slice S-5 + S-5b (2026-09-08 sitting): the selected region needs to read as
+       chosen on a busy picture, but a 45% wash hid the picture under it — 30% accent,
+       a 3px accent border and an inset paper hairline; hover stays lighter. */
     .hotspot-region.selected {
-      background: color-mix(in srgb, var(--accent) 45%, transparent);
+      background: color-mix(in srgb, var(--accent) 30%, transparent);
       border: 3px solid var(--accent);
       box-shadow: 0 0 0 2px var(--paper) inset;
     }
     .hotspot-region.selected:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* Fix slice S-9 (2026-09-08 sitting): the match item had no rules at all —
+       the rows sat flush under the stem at browser-default size, hard to read
+       and hard to hit. Sizing is rem throughout so it scales with data-zoom;
+       colours are slice A tokens so the eight contrast sets restyle it too. */
+    .match { margin-top: 1rem; }
+    .match-row {
+      display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem;
+      padding: 0.6rem 0.75rem; font-size: 1rem; margin: 0.5rem 0;
+    }
+    .match-left { flex: 1; line-height: 1.4; }
+    .match-select { font: inherit; padding: 0.4rem 0.6rem; min-width: 12rem; }
     /* Slice B: the canvas keeps its intrinsic pixel size (that is the answer's
        resolution and must not move), but it may not be wider than the column —
        at zoom 3X the rem gutters alone are 240 px and an 800 px canvas would
