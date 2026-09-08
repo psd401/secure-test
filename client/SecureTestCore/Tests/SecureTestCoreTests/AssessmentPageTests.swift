@@ -122,7 +122,12 @@ final class AssessmentPageTests: XCTestCase {
     func testPageWithoutKatexStillRendersAndCarriesNoMathHooksButTheGuardedCall() {
         let bare = KatexBundle.Assets(css: "", js: "", autoRender: "", missing: ["katex.min.js"])
         let html = AssessmentPage.html(title: "T", bundleJSON: "{}", katex: bare)
-        XCTAssertFalse(html.contains("data:font/woff2"))
+        // No KaTeX face is inlined. The page's own two brand faces (client UI
+        // pass slice A) are a separate stylesheet and still are, so this asks
+        // about KaTeX's families rather than about data: fonts in general.
+        XCTAssertFalse(html.contains("KaTeX_Main"))
+        XCTAssertFalse(html.contains("font-family:KaTeX"))
+        XCTAssertTrue(html.contains("font-family: 'Inter';"))
         // The guarded call is part of the renderer and stays; without the
         // library it is a no-op, which is the whole point of the guard.
         XCTAssertTrue(html.contains("typeof renderMathInElement === 'function'"))

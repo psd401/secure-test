@@ -909,3 +909,44 @@ menu. A shipped build has no such item.
 | `exit(70)`: launch with `SECURE_TEST_SIMULATE_LOCKDOWN=hangs`, join a sitting, press Cmd-E and wait out the teardown escalation | stderr: `lockdown UNRECOVERABLE — exiting`, process exits 70. `errors.log` gained one line, `"kind":"lockdown_unrecoverable"`, carrying the attempt id — written the same pre-formatted way the crash line is, because the main thread is presumed gone | Not run |
 | Leave the attempt (Back to your tests), then cause any error on the entry screen | The new line has NO `attempt_id` — the binding is cleared when the attempt screen is torn down | Not run |
 | Look at a line whose `message` came from a long error | Truncated at 2 000 characters; and nothing in any line is response text, a stem, a choice, a student name or a token (the design page's redaction rule) | Not run |
+
+## Client UI pass — slice A (theme) (2026-09-07)
+
+`docs/client-ui-pass-design.md` §A, decisions D-A1 (palette mapping) and D-A2
+(light only). What `swift test` covers is the stylesheet TEXT — the token block
+exists, no retired hex survives, the finish rules and the pip glyph and the
+focus ring are present, both faces inline as `data:`. What it cannot cover is
+anything with pixels in it, which is every row below.
+
+Run them in one short sitting on a **Published, paged** assessment carrying a
+stimulus set, a match, a short text with math, a drawing and a hotspot — the
+same fixture shape the batch 0b rows want, so both sets can run together.
+Screenshots are worth keeping: this is the first time the student page has had
+a designed look, and a later pass will want the before.
+
+| Check | Expect | Result |
+|---|---|---|
+| Open any test and look at the page as a whole | White paper, dark blue-green (Pacific) text — not the old near-black body ink. Nothing louder than the item | Not run |
+| Body and heading type | Body text is **Inter**, the assessment title is **Josefin Sans** — compare against the design tool's own header in a browser beside it. If either falls back to the system face (San Francisco), the vendored woff2 did not load: check `PageFonts.shared.missing` | Not run |
+| A stimulus set | Sea Foam panel, Driftwood hairline, a **Whulge** (teal-blue) left rule — not the old bright blue. Its eyebrow label ("Questions 3–5") is Josefin Sans, uppercase, in the soft ink | Not run |
+| A passage on its own page, then a question page | "Show the passage" is Whulge, not bright blue | Not run |
+| Paged strip, an answered question | Cedar green border and text, and the pip's own label carries a check mark ✓ | Not run |
+| Paged strip, a partly-answered set (answer one of its two questions) | Ochre/amber border and text **and** a trailing `…` glyph — state is never colour alone (WCAG 1.4.1) | Not run |
+| The current page's pip | Filled Whulge with Skylight text (5.97:1); an answered or partial pip that is also current still reads its label | Not run |
+| Press Next / Previous, then look at the page heading | The heading takes focus AND shows a visible Whulge ring around it (2 px, offset). Before slice A the ring was suppressed and nothing appeared to move | Not run |
+| Tab through one question page with the keyboard only | Every control shows a ring; the hotspot regions show their dashed Whulge outline on focus (unchanged from batch 0b) | Not run |
+| The review page's "Finish and hand in" | A real filled button: Whulge fill, Skylight text, rounded, and it dims when disabled. The words are unchanged — "Finish and hand in", then "Handing in…", then "Handed in. You can close the app." in the soft ink below it | Not run |
+| Hand in, then the way-home button | "Back to your tests" sits beside the (now disabled) hand-in button and still works | Not run |
+| Offline: `--bundle` / Cmd-O on a saved bundle | The notice under the title is the Ochre pair on a pale amber wash (`--warn`), not the old yellow; it still reads "Offline mode: answers are not saved to a server." | Not run |
+| A stem carrying `$x^2$`, and a short-text answer's math preview | KaTeX renders exactly as before — its own stylesheet is untouched and its faces still inline | Not run |
+| A drawing item with `grid` / `axes` paper | The graph paper is unchanged (its colours are canvas paint, deliberately NOT tokens — they are baked into the uploaded PNG) | Not run |
+| Teacher side: peek this student while all of the above is on screen | The returned frame shows the new palette and the peek strip is unchanged (still drawn in `draw(_:)`) | Not run |
+| An item type this build does not know (older bundle) | "This item type (…) is not available yet." in the soft ink, italic — readable, not the old near-black grey | Not run |
+
+**Payload note (measured 2026-09-07, one-item page, KaTeX inlined as always):**
+the built page is **718 067 → 821 244 characters**, +103 177 (+14.4 %). All of
+it is the two brand faces (`PageFonts.shared.css` is 103 138 characters —
+~101 KB of base64 for a 48 KB and a 29 KB woff2). The page is built once per
+attempt and never fetched again, so this is paid once at bundle load. Slice B's
+optional dyslexia face would add a third; D-B2 (inline only the SELECTED
+optional font) is what keeps that from compounding.
