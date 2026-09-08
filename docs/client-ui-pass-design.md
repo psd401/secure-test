@@ -208,4 +208,59 @@ contract, identifiers.
 
 ## Progress
 
-Nothing built.
+**Slice A BUILT 2026-09-07.** The theme layer is in and the page has no
+literal colour left in it. `PageShell.baseStyles` opens with the `:root`
+token block from §A exactly as D-A1 maps it — `--paper #ffffff`, `--ink`
+Pacific, `--ink-soft` the design tool's derived Pacific-grey helper ink
+(`#5a6c73`, 5.30:1 on white — the `→ Pacific 70%` in §A), `--line` /
+`--line-strong` / `--panel` / `--panel-line`, `--accent` Whulge with
+`--accent-ink` Skylight (5.97:1), `--ok` Cedar, `--warn` Ochre, `--danger`
+Clay, `--font-body` / `--font-heading` and `--zoom: 1` — plus
+`html { font-size: calc(16px * var(--zoom)) }`, which is the single lever
+slice B's nine zoom levels pull, and `color-scheme: light` (D-A2; the old
+`light dark` declared a dark mode with no tokens behind it). Every type size
+in both stylesheets is `rem` now so that lever actually moves them.
+
+Retired literals, collected by grepping the two stylesheets before the change
+and pinned as gone by `PageShellTests`: `#0b5cd6` (accent — stimulus rule,
+passage link, current pip, hotspot focus, and the three `rgba(11, 92, 214, …)`
+washes), `#1c1c1e`, `#1d1d1f`, `#2e7d32` (answered), `#3a4a6a` (eyebrow),
+`#555`, `#6b4a00` / `#fff4d6` / `#e6c46a` (the offline notice's amber, now
+`--warn` with `color-mix` for its wash and border), `#6b6b70`, `#b7791f`
+(partial), `#c00`, `#c7c7cc`, `#c9d1e0`, `#d6dce8`, `#e5e5ea`, `#f5f7fb`,
+`#fff`. A second test proves the stronger property: outside the `:root`
+block, neither stylesheet contains a hex at all.
+
+Also in the slice: `.finish` / `.finish-status` finally have rules (a filled
+`--accent` primary button with `--accent-ink` text and a focus ring; the
+hand-in copy is untouched); the partly-answered pip gets a `…` glyph in CSS
+`::after` so state is never colour alone (the answered pip already carries a
+check mark in its own text, and both carry it in `aria-label`) — CSS-only, so
+the emitted DOM is unchanged and every renderer test keeps its meaning; and
+§D's focus item is taken here, since `.page-label` was suppressing the ring
+on the very heading the pager focuses (`outline: 2px solid var(--accent)`).
+
+Fonts ride the `KatexBundle` pattern: `client/scripts/vendor-fonts.mjs`
+copies the two latin-subset variable woff2 files and their OFL licences from
+`design-tool/app/fonts/` into `Resources/fonts/` with a `MANIFEST` of sizes
+and SHA-256s, and `PageFonts` inlines them as `@font-face` / `data:` rules
+(`font-src data:` is all the CSP allows). `PageShell.document` emits them
+ahead of the tokens, so a notice page gets them too; a missing resource costs
+the face and nothing else. `PageFontsTests` drift-checks the vendored bytes
+against both the MANIFEST and the design tool's originals.
+
+**Payload:** a one-item page goes **718 067 → 821 244 characters**, +103 177
+(+14.4 %), all of it the two faces; built once per attempt. Recorded with the
+rows.
+
+Tests: `swift test` **387 → 402** (10 new in `PageShellTests`, 5 in
+`PageFontsTests`), 0 failures; `xcodebuild` green and the built app carries
+`SecureTestCore_SecureTestCore.bundle/Contents/Resources/fonts/`. One existing
+test changed meaning by necessity: `AssessmentPageTests`'
+"page without KaTeX" row asserted no `data:font/woff2` appeared at all, which
+is now false by design — it asks about KaTeX's own families instead.
+
+Nothing visual is verified: 16 rows + the payload note are in
+`client/MANUAL-CHECKS.md` ("Client UI pass — slice A (theme)"), NOT run. Slice
+B is unblocked — its contrast pairs, optional font and zoom levels are now
+variable sets on the root and one `--zoom` value.

@@ -48,84 +48,123 @@ public enum AssessmentPage {
         )
     }
 
+    /// Client UI pass slice A (`docs/client-ui-pass-design.md` §A): every rule
+    /// below reads a token from `PageShell.baseStyles`; no literal colour is
+    /// left in this stylesheet. The old palette it replaced — `#0b5cd6`
+    /// accent, `#f5f7fb` / `#d6dce8` panels, `#3a4a6a` eyebrow ink,
+    /// `#2e7d32` / `#b7791f` pips, the assorted `#c7c7cc` / `#555` greys and
+    /// the offline notice's `#6b4a00` / `#fff4d6` / `#e6c46a` amber — is
+    /// pinned as gone by `PageShellTests`.
     static let itemStyles = """
     .choice { display: block; margin: 8px 0; line-height: 1.4; }
     .choice input { margin-right: 8px; }
     /* Client-fixes batch 1b (#3, 2026-09-03): withdraws a multiple-choice answer. */
     .clear-answer {
-      font: inherit; font-size: 13px; padding: 4px 10px; margin-top: 6px;
-      border: 1px solid #c7c7cc; border-radius: 6px; background: #fff; color: #1c1c1e;
+      font: inherit; font-size: 0.8125rem; padding: 4px 10px; margin-top: 6px;
+      border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink);
     }
     .clear-answer:disabled { opacity: .4; }
     .short-text {
       width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit;
-      border: 1px solid #c7c7cc; border-radius: 6px;
+      border: 1px solid var(--line-strong); border-radius: 6px;
     }
     /* Client-fixes batch 1b (#4, 2026-09-03): the essay box had no rule at all, so
        WebKit's default two-row textarea showed. About ten lines, draggable taller. */
     .essay {
       width: 100%; box-sizing: border-box; min-height: 240px; padding: 8px 10px;
-      font: inherit; border: 1px solid #c7c7cc; border-radius: 6px; resize: vertical;
+      font: inherit; border: 1px solid var(--line-strong); border-radius: 6px; resize: vertical;
     }
     .stem img { max-width: 100%; max-height: 360px; display: block; margin: 8px 0;
-      border: 1px solid #e5e5ea; border-radius: 4px; }
+      border: 1px solid var(--line); border-radius: 4px; }
     /* Batch 0b slice 1 (2026-09-03): the hotspot had no rules at all since slice 57, so the
        frame was never positioned and the regions rendered as default buttons UNDER the image
        (hand-run finding, docs/roadmap-2026-09.md). The frame hugs the image so the regions'
        percent offsets resolve against the picture; a region is invisible until hovered or
        focused (James, 2026-09-03 — the picture is the question) and fills when selected. */
     .hotspot-frame { position: relative; display: inline-block; max-width: 100%; margin: 8px 0; line-height: 0; }
-    .hotspot-frame img { display: block; max-width: 100%; height: auto; border: 1px solid #e5e5ea; border-radius: 4px; }
+    .hotspot-frame img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
     .hotspot-region {
       position: absolute; box-sizing: border-box; margin: 0; padding: 0; cursor: pointer;
       background: transparent; border: 2px dashed transparent; border-radius: 4px;
     }
-    .hotspot-region:hover { background: rgba(11, 92, 214, .12); border-color: rgba(11, 92, 214, .55); }
-    .hotspot-region:focus-visible { outline: 3px solid #0b5cd6; outline-offset: 1px; }
-    .hotspot-region.selected { background: rgba(11, 92, 214, .3); border: 3px solid #0b5cd6; }
-    .missing-asset { color: #c00; font: 12px ui-monospace, monospace; }
-    .unsupported { color: #6b6b70; font-style: italic; font-size: 14px; }
-    .offline-notice { color: #6b4a00; background: #fff4d6; border: 1px solid #e6c46a; border-radius: 6px; padding: 8px 12px; font-size: 14px; margin: 0 0 16px; }
+    .hotspot-region:hover {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+    .hotspot-region.selected { background: color-mix(in srgb, var(--accent) 30%, transparent); border: 3px solid var(--accent); }
+    .missing-asset { color: var(--danger); font: 0.75rem ui-monospace, monospace; }
+    .unsupported { color: var(--ink-soft); font-style: italic; font-size: 0.875rem; }
+    .offline-notice {
+      color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--paper));
+      border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--paper));
+      border-radius: 6px; padding: 8px 12px; font-size: 0.875rem; margin: 0 0 16px;
+    }
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
-    .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: #f5f7fb; border: 1px solid #d6dce8; border-left: 4px solid #0b5cd6; border-radius: 6px; }
-    .stimulus-label { margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: #3a4a6a; }
+    .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
+    .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .stimulus-body { margin: 0; line-height: 1.5; }
-    .stimulus-body img { max-width: 100%; max-height: 480px; display: block; margin: 8px 0; border: 1px solid #e5e5ea; border-radius: 4px; }
+    .stimulus-body img { max-width: 100%; max-height: 480px; display: block; margin: 8px 0; border: 1px solid var(--line); border-radius: 4px; }
     /* E7(b): a short-text answer typed as a formula previews as rendered math. */
-    .formula-hint { margin: 4px 0 0; font-size: 12px; color: #555; }
-    .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: #1d1d1f; }
+    .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
+    .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: var(--ink); }
     .formula-preview:empty { display: none; }
     /* E12 slice 3: the outline a student writes in place of a missing earlier answer. */
     .outline-inline { margin-top: 10px; }
-    .outline-hint { margin: 0 0 6px; font-size: 13px; color: #3a4a6a; }
-    .outline-inline textarea { width: 100%; min-height: 140px; font: inherit; padding: 8px 10px; border: 1px solid #c9d1e0; border-radius: 4px; }
-    .outline-status { margin: 4px 0 0; font-size: 12px; color: #555; }
-    .item.in-set { margin-left: 16px; padding-left: 12px; border-left: 3px solid #d6dce8; }
+    .outline-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
+    .outline-inline textarea { width: 100%; min-height: 140px; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 4px; }
+    .outline-status { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
+    .item.in-set { margin-left: 16px; padding-left: 12px; border-left: 3px solid var(--panel-line); }
     /* E3 slice 3: the table the student fills in — one text field per body cell. */
     .fill-table-wrap { overflow-x: auto; margin: 8px 0; }
     .fill-table { border-collapse: collapse; font: inherit; }
-    .fill-table th, .fill-table td { border: 1px solid #c7c7cc; padding: 4px 6px; text-align: left; vertical-align: middle; }
-    .fill-table th { background: #f5f7fb; font-weight: 600; }
-    .fill-table .table-cell { width: 7em; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid #c7c7cc; border-radius: 4px; }
+    .fill-table th, .fill-table td { border: 1px solid var(--line-strong); padding: 4px 6px; text-align: left; vertical-align: middle; }
+    .fill-table th { background: var(--panel); font-weight: 600; }
+    .fill-table .table-cell { width: 7em; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid var(--line-strong); border-radius: 4px; }
     /* Client paging: one page at a time, a bar fixed to the bottom to move between them. */
     .page[hidden] { display: none; }
-    .page-label { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: #3a4a6a; outline: none; }
+    .page-label { margin: 0 0 12px; font-family: var(--font-heading); font-size: 0.8125rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+    /* Slice A takes the §D item that is cheap here: the heading is focused on
+       every page change (tabindex -1), and it used to suppress the ring the
+       browser draws for that, so a keyboard student saw nothing move.
+       A ring on both :focus and :focus-visible — a programmatic focus() on a
+       tabindex -1 element does not always satisfy :focus-visible. */
+    .page-label:focus, .page-label:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px;
+    }
     .page .item { border-bottom: none; }
     .passage-ref { margin: 0 0 16px; }
-    .passage-ref summary { cursor: pointer; font-size: 14px; color: #0b5cd6; }
+    .passage-ref summary { cursor: pointer; font-size: 0.875rem; color: var(--accent); }
     .passage-ref .stimulus { margin-top: 8px; }
     .review-list { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-    .review-list button, .pager-strip button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid #c7c7cc; border-radius: 6px; background: #fff; color: #1c1c1e; }
-    .pager { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 40px 12px; background: #f5f7fb; border-top: 1px solid #d6dce8; }
+    .review-list button, .pager-strip button { font: inherit; font-size: 0.8125rem; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
+    .pager { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 40px 12px; background: var(--panel); border-top: 1px solid var(--panel-line); }
     .pager-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .pager-row button { font: inherit; padding: 8px 16px; border: 1px solid #c7c7cc; border-radius: 6px; background: #fff; color: #1c1c1e; }
+    .pager-row button { font: inherit; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
     .pager-row button:disabled { opacity: .4; }
-    .pager-current { font-size: 14px; font-weight: 600; color: #1c1c1e; }
+    .pager-current { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
     .pager-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .pager-strip button[aria-current="page"] { background: #0b5cd6; border-color: #0b5cd6; color: #fff; }
-    .pager-strip button.answered { border-color: #2e7d32; color: #2e7d32; }
-    .pager-strip button.partial { border-color: #b7791f; color: #b7791f; }
-    .pager-strip button.answered[aria-current="page"], .pager-strip button.partial[aria-current="page"] { color: #fff; }
+    .pager-strip button[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .pager-strip button.answered { border-color: var(--ok); color: var(--ok); }
+    .pager-strip button.partial { border-color: var(--warn); color: var(--warn); }
+    .pager-strip button.answered[aria-current="page"], .pager-strip button.partial[aria-current="page"] { color: var(--accent-ink); }
+    /* Slice A, WCAG 1.4.1: a pip's state is never colour alone. The renderer
+       already appends a check mark to a fully-answered pip's TEXT (and every pip
+       carries the state in its aria-label); a partly-answered one gets its
+       glyph here, in CSS, so the emitted DOM is unchanged. */
+    .pager-strip button.partial::after { content: " \\2026"; }
+    /* Slice A: the hand-in block had NO rules at all — the same class of bug as
+       the essay box (client-fixes #4). The one filled button on the page.
+       Its text and the status copy are the hand-in contract and are untouched. */
+    .finish { margin: 32px 0 0; padding: 20px 0 0; border-top: 1px solid var(--line); }
+    .finish button {
+      font: inherit; font-size: 1rem; font-weight: 600; padding: 10px 20px;
+      border: 1px solid var(--accent); border-radius: 8px;
+      background: var(--accent); color: var(--accent-ink); cursor: pointer;
+    }
+    .finish button:disabled { opacity: .5; cursor: default; }
+    .finish button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .finish-status { margin: 10px 0 0; font-size: 0.875rem; color: var(--ink-soft); }
     """
 
     // No `</` sequence appears in this script, so it cannot close its own

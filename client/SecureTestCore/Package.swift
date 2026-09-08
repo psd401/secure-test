@@ -28,7 +28,10 @@ let package = Package(
             // client/scripts/vendor-katex.mjs, inlined into the assessment
             // page by KatexBundle so the student sees math the way the
             // teacher's preview renders it.
-            resources: [.copy("Resources/katex")]
+            // Fonts (client UI pass slice A): the two PSD variable woff2 faces,
+            // vendored by client/scripts/vendor-fonts.mjs from the design
+            // tool's own copies and inlined as data: URIs by PageFonts.
+            resources: [.copy("Resources/katex"), .copy("Resources/fonts")]
         ),
         .testTarget(
             name: "SecureTestCoreTests",
