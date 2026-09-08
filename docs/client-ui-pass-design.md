@@ -162,7 +162,7 @@ contract, identifiers.
    that no literal hex from the old palette remains in either stylesheet;
    renderer tests unchanged and green. Rows: the page in its new clothes,
    the finish button, the pips. Size M. Opus 5 / high.
-2. **B — accommodations rendering** (`PageShell` attributes from
+2. **B — accommodations rendering** (parallel with D) (`PageShell` attributes from
    `ACCOMMODATIONS`, the eight contrast sets, the optional font, zoom).
    Tests: attribute selection from the bundle for every value and the
    absence case; the stylesheet carries each set. Rows: one student per
@@ -174,25 +174,37 @@ contract, identifiers.
    Rows: icon in Dock and Finder, About shows version + sha, window title.
    Size S–M. Opus 5 / medium — **rides batch 2** so the first package
    carries it.
-4. **D — entry screen + a11y** (Auto Layout rewrite of
+4. **D — entry screen + a11y + AppKit branding (D-D1)** (Auto Layout rewrite of
    `SessionEntryViewController`, notice pages on the theme, focus ring).
    Rows: the row shows two lines with no truncation at 980 px and at the
    window's minimum; VoiceOver reads every control; keyboard-only join.
    Size M. Opus 5 / high.
-5. **Rows** in `client/MANUAL-CHECKS.md` per slice; a "client a11y"
+5. **E — order drag-and-drop** (D-D2): `AssessmentPage` order renderer
+   gains HTML5 drag events with a drop indicator; buttons stay; tests on
+   the emitted markup + the response posted after a drop (harness). Size
+   M. Opus 5 / high.
+6. **Rows** in `client/MANUAL-CHECKS.md` per slice; a "client a11y"
    section modelled on `docs/ux-pass-1.md` §a11y.
 
 ## Decisions
 
-- **D-A1 palette mapping** (recommended above). **D-A2 light only**
-  (recommended). **D-B1 optional font** (recommended Atkinson Hyperlegible;
-  James to confirm against what teachers expect from "dyslexia-friendly").
-  **D-B2 inline only the selected optional font** (recommended).
-  **D-C1 display name "Secure Test" now, rename post-pilot** (James
-  2026-09-03: changeable later — yes).
-- **D-S sequencing:** C with batch 2; A → B → D as batch 4, with B moving
-  ahead of the observability batch if a sitting with accommodated students
-  is scheduled first (roadmap D-0).
+- **D-A1 palette mapping** (as written in §A) and **D-A2 light only** —
+  taken as recommended for slice A (James, 2026-09-07: "begin batch 4").
+- **D-B1 optional font = Atkinson Hyperlegible** (James, 2026-09-07); the
+  catalog label stays "dyslexia-friendly".
+- **D-B2 inline only the selected optional font** (James, 2026-09-07).
+- **D-C1 display name "Secure Test" now, rename post-pilot** (James
+  2026-09-03) — shipped in batch 2.
+- **D-S sequencing (James, 2026-09-07):** A first; then B and D in parallel
+  worktrees; then order drag-and-drop as the last slice of this batch.
+- **D-D1 AppKit branding scope (James, 2026-09-07: "as proposed"):** the
+  grey ground inside a session and behind the web view → Pacific; the entry
+  screen gets the emblem + a Josefin heading like the sign-in header; the
+  hand-in / primary AppKit buttons → Whulge fill with `--accent-ink` text.
+- **D-D2 order drag-and-drop is IN this batch** (James, 2026-09-07):
+  pointer drag on the order item (HTML drag events in WKWebView), a drop
+  indicator, the Move up / down buttons kept as the keyboard + VoiceOver
+  path, the answered mark unchanged; short design note in the slice.
 
 ## Progress
 
