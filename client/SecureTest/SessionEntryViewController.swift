@@ -379,7 +379,10 @@ final class SessionEntryViewController: NSObject {
         }
         rowButtons = []
         for (index, row) in rows.enumerated() {
-            listStack.addArrangedSubview(rowView(for: row, index: index))
+            let view = rowView(for: row, index: index)
+            listStack.addArrangedSubview(view)
+            // Only now do the two share an ancestor (see rowView).
+            view.widthAnchor.constraint(equalTo: listStack.widthAnchor).isActive = true
         }
         listStack.layoutSubtreeIfNeeded()
     }
@@ -463,8 +466,13 @@ final class SessionEntryViewController: NSObject {
 
         container.addSubview(text)
         container.addSubview(trailing)
+        // The width constraint against `listStack` is activated in `render`,
+        // AFTER `addArrangedSubview`: activating it here, while `container`
+        // has no superview, raises NSGenericException ("no common ancestor").
+        // That exception unwound through the sign-in Task on 2026-09-08 and
+        // left the main actor marked busy for the life of the process — the
+        // "Loading…" / "Joining…" hang (client/MANUAL-CHECKS.md, slice D).
         NSLayoutConstraint.activate([
-            container.widthAnchor.constraint(equalTo: listStack.widthAnchor),
             container.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
             text.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             text.centerYAnchor.constraint(equalTo: container.centerYAnchor),
