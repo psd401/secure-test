@@ -39,7 +39,7 @@ Self-contained, content-agnostic, no AAC dependencies. Works identically on free
 
 - **Color Contrast** — 8 CSS-variable themes
 - **Optional Font** — bundled dyslexia-friendly font (e.g., OpenDyslexic) + CSS swap
-- **Zoom Test Level** — CSS transform; 5 standard levels (Streamlined-only levels gate on Tier 1 Streamline shipping in the same phase)
+- **Zoom Test Level** — root font-size multiplier (`--zoom`, built 2026-09-07); 5 standard levels as named; the 4 Streamlined-only levels are clamped to a 1.5–3× ramp until Streamlined Interface Mode ships (D-B3, `docs/client-ui-pass-design.md`)
 - **Streamline Interface Mode** — CSS vertical-stack layout variant
 - **Highlighter** — text selection + color marking via WKWebView native APIs
 - **Strikethrough** — per-choice strike toggle in MC UI

@@ -193,6 +193,12 @@ contract, identifiers.
 - **D-B1 optional font = Atkinson Hyperlegible** (James, 2026-09-07); the
   catalog label stays "dyslexia-friendly".
 - **D-B2 inline only the selected optional font** (James, 2026-09-07).
+- **D-B3 streamlined-only zoom levels stay clamped** to the 1.5–3.0 ramp
+  (James, 2026-09-07); Streamlined Interface Mode is not built.
+- **D-B4 three contrast pairs adjusted from the dictionary's literals**
+  (recorded 2026-09-07): Medium Gray on Light Gray `#595959`/`#e0e0e0`
+  (literal 2.63:1 → 5.31:1), Red on White `#d40000` (4.00 → 5.53), White on
+  Red `#c40000` (4.00 → 6.27); names and intent unchanged.
 - **D-C1 display name "Secure Test" now, rename post-pilot** (James
   2026-09-03) — shipped in batch 2.
 - **D-S sequencing (James, 2026-09-07):** A first; then B and D in parallel
@@ -372,8 +378,9 @@ in their name (1 / 1.5 / 1.75 / 2.5 / 3). The four "(Streamlined Mode Only)"
 levels are valid only alongside Streamlined Interface Mode, which this client
 does not implement — rendering one literally would hand a student a page with
 two words on it — so they ramp monotonically into the range this layout holds
-(1.5 / 2 / 2.5 / 3). **Open for James:** confirm that clamp, or schedule the
-streamlined layout, before the first streamlined-level student. Layout work the
+(1.5 / 2 / 2.5 / 3). **D-B3 (James, 2026-09-07): keep the clamp** for the
+pilot; a streamlined layout is not scheduled. Revisit if a student's overlay
+carries a streamlined-only level. Layout work the
 3× case needed: `body`'s gutters are `rem` (the fixed pager grew past a px
 bottom gutter and hid the finish block), `.pager` is `rem` with
 `max-height: 60vh; overflow-y: auto`, `.pager-row` wraps and `.pager-current`
