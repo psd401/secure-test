@@ -94,7 +94,10 @@ public enum PageShell {
     body {
       font: 1rem var(--font-body);
       margin: 0;
-      padding: 32px 40px 96px;
+      /* Slice B: in `rem`, not px. The pager is fixed to the bottom and grows
+         with the root font size, so a px gutter that cleared it at 1X hid the
+         finish block behind it at 3X. */
+      padding: 2rem 2.5rem 7rem;
       color: var(--ink);
       background: var(--paper);
       -webkit-user-select: none;
@@ -108,6 +111,20 @@ public enum PageShell {
     input, textarea { -webkit-user-select: text; user-select: text; }
     """
 
+    /// Client UI pass slice B (`docs/client-ui-pass-design.md` §B): the
+    /// variable sets that the three *rendering* accommodations swap in on the
+    /// root element — `color_contrast`, `optional_font`, `zoom`.
+    ///
+    /// This stylesheet follows `baseStyles`, so every rule below overrides the
+    /// `:root` defaults; nothing else in the page has to know an accommodation
+    /// exists. See `PageAccommodations` for how the attributes are chosen.
+    public static var accommodationStyles: String {
+        (PageAccommodations.contrastSets.map(\.css)
+            + [PageAccommodations.optionalFontCSS]
+            + PageAccommodations.zoomLevels.map(\.css))
+            .joined(separator: "\n")
+    }
+
     /// - Parameters:
     ///   - title: shown as the page heading and `<title>`; HTML-escaped.
     ///   - styles: additional stylesheets, inlined in order after `baseStyles`.
@@ -118,15 +135,23 @@ public enum PageShell {
     ///     `--font-body` / `--font-heading` resolve to the PSD faces. The
     ///     default is the vendored pair; a caller (or a test) can pass an empty
     ///     set to see the page on the system stack.
+    ///   - accommodations: the effective per-student map the delivery bundle
+    ///     carries. It decides two things and nothing else: which attributes go
+    ///     on `<html>`, and whether the optional font's bytes are inlined at
+    ///     all (D-B2). An empty map emits no attribute and no extra bytes.
     public static func document(
         title: String,
         styles: [String] = [],
         scripts: [String] = [],
         body: String,
-        fonts: PageFonts.Assets = PageFonts.shared
+        fonts: PageFonts.Assets? = nil,
+        accommodations: [String: String] = [:]
     ) -> String {
+        let attributes = PageAccommodations.rootAttributes(accommodations)
+        let fonts = fonts ?? PageFonts.assets(
+            optionalFont: attributes[PageAccommodations.fontAttribute] != nil)
         let safeTitle = HTMLEscape.text(title)
-        let styleBlocks = ([fonts.css, baseStyles] + styles)
+        let styleBlocks = ([fonts.css, baseStyles, accommodationStyles] + styles)
             .filter { !$0.isEmpty }
             .map { "<style>\($0)</style>" }
             .joined(separator: "\n")
@@ -134,9 +159,12 @@ public enum PageShell {
             .filter { !$0.isEmpty }
             .map { "<script>\($0)</script>" }
             .joined(separator: "\n")
+        let rootAttributes = attributes.keys.sorted()
+            .map { " \($0)=\"\(HTMLEscape.text(attributes[$0]!))\"" }
+            .joined()
         return """
         <!doctype html>
-        <html lang="en"><head>
+        <html lang="en"\(rootAttributes)><head>
         <meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="\(contentSecurityPolicy)">
         <title>\(safeTitle)</title>

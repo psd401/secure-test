@@ -294,3 +294,109 @@ now read their (identical) colours from `PSDColor`. `xcodebuild` green;
 side: the session-ended `NSAlert`'s buttons cannot be restyled without
 replacing the alert (copy is contract), and the notice pages' `<h1>` /
 structural markup still comes from this file rather than Core.
+
+**Slice B BUILT 2026-09-07.** The three rendering accommodations —
+`color_contrast`, `optional_font`, `zoom` — are applied. They are resolved
+once, in Swift, at page-build time, from the effective per-student map the
+delivery bundle already carries, into attributes on `<html>`:
+`data-contrast="<TIDE value>"`, `data-font="optional"`,
+`data-zoom="<TIDE value>"`. The renderer script never learns any of it, which
+is the point — an accommodation that changed the DOM would change what a peek
+shows the teacher and what `cacheDisplay` captures, and it would have to be
+re-applied on every page turn. `PageAccommodations` (new file) owns the table;
+`PageShell.accommodationStyles` emits it after the token block so every rule
+overrides a `:root` default. `AssessmentPage.html` reads the map out of the
+bundle's own bytes by default, so neither AppKit caller changed.
+
+The values are TIDE's own strings verbatim
+(`design-tool/lib/accommodations/tide-catalog.json`), not a re-encoding. An
+absent tool, an off-ish value ("Off" / "None (Default)" / blank — the same set
+`lib/accommodations/effective.ts` filters on, re-checked here) or a value this
+client has not heard of emits **no attribute at all**, so an unaccommodated
+page is byte-identical to before apart from the always-shipped stylesheet.
+
+**The eight contrast sets.** Each defines all twelve tokens — a set that
+defined only paper and ink would leave panels, hairlines, accent and the three
+state colours sitting in the PSD palette on a black or a rose ground. The
+derivation is one rule applied eight times: `--ink-soft` = `--ink` (a student
+who needs Yellow on Blue needs the eyebrow and the hints in it too; hierarchy
+is carried by size and weight); `--panel` = ink mixed 6 % into paper,
+`--line` / `--panel-line` 35 %; `--line-strong` = `--ink`, so every interactive
+boundary passes 1.4.11 by construction; `--accent` = `--ink` and
+`--accent-ink` = `--paper`, so the filled finish button and the current pip
+invert the pair and carry their text at the body ratio.
+
+| Set | ink on paper | body ratio | ink on panel |
+|---|---|---|---|
+| Black on Rose | `#000000` on `#ffd7e8` | 16.14:1 | 14.17:1 |
+| Black on White | `#000000` on `#ffffff` | 21.00:1 | 18.43:1 |
+| Medium Gray on Light Gray | `#595959` on `#e0e0e0` | **5.31:1** | 4.91:1 |
+| Red on White | `#d40000` on `#ffffff` | **5.53:1** | 4.96:1 |
+| Reverse Contrast | `#ffffff` on `#000000` | 21.00:1 | 19.17:1 |
+| White on Red | `#ffffff` on `#c40000` | **6.27:1** | 5.95:1 |
+| Yellow on Black | `#ffff00` on `#000000` | 19.56:1 | 17.96:1 |
+| Yellow on Blue | `#ffff00` on `#0000cc` | 10.45:1 | 10.57:1 |
+
+**Three pairs are adjusted** (bold above), keeping the pair's intent and its
+TIDE name, because the literal reading fails AA: **Medium Gray on Light Gray**
+as `#808080` on `#d3d3d3` is 2.63:1 — a designated support below the floor —
+darkened to `#595959` on `#e0e0e0`, still unmistakably grey-on-grey and still
+the lowest-contrast set of the eight, which is what the student is asking for;
+**Red on White** and **White on Red** on a literal `#ff0000` are both 4.00:1,
+deepened to `#d40000` and `#c40000`, both still plainly red. `--ok` / `--warn`
+/ `--danger` keep green / amber / red — `#14532d` / `#6b3d09` / `#7f1d1d` on
+the light grounds, `#c8fad6` / `#ffeeb3` / `#ffdada` on the dark ones — and
+every one of the 48 combinations clears 4.5:1 on both the paper and the panel;
+`PageAccommodationsTests` recomputes all of it from the hexes, so a future edit
+cannot quietly drop a set below AA.
+
+One slice A rule had to change for this: `.finish button:focus-visible` drew a
+plain `--ink` ring, which is invisible on an `--ink` fill in every set here. It
+is now a `--paper` halo hugging the button with the ink ring outside it, which
+reads in all eight and in the default palette.
+
+**Optional font (D-B1).** Atkinson Hyperlegible, SIL OFL 1.1, from the Braille
+Institute — vendored from `@fontsource/atkinson-hyperlegible` **5.2.8** (that
+package is what publishes the *subset* woff2 files; the upstream release ships
+full ttf/otf only), latin subset, regular **and** bold, pinned by version and
+by SHA-256 in the fonts `MANIFEST`. Bold matters: without it a `<strong>` in a
+stem would be a synthesised bold, which is exactly the letterform ambiguity the
+accommodation exists to remove. `html[data-font="optional"]` puts it in front
+of the brand stack for **both** `--font-body` and `--font-heading`. D-B2 holds:
+`PageFonts.assets(optionalFont:)` inlines the two faces only when the attribute
+is set; every other page pays nothing.
+
+**Zoom.** Nine `html[data-zoom="…"]` rules setting `--zoom`, which slice A
+already wired to the root font size. The five ordinary levels map to the number
+in their name (1 / 1.5 / 1.75 / 2.5 / 3). The four "(Streamlined Mode Only)"
+levels are valid only alongside Streamlined Interface Mode, which this client
+does not implement — rendering one literally would hand a student a page with
+two words on it — so they ramp monotonically into the range this layout holds
+(1.5 / 2 / 2.5 / 3). **Open for James:** confirm that clamp, or schedule the
+streamlined layout, before the first streamlined-level student. Layout work the
+3× case needed: `body`'s gutters are `rem` (the fixed pager grew past a px
+bottom gutter and hid the finish block), `.pager` is `rem` with
+`max-height: 60vh; overflow-y: auto`, `.pager-row` wraps and `.pager-current`
+has `min-width: 0`, and `.drawing-canvas` gets `max-width: 100%` — its pointer
+mapping divides by the live `getBoundingClientRect()` width on every move, so a
+CSS-scaled canvas still records in canvas coordinates (read, not changed).
+
+**Payload:** an unaccommodated page goes **821 244 → 825 725 characters**
+(+4 481, +0.5 %) — 3 028 of it the accommodation stylesheet, which ships always
+so the attributes have something to match. A contrast or zoom page adds the
+attribute only (+31). The optional font adds **46 677** (+5.7 %), and only for
+the students who selected it.
+
+Tests: `swift test` **402 → 424**, 0 failures (21 new in
+`PageAccommodationsTests` — attribute selection for all eight contrast values,
+all nine zoom levels, the optional font, the absence case, off-ish and unknown
+values, the recomputed ratios, the eight sets and nine zoom rules in the
+stylesheet, the `@font-face` present only when selected, and the bundle-bytes
+path; 1 new in `PageFontsTests`, whose MANIFEST drift check now covers the two
+Atkinson files and their licence). `xcodebuild` green.
+
+Nothing visual is verified: 28 rows + a payload note are in
+`client/MANUAL-CHECKS.md` ("Client UI pass — slice B (accommodations)"), NOT
+run — one sitting cycling the values through the per-student accommodations
+overlay, a screenshot per contrast pair, the optional font, zoom 1 / 2.5 / 3
+with the pager and finish block, KaTeX and the drawing under both.
