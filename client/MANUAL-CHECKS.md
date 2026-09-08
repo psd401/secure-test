@@ -1046,3 +1046,39 @@ and ships on every page so the attributes have something to match. A contrast
 or zoom page adds only the attribute itself (+31). Selecting the optional font
 adds **46 677 characters** (+5.7 %) — the base64 of Atkinson's 400 and 700
 latin subsets, and only for the students who asked for it (D-B2).
+
+## Client UI pass — slice E (order drag-and-drop)
+
+Written 2026-09-07, `docs/client-ui-pass-design.md` §E (D-D2). `swift test`
+covers the reorder itself: a drop and the equivalent run of Move presses leave
+the same `ordered_ids`, a drop posts exactly once, `dragover` posts nothing,
+`dragend` without a drop changes nothing. What it cannot cover is whether
+WebKit inside the client delivers a drag at all, what the indicator looks like,
+or VoiceOver.
+
+**Row 1 is the gate.** `LockedDownWebView` calls `unregisterDraggedTypes()` and
+refuses `draggingEntered` / `performDragOperation` to keep drags in from other
+apps off the answer surface. On macOS an in-page WebKit drag is also an
+`NSDraggingSession` whose destination is that same view, so the drop may never
+arrive. If row 1 fails, nothing below it is meaningful and the finding is that
+slice E needs the pointer-tracking fallback in the design note — do NOT loosen
+the view.
+
+Needs a Published assessment with an order item of four or more entries, a
+sitting, and the log of the response posts (stderr `SPOOL`/`POST` lines, or the
+teacher's event history) to count them.
+
+| Check | Expect | Result |
+|---|---|---|
+| Any sitting, on the order item: press and drag a row **down two places** | The row follows the pointer at reduced opacity; a 2 px accent line shows on the row being hovered, on the side the pointer is nearer; on release the row lands where the line promised and the numbers 1..n renumber. **Exactly ONE response posted** for the drop (not one per pointer move) — count it in the log | Not run |
+| Drag a row **up two places** | Same, upward; one post | Not run |
+| Drag the last row to the **first** position (drop on the top half of row 1) | It lands first, everything else shifts down one; one post | Not run |
+| Drag the first row to the **last** position (drop on the bottom half of the last row) | It lands last; one post | Not run |
+| Start a drag and press **Escape** before releasing | The drag ends, the indicator clears, the list is exactly as it was, and NO response is posted | Not run |
+| Drop a row back on itself | Nothing moves, nothing posted | Not run |
+| **Move up / Move down still work**, and VoiceOver | The buttons reorder as before; VoiceOver reads "Drag to reorder, or use the Move buttons" as the list's description, still announces each button as "Move up" / "Move down", and after every move (button or drop) speaks "<label> moved to position k of n" | Not run |
+| **Under a real AAC session** (not simulated), repeat the first row | The drag works inside the locked session — `LockedDownWebView` suppresses drags from other apps, not this one. If the row will not drag or the drop does nothing, record it here as the finding | Not run |
+| Under **zoom 3.0** (accommodation) | Rows, labels and buttons scale; the drop indicator scales with them (it is in rem) and is still clearly on one edge of a row, not a smudge | Not run |
+| Under a **contrast pair** (any of the eight), start a drag | The indicator line is visible against that pair's paper — it takes the pair's accent, not the default blue | Not run |
+| After a drag, check the **answered mark** | The item marks answered exactly as a Move press marks it — green in the pager strip, counted in "k of N answered". Hand in, and the teacher's queue shows the dragged order | Not run |
+| Resume: answer by dragging, quit, relaunch, Resume | The dragged order is restored (P-1 prefill), the status line is empty again, and nothing is posted by the restore itself | Not run |

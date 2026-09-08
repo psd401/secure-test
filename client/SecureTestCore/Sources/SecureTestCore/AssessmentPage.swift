@@ -147,6 +147,26 @@ public enum AssessmentPage {
     .outline-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
     .outline-inline textarea { width: 100%; min-height: 140px; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 4px; }
     .outline-status { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
+    /* Client UI pass slice E (D-D2, 2026-09-07): the order item is draggable as well as
+       button-operable. The rows had no rules at all before this; the drop indicator is drawn
+       on the hovered row rather than as an extra element, in rem so it scales with data-zoom.
+       Colours are slice A tokens, so the eight contrast sets (slice B) restyle it too. */
+    .order { margin: 8px 0; }
+    .order-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 4px 0;
+      border: 1px solid var(--line); border-radius: 6px; background: var(--paper); cursor: grab;
+      -webkit-user-drag: element;
+    }
+    .order-row:active { cursor: grabbing; }
+    .order-position { min-width: 1.6em; color: var(--ink-soft); }
+    .order-label { flex: 1; line-height: 1.4; }
+    .order-move { font: inherit; padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
+    .order-move:disabled { opacity: .4; cursor: default; }
+    .order-row.dragging { opacity: .5; }
+    .order-row.drop-before { box-shadow: inset 0 0.125rem 0 0 var(--accent); }
+    .order-row.drop-after { box-shadow: inset 0 -0.125rem 0 0 var(--accent); }
+    .order-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
+    .order-status { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .item.in-set { margin-left: 16px; padding-left: 12px; border-left: 3px solid var(--panel-line); }
     /* E3 slice 3: the table the student fills in — one text field per body cell. */
     .fill-table-wrap { overflow-x: auto; margin: 8px 0; }
@@ -776,10 +796,26 @@ public enum AssessmentPage {
         return wrap;
       }
 
-      // Up/down buttons rather than drag-to-reorder, for the same reason match
-      // uses dropdowns: dragging is not keyboard-operable and does not work with
-      // assistive technology, which in an assessment client means some students
-      // could not answer the item at all.
+      // Moves the entry at `from` to index `to`, splice semantics, without
+      // touching the list it is given. Both the Move buttons and a pointer drop
+      // go through it, so the two paths cannot drift: for an adjacent move a
+      // splice is exactly the swap the buttons always did, and for a drag across
+      // several places it is what the drop indicator promised.
+      function reorderIDs(list, from, to) {
+        var out = list.slice();
+        if (from === to) return out;
+        if (from < 0 || from >= out.length) return out;
+        if (to < 0 || to >= out.length) return out;
+        out.splice(to, 0, out.splice(from, 1)[0]);
+        return out;
+      }
+
+      // Move up / Move down buttons AND drag-and-drop (client UI pass slice E,
+      // D-D2). The buttons are not an implementation detail that dragging
+      // replaces: dragging is not keyboard-operable and does not work with
+      // assistive technology, which in an assessment client would mean some
+      // students could not answer the item at all. So the buttons stay, remain
+      // the VoiceOver path, and both paths call the same move().
       //
       // Rows stay put and their CONTENTS move, rather than the list being
       // rebuilt. That keeps focus where the student left it — a rebuilt list
@@ -815,8 +851,27 @@ public enum AssessmentPage {
         }
         var rows = [];
 
+        var wrap = document.createElement('div');
+        wrap.className = 'order-field';
+
+        var hintID = 'order-hint-' + item.id;
+        var hint = document.createElement('p');
+        hint.className = 'order-hint';
+        hint.id = hintID;
+        hint.setAttribute('id', hintID);
+        hint.textContent = 'Drag to reorder, or use the Move buttons.';
+        wrap.appendChild(hint);
+
         var list = document.createElement('div');
         list.className = 'order';
+        list.setAttribute('aria-describedby', hintID);
+        wrap.appendChild(list);
+
+        // Both paths announce here, so a drop and a button press sound alike.
+        var status = document.createElement('p');
+        status.className = 'order-status';
+        status.setAttribute('aria-live', 'polite');
+        wrap.appendChild(status);
 
         function refresh() {
           rows.forEach(function (row, index) {
@@ -829,21 +884,65 @@ public enum AssessmentPage {
 
         function move(from, to) {
           if (to < 0 || to >= entries.length) return;
-          var held = entries[from];
-          entries[from] = entries[to];
-          entries[to] = held;
+          if (from < 0 || from >= entries.length) return;
+          if (from === to) return;
+          entries = reorderIDs(entries, from, to);
           refresh();
+          status.textContent = (entries[to].label || 'Item')
+            + ' moved to position ' + (to + 1) + ' of ' + entries.length + '.';
           // Posted only after a move: the arrangement the student was handed is
-          // the server's shuffle, not an answer they gave.
+          // the server's shuffle, not an answer they gave. One post per move —
+          // a drag posts on its drop, never on the dragover stream.
           post(item.id, {
             type: 'order',
             ordered_ids: entries.map(function (entry) { return entry.id; })
           });
         }
 
+        // -- drag state -------------------------------------------------------
+        // dragFrom is the index the drag started from; -1 means no drag is in
+        // flight, which is also what Escape leaves behind (dragend fires with no
+        // drop, so nothing moves).
+        var dragFrom = -1;
+
+        function paintIndicators(over, before) {
+          rows.forEach(function (other, otherIndex) {
+            other.node.className = otherIndex === dragFrom
+              ? 'order-row dragging'
+              : 'order-row';
+          });
+          if (over >= 0 && over !== dragFrom) {
+            rows[over].node.className = 'order-row ' + (before ? 'drop-before' : 'drop-after');
+          }
+        }
+
+        function endDrag() {
+          dragFrom = -1;
+          rows.forEach(function (row) { row.node.className = 'order-row'; });
+        }
+
+        // Top half of the hovered row means "land above it", bottom half "below".
+        // An event without geometry falls back to "above", the conservative
+        // reading of a pointer sitting somewhere on a row.
+        function pointerIsBefore(node, event) {
+          if (!event || typeof event.clientY !== 'number') return true;
+          if (typeof node.getBoundingClientRect !== 'function') return true;
+          var box = node.getBoundingClientRect();
+          if (!box || typeof box.top !== 'number' || typeof box.height !== 'number') return true;
+          return event.clientY < box.top + (box.height / 2);
+        }
+
+        function targetIndex(over, before) {
+          return before
+            ? (dragFrom > over ? over : over - 1)
+            : (dragFrom < over ? over : over + 1);
+        }
+
         entries.forEach(function (entry, index) {
           var row = document.createElement('div');
           row.className = 'order-row';
+          row.setAttribute('draggable', 'true');
+          row.draggable = true;
 
           var position = document.createElement('span');
           position.className = 'order-position';
@@ -873,12 +972,69 @@ public enum AssessmentPage {
           })(index);
           row.appendChild(down);
 
-          rows.push({ position: position, label: label, up: up, down: down });
+          row.ondragstart = (function (at) {
+            return function (event) {
+              dragFrom = at;
+              if (event && event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                try {
+                  // The sealed entry id, so a drop can be told apart from a drag
+                  // that began elsewhere. Nothing else goes on the pasteboard.
+                  event.dataTransfer.setData('text/plain', entries[at].id);
+                } catch (e) { /* setData is optional to the interaction */ }
+              }
+              paintIndicators(-1, true);
+            };
+          })(index);
+
+          row.ondragover = (function (at) {
+            return function (event) {
+              if (dragFrom < 0) return;
+              // Without preventDefault the row is not a drop target at all.
+              if (event && typeof event.preventDefault === 'function') event.preventDefault();
+              if (event && event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+              paintIndicators(at, pointerIsBefore(row, event));
+            };
+          })(index);
+
+          row.ondragleave = (function (at) {
+            return function () {
+              if (dragFrom < 0 || at === dragFrom) return;
+              row.className = 'order-row';
+            };
+          })(index);
+
+          row.ondrop = (function (at) {
+            return function (event) {
+              if (event && typeof event.preventDefault === 'function') event.preventDefault();
+              if (dragFrom < 0) return;
+              // Dropped back on itself: the student changed their mind, and
+              // neither half of the row means a move.
+              if (at === dragFrom) { endDrag(); return; }
+              var from = dragFrom;
+              var to = targetIndex(at, pointerIsBefore(row, event));
+              if (to < 0) to = 0;
+              if (to > entries.length - 1) to = entries.length - 1;
+              endDrag();
+              move(from, to);
+            };
+          })(index);
+
+          // Escape, or a drop outside the list: the drag ends and nothing moves.
+          row.ondragend = function () { endDrag(); };
+
+          rows.push({
+            node: row,
+            position: position,
+            label: label,
+            up: up,
+            down: down
+          });
           list.appendChild(row);
         });
 
         refresh();
-        return list;
+        return wrap;
       }
 
       // Regions are absolutely-positioned buttons over the image, sized from
