@@ -332,3 +332,23 @@ only runs on the origin after a deploy. Rows 62–68 run 2026-09-07 (results in 
 | 66 | With a student session (minted token or the client), attempt `POST /api/feedback` directly | 403 — students have no button and cannot reach the route even by hand | ⚠️ half 2026-09-07: no session → 401 by curl on the origin; the student-session 403 is unit-tested (`feedback-api.test.ts`), not exercised by hand (no student token minted today) |
 | 67 | Server errors (slice 2): force an unhandled error on the origin and read the error page | The boundary shows an Alert with "Try again" and a `ref`; a `server_error_events` row and a `level:"error"` log line carry the same request id | ⚠️ NOT FORCEABLE 2026-09-07: every id-taking route validates before the DB (`/dashboard/not-a-uuid` → the not-found page, `/api/assessments/not-a-uuid/shares` → 400 `invalid_id`), so no reachable input throws. `onRequestError` → row + line is unit-tested (`server-error-record.test.ts`); the boundaries render the ref in `error-boundaries.test.tsx`. `x-request-id` IS echoed on the origin (`/api/health` → `Root=1-…`, the ALB trace id). Leave open until a real 500 happens or a debug throw is added behind an env knob |
 | 68 | Alarm path (slice 1): one synthetic `{"level":"error",…}` line put into `/ecs/secure-test-design-tool-dev` (stream `hand-run-2026-09-07`) with `aws logs put-log-events` | `ServerErrorsAlarm` goes ALARM within one 5-min period and publishes to the topic; an email arrives once the subscription is confirmed | ✅ 2026-09-07: line at 10:01:08 PT → ALARM at 10:02:25 ("1 datapoint [1.0] ≥ 1.0"); the SNS action fired. Email: pending James's subscription confirmation. All four alarms read OK on real data before the test (no false positive at deploy) |
+
+## Reporting R2 — print report (batch 5)
+
+`docs/reporting-design.md` R2, built 2026-09-07. `GET
+/dashboard/[id]/results/print` — a print-CSS page the teacher
+Save-as-PDFs (ADR 0013; there is no headless Chrome and no PDF library
+here). No migration, design tool only. Rows are lettered R2-P1… rather
+than numbered so they cannot clash with R1's block. Every row can run on
+the origin against the `Client-fixes hand-run 2026-09-03` fixture, which
+already has a handed-in attempt with scored and unscored items — no
+student needed.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| R2-P1 | On Results for an assessment with at least one handed-in attempt, click **Print report** | The report opens: assessment name, "All sections", the hand-in date range, "N handed in", a mean total / mean percent line (and "k of N still have unscored items" when any row is pending), then a Q / Type / Max / Mean points / p-value table. A screen-only bar above it has "Print / Save as PDF" and "Back to results" | |
+| R2-P2 | Press **Print / Save as PDF** (or ⌘P) and look at the print preview | The app header and the top bar are gone; black text on white, 11pt, bordered tables; page one is the summary and **each student starts on a new page**; the last page is not a stray blank | |
+| R2-P3 | Read one student's page | `Name · student number · section` heading, the assessment name under it, "Handed in <date, time>", `total / max` with the percent (or "n unscored" when something is pending), a marks row of `points/max` — `AI ⏳` for a proposal awaiting review, `—` for unanswered or unscored — and an "Integrity:" line in plain words ("Left the test window 2 times" / "Secure session ended by the student" / "No integrity events") | |
+| R2-P4 | Append `?attempt=<attemptId>` (copy an attempt id from the results JSON or the monitor) and print | Only that student's page, with NO summary page and no other student on it; it still names the assessment. This is the page a family gets | |
+| R2-P5 | Append `?section=<the exact section label shown on Results>`; then a label nobody is in. Also open the plain URL while signed in as different staff (or signed out) | The first prints only that section's students and the header reads that label instead of "All sections"; the second reads "0 handed in" and lists nobody. As another teacher: the 404 page, not a "Forbidden" screen — the URL must not confirm the assessment exists | |
+| R2-P6 | Scan the whole printed report for anything a student wrote | Marks and totals only — no essay text, no short-text answer, no drawing, anywhere on any page | |

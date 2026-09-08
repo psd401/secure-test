@@ -82,12 +82,22 @@ export default async function ResultsPage({ params }: PageProps) {
             Results — {assessment.name}
           </h1>
         </div>
-        <a
-          href={`/api/assessments/${assessment.id}/results?format=csv`}
-          className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
-        >
-          Download CSV
-        </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/api/assessments/${assessment.id}/results?format=csv`}
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+          >
+            Download CSV
+          </a>
+          {/* R2 print report (docs/reporting-design.md): a print-CSS page the
+              teacher Save-as-PDFs — summary page then one page per student. */}
+          <a
+            href={`/dashboard/${assessment.id}/results/print`}
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+          >
+            Print report
+          </a>
+        </div>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
         Final scores only. &ldquo;AI ⏳&rdquo; marks proposals still awaiting
