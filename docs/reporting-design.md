@@ -313,3 +313,5 @@ still folds `buildResults` cells and should call `lib/reporting/analytics.ts`
 now that both are on `main` (constant max, p-value, % answered). Rows
 69–74 and R2-P1…P6 in `docs/design-tool-manual-checks.md` are unrun; the
 timeline rows need a real focus loss + End secure session on the origin.
+
+**DEPLOYED 2026-09-07 21:39 PT — rev 13, rollout COMPLETED, /api/health 200; no migration.** The cdk CLI reported `SignatureDoesNotMatch: Signature expired` after a hung monitoring request and exited 1; CloudFormation had already completed.
