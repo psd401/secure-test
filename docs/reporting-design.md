@@ -164,10 +164,15 @@ admin ask list (sample files, API keys or the LTI registration).
 - **D-5 (James)** PowerSchool official; export covers both; sample files
   and integration path are an exploration. **D-6 (James)** auto-score on
   submit. **D-7 (James)** standards tags later.
-- **D-R1 / D-R2 / D-R3 / D-R4** recommended above.
-- **D-R5 (recommended)** the per-student page and the events route are
-  owner-only (no sharing semantics in v1; staff sharing copies
-  assessments, not attempts).
+- **D-R1 / D-R2 accepted 2026-09-03** (R0). **D-R4** recommended above.
+- **D-R3 gradebook CSV — WAIT for the sample exports (James, 2026-09-07):**
+  not built in batch 5; the shape is confirmed against a PowerTeacher Pro
+  score export and a Schoology gradebook export from PSD instances plus one
+  test import each, then built as a small Sonnet slice. The analysis CSV
+  stays the only export until then.
+- **D-R5 accepted for v1 (James, 2026-09-07):** the per-student page and
+  the events route are owner-only (no sharing semantics; staff sharing
+  copies assessments, not attempts).
 
 ## Model and effort
 
