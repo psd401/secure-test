@@ -235,3 +235,14 @@ Mac), and the Jamf policy ask. The fleet scope is James's to name. Decision
 (James, 2026-09-07): the v1.0.0 floor stays `LSMinimumSystemVersion 26.5`
 (IT's DDM floor is 26.4; Macs on 26.4 update first). Batch 2 is complete
 except the hand-install row on a district Mac.
+
+**Next release = v1.1.0 (James, 2026-09-07 evening).** `v1.0.0` was built
+from `c719eb5`, before batch 3's client half (errors.log, crash capture,
+drain, the `client_error` event) and batch 4 (theme, accommodations,
+entry screen, drag-and-drop). Order: hand-run the client rows on a Debug
+build first (batch 3 "Observability slice 4", batch 4's 74 rows with the
+drag-and-drop AAC gate on top); bump `MARKETING_VERSION` to `1.1.0` in one
+commit; then the `client/RELEASING.md` steps (archive → export → notarize
+app → pkg → notarize pkg → `gh release create v1.1.0`); hand-install on a
+district Mac from that pkg closes batch 2's last row; Installomator's
+`/releases/latest` picks it up.
