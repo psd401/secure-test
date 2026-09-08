@@ -304,3 +304,12 @@ break markers, both query modes, owner-only) and
 `test/reporting-print-helpers.test.ts` (12, pure). Design-tool suite 1180
 → 1204 pass, typecheck clean, no migration. Hand-run rows R2-P1…R2-P6 in
 `docs/design-tool-manual-checks.md` — NOT run.
+
+**Batch 5 (R1 + R2 print) MERGED 2026-09-07 evening** (`78b1638`; design-tool
+1245 tests, typecheck clean, `next build` compiles; no migration). The
+gradebook CSV waits for the sample exports (D-R3). Follow-up inside the
+batch: the print page's per-item summary (`printSummary.summarizeItems`)
+still folds `buildResults` cells and should call `lib/reporting/analytics.ts`
+now that both are on `main` (constant max, p-value, % answered). Rows
+69–74 and R2-P1…P6 in `docs/design-tool-manual-checks.md` are unrun; the
+timeline rows need a real focus loss + End secure session on the origin.
