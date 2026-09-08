@@ -1,18 +1,15 @@
 // R2 print report (docs/reporting-design.md): the two pure helpers behind the
 // print view — the integrity formatter and the page-one summary. No DB.
 import { describe, expect, test } from "bun:test";
+import { eventLabel } from "../app/dashboard/[id]/attendanceView";
 import {
   NO_EVENTS,
   countByKind,
   formatIntegrityLine,
   integrityPhrases,
 } from "../lib/reporting/printIntegrity";
-import {
-  itemTypeLabel,
-  summarizeCohort,
-  summarizeItems,
-} from "../lib/reporting/printSummary";
-import type { ResultsCell, ResultsRow } from "../lib/scoring/results";
+import { itemTypeLabel, summarizeCohort } from "../lib/reporting/printSummary";
+import type { ResultsRow } from "../lib/scoring/results";
 
 describe("formatIntegrityLine", () => {
   test("no events reads as words, not an empty line", () => {
@@ -27,12 +24,23 @@ describe("formatIntegrityLine", () => {
     ).toBe("Left the test window 2 times");
   });
 
-  test("every kind the schema allows has plain words", () => {
+  // P5-2: this file's phrasing must agree with the monitor's own wording
+  // (`app/dashboard/[id]/attendanceView.ts`'s `eventLabel`) for the two
+  // kinds that borrow it, the way `lib/reporting/timeline.ts` already does.
+  test("lockdown_failed / lockdown_interrupted equal the monitor's labels", () => {
+    expect(formatIntegrityLine([{ kind: "lockdown_failed" }])).toBe(
+      eventLabel("lockdown_failed"),
+    );
+    expect(formatIntegrityLine([{ kind: "lockdown_interrupted" }])).toBe(
+      eventLabel("lockdown_interrupted"),
+    );
+  });
+
+  test("every kind the schema allows has plain words, meaning timeline.ts agrees", () => {
     const kinds = [
       "quit",
       "emergency_exit",
       "focus_loss",
-      "focus_regained",
       "lockdown_begin",
       "lockdown_end",
       "lockdown_failed",
@@ -45,12 +53,31 @@ describe("formatIntegrityLine", () => {
       expect(line).not.toContain("_");
       expect(line.length).toBeGreaterThan(0);
     }
+    // lockdown_end is an ORDINARY end (hand-in, quit) — "by the student" is
+    // emergency_exit's line, not this one.
     expect(formatIntegrityLine([{ kind: "lockdown_end" }])).toBe(
-      "Secure session ended by the student",
+      "Secure session ended",
     );
     expect(formatIntegrityLine([{ kind: "emergency_exit" }])).toBe(
-      "Used the emergency exit",
+      "Secure session ended by the student",
     );
+    expect(formatIntegrityLine([{ kind: "quit" }])).toBe("Quit the app");
+  });
+
+  test("focus_regained is tolerated in input but never printed (P5-2)", () => {
+    // Alone, it produces no line at all rather than a redundant
+    // "Came back to the test window" sentence.
+    expect(formatIntegrityLine([{ kind: "focus_regained" }])).toBe(NO_EVENTS);
+    // Alongside a focus_loss, only the loss's count shows.
+    expect(
+      formatIntegrityLine([
+        { kind: "focus_loss" },
+        { kind: "focus_loss" },
+        { kind: "focus_regained" },
+      ]),
+    ).toBe("Left the test window 2 times");
+    // countByKind still counts it — only the printed phrase is dropped.
+    expect(countByKind([{ kind: "focus_regained" }]).get("focus_regained")).toBe(1);
   });
 
   test("kinds read in a fixed order, joined, whatever order they arrived in", () => {
@@ -61,13 +88,13 @@ describe("formatIntegrityLine", () => {
       { kind: "lockdown_begin" },
     ]);
     expect(line).toBe(
-      "Secure session started · Left the test window 2 times · Secure session ended by the student",
+      "Secure session started · Left the test window 2 times · Secure session ended",
     );
   });
 
   test("an unknown kind still shows, last, under its own name", () => {
     const phrases = integrityPhrases([{ kind: "quit" }, { kind: "future_kind" }]);
-    expect(phrases).toEqual(["Quit the test", "future_kind"]);
+    expect(phrases).toEqual(["Quit the app", "future_kind"]);
   });
 
   test("countByKind counts", () => {
@@ -81,20 +108,6 @@ describe("formatIntegrityLine", () => {
     expect(counts.get("nope")).toBeUndefined();
   });
 });
-
-const ITEMS = [
-  { id: "i1", position: 0, type: "multiple_choice_single", stem: "MC" },
-  { id: "i2", position: 1, type: "essay", stem: "Essay" },
-  { id: "i3", position: 2, type: "short_text", stem: "Short" },
-];
-
-function cell(status: ResultsCell["status"], points?: number, max?: number): ResultsCell {
-  return {
-    status,
-    points: points ?? null,
-    max_points: max ?? null,
-  };
-}
 
 function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "cells">): ResultsRow {
   return {
@@ -114,51 +127,6 @@ function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "c
     ...overrides,
   };
 }
-
-describe("summarizeItems", () => {
-  // Q1 (max 1): 1 and 0 → mean 0.5, p 50%.
-  // Q2 (max 4): one final 3, one proposal (never counted) → mean 3, p 75%.
-  // Q3: nothing final → all null.
-  const rows = [
-    row({
-      attempt_id: "a1",
-      cells: [cell("final", 1, 1), cell("final", 3, 4), cell("unscored")],
-    }),
-    row({
-      attempt_id: "a2",
-      cells: [cell("final", 0, 1), cell("proposed_pending"), cell("no_response")],
-    }),
-  ];
-
-  test("mean and p-value over FINAL cells only", () => {
-    const stats = summarizeItems(ITEMS, rows);
-    expect(stats[0]).toMatchObject({
-      position: 0,
-      type: "multiple_choice_single",
-      max_points: 1,
-      scored_count: 2,
-      mean_points: 0.5,
-      p_value: 50,
-    });
-    expect(stats[1]).toMatchObject({
-      max_points: 4,
-      scored_count: 1,
-      mean_points: 3,
-      p_value: 75,
-    });
-    expect(stats[2]).toMatchObject({
-      max_points: null,
-      scored_count: 0,
-      mean_points: null,
-      p_value: null,
-    });
-  });
-
-  test("no rows at all leaves every item blank rather than 0%", () => {
-    const stats = summarizeItems(ITEMS, []);
-    expect(stats.every((s) => s.mean_points === null && s.p_value === null)).toBe(true);
-  });
-});
 
 describe("summarizeCohort", () => {
   const complete1 = row({

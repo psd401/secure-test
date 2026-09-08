@@ -31,6 +31,11 @@ export function formatTime(value: string | Date): string {
   return TIME.format(toDate(value));
 }
 
+/** "Sep 2, 10:40 AM" — always the date, for printed records. */
+export function formatDateTime(value: string | Date): string {
+  return DATE_TIME.format(toDate(value));
+}
+
 /**
  * "10:40 AM" when the instant falls on today's calendar date (Pacific),
  * otherwise "Sep 2, 10:40 AM". `now` is injectable for tests.

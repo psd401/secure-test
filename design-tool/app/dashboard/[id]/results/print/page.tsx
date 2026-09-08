@@ -3,14 +3,13 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, attempt_events } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
+import { formatMean } from "@/lib/reporting/analytics";
 import { formatIntegrityLine } from "@/lib/reporting/printIntegrity";
-import {
-  itemTypeLabel,
-  summarizeCohort,
-  summarizeItems,
-} from "@/lib/reporting/printSummary";
+import { itemTypeLabel, summarizeCohort } from "@/lib/reporting/printSummary";
 import { buildResults, type ResultsCell, type ResultsRow } from "@/lib/scoring/results";
+import { formatDate, formatDateTime } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
+import { loadItemAnalytics } from "../analyticsQuery";
 
 /**
  * R2 print report (docs/reporting-design.md), ADR 0013 pattern: there is no
@@ -66,14 +65,14 @@ function markText(cell: ResultsCell): string {
   }
 }
 
-function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleDateString("en-US", { dateStyle: "medium" }) : "—";
+function printDate(iso: string | null): string {
+  return iso ? formatDate(iso) : "—";
 }
 
-function formatDateTime(iso: string | null): string {
-  return iso
-    ? new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-    : "—";
+function printWhen(iso: string | null): string {
+  // A printed record always carries the date (formatWhen would drop it for
+  // a same-day hand-in).
+  return iso ? formatDateTime(iso) : "—";
 }
 
 function scoreLine(row: ResultsRow): string {
@@ -153,7 +152,9 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
   }
 
   const cohort = summarizeCohort(rows);
-  const itemStats = summarizeItems(results.items, rows);
+  // P5-3: the same numbers the results page's footer shows — assessment-wide,
+  // not scoped to `?section=` (see the note printed beside the table below).
+  const { analytics, submitted_count } = await loadItemAnalytics(id);
 
   // The integrity line reads `attempt_events` for the attempts on THIS page
   // only — one query, scoped to attempt ids that already came out of the
@@ -183,8 +184,8 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
     cohort.first_submitted === null
       ? "—"
       : cohort.first_submitted === cohort.last_submitted
-        ? formatDate(cohort.first_submitted)
-        : `${formatDate(cohort.first_submitted)} – ${formatDate(cohort.last_submitted)}`;
+        ? printDate(cohort.first_submitted)
+        : `${printDate(cohort.first_submitted)} – ${printDate(cohort.last_submitted)}`;
 
   return (
     <>
@@ -219,6 +220,12 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
                 items — the means are over the {cohort.complete_count} complete.
               </p>
             ) : null}
+            <p className="meta muted">
+              Per-question numbers are across all {submitted_count} handed-in
+              attempt{submitted_count === 1 ? "" : "s"} for the whole
+              assessment; the section filter narrows the student pages below,
+              not these.
+            </p>
             <table>
               <caption className="sr-only">Per-question summary</caption>
               <thead>
@@ -237,12 +244,12 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
                 </tr>
               </thead>
               <tbody>
-                {itemStats.map((stat) => (
-                  <tr key={stat.id}>
+                {analytics.map((stat) => (
+                  <tr key={stat.item_id}>
                     <th scope="row">Q{stat.position + 1}</th>
                     <td>{itemTypeLabel(stat.type)}</td>
-                    <td className="num">{stat.max_points ?? "—"}</td>
-                    <td className="num">{stat.mean_points ?? "—"}</td>
+                    <td className="num">{stat.max_points}</td>
+                    <td className="num">{formatMean(stat.mean_points)}</td>
                     <td className="num">
                       {stat.p_value === null ? "—" : `${stat.p_value}%`}
                     </td>
@@ -272,7 +279,7 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
               {assessment.name}
               {singleStudent && sectionFilter ? ` · ${sectionFilter}` : ""}
             </p>
-            <p className="meta">Handed in {formatDateTime(row.submitted_at)}</p>
+            <p className="meta">Handed in {printWhen(row.submitted_at)}</p>
             <p className="meta">{scoreLine(row)}</p>
             <table>
               <caption className="sr-only">Marks per question</caption>

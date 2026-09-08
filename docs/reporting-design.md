@@ -315,3 +315,38 @@ now that both are on `main` (constant max, p-value, % answered). Rows
 timeline rows need a real focus loss + End secure session on the origin.
 
 **DEPLOYED 2026-09-07 21:39 PT — rev 13, rollout COMPLETED, /api/health 200; no migration.** The cdk CLI reported `SignatureDoesNotMatch: Signature expired` after a hung monitoring request and exited 1; CloudFormation had already completed.
+
+**Fix slice 2026-09-08 (P5-1…3), hand-run rows R2-P1 / R2-P3.** Three defects
+from the 2026-09-08 hand-run, all in the print report, none deployed yet.
+**P5-1:** the page's own `formatDate` / `formatDateTime` used
+`toLocaleDateString` / `toLocaleString` with no time zone, so a hand-in
+printed in the server's UTC (a 3:50 PM Pacific submission read 10:50 PM);
+deleted in favor of `lib/ui/format.ts`'s `formatDate` / `formatWhen`
+throughout the page, the same helpers the per-student results page already
+used. **P5-2:** `lib/reporting/printIntegrity.ts`'s `PHRASES` contradicted
+`lib/reporting/timeline.ts` — `lockdown_end` read "ended by the student"
+(that line belongs to `emergency_exit`) and `quit` said "Quit the test"
+instead of "Quit the app". Brought into agreement: `lockdown_end` is now
+"Secure session ended", `emergency_exit` "Secure session ended by the
+student", `quit` "Quit the app"; `lockdown_failed` / `lockdown_interrupted`
+now import `eventLabel` from `app/dashboard/[id]/attendanceView.ts` rather
+than keeping a second copy of the monitor's words (the module stays pure —
+`attendanceView.ts` has no DB import either, the same way `timeline.ts`
+already gets away with it). `focus_regained` dropped out of the printed
+line entirely (it only duplicated the paired `focus_loss` count) while
+`countByKind` still tolerates and counts it. **P5-3:** the summary table's
+Max column came from `printSummary.summarizeItems`, which read an item's
+max off a scored cell and printed "—" when nothing had scored it yet
+(exactly the follow-up flagged when R2 first merged). The print page now
+calls `results/analyticsQuery.ts`'s `loadItemAnalytics` and feeds the
+table from `lib/reporting/analytics.ts`'s `buildItemAnalytics` — the same
+numbers the results page's footer already shows (constant max, mean,
+p-value, % answered) — with a one-line note that these are assessment-wide
+and the `?section=` filter narrows the student pages only, not this table.
+`summarizeItems` and its `ItemStat` type are deleted from
+`lib/reporting/printSummary.ts` (nothing else referenced them);
+`summarizeCohort` stays, unchanged. Files: `app/dashboard/[id]/results/print/page.tsx`,
+`lib/reporting/printIntegrity.ts`, `lib/reporting/printSummary.ts`,
+`test/reporting-print.test.tsx`, `test/reporting-print-helpers.test.ts`. No
+migration. Design-tool suite 1245 → 1246 pass, typecheck clean. Not
+verified by a hand-run yet — redeploy pending.

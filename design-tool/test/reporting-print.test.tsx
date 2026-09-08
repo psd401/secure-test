@@ -18,6 +18,7 @@ import {
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
+import { formatDateTime } from "../lib/ui/format";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -273,6 +274,53 @@ describe("print report — structure", () => {
     expect(html).toContain("p-value");
   });
 
+  test("P5-3: an item nothing has scored still prints its real Max, not —", async () => {
+    // The old `summarizeItems` read an item's max off a scored cell, so a
+    // question with zero final scores showed "—" for Max even though its
+    // constant denominator is known. `analytics.ts` supplies the constant
+    // regardless of scoring state.
+    const db = getDb();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Unscored Item Fixture" })
+      .returning();
+    const [item] = await db
+      .insert(items)
+      .values({
+        assessment_id: assessment!.id,
+        position: 0,
+        type: "essay",
+        stem: "Ungraded essay",
+        config: { scoring_method: "human" },
+      })
+      .returning();
+    const [student] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "u-1", name: "Uma Unscored" })
+      .returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: assessment!.id,
+        student_id: student!.id,
+        status: "submitted" as const,
+        started_at: new Date("2026-09-03T16:00:00Z"),
+        submitted_at: new Date("2026-09-03T16:30:00Z"),
+      })
+      .returning();
+    await db.insert(responses).values({
+      attempt_id: attempt!.id,
+      item_id: item!.id,
+      response: { type: "essay", text: "not yet scored" },
+    });
+    // Deliberately no `scores` row: the item has zero final scores.
+
+    const html = await render(assessment!.id);
+    // The essay's constant max is 1 (no rubric) — it must print, not "—",
+    // even though nothing has scored it yet (mean/p-value legitimately do).
+    expect(html).toContain('<td class="num">1</td>');
+  });
+
   test("one page per student, in the matrix's order, with the break marker", async () => {
     const { assessment } = await seedPrintScenario();
     const html = await render(assessment.id);
@@ -291,15 +339,26 @@ describe("print report — structure", () => {
     const { assessment } = await seedPrintScenario();
     const html = await render(assessment.id);
 
+    // P5-1: hand-in time is Pacific (lib/ui/format), not the server's UTC.
+    // Ada's attempt is 2026-09-03T17:00:00Z = 10:00 AM Pacific — a UTC
+    // render would show 5:00 PM instead.
+    expect(html).toContain(`Handed in ${formatDateTime("2026-09-03T17:00:00Z")}`);
+    expect(formatDateTime("2026-09-03T17:00:00Z")).toMatch(/^Sep 3.*10:00 AM$/);
+    expect(html).toContain("10:00 AM");
+    expect(html).not.toContain("5:00 PM");
+
     // Ada: 2 / 2 · 100%, both marks final.
     expect(html).toContain("1/1");
     // Ben: 0/1 on the MC, an em dash for the unscored essay, 1 unscored.
     expect(html).toContain("0/1");
     expect(html).toContain("—");
     expect(html).toContain("1 unscored");
-    // Integrity, in plain words, per attempt.
+    // Integrity, in plain words, per attempt. P5-2: Ada's event is an
+    // ordinary lockdown_end, so it reads "ended", not "ended by the student"
+    // (that phrase belongs to emergency_exit).
     expect(html).toContain("Left the test window 2 times");
-    expect(html).toContain("Secure session ended by the student");
+    expect(html).toContain("Secure session ended");
+    expect(html).not.toContain("Secure session ended by the student");
     expect(html).toContain("No integrity events");
   });
 
