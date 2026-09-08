@@ -263,3 +263,44 @@ block in `test/attempt-events-api.test.ts`. **Hand-run rows 69–74** in
 the origin with a real focus loss and a real End secure session, so they
 pair with the batch 0b rows. Not built here: R2 (the print view is a
 parallel agent's; the gradebook CSV is unstarted) and R3.
+
+**R2 print report BUILT 2026-09-07** (Opus 5 / medium, its own worktree,
+in parallel with R1). `GET /dashboard/[id]/results/print` is a server
+component with no client JS bar one line that wires the "Print / Save as
+PDF" button to `window.print()` — the ADR 0013 bargain, the same one
+`/preview/[id]?print=1` struck, and it reuses none of `renderHtml.ts`
+(that renders a blank form to write on). Owner-only, and every failure —
+a non-uuid id, a missing row, another teacher's assessment — is the same
+`notFound()`, so the URL cannot be used to probe for an assessment.
+`export const dynamic = "force-dynamic"` is what keeps it out of caches
+(Next answers an uncached dynamic render with `private, no-cache,
+no-store, …`); a page cannot set a response header itself, and the proxy
+sets none, so that is the whole of the `no-store` posture — worth a
+second look if the header is ever wanted verbatim. `?section=<label>`
+filters on the resolved section label; `?attempt=<attemptId>` prints that
+one student's page ALONE with no summary page — the family-facing report.
+Page one: title, section or "All sections", the hand-in date range, N
+handed in, mean total and mean percent over COMPLETE rows only with
+"k of N still have unscored items" beside them, then a Q# / type / max /
+mean points / p-value table. Then one `.student-page` per student —
+name · number · section, handed in, total / max with percent or
+"n unscored", a marks row (`points/max`, `AI ⏳` for a proposal, `—` for
+unanswered or unscored) and an integrity line in plain words. No free-text
+response appears anywhere on the page, and a test asserts it. Two new
+pure helpers: `lib/reporting/printIntegrity.ts` (counts `attempt_events`
+by kind and says them — "Left the test window 2 times", "Secure session
+ended by the student", `No integrity events` when there are none; a fixed
+reading order, unknown kinds last under their raw name; deliberately
+independent of R1's `timeline.ts`) and `lib/reporting/printSummary.ts`
+(the cohort and per-item numbers). **`summarizeItems` is a stand-in**:
+once R1's `lib/reporting/analytics.ts` merges, the print view should call
+that for the per-item block — analytics owns the p-value and can supply
+the item's CONSTANT max, where this helper can only read a max off the
+scored cells and shows "—" for an item nothing has scored yet.
+`summarizeCohort` has no analytics equivalent and stays. The results page
+gained a "Print report" link beside "Download CSV". Tests:
+`test/reporting-print.test.tsx` (12, test DB — structure, order, the
+break markers, both query modes, owner-only) and
+`test/reporting-print-helpers.test.ts` (12, pure). Design-tool suite 1180
+→ 1204 pass, typecheck clean, no migration. Hand-run rows R2-P1…R2-P6 in
+`docs/design-tool-manual-checks.md` — NOT run.

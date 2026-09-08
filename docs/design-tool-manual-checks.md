@@ -360,3 +360,23 @@ student's enrollment, or to blank).
 | 72 | Click a student's name | The per-student page opens: name · student number · section, "Handed in <time>" in Pacific, total / max, and either a percent or "n unscored" — all matching that student's row on the matrix. Every item appears in order with its stem (math rendered, images shown), the student's answer readable as words not ids (choice TEXT, `Water → H2O`, `1. Sprout`, the table grid with the expected cell beside each keyed one), and the **drawing at full size** (not the queue's capped thumbnail). Under each answer: the final score with its method in words ("auto-scored" / "AI, approved by you" / "scored by you") and any rationale; an item with only an AI proposal reads "AI proposal: k / n (not counted)" and contributes nothing to the total | |
 | 73 | On the same page, read "Test session history" for an attempt that really lost focus and ended with End secure session | One line per event in the district's clock: "Secure session started 2:00 PM", one line pairing the focus gap — "Left the test window 2:14 PM · back 2:15 PM (1 min)" — and "Secure session ended by the student 2:39 PM". A loss with no return before the hand-in reads "did not return before handing in". Nothing shows a raw kind like `focus_loss` | |
 | 74 | Back on Results, check the analytics footer by hand against the matrix | For each question: Mean is the average of the scored cells in that column (an `AI ⏳` cell is NOT averaged in and is counted in "(n unscored)"), p is that mean over the question's max as a whole percent, Answered is the count of cells that are not `·` over the number of handed-in attempts, and a multiple-choice row lists every choice with its count and a ✓ on the key. The footer deliberately ignores the section filter — confirm the wording says so | |
+
+## Reporting R2 — print report (batch 5)
+
+`docs/reporting-design.md` R2, built 2026-09-07. `GET
+/dashboard/[id]/results/print` — a print-CSS page the teacher
+Save-as-PDFs (ADR 0013; there is no headless Chrome and no PDF library
+here). No migration, design tool only. Rows are lettered R2-P1… rather
+than numbered so they cannot clash with R1's block. Every row can run on
+the origin against the `Client-fixes hand-run 2026-09-03` fixture, which
+already has a handed-in attempt with scored and unscored items — no
+student needed.
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| R2-P1 | On Results for an assessment with at least one handed-in attempt, click **Print report** | The report opens: assessment name, "All sections", the hand-in date range, "N handed in", a mean total / mean percent line (and "k of N still have unscored items" when any row is pending), then a Q / Type / Max / Mean points / p-value table. A screen-only bar above it has "Print / Save as PDF" and "Back to results" | |
+| R2-P2 | Press **Print / Save as PDF** (or ⌘P) and look at the print preview | The app header and the top bar are gone; black text on white, 11pt, bordered tables; page one is the summary and **each student starts on a new page**; the last page is not a stray blank | |
+| R2-P3 | Read one student's page | `Name · student number · section` heading, the assessment name under it, "Handed in <date, time>", `total / max` with the percent (or "n unscored" when something is pending), a marks row of `points/max` — `AI ⏳` for a proposal awaiting review, `—` for unanswered or unscored — and an "Integrity:" line in plain words ("Left the test window 2 times" / "Secure session ended by the student" / "No integrity events") | |
+| R2-P4 | Append `?attempt=<attemptId>` (copy an attempt id from the results JSON or the monitor) and print | Only that student's page, with NO summary page and no other student on it; it still names the assessment. This is the page a family gets | |
+| R2-P5 | Append `?section=<the exact section label shown on Results>`; then a label nobody is in. Also open the plain URL while signed in as different staff (or signed out) | The first prints only that section's students and the header reads that label instead of "All sections"; the second reads "0 handed in" and lists nobody. As another teacher: the 404 page, not a "Forbidden" screen — the URL must not confirm the assessment exists | |
+| R2-P6 | Scan the whole printed report for anything a student wrote | Marks and totals only — no essay text, no short-text answer, no drawing, anywhere on any page | |
