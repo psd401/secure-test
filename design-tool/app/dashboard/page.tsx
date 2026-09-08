@@ -168,6 +168,9 @@ export default async function DashboardPage() {
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Questions</TableHead>
                 <TableHead>Updated</TableHead>
+                <TableHead className="text-right">
+                  <span className="sr-only">Results</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -198,6 +201,17 @@ export default async function DashboardPage() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(a.updated_at)}
+                    </TableCell>
+                    {/* R1 (docs/reporting-design.md): until this the results
+                        matrix was reachable only from inside the editor, which
+                        is the wrong place to look for "how did they do?".
+                        Published only — a draft has no attempts to report on. */}
+                    <TableCell className="text-right">
+                      {a.status === "published" ? (
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/dashboard/${a.id}/results`}>Results</Link>
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 );

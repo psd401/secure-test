@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import {
   ATTEMPT_EVENT_KINDS,
   OBSERVABILITY_TEXT_MAX,
+  assessments,
   attempt_events,
+  attempts,
 } from "@/db/schema";
 import { truncate } from "@/lib/log";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStaff, requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -87,5 +90,65 @@ export async function POST(req: Request, ctx: RouteContext) {
   return NextResponse.json(
     { ok: true, event: { id: event!.id, kind: event!.kind, at: event!.at } },
     { status: 201 },
+  );
+}
+
+/**
+ * R1 (docs/reporting-design.md): the teacher's read side of the same rows —
+ * the integrity timeline on `/dashboard/[id]/results/[attemptId]`. There was
+ * no read route at all before this; the monitor folds the newest event per
+ * attempt into the attendance payload and never lists them.
+ *
+ * D-R5: owner-only. Ownership walks attempt -> assessment, and every failure
+ * after the role check — no such attempt, another teacher's attempt — answers
+ * 404, the posture the response-upload route (R0.2) settled on: a teacher
+ * probing ids must not be able to tell "not yours" from "doesn't exist". A
+ * STUDENT session gets 403 from requireStaff, like every other teacher route.
+ *
+ * FERPA: `private, no-store`. These rows say when a named child left the test
+ * window; they belong in no shared cache and on no disk.
+ */
+export async function GET(_req: Request, ctx: RouteContext) {
+  const auth = await requireStaff();
+  if (!auth.ok) return auth.response;
+
+  const { attemptId } = await ctx.params;
+  const notFound = () =>
+    NextResponse.json(
+      { ok: false, error: "not_found" },
+      { status: 404, headers: { "cache-control": "private, no-store" } },
+    );
+  if (!UUID_RE.test(attemptId)) return notFound();
+
+  const db = getDb();
+  const [attempt] = await db
+    .select()
+    .from(attempts)
+    .where(eq(attempts.id, attemptId))
+    .limit(1);
+  if (!attempt) return notFound();
+
+  const [assessment] = await db
+    .select()
+    .from(assessments)
+    .where(eq(assessments.id, attempt.assessment_id))
+    .limit(1);
+  if (!assessment || assessment.owner_sub !== auth.session.sub) return notFound();
+
+  const rows = await db
+    .select()
+    .from(attempt_events)
+    .where(eq(attempt_events.attempt_id, attempt.id))
+    .orderBy(asc(attempt_events.at));
+
+  return NextResponse.json(
+    {
+      events: rows.map((r) => ({
+        at: r.at.toISOString(),
+        kind: r.kind,
+        detail: r.detail ?? null,
+      })),
+    },
+    { headers: { "cache-control": "private, no-store" } },
   );
 }

@@ -120,6 +120,13 @@ async function postEvent(attemptId: string, body: unknown) {
   );
 }
 
+async function getEvents(attemptId: string) {
+  const { GET } = await import("../app/api/attempts/[attemptId]/events/route");
+  return GET(new Request(`http://localhost/api/attempts/${attemptId}/events`), {
+    params: Promise.resolve({ attemptId }),
+  });
+}
+
 async function attendance(sessionId: string) {
   principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
   const { GET } = await import("../app/api/test-sessions/[sessionId]/attendance/route");
@@ -329,5 +336,76 @@ describe("the client_error kind", () => {
 
     const ada = (await attendance(sitting.id)).rows.find((r) => r.ps_id === STUDENT.ps_id)!;
     expect(ada.alert?.kind).toBe("client_error");
+  });
+});
+
+// R1 (docs/reporting-design.md): the teacher's read side — the rows behind
+// the integrity timeline on the per-student results page. D-R5: owner-only.
+describe("GET /api/attempts/:attemptId/events", () => {
+  test("the owner gets every event, oldest first, with no-store", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    // Explicit `at` values, inserted out of order: the route must sort, not
+    // rely on the order rows happen to come back in.
+    await getDb()
+      .insert(attempt_events)
+      .values([
+        { attempt_id: attempt.id, kind: "focus_loss", at: new Date("2026-09-07T21:14:00Z") },
+        { attempt_id: attempt.id, kind: "lockdown_begin", at: new Date("2026-09-07T21:00:00Z") },
+        {
+          attempt_id: attempt.id,
+          kind: "client_error",
+          at: new Date("2026-09-07T21:20:00Z"),
+          detail: { kind: "spool_failed", message: "nope" },
+        },
+      ]);
+
+    principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
+    const res = await getEvents(attempt.id);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const body = (await res.json()) as {
+      events: { at: string; kind: string; detail: Record<string, unknown> | null }[];
+    };
+    expect(body.events.map((e) => e.kind)).toEqual([
+      "lockdown_begin",
+      "focus_loss",
+      "client_error",
+    ]);
+    expect(body.events[2]!.detail).toEqual({ kind: "spool_failed", message: "nope" });
+    expect(body.events[0]!.detail).toBeNull();
+  });
+
+  test("another teacher's attempt answers 404, not 403 — no existence oracle", async () => {
+    const assessment = await seedAssessment("someone-else");
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { owner: "someone-else" });
+
+    principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
+    const res = await getEvents(attempt.id);
+    expect(res.status).toBe(404);
+  });
+
+  test("an attempt that does not exist answers 404 the same way", async () => {
+    principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
+    const res = await getEvents("00000000-0000-4000-8000-000000000000");
+    expect(res.status).toBe(404);
+  });
+
+  test("a student session is refused (403, like every other teacher route)", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+
+    principal = studentPrincipal(STUDENT.email);
+    const res = await getEvents(attempt.id);
+    expect(res.status).toBe(403);
+  });
+
+  test("no session at all is 401", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+
+    principal = null;
+    const res = await getEvents(attempt.id);
+    expect(res.status).toBe(401);
   });
 });
