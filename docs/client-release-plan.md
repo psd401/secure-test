@@ -246,3 +246,10 @@ commit; then the `client/RELEASING.md` steps (archive → export → notarize
 app → pkg → notarize pkg → `gh release create v1.1.0`); hand-install on a
 district Mac from that pkg closes batch 2's last row; Installomator's
 `/releases/latest` picks it up.
+
+**v1.1.0 STARTED 2026-09-08 ~15:10 PT** from `0e52d02` (the bump commit;
+carries batch 3's client half, batch 4 A–E and the S-0…S-9 fixes from the
+2026-09-08 sitting). Archive + export done (1.1.0, stamp `0e52d0232fb0`, all
+four entitlements, profile embedded, Gatekeeper accepted); the
+notarization, pkg notarization and `gh release` are James's `!` steps as for
+v1.0.0. Hand-install on a district Mac from this pkg closes batch 2.
