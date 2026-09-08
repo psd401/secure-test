@@ -53,6 +53,8 @@ has, or will have, its own design page; this page is the order and the why.
 | 4 | **Client UI pass** — **BUILT 2026-09-07 evening, slices A–E** (theme, 8 contrast sets + Atkinson + zoom, entry screen + AppKit branding, order drag-and-drop); 74 rows unrun, E row 1 gates drag under LockedDownWebView | `docs/client-ui-pass-design.md` slices A, B, D | largest hand-run burden, better with error signal in place; the accommodations half is equity work and may move ahead if a sitting with accommodated students comes first | client |
 | 5 | **Reporting R1–R2** — **R1 + print report BUILT + merged 2026-09-07 evening**, deploy started (rev 13 expected); gradebook CSV WAITS for sample exports (D-R3); rows 69–74 / R2-P1…P6 unrun | `docs/reporting-design.md` | shape it with the first real sittings; E11 waits for the same teacher input | design tool, ∥ with 4 |
 | 6 | **Reporting R3**: gradebook integration (PowerSchool official, Schoology covered too) | `docs/reporting-design.md` R3 | post-pilot; needs sample files + district-admin keys → the IT / admin ask list | design tool + infra |
+| 4b | **Math entry** (James, 2026-09-08, S-6): a calculator-style keypad for short-text math (fractions, exponents, roots, Greek, ±, ×, ÷ — inserts KaTeX-safe text and re-renders the preview), plus a **spike** on handwriting recognition from the touchpad (Vision `VNRecognizeTextRequest` over a stroke image; PencilKit is iOS-only) | `docs/client-ui-pass-design.md` findings table; design note first | asked for after the first sitting; the keypad closes the `\mathrm{…` confusion for good, handwriting is a maybe | client — **fresh session**; design note Fable / high; keypad Opus 5 / medium (one slice, M); handwriting spike Opus 5 / high (half a day, go / no-go), post-pilot unless the spike is cheap |
+| 4c | **Drawing tools** (James, 2026-09-08, S-7): pen size, colour, eraser, undo on the drawing item; the PNG contract with the paper background stays (tools paint into the same canvas) | design note first, then one slice | asked for after the first sitting; equity for graph-heavy math | client — **fresh session**; design note Fable / medium; build Opus 5 / medium (M); Sonnet 5 / medium for the rows |
 
 Parallel lines as in the 2026-09-03 batch: design-tool batches (1, 5) can
 run in a second terminal beside client batches (2, 4); batch 3 touches both
@@ -127,6 +129,8 @@ disabled until a choice is made, by design.
 | 4 client UI pass | Fable / high (a11y + theme decisions) | Opus 5 / high (theme layer, accommodations, AppKit layout — untestable headlessly, so review weight matters) |
 | 5 reporting R1–R2 | Fable / high (scoring semantics, FERPA) | Opus 5 / medium; Sonnet 5 for the CSV variants once shapes are confirmed |
 | 6 reporting R3 | later | later |
+| 4b math entry | Fable / high (keypad layout is a11y + a11y-of-math question) | Opus 5 / medium keypad; Opus 5 / high handwriting spike (Vision) — fresh session |
+| 4c drawing tools | Fable / medium | Opus 5 / medium — fresh session; rows Sonnet 5 / medium |
 
 Facts that hold (checked 2026-09-03): effort is per session (`/effort`);
 a subagent inherits the parent's effort unless its agent definition sets
