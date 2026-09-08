@@ -950,6 +950,10 @@ each open block got from the sitting:
   pointer tracking driving the same `move()`.
 - **Finding 8.4 CLOSED** — no predictive text appeared in the essay inside
   the real session with `predictiveKeyboard=false` (Q6), on this build.
+- **Pass two + three (same afternoon, the copy fixture with Yellow on Black +
+  Atkinson + 2.5×):** S-1 pointer drag ✅ under a real session, S-2 ✅, S-4 ✅,
+  S-5/S-5b ✅, S-8 fullscreen at launch + after lock ✅, S-9 ✅; slice B's
+  contrast / font / zoom rendered ("good"); crash + drain ✅ (above).
 - **New asks (James):** a calculator-style keypad for math entry and
   handwriting input from the touchpad on short-text math (S-6); drawing
   tools — pen size / colour, eraser, undo — on the drawing item (S-7).

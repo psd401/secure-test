@@ -599,3 +599,14 @@ AppKit-only change neither package's test target can drive headlessly, per
 `client/README.md`'s ADR 0013 note); `xcodebuild` green. Nothing hand-run:
 three new rows under "Fix slices S-1…S-9 (2026-09-08)" in
 `client/MANUAL-CHECKS.md`.
+
+**Pass three, 2026-09-08 ~15:05 PT** (same copy fixture, resumed attempt,
+real session): full screen at launch ✅ and still full screen after
+`DID BEGIN` ✅ (S-8); match rows legible and clear of the stem ✅ (S-9);
+the picture shows through the 30 % wash ✅ (S-5b); handed in cleanly
+(`DID END`). **Every S-finding from the sitting is closed except S-6 / S-7
+(roadmap 4b / 4c).** Batch 4 rows: A / B / D / E passed by behaviour across
+the three passes (the individual row cells are summarised in
+`client/MANUAL-CHECKS.md` "Client sitting 2026-09-08"); the VoiceOver pass
+and the per-contrast-pair screenshots (slice B) were not done — one contrast
+pair, one font and one zoom level were seen.
