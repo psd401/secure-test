@@ -950,3 +950,37 @@ it is the two brand faces (`PageFonts.shared.css` is 103 138 characters —
 attempt and never fetched again, so this is paid once at bundle load. Slice B's
 optional dyslexia face would add a third; D-B2 (inline only the SELECTED
 optional font) is what keeps that from compounding.
+
+## Client UI pass — slice D (entry screen, AppKit branding, a11y) (2026-09-07)
+
+`docs/client-ui-pass-design.md` §D, D-D1. Everything below is AppKit drawing
+and layout, so none of it is reachable from `swift test` (no window server) —
+each row needs the app on screen. Build first:
+`cd client && xcodebuild -project SecureTest.xcodeproj -scheme SecureTest -destination 'platform=macOS' build`,
+then launch the built app (`client/scripts/launch-client.ts`).
+
+The entry screen is now a white card, capped at 520 pt and centred on a
+Pacific ground, headed by the white PSD emblem and "Secure Test" — the same
+shape as the sign-in sheet's header. The window's minimum content size is
+720 × 620.
+
+| Check | Expect | Result |
+|---|---|---|
+| Launch and look at the window before signing in | The ground around the card is Pacific `#25424c`, edge to edge — no system grey anywhere, including the strip under the titlebar | Not run |
+| Join a sitting and watch the moment between screens | While "Loading your test…" is up, and in any gap before the page paints, the ground behind the web view is Pacific, not grey | Not run |
+| Inside a session, press "End secure session", then look at the window | Still Pacific behind and around the page; the "Back to your tests" titlebar button is a filled Whulge button with light text | Not run |
+| The card header | White PSD emblem at 24 pt, "Secure Test" beside it in light text on Pacific; nothing clipped | Not run |
+| At 980 × 700 (the launch size), signed in with 2+ sittings | Each row is TWO lines — assessment name on top, `<code · where — teacher> · closes <time>` underneath — across the card's full width, with NOTHING truncated on the second line (this is the `docs/phase-7-slices.md` 250-px finding) | Not run |
+| Drag the window down to its minimum | It stops at 720 × 620. The card is still whole: header, account row, three sitting rows, code row and the status line all visible; the two-line rows still do not truncate | Not run |
+| Make the window very wide (full screen on a large display) | The card stays 520 pt and stays centred — it does not stretch | Not run |
+| The primary buttons (Join / Resume, Sign in with Google, and the two titlebar buttons) | Whulge `#346780` fill, Skylight `#fffaec` text, rounded; pressing one darkens it; a disabled one (Join before sign-in) is visibly faded | Not run |
+| Tab to a primary button (Full Keyboard Access on: System Settings → Keyboard) | A standard macOS focus ring is drawn around the button's rounded shape — not suppressed | Not run |
+| A sitting whose attempt is submitted | The row reads "Done" as a word PLUS a Cedar `checkmark.circle.fill` symbol — state is never the tick or the colour alone | Not run |
+| Notice pages: launch with no bundle (`--bundle` with a missing file, or File → Open on a non-bundle) | The notice is a Sea Foam card with a Driftwood border on white, Pacific heading, the detail line in `#5a6c73` — no grey `#6b6b70` anywhere | Not run |
+| Notice page: "Loading your test…" | Same treatment as above | Not run |
+| VoiceOver (Cmd-F5) over the entry screen, signed in | Every control is read with a useful name: "Peninsula School District" (emblem), "Sign in with your school Google account" / "Sign out of this Mac", "Refresh the list of your tests", each row as "<assessment>. <detail>" with its button as "Join <assessment>" / "Resume <assessment>" or "<assessment>: handed in", "Session code" for the field (with its help text), "Join the test with the session code you typed", and the status line | Not run |
+| Keyboard-only join by code | Tab from the code field to Join and press Space/Return — the join runs; no mouse touched | Not run |
+| Keyboard-only join from the list | Tab reaches each row's Join/Resume button in list order and activates it | Not run |
+| The sign-in sheet (Sign in with Google) | Unchanged from before this slice: 520 × 760, Pacific header, emblem, "Sign in with your school account", Cancel; Google's page below | Not run |
+| Peek frame while a teacher views the screen | The captured frame is unchanged: the Whulge notice strip still appears in it, the page content is intact | Not run |
+| Exit paths, unchanged | The titlebar "End secure session" button ends the session; Cmd-E does too; Cmd-Q mid-session ends then quits; the watchdog still fires | Not run |

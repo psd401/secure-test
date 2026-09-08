@@ -264,3 +264,33 @@ Nothing visual is verified: 16 rows + the payload note are in
 `client/MANUAL-CHECKS.md` ("Client UI pass — slice A (theme)"), NOT run. Slice
 B is unblocked — its contrast pairs, optional font and zoom levels are now
 variable sets on the root and one `--zoom` value.
+
+Nothing built.
+
+**Slice D BUILT 2026-09-07** (entry screen + AppKit branding + a11y, D-D1 as
+proposed). New `client/SecureTest/PSDColor.swift` names the palette once for
+the AppKit side — Pacific `#25424c`, ink-soft `#5a6c73`, Whulge `#346780`
+(plus a pressed `#274e62`), Skylight `#fffaec`, Cedar `#466857`, Sea Foam
+`#eeebe4`, Driftwood `#d7cdbe`, Mist `#f3f8fa`, paper, line, warn, danger —
+and carries `PSDPrimaryButton`, a borderless Whulge/Skylight button that
+still draws AppKit's own focus ring. The window's background, the assessment
+container behind the web view and the entry screen's ground are Pacific, so
+nothing the student sees is system grey; `contentMinSize` is 720 × 620.
+`SessionEntryViewController` is rebuilt on Auto Layout: a white card capped at
+520 pt, centred, with a Pacific header carrying the white emblem and "Secure
+Test" (system face — the app ships no font files), and sitting rows that are
+full-width and TWO lines, which closes the 250-px truncation finding. "Done ✓"
+became the word "Done" plus a Cedar `checkmark.circle.fill`. Accessibility
+labels on every control, a help string on the code field, each row a labelled
+group. The titlebar "End secure session" and "Back to your tests" buttons take
+the Whulge primary style (titles, targets, actions and Cmd-E untouched). The
+notice pages are restyled through `PageShell.document(styles:)` — a new
+`AssessmentViewController.noticeStyles` sheet whose colours read the slice-A
+tokens with the literals as fallbacks, so it is correct before and after slice
+A; the `#6b6b70` literal is gone. The peek strip and the sign-in sheet header
+now read their (identical) colours from `PSDColor`. `xcodebuild` green;
+`swift test` 387 pass. Everything visual is a hand-run row — see
+`client/MANUAL-CHECKS.md` "Client UI pass — slice D". Not done on the AppKit
+side: the session-ended `NSAlert`'s buttons cannot be restyled without
+replacing the alert (copy is contract), and the notice pages' `<h1>` /
+structural markup still comes from this file rather than Core.
