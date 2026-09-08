@@ -489,6 +489,9 @@ unregistered drag types could not be proven headlessly.
 | **S-5** | Hotspot: the selected region's fill is too subtle — stronger fill (accent at ~35%) plus a 3px outline. | batch 0b follow-up | XS |
 | **S-6** | James: a calculator-style keypad for math entry, and handwriting recognition from the touchpad for short-text math. Keypad = a design note + a slice (M). Handwriting = a spike (Vision `VNRecognizeTextRequest` on a canvas stroke image, or PencilKit is iOS-only) — post-pilot unless the spike is cheap. | roadmap **4b** (James, 2026-09-08): fresh session; design note Fable / high, keypad Opus 5 / medium, handwriting spike Opus 5 / high | M / spike |
 | **S-7** | James: drawing tools on the drawing item — pen size, colour, eraser, undo. A design note first (the PNG contract with the paper background stays). | roadmap **4c** (James, 2026-09-08): fresh session; design note Fable / medium, build Opus 5 / medium | M |
+| **S-8** | James (pass two): the app should run full screen by default, especially inside lockdown. `toggleFullScreen` once the window is on screen and again on lockdown begin; a `SECURE_TEST_NO_FULLSCREEN=1` knob for dev runs. | fix slice 2 | S |
+| **S-9** | James (pass two): the match item's rows are too small and too close to the stem — the S-3 treatment (1rem type, 2.75rem rows, 1rem top margin). | fix slice 2 | XS |
+| **S-5b** | James (pass two): the hotspot selected wash is now clear but could carry a little more transparency — 45 % → 30 % accent. | fix slice 2 | XS |
 | — | Finding 8.4 CLOSED: no predictive text in the essay under a real session with `predictiveKeyboard=false`. | — | — |
 
 **Fix slice S-1…S-5 BUILT 2026-09-08** (the five findings above; `client/`
@@ -541,3 +544,16 @@ Nothing visual or in-session is verified: the slice E rows in
 row is a real AAC session, which is the only place S-1's failure appeared** —
 and a new "Fix slice S-1…S-5 (2026-09-08)" section carries 14 rows for
 S-2…S-5. None are run.
+
+**Pass two, 2026-09-08 afternoon** (the copy fixture, overrides Yellow on
+Black + Atkinson + zoom 2.5X, real session, James at the client): the code
+field hidden before sign-in ✅ (S-2); the page rendered yellow-on-black in
+Atkinson at 2.5× and James rated it "good" (slice B's contrast / font /
+zoom rows — the pager and finish-block wrap not separately called out);
+the pointer drag landed under the real session ✅ (S-1 — the gate passes);
+the math-preview message ✅ (S-4); the hotspot wash "much more clear"
+(S-5, with S-5b asked); order rows fine, but the match item needs the same
+treatment (S-9); and full screen by default asked (S-8). Six hotspot,
+three order and one short-text responses posted; the session was ended
+with the emergency control and the attempt left in progress for the
+crash / drain rows.
