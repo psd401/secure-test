@@ -350,3 +350,5 @@ and the `?section=` filter narrows the student pages only, not this table.
 `test/reporting-print.test.tsx`, `test/reporting-print-helpers.test.ts`. No
 migration. Design-tool suite 1245 → 1246 pass, typecheck clean. Not
 verified by a hand-run yet — redeploy pending.
+
+**Fix slice DEPLOYED 2026-09-08 ~10:55 PT — rev 14, health 200.** R2-P1 / R2-P3 re-checked on the origin: "Handed in Sep 3, 3:50 PM", every Max filled (table = 4), integrity "Secure session started 2 times · Left the test window 10 times · Quit the app · Secure session ended 2 times".
