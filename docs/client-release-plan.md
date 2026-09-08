@@ -253,3 +253,10 @@ carries batch 3's client half, batch 4 A–E and the S-0…S-9 fixes from the
 four entitlements, profile embedded, Gatekeeper accepted); the
 notarization, pkg notarization and `gh release` are James's `!` steps as for
 v1.0.0. Hand-install on a district Mac from this pkg closes batch 2.
+
+**v1.1.0 PUBLISHED 2026-09-08 ~15:20 PT** on `psd401/secure-test`
+(`SecureTest-1.1.0.pkg`, app + pkg both notarized and stapled, tag on
+`main` = `a10d80e` which contains the build commit `0e52d02`;
+`/releases/latest/download/SecureTest-1.1.0.pkg` → 302). Installomator's
+`/releases/latest` now serves 1.1.0. Still open: the hand-install row on a
+district Mac (batch 2's last), and IT's fleet scope.
