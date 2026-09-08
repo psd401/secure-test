@@ -253,6 +253,20 @@ contract, identifiers.
   indicator, the Move up / down buttons kept as the keyboard + VoiceOver
   path, the answered mark unchanged; short design note in the slice.
 
+## Findings from the 2026-09-08 sitting
+
+Five findings from the first sitting on the batch-4 client (a real AAC session
+on the origin, the `Client rows hand-run 2026-09-08` fixture). All five are
+client-only; none needs a deploy.
+
+| # | Finding | Decision |
+|---|---|---|
+| S-1 | The order item's HTML5 drag never completes inside a real AAC session — the row lifts and snaps back, nothing moves. `LockedDownWebView` refuses the drag session's destination (the risk written into the §E design note). | Replace the HTML5 drag with pointer tracking; no change to that view, no dual path. |
+| S-2 | A signed-out student sees the session-code field above the sign-in button and types into it — the app asks for the wrong thing first. | Hide the code heading, field, Join and the rule above them until signed in. |
+| S-3 | The order rows are too tight to read comfortably or to hit reliably. | Taller rows, more padding, body-sized labels — all rem, all tokens. |
+| S-4 | Half-typed math (`\frac{`) shows KaTeX's own red error markup, which reads as "you got it wrong" rather than "you are not finished". | Ask KaTeX to throw, keep the last good render, and say it in plain words. |
+| S-5 | A selected hotspot region is barely distinguishable from a hovered one on a busy picture. | Heavier selected fill, accent border, inset paper hairline, visible focus ring. |
+
 ## Progress
 
 **Slice A BUILT 2026-09-07.** The theme layer is in and the page has no
@@ -476,3 +490,54 @@ James at the keyboard: 16 (A) + 28 (B) + 18 (D) + 12 (E) rows in
 `client/MANUAL-CHECKS.md`, no deploy needed (client only). The first E row
 is a gate: whether an in-page drag survives `LockedDownWebView`'s
 unregistered drag types could not be proven headlessly.
+
+**Fix slice S-1…S-5 BUILT 2026-09-08** (the five findings above; `client/`
+only, no deploy). **S-1** replaces the order item's HTML5 drag with pointer
+tracking: `pointerdown` on a row (never on a Move button, never a non-primary
+button) captures the pointer and snapshots every row's rectangle, `pointermove`
+carries the dragged row on a `translateY` transform and paints the same
+`drop-before` / `drop-after` indicator on the row the pointer is over, and
+`pointerup` runs the same `move(from, to)` — one post per drag, none per move.
+The drop target is decided against the SNAPSHOT, not live rectangles: the
+dragged row is transformed, so a live `getBoundingClientRect()` would hit-test
+it against its own moved box. A pointer past either end of the list clamps to
+that end rather than being discarded. Escape (read on `document.onkeydown`,
+chaining any previous handler, because no row holds keyboard focus during a
+pointer drag) and `pointercancel` restore and post nothing. `draggable` and
+every `dragstart` / `dragover` / `dragleave` / `drop` / `dragend` handler are
+gone — a leftover HTML5 path would be a second chance to reorder differently,
+and a test pins their absence. `LockedDownWebView`, the CSP, the buttons, the
+`aria-describedby` hint, the `aria-live` announcement and the
+`{type:'order', ordered_ids}` payload are all untouched. **S-3** gives
+`.order-row` `min-height: 2.75rem`, `0.6rem 0.75rem` padding, `1rem` type and a
+`0.75rem` gap, with `.order` `margin-top: 1rem` and a `1rem` position number —
+rem and tokens throughout, so slice A's no-literal-hex tests and slice B's zoom
+lever still hold. **S-4** renders the formula preview with `throwOnError: true`
+inside a try/catch: on a parse failure the last good tex (kept in
+`data-last-good`) is repainted and a plain
+`<span class="formula-preview-note">` in `--ink-soft` says "Can't read that as
+math yet — keep typing."; KaTeX's error markup never reaches the page, the
+preview stays a polite live region, and an empty field clears both the note and
+the remembered render. **S-5** makes a selected hotspot region a 45 % accent
+wash with a 3 px accent border and a 2 px inset `--paper` hairline, plus a
+focus ring on the selected state, leaving hover at its lighter 12 % wash.
+**S-2** is the only AppKit change: `refreshSignInState()` hides `separator`,
+`codeHeader` and `codeRow` unless signed in, beside `testsRow` / `listScroll`,
+so the `--token` / `SECURE_TEST_TOKEN` path shows them exactly as it shows the
+tests list.
+
+Tests: `swift test` **438 → 448**, 0 failures — `RendererOrderDragTests` is
+rewritten onto pointer events (a pointerdown/move/up from index 2 to index 0
+equals two Move-ups and posts once; the inverse drag round-trips; Escape and
+`pointercancel` restore and post nothing; a press on a Move button starts no
+drag; the indicator marks exactly one row; the dragged row carries the
+transform; no `draggable`, no HTML5 handler and no `dataTransfer` anywhere in
+the script), and five tests in `RendererFormulaInputTests` cover S-4 against a
+KaTeX stub that throws on unbalanced input. `xcodebuild` green. S-2, S-3 and
+S-5 have no headless coverage by construction (AppKit and CSS).
+
+Nothing visual or in-session is verified: the slice E rows in
+`client/MANUAL-CHECKS.md` are rewritten for the pointer path — **their first
+row is a real AAC session, which is the only place S-1's failure appeared** —
+and a new "Fix slice S-1…S-5 (2026-09-08)" section carries 14 rows for
+S-2…S-5. None are run.

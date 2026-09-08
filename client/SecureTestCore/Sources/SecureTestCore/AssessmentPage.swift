@@ -117,8 +117,16 @@ public enum AssessmentPage {
       background: color-mix(in srgb, var(--accent) 12%, transparent);
       border-color: color-mix(in srgb, var(--accent) 55%, transparent);
     }
-    .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
-    .hotspot-region.selected { background: color-mix(in srgb, var(--accent) 30%, transparent); border: 3px solid var(--accent); }
+    .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* Fix slice S-5 (2026-09-08 sitting): the selected region was too close to the hover
+       wash to read as chosen on a busy picture. It is now a heavier fill with an inset
+       paper hairline so the border reads against dark artwork too; hover stays lighter. */
+    .hotspot-region.selected {
+      background: color-mix(in srgb, var(--accent) 45%, transparent);
+      border: 3px solid var(--accent);
+      box-shadow: 0 0 0 2px var(--paper) inset;
+    }
+    .hotspot-region.selected:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* Slice B: the canvas keeps its intrinsic pixel size (that is the answer's
        resolution and must not move), but it may not be wider than the column —
        at zoom 3X the rem gutters alone are 240 px and an 800 px canvas would
@@ -142,27 +150,35 @@ public enum AssessmentPage {
     .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: var(--ink); }
     .formula-preview:empty { display: none; }
+    /* Fix slice S-4 (2026-09-08 sitting): half-typed math is normal, so a parse failure
+       says so in words instead of showing KaTeX's red error markup. */
+    .formula-preview-note { display: inline-block; margin-left: 0.25rem; font-size: 0.8125rem; color: var(--ink-soft); }
     /* E12 slice 3: the outline a student writes in place of a missing earlier answer. */
     .outline-inline { margin-top: 10px; }
     .outline-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
     .outline-inline textarea { width: 100%; min-height: 140px; font: inherit; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 4px; }
     .outline-status { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
-    /* Client UI pass slice E (D-D2, 2026-09-07): the order item is draggable as well as
-       button-operable. The rows had no rules at all before this; the drop indicator is drawn
-       on the hovered row rather than as an extra element, in rem so it scales with data-zoom.
+    /* Client UI pass slice E (D-D2, 2026-09-07), reworked by fix slice S-1 (2026-09-08):
+       the order item is draggable as well as button-operable, and the drag is POINTER
+       tracking, not HTML5 drag-and-drop — under a real AAC session the drop never landed
+       and the row snapped back. The drop indicator is drawn on the row under the pointer
+       rather than as an extra element, in rem so it scales with data-zoom. `touch-action`
+       and `user-select` are off on a row so a drag does not scroll or select instead.
+       S-3: the rows were too tight to read or to hit; heights, padding and type are up.
        Colours are slice A tokens, so the eight contrast sets (slice B) restyle it too. */
-    .order { margin: 8px 0; }
+    .order { margin-top: 1rem; margin-bottom: 0.5rem; }
     .order-row {
-      display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 4px 0;
+      display: flex; align-items: center; gap: 0.75rem;
+      min-height: 2.75rem; padding: 0.6rem 0.75rem; margin: 0.25rem 0; font-size: 1rem;
       border: 1px solid var(--line); border-radius: 6px; background: var(--paper); cursor: grab;
-      -webkit-user-drag: element;
+      touch-action: none; -webkit-user-select: none; user-select: none;
     }
     .order-row:active { cursor: grabbing; }
-    .order-position { min-width: 1.6em; color: var(--ink-soft); }
+    .order-position { min-width: 1.6em; font-size: 1rem; color: var(--ink-soft); }
     .order-label { flex: 1; line-height: 1.4; }
     .order-move { font: inherit; padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer; }
     .order-move:disabled { opacity: .4; cursor: default; }
-    .order-row.dragging { opacity: .5; }
+    .order-row.dragging { opacity: .5; position: relative; z-index: 1; cursor: grabbing; }
     .order-row.drop-before { box-shadow: inset 0 0.125rem 0 0 var(--accent); }
     .order-row.drop-after { box-shadow: inset 0 -0.125rem 0 0 var(--accent); }
     .order-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
@@ -552,25 +568,54 @@ public enum AssessmentPage {
         var inner = String(text).replace(/\$/g, '').replace(/([%#&~])/g, '\\$1').trim().replace(/\s+/g, '\\ ');
         return inner ? '\\mathrm{' + inner + '}' : '';
       }
+      // Fix slice S-4 (2026-09-08 sitting): a student halfway through typing `\frac{`
+      // has not made a mistake, and KaTeX's own error markup — red source text with a
+      // parse message — reads as one. So the render is asked to THROW
+      // (throwOnError: true) and the failure is caught here: the last good render stays
+      // on screen, and a plain note in --ink-soft says the input is not readable as math
+      // yet. `data-last-good` carries the last tex that parsed, so the note can be added
+      // without losing the picture the student already had. aria-live stays polite, so
+      // the note is announced without interrupting.
+      function katexOptions(throwOnError) {
+        return {
+          throwOnError: throwOnError,
+          strict: 'ignore',
+          trust: false,
+          macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
+        };
+      }
+      function formulaPreviewNote(preview) {
+        var note = document.createElement('span');
+        note.className = 'formula-preview-note';
+        note.textContent = "Can't read that as math yet — keep typing.";
+        preview.appendChild(note);
+      }
       function renderFormulaPreview(preview, text) {
         var tex = formulaTex(text);
         if (!tex) {
           preview.textContent = '';
           preview.removeAttribute('data-tex');
+          preview.removeAttribute('data-last-good');
           return;
         }
         preview.setAttribute('data-tex', tex);
         if (typeof katex === 'object' && katex && typeof katex.render === 'function') {
           try {
-            katex.render(tex, preview, {
-              throwOnError: false,
-              errorColor: '#cc0000',
-              strict: 'ignore',
-              trust: false,
-              macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
-            });
+            katex.render(tex, preview, katexOptions(true));
+            preview.setAttribute('data-last-good', tex);
           } catch (e) {
+            var lastGood = preview.getAttribute('data-last-good');
             preview.textContent = '';
+            if (lastGood) {
+              // Repainting the last good tex rather than keeping the node untouched,
+              // because katex.render may have emptied it before it threw.
+              try {
+                katex.render(lastGood, preview, katexOptions(false));
+              } catch (e2) {
+                preview.textContent = '';
+              }
+            }
+            formulaPreviewNote(preview);
           }
         }
       }
@@ -899,11 +944,26 @@ public enum AssessmentPage {
           });
         }
 
-        // -- drag state -------------------------------------------------------
+        // -- drag state (fix slice S-1, 2026-09-08) --------------------------
+        // POINTER tracking, not HTML5 drag-and-drop. The 2026-09-08 sitting found
+        // the HTML5 drop never landing inside a real AAC session: LockedDownWebView
+        // unregisters its dragged types and refuses the drag destination, which is
+        // aimed at drags in from other apps but also swallows an in-page drop, so
+        // the row lifted and snapped back with nothing moved. That view is not
+        // touched (hard rule); the interaction is rebuilt on pointer events, which
+        // never become an NSDraggingSession. A touchpad is a pointer, so nothing
+        // extra is needed for it. There is deliberately no second HTML5 path — two
+        // paths would be two chances to reorder differently.
+        //
         // dragFrom is the index the drag started from; -1 means no drag is in
-        // flight, which is also what Escape leaves behind (dragend fires with no
-        // drop, so nothing moves).
+        // flight, which is also what Escape and pointercancel leave behind.
         var dragFrom = -1;
+        var dragPointerID = null;
+        var dragStartY = 0;
+        // Row geometry is snapshotted at pointerdown: the dragged row is moved with
+        // a transform, and a live getBoundingClientRect would then report the moved
+        // box and hit-test against itself.
+        var dragBoxes = [];
 
         function paintIndicators(over, before) {
           rows.forEach(function (other, otherIndex) {
@@ -917,19 +977,46 @@ public enum AssessmentPage {
         }
 
         function endDrag() {
+          if (dragFrom >= 0 && dragPointerID !== null) {
+            var node = rows[dragFrom].node;
+            if (typeof node.releasePointerCapture === 'function') {
+              try { node.releasePointerCapture(dragPointerID); } catch (e) { /* already gone */ }
+            }
+          }
           dragFrom = -1;
-          rows.forEach(function (row) { row.node.className = 'order-row'; });
+          dragPointerID = null;
+          dragBoxes = [];
+          rows.forEach(function (row) {
+            row.node.className = 'order-row';
+            if (row.node.style) row.node.style.transform = '';
+          });
         }
 
-        // Top half of the hovered row means "land above it", bottom half "below".
-        // An event without geometry falls back to "above", the conservative
-        // reading of a pointer sitting somewhere on a row.
-        function pointerIsBefore(node, event) {
-          if (!event || typeof event.clientY !== 'number') return true;
-          if (typeof node.getBoundingClientRect !== 'function') return true;
+        function boxOf(index) {
+          var node = rows[index].node;
+          if (typeof node.getBoundingClientRect !== 'function') return null;
           var box = node.getBoundingClientRect();
-          if (!box || typeof box.top !== 'number' || typeof box.height !== 'number') return true;
-          return event.clientY < box.top + (box.height / 2);
+          if (!box || typeof box.top !== 'number' || typeof box.height !== 'number') return null;
+          return box;
+        }
+
+        // Which row is under the pointer, and whether the pointer is in its top
+        // half ("land above it") or its bottom half ("below"). Above the first row
+        // and below the last are clamped to the ends rather than dropped, so a
+        // student who overshoots the list still lands the move they aimed at.
+        function hitTest(y) {
+          if (typeof y !== 'number' || dragBoxes.length === 0) return null;
+          for (var i = 0; i < dragBoxes.length; i++) {
+            var box = dragBoxes[i];
+            if (!box) continue;
+            if (y < box.top) {
+              return { over: i, before: true };
+            }
+            if (y < box.top + box.height) {
+              return { over: i, before: y < box.top + (box.height / 2) };
+            }
+          }
+          return { over: dragBoxes.length - 1, before: false };
         }
 
         function targetIndex(over, before) {
@@ -938,11 +1025,46 @@ public enum AssessmentPage {
             : (dragFrom < over ? over : over + 1);
         }
 
+        function beginDrag(at, event) {
+          dragFrom = at;
+          dragStartY = (event && typeof event.clientY === 'number') ? event.clientY : 0;
+          dragBoxes = rows.map(function (row, index) { return boxOf(index); });
+          dragPointerID = (event && typeof event.pointerId !== 'undefined') ? event.pointerId : null;
+          var node = rows[at].node;
+          if (dragPointerID !== null && typeof node.setPointerCapture === 'function') {
+            // Capture keeps pointermove / pointerup on this row even when the
+            // pointer leaves it, which is the whole reason the rows can stay put.
+            try { node.setPointerCapture(dragPointerID); } catch (e) { dragPointerID = null; }
+          }
+          paintIndicators(-1, true);
+        }
+
+        function dragTo(event) {
+          if (dragFrom < 0) return null;
+          var y = (event && typeof event.clientY === 'number') ? event.clientY : dragStartY;
+          var node = rows[dragFrom].node;
+          if (node.style) node.style.transform = 'translateY(' + (y - dragStartY) + 'px)';
+          var hit = hitTest(y);
+          paintIndicators(hit ? hit.over : -1, hit ? hit.before : true);
+          return hit;
+        }
+
+        // Escape cancels mid-drag. It is read on the document because the drag is
+        // driven by the pointer and no row holds keyboard focus during one; the
+        // previous handler is chained so a second order item on the page keeps its
+        // own Escape.
+        var previousKeydown = document.onkeydown;
+        document.onkeydown = function (event) {
+          if (dragFrom >= 0 && event && event.key === 'Escape') {
+            endDrag();
+            return;
+          }
+          if (typeof previousKeydown === 'function') return previousKeydown(event);
+        };
+
         entries.forEach(function (entry, index) {
           var row = document.createElement('div');
           row.className = 'order-row';
-          row.setAttribute('draggable', 'true');
-          row.draggable = true;
 
           var position = document.createElement('span');
           position.className = 'order-position';
@@ -972,56 +1094,46 @@ public enum AssessmentPage {
           })(index);
           row.appendChild(down);
 
-          row.ondragstart = (function (at) {
+          // A press that starts on a Move button is a button press, not a drag —
+          // otherwise the keyboard path would be unusable with a mouse.
+          function onAMoveButton(event) {
+            var node = event && event.target;
+            while (node) {
+              if ((' ' + (node.className || '') + ' ').indexOf(' order-move ') !== -1) return true;
+              node = node.parentNode;
+            }
+            return false;
+          }
+
+          row.onpointerdown = (function (at) {
             return function (event) {
-              dragFrom = at;
-              if (event && event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                try {
-                  // The sealed entry id, so a drop can be told apart from a drag
-                  // that began elsewhere. Nothing else goes on the pasteboard.
-                  event.dataTransfer.setData('text/plain', entries[at].id);
-                } catch (e) { /* setData is optional to the interaction */ }
-              }
-              paintIndicators(-1, true);
+              if (dragFrom >= 0) return;
+              if (event && typeof event.button === 'number' && event.button !== 0) return;
+              if (onAMoveButton(event)) return;
+              beginDrag(at, event);
             };
           })(index);
 
-          row.ondragover = (function (at) {
-            return function (event) {
-              if (dragFrom < 0) return;
-              // Without preventDefault the row is not a drop target at all.
-              if (event && typeof event.preventDefault === 'function') event.preventDefault();
-              if (event && event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-              paintIndicators(at, pointerIsBefore(row, event));
-            };
-          })(index);
+          row.onpointermove = function (event) {
+            if (dragFrom < 0) return;
+            dragTo(event);
+          };
 
-          row.ondragleave = (function (at) {
-            return function () {
-              if (dragFrom < 0 || at === dragFrom) return;
-              row.className = 'order-row';
-            };
-          })(index);
+          row.onpointerup = function (event) {
+            if (dragFrom < 0) return;
+            var hit = dragTo(event);
+            var from = dragFrom;
+            var to = hit ? targetIndex(hit.over, hit.before) : from;
+            endDrag();
+            if (!hit || hit.over === from) return;
+            if (to < 0) to = 0;
+            if (to > entries.length - 1) to = entries.length - 1;
+            move(from, to);
+          };
 
-          row.ondrop = (function (at) {
-            return function (event) {
-              if (event && typeof event.preventDefault === 'function') event.preventDefault();
-              if (dragFrom < 0) return;
-              // Dropped back on itself: the student changed their mind, and
-              // neither half of the row means a move.
-              if (at === dragFrom) { endDrag(); return; }
-              var from = dragFrom;
-              var to = targetIndex(at, pointerIsBefore(row, event));
-              if (to < 0) to = 0;
-              if (to > entries.length - 1) to = entries.length - 1;
-              endDrag();
-              move(from, to);
-            };
-          })(index);
-
-          // Escape, or a drop outside the list: the drag ends and nothing moves.
-          row.ondragend = function () { endDrag(); };
+          // A cancelled pointer (Escape handled above, a system gesture, the pointer
+          // being taken away) restores the row and posts nothing.
+          row.onpointercancel = function () { endDrag(); };
 
           rows.push({
             node: row,
