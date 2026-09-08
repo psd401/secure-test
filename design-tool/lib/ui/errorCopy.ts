@@ -170,6 +170,25 @@ export function sessionErrorCopy(code: string): ErrorCopy {
   }
 }
 
+/** DELETE /api/attempts/[attemptId] — the teacher's "Delete attempt". */
+export function attemptDeleteErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "session_open":
+      return {
+        message: "The student may still be working. End the test session first, then delete.",
+        showCode: false,
+      };
+    case "forbidden":
+      return { message: "Only the assessment's owner can delete an attempt.", showCode: false };
+    case "not_found":
+      return { message: "That attempt is already gone. Refresh the page.", showCode: false };
+    case "network":
+      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+    default:
+      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+  }
+}
+
 /** app/api/students/[id]/accommodations and the overrides routes. */
 export function accommodationErrorCopy(code: string): ErrorCopy {
   switch (code) {

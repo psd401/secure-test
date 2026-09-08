@@ -49,6 +49,7 @@ import {
   sessionState,
   type StudentState,
 } from "@/components/app/StatusBadge";
+import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt } from "@/lib/ui/format";
@@ -337,12 +338,19 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
                   <TableHead>Progress</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last activity</TableHead>
-                  <TableHead className="text-right">Screen</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visible.map(({ row: r, state: st }) => (
-                  <StudentRow key={r.ps_id} row={r} state={st} now={now} />
+                  <StudentRow
+                    key={r.ps_id}
+                    row={r}
+                    state={st}
+                    now={now}
+                    sessionClosed={session.status === "closed"}
+                    onDeleted={() => void load()}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -390,7 +398,19 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
   );
 }
 
-function StudentRow({ row: r, state: st, now }: { row: AttendanceRow; state: StudentState; now: number }) {
+function StudentRow({
+  row: r,
+  state: st,
+  now,
+  sessionClosed,
+  onDeleted,
+}: {
+  row: AttendanceRow;
+  state: StudentState;
+  now: number;
+  sessionClosed: boolean;
+  onDeleted: () => void;
+}) {
   const idle = idleFor(r, now);
   const current = st === "needs_attention";
   return (
@@ -433,7 +453,22 @@ function StudentRow({ row: r, state: st, now }: { row: AttendanceRow; state: Stu
       </TableCell>
       <TableCell className="text-right">
         {r.attempt_id && r.status !== "not_joined" ? (
-          <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
+            {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
+                while the student may still be locked in — the route 409s
+                for the same case (`session_open`). */}
+            <DeleteAttemptControl
+              attemptId={r.attempt_id}
+              studentName={r.name}
+              onDeleted={onDeleted}
+              disabledReason={
+                r.status === "submitted" || sessionClosed
+                  ? undefined
+                  : "End the test session first, then delete."
+              }
+            />
+          </div>
         ) : null}
       </TableCell>
     </TableRow>

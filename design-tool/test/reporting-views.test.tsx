@@ -438,6 +438,8 @@ describe("the per-student attempt page", () => {
     expect(html).toContain("Alice Overlay");
     expect(html).toContain(STUDENT.ps_id);
     expect(html).toContain("Handed in");
+    // Roadmap 2026-09 delete attempt: the owner's button is on the page.
+    expect(html).toContain("Delete attempt");
     // 4 of 12 (MC 1 + essay 4 + six 1-pointers + a 1-cell table) with the
     // short_text proposal uncounted, so a "n unscored" count, not a percent.
     expect(html).toContain("unscored");

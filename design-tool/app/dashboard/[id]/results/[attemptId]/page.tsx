@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteAttemptAndReturn } from "./DeleteAttemptAndReturn";
 import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -265,8 +266,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
           {identity ? `${identity} · ` : ""}
           {assessment.name}
         </p>
-        <p className="mt-3 text-sm">
-          Handed in{" "}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm">
+            Handed in{" "}
           {row.submitted_at ? formatWhen(row.submitted_at) : "—"} ·{" "}
           <strong>
             {row.total_points} / {row.max_points}
@@ -275,7 +277,13 @@ export default async function AttemptResultPage({ params }: PageProps) {
           {row.unscored_count === 0
             ? `${row.percent ?? 0}%`
             : `${row.unscored_count} unscored`}
-        </p>
+          </p>
+          <DeleteAttemptAndReturn
+            attemptId={attemptId}
+            assessmentId={id}
+            studentName={row.student.name || row.student.ssid || "this student"}
+          />
+        </div>
       </div>
 
       <section aria-labelledby="answers" className="space-y-4">

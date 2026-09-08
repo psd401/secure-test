@@ -352,3 +352,27 @@ migration. Design-tool suite 1245 → 1246 pass, typecheck clean. Not
 verified by a hand-run yet — redeploy pending.
 
 **Fix slice DEPLOYED 2026-09-08 ~10:55 PT — rev 14, health 200.** R2-P1 / R2-P3 re-checked on the origin: "Handed in Sep 3, 3:50 PM", every Max filled (table = 4), integrity "Secure session started 2 times · Left the test window 10 times · Quit the app · Secure session ended 2 times".
+
+**Delete attempt BUILT 2026-09-08** (roadmap 2026-09, the finding from the
+2026-09-07 signed-build run; pulled ahead of 4b / 4c because every
+pilot retake and every hand-run on a reused fixture needs it). Two commits.
+Slice 1: `DELETE /api/attempts/[attemptId]` — staff, owner-only (D-R5:
+sharers can score, not erase), 409 `session_open` for an in-progress attempt
+whose sitting is still open (the student may be locked in mid-answer), 204
+otherwise; the DB cascades take responses / scores / uploads / events / peek
+requests, the stored upload bytes are deleted best-effort after the commit
+through each row's provider, and an audit row goes into the new
+`attempt_deletions` table (**migration 0029** — `attempt_events` cascades
+with the attempt so the record of the deletion cannot live there; it keeps
+the deleting sub, a status / started / submitted snapshot and the counts, no
+student text). `test/attempt-delete-api.test.ts`, 9 tests. Slice 2:
+`components/app/DeleteAttemptControl.tsx` (confirm-first AlertDialog,
+`attemptDeleteErrorCopy`) mounted on the per-student results page (back to
+the matrix on success) and on every joined monitor row beside View screen
+(disabled with "End the test session first" while the student may still be
+working; the monitor column is now "Actions"). Decisions (James,
+2026-09-08): gate in-progress deletes on a closed session rather than warn;
+audit table rather than a log line; owner-only; no button on the matrix
+row. Rows 75–78 in `docs/design-tool-manual-checks.md` — NOT run; they
+need the deploy plus `migrate-aurora.sh` for 0029.
+

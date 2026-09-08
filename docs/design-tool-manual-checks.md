@@ -380,3 +380,20 @@ student needed.
 | R2-P4 | Append `?attempt=<attemptId>` (copy an attempt id from the results JSON or the monitor) and print | Only that student's page, with NO summary page and no other student on it; it still names the assessment. This is the page a family gets | ✅ 2026-09-08: `?attempt=<id>` prints that one student's page only, no summary, the assessment named (same P5-1 / P5-2 text) |
 | R2-P5 | Append `?section=<the exact section label shown on Results>`; then a label nobody is in. Also open the plain URL while signed in as different staff (or signed out) | The first prints only that section's students and the header reads that label instead of "All sections"; the second reads "0 handed in" and lists nobody. As another teacher: the 404 page, not a "Forbidden" screen — the URL must not confirm the assessment exists | ⚠️ half 2026-09-08: `?section=Nobody` → header "Nobody", "0 handed in", "No handed-in attempts to report." ✅; a real section label could not be tried (see row 70); the other-teacher 404 needs a second staff account (row 29's blocker) |
 | R2-P6 | Scan the whole printed report for anything a student wrote | Marks and totals only — no essay text, no short-text answer, no drawing, anywhere on any page | ✅ 2026-09-08: marks, totals and type labels only — no essay, short-text, table or drawing content anywhere |
+
+## Delete attempt (roadmap 2026-09, the 2026-09-07 finding)
+
+Built 2026-09-08. `DELETE /api/attempts/[attemptId]` (owner-only, migration
+**0029** `attempt_deletions`), the **Delete attempt** button on the
+per-student results page and on every joined monitor row. Rows 75–78 need a
+Published assessment with one handed-in attempt by the demo student
+(`Client rows hand-run 2026-09-08` on the origin carries one) and, for row
+77, an open session the student has joined. Run **after** the deploy that
+carries 0029 and its `migrate-aurora.sh`.
+
+| # | Check | Expect | Result |
+|---|---|---|---|
+| 75 | Results → click the demo student → **Delete attempt** → read the dialog → Cancel; then again → **Delete attempt** | The dialog names the student and says every answer, drawing, score and session event goes and the student starts fresh next join; Cancel changes nothing. Confirming lands back on the Results matrix with that student's row GONE; the CSV no longer lists them; the analytics footer's "handed-in attempts" count drops by one. In the DB (or `aws s3 ls s3://<bucket>/responses/<attemptId>/`), the attempt's S3 objects are gone and `attempt_deletions` has one row with your sub, `attempt_status = submitted`, and the response / upload / event counts | |
+| 76 | Have the student join a session of the same assessment again | A fresh attempt: every field empty (no prefilled answers, no answered marks), the monitor shows them as just joined, and the row's Progress starts at 0 | |
+| 77 | On the Monitor while that session is OPEN and the student is in progress, hover **Delete attempt** on their row; then close the session and try again | While open + in progress the button is disabled with the title "End the test session first, then delete." After Close session the button is live; confirming removes the attempt and the row drops to "not joined" on the next poll (≤ 5 s). A handed-in row's button is live even while the session is open | |
+| 78 | Sign in as staff the assessment is shared with (or hit `DELETE /api/attempts/<id>` with the other account's cookie) | 403 — the page's dialog reads "Only the assessment's owner can delete an attempt." (needs a second staff account, same blocker as row 29) | |

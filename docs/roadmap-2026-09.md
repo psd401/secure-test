@@ -79,7 +79,7 @@ Not a finding but recorded here: `client/MANUAL-CHECKS.md` Clear-answer row
 "Clear on a never-answered item" cannot be exercised — the button is
 disabled until a choice is made, by design.
 
-## Finding from the 2026-09-07 signed-build run (James: "put a delete path on our roadmap"; nothing built)
+## Finding from the 2026-09-07 signed-build run (James: "put a delete path on our roadmap") — **BUILT 2026-09-08** (see `docs/reporting-design.md` §Progress; rows 75–78 in `docs/design-tool-manual-checks.md` unrun)
 
 | Finding | What | Where | Size |
 |---|---|---|---|
