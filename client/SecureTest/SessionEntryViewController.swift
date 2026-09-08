@@ -321,6 +321,16 @@ final class SessionEntryViewController: NSObject {
         }
         testsRow.isHidden = !signedIn
         listScroll.isHidden = !signedIn
+        // Fix slice S-2 (2026-09-08 sitting): a signed-out student saw an empty
+        // code box above the sign-in button and typed into it, so the first
+        // thing the app asked for was the wrong thing. The code path is a
+        // signed-in path — the redeem call carries the session token — so the
+        // whole block, its heading and the rule above it are hidden until then.
+        // The launch-argument token (`--token` / SECURE_TEST_TOKEN) reports as
+        // signed in, exactly as it already does for the tests list.
+        for control in [separator, codeHeader, codeRow] as [NSView] {
+            control.isHidden = !signedIn
+        }
         joinButton.isEnabled = signedIn
         codeField.isEnabled = signedIn
         if configured && !signedIn {

@@ -1087,22 +1087,25 @@ or zoom page adds only the attribute itself (+31). Selecting the optional font
 adds **46 677 characters** (+5.7 %) — the base64 of Atkinson's 400 and 700
 latin subsets, and only for the students who asked for it (D-B2).
 
-## Client UI pass — slice E (order drag-and-drop)
+## Client UI pass — slice E (order drag-and-drop), rewritten by fix slice S-1
 
-Written 2026-09-07, `docs/client-ui-pass-design.md` §E (D-D2). `swift test`
-covers the reorder itself: a drop and the equivalent run of Move presses leave
-the same `ordered_ids`, a drop posts exactly once, `dragover` posts nothing,
-`dragend` without a drop changes nothing. What it cannot cover is whether
-WebKit inside the client delivers a drag at all, what the indicator looks like,
-or VoiceOver.
+Written 2026-09-07, **rewritten 2026-09-08 for the pointer path**
+(`docs/client-ui-pass-design.md` §E + the S-1 row of the 2026-09-08 findings).
+The first version of these rows used HTML5 drag-and-drop; the 2026-09-08
+sitting proved the drop never lands inside a real AAC session — the row lifts
+and snaps back — so the interaction is now pointer tracking
+(`pointerdown` / `pointermove` / `pointerup` with pointer capture) and the
+HTML5 path is gone entirely. `LockedDownWebView` was NOT changed.
 
-**Row 1 is the gate.** `LockedDownWebView` calls `unregisterDraggedTypes()` and
-refuses `draggingEntered` / `performDragOperation` to keep drags in from other
-apps off the answer surface. On macOS an in-page WebKit drag is also an
-`NSDraggingSession` whose destination is that same view, so the drop may never
-arrive. If row 1 fails, nothing below it is meaningful and the finding is that
-slice E needs the pointer-tracking fallback in the design note — do NOT loosen
-the view.
+`swift test` covers the reorder itself: a pointer drop and the equivalent run
+of Move presses leave the same `ordered_ids`, a drop posts exactly once,
+`pointermove` posts nothing, Escape and `pointercancel` change nothing, and a
+press that starts on a Move button does not start a drag. What it cannot cover
+is what a real pointer does inside WebKit, what the indicator looks like, or
+VoiceOver.
+
+**Row 1 is the gate, and it runs under a REAL AAC session** — the failure this
+slice exists to fix only appears there. A simulated session is not evidence.
 
 Needs a Published assessment with an order item of four or more entries, a
 sitting, and the log of the response posts (stderr `SPOOL`/`POST` lines, or the
@@ -1110,15 +1113,44 @@ teacher's event history) to count them.
 
 | Check | Expect | Result |
 |---|---|---|
-| Any sitting, on the order item: press and drag a row **down two places** | The row follows the pointer at reduced opacity; a 2 px accent line shows on the row being hovered, on the side the pointer is nearer; on release the row lands where the line promised and the numbers 1..n renumber. **Exactly ONE response posted** for the drop (not one per pointer move) — count it in the log | Not run |
-| Drag a row **up two places** | Same, upward; one post | Not run |
-| Drag the last row to the **first** position (drop on the top half of row 1) | It lands first, everything else shifts down one; one post | Not run |
-| Drag the first row to the **last** position (drop on the bottom half of the last row) | It lands last; one post | Not run |
-| Start a drag and press **Escape** before releasing | The drag ends, the indicator clears, the list is exactly as it was, and NO response is posted | Not run |
-| Drop a row back on itself | Nothing moves, nothing posted | Not run |
-| **Move up / Move down still work**, and VoiceOver | The buttons reorder as before; VoiceOver reads "Drag to reorder, or use the Move buttons" as the list's description, still announces each button as "Move up" / "Move down", and after every move (button or drop) speaks "<label> moved to position k of n" | Not run |
-| **Under a real AAC session** (not simulated), repeat the first row | The drag works inside the locked session — `LockedDownWebView` suppresses drags from other apps, not this one. If the row will not drag or the drop does nothing, record it here as the finding | Not run |
+| **Under a real AAC session** (entitled build, `SECURE_TEST_SIMULATE_LOCKDOWN` blank): press a row and drag it **down two places** | The row follows the pointer at reduced opacity and does NOT snap back; an accent line shows on the row under the pointer, on the side the pointer is nearer; on release the row lands where the line promised and the numbers 1..n renumber. **Exactly ONE response posted** for the drag (not one per pointer move) — count it in the log | Not run |
+| Same session: drag a row **up two places** | Same, upward; one post | Not run |
+| Drag the last row to the **first** position (release on the top half of row 1) | It lands first, everything else shifts down one; one post | Not run |
+| Drag the first row to the **last** position (release on the bottom half of the last row) | It lands last; one post | Not run |
+| Release the pointer **above the first row / below the last** (overshoot the list) | The move still lands at that end rather than being discarded; one post | Not run |
+| Start a drag and press **Escape** before releasing | The drag ends, the indicator clears, the dragged row returns to its place, the list is exactly as it was, and NO response is posted | Not run |
+| Release a row **on itself** (press and let go without moving) | Nothing moves, nothing posted, no stray selection or context menu | Not run |
+| Press and hold on a **Move button** and drag from there | No drag starts (the row does not lift); releasing over the button still performs the button's move, once | Not run |
+| **Move up / Move down still work**, and VoiceOver | The buttons reorder as before; VoiceOver reads "Drag to reorder, or use the Move buttons" as the list's description, still announces each button as "Move up" / "Move down", and after every move (button or drag) speaks "<label> moved to position k of n" | Not run |
+| Drag with a **trackpad** (click-and-hold, then move) as well as a mouse | Identical behaviour — a touchpad is a pointer; the page does not scroll or select text while dragging | Not run |
 | Under **zoom 3.0** (accommodation) | Rows, labels and buttons scale; the drop indicator scales with them (it is in rem) and is still clearly on one edge of a row, not a smudge | Not run |
 | Under a **contrast pair** (any of the eight), start a drag | The indicator line is visible against that pair's paper — it takes the pair's accent, not the default blue | Not run |
 | After a drag, check the **answered mark** | The item marks answered exactly as a Move press marks it — green in the pager strip, counted in "k of N answered". Hand in, and the teacher's queue shows the dragged order | Not run |
 | Resume: answer by dragging, quit, relaunch, Resume | The dragged order is restored (P-1 prefill), the status line is empty again, and nothing is posted by the restore itself | Not run |
+
+## Fix slice S-1…S-5 (2026-09-08)
+
+The five findings from the 2026-09-08 sitting
+(`docs/client-ui-pass-design.md`, "Findings from the 2026-09-08 sitting" and
+its §Progress). S-1's rows are the slice E block above, rewritten for the
+pointer path — run those first, and the real-session row before any of them.
+S-2 is AppKit, so `swift test` says nothing about it at all; S-3 and S-5 are
+CSS, which is not harness-testable by construction; S-4's copy and its
+"keep the last render" behaviour are covered headlessly, its appearance is not.
+
+| Check | Expect | Result |
+|---|---|---|
+| **S-2** Launch the client signed out (every launch is signed out) | The sign-in prompt is all that shows: NO "Or enter a code from your teacher" heading, NO code field, NO Join button, and no rule above where they were. The layout closes up rather than leaving a gap | Not run |
+| **S-2** Sign in with the school Google account | The heading, the code field, the Join button and the rule appear, below the tests list, and the code field accepts a code and joins as before | Not run |
+| **S-2** Sign out again from the entry screen | The block disappears again, and the status line says to sign in first | Not run |
+| **S-2** Launch with `--token` / `SECURE_TEST_TOKEN` (dev path, no Google sign-in) | Counts as signed in: the tests list AND the code block both show, and joining by code works | Not run |
+| **S-3** On the order item, read the rows at default zoom | Each row is at least ~44 pt tall with comfortable padding, the label is body-sized (not the old small type), and the position number and the Move buttons are easy to hit with a mouse | Not run |
+| **S-3** Same item under zoom 2.5 / 3.0 and under one contrast pair | Everything scales together (all rem, all tokens) — no fixed-size row, no clipped label, no button overlapping the label | Not run |
+| **S-4** In a short-text item, type an incomplete formula (e.g. `\frac{`) | Under the field: the plain grey note "Can't read that as math yet — keep typing." — NOT KaTeX's red error text and NOT the raw source in red | Not run |
+| **S-4** Type a valid formula (`H_2O`), then break it (`H_2O \frac{`) | The rendered `H₂O` STAYS on screen with the note beside it; it does not blank out | Not run |
+| **S-4** Finish the formula so it parses again | The note disappears and the new render replaces it; clearing the field empties the preview entirely | Not run |
+| **S-4** With VoiceOver on, type an incomplete formula | The note is announced politely (it does not interrupt typing), and the field's own value is unaffected — the answer posted is still the raw typed text | Not run |
+| **S-5** On a hotspot item, select a region | The chosen region is unmistakable: a solid accent wash with a heavy accent border and a light hairline inside it, readable over both light and dark artwork | Not run |
+| **S-5** Hover a different region while one is selected | The hover wash is clearly LIGHTER than the selected one — the two states are never confusable | Not run |
+| **S-5** Tab to the regions with the keyboard | Every region shows a visible focus ring, including the selected one; the ring is distinguishable from the selected fill | Not run |
+| **S-5** Repeat under one contrast pair and at zoom 3.0 | The selected state takes that pair's accent and stays visible; the region still tracks the picture | Not run |

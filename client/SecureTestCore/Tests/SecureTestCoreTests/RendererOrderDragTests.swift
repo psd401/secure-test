@@ -1,19 +1,25 @@
 import XCTest
 @testable import SecureTestCore
 
-/// Client UI pass slice E (D-D2): the order item is draggable as well as
-/// button-operable.
+/// Client UI pass slice E (D-D2), rebuilt by fix slice S-1 (2026-09-08): the
+/// order item is draggable as well as button-operable, and the drag is POINTER
+/// tracking rather than HTML5 drag-and-drop.
 ///
-/// The point of these tests is that the two paths cannot drift. A drag is not
-/// allowed to be a second, parallel implementation of reordering — a drop and
-/// the equivalent run of Move presses must leave the same ordered ids, and a
-/// drag must post exactly once, on its drop, never on the dragover stream.
+/// The 2026-09-08 sitting found the HTML5 drop never landing inside a real AAC
+/// session — `LockedDownWebView` refuses the drag session's destination, so the
+/// row lifted and snapped back with nothing moved. Pointer events never become
+/// an `NSDraggingSession`, so nothing in that view had to change. There is only
+/// one drag path now: a leftover HTML5 handler would be a second chance to
+/// reorder differently, and `testNoHTML5DragPathRemains` pins that.
 ///
-/// What this cannot prove is that WebKit inside `LockedDownWebView` delivers
-/// the drop at all: that view unregisters its dragged types, which is aimed at
-/// drags in from other apps but may also swallow an in-page drag, and there is
-/// no window server here to find out (ADR 0013). That is the AAC row in
-/// `client/MANUAL-CHECKS.md`.
+/// The point of the rest is that the pointer path and the button path cannot
+/// drift: a drop and the equivalent run of Move presses must leave the same
+/// ordered ids, and a drag must post exactly once, on its pointerup, never on
+/// the pointermove stream.
+///
+/// What this still cannot prove is what WebKit does with a real pointer inside
+/// a locked session — there is no window server here (ADR 0013). That is the
+/// first row of "Fix slice S-1…S-5" in `client/MANUAL-CHECKS.md`.
 final class RendererOrderDragTests: XCTestCase {
     private let item = "__item(5)"
 
@@ -32,14 +38,29 @@ final class RendererOrderDragTests: XCTestCase {
             return { top: i * 40, height: 40, left: 0, width: 200 };
           };
         });
+        // A whole pointer drag: press on `from`, move to the top or bottom half
+        // of `over`, release there. pointermove / pointerup arrive on the row
+        // that started the drag, which is what setPointerCapture guarantees in
+        // the browser.
         function __drag(from, over, before) {
           var top = __rows[over].getBoundingClientRect().top;
           var y = before ? top + 5 : top + 35;
-          var transfer = { data: {}, setData: function (k, v) { this.data[k] = v; } };
-          var event = { clientY: y, dataTransfer: transfer, preventDefault: function () {} };
-          __rows[from].ondragstart(event);
-          __rows[over].ondragover(event);
-          __rows[over].ondrop(event);
+          var start = __rows[from].getBoundingClientRect();
+          __rows[from].onpointerdown({
+            clientY: start.top + 20, button: 0, pointerId: 7, target: __rows[from]
+          });
+          __rows[from].onpointermove({ clientY: y, pointerId: 7 });
+          __rows[from].onpointerup({ clientY: y, pointerId: 7 });
+        }
+        function __press(from) {
+          var start = __rows[from].getBoundingClientRect();
+          __rows[from].onpointerdown({
+            clientY: start.top + 20, button: 0, pointerId: 7, target: __rows[from]
+          });
+        }
+        function __moveTo(from, over, before) {
+          var top = __rows[over].getBoundingClientRect().top;
+          __rows[from].onpointermove({ clientY: before ? top + 5 : top + 35, pointerId: 7 });
         }
         """)
         return h
@@ -58,13 +79,35 @@ final class RendererOrderDragTests: XCTestCase {
 
     // MARK: - markup
 
-    func testRowsAreDraggableAndCarryTheHint() throws {
+    /// No `draggable`, no HTML5 handlers: one path only, and the browser's own
+    /// drag machinery is never started.
+    func testNoHTML5DragPathRemains() throws {
         let h = try harness()
-        let flags = try h.string(
-            "__all('.order-row', \(item)).map(function (r) { return r.getAttribute('draggable'); }).join(',')"
+        XCTAssertEqual(
+            try h.string("__all('.order-row', \(item)).map(function (r) { return String(r.getAttribute('draggable')); }).join(',')"),
+            "null,null,null,null"
         )
-        XCTAssertEqual(flags, "true,true,true,true")
+        for handler in ["ondragstart", "ondragover", "ondragleave", "ondrop", "ondragend"] {
+            XCTAssertEqual(
+                try h.string("typeof __all('.order-row', \(item))[0].\(handler)"),
+                "undefined",
+                "\(handler) must be gone — no dual path"
+            )
+        }
+        let script = AssessmentPage.rendererScript
+        XCTAssertFalse(script.contains("ondragstart"))
+        XCTAssertFalse(script.contains("dataTransfer"))
+        XCTAssertFalse(AssessmentPage.itemStyles.contains("-webkit-user-drag"))
+    }
 
+    func testRowsCarryThePointerHandlersAndTheHint() throws {
+        let h = try harness()
+        for handler in ["onpointerdown", "onpointermove", "onpointerup", "onpointercancel"] {
+            XCTAssertEqual(
+                try h.string("typeof __all('.order-row', \(item))[0].\(handler)"),
+                "function"
+            )
+        }
         XCTAssertEqual(
             try h.string("__first('.order-hint', \(item)).textContent"),
             "Drag to reorder, or use the Move buttons."
@@ -171,6 +214,20 @@ final class RendererOrderDragTests: XCTestCase {
         XCTAssertEqual(try labels(h), expected)
     }
 
+    /// A pointer released above the first row, or below the last, still lands
+    /// the move it aimed at rather than being discarded.
+    func testReleasingPastTheEndsOfTheListClampsToTheEnds() throws {
+        let h = try harness()
+        let before = try labels(h)
+        try h.eval("""
+        __press(3);
+        __rows[3].onpointermove({ clientY: -50, pointerId: 7 });
+        __rows[3].onpointerup({ clientY: -50, pointerId: 7 });
+        """)
+        XCTAssertEqual(try labels(h).first, before[3])
+        XCTAssertEqual(try h.postedMessages().count, 1)
+    }
+
     func testEveryEntryStillAppearsExactlyOnceAfterADrop() throws {
         let h = try harness()
         try h.eval("__drag(3, 1, true);")
@@ -191,62 +248,104 @@ final class RendererOrderDragTests: XCTestCase {
         XCTAssertEqual(try h.postedMessages().count, 0)
     }
 
-    // MARK: - the indicator, and Escape
+    // MARK: - the indicator, cancellation, and the buttons
 
-    func testDragoverMarksTheHoveredRowAndPostsNothing() throws {
+    func testPointerMoveMarksOneRowAndPostsNothing() throws {
         let h = try harness()
-        try h.eval("""
-        var transfer = { setData: function () {} };
-        __rows[2].ondragstart({ dataTransfer: transfer, preventDefault: function () {} });
-        """)
+        try h.eval("__press(2);")
         XCTAssertEqual(try h.string("__rows[2].className"), "order-row dragging")
 
-        try h.eval("__rows[0].ondragover({ clientY: 5, dataTransfer: transfer, preventDefault: function () {} });")
+        try h.eval("__moveTo(2, 0, true);")
         XCTAssertEqual(try h.string("__rows[0].className"), "order-row drop-before")
+        XCTAssertEqual(try h.string("__rows[2].className"), "order-row dragging")
 
-        try h.eval("__rows[0].ondragover({ clientY: 35, dataTransfer: transfer, preventDefault: function () {} });")
+        try h.eval("__moveTo(2, 0, false);")
         XCTAssertEqual(try h.string("__rows[0].className"), "order-row drop-after",
                        "the bottom half of a row means below it")
-        XCTAssertEqual(try h.string("transfer.dropEffect"), "move")
 
         // Only one row is ever marked: moving on clears the previous one.
-        try h.eval("__rows[1].ondragover({ clientY: 45, dataTransfer: transfer, preventDefault: function () {} });")
+        try h.eval("__moveTo(2, 1, true);")
         XCTAssertEqual(try h.string("__rows[0].className"), "order-row")
+        XCTAssertEqual(try h.string("__rows[1].className"), "order-row drop-before")
+        XCTAssertEqual(
+            try h.int("__rows.filter(function (r) { return r.className !== 'order-row' && r.className !== 'order-row dragging'; }).length"),
+            1
+        )
 
-        XCTAssertEqual(try h.postedMessages().count, 0, "dragover never posts")
+        XCTAssertEqual(try h.postedMessages().count, 0, "pointermove never posts")
+    }
+
+    /// The dragged row follows the pointer with a transform; the rows
+    /// themselves stay put, so focus and the hit-test geometry do not move.
+    func testTheDraggedRowFollowsThePointer() throws {
+        let h = try harness()
+        try h.eval("__press(0);")
+        try h.eval("__rows[0].onpointermove({ clientY: 95, pointerId: 7 });")
+        XCTAssertEqual(try h.string("__rows[0].style.transform"), "translateY(75px)")
+        try h.eval("__rows[0].onpointerup({ clientY: 95, pointerId: 7 });")
+        XCTAssertEqual(try h.string("__rows[0].style.transform"), "")
     }
 
     func testEscapeMidDragCancels() throws {
         let h = try harness()
         let before = try labels(h)
         try h.eval("""
-        var transfer = { setData: function () {} };
-        __rows[2].ondragstart({ dataTransfer: transfer, preventDefault: function () {} });
-        __rows[0].ondragover({ clientY: 5, dataTransfer: transfer, preventDefault: function () {} });
-        __rows[2].ondragend();
+        __press(2);
+        __moveTo(2, 0, true);
+        document.onkeydown({ key: 'Escape' });
         """)
         XCTAssertEqual(try labels(h), before, "a cancelled drag moves nothing")
         XCTAssertEqual(try h.postedMessages().count, 0)
         XCTAssertEqual(try h.string("__rows[0].className"), "order-row")
         XCTAssertEqual(try h.string("__rows[2].className"), "order-row")
+        XCTAssertEqual(try h.string("__rows[2].style.transform"), "")
 
-        // And a stray drop afterwards is ignored rather than replaying the drag.
-        try h.eval("__rows[0].ondrop({ clientY: 5, preventDefault: function () {} });")
+        // And a stray release afterwards is ignored rather than replaying the drag.
+        try h.eval("__rows[2].onpointerup({ clientY: 5, pointerId: 7 });")
         XCTAssertEqual(try labels(h), before)
         XCTAssertEqual(try h.postedMessages().count, 0)
     }
 
-    func testDragstartCarriesTheSealedIDAndMoveEffect() throws {
+    func testPointerCancelRestoresAndPostsNothing() throws {
+        let h = try harness()
+        let before = try labels(h)
+        try h.eval("""
+        __press(2);
+        __moveTo(2, 0, true);
+        __rows[2].onpointercancel({ pointerId: 7 });
+        """)
+        XCTAssertEqual(try labels(h), before)
+        XCTAssertEqual(try h.postedMessages().count, 0)
+        XCTAssertEqual(try h.string("__rows[0].className"), "order-row")
+        XCTAssertEqual(try h.string("__rows[2].className"), "order-row")
+    }
+
+    /// A press that starts on a Move button is a button press. If it started a
+    /// drag as well, the keyboard path would be unusable with a mouse.
+    func testAPressOnAMoveButtonDoesNotStartADrag() throws {
+        let h = try harness()
+        let before = try labels(h)
+        try h.eval("""
+        var __btn = __all('button', __rows[2])[0];
+        __rows[2].onpointerdown({ clientY: 100, button: 0, pointerId: 7, target: __btn });
+        """)
+        XCTAssertEqual(try h.string("__rows[2].className"), "order-row", "no drag started")
+        try h.eval("__rows[2].onpointermove({ clientY: 5, pointerId: 7 });")
+        try h.eval("__rows[2].onpointerup({ clientY: 5, pointerId: 7 });")
+        XCTAssertEqual(try labels(h), before)
+        XCTAssertEqual(try h.postedMessages().count, 0)
+
+        // The button itself still works.
+        try h.eval("__btn.onclick();")
+        XCTAssertEqual(try h.postedMessages().count, 1)
+    }
+
+    func testARightButtonPressDoesNotStartADrag() throws {
         let h = try harness()
         try h.eval("""
-        var transfer = { data: {}, setData: function (k, v) { this.data[k] = v; } };
-        __rows[1].ondragstart({ dataTransfer: transfer, preventDefault: function () {} });
+        __rows[2].onpointerdown({ clientY: 100, button: 2, pointerId: 7, target: __rows[2] });
         """)
-        XCTAssertEqual(try h.string("transfer.effectAllowed"), "move")
-        XCTAssertEqual(
-            try h.string("transfer.data['text/plain']"),
-            try h.string("BUNDLE.items[5].entries[1].id")
-        )
+        XCTAssertEqual(try h.string("__rows[2].className"), "order-row")
     }
 
     // MARK: - the announcement
