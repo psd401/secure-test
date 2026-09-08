@@ -75,6 +75,22 @@ const STUDENT_ROUTES = new Set([
   join("api", "client-errors"),
 ]);
 
+/**
+ * R1 (docs/reporting-design.md): a route file whose METHODS split by role.
+ * `attempts/[attemptId]/events` is the only one — the client POSTs its events
+ * there and, since R1, the owning teacher GETs them back for the per-student
+ * page's integrity timeline. Classification is per file everywhere else, so
+ * this map is the exception rather than a second scheme: the named methods are
+ * held to the staff expectations, the rest of the file to the student ones.
+ */
+const STAFF_METHODS_ON_STUDENT_ROUTES = new Map<string, Set<string>>([
+  [join("api", "attempts", "[attemptId]", "events"), new Set(["GET"])],
+]);
+
+function staffMethodsFor(path: string): Set<string> {
+  return STAFF_METHODS_ON_STUDENT_ROUTES.get(path) ?? new Set();
+}
+
 function findRouteFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -137,18 +153,49 @@ describe("role enforcement across every teacher route", () => {
 
   test("student routes accept a student and refuse staff", async () => {
     for (const { file, path } of studentRoutes) {
+      const staffMethods = staffMethodsFor(path);
       mockSession = { sub: "student-sub", role: "student" };
       for (const [method, status] of await statusesFor(file, path)) {
+        if (staffMethods.has(method)) continue;
         expect([401, 403]).not.toContain(status);
         expect(`${method} ${path} ${status}`).toBeTruthy();
       }
       mockSession = { sub: "teacher-sub", role: "staff" };
-      for (const [, status] of await statusesFor(file, path)) {
+      for (const [method, status] of await statusesFor(file, path)) {
+        if (staffMethods.has(method)) continue;
         expect(status).toBe(403);
       }
       mockSession = null;
-      for (const [, status] of await statusesFor(file, path)) {
+      for (const [method, status] of await statusesFor(file, path)) {
+        if (staffMethods.has(method)) continue;
         expect(status).toBe(401);
+      }
+    }
+  });
+
+  test("the staff methods on a student route are the mirror image", async () => {
+    for (const [path, methods] of STAFF_METHODS_ON_STUDENT_ROUTES) {
+      const route = allRoutes.find((r) => r.path === path);
+      expect(route).toBeDefined();
+      const seen = new Set<string>();
+
+      mockSession = { sub: "teacher-sub", role: "staff" };
+      for (const [method, status] of await statusesFor(route!.file, path)) {
+        if (!methods.has(method)) continue;
+        seen.add(method);
+        expect([401, 403]).not.toContain(status);
+      }
+      // The classification must name methods that actually exist, or it is a
+      // silent exemption for a route nobody is checking.
+      expect([...seen].sort()).toEqual([...methods].sort());
+
+      mockSession = { sub: "student-sub", role: "student" };
+      for (const [method, status] of await statusesFor(route!.file, path)) {
+        if (methods.has(method)) expect(status).toBe(403);
+      }
+      mockSession = null;
+      for (const [method, status] of await statusesFor(route!.file, path)) {
+        if (methods.has(method)) expect(status).toBe(401);
       }
     }
   });

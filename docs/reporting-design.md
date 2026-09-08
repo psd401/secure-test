@@ -199,3 +199,67 @@ and blank until `unscored` is 0, the CSV header as specified, the page
 shows number · section under the name and a % column; `scored_max_points`
 stays in the JSON. Hand-run rows 59–61 in
 `docs/design-tool-manual-checks.md` — NOT run. R1–R3 unbuilt.
+
+**R1 in-app views BUILT 2026-09-07** (one Opus 5 / medium pass; no
+migration, D-R5 assumed — owner-only, no sharing semantics). What landed:
+
+- **`lib/reporting/`, pure by design** so the R2 print view imports the same
+  sentences and the same arithmetic rather than a second copy.
+  `timeline.ts` maps `attempt_events` to plain words — a `focus_loss` and
+  the `focus_regained` after it collapse into ONE line with the gap spelled
+  out ("Left the test window 2:14 PM · back 2:15 PM (1 min)"), an unpaired
+  loss says "did not return before handing in", lockdown begin/end are
+  "Secure session started / ended", `emergency_exit` is "Secure session
+  ended by the student", `quit` is "Quit the app", `lockdown_failed` /
+  `lockdown_interrupted` reuse the monitor's `eventLabel` verbatim, and
+  `client_error` reads "The app hit a problem: <detail.kind>" (the message
+  stays off the line). Times are Pacific, through `lib/ui/format`.
+  `analytics.ts` is aggregation over rows the caller fetched — mean over
+  the responses carrying a FINAL score, the p-value as a whole percent of
+  the item's constant max, % answered over the submitted attempts, and per
+  choice the count with the key marked; a proposed AI score arrives as
+  `points: null` and is counted nowhere. `answerView.ts` resolves a response
+  against its item so a report reads "Copper" and "Water → H2O" rather than
+  the queue's `c2` / `p1 → p1`.
+- **`GET /api/attempts/[attemptId]/events`** — added beside the client's
+  POST. Staff role, then attempt → assessment ownership; every failure after
+  the role check is 404 (the R0.2 posture: no existence oracle), a student
+  session is 403, the body is `{ events: [{ at, kind, detail }] }` ordered
+  by `at` asc, `Cache-Control: private, no-store`. This is the first route
+  file whose methods split by role, so `auth-role-enforcement.test.ts` grew
+  a `STAFF_METHODS_ON_STUDENT_ROUTES` map and a mirror-image test rather
+  than an exemption.
+- **The matrix** (`results/page.tsx`): a section filter as a plain GET form
+  (no client component, so the page still needs no JavaScript), "All
+  sections" / each resolved label / "No section"; a last column reading
+  "✓ Complete" or "n to score" (text AND glyph, never colour alone); every
+  student name links to their attempt page; and the item-analytics footer,
+  fed by `results/analyticsQuery.ts` — one left join of `responses` to its
+  final `scores` row over the assessment's submitted attempts. The footer is
+  assessment-wide and says so; the section filter narrows the table only.
+- **The per-student page** `results/[attemptId]/page.tsx`, server-rendered:
+  identity, totals and the section label all come from `buildResults`, so it
+  cannot disagree with the row it was opened from (and an in-progress
+  attempt 404s, because `buildResults` is submitted-only). Stems render
+  through `renderItemContent` (KaTeX + owner-scoped image refs) exactly as
+  the queue does; a drawing is the R0.2 upload route at full size; a table
+  is the queue's grid with the expected cell beside each keyed one; the
+  final score names its method in words and shows its rationale; an
+  unapproved proposal reads "AI proposal: k / n (not counted)". The
+  integrity timeline sits at the foot.
+- **Reachability**: a "Results" button on every Published row of the
+  Assessments list (`app/dashboard/page.tsx`) — until now the matrix was
+  only reachable from inside the editor.
+
+Tests: 1180 → 1221 pass, `bun run typecheck` clean. New files
+`test/reporting-timeline.test.ts` (pairing, the unpaired loss, every kind in
+`ATTEMPT_EVENT_KINDS` mapped, the `client_error` detail),
+`test/reporting-analytics.test.ts` (hand-computed p-values, answered %,
+distractor counts with the key, a proposal counted as answered-not-scored),
+`test/reporting-views.test.tsx` (the three pages rendered through their own
+page functions on a seeded assessment carrying every item type), plus a GET
+block in `test/attempt-events-api.test.ts`. **Hand-run rows 69–74** in
+`docs/design-tool-manual-checks.md` — NOT run; they want the demo student on
+the origin with a real focus loss and a real End secure session, so they
+pair with the batch 0b rows. Not built here: R2 (the print view is a
+parallel agent's; the gradebook CSV is unstarted) and R3.

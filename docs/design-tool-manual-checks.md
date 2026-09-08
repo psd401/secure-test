@@ -332,3 +332,31 @@ only runs on the origin after a deploy. Rows 62–68 run 2026-09-07 (results in 
 | 66 | With a student session (minted token or the client), attempt `POST /api/feedback` directly | 403 — students have no button and cannot reach the route even by hand | ⚠️ half 2026-09-07: no session → 401 by curl on the origin; the student-session 403 is unit-tested (`feedback-api.test.ts`), not exercised by hand (no student token minted today) |
 | 67 | Server errors (slice 2): force an unhandled error on the origin and read the error page | The boundary shows an Alert with "Try again" and a `ref`; a `server_error_events` row and a `level:"error"` log line carry the same request id | ⚠️ NOT FORCEABLE 2026-09-07: every id-taking route validates before the DB (`/dashboard/not-a-uuid` → the not-found page, `/api/assessments/not-a-uuid/shares` → 400 `invalid_id`), so no reachable input throws. `onRequestError` → row + line is unit-tested (`server-error-record.test.ts`); the boundaries render the ref in `error-boundaries.test.tsx`. `x-request-id` IS echoed on the origin (`/api/health` → `Root=1-…`, the ALB trace id). Leave open until a real 500 happens or a debug throw is added behind an env knob |
 | 68 | Alarm path (slice 1): one synthetic `{"level":"error",…}` line put into `/ecs/secure-test-design-tool-dev` (stream `hand-run-2026-09-07`) with `aws logs put-log-events` | `ServerErrorsAlarm` goes ALARM within one 5-min period and publishes to the topic; an email arrives once the subscription is confirmed | ✅ 2026-09-07: line at 10:01:08 PT → ALARM at 10:02:25 ("1 datapoint [1.0] ≥ 1.0"); the SNS action fired. Email: pending James's subscription confirmation. All four alarms read OK on real data before the test (no false positive at deploy) |
+
+## Reporting R1 (batch 5)
+
+Batch 5 R1 (`docs/reporting-design.md`): the results matrix gains a section
+filter, a Complete marker and a link to a new per-student attempt page
+(`/dashboard/[id]/results/[attemptId]`), the Assessments list gains a
+Results button on published assessments, and an item-analytics footer sits
+under the matrix. The per-student page's integrity timeline is fed by the
+new teacher-side `GET /api/attempts/[attemptId]/events` (owner-only,
+`private, no-store`).
+
+What a run needs: an assessment with **handed-in attempts of every item
+type**, at least one **drawing**, at least one answer left for the AI to
+propose on (an essay with a proposal but no approval), and one attempt whose
+session really did lose focus and end with "End secure session" — i.e. the
+demo student on the origin, in the client, on the fixture that batch 0b's
+rows also want. Two sections in the same assessment make row 70 meaningful;
+one sitting scoped to a section is enough (the second row falls back to the
+student's enrollment, or to blank).
+
+| # | Do | Expect | Result |
+|---|----|--------|--------|
+| 69 | On `/dashboard`, find a Published assessment and a Draft one | The Published row carries a "Results" button in the last column that opens `/dashboard/<id>/results`; the Draft row's last cell is empty | |
+| 70 | On Results, use the Section select: "All sections", then one section, then Clear | "All sections" lists every handed-in attempt; picking a section (and pressing Show) narrows the table to that section's students and the URL carries `?section=…`; "No section" appears only when some row has no section and lists exactly those; Clear returns to all. The page works with JavaScript disabled (it is a plain GET form) | |
+| 71 | On Results, compare the last column against the Total / % columns | A row with everything scored reads "✓ Complete" (text AND the glyph — check it is still readable in Chrome's greyscale rendering emulation); a row with work outstanding reads "n to score" and matches the number of `—` / `AI ⏳` cells in that row | |
+| 72 | Click a student's name | The per-student page opens: name · student number · section, "Handed in <time>" in Pacific, total / max, and either a percent or "n unscored" — all matching that student's row on the matrix. Every item appears in order with its stem (math rendered, images shown), the student's answer readable as words not ids (choice TEXT, `Water → H2O`, `1. Sprout`, the table grid with the expected cell beside each keyed one), and the **drawing at full size** (not the queue's capped thumbnail). Under each answer: the final score with its method in words ("auto-scored" / "AI, approved by you" / "scored by you") and any rationale; an item with only an AI proposal reads "AI proposal: k / n (not counted)" and contributes nothing to the total | |
+| 73 | On the same page, read "Test session history" for an attempt that really lost focus and ended with End secure session | One line per event in the district's clock: "Secure session started 2:00 PM", one line pairing the focus gap — "Left the test window 2:14 PM · back 2:15 PM (1 min)" — and "Secure session ended by the student 2:39 PM". A loss with no return before the hand-in reads "did not return before handing in". Nothing shows a raw kind like `focus_loss` | |
+| 74 | Back on Results, check the analytics footer by hand against the matrix | For each question: Mean is the average of the scored cells in that column (an `AI ⏳` cell is NOT averaged in and is counted in "(n unscored)"), p is that mean over the question's max as a whole percent, Answered is the count of cells that are not `·` over the number of handed-in attempts, and a multiple-choice row lists every choice with its count and a ✓ on the key. The footer deliberately ignores the section filter — confirm the wording says so | |

@@ -74,8 +74,10 @@ export interface AssessmentResults {
 
 /** D-R1: an item's constant maximum — the same rule the manual-score route
  * pins (`app/api/responses/[responseId]/score/route.ts`): the rubric max
- * when the item has a rubric, the keyed-cell count for a table, else 1. */
-function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
+ * when the item has a rubric, the keyed-cell count for a table, else 1.
+ * Exported for R1: the item-analytics footer and the per-student page divide
+ * by the same constant this file sums into `max_points`. */
+export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
   if (item.config.rubric) return rubricMaxPoints(item.config.rubric);
   if (item.type === "table") return tableMaxPoints(item.config);
   return 1;
