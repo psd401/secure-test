@@ -143,6 +143,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the account row, three two-line sitting rows, the code row and the
         // status block. Below this the card would clip rather than reflow.
         window.contentMinSize = NSSize(width: 720, height: 620)
+        // Fix slice S-8: lets AppKit hand this window into full screen —
+        // required for `toggleFullScreen(nil)` below to have any effect.
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.center()
         self.window = window
 
@@ -159,6 +162,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        enterFullScreenAtLaunchIfNeeded()
+    }
+
+    /// Fix slice S-8 (2026-09-08 sitting): the main window goes full screen
+    /// as soon as it is on screen — at launch, and again as a backstop when a
+    /// lockdown session becomes active. Guarded on `styleMask` rather than a
+    /// one-shot flag, so calling it twice (launch, then lockdown begin) is
+    /// idempotent by construction: `toggleFullScreen` only ever runs the
+    /// zero-to-one transition, never one-to-zero. The AAC session is what
+    /// actually locks the Mac (`RealLockdownSession` / the watchdog / the
+    /// exit paths above) — this only removes the windowed chrome and the
+    /// stray-click-to-Finder surface between attempts; exiting full screen
+    /// (green button, Esc-equivalent gesture) is never blocked by the app.
+    /// `SECURE_TEST_NO_FULLSCREEN=1` skips this entirely, for `--bundle` /
+    /// dev runs where a full-screen relaunch loop is just friction
+    /// (documented in `client/README.md`).
+    private func enterFullScreenAtLaunchIfNeeded() {
+        guard let window, !window.styleMask.contains(.fullScreen) else { return }
+        guard ProcessInfo.processInfo.environment["SECURE_TEST_NO_FULLSCREEN"] != "1" else {
+            Self.log("SECURE_TEST_NO_FULLSCREEN=1 — staying windowed")
+            return
+        }
+        window.toggleFullScreen(nil)
     }
 
     private static var hasOfflineBundleArgument: Bool {
@@ -532,6 +558,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             installLockdownAccessoryIfNeeded()
             lockdownStatusLabel?.stringValue =
                 state == .starting ? "secure session starting…" : "secure session active"
+            // Fix slice S-8: DID BEGIN drives state to .active (AAC-1's
+            // `AssessmentLockdown.handle(.didBegin)`) — if the launch-time
+            // full screen somehow did not stick (a relaunch mid-flight, the
+            // knob above, or AppKit declining), this is the second and last
+            // chance, gated the same way.
+            if state == .active { enterFullScreenAtLaunchIfNeeded() }
         }
     }
 

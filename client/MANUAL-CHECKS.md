@@ -1081,4 +1081,26 @@ teacher's event history) to count them.
 | Under **zoom 3.0** (accommodation) | Rows, labels and buttons scale; the drop indicator scales with them (it is in rem) and is still clearly on one edge of a row, not a smudge | Not run |
 | Under a **contrast pair** (any of the eight), start a drag | The indicator line is visible against that pair's paper — it takes the pair's accent, not the default blue | Not run |
 | After a drag, check the **answered mark** | The item marks answered exactly as a Move press marks it — green in the pager strip, counted in "k of N answered". Hand in, and the teacher's queue shows the dragged order | Not run |
+
+## Fix slices S-1…S-9 (2026-09-08)
+
+Three small fixes from a second sitting on 2026-09-08
+(`docs/client-ui-pass-design.md` §Progress "Fix slice S-8 / S-9 / S-5b
+BUILT 2026-09-08"). No prior "Fix slice S-1…S-5" section existed in this
+file or in the design doc's §Progress at the time these rows were written
+— the heading name below anticipates that numbering rather than renaming
+an existing section. Needs a Published assessment with a match item, a
+hotspot item carrying a real PNG, and either a real AAC session or a
+simulated one (S-8's launch-time fullscreen is independent of AAC and can
+be checked in either).
+
+| Check | Expect | Result |
+|---|---|---|
+| Launch the app (real or simulated session) | The main window fills the screen full-screen almost immediately after the entry screen (or the assessment, on `--bundle`) appears — no separate action needed | Not run |
+| Join a sitting and let the AAC session reach `DID BEGIN` (real session) | The window is (or becomes) full screen at that point; if it was already full screen from launch nothing visibly changes | Not run |
+| Launch with `SECURE_TEST_NO_FULLSCREEN=1` | The window stays windowed at its normal launch size; stderr logs `SECURE_TEST_NO_FULLSCREEN=1 — staying windowed` | Not run |
+| Exit full screen mid-session (green button or the gesture) | It exits normally — the app does not fight it or force it back | Not run |
+| Open an assessment with a 2+ pair match item | Each pair row is visibly taller and roomier than before (not flush against the stem or against each other), the row spacing reads as deliberate, and the dropdown is comfortably wide (not clipped to the option text) | Not run |
+| Under zoom 3.0 (accommodation), same match item | The rows and dropdown scale with the rest of the page (rem sizing) | Not run |
+| Open an assessment with a hotspot item, select a region | The selected region reads as a light accent tint over the picture (not a near-solid block) — the picture underneath the selected region is still legible; the 3px border and inset paper hairline are unchanged | Not run |
 | Resume: answer by dragging, quit, relaunch, Resume | The dragged order is restored (P-1 prefill), the status line is empty again, and nothing is posted by the restore itself | Not run |

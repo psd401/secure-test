@@ -118,7 +118,23 @@ public enum AssessmentPage {
       border-color: color-mix(in srgb, var(--accent) 55%, transparent);
     }
     .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+    /* Fix slice S-5b (2026-09-08 sitting): the selected wash was --accent at 45%
+       opacity, which read as a near-solid block over the picture — hard to see
+       the region underneath it was chosen for. 30% keeps the same accent hue,
+       the 3px border and the inset paper hairline (unchanged) as the primary
+       "this is selected" signal. */
     .hotspot-region.selected { background: color-mix(in srgb, var(--accent) 30%, transparent); border: 3px solid var(--accent); }
+    /* Fix slice S-9 (2026-09-08 sitting): the match item had no rules at all —
+       the rows sat flush under the stem at browser-default size, hard to read
+       and hard to hit. Sizing is rem throughout so it scales with data-zoom;
+       colours are slice A tokens so the eight contrast sets restyle it too. */
+    .match { margin-top: 1rem; }
+    .match-row {
+      display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem;
+      padding: 0.6rem 0.75rem; font-size: 1rem; margin: 0.5rem 0;
+    }
+    .match-left { flex: 1; line-height: 1.4; }
+    .match-select { font: inherit; padding: 0.4rem 0.6rem; min-width: 12rem; }
     /* Slice B: the canvas keeps its intrinsic pixel size (that is the answer's
        resolution and must not move), but it may not be wider than the column —
        at zoom 3X the rem gutters alone are 240 px and an 800 px canvas would
