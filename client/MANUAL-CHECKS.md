@@ -950,3 +950,65 @@ it is the two brand faces (`PageFonts.shared.css` is 103 138 characters —
 attempt and never fetched again, so this is paid once at bundle load. Slice B's
 optional dyslexia face would add a third; D-B2 (inline only the SELECTED
 optional font) is what keeps that from compounding.
+
+## Client UI pass — slice B (accommodations) (2026-09-07)
+
+`docs/client-ui-pass-design.md` §B, decisions D-B1 (Atkinson Hyperlegible) and
+D-B2 (inline only the selected optional font). `swift test` covers the layer
+under the paint — which attribute lands on `<html>` for every catalog value,
+that the stylesheet carries all eight contrast sets and all nine zoom rules,
+that the recorded ratios match their hexes, and that an unaccommodated page
+carries no attribute and none of Atkinson's bytes. Everything below has pixels
+in it and cannot be covered here.
+
+**Setup — one sitting, values cycled rather than one student per pair.**
+Eight students with eight different contrast entitlements is not a realistic
+ask, so: one demo student, one Published **paged** assessment carrying a
+stimulus set, a match, a short text with math, a drawing (`grid` paper) and a
+hotspot with a real PNG — the same fixture the batch 0b and slice A rows want,
+so all three sets run together. Between rows, edit that student's
+accommodations overlay in the design tool (Students → the student → the
+per-student edit), then **rejoin** — the attributes are resolved when the page
+is built, so a change needs a fresh page, not a reload of the same one.
+
+Keep a screenshot per contrast pair; they are the record that the eight sets
+ship, and a later pass will want the before.
+
+| Check | Expect | Result |
+|---|---|---|
+| No contrast / font / zoom entitlement at all (start here) | The slice A page exactly: white paper, Pacific ink, Whulge accent. In Web Inspector the `<html>` tag has NO `data-` attribute | Not run |
+| Set Color Contrast = **Black on Rose**, rejoin | Pale rose page, pure black text everywhere — including the stimulus eyebrow, the formula hint and the finish status, which are the soft ink in the default palette and are NOT softened here. Stimulus panel is a deeper rose, not Sea Foam | Not run |
+| **Black on White** | White page, pure black text. Distinguishable from the default page: the accent is black, not Whulge — the current pip and the finish button are black-filled with white text | Not run |
+| **Medium Gray on Light Gray** | Light grey page, medium grey text — the lowest-contrast set, deliberately. It must still be comfortably readable: the shipped values are `#595959` on `#e0e0e0`, 5.31:1, adjusted up from the dictionary's literal pair (2.63:1, below AA) | Not run |
+| **Red on White** | White page, deep red text (`#d40000`, 5.53:1 — the dictionary's literal `#ff0000` is 4.00:1). Green / amber / red state colours are still each distinguishable from the red ink | Not run |
+| **Reverse Contrast** | Black page, white text. Check the KaTeX math specifically — it inherits `currentColor`, so a formula must be white, not an invisible black-on-black | Not run |
+| **White on Red** | Deep red page (`#c40000`), white text. The pale green / amber / pink state colours read on it | Not run |
+| **Yellow on Black** | Black page, yellow text | Not run |
+| **Yellow on Blue** | Deep blue page, yellow text | Not run |
+| In ANY contrast set: tab to the "Finish and hand in" button | The focus ring is visible ON the filled button — a pale halo hugging it with a dark ring outside. (Slice A drew a plain `--ink` ring, which would be invisible on an `--ink` fill in every set here) | Not run |
+| In ANY contrast set: the answered / partial pips in the pager strip | Answered = green border + ✓ in its label; partial = amber border + trailing `…`. Both readable against that set's ground | Not run |
+| In ANY contrast set: the offline notice (Cmd-O on a saved bundle) | The amber wash follows the set — it is `--warn` mixed into `--paper`, so it is never a pale-yellow box on a black page | Not run |
+| Set Optional Font = **On** (contrast off), rejoin | Every word on the page is **Atkinson Hyperlegible** — the give-aways are the flat-topped `l`, the tailed `I`, the slashless but heavily differentiated `0`/`O` and `b`/`d`. The assessment title too, not just the body: the heading token switches with the body token | Not run |
+| Same, a stem containing bold text and the pager's current-page label | The bold is a REAL bold face, not a smeared synthetic one (the 700 weight is vendored alongside the 400) | Not run |
+| Optional font ON, then look at a KaTeX formula | Math still renders in KaTeX's own fonts — that is correct and deliberate; the accommodation swaps the prose faces, not the mathematical typography | Not run |
+| Optional font OFF again, rejoin | Back to Inter / Josefin Sans. In Web Inspector, search the document source for "Atkinson" — the `@font-face` block is GONE (D-B2: the ~46 KB is inlined only when selected; the CSS rule stays and matches nothing) | Not run |
+| Set Zoom = **1X (Default)** | Indistinguishable from no zoom entitlement | Not run |
+| Set Zoom = **2.5X** | Everything is 2.5× — body, heading, buttons, the pager. Nothing is left behind at its old size (a px value that should have been `rem`) | Not run |
+| Zoom **3X**, on a question page, at the default 980 × 700 window | No horizontal scrollbar on the page body. The pager bar at the bottom **wraps** — Previous / "Question 3 of 8" / Next stack rather than pushing off the edge, and the jump strip wraps under it | Not run |
+| Zoom 3X, scroll to the bottom of the review page | The "Finish and hand in" block is reachable and NOT hidden behind the fixed pager bar (the body's bottom gutter is `7rem`, so it grows with the zoom) | Not run |
+| Zoom 3X, then shrink the window to its minimum | Still no horizontal scroll of the body; the pager bar is capped at 60 % of the window height and scrolls internally if it needs to | Not run |
+| Zoom 3X, a drawing item: draw a stroke and check where the ink lands | The ink lands under the pointer. The canvas is CSS-scaled to the column but records in canvas coordinates — the mapping divides by the live `getBoundingClientRect()` width on every pointer move, so this is expected to be unchanged; the row exists to prove it | Not run |
+| Zoom 3X, save the drawing, then view it teacher-side in the review queue | The saved PNG is the canvas's own resolution — unaffected by zoom | Not run |
+| Zoom 3X, a stem with `$\frac{a}{b}$` | The formula scales with the text, not independently of it | Not run |
+| **Contrast + zoom + optional font together** (e.g. Yellow on Blue, 2.5X, font On) | All three at once, no interference: yellow-on-blue Atkinson at 2.5×. This is the realistic accommodated student | Not run |
+| Teacher side: peek this student mid-sitting with all three on | The returned frame shows the accommodated page — the contrast set, the face and the zoom — because the client renders itself (`cacheDisplay`, finding #14). A teacher seeing the default page here would mean the peek path re-renders instead of capturing | Not run |
+| Set a streamlined-only zoom level (**10X (Streamlined Mode Only)**) | The page renders at **2×**, not at 10× — the streamlined levels are clamped into the 1.0–3.0 range this layout is verified to hold, because Streamlined Interface Mode is not implemented. **This is a decision awaiting James**: confirm the clamp or schedule the streamlined layout | Not run |
+| Set a value this client does not know (hand-edit the overlay to a nonsense value if the UI allows it) | The page renders with NO attribute — the default palette, default font, zoom 1. It never renders a half-applied theme | Not run |
+
+**Payload note (measured 2026-09-07, one-item page, KaTeX and the two brand
+faces inlined as always):** an unaccommodated page goes **821 244 → 825 725
+characters** (+4 481, +0.5 %) — the accommodation stylesheet is 3 028 of that
+and ships on every page so the attributes have something to match. A contrast
+or zoom page adds only the attribute itself (+31). Selecting the optional font
+adds **46 677 characters** (+5.7 %) — the base64 of Atkinson's 400 and 700
+latin subsets, and only for the students who asked for it (D-B2).

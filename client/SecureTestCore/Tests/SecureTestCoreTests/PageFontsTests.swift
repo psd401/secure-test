@@ -35,6 +35,31 @@ final class PageFontsTests: XCTestCase {
         XCTAssertFalse(PageFonts.shared.css.contains("</"))
     }
 
+    /// Slice B, D-B1 / D-B2: Atkinson Hyperlegible loads on demand and ONLY on
+    /// demand. `shared` is what an unaccommodated page gets and it must not
+    /// carry the face; `sharedWithOptionalFont` adds regular AND bold, so a
+    /// `<strong>` in a stem is a real bold rather than a synthesised one — the
+    /// letterform ambiguity the accommodation exists to remove.
+    func testTheOptionalFontIsAbsentUnlessAskedFor() {
+        XCTAssertFalse(PageFonts.shared.css.contains("Atkinson Hyperlegible"))
+        XCTAssertFalse(PageFonts.assets(optionalFont: false).css.contains("Atkinson"))
+
+        let withFont = PageFonts.assets(optionalFont: true)
+        XCTAssertEqual(withFont.missing, [])
+        XCTAssertEqual(withFont.css.components(separatedBy: "@font-face").count - 1, 4)
+        XCTAssertEqual(
+            withFont.css.components(separatedBy: "font-family: 'Atkinson Hyperlegible';").count - 1,
+            2)
+        XCTAssertTrue(withFont.css.contains("font-weight: 400;"))
+        XCTAssertTrue(withFont.css.contains("font-weight: 700;"))
+        XCTAssertFalse(withFont.css.contains("</"))
+        // The brand pair stays, so a face that fails to decode lands on Inter.
+        XCTAssertTrue(withFont.css.contains("font-family: 'Inter';"))
+        // ~46 KB of extra base64 for the pair of static faces.
+        XCTAssertGreaterThan(withFont.css.count - PageFonts.shared.css.count, 40_000)
+        XCTAssertLessThan(withFont.css.count - PageFonts.shared.css.count, 60_000)
+    }
+
     /// A missing resource costs the face, never the page.
     func testAMissingResourceIsReportedRatherThanFatal() {
         let fonts = PageFonts.load(bundle: Bundle(for: PageFontsTests.self))
@@ -54,7 +79,8 @@ final class PageFontsTests: XCTestCase {
         let manifest = try String(contentsOf: manifestURL, encoding: .utf8)
             .split(separator: "\n")
             .map { $0.split(separator: " ").map(String.init) }
-        XCTAssertEqual(manifest.count, 4, "two woff2 and two OFL licences")
+        XCTAssertEqual(manifest.count, 7,
+                       "two brand woff2 + two Atkinson woff2 (slice B) and three OFL licences")
 
         // client/SecureTestCore/Tests/SecureTestCoreTests/<this file>
         let designToolFonts = URL(fileURLWithPath: #filePath)

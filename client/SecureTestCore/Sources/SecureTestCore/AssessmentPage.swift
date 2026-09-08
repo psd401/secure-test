@@ -21,11 +21,20 @@ public enum AssessmentPage {
     ///     the emitted document is the value of the `OFFLINE` constant.
     ///   - katex: the KaTeX assets to inline (ADR 0009). The default is the
     ///     vendored bundle; tests pass an empty one to see the page without it.
+    ///   - accommodations: client UI pass slice B. The rendering
+    ///     accommodations — contrast, optional font, zoom — become attributes
+    ///     on `<html>` (`PageAccommodations`). The default reads them back out
+    ///     of `bundleJSON`, which is what the two app callers get: they already
+    ///     hand over the bundle's own bytes, and the effective per-student map
+    ///     is a field of those bytes, so no caller has to learn a new argument
+    ///     for the page to honour a student's settings. Passing the map
+    ///     explicitly is for tests.
     public static func html(
         title: String,
         bundleJSON: String,
         offline: Bool = false,
-        katex: KatexBundle.Assets = KatexBundle.shared
+        katex: KatexBundle.Assets = KatexBundle.shared,
+        accommodations: [String: String]? = nil
     ) -> String {
         PageShell.document(
             title: title,
@@ -44,8 +53,25 @@ public enum AssessmentPage {
             body: """
             <h1>\(HTMLEscape.text(title))</h1>
             <div id="items"></div>
-            """
+            """,
+            accommodations: accommodations ?? accommodationsIn(bundleJSON)
         )
+    }
+
+    /// Slice B: the effective accommodations map out of the bundle's own bytes.
+    ///
+    /// Deliberately lenient and deliberately narrow — it reads ONE object of
+    /// strings and returns nothing on any surprise. The bundle has already been
+    /// decoded and validated by the time a page is built (that is the whole
+    /// contract in the type doc above); this exists so the page can be told how
+    /// to paint itself without every caller threading a second argument, and a
+    /// failure here must cost the accommodation, never the test.
+    static func accommodationsIn(_ bundleJSON: String) -> [String: String] {
+        guard let data = bundleJSON.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = root["accommodations"] as? [String: Any]
+        else { return [:] }
+        return raw.compactMapValues { $0 as? String }
     }
 
     /// Client UI pass slice A (`docs/client-ui-pass-design.md` §A): every rule
@@ -93,6 +119,13 @@ public enum AssessmentPage {
     }
     .hotspot-region:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
     .hotspot-region.selected { background: color-mix(in srgb, var(--accent) 30%, transparent); border: 3px solid var(--accent); }
+    /* Slice B: the canvas keeps its intrinsic pixel size (that is the answer's
+       resolution and must not move), but it may not be wider than the column —
+       at zoom 3X the rem gutters alone are 240 px and an 800 px canvas would
+       push the page sideways. The pointer mapping is unaffected: it divides by
+       the LIVE getBoundingClientRect width every time a pointer moves, so a
+       CSS-scaled canvas still records strokes in canvas coordinates. */
+    .drawing-canvas { max-width: 100%; height: auto; }
     .missing-asset { color: var(--danger); font: 0.75rem ui-monospace, monospace; }
     .unsupported { color: var(--ink-soft); font-style: italic; font-size: 0.875rem; }
     .offline-notice {
@@ -138,11 +171,15 @@ public enum AssessmentPage {
     .passage-ref .stimulus { margin-top: 8px; }
     .review-list { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
     .review-list button, .pager-strip button { font: inherit; font-size: 0.8125rem; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
-    .pager { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 40px 12px; background: var(--panel); border-top: 1px solid var(--panel-line); }
-    .pager-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .pager-row button { font: inherit; padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
+    /* Slice B: the bar and everything in it is sized in `rem` and allowed to
+       wrap, so at zoom 3X the row becomes three stacked lines inside a taller
+       bar instead of overflowing the window; `min-width: 0` lets the label
+       shrink rather than push the buttons off the edge. */
+    .pager { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60vh; overflow-y: auto; padding: 0.625rem 2.5rem 0.75rem; background: var(--panel); border-top: 1px solid var(--panel-line); }
+    .pager-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+    .pager-row button { font: inherit; padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
     .pager-row button:disabled { opacity: .4; }
-    .pager-current { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+    .pager-current { font-size: 0.875rem; font-weight: 600; color: var(--ink); min-width: 0; }
     .pager-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .pager-strip button[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     .pager-strip button.answered { border-color: var(--ok); color: var(--ok); }
@@ -163,7 +200,15 @@ public enum AssessmentPage {
       background: var(--accent); color: var(--accent-ink); cursor: pointer;
     }
     .finish button:disabled { opacity: .5; cursor: default; }
-    .finish button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    /* Slice B: every contrast set makes --accent the ink and --accent-ink the
+       paper (so the filled button carries its label at the body ratio), which
+       would have left slice A's plain --ink ring invisible ON an --ink fill.
+       A --paper halo hugs the button and the ink ring sits outside it, so the
+       ring reads on the fill AND on the page in all eight sets. */
+    .finish button:focus-visible {
+      outline: 3px solid var(--ink); outline-offset: 3px;
+      box-shadow: 0 0 0 2px var(--paper);
+    }
     .finish-status { margin: 10px 0 0; font-size: 0.875rem; color: var(--ink-soft); }
     """
 
