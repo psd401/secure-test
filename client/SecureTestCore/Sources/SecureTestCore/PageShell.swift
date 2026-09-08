@@ -86,6 +86,14 @@ public enum PageShell {
       --ok: #466857;
       --warn: #8d5d1c;
       --danger: #a04034;
+      /* Drawing tools D-6 (docs/drawing-tools-design.md): the ground a drawing
+         canvas presents ON SCREEN. Deliberately NOT one of the twelve tokens a
+         contrast set swaps — the ink the student draws is canvas paint and is
+         identical under every set, and the saved PNG is viewed on white by the
+         teacher, so a blank canvas on a dark set must still be white paper or
+         the student draws dark ink they cannot see. The PNG itself stays
+         transparent; this is CSS behind the bitmap, not paint in it. */
+      --canvas-paper: #ffffff;
       --font-body: 'Inter', -apple-system, system-ui, sans-serif;
       --font-heading: 'Josefin Sans', 'Inter', -apple-system, system-ui, sans-serif;
       --zoom: 1;

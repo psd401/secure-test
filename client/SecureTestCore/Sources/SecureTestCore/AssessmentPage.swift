@@ -144,7 +144,54 @@ public enum AssessmentPage {
        push the page sideways. The pointer mapping is unaffected: it divides by
        the LIVE getBoundingClientRect width every time a pointer moves, so a
        CSS-scaled canvas still records strokes in canvas coordinates. */
-    .drawing-canvas { max-width: 100%; height: auto; }
+    /* Drawing tools D-6: the canvas presents white paper on screen even when it
+       paints none into its own bitmap. A blank canvas is transparent, so under a
+       dark contrast set the student drew dark ink on a dark ground and saw
+       almost nothing. `--canvas-paper` is the one token no contrast set
+       overrides; the saved PNG is unaffected. */
+    .drawing-canvas { max-width: 100%; height: auto; background: var(--canvas-paper); }
+    /* Drawing tools slice 1 (docs/drawing-tools-design.md): the pen / eraser /
+       size / colour strip ABOVE the canvas, so it is in tab order before the
+       surface it controls and cannot be pushed off screen by a tall canvas.
+       `.drawing-controls` and `.drawing-status` had no rule at all since slice
+       68 — Clear and Save drawing rendered as WebKit's default buttons, the same
+       class of bug as the essay box — so they are styled here too, with the same
+       treatment as `.clear-answer` / `.order-move`. Tokens and rem only, so the
+       eight contrast sets and the nine zoom levels reach the strip; `flex-wrap`
+       is what turns it into two or three rows at 3X instead of overflowing. The
+       swatch's colour is an inline style on the span, the one literal colour on
+       the page — it must show the ink it actually draws. */
+    .drawing-tools {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; margin: 0.5rem 0;
+    }
+    .drawing-tools button {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .drawing-tools button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* The pressed treatment is the pager strip's: every contrast set inverts
+       the pair, so the chosen tool reads as chosen on all eight. */
+    .drawing-tools button[aria-pressed="true"] {
+      background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+    }
+    .drawing-tools button:disabled { opacity: .4; cursor: default; }
+    .drawing-swatch {
+      display: inline-block; width: 0.75rem; height: 0.75rem;
+      border-radius: 50%; border: 1px solid var(--ink);
+    }
+    .drawing-controls {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
+    }
+    .drawing-controls button {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .drawing-controls button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .drawing-status { font-size: 0.8125rem; color: var(--ink-soft); }
+    .drawing-status.saved { color: var(--ok); }
     .missing-asset { color: var(--danger); font: 0.75rem ui-monospace, monospace; }
     .unsupported { color: var(--ink-soft); font-style: italic; font-size: 0.875rem; }
     .offline-notice {
@@ -1294,6 +1341,21 @@ public enum AssessmentPage {
       var PEN_COLOR = '#1c1c1e';
       var PEN_WIDTH = 2.5;
 
+      // Drawing tools slice 1 (docs/drawing-tools-design.md, D-1 / D-2). Three
+      // sizes, Medium being today's pen; the eraser is 4x the pen at each size,
+      // so the same three buttons serve both tools. The four inks are canvas
+      // paint, not tokens — they are baked into the PNG the teacher reads on
+      // white, so they stay identical under every contrast set (like the paper).
+      var PEN_SIZES = { pen: [1.5, 2.5, 5], eraser: [6, 10, 20] };
+      var PEN_SIZE_LABELS = ['Thin', 'Medium', 'Thick'];
+      var PEN_SIZE_DEFAULT = 1;
+      var PEN_INKS = [
+        ['Black', PEN_COLOR],
+        ['Red', '#c8102e'],
+        ['Blue', '#1f4fd8'],
+        ['Green', '#1e7d3a']
+      ];
+
       // Grid-line offsets across `span` canvas pixels: 0.5, 40.5, ... while
       // still inside the canvas. A canvas that is not a whole number of cells
       // (1000 x 700 is 25 x 17.5) simply ends mid-cell, as the design page
@@ -1304,9 +1366,21 @@ public enum AssessmentPage {
         return out;
       }
 
-      function paintBackground(context, canvas, kind) {
-        if (!context) return;
-        if (kind !== 'grid' && kind !== 'axes') return;
+      // Drawing tools slice 1 (docs/drawing-tools-design.md, D-3): `under` paints
+      // the SAME paper UNDER what is already on the canvas, with
+      // `destination-over`, which is how the eraser works — it cuts to
+      // transparent (`destination-out`) and the paper is then put back in the
+      // hole it made. Under `destination-over` the FIRST thing painted wins, so
+      // the whole paint runs in reverse: the axes, then the lines, then the
+      // opaque paper last. A blank canvas paints nothing either way and so gets
+      // nothing put back under it — its blank state IS transparent.
+      //
+      // Returns whether it painted, so a caller can tell whether the
+      // compositing mode and the pen were handed back here or are still its own
+      // to restore.
+      function paintBackground(context, canvas, kind, under) {
+        if (!context) return false;
+        if (kind !== 'grid' && kind !== 'axes') return false;
 
         var width = canvas.width;
         var height = canvas.height;
@@ -1314,15 +1388,17 @@ public enum AssessmentPage {
         var rows = gridLines(height);
         var i;
 
-        context.fillStyle = GRID_PAPER;
-        context.fillRect(0, 0, width, height);
+        function paper() {
+          context.fillStyle = GRID_PAPER;
+          context.fillRect(0, 0, width, height);
+        }
 
-        // Two passes rather than a colour change per line: every fifth line is
-        // darker so the student can count cells, and grouping by colour keeps
-        // the op stream short without changing what is drawn.
-        context.lineWidth = 1;
-        for (var pass = 0; pass < 2; pass++) {
-          var major = pass === 1;
+        // One pass per colour rather than a colour change per line: every fifth
+        // line is darker so the student can count cells, and grouping by colour
+        // keeps the op stream short without changing what is drawn. Reversing
+        // the two passes under `destination-over` keeps the same line on top at
+        // every crossing.
+        function linePass(major) {
           context.strokeStyle = major ? GRID_MAJOR : GRID_MINOR;
           context.beginPath();
           for (i = 0; i < columns.length; i++) {
@@ -1338,7 +1414,19 @@ public enum AssessmentPage {
           context.stroke();
         }
 
-        if (kind === 'axes') {
+        function lines() {
+          context.lineWidth = 1;
+          if (under) {
+            linePass(true);
+            linePass(false);
+          } else {
+            linePass(false);
+            linePass(true);
+          }
+        }
+
+        function axes() {
+          if (kind !== 'axes') return;
           // Through the centre, on the half pixel like the grid. Unlabelled and
           // unscaled — numbers, origin placement and plotted points are the
           // post-MVP graphing suite.
@@ -1372,11 +1460,28 @@ public enum AssessmentPage {
           context.stroke();
         }
 
+        if (under) {
+          context.globalCompositeOperation = 'destination-over';
+          axes();
+          lines();
+          paper();
+        } else {
+          paper();
+          lines();
+          axes();
+        }
+
         // Hand the pen back. Explicit re-assignment rather than save/restore:
         // one fewer thing for a stripped runtime (and the test shim) to have.
-        // Cap and join were never changed, so they are not re-set.
-        context.lineWidth = PEN_WIDTH;
-        context.strokeStyle = PEN_COLOR;
+        // Cap and join were never changed, so they are not re-set. With the
+        // tools the "pen" is whatever tool is selected on THIS canvas — the
+        // eraser's width, say — which the field records on the element rather
+        // than passing down, so an item's tools cannot reach another item's.
+        var pen = canvas.__pen || { width: PEN_WIDTH, color: PEN_COLOR };
+        context.lineWidth = pen.width;
+        context.strokeStyle = pen.color;
+        if (under) context.globalCompositeOperation = 'source-over';
+        return true;
       }
 
       function drawingField(item) {
@@ -1411,10 +1516,130 @@ public enum AssessmentPage {
         canvas.className = 'drawing-canvas';
         canvas.width = width;
         canvas.height = height;
+        // Drawing tools: the canvas can hold focus, so Cmd-Z works with the
+        // hand still on the drawing surface, and VoiceOver has a name for it.
+        canvas.setAttribute('tabindex', '0');
+        canvas.setAttribute('aria-label', 'Drawing area');
         if (background === 'grid' || background === 'axes') {
           // So the DOM says what was asked, assertable without pixels.
           canvas.setAttribute('data-background', background);
         }
+
+        // --- tool state -----------------------------------------------------
+        // The bitmap used to be the only state. The tools need a second one: a
+        // list of strokes, so undo can replay what is left and the eraser can
+        // put the paper back. Drawing stays incremental (a pointermove is still
+        // one lineTo + stroke); the list is only read by undo and by rebuild.
+        var drawing = false;
+        var strokes = [];
+        var current = null;
+        // A restored picture is a flat bitmap, not strokes: undo stops at it,
+        // and `savedPresent` is true even when the bytes did not ride the
+        // bundle (P-1, D-5) because the answer still exists on the server.
+        var baseline = null;
+        var savedPresent = false;
+        var tool = 'pen';
+        var size = PEN_SIZE_DEFAULT;
+        var color = PEN_INKS[0][1];
+
+        function widthNow() { return PEN_SIZES[tool][size]; }
+
+        // What `paintBackground` hands the pen back to. Kept on the element so
+        // one item's tools can never reach another item's canvas.
+        function recordPen() {
+          canvas.__pen = { width: widthNow(), color: color };
+        }
+        recordPen();
+
+        // --- the toolbar ----------------------------------------------------
+        var tools = document.createElement('div');
+        tools.className = 'drawing-tools';
+        tools.setAttribute('role', 'toolbar');
+        tools.setAttribute('aria-label', 'Drawing tools');
+
+        var toolButtons = [];
+        var sizeButtons = [];
+        var colorButtons = [];
+
+        function pressGroup(buttons, index) {
+          for (var b = 0; b < buttons.length; b++) {
+            buttons[b].setAttribute('aria-pressed', b === index ? 'true' : 'false');
+          }
+        }
+
+        function toolbarButton(label, pressed) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = label;
+          button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+          tools.appendChild(button);
+          return button;
+        }
+
+        var TOOL_NAMES = ['pen', 'eraser'];
+        var TOOL_LABELS = ['Pen', 'Eraser'];
+        for (var t = 0; t < TOOL_NAMES.length; t++) {
+          (function (index) {
+            var button = toolbarButton(TOOL_LABELS[index], index === 0);
+            button.onclick = function () {
+              tool = TOOL_NAMES[index];
+              pressGroup(toolButtons, index);
+              // A colour cannot mean anything while the eraser is on, and a
+              // disabled button says so where a silently ignored one would not.
+              for (var c = 0; c < colorButtons.length; c++) {
+                colorButtons[c].disabled = tool === 'eraser';
+              }
+              recordPen();
+            };
+            toolButtons.push(button);
+          })(t);
+        }
+
+        for (var s = 0; s < PEN_SIZE_LABELS.length; s++) {
+          (function (index) {
+            var button = toolbarButton(PEN_SIZE_LABELS[index], index === size);
+            button.onclick = function () {
+              size = index;
+              pressGroup(sizeButtons, index);
+              recordPen();
+            };
+            sizeButtons.push(button);
+          })(s);
+        }
+
+        for (var k = 0; k < PEN_INKS.length; k++) {
+          (function (index) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
+            var swatch = document.createElement('span');
+            swatch.className = 'drawing-swatch';
+            // The one literal colour on the page, inline rather than in the
+            // stylesheet: the dot has to show the ink it actually draws. Colour
+            // alone is never the state (WCAG 1.4.1) — the name is beside it.
+            swatch.style.background = PEN_INKS[index][1];
+            button.appendChild(swatch);
+            button.appendChild(document.createTextNode(PEN_INKS[index][0]));
+            button.onclick = function () {
+              color = PEN_INKS[index][1];
+              pressGroup(colorButtons, index);
+              recordPen();
+            };
+            colorButtons.push(button);
+            tools.appendChild(button);
+          })(k);
+        }
+
+        // D-7: at the end of the strip, and disabled until there is a stroke to
+        // take back. A restored picture is not a stroke.
+        var undoButton = document.createElement('button');
+        undoButton.type = 'button';
+        undoButton.textContent = 'Undo';
+        undoButton.disabled = true;
+        undoButton.onclick = function () { undo(); };
+        tools.appendChild(undoButton);
+
+        wrap.appendChild(tools);
         wrap.appendChild(canvas);
 
         var context = canvas.getContext ? canvas.getContext('2d') : null;
@@ -1427,8 +1652,64 @@ public enum AssessmentPage {
           paintBackground(context, canvas, background);
         }
 
-        var drawing = false;
-        var marked = false;
+        // Porter-Duff `over` is associative, so replaying the list lands on the
+        // same pixels the incremental drawing did.
+        function rebuild() {
+          if (!context) return;
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          paintBackground(context, canvas, background);
+          if (baseline) {
+            context.drawImage(baseline, 0, 0, canvas.width, canvas.height);
+          }
+          for (var i = 0; i < strokes.length; i++) {
+            var stroke = strokes[i];
+            context.lineWidth = stroke.width;
+            context.strokeStyle = stroke.color;
+            context.globalCompositeOperation =
+              stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
+            context.beginPath();
+            context.moveTo(stroke.points[0][0], stroke.points[0][1]);
+            for (var p = 1; p < stroke.points.length; p++) {
+              context.lineTo(stroke.points[p][0], stroke.points[p][1]);
+            }
+            context.stroke();
+          }
+          // The paper goes back under whatever the replayed erasers cut out. A
+          // blank canvas paints nothing, so the mode is restored here instead.
+          if (!paintBackground(context, canvas, background, true)) {
+            context.globalCompositeOperation = 'source-over';
+          }
+        }
+
+        function undo() {
+          if (!strokes.length) return;
+          strokes.pop();
+          rebuild();
+          undoButton.disabled = strokes.length === 0;
+        }
+
+        // The "Draw something first." guard. Eraser-only work on a blank canvas
+        // is not an answer, and undoing everything makes the guard true again.
+        function isMarked() {
+          if (savedPresent) return true;
+          for (var i = 0; i < strokes.length; i++) {
+            if (strokes[i].tool === 'pen') return true;
+          }
+          return false;
+        }
+
+        // D-5: Cmd-Z undoes while focus is inside THIS drawing item — read on
+        // the wrap, not the document, so two drawing items cannot undo each
+        // other and a Cmd-Z in the essay's textarea is untouched. There is no
+        // Edit -> Undo menu item to route through (AppDelegate), so WebKit hands
+        // the key to the page; the button is the path that must work regardless.
+        // No Redo — a second stack for something nobody asked for.
+        wrap.onkeydown = function (event) {
+          if (!event || !event.metaKey || event.shiftKey) return;
+          if (event.key !== 'z' && event.key !== 'Z') return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          undo();
+        };
 
         function positionOf(event) {
           var box = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
@@ -1445,19 +1726,55 @@ public enum AssessmentPage {
         canvas.onpointerdown = function (event) {
           if (!context) return;
           drawing = true;
-          marked = true;
           var at = positionOf(event);
+          current = {
+            tool: tool,
+            width: widthNow(),
+            color: color,
+            points: [[at.x, at.y]]
+          };
+          strokes.push(current);
+          undoButton.disabled = false;
+          context.lineWidth = current.width;
+          context.strokeStyle = current.color;
+          // D-3: the eraser cuts to transparent rather than painting the paper
+          // colour — a white blob would lose the grid lines under it, and on a
+          // blank canvas it would turn a transparent PNG into a blotched one.
+          context.globalCompositeOperation =
+            current.tool === 'eraser' ? 'destination-out' : 'source-over';
           context.beginPath();
           context.moveTo(at.x, at.y);
         };
         canvas.onpointermove = function (event) {
           if (!drawing || !context) return;
           var at = positionOf(event);
+          current.points.push([at.x, at.y]);
           context.lineTo(at.x, at.y);
           context.stroke();
+          if (current.tool === 'eraser'
+              && paintBackground(context, canvas, background, true)) {
+            // Under-painting on every move, not once at the end: otherwise a
+            // student on a dark contrast set sees the page ground through the
+            // hole mid-stroke. The paint strokes paths of its own, so the
+            // eraser's is restarted where it had reached.
+            context.globalCompositeOperation = 'destination-out';
+            context.beginPath();
+            context.moveTo(at.x, at.y);
+          }
         };
-        canvas.onpointerup = function () { drawing = false; };
-        canvas.onpointerleave = function () { drawing = false; };
+        function endStroke() {
+          drawing = false;
+          if (context && current && current.tool === 'eraser') {
+            // The under-paint hands the normal mode back itself when it paints;
+            // a blank canvas paints nothing, so it is restored here.
+            if (!paintBackground(context, canvas, background, true)) {
+              context.globalCompositeOperation = 'source-over';
+            }
+          }
+          current = null;
+        }
+        canvas.onpointerup = endStroke;
+        canvas.onpointerleave = endStroke;
 
         var controls = document.createElement('div');
         controls.className = 'drawing-controls';
@@ -1471,10 +1788,18 @@ public enum AssessmentPage {
         clear.onclick = function () {
           if (context) {
             context.clearRect(0, 0, canvas.width, canvas.height);
-            // Clear takes the work away, not the paper (D-3).
+            // Clear takes the work away, not the paper (D-3 of the background
+            // page).
             paintBackground(context, canvas, background);
           }
-          marked = false;
+          // D-4: Clear is not undoable. It empties the stroke list and drops the
+          // restored picture too — "Clear then Undo brings it all back" is a
+          // second mental model for a button whose copy says what it does.
+          strokes = [];
+          current = null;
+          baseline = null;
+          savedPresent = false;
+          undoButton.disabled = true;
           status.className = 'drawing-status';
           status.textContent = '';
         };
@@ -1484,7 +1809,7 @@ public enum AssessmentPage {
         save.type = 'button';
         save.textContent = 'Save drawing';
         save.onclick = function () {
-          if (!marked) {
+          if (!isMarked()) {
             // Handing in a blank canvas looks identical to not answering, and
             // would cost the student an upload slot to say nothing.
             status.className = 'drawing-status';
@@ -1527,6 +1852,10 @@ public enum AssessmentPage {
             // onload before src: a data URL can decode immediately, and a
             // handler attached afterwards would miss the event.
             restored.onload = function () {
+              // Kept as the baseline so a rebuild after an undo can redraw it
+              // under the remaining strokes. Assigned in `onload`, so `rebuild`
+              // never draws an image that has not decoded.
+              baseline = restored;
               context.drawImage(restored, 0, 0, canvas.width, canvas.height);
             };
             restored.src = 'data:' + blob.content_type + ';base64,' + blob.base64;
@@ -1534,7 +1863,7 @@ public enum AssessmentPage {
           // Marked and labelled whether or not the bytes came: the answer IS
           // saved on the server, and a student pressing Save on work they did
           // last session must not be told to draw something first.
-          marked = true;
+          savedPresent = true;
           status.className = 'drawing-status saved';
           status.textContent = 'Saved.';
         }
@@ -1545,7 +1874,7 @@ public enum AssessmentPage {
           status.className = ok ? 'drawing-status saved' : 'drawing-status';
           status.textContent = ok ? 'Saved.' : 'Could not save. Tell your teacher.';
         };
-        canvas.__markedForTest = function () { return marked; };
+        canvas.__markedForTest = function () { return isMarked(); };
 
         return wrap;
       }

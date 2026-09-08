@@ -144,7 +144,10 @@ final class PageShellTests: XCTestCase {
         XCTAssertEqual(hexes(in: AssessmentPage.itemStyles), [])
         // And the token block itself does carry them — otherwise the two
         // assertions above would pass on an empty stylesheet.
-        XCTAssertEqual(hexes(in: String(PageShell.baseStyles[..<close.lowerBound])).count, 12)
+        // Twelve slice-B tokens plus `--canvas-paper`, the drawing canvas's
+        // on-screen ground, which is declared here but deliberately NOT one of
+        // the twelve a contrast set swaps (drawing tools D-6).
+        XCTAssertEqual(hexes(in: String(PageShell.baseStyles[..<close.lowerBound])).count, 13)
     }
 
     /// The hand-in block had no CSS at all before slice A (design page,

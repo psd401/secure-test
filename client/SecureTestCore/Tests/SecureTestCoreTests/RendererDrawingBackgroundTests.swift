@@ -264,7 +264,7 @@ final class RendererDrawingBackgroundTests: XCTestCase {
         c.onpointerdown({ clientX: 10, clientY: 20 });
         c.onpointermove({ clientX: 30, clientY: 40 });
         c.onpointerup();
-        __all('button', \(item))[0].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[0].onclick();
         """)
         let recorded = try ops(h)
         let clearAt = try XCTUnwrap(recorded.lastIndex(of: #"["clearRect"]"#))
@@ -278,7 +278,7 @@ final class RendererDrawingBackgroundTests: XCTestCase {
         var c = __first('canvas', \(item));
         c.onpointerdown({ clientX: 1, clientY: 1 });
         c.onpointerup();
-        __all('button', \(item))[0].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[0].onclick();
         """)
         let recorded = try ops(h)
         XCTAssertEqual(recorded.last, #"["clearRect"]"#)

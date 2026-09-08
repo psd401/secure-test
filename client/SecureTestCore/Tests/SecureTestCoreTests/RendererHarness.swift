@@ -180,6 +180,10 @@ final class RendererHarness {
           // Drawing background: the grid paper is a fill plus strokes, so the
           // paint is assertable as ops rather than as pixels.
           set fillStyle(v) { ops.push(['fillStyle', v]); },
+          // Drawing tools slice 1: the eraser cuts to transparent and the paper
+          // is put back under the hole, both of which are compositing modes
+          // rather than anything a pixel-free shim could otherwise show.
+          set globalCompositeOperation(v) { ops.push(['globalCompositeOperation', v]); },
           fillRect: function (x, y, w, h) { ops.push(['fillRect', x, y, w, h]); },
           beginPath: function () { ops.push(['beginPath']); },
           moveTo: function (x, y) { ops.push(['moveTo', x, y]); },

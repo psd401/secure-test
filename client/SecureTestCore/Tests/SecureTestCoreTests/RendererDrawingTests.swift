@@ -30,7 +30,7 @@ final class RendererDrawingTests: XCTestCase {
         var c = __first('canvas', \(item));
         c.onpointerdown({ clientX: 1, clientY: 1 });
         c.onpointerup();
-        __all('button', \(item))[1].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[1].onclick();
         """)
     }
 
@@ -51,11 +51,15 @@ final class RendererDrawingTests: XCTestCase {
         XCTAssertEqual(try h.int("__first('canvas').height"), 600)
     }
 
+    /// Drawing tools slice 1 put a toolbar ABOVE the canvas, so the item's
+    /// buttons are no longer only these two and every lookup here is scoped to
+    /// `.drawing-controls` — the commit-and-destroy row below the canvas, whose
+    /// count and copy are unchanged.
     func testOffersClearAndSave() throws {
         let h = try harness()
-        XCTAssertEqual(try h.int("__count('button', \(item))"), 2)
-        XCTAssertEqual(try h.string("__all('button', \(item))[0].textContent"), "Clear")
-        XCTAssertEqual(try h.string("__all('button', \(item))[1].textContent"), "Save drawing")
+        XCTAssertEqual(try h.int("__count('button', __first('.drawing-controls', \(item)))"), 2)
+        XCTAssertEqual(try h.string("__all('button', __first('.drawing-controls', \(item)))[0].textContent"), "Clear")
+        XCTAssertEqual(try h.string("__all('button', __first('.drawing-controls', \(item)))[1].textContent"), "Save drawing")
     }
 
     func testPointerStrokesReachTheDrawingContext() throws {
@@ -84,7 +88,7 @@ final class RendererDrawingTests: XCTestCase {
     /// cost the student an upload slot to say nothing.
     func testSavingAnUntouchedCanvasIsRefusedWithAnExplanation() throws {
         let h = try harness()
-        try h.eval("__all('button', \(item))[1].onclick();")
+        try h.eval("__all('button', __first('.drawing-controls', \(item)))[1].onclick();")
         XCTAssertEqual(try h.postedUploads().count, 0)
         XCTAssertEqual(
             try h.string("__first('.drawing-status', \(item)).textContent"),
@@ -100,7 +104,7 @@ final class RendererDrawingTests: XCTestCase {
         var c = __first('canvas', \(item));
         c.onpointerdown({ clientX: 1, clientY: 1 });
         c.onpointerup();
-        __all('button', \(item))[1].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[1].onclick();
         """)
         let uploads = try h.postedUploads()
         XCTAssertEqual(uploads.count, 1)
@@ -116,8 +120,8 @@ final class RendererDrawingTests: XCTestCase {
         var c = __first('canvas', \(item));
         c.onpointerdown({ clientX: 1, clientY: 1 });
         c.onpointerup();
-        __all('button', \(item))[0].onclick();
-        __all('button', \(item))[1].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[0].onclick();
+        __all('button', __first('.drawing-controls', \(item)))[1].onclick();
         """)
         // After clearing, the canvas counts as untouched again.
         XCTAssertEqual(try h.postedUploads().count, 0)
@@ -172,7 +176,7 @@ final class RendererDrawingTests: XCTestCase {
     /// for a drawing that would otherwise have been uploaded.
     func testSavingAnUntouchedCanvasOfflineIsStillRefused() throws {
         let h = try harness(offline: true)
-        try h.eval("__all('button', \(item))[1].onclick();")
+        try h.eval("__all('button', __first('.drawing-controls', \(item)))[1].onclick();")
         XCTAssertEqual(try h.postedUploads().count, 0)
         XCTAssertEqual(
             try h.string("__first('.drawing-status', \(item)).textContent"),

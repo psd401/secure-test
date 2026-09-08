@@ -350,5 +350,47 @@ tools' diff stays reviewable on its own.
 
 ## Progress
 
-Nothing built. This page written 2026-09-08 (read-only session); D-1…D-8
-decided by James the same day.
+This page written 2026-09-08 (read-only session); D-1…D-8 decided by James
+the same day.
+
+**Slice 1 BUILT 2026-09-08 (local, uncommitted at the time of writing → one
+commit).** The tools, as designed, all in `client/SecureTestCore`:
+
+- `AssessmentPage.swift`: the `.drawing-tools` toolbar between the prompt
+  image and the canvas (Pen / Eraser, Thin / Medium / Thick, Black / Red /
+  Blue / Green as swatch + name, Undo last — D-1, D-2, D-7), `aria-pressed`
+  state, colours disabled under the eraser; the per-canvas stroke list,
+  `rebuild()` (clear → paint → baseline → strokes → under-paint), `undo()`,
+  `isMarked()` (any pen stroke, or a saved answer); the eraser as
+  `destination-out` with the paper put back by `paintBackground(…, under)`
+  in reversed order under `destination-over` on every move and at the
+  stroke's end (D-3); Clear empties the list and drops the baseline (D-4);
+  Cmd-Z on the item's wrap only, canvas `tabindex="0"` + "Drawing area"
+  (D-5); the previously missing `.drawing-controls` / `.drawing-status`
+  rules; `.drawing-canvas { background: var(--canvas-paper) }` (D-6). Two
+  readings the page left open: the pen hand-back after a paint is the
+  current tool's width / colour, kept on the element as `canvas.__pen`
+  rather than a fifth parameter; on a blank canvas the under-paint records
+  nothing, so the caller restores `source-over`.
+- `PageShell.swift`: `--canvas-paper: #ffffff` on `:root`, outside the
+  twelve tokens the contrast sets swap.
+- Harness: `globalCompositeOperation` recorded as an op. Tests: new
+  `RendererDrawingToolsTests` (17 — order and defaults of the strip,
+  controls row unchanged, width / colour before a stroke, the eraser's
+  modes and the reversed under-paint on the axes fixture with the
+  mid-stroke count pinned, nothing put back on a blank canvas, undo replays
+  the paint then the remaining stroke and disables at zero, undo-to-zero
+  and eraser-only are unanswered, Clear repaints exactly the build paint,
+  Cmd-Z on the wrap and not the document, plain Cmd-Z only, a restored
+  picture redrawn after the paper on a rebuild, the D-6 token declared and
+  never overridden). The existing drawing tests now scope their Clear /
+  Save lookups to `.drawing-controls` (the item has twelve buttons, not
+  two); every pinned paint op stream in `RendererDrawingBackgroundTests`
+  passes verbatim. `PageShellTests`' `:root` hex count 12 → 13. `swift
+  test` 465 pass (was 448); `xcodebuild … build` succeeds.
+- Not testable headlessly: what an erased band looks like across a grid
+  line, the swatch dot on each contrast set, Cmd-Z inside a real AAC
+  session, the wrap at zoom 3×. Slice 3's rows.
+
+Built by an Opus 5 / medium subagent from this page; diff reviewed and
+both checks re-run in the main session before the commit.

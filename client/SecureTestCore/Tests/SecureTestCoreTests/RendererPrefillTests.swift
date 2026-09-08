@@ -242,7 +242,7 @@ final class RendererPrefillTests: XCTestCase {
             [Index.drawing: "{\"type\":\"drawing_upload\",\"upload_id\":\"\(Self.uploadID)\"}"],
             uploads: [Self.uploadID: "{\"content_type\":\"image/png\",\"base64\":\"\(Self.pngBase64)\"}"]
         )
-        try h.eval("__all('button', \(item))[0].onclick()")
+        try h.eval("__all('button', __first('.drawing-controls', \(item)))[0].onclick()")
         let ops = try h.string("JSON.stringify(__first('canvas', \(item)).__ops)") ?? ""
         XCTAssertTrue(ops.contains("clearRect"))
         XCTAssertFalse(try h.bool("__first('canvas', \(item)).__markedForTest()"))
