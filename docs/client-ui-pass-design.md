@@ -466,3 +466,13 @@ whose first row is the gate on whether `LockedDownWebView` lets an in-page drag
 complete at all.
 
 Slices A–D: nothing built.
+
+**Batch 4 slices A–E ALL BUILT and merged 2026-09-07 evening** (`9e0356e`;
+swift test 438, xcodebuild green). Slice D's and E's worktrees branched
+before A merged — D's notice-page CSS still carries literal fallbacks
+beside the tokens (harmless; drop in a tidy-up), E's stylesheet hunk was
+rebased onto the tokens in the merge. Slice 6 (rows) is next and needs
+James at the keyboard: 16 (A) + 28 (B) + 18 (D) + 12 (E) rows in
+`client/MANUAL-CHECKS.md`, no deploy needed (client only). The first E row
+is a gate: whether an in-page drag survives `LockedDownWebView`'s
+unregistered drag types could not be proven headlessly.
