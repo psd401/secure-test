@@ -133,6 +133,47 @@ meaning what it means.
 - The sign-in sheet header gets the white emblem at 20 px beside its
   title.
 
+### E. Order as drag-and-drop (D-D2)
+
+Slice E design note, 2026-09-07. The 2026-09-03 sitting found the order
+item answerable only through Move up / Move down (`docs/roadmap-2026-09.md`),
+which reads as unfinished to a student holding a mouse or a trackpad.
+
+- **Pointer drag on the rows.** Each `.order-row` gets `draggable="true"`
+  and `dragstart` / `dragover` / `dragleave` / `drop` / `dragend`. The
+  `dataTransfer` payload is the sealed entry id, `effectAllowed = "move"`,
+  `dropEffect = "move"`; `dragover` calls `preventDefault()` so the row is
+  a drop target at all. A touchpad is a pointer, so nothing extra.
+- **Drop indicator.** No new element: the hovered row carries
+  `drop-before` or `drop-after` depending on whether the pointer is in its
+  top or bottom half (`clientY` against `getBoundingClientRect()`), drawn
+  as a `0.125rem` inset `--accent` line, so it scales with `data-zoom`.
+  The dragged row carries `dragging` (opacity `.5`).
+- **One code path.** Both the buttons and a drop call `move(from, to)`,
+  which splices through the pure top-level `reorderIDs(list, from, to)`
+  (adjacent splice == the old swap, so the button behaviour is unchanged)
+  and posts exactly one `{type: 'order', ordered_ids}` — per drop, never
+  per `dragover`. The response format, the answered mark (`post()` marks)
+  and every identifier are untouched.
+- **Keyboard path unchanged.** The Move buttons stay and remain the
+  VoiceOver path; the list gains an `aria-describedby` hint, "Drag to
+  reorder, or use the Move buttons", and an `aria-live="polite"` status
+  line that announces "<label> moved to position k of n" — for a button
+  press as well as a drop, so the two paths announce identically.
+- **Cancel.** Escape ends the drag with `dragend` and no `drop`, which
+  clears the indicator and changes nothing; a drop on the row being
+  dragged is likewise a no-op.
+- **Risk, to be settled by hand-run:** `LockedDownWebView` calls
+  `unregisterDraggedTypes()` and refuses `draggingEntered` /
+  `performDragOperation`, which is aimed at drags in from other apps. On
+  macOS an in-page WebKit drag is also an `NSDraggingSession` whose
+  destination is the same view, so the drop may never be delivered inside
+  the client even though it works in a plain WKWebView. That view is not
+  changed here (hard rule); the AAC row in `client/MANUAL-CHECKS.md`
+  decides it. If the drop is swallowed, the fallback is a pointer-tracking
+  drag (`mousedown` / `mousemove` / `mouseup` on the list) driving the same
+  `move()`, with no change to the view or the CSP.
+
 ### D. AppKit layout and a11y (batch 4)
 
 - `SessionEntryViewController` on Auto Layout: a centred column, the
@@ -196,4 +237,20 @@ contract, identifiers.
 
 ## Progress
 
-Nothing built.
+**Slice E BUILT 2026-09-07** (order drag-and-drop, D-D2 — the finding from the
+2026-09-03 sitting). `AssessmentPage.swift` only: the order rows are
+`draggable="true"` with `dragstart` / `dragover` / `dragleave` / `drop` /
+`dragend`, the hovered row carries `drop-before` / `drop-after` (a `0.125rem`
+inset `--accent` line, so it scales under `data-zoom`) and the dragged row
+`dragging`; a drop and a Move press both call `move(from, to)` through the new
+pure `reorderIDs(list, from, to)`, so one post leaves per drop and none per
+`dragover`. The list gained an `aria-describedby` hint and an `aria-live`
+status line that announces every move, button or drop. The Move buttons, the
+`{type:'order', ordered_ids}` payload, the answered mark and every identifier
+are unchanged; `.order` / `.order-row` also gained the CSS they never had.
+`swift test` 401 (was 387; 14 new in `RendererOrderDragTests`), `xcodebuild`
+green. NOT hand-run: "Client UI pass — slice E" in `client/MANUAL-CHECKS.md`,
+whose first row is the gate on whether `LockedDownWebView` lets an in-page drag
+complete at all.
+
+Slices A–D: nothing built.
