@@ -253,20 +253,6 @@ contract, identifiers.
   indicator, the Move up / down buttons kept as the keyboard + VoiceOver
   path, the answered mark unchanged; short design note in the slice.
 
-## Findings from the 2026-09-08 sitting
-
-Five findings from the first sitting on the batch-4 client (a real AAC session
-on the origin, the `Client rows hand-run 2026-09-08` fixture). All five are
-client-only; none needs a deploy.
-
-| # | Finding | Decision |
-|---|---|---|
-| S-1 | The order item's HTML5 drag never completes inside a real AAC session — the row lifts and snaps back, nothing moves. `LockedDownWebView` refuses the drag session's destination (the risk written into the §E design note). | Replace the HTML5 drag with pointer tracking; no change to that view, no dual path. |
-| S-2 | A signed-out student sees the session-code field above the sign-in button and types into it — the app asks for the wrong thing first. | Hide the code heading, field, Join and the rule above them until signed in. |
-| S-3 | The order rows are too tight to read comfortably or to hit reliably. | Taller rows, more padding, body-sized labels — all rem, all tokens. |
-| S-4 | Half-typed math (`\frac{`) shows KaTeX's own red error markup, which reads as "you got it wrong" rather than "you are not finished". | Ask KaTeX to throw, keep the last good render, and say it in plain words. |
-| S-5 | A selected hotspot region is barely distinguishable from a hovered one on a busy picture. | Heavier selected fill, accent border, inset paper hairline, visible focus ring. |
-
 ## Progress
 
 **Slice A BUILT 2026-09-07.** The theme layer is in and the page has no
