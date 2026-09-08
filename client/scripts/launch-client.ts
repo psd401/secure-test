@@ -17,6 +17,8 @@ const child = spawn(`${app}/Contents/MacOS/SecureTest`, [], {
     SECURE_TEST_GOOGLE_CLIENT_ID: native,
     ...(process.env.SECURE_TEST_SIMULATE_LOCKDOWN ? { SECURE_TEST_SIMULATE_LOCKDOWN: process.env.SECURE_TEST_SIMULATE_LOCKDOWN } : {}),
     ...(process.env.SECURE_TEST_TOKEN ? { SECURE_TEST_TOKEN: process.env.SECURE_TEST_TOKEN } : {}),
+    // Observability slice 4 hand-run: the debug crash menu item (Session menu).
+    ...(process.env.SECURE_TEST_DEBUG_CRASH ? { SECURE_TEST_DEBUG_CRASH: process.env.SECURE_TEST_DEBUG_CRASH } : {}),
   },
   detached: true, stdio: ["ignore", "ignore", err],
 });
