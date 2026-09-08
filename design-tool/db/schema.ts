@@ -1199,3 +1199,45 @@ export type ClientErrorEventRow = typeof client_error_events.$inferSelect;
 export type ClientErrorEventInsert = typeof client_error_events.$inferInsert;
 export type FeedbackRow = typeof feedback.$inferSelect;
 export type FeedbackInsert = typeof feedback.$inferInsert;
+
+/**
+ * The audit record of a teacher deleting a student's attempt (roadmap
+ * 2026-09, finding of the 2026-09-07 signed-build run). `attempt_events`
+ * cascades with the attempt, so the record of the deletion has to live
+ * beside it, not in it. The row keeps WHO (the owner's sub), WHAT (a snapshot
+ * of the attempt's status and hand-in time plus what was removed with it) and
+ * WHEN; never response text, never a stem. It cascades with the assessment
+ * and the student — once those are gone there is nothing left to audit.
+ */
+export const attempt_deletions = pgTable(
+  "attempt_deletions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    /** The deleted attempt's id — no FK, the row it names is gone. */
+    attempt_id: uuid("attempt_id").notNull(),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    student_id: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    /** The deleting teacher's sub — the owner, by the route's rule. */
+    deleted_by_sub: text("deleted_by_sub").notNull(),
+    attempt_status: text("attempt_status").notNull(),
+    attempt_started_at: timestamp("attempt_started_at", { withTimezone: true }).notNull(),
+    attempt_submitted_at: timestamp("attempt_submitted_at", { withTimezone: true }),
+    response_count: integer("response_count").notNull(),
+    upload_count: integer("upload_count").notNull(),
+    event_count: integer("event_count").notNull(),
+    deleted_at: timestamp("deleted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    assessmentIdIdx: index("attempt_deletions_assessment_id_idx").on(t.assessment_id),
+    deletedAtIdx: index("attempt_deletions_deleted_at_idx").on(t.deleted_at),
+  }),
+);
+
+export type AttemptDeletionRow = typeof attempt_deletions.$inferSelect;
+export type AttemptDeletionInsert = typeof attempt_deletions.$inferInsert;

@@ -204,6 +204,13 @@
       "when": 1788797989824,
       "tag": "0028_observability_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788907131849,
+      "tag": "0029_attempt_deletions",
+      "breakpoints": true
     }
   ]
 }
