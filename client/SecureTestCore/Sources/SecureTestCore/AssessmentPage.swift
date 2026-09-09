@@ -100,6 +100,10 @@ public enum AssessmentPage {
       width: 100%; box-sizing: border-box; min-height: 240px; padding: 8px 10px;
       font: inherit; border: 1px solid var(--line-strong); border-radius: 6px; resize: vertical;
     }
+    /* Multi-source stimulus slice 1 (2026-09-09, docs/multi-source-stimulus-design.md):
+       authored newlines were plain whitespace, so a poem or a paragraphed passage
+       collapsed into one run of prose. pre-line keeps the breaks and still wraps. */
+    .stem { white-space: pre-line; }
     .stem img { max-width: 100%; max-height: 360px; display: block; margin: 8px 0;
       border: 1px solid var(--line); border-radius: 4px; }
     /* Batch 0b slice 1 (2026-09-03): the hotspot had no rules at all since slice 57, so the
@@ -202,7 +206,7 @@ public enum AssessmentPage {
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
     .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
-    .stimulus-body { margin: 0; line-height: 1.5; }
+    .stimulus-body { margin: 0; line-height: 1.5; white-space: pre-line; }
     .stimulus-body img { max-width: 100%; max-height: 480px; display: block; margin: 8px 0; border: 1px solid var(--line); border-radius: 4px; }
     /* E7(b): a short-text answer typed as a formula previews as rendered math. */
     .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }

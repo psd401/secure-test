@@ -55,7 +55,7 @@ export function MathPreview({ text, debounceMs = 300 }: Props) {
           HTML-escaped, math is KaTeX, images are <img> tags pointing
           at session-scoped /api/assets/<uuid>. Unresolved refs come
           back as inline red placeholders — no injection vector. */}
-      <span dangerouslySetInnerHTML={{ __html: html }} />
+      <span className="whitespace-pre-line" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }

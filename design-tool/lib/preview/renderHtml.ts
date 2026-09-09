@@ -470,10 +470,12 @@ export function renderAssessmentHtml(
     /* E5 slice 1: the stimulus block above a set. */
     .stimulus { margin: 20px 0 4px; padding: 12px 14px; background: #f5f7fb; border: 1px solid #d6dce8; border-left: 4px solid #0b5cd6; border-radius: 4px; }
     .stimulus-label { margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: #3a4a6a; }
-    .stimulus-body { margin: 0; }
+    /* Multi-source stimulus slice 1 (2026-09-09): keep authored line breaks —
+       a poem or a paragraphed passage collapsed into prose before. */
+    .stimulus-body { margin: 0; white-space: pre-line; }
     .stimulus-empty { color: #9b5400; font-size: 12px; font-style: italic; }
     .stimulus-source { margin-top: 8px; padding: 10px 12px; border: 1px dashed #8a94a6; border-radius: 4px; color: #3a4a6a; font-size: 13px; font-style: italic; }
-    .stem { margin: 0 0 8px; }
+    .stem { margin: 0 0 8px; white-space: pre-line; }
     .choice { display: block; margin: 6px 0; }
     .short-text { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     .essay { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; }

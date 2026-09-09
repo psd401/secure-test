@@ -714,6 +714,18 @@ describe("item sets in the preview (E5 slice 1)", () => {
     expect(html).toContain(".stimulus-own_page { break-before: page;");
   });
 
+  // Multi-source stimulus slice 1 (2026-09-09): authored line breaks survive in
+  // stems and stimulus bodies (a poem stayed a poem only in the PDF before).
+  test("stem and stimulus bodies keep authored line breaks (white-space: pre-line)", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{ id: "s3", stimulus: "Two roads diverged\nAnd sorry I could not travel both", layout: "inline", item_ids: ["i1"] }],
+    });
+    expect(html).toContain(".stem { margin: 0 0 8px; white-space: pre-line; }");
+    expect(html).toContain(".stimulus-body { margin: 0; white-space: pre-line; }");
+    // The newline reaches the markup as a newline, not a space or a <br>.
+    expect(html).toContain("Two roads diverged\nAnd sorry");
+  });
+
   test("no sets → no stimulus markup (byte-stable for existing previews)", () => {
     const html = renderAssessmentHtml(assessment, items, new Map(), {});
     expect(html).not.toContain('class="stimulus ');

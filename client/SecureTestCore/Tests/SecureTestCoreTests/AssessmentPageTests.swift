@@ -119,6 +119,15 @@ final class AssessmentPageTests: XCTestCase {
         XCTAssertLessThan(katexAt, rendererAt, "the library must be inlined before the renderer")
     }
 
+    // Multi-source stimulus slice 1 (2026-09-09): authored line breaks in a
+    // stem or a stimulus survive — a poem or a paragraphed passage collapsed
+    // into one run of prose before (docs/multi-source-stimulus-design.md).
+    func testStemAndStimulusBodiesKeepAuthoredLineBreaks() {
+        let html = AssessmentPage.html(title: "T", bundleJSON: "{}")
+        XCTAssertTrue(html.contains(".stem { white-space: pre-line; }"))
+        XCTAssertTrue(html.contains(".stimulus-body { margin: 0; line-height: 1.5; white-space: pre-line; }"))
+    }
+
     func testPageWithoutKatexStillRendersAndCarriesNoMathHooksButTheGuardedCall() {
         let bare = KatexBundle.Assets(css: "", js: "", autoRender: "", missing: ["katex.min.js"])
         let html = AssessmentPage.html(title: "T", bundleJSON: "{}", katex: bare)
