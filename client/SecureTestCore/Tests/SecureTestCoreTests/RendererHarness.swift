@@ -60,6 +60,39 @@ final class RendererHarness {
         if let thrown { throw HarnessError.javaScript("renderer: \(thrown)") }
     }
 
+    /// The delivery bundle the design tool's route really emitted
+    /// (`design-tool/scripts/generate-delivery-fixture.ts`), which most
+    /// renderer suites build their harness from.
+    static func fixtureJSON() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/delivery-bundle.json")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The same bundle with its `item_sets` value replaced, for the suites that
+    /// need a set the fixture does not carry. Scans for the array's matching
+    /// bracket — since the multi-source slice a set's value contains arrays of
+    /// its own, so the first `],` is no longer the end of the list.
+    static func fixtureJSON(replacingItemSets itemSets: String) throws -> String {
+        var json = try fixtureJSON()
+        guard let range = json.range(of: "\"item_sets\": [") else {
+            throw HarnessError.javaScript("the fixture has no item_sets array")
+        }
+        var depth = 1
+        var end = range.upperBound
+        while depth > 0, end < json.endIndex {
+            if json[end] == "[" { depth += 1 }
+            if json[end] == "]" { depth -= 1 }
+            end = json.index(after: end)
+        }
+        guard depth == 0 else {
+            throw HarnessError.javaScript("unbalanced item_sets array in the fixture")
+        }
+        json.replaceSubrange(range.lowerBound..<end, with: "\"item_sets\": \(itemSets)")
+        return json
+    }
+
     /// Evaluates an expression against the rendered tree.
     @discardableResult
     func eval(_ expression: String) throws -> JSValue {

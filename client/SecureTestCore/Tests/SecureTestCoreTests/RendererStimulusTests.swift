@@ -7,33 +7,13 @@ import XCTest
 /// fixture the design tool's delivery route produced, which carries one set
 /// over positions 2–3 (indices 1–2) with an image ref and layout own_page.
 final class RendererStimulusTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     private func harness() throws -> RendererHarness {
-        try RendererHarness(bundleJSON: try fixtureJSON())
+        try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON())
     }
 
     /// A bundle with the fixture's items and the given `item_sets` value.
-    /// Scans for the matching bracket rather than the first `],` — since the
-    /// multi-source slice a set's value contains arrays of its own.
     private func harness(itemSets: String) throws -> RendererHarness {
-        var json = try fixtureJSON()
-        let range = try XCTUnwrap(json.range(of: "\"item_sets\": ["))
-        var depth = 1
-        var end = range.upperBound
-        while depth > 0, end < json.endIndex {
-            if json[end] == "[" { depth += 1 }
-            if json[end] == "]" { depth -= 1 }
-            end = json.index(after: end)
-        }
-        XCTAssertEqual(depth, 0, "unbalanced item_sets array in the fixture")
-        json.replaceSubrange(range.lowerBound..<end, with: "\"item_sets\": \(itemSets)")
-        return try RendererHarness(bundleJSON: json)
+        try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON(replacingItemSets: itemSets))
     }
 
     func testRendersTheStimulusOnceBeforeTheFirstMember() throws {
@@ -95,7 +75,7 @@ final class RendererStimulusTests: XCTestCase {
     }
 
     private func firstItemId() throws -> String {
-        let data = Data(try fixtureJSON().utf8)
+        let data = Data(try RendererHarness.fixtureJSON().utf8)
         let bundle = try DeliveryBundle.decode(from: data)
         return try XCTUnwrap(bundle.items.first?.id)
     }

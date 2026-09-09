@@ -6,22 +6,15 @@ import XCTest
 /// Q2 · Q3 · Q4 … Q9 · review = 11 pages. Scroll mode builds the tree every
 /// other renderer suite already asserts on; these tests only add the flag.
 final class RendererPagingTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     private func paged() throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
         json.replaceSubrange(range, with: "\"layout\": \"paged\", \"test_id\":")
         return try RendererHarness(bundleJSON: json)
     }
 
     func testScrollModeBuildsNoPagesAndNoBar() throws {
-        let h = try RendererHarness(bundleJSON: try fixtureJSON())
+        let h = try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON())
         XCTAssertEqual(try h.int("__count('.page')"), 0)
         XCTAssertEqual(try h.int("__count('.pager')"), 0)
         XCTAssertEqual(try h.string("__root.children[0].className"), "item")
@@ -142,16 +135,9 @@ final class RendererPagingTests: XCTestCase {
 /// answered_item_ids (this attempt's saved answers) and kept current as the
 /// page posts. Scroll mode never shows them.
 final class RendererAnsweredMarksTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     /// The fixture, paged, with the given item indexes already answered.
     private func paged(answered: [Int]) throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let probe = try RendererHarness(bundleJSON: json)
         let ids = try answered.map { try XCTUnwrap(probe.string("BUNDLE.items[\($0)].id")) }
         let list = ids.map { "\"\($0)\"" }.joined(separator: ",")
@@ -227,7 +213,7 @@ final class RendererAnsweredMarksTests: XCTestCase {
     }
 
     func testScrollModeIgnoresTheField() throws {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
         json.replaceSubrange(range, with: "\"answered_item_ids\": [\"anything\"], \"test_id\":")
         let h = try RendererHarness(bundleJSON: json)

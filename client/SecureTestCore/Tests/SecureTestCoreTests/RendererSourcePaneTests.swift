@@ -8,15 +8,8 @@ import XCTest
 /// carries one own_page set over items 1–2 and one side_by_side set with two
 /// sources over item 3 (the essay).
 final class RendererSourcePaneTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     private func harness(paged: Bool = false, wide: Bool? = nil) throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         if paged {
             let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
             json.replaceSubrange(range, with: "\"layout\": \"paged\", \"test_id\":")
@@ -27,17 +20,7 @@ final class RendererSourcePaneTests: XCTestCase {
 
     /// A bundle whose only set is the given one, over the fixture's first item.
     private func harness(itemSets: String) throws -> RendererHarness {
-        var json = try fixtureJSON()
-        let range = try XCTUnwrap(json.range(of: "\"item_sets\": ["))
-        var depth = 1
-        var end = range.upperBound
-        while depth > 0, end < json.endIndex {
-            if json[end] == "[" { depth += 1 }
-            if json[end] == "]" { depth -= 1 }
-            end = json.index(after: end)
-        }
-        json.replaceSubrange(range.lowerBound..<end, with: "\"item_sets\": \(itemSets)")
-        return try RendererHarness(bundleJSON: json)
+        try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON(replacingItemSets: itemSets))
     }
 
     /// The fixture's ids churn on every regeneration, so tests read them back

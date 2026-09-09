@@ -2,15 +2,8 @@ import XCTest
 @testable import SecureTestCore
 
 final class AssessmentPageTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     func testPageCarriesTheShellAndItsCSP() throws {
-        let html = AssessmentPage.html(title: "Quiz", bundleJSON: try fixtureJSON())
+        let html = AssessmentPage.html(title: "Quiz", bundleJSON: try RendererHarness.fixtureJSON())
         XCTAssertTrue(html.hasPrefix("<!doctype html>"))
         XCTAssertTrue(html.contains(PageShell.contentSecurityPolicy))
         XCTAssertTrue(html.contains(#"<div id="items"></div>"#))
@@ -21,7 +14,7 @@ final class AssessmentPageTests: XCTestCase {
     /// and the rest would parse as markup — which `script-src 'unsafe-inline'`
     /// would then execute.
     func testMarkupShapedStemCannotCloseTheScriptElement() throws {
-        let html = AssessmentPage.html(title: "Quiz", bundleJSON: try fixtureJSON())
+        let html = AssessmentPage.html(title: "Quiz", bundleJSON: try RendererHarness.fixtureJSON())
         let scriptCloseCount = html.components(separatedBy: "</script>").count - 1
         let scriptOpenCount = html.components(separatedBy: "<script>").count - 1
         XCTAssertEqual(
@@ -79,7 +72,7 @@ final class AssessmentPageTests: XCTestCase {
     /// `offline: false` document, and that document must say so: the renderer
     /// treats anything but an explicit true as the server path.
     func testTheServerPageIsTheDefaultAndDeclaresItselfOnline() throws {
-        let json = try fixtureJSON()
+        let json = try RendererHarness.fixtureJSON()
         let byDefault = AssessmentPage.html(title: "Quiz", bundleJSON: json)
         XCTAssertEqual(byDefault, AssessmentPage.html(title: "Quiz", bundleJSON: json, offline: false))
         XCTAssertTrue(byDefault.contains("<script>const OFFLINE = false;</script>"))
@@ -89,7 +82,7 @@ final class AssessmentPageTests: XCTestCase {
     /// The offline document differs from the server one in exactly that
     /// constant — nothing else about what the student is handed changes.
     func testTheOfflinePageDiffersOnlyInTheFlag() throws {
-        let json = try fixtureJSON()
+        let json = try RendererHarness.fixtureJSON()
         let offline = AssessmentPage.html(title: "Quiz", bundleJSON: json, offline: true)
         XCTAssertTrue(offline.contains("<script>const OFFLINE = true;</script>"))
         XCTAssertEqual(
