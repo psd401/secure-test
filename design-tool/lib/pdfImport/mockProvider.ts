@@ -21,6 +21,11 @@ import type {
 //   SET: #<a>-<b> | figure=<n>[,<n>] | <stimulus text>  (E5 slice 3: a proposed
 //        item set over the segments whose printed numbers fall in a..b;
 //        "figure=" may be omitted for a passage-only set)
+//        Multi-source stimulus slice 3: an optional trailing
+//        "| sources=<label>::<text>;;<label>::<text>" carries the set's
+//        labelled sources ("::" separates a label from its text, ";;"
+//        separates sources — neither can occur in normal PDF prose). It must
+//        come last; everything before it is still the stimulus text.
 // A body may start with "#<n>" to claim a printed question number
 // (E8 `source_number`), e.g. "MC: #3 What is ...", or "#<a>-<b>" to claim a
 // range (`source_numbers`, a match set built from rows 1-5).
@@ -157,16 +162,41 @@ export const mockPdfExtractor: PdfExtractorProvider = {
       };
     }
     const candidates: unknown[] = [];
-    const setSpecs: { from: number; to: number; figures: number[]; stimulus: string }[] = [];
+    const setSpecs: {
+      from: number;
+      to: number;
+      figures: number[];
+      stimulus: string;
+      sources: { label: string; text: string }[];
+    }[] = [];
     for (const m of req.text.matchAll(SEGMENT_RE)) {
       if (m[1] === "SET") {
-        const spec = /^#(\d+)(?:-(\d+))?\s*(?:\|\s*figure=([\d,\s]+))?\s*(?:\|\s*(.*))?$/s.exec(m[2]!.trim());
+        // Multi-source stimulus slice 3: split the sources tail off first —
+        // the stimulus part is free text and would otherwise swallow it.
+        const whole = m[2]!.trim();
+        const at = whole.search(/\|\s*sources=/);
+        const head = at < 0 ? whole : whole.slice(0, at).trim();
+        const sources =
+          at < 0
+            ? []
+            : whole
+                .slice(whole.indexOf("sources=", at) + "sources=".length)
+                .split(";;")
+                .map((part) => {
+                  const sep = part.indexOf("::");
+                  return sep < 0
+                    ? { label: part.trim(), text: "" }
+                    : { label: part.slice(0, sep).trim(), text: part.slice(sep + 2).trim() };
+                })
+                .filter((s) => s.label.length > 0 || s.text.length > 0);
+        const spec = /^#(\d+)(?:-(\d+))?\s*(?:\|\s*figure=([\d,\s]+))?\s*(?:\|\s*(.*))?$/s.exec(head);
         if (spec) {
           setSpecs.push({
             from: Number(spec[1]),
             to: Number(spec[2] ?? spec[1]),
             figures: (spec[3] ?? "").split(",").map((x) => Number(x.trim())).filter((n) => n > 0),
             stimulus: (spec[4] ?? "").trim(),
+            sources,
           });
         }
         continue;
@@ -180,6 +210,9 @@ export const mockPdfExtractor: PdfExtractorProvider = {
     const proposed_sets = setSpecs.map((spec) => ({
       stimulus: spec.stimulus,
       figures: spec.figures,
+      // Omitted when the segment carried none, so the raw shape stays what a
+      // pre-slice-3 model returns.
+      ...(spec.sources.length > 0 ? { sources: spec.sources } : {}),
       item_indexes: candidates
         .map((c, i) => {
           const n = (c as { source_number?: number }).source_number;

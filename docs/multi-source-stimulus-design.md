@@ -286,6 +286,46 @@ results page and scoring queue stems got `whitespace-pre-line` (the slice 1
 fold). Schema package 114 → 121 tests, design-tool 1327 → 1345, typecheck
 clean. Not deployed.
 
+2026-09-09, later still: **slice 3 BUILT** (Opus 5 agent, diff reviewed +
+checks re-run in the main session, one addition made here). Prompt rules
+(a)–(e) added to `PDF_EXTRACT_SYSTEM_PROMPT` (single-question sets, sources
+printed after the prompt, labelled sources returned verbatim as `sources`,
+chart text belongs to the figure) and a short form on the scanned prompt;
+`validateProposedSets` reads `sources` (bare strings coerced to "Source
+<letter>", label 80 / text 20 000 / 12 with `sources_truncated`), a set
+with sources only is not `empty`, `ProposedSet.layout` defaults to
+`side_by_side` when a set has sources; `flagShortenedSources` +
+`sourceSpanLengths` compare each returned source with the document's span
+under its heading line (forward search past the prompt's own mention of
+the label, `[FIGURE n]` lines out, **and running headers / footers that
+repeat on ≥ 3 pages out — added in review, with a trailing page number
+ignored — because the first evidence run flagged the pilot's Source C on
+furniture alone**); the route runs it on the text path and feeds source
+texts to the guardrail output scan; the mock's `SET:` segment takes a
+`| sources=Label::text;;Label::text` tail; the panel card lists sources
+(label input, collapsed first line + character count, expand to edit —
+editing clears the badge, Remove, "Looks shorter than the document —
+check it"), a layout select with the editor's wording, and Add posts
+`sources` + `layout`. design-tool 1345 → 1357 tests, typecheck clean.
+
+**Bedrock evidence on the pilot document** (Sonnet 4.6, temperature as the
+route sets it, one attempt — no prompt iteration was needed): 1 essay, 1
+set, four sources A–D, `side_by_side`, `stimulus: ""`. With the furniture
+filter:
+
+| source | span chars | returned | ratio | shortened |
+|---|---|---|---|---|
+| A (poem) | 800 | 799 | 99.9 % | no |
+| B (article) | 5 795 | 5 794 | 100 % | no |
+| C (excerpt + charts) | 4 450 | 3 380 | 76 % | **yes** |
+| D (speech) | 2 290 | 2 265 | 98.9 % | no |
+
+Source C's flag is half right: the span still carries the three charts'
+titles, axis captions and "Note." blocks (slice 5 moves the chart-internal
+text into the figure and re-measures), but the model also dropped the
+excerpt's footnote and citation line — real text the teacher should paste
+back, which is exactly what the badge asks. The 85 % ratio stays.
+
 **Hazard until slice 4 ships:** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
 published with sources before the next client release shows students the

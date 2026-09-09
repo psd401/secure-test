@@ -250,6 +250,56 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md):
+  // the AP Seminar shape — one essay prompt plus labelled sources printed
+  // after it. The sources ride the response with the card's layout default,
+  // and the shortened check compares each against the document's own span.
+  // The SET line comes FIRST so the two source headings below it bound each
+  // other's span (the last source's span runs to the end of the document).
+  // makeTextPdf draws Helvetica 12pt from x=72 on a 612pt page, so a line
+  // past ~98 characters runs off the page and comes back clipped — every
+  // line below stays well inside that.
+  test("sources on a proposed set: side_by_side layout, shortened flagged against the document span", async () => {
+    const id = await createAssessment("Sources");
+    const SOURCE_A_LINE =
+      "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike";
+    const SOURCE_B_LINE = "quebec romeo sierra";
+    const res = await postPdf(
+      id,
+      makeTextPdf([
+        // Source A comes back as one word of a long paragraph → shortened;
+        // Source B comes back whole → not shortened.
+        `SET: #1 | Read them. | sources=Source A::alpha;;Source B::${SOURCE_B_LINE}`,
+        "ES: #1 Write an essay that uses both sources.",
+        "Source A",
+        SOURCE_A_LINE,
+        "Source B",
+        SOURCE_B_LINE,
+      ]),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string }[];
+      proposed_sets: {
+        id: string;
+        stimulus: string;
+        layout: string;
+        item_indexes: number[];
+        sources: { label: string; text: string; shortened?: boolean }[];
+      }[];
+    };
+    expect(body.candidates.map((c) => c.type)).toEqual(["essay"]);
+    expect(body.proposed_sets).toHaveLength(1);
+    const set = body.proposed_sets[0]!;
+    expect(set.stimulus).toBe("Read them.");
+    expect(set.item_indexes).toEqual([0]);
+    expect(set.layout).toBe("side_by_side");
+    expect(set.sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    expect(set.sources[0]!.shortened).toBe(true);
+    expect(set.sources[1]!.text).toBe(SOURCE_B_LINE);
+    expect(set.sources[1]!.shortened).toBeUndefined();
+  });
+
   // E9 (2026-09-02): the numbering restarting at 1 splits the validated
   // candidates into forms; labels alone only announce a count.
   test("forms: numbering restarts → groups over validated indexes; labels alone → count only; neither → null", async () => {
@@ -328,7 +378,16 @@ describe("POST items/import-pdf", () => {
     expect(body.candidates[1]!.stem).toBe("OCR mock: What is the capital of Washington State?");
     expect(body.candidates.some((c) => /\[FIGURE \d+\]/.test(c.stem))).toBe(false);
     expect(body.proposed_sets).toEqual([
-      { id: "s1", stimulus: "", figures: [], item_indexes: [0], source: "model", needs_figure: true },
+      {
+        id: "s1",
+        stimulus: "",
+        figures: [],
+        item_indexes: [0],
+        source: "model",
+        sources: [],
+        layout: "inline",
+        needs_figure: true,
+      },
     ]);
     expect(body.rejected_sets).toEqual([{ index: 0, reason: "empty" }]);
   });

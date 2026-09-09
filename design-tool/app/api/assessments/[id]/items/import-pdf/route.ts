@@ -11,6 +11,7 @@ import {
   PdfExtractError,
   adjacencyFallback,
   countNumberedItems,
+  flagShortenedSources,
   formsReport,
   numberingReport,
   readSourceNumbers,
@@ -219,11 +220,22 @@ export async function POST(req: Request, ctx: RouteContext) {
         ...r.candidates.map((c) =>
           c && typeof c === "object" && "stem" in c ? String((c as { stem: unknown }).stem) : "",
         ),
-        ...(r.proposed_sets ?? []).map((sset) =>
-          sset && typeof sset === "object" && "stimulus" in sset
-            ? String((sset as { stimulus: unknown }).stimulus)
-            : "",
-        ),
+        ...(r.proposed_sets ?? []).flatMap((sset) => {
+          if (!sset || typeof sset !== "object") return [""];
+          const obj = sset as { stimulus?: unknown; sources?: unknown };
+          // Multi-source stimulus slice 3: a source's text is model output
+          // the student will read — the same screen as a stimulus.
+          const sourceTexts = Array.isArray(obj.sources)
+            ? obj.sources.map((s) =>
+                s && typeof s === "object" && "text" in s
+                  ? String((s as { text: unknown }).text)
+                  : typeof s === "string"
+                    ? s
+                    : "",
+              )
+            : [];
+          return ["stimulus" in obj ? String(obj.stimulus) : "", ...sourceTexts];
+        }),
       ].join("\n"),
     });
   } catch (err) {
@@ -268,7 +280,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   const proposed_sets = [
     ...setValidation.sets,
     ...(scanned ? [] : adjacencyFallback(figures.length, modelText, validSourceNumbers, setValidation.sets)),
-  ];
+    // Multi-source stimulus slice 3: the model tends to abbreviate long
+    // verbatim text, so compare each returned source with the document's own
+    // span under the same heading. The scanned path has no text to compare.
+  ].map((s) =>
+    scanned || s.sources.length === 0
+      ? s
+      : { ...s, sources: flagShortenedSources(modelText, s.sources) },
+  );
   // E9: several forms in one PDF, from the numbering restarting at 1 (any
   // path — the model reports printed numbers on a scan too) or, failing
   // that, "Form A / Form B" labels in the text layer.

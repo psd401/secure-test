@@ -88,6 +88,29 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   '"item_indexes":[0,1]} — item_indexes are 0-based positions in the items',
   "array and must be consecutive; figures lists the marker numbers the set",
   "uses (empty when it is a passage). A question belongs to at most one set.",
+  // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md,
+  // §Import): the AP Seminar pilot document is one essay prompt followed by
+  // four labelled sources. The old wording framed a stimulus as data given
+  // BEFORE questions that SHARE it, so the model returned a bare array and
+  // every source was dropped.
+  "An item_set may hold a SINGLE question: one essay prompt together with",
+  "the passages it is answered from is one set.",
+  "The passage or passages a question depends on may be printed AFTER the",
+  "question — a prompt followed by its sources is still one item_set.",
+  'When the document labels its sources ("Source A", "Passage 1",',
+  '"Document 2", a title and author line under a rule), return them on the',
+  'set as "sources":[{"label":"Source A","text":"..."}] in the order they',
+  "are printed, each source's FULL printed text copied verbatim — every",
+  "paragraph, every line of a poem — never summarised, abbreviated or",
+  'elided (never write "[text continues]" or similar), keeping the printed',
+  "line breaks as \\n. Put the framing text that introduces the sources in",
+  '"stimulus", or "" when there is none.',
+  "Text that belongs to a chart, graph or figure — axis labels, tick",
+  "values, legend entries, country or category lists — belongs to that",
+  "figure and never to a source's text; the chart's own title or caption",
+  "line stays with the text.",
+  "A document with one question and labelled sources is ONE item_set: the",
+  'question in item_indexes, the sources in "sources".',
   "Never put the [FIGURE n] marker text itself into a stem or stimulus.",
   "The text marks the document's own emphasis as **bold** and _italic_.",
   "Keep those markers exactly where they are in stems, choices, pairs and",
@@ -121,7 +144,14 @@ export const PDF_OCR_USER_PROMPT =
   "diagram or picture in a stimulus or a stem — a description can give away " +
   "the answer. When questions depend on a figure you can see, return them as " +
   'an item_set with "needs_figure": true and only the printed text (or "") ' +
-  "as its stimulus; the teacher adds the figure by hand.";
+  "as its stimulus; the teacher adds the figure by hand. " +
+  // Multi-source stimulus slice 3: the same source rules as the text path,
+  // said briefly — a scan of a synthesis prompt has the same shape.
+  'When the document labels its sources ("Source A", "Passage 1"), return ' +
+  'them on the set as "sources":[{"label":"Source A","text":"..."}] in ' +
+  "printed order, each source's full printed text copied verbatim from the " +
+  "page and never summarised; a chart's axis labels, tick values and legend " +
+  "entries stay out of a source's text, and a chart is never described.";
 
 // Caps for the scanned/OCR branch (ADR 0015, approved 2026-08-13). Pages are
 // read as images, which is token-heavy — 30 pages bounds the spend, checked
@@ -595,6 +625,28 @@ export function formsReport(
 
 // --- E5 slice 3: proposed item sets ---
 
+// --- Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md) ---
+
+/** One labelled source on a proposed set, as the panel receives it. */
+export interface ProposedSource {
+  label: string;
+  text: string;
+  /** The document's span under this source's heading is markedly longer
+   * than what came back — the model abbreviated. Set by
+   * flagShortenedSources on the text path only. */
+  shortened?: boolean;
+}
+
+/** The three `item_sets.layout` values (slice 2 widened the CHECK). */
+export type ProposedSetLayout = "inline" | "own_page" | "side_by_side";
+
+/** Label 1–80 chars, text ≤ 20 000 (the stimulus bound), 12 sources —
+ * the same bounds as `StimulusSources` in lib/api/itemSets.ts, so a set the
+ * panel posts cannot be rejected by the write schema. */
+export const MAX_PROPOSED_SOURCES = 12;
+export const MAX_SOURCE_LABEL_CHARS = 80;
+export const MAX_SOURCE_TEXT_CHARS = 20000;
+
 /** A set as the panel receives it: indexes into the VALIDATED candidate list. */
 export interface ProposedSet {
   id: string;
@@ -604,6 +656,14 @@ export interface ProposedSet {
   /** Consecutive indexes into the validated candidates. */
   item_indexes: number[];
   source: "model" | "adjacency";
+  /** Multi-source stimulus slice 3: the labelled sources under the
+   * introduction, always present ([] when the document had none). */
+  sources: ProposedSource[];
+  /** The card's default (D-2 keeps it the teacher's choice): a set with at
+   * least one source proposes `side_by_side`, everything else `inline`. */
+  layout: ProposedSetLayout;
+  /** More than MAX_PROPOSED_SOURCES came back; the list was cut. */
+  sources_truncated?: boolean;
   /** E13: the model saw a figure these questions depend on but nothing
    * could be attached (a scan). Present only when true and the set carries
    * no figure of its own; the teacher adds the figure by hand. */
@@ -620,6 +680,54 @@ export interface RejectedSet {
 export interface SetValidation {
   sets: ProposedSet[];
   rejected: RejectedSet[];
+}
+
+/** "Source A" … for a source the model returned as a bare string. */
+function defaultSourceLabel(n: number): string {
+  return `Source ${String.fromCharCode(65 + (n % 26))}`;
+}
+
+/**
+ * Multi-source stimulus slice 3: read `sources` off a raw set. An array of
+ * `{label, text}`; a bare string is coerced to `{label: "Source <next
+ * letter>", text}` (the model sometimes drops the labels it was asked for).
+ * Labels are trimmed and bounded, text bounded; an entry with an empty
+ * label after trimming or a non-string text is dropped. An EMPTY text is
+ * kept — the teacher can paste the passage in the panel. Beyond
+ * MAX_PROPOSED_SOURCES the list is cut and the set says so; nothing else
+ * about the set changes.
+ */
+function readProposedSources(
+  raw: unknown,
+  figureCount: number,
+): { sources: ProposedSource[]; truncated: boolean } {
+  if (!Array.isArray(raw)) return { sources: [], truncated: false };
+  const sources: ProposedSource[] = [];
+  for (const entry of raw) {
+    let label: string;
+    let text: string;
+    if (typeof entry === "string") {
+      label = defaultSourceLabel(sources.length);
+      text = entry;
+    } else if (entry && typeof entry === "object") {
+      const obj = entry as { label?: unknown; text?: unknown };
+      if (typeof obj.text !== "string") continue;
+      if (typeof obj.label !== "string" || obj.label.trim().length === 0) continue;
+      label = obj.label.trim();
+      text = obj.text;
+    } else {
+      continue;
+    }
+    // E14: with no figure extracted a marker in a source refers to nothing —
+    // the same rule stimulus text follows.
+    const bounded = text.slice(0, MAX_SOURCE_TEXT_CHARS);
+    sources.push({
+      label: label.slice(0, MAX_SOURCE_LABEL_CHARS),
+      text: figureCount === 0 ? stripFigureMarkers(bounded) : bounded,
+    });
+  }
+  const truncated = sources.length > MAX_PROPOSED_SOURCES;
+  return { sources: truncated ? sources.slice(0, MAX_PROPOSED_SOURCES) : sources, truncated };
 }
 
 const asIndexList = (v: unknown): number[] =>
@@ -657,6 +765,7 @@ export function validateProposedSets(
       figure?: unknown;
       item_indexes?: unknown;
       needs_figure?: unknown;
+      sources?: unknown;
     };
     const rawIndexes = asIndexList(obj.item_indexes);
     if (rawIndexes.length === 0) {
@@ -681,7 +790,15 @@ export function validateProposedSets(
     const stimulus = figureCount === 0 ? stripFigureMarkers(bounded) : bounded;
     // E13: meaningful only when the set has no figure of its own.
     const needsFigure = obj.needs_figure === true && figures.length === 0;
-    if (figures.length === 0 && stimulus.trim().length === 0 && !needsFigure) {
+    // Multi-source stimulus slice 3: a set whose reading lives in its
+    // sources has nothing in `stimulus` and is NOT an empty card.
+    const { sources, truncated: sourcesTruncated } = readProposedSources(obj.sources, figureCount);
+    if (
+      figures.length === 0 &&
+      stimulus.trim().length === 0 &&
+      sources.length === 0 &&
+      !needsFigure
+    ) {
       rejected.push({ index, reason: "empty" });
       return;
     }
@@ -698,6 +815,10 @@ export function validateProposedSets(
       figures,
       item_indexes: run,
       source: "model",
+      sources,
+      // D-2: the default the card offers; the teacher can change it before Add.
+      layout: sources.length > 0 ? "side_by_side" : "inline",
+      ...(sourcesTruncated ? { sources_truncated: true } : {}),
       ...(needsFigure ? { needs_figure: true } : {}),
     });
   });
@@ -752,7 +873,135 @@ export function adjacencyFallback(
     if (taken.has(idx)) continue;
     taken.add(idx);
     seq += 1;
-    out.push({ id: `s${seq}`, stimulus: "", figures: [n], item_indexes: [idx], source: "adjacency" });
+    out.push({
+      id: `s${seq}`,
+      stimulus: "",
+      figures: [n],
+      item_indexes: [idx],
+      source: "adjacency",
+      sources: [],
+      layout: "inline",
+    });
   }
   return out;
+}
+
+// --- Multi-source stimulus slice 3: the shortened-source check ---
+
+/** Under this fraction of the document's span, a source reads as abbreviated. */
+export const SHORTENED_SOURCE_RATIO = 0.85;
+
+const FIGURE_LINE_RE = /^\s*\[FIGURE \d+\]\s*$/;
+
+const foldWhitespace = (s: string): string => s.replace(/\s+/g, " ").trim();
+
+/** A heading line as it compares: E6 emphasis marks off, whitespace folded,
+ * case-insensitive. `**Source A**` and `Source A` are the same heading. */
+function normalizeHeading(line: string): string {
+  return foldWhitespace(line.replace(/\*\*/g, "").replace(/_/g, "")).toLowerCase();
+}
+
+/** Comparable length of a block: `[FIGURE n]` lines and page furniture out,
+ * whitespace folded. */
+function comparableLength(lines: readonly string[], furniture: ReadonlySet<string> = new Set()): number {
+  return foldWhitespace(
+    lines.filter((l) => !FIGURE_LINE_RE.test(l) && !furniture.has(furnitureKey(l))).join(" "),
+  ).length;
+}
+
+/** A line as it compares for page furniture: emphasis off, whitespace
+ * folded, case-insensitive, and a trailing page number dropped — "Visit us
+ * on the web 6" and "… 7" are the same footer. */
+function furnitureKey(line: string): string {
+  return normalizeHeading(line).replace(/\s\d{1,4}$/, "");
+}
+
+/** Pages of the marked text (extractPdfLayout joins them with a blank line)
+ * needed for a line to count as furniture. */
+const FURNITURE_MIN_PAGES = 3;
+
+/**
+ * Running headers and footers: a line that repeats on at least three pages
+ * (pages are blank-line separated in the marked text). The model rightly
+ * leaves them out of a source, but they sit inside the source's span in
+ * the document, so without this every multi-page source reads ~5 % short
+ * and the pilot document's Source C flagged falsely (§Progress, slice 3).
+ */
+function furnitureLines(textWithMarkers: string): Set<string> {
+  const pages = textWithMarkers.split(/\n\s*\n/);
+  const out = new Set<string>();
+  if (pages.length < FURNITURE_MIN_PAGES) return out;
+  const pagesSeen = new Map<string, number>();
+  for (const page of pages) {
+    const keys = new Set(page.split("\n").map(furnitureKey).filter((k) => k.length > 0));
+    for (const k of keys) pagesSeen.set(k, (pagesSeen.get(k) ?? 0) + 1);
+  }
+  for (const [k, n] of pagesSeen) if (n >= FURNITURE_MIN_PAGES) out.add(k);
+  return out;
+}
+
+/**
+ * How long the document's own text is under each source's heading, or null
+ * when no heading line matches that label. The heading search walks FORWARD
+ * from the previous source's heading, so a label named inside the prompt's
+ * instructions on page 1 is passed over once a later line is exactly the
+ * label; the span runs to the next matched heading, or to the end of the
+ * document for the last source. Pure; exported for the evidence run.
+ */
+export function sourceSpanLengths(
+  textWithMarkers: string,
+  sources: readonly { label: string }[],
+): (number | null)[] {
+  const lines = textWithMarkers.split("\n");
+  const normalized = lines.map(normalizeHeading);
+  const furniture = furnitureLines(textWithMarkers);
+  const headings: (number | null)[] = [];
+  let cursor = 0;
+  for (const s of sources) {
+    const want = normalizeHeading(s.label);
+    let at = -1;
+    if (want.length > 0) {
+      for (let i = cursor; i < normalized.length; i++) {
+        if (normalized[i] === want) {
+          at = i;
+          break;
+        }
+      }
+    }
+    headings.push(at < 0 ? null : at);
+    if (at >= 0) cursor = at + 1;
+  }
+  return headings.map((at, i) => {
+    if (at === null) return null;
+    let end = lines.length;
+    for (let j = i + 1; j < headings.length; j++) {
+      const next = headings[j];
+      if (next != null && next > at) {
+        end = next;
+        break;
+      }
+    }
+    return comparableLength(lines.slice(at + 1, end), furniture);
+  });
+}
+
+/**
+ * Flag each source the model abbreviated: its returned text is under
+ * SHORTENED_SOURCE_RATIO of the document's span under the same heading.
+ * A source whose label matches no heading line is left unflagged — the
+ * check can only compare what it can find (design note, open question 3).
+ * The text itself is never rewritten; the panel shows a badge and the
+ * teacher pastes from the PDF.
+ */
+export function flagShortenedSources(
+  textWithMarkers: string,
+  sources: readonly ProposedSource[],
+): ProposedSource[] {
+  const spans = sourceSpanLengths(textWithMarkers, sources);
+  return sources.map((s, i) => {
+    const span = spans[i];
+    if (span == null) return s;
+    const returned = comparableLength(s.text.split("\n"));
+    return returned < SHORTENED_SOURCE_RATIO * span ? { ...s, shortened: true } : s;
+  });
 }

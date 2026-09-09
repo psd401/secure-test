@@ -62,12 +62,39 @@ interface ExtractResult {
   forms: { count: number; groups: number[][] | null; source: "numbering" | "labels" } | null;
 }
 
+// Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md): a
+// labelled source the model read out of the document.
+interface ProposedSource {
+  label: string;
+  text: string;
+  /** The document's text under this heading is markedly longer than what
+   * came back — the model abbreviated it (flagShortenedSources). */
+  shortened?: boolean;
+}
+
+type SetLayout = "inline" | "own_page" | "side_by_side";
+
+/** The editor's own wording for the three layouts, so the card and the
+ * stimulus card in AssessmentEditor read the same. */
+const LAYOUT_LABEL: Record<SetLayout, string> = {
+  inline: "Shown above its questions",
+  own_page: "On its own page",
+  side_by_side: "Side by side (sources beside the question)",
+};
+
 interface ProposedSet {
   id: string;
   stimulus: string;
   figures: number[];
   item_indexes: number[];
   source: "model" | "adjacency";
+  /** Always present ([] when the document had no labelled sources). */
+  sources: ProposedSource[];
+  /** `side_by_side` when the set has sources, else `inline` (D-2: the
+   * teacher can change it on the card before Add). */
+  layout: SetLayout;
+  /** More than 12 sources came back; the list was cut. */
+  sources_truncated?: boolean;
   /** E13: a scan's set that depends on a figure nothing could extract. */
   needs_figure?: boolean;
 }
@@ -120,6 +147,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   // discard figure / edit text) — local until Add.
   const [sets, setSets] = useState<ProposedSet[]>([]);
   const [addedSets, setAddedSets] = useState<Set<string>>(new Set());
+  // Multi-source stimulus slice 3: which source previews are expanded into
+  // an editable textarea, keyed `${setId}:${index}` (collapsed by default —
+  // four AP sources are 13k characters).
+  const [openSources, setOpenSources] = useState<Set<string>>(new Set());
   // E9 (decision James 2026-09-02): what to do with a multi-form PDF.
   // "all" keeps today's behaviour (every form into this draft, the default);
   // "first" hides every group but the first. Per-student form assignment
@@ -145,6 +176,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     setWorkTypes(new Map());
     setSets([]);
     setAddedSets(new Set());
+    setOpenSources(new Set());
     setFormChoice("all");
     setCreatedDrafts([]);
     try {
@@ -163,7 +195,16 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
         throw new Error(body?.hint ?? body?.error ?? `HTTP ${res.status}`);
       }
       setResult(body);
-      setSets(body.proposed_sets ?? []);
+      // Multi-source stimulus slice 3: `sources` / `layout` always ride the
+      // response, but default them so an older cached response cannot crash
+      // the card.
+      setSets(
+        (body.proposed_sets ?? []).map((s) => ({
+          ...s,
+          sources: s.sources ?? [],
+          layout: s.layout ?? "inline",
+        })),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -244,10 +285,17 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
       }
       if (postedIds.length === 0) throw new Error("nothing to group — those questions were already added");
       const stimulus_text = [...refs, set.stimulus.trim()].filter(Boolean).join("\n");
+      // Multi-source stimulus slice 3: the sources and the card's layout ride
+      // the create call (slice 2 made the route take both). `shortened` is a
+      // panel-only hint and never leaves the browser; a source the teacher
+      // emptied the label of is dropped rather than failing the write schema.
+      const sources = set.sources
+        .map((s) => ({ label: s.label.trim(), text: s.text }))
+        .filter((s) => s.label.length > 0);
       const res = await fetch(`/api/assessments/${targetId}/item-sets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ item_ids: postedIds, stimulus_text }),
+        body: JSON.stringify({ item_ids: postedIds, stimulus_text, sources, layout: set.layout }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { hint?: string; error?: string } | null;
@@ -377,6 +425,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                 figures: [...new Set([...s.figures, ...me.figures])],
                 stimulus: [s.stimulus, me.stimulus].filter((t) => t.trim()).join("\n"),
                 item_indexes: [...s.item_indexes, ...me.item_indexes],
+                // Slice 3: the merged card carries both sets' sources, and
+                // side_by_side wins if either half proposed it.
+                sources: [...s.sources, ...me.sources],
+                layout: s.layout === "side_by_side" || me.layout === "side_by_side" ? "side_by_side" : s.layout,
                 ...(s.needs_figure || me.needs_figure ? { needs_figure: true } : {}),
               }
             : s,
@@ -391,8 +443,36 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   function startSet(index: number) {
     setSets((prev) => [
       ...prev,
-      { id: `local-${Date.now()}-${index}`, stimulus: "", figures: [], item_indexes: [index], source: "model" },
+      {
+        id: `local-${Date.now()}-${index}`,
+        stimulus: "",
+        figures: [],
+        item_indexes: [index],
+        source: "model",
+        sources: [],
+        layout: "inline",
+      },
     ]);
+  }
+
+  // ---- Multi-source stimulus slice 3: editing a card's sources ----
+  /** A teacher edit is the answer to the shortened badge, so it clears it. */
+  function updateSource(setId: string, at: number, mut: (s: ProposedSource) => ProposedSource) {
+    updateSet(setId, (s) => ({
+      ...s,
+      sources: s.sources.map((src, i) => (i === at ? mut(src) : src)),
+    }));
+  }
+  function removeSource(setId: string, at: number) {
+    updateSet(setId, (s) => ({ ...s, sources: s.sources.filter((_, i) => i !== at) }));
+  }
+  function toggleSource(key: string) {
+    setOpenSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   return (
@@ -639,6 +719,102 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             placeholder="Passage or data the questions share (optional when a figure is the stimulus)"
                             className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
                           />
+                          {/* Multi-source stimulus slice 3: the labelled
+                              sources the model read, each collapsed to its
+                              first line until the teacher opens it. */}
+                          {set.sources.length > 0 ? (
+                            <ul className="mt-2 space-y-1">
+                              {set.sources.map((src, si) => {
+                                const key = `${set.id}:${si}`;
+                                const expanded = openSources.has(key);
+                                const firstLine = src.text.split("\n").find((l) => l.trim().length > 0) ?? "";
+                                return (
+                                  <li key={key} className="rounded border border-border bg-background p-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        value={src.label}
+                                        disabled={disabled || busy || setAdded}
+                                        onChange={(e) =>
+                                          updateSource(set.id, si, (s) => ({ ...s, label: e.target.value }))
+                                        }
+                                        aria-label={`Label for source ${si + 1}`}
+                                        className="w-40 rounded border border-border bg-background px-1 py-0.5 text-xs font-medium"
+                                      />
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {src.text.length} characters
+                                      </span>
+                                      {src.shortened ? (
+                                        <span className="rounded bg-warning-foreground/10 px-1.5 py-0.5 text-[11px] text-warning-foreground">
+                                          Looks shorter than the document — check it
+                                        </span>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSource(key)}
+                                        className="text-[11px] underline"
+                                      >
+                                        {expanded ? "Collapse" : "Expand"}
+                                      </button>
+                                      {!setAdded ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeSource(set.id, si)}
+                                          disabled={disabled || busy}
+                                          className="text-[11px] underline"
+                                        >
+                                          Remove
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                    {expanded ? (
+                                      <textarea
+                                        value={src.text}
+                                        disabled={disabled || busy || setAdded}
+                                        onChange={(e) =>
+                                          updateSource(set.id, si, (s) => ({
+                                            ...s,
+                                            text: e.target.value,
+                                            // The teacher has looked at it — the
+                                            // model-abbreviation warning is answered.
+                                            shortened: false,
+                                          }))
+                                        }
+                                        rows={8}
+                                        aria-label={`Text of source ${si + 1}`}
+                                        className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                                      />
+                                    ) : (
+                                      <p className="truncate text-[11px] text-muted-foreground">
+                                        {firstLine || "(empty — paste the source text)"}
+                                      </p>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : null}
+                          {set.sources_truncated ? (
+                            <p className="mt-1 text-[11px] text-warning-foreground">
+                              This set came back with more than 12 sources; the list was cut at 12.
+                            </p>
+                          ) : null}
+                          <label className="mt-1 block text-[11px] text-muted-foreground">
+                            Layout{" "}
+                            <select
+                              value={set.layout}
+                              disabled={disabled || busy || setAdded}
+                              onChange={(e) =>
+                                updateSet(set.id, (s) => ({ ...s, layout: e.target.value as SetLayout }))
+                              }
+                              className="rounded border border-border bg-background px-1 py-0.5 text-[11px]"
+                            >
+                              {(Object.keys(LAYOUT_LABEL) as SetLayout[]).map((l) => (
+                                <option key={l} value={l}>
+                                  {LAYOUT_LABEL[l]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
                             <button type="button" onClick={() => splitLast(set.id)} disabled={disabled || busy || setAdded} className="underline">
                               {set.item_indexes.length > 1 ? "Split off the last question" : "Drop this stimulus"}

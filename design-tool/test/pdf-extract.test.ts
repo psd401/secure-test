@@ -15,14 +15,20 @@ import {
   validateProposedSets,
   MAX_NUMBERED_ITEMS,
   MAX_PDF_CANDIDATES,
+  MAX_PROPOSED_SOURCES,
+  MAX_SOURCE_LABEL_CHARS,
+  MAX_SOURCE_TEXT_CHARS,
   PDF_EXTRACT_MAX_TOKENS,
   PDF_EXTRACT_SYSTEM_PROMPT,
+  PDF_OCR_USER_PROMPT,
   PdfExtractError,
   countFormLabels,
   countNumberedItems,
   detectForms,
   fillableTableFromStem,
+  flagShortenedSources,
   formsReport,
+  sourceSpanLengths,
   normalizePdfCandidate,
   numberingReport,
   parsePdfCandidates,
@@ -497,7 +503,9 @@ describe("validateProposedSets (E5 slice 3)", () => {
       3,
     );
     expect(rejected).toEqual([]);
-    expect(sets).toEqual([{ id: "s1", stimulus: "Passage", figures: [1], item_indexes: [1, 2], source: "model" }]);
+    expect(sets).toEqual([
+      { id: "s1", stimulus: "Passage", figures: [1], item_indexes: [1, 2], source: "model", sources: [], layout: "inline" },
+    ]);
   });
 
   test("keeps the first consecutive run and reports the rest; a second set cannot take a claimed item", () => {
@@ -534,7 +542,9 @@ describe("validateProposedSets (E5 slice 3)", () => {
       { index: 3, reason: "empty" },
       { index: 4, reason: "empty" },
     ]);
-    expect(sets).toEqual([{ id: "s1", stimulus: "kept", figures: [], item_indexes: [2], source: "model" }]);
+    expect(sets).toEqual([
+      { id: "s1", stimulus: "kept", figures: [], item_indexes: [2], source: "model", sources: [], layout: "inline" },
+    ]);
   });
 
   // E14 + row 31 on the scanned path: figureCount 0 strips a marker from
@@ -549,7 +559,9 @@ describe("validateProposedSets (E5 slice 3)", () => {
       rawToValid,
       0,
     );
-    expect(sets).toEqual([{ id: "s1", stimulus: "Use the graph.", figures: [], item_indexes: [0, 1], source: "model" }]);
+    expect(sets).toEqual([
+      { id: "s1", stimulus: "Use the graph.", figures: [], item_indexes: [0, 1], source: "model", sources: [], layout: "inline" },
+    ]);
     expect(rejected).toEqual([{ index: 1, reason: "empty" }]);
     // With figures present the stimulus is left alone (text-path prompt rule).
     const text = validateProposedSets([{ stimulus: "Keep [FIGURE 1]", figures: [1], item_indexes: [0] }], rawToValid, 1);
@@ -570,11 +582,22 @@ describe("validateProposedSets (E5 slice 3)", () => {
     );
     expect(rejected).toEqual([{ index: 2, reason: "empty" }]);
     expect(sets).toEqual([
-      { id: "s1", stimulus: "", figures: [], item_indexes: [0], source: "model", needs_figure: true },
-      { id: "s2", stimulus: "Table 1: pH 7.2, 7.5, 7.9", figures: [], item_indexes: [1], source: "model", needs_figure: true },
+      { id: "s1", stimulus: "", figures: [], item_indexes: [0], source: "model", sources: [], layout: "inline", needs_figure: true },
+      {
+        id: "s2",
+        stimulus: "Table 1: pH 7.2, 7.5, 7.9",
+        figures: [],
+        item_indexes: [1],
+        source: "model",
+        sources: [],
+        layout: "inline",
+        needs_figure: true,
+      },
     ]);
     const withFigure = validateProposedSets([{ stimulus: "", figures: [1], item_indexes: [0], needs_figure: true }], rawToValid, 1);
-    expect(withFigure.sets).toEqual([{ id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model" }]);
+    expect(withFigure.sets).toEqual([
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model", sources: [], layout: "inline" },
+    ]);
   });
 });
 
@@ -592,19 +615,25 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
   test("unplaced figures become sets of one on the question below; placed ones and taken questions are skipped", () => {
     const sourceNumbers = [[1], [2], [3]];
     const fromModel = adjacencyFallback(3, text, sourceNumbers, []);
-    expect(fromModel).toEqual([{ id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency" }]);
+    expect(fromModel).toEqual([
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+    ]);
     // The model already used figure 1 on question 2 → nothing to add.
-    const existing = [{ id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "model" as const }];
+    const existing = [
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "model" as const, sources: [], layout: "inline" as const },
+    ];
     expect(adjacencyFallback(3, text, sourceNumbers, existing)).toEqual([]);
     // The model placed figure 1 elsewhere but question 2 is free → figure 1 is used, so no fallback either.
-    const elsewhere = [{ id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model" as const }];
+    const elsewhere = [
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model" as const, sources: [], layout: "inline" as const },
+    ];
     expect(adjacencyFallback(3, text, sourceNumbers, elsewhere)).toEqual([]);
   });
 
   test("two unplaced figures above the same question share one set", () => {
     const stacked = "[FIGURE 1]\n[FIGURE 2]\n1. Q1";
     expect(adjacencyFallback(2, stacked, [[1]], [])).toEqual([
-      { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency" },
+      { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
     ]);
   });
 });
@@ -624,6 +653,203 @@ describe("mockPdfExtractor SET segments (E5 slice 3)", () => {
       { stimulus: "Use the graph.", figures: [1], item_indexes: [1, 2] },
       { stimulus: "Read the intro.", figures: [], item_indexes: [0] },
     ]);
+  });
+});
+
+// Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md,
+// §Import): the AP Seminar pilot document is one essay prompt followed by
+// four labelled sources, which the old prompt and validation dropped whole.
+describe("proposed sources (multi-source stimulus slice 3)", () => {
+  const rawToValid = new Map([[0, 0], [1, 1], [2, 2]]);
+
+  test("sources are read, coerced, trimmed and bounded; layout defaults to side_by_side", () => {
+    const { sets } = validateProposedSets(
+      [
+        {
+          stimulus: "Read the four sources.",
+          item_indexes: [0],
+          sources: [
+            { label: "  Source A  ", text: "First source." },
+            "an unlabelled source", // coerced to the next letter
+            { label: "Source C", text: "" }, // empty text is kept — the teacher pastes
+            { label: "   ", text: "dropped: no label" },
+            { label: "Source E", text: 42 }, // dropped: text is not a string
+            { label: "L".repeat(200), text: "T".repeat(MAX_SOURCE_TEXT_CHARS + 50) },
+          ],
+        },
+      ],
+      rawToValid,
+      0,
+    );
+    expect(sets[0]!.layout).toBe("side_by_side");
+    expect(sets[0]!.sources.map((s) => s.label)).toEqual([
+      "Source A",
+      "Source B",
+      "Source C",
+      "L".repeat(MAX_SOURCE_LABEL_CHARS),
+    ]);
+    expect(sets[0]!.sources[1]!.text).toBe("an unlabelled source");
+    expect(sets[0]!.sources[2]!.text).toBe("");
+    expect(sets[0]!.sources[3]!.text).toHaveLength(MAX_SOURCE_TEXT_CHARS);
+    expect(sets[0]!.sources_truncated).toBeUndefined();
+  });
+
+  test("beyond 12 sources the list is cut and the set says so", () => {
+    const many = Array.from({ length: MAX_PROPOSED_SOURCES + 3 }, (_, i) => ({
+      label: `Source ${i + 1}`,
+      text: "x",
+    }));
+    const { sets } = validateProposedSets([{ stimulus: "", item_indexes: [0], sources: many }], rawToValid, 0);
+    expect(sets[0]!.sources).toHaveLength(MAX_PROPOSED_SOURCES);
+    expect(sets[0]!.sources_truncated).toBe(true);
+  });
+
+  test("a set with sources and no figure and no stimulus is kept, not empty", () => {
+    const { sets, rejected } = validateProposedSets(
+      [{ stimulus: "", item_indexes: [0], sources: [{ label: "Source A", text: "the poem" }] }],
+      rawToValid,
+      0,
+    );
+    expect(rejected).toEqual([]);
+    expect(sets[0]!.item_indexes).toEqual([0]);
+    expect(sets[0]!.layout).toBe("side_by_side");
+  });
+
+  test("no sources → sources [] and layout inline; a scan strips a figure marker from a source", () => {
+    const plain = validateProposedSets([{ stimulus: "Passage", item_indexes: [0] }], rawToValid, 0);
+    expect(plain.sets[0]!.sources).toEqual([]);
+    expect(plain.sets[0]!.layout).toBe("inline");
+    const scanned = validateProposedSets(
+      [{ stimulus: "s", item_indexes: [0], sources: [{ label: "Source A", text: "The chart. [FIGURE 1]" }] }],
+      rawToValid,
+      0,
+    );
+    expect(scanned.sets[0]!.sources[0]!.text).toBe("The chart.");
+    // With figures extracted the text-path rule holds and nothing is stripped.
+    const textPath = validateProposedSets(
+      [{ stimulus: "s", item_indexes: [0], sources: [{ label: "Source A", text: "The chart. [FIGURE 1]" }] }],
+      rawToValid,
+      1,
+    );
+    expect(textPath.sets[0]!.sources[0]!.text).toBe("The chart. [FIGURE 1]");
+  });
+});
+
+describe("flagShortenedSources (multi-source stimulus slice 3)", () => {
+  // Headings on their own lines, one of them emphasis-marked (E6 wraps a
+  // bold heading as **…**), plus the label named inside an instruction
+  // paragraph on the first page — which must not be taken as the heading.
+  const MARKED = [
+    "Read the prompt, then Source A through Source D.",
+    "In your essay, cite Source A at least once.",
+    "**Source A**",
+    "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj",
+    "kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt",
+    "Source B",
+    "[FIGURE 1]",
+    "one two three four five six seven eight nine ten",
+    "Source C",
+    "the last source runs to the end of the document",
+    "and keeps going for another line as well",
+  ].join("\n");
+
+  // Running header + footer on every page (the footer with a page number),
+  // one source spanning three pages: the furniture is not part of the span.
+  test("a header and a numbered footer repeated on three pages are left out of the span", () => {
+    const page = (n: number, body: string) =>
+      ["AP TEST 2026 • **FREE-RESPONSE**", body, "Visit us on the web: example.org. " + n].join("\n");
+    const three = [
+      page(5, "**Source A**\nfirst page words here"),
+      page(6, "second page words here"),
+      page(7, "third page words here"),
+    ].join("\n\n");
+    const body = "first page words here second page words here third page words here";
+    expect(sourceSpanLengths(three, [{ label: "Source A" }])).toEqual([body.length]);
+    // Two pages are not enough to call a line furniture.
+    const two = [page(5, "**Source A**\nfirst page words here"), page(6, "second page words here")].join("\n\n");
+    expect(sourceSpanLengths(two, [{ label: "Source A" }])[0]).toBeGreaterThan(
+      "first page words here second page words here".length,
+    );
+  });
+
+  test("a source under 85% of its span is flagged; a full one is not; the last runs to the end", () => {
+    const flagged = flagShortenedSources(MARKED, [
+      { label: "Source A", text: "aaaa bbbb cccc" }, // far short of ~100 chars
+      {
+        label: "Source B",
+        text: "one two three four five six seven eight nine ten",
+      },
+      {
+        label: "Source C",
+        text: "the last source runs to the end of the document\nand keeps going for another line as well",
+      },
+    ]);
+    expect(flagged.map((s) => s.shortened)).toEqual([true, undefined, undefined]);
+  });
+
+  const ALL_LABELS = [{ label: "Source A" }, { label: "Source B" }, { label: "Source C" }];
+
+  test("the heading is found past the instruction paragraph that names the label", () => {
+    // Only the whole line "**Source A**" is the heading; the two mentions
+    // above it are inside sentences and never match. A's span ends at B's
+    // heading, and C's runs to the end of the document.
+    expect(sourceSpanLengths(MARKED, ALL_LABELS)).toEqual([
+      "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt".length,
+      "one two three four five six seven eight nine ten".length,
+      "the last source runs to the end of the document and keeps going for another line as well".length,
+    ]);
+  });
+
+  test("[FIGURE n] lines do not count toward a span (chart noise is not the source)", () => {
+    // Source B's span is its one text line; the marker line between the
+    // heading and the text is ignored.
+    expect(sourceSpanLengths(MARKED, ALL_LABELS)[1]).toBe(
+      "one two three four five six seven eight nine ten".length,
+    );
+  });
+
+  test("a source with no matching heading is left unflagged", () => {
+    const out = flagShortenedSources(MARKED, [{ label: "Passage 9", text: "x" }]);
+    expect(sourceSpanLengths(MARKED, [{ label: "Passage 9" }])).toEqual([null]);
+    expect(out[0]!.shortened).toBeUndefined();
+  });
+
+  test("the prompt carries the source rules the AP document needs", () => {
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"sources":[{"label":"Source A","text":"..."}]');
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("printed AFTER the");
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("SINGLE question");
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("never summarised");
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("axis labels");
+    // The scanned prompt mirrors (c) and (d) briefly.
+    expect(PDF_OCR_USER_PROMPT).toContain('"sources"');
+    expect(PDF_OCR_USER_PROMPT).toContain("verbatim");
+  });
+});
+
+describe("mockPdfExtractor sources= segment (multi-source stimulus slice 3)", () => {
+  test("carries labelled sources on the set; segments without one are unchanged", async () => {
+    const text = [
+      "ES: #1 Write an essay using the sources.",
+      "MC: #2 Which? | a:x | b:y | *a",
+      "SET: #1 | Read the sources. | sources=Source A::first text;;Source B::second text",
+      "SET: #2 | Plain set, no sources.",
+    ].join(" ");
+    const { proposed_sets } = await mockPdfExtractor.extract({ text, page_count: 1 });
+    expect(proposed_sets).toEqual([
+      {
+        stimulus: "Read the sources.",
+        figures: [],
+        sources: [
+          { label: "Source A", text: "first text" },
+          { label: "Source B", text: "second text" },
+        ],
+        item_indexes: [0],
+      },
+      { stimulus: "Plain set, no sources.", figures: [], item_indexes: [1] },
+    ]);
+    const { sets } = validateProposedSets(proposed_sets!, new Map([[0, 0], [1, 1]]), 0);
+    expect(sets[0]!.layout).toBe("side_by_side");
+    expect(sets[1]!.layout).toBe("inline");
   });
 });
 
