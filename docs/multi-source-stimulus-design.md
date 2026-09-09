@@ -408,6 +408,15 @@ sources (a line break + bold, an asset ref); the generator needs
 1–5 are now all on `main`; slice 6 (rows) is what remains, after the
 deploy + `migrate-aurora.sh` (0030) and a client rebuild.
 
+2026-09-09 ~11:38 PT: **DEPLOYED — task definition rev 16, rollout
+COMPLETED, `/api/health` 200 with `x-request-id`, `migrate-aurora.sh` OK
+(Aurora at 0030).** James ran the deploy script by hand (the classifier
+blocks `cdk deploy`); `cdk diff` beforehand showed the image and the
+importer bundle only. Verified from the main session with
+`describe-services` and a health probe. The origin now carries slices
+2 / 3 / 5; the client rows need a rebuild (slice 4 is on `main`, not yet
+released).
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
