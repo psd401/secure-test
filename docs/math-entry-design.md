@@ -618,3 +618,6 @@ changes before each, no push without James's go-ahead.
 
 This page written 2026-09-08 (read-only session); decisions 1.1–6.1 made by
 James the same day, all recommendations accepted. Nothing built yet.
+
+Slice 2 written 2026-09-08: 42 hand-run rows in `client/MANUAL-CHECKS.md`
+("Math entry — the keypad on short-text items"), not yet run.

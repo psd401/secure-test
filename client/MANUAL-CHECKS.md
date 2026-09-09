@@ -1242,3 +1242,88 @@ section does.
 | Cmd-O offline bundle: draw a stroke and wait 10 s | Nothing posts — no `drawing ignored` line appears until the button is pressed | Not run |
 | Cmd-O offline bundle: press Save drawing | stderr shows `drawing ignored`; on screen: "Offline mode: not saved to a server." | Not run |
 | Relaunch (fresh sign-in) onto a question with a restored picture, and do not draw | Status shows "Saved." with no new stroke; no auto-save fires until a new stroke is drawn | Not run |
+
+## Math entry — the keypad on short-text items (2026-09-08)
+
+`docs/math-entry-design.md` slice 2 (`docs/math-entry-design.md` §Slices), on
+top of slice 1's two commits: `182cfb9` (server, the scorer's fold gains
+`canonicalizeMath`) and `ae86af8` (client, the keypad itself — `MATH_KEY_ROWS`,
+`insertMath`, `mathKeypad` in `AssessmentPage.swift`). The client half needs
+no deploy; **the server half does, and it must be DEPLOYED to the origin
+before any teacher-side auto-score row below can pass** (`182cfb9` is
+additive and safe to deploy on its own — it can only add matches — see the
+design note §Model and effort for the `cdk deploy` call). Until that deploy
+happens, every keyed item below will show 0 points on the teacher side even
+though the client-side rows behave correctly; that gap is expected, not a
+client bug — note the deploy status when running the teacher-side rows.
+Rebuild the client first — `cd client && xcodebuild -project
+SecureTest.xcodeproj -scheme SecureTest -destination 'platform=macOS' build`
+per CLAUDE.md — and verify the built page carries the new code before
+starting:
+```
+find ~/Library/Developer/Xcode/DerivedData -name SecureTest.debug.dylib \
+  | xargs grep -ac 'math-keys\|MATH_KEY_ROWS\|insertMath'
+```
+each should come back non-zero (the real code lives in the dylib; the outer
+binary is Xcode's launcher stub).
+
+Fixture: a Published, paged assessment with short-text items whose stems
+carry `$` (so the pad opens by default) and PLAIN keys, one per notation —
+key `1/2` (fraction), `x^2` (exponent), `H2O` (subscript), `sqrt(2)` (root),
+`3.2 x 10^5` (scientific notation / times), `45°C` (degree), `π` (a
+teacher's Option-P, Greek), `<=` (a stem asking for the ≤ symbol) — plus
+ONE prose short-text item with no `$` in the stem (a one-word answer, to
+prove the pad's default stays collapsed there). Build it from a file, per
+the 2026-09-03 rule (import fixtures from a file, never a hand-pasted
+base64 — that is how the hotspot picture lost bytes) — `design-tool/samples/
+_build-client-rows-fixture.ts` is the pattern; extend it or write a sibling
+script. Import it on the origin; re-run the one-day teacher-row script
+first; delete the fixture after the rows are run. Demo student
+(`<demo-student-A>`-style placeholders only — never a real name or number).
+Rows marked **real session** need the actual AAC framework, not the
+simulator — blank `SECURE_TEST_SIMULATE_LOCKDOWN` on the command line.
+
+| Check | Expect | Result |
+|---|---|---|
+| Open a `$`-stem short-text item | The "Math keys" toggle reads expanded (`aria-expanded="true"`) and the 22-key pad is visible with no click needed | Not run |
+| Open the prose short-text item (no `$` in its stem) | The toggle reads collapsed (`aria-expanded="false"`) and the pad is hidden | Not run |
+| Click the toggle on the prose item | The pad opens; a second click collapses it again | Not run |
+| Look at the pad on any `$`-stem item | 22 keys in three rows — Structure (Fraction, Exponent, Subscript, Square root, `(`, `)`), Operators (`× ÷ ± ≤ ≥ ≠ °`), Greek (`π θ α β Δ λ μ Σ Ω`); the four structure keys show rendered KaTeX faces — a small stacked a-over-b, x², x₂, √a — not their glyph text | Not run |
+| Clear the field, caret at the end, press Fraction | The field reads `\frac{}{}`; the caret sits inside the first pair of braces (typing next lands in the numerator); the preview shows an EMPTY fraction bar | Not run |
+| Continuing: type `1`, press Right twice, type `2` | The field reads `\frac{1}{2}`; the preview shows one-half stacked | Not run |
+| Clear the field, type `x+1`, select it, press Fraction | The field reads `\frac{x+1}{}`; the caret is in the denominator | Not run |
+| Clear the field, type `10` (caret at the end, nothing selected), press Exponent | The field reads `10^{}`; the caret is between the braces; typing `5` gives `10^{5}` | Not run |
+| Clear the field, type `3.2` then the × key then `105`, select the trailing `5`, press Exponent | The field reads `3.2×10^{5}`; the caret lands after the closing brace; the preview shows a properly stacked exponent | Not run |
+| Clear the field, type `H`, press Subscript, type `2`, press Right, type `O` | The field reads `H_{2}O` (the Right press was needed to leave the braces before typing `O`); the preview shows H₂O | Not run |
+| Clear the field, type `H2O`, select the `2`, press Subscript | The field reads `H_{2}O`; the caret lands after the closing brace; the preview shows H₂O | Not run |
+| Clear the field, caret in the empty field, press Square root, then type `2` | The field reads `\sqrt{2}` (caret was between the braces right after the key); the preview shows √2 | Not run |
+| Clear the field, type `2`, select it, press Square root | The field reads `\sqrt{2}`; the caret lands after the closing brace; the preview shows √2 | Not run |
+| Clear the field, press `(` then `)` | The field reads `()`; each key inserts only its own character after the caret — no wrapping | Not run |
+| Clear the field, press each operator key in turn (×, ÷, ±, ≤, ≥, ≠, °), clearing between presses | Each key inserts exactly its character after the caret and the preview shows that same symbol | Not run |
+| Clear the field, press each Greek key in turn (π, θ, α, β, Δ, λ, μ, Σ, Ω), clearing between presses | Each key inserts the Unicode letter after the caret and the preview shows it | Not run |
+| Click a key with the mouse, then immediately type more characters (do not click back into the field) | The typed characters land right after the inserted key's text — the click never moved focus off the field | Not run |
+| Tab from the short-text field | Focus moves to the "Math keys" toggle | Not run |
+| Tab again, with the pad open | Focus moves into the pad, landing on Fraction — ONE Tab stop for the whole 22-key pad, not 22 | Not run |
+| With focus on Fraction, press Right twice, then Home, then End | Right/Right moves two keys into the Structure row; Home returns focus to Fraction; End moves it to Omega, the last key in the pad | Not run |
+| With focus on any key, press Space | The key's insertion fires and focus STAYS on that key, not the field | Not run |
+| With focus on a key, press Shift-Tab (twice) | Focus returns to the toggle, then to the field | Not run |
+| **Roving stop vs. a pointer click:** click the Times key with the mouse, then Tab out of the item and Tab back in to the pad | Focus lands on Fraction, not Times — a pointer click never moves the roving Tab stop (the click handler inserts but never calls the roving-index update) | Not run |
+| **THE TRAP:** clear the field, type `10`, Tab to the pad (lands on Fraction), press Right to reach Exponent, press Space, then press Next at once with no click back into the field | The teacher-side response for that item is `10^{}` — a keyboard-driven insertion posts immediately. If the teacher side instead shows the pre-keypad `10`, that is the bug this row exists to catch | Not run |
+| Type `\frac{1}` (one closing brace short) into a field | The S-4 note appears: "Can't read that as math yet — keep typing." | Not run |
+| Continue typing to close it (`\frac{1}{2}`) | The S-4 note disappears and the fraction preview renders | Not run |
+| **Real session:** press a key, then immediately press Cmd-Z | The insertion is undone (WebKit's own undo stack on the field; `setRangeText` participates in it) | Not run |
+| VoiceOver (Cmd-F5) on the "Math keys" toggle | Announces "Math keys, [collapsed/expanded], button" | Not run |
+| VoiceOver on three keys — Fraction, Times, Pi | Announces the word from the table ("Fraction, button" / "Times, button" / "Pi, button"), never the glyph or the LaTeX | Not run |
+| VoiceOver on the preview after pressing Fraction and filling it to `1/2` | Record exactly what is announced — expected "one half" from KaTeX's MathML twin, not "backslash f r a c one over two" | Not run |
+| Color Contrast = Reverse Contrast, open a `$`-stem item | Every key is readable against its background; the pressed/active instant on a key press is visible | Not run |
+| Color Contrast = Yellow on Blue, open a `$`-stem item | Same: keys readable, active state readable | Not run |
+| Zoom = 3X, open a `$`-stem item | The pad wraps into more rows instead of overflowing sideways; each key's hit target visibly grows with its label | Not run |
+| Optional font = Atkinson Hyperlegible, look at the Greek row | The Greek letters are legible; per the design note they may render in Inter rather than Atkinson (partial Greek coverage) — either is acceptable | Not run |
+| Look at the hint line under a `$`-stem item | Reads "Use the math keys below, or type _ for a subscript and ^ for an exponent. Your answer shows below as it will be read." | Not run |
+| Answer every keyed item with the notation shown above, hand in | The client accepts the hand-in with no errors | Not run |
+| Teacher side, **after slice 1a is deployed** — check auto-scoring on each keyed item | Every item scores 1 against its plain key: `\frac{1}{2}` vs `1/2`, `x^{2}` vs `x^2`, `H_{2}O` vs `H2O`, `\sqrt{2}` vs `sqrt(2)`, `3.2×10^{5}` vs `3.2 x 10^5`, `45°C` vs `45°C`, `π` vs `π`, `≤` vs `<=` | Not run |
+| Teacher side, the per-student results page | Shows the student's raw typed text for each item (the keypad's Unicode/LaTeX mix), not a rendered picture | Not run |
+| Download the gradebook CSV for the sitting | Each column carries the same raw text as the results page | Not run |
+| Teacher side, the prose item (no `$` stem) | Scores exactly as it did before this slice — a plain exact-match comparison, untouched by the fold changes | Not run |
+| **Regression, E7(b):** type `H_2O` by keyboard only, no keypad keys pressed | The preview still renders H₂O and the posted response is the typed text `H_2O`, unaffected by the keypad's presence | Not run |
+| **Regression, resume:** after answering a keyed item, relaunch and rejoin the same sitting | The restored field shows the keypad-produced text (e.g. `\frac{1}{2}`) and its formula preview is repainted to match, exactly as P-1 built for typed text | Not run |
