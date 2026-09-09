@@ -518,6 +518,26 @@ next launcher touch. The next client release should carry C-1 and C-2.
   per item there; C-2 and C-1 first; ships as client v1.2.0 plus one
   deploy.
 
+**Row S-f progress:**
+- **C-2 BUILT 2026-09-09.** Rule (James, 1.2): a single `$` opener whose
+  next character is a digit is text and never opens math; `$$` display
+  openers and `\$` escapes are unchanged. Design tool: both tokenizers
+  (`lib/math/renderLatex.ts`, `lib/items/renderItemContent.ts` — still
+  deliberate parallel copies); the importer prompt writes a dollar
+  amount as `\$57,600` (the JSON-repair path already preserves `\$`,
+  now pinned by a test). Client: `mathSegments` carries the same rule
+  and the closing KaTeX pass is the renderer's own walk over it
+  (`renderMathIn`, `katex.render` per math run, same options) —
+  **auto-render is no longer inlined** (James, 1.1; the vendored file
+  stays and is still tested); a side effect is that `\$` now reaches the
+  student as a literal `$` on the client too (auto-render opened math on
+  it). Escape hatch for math that starts with a digit: `${5x+3}$` or
+  `$ 5x+3$` — one pre-existing renderer test (`$45\degree$`) was
+  rewritten that way, and any authored stem in that shape renders as
+  text until rewritten. Tests: design-tool 1379 (+13), client 539 (+10,
+  `RendererMathPassTests` incl. the real vendored KaTeX in a JSContext
+  through the harness's prelude). Rows: not yet written (rows slice next).
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set

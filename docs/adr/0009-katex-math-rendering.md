@@ -100,3 +100,16 @@ and `![alt](asset:uuid)`:
   `\mathrm{}` unwrap, braces / whitespace / `_` go, `^` stays).
 
 Record: `docs/pdf-import-enhancements.md` E6 and E7.
+
+## Addendum 2026-09-09 (C-2, `docs/multi-source-stimulus-design.md`)
+
+A single `$` directly followed by a digit is a dollar amount, never an
+opening delimiter, in both the server tokenizers and the client — a pilot
+stimulus's `$57,600 … $30,000–$120,000` had rendered as math. `$$` and `\$`
+are unchanged; math that starts with a digit is written `${5x+3}$` or
+`$ 5x+3$`. The client no longer inlines `auto-render.min.js`: its delimiter
+search has no hook for the rule and opens math on `\$`, so
+`AssessmentPage.swift` walks text nodes with its own `mathSegments` splitter
+(the same rules as `renderLatex`) and calls `katex.render` per run. The
+importer prompt writes money as `\$57,600`.
+

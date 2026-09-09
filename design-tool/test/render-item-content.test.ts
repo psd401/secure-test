@@ -111,3 +111,44 @@ describe("renderItemContent — emphasis (E6)", () => {
     );
   });
 });
+
+// C-2 (docs/multi-source-stimulus-design.md): the parallel copy of the math
+// tokenizer takes the same rule — a single `$` before a digit is not math.
+describe("renderItemContent — C-2 dollar amounts are not math", () => {
+  test("the pilot shape renders as literal text with every $ present", () => {
+    const out = renderItemContent(
+      "Costs rose from $57,600 to between $30,000–$120,000 a year.",
+      new Map(),
+    );
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe(
+      "Costs rose from $57,600 to between $30,000–$120,000 a year.",
+    );
+  });
+
+  test("$5x$ (digit right after the opener) is literal text", () => {
+    const out = renderItemContent("$5x$", new Map());
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe("$5x$");
+  });
+
+  test("$x = 5$ still renders math", () => {
+    expect(renderItemContent("$x = 5$", new Map())).toContain('class="katex"');
+  });
+
+  test("${5x+3}$ still renders math (the escape hatch)", () => {
+    expect(renderItemContent("${5x+3}$", new Map())).toContain('class="katex"');
+  });
+
+  test("$$5x$$ still renders display math", () => {
+    const out = renderItemContent("$$5x$$", new Map());
+    expect(out).toContain('class="katex"');
+    expect(out).toContain("katex-display");
+  });
+
+  test("\\$5 and $x$ gives a literal $5 plus math", () => {
+    const out = renderItemContent("\\$5 and $x$", new Map());
+    expect(out).toContain("$5 and ");
+    expect(out).toContain('class="katex"');
+  });
+});

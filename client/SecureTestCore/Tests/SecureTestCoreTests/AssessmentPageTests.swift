@@ -98,16 +98,17 @@ final class AssessmentPageTests: XCTestCase {
         XCTAssertFalse(AssessmentPage.rendererScript.contains("</"))
     }
 
-    // ADR 0009 in the shipping client (2026-09-01): KaTeX + auto-render are
-    // inlined ahead of the renderer, the macro constant beside BUNDLE, and the
-    // renderer closes by rendering math in the tree it built.
+    // ADR 0009 in the shipping client (2026-09-01): KaTeX is inlined ahead of
+    // the renderer, the macro constant beside BUNDLE, and the renderer closes
+    // by rendering math in the tree it built. C-2 (2026-09-09): the pass is the
+    // renderer's own walk over `mathSegments`; auto-render is no longer inlined.
     func testPageInlinesKatexAndRendersMathAfterBuildingTheTree() throws {
         let html = AssessmentPage.html(title: "T", bundleJSON: "{}")
         XCTAssertTrue(html.contains("data:font/woff2;base64,"), "KaTeX CSS with inlined fonts")
         XCTAssertTrue(html.contains("const KATEX_MACROS = {"))
-        XCTAssertTrue(html.contains("renderMathInElement(root, {"))
-        let katexAt = try XCTUnwrap(html.range(of: "renderMathInElement=")?.lowerBound
-            ?? html.range(of: "renderMathInElement")?.lowerBound)
+        XCTAssertTrue(html.contains("renderMathIn(root);"))
+        XCTAssertFalse(html.contains("renderMathInElement"), "auto-render is no longer inlined")
+        let katexAt = try XCTUnwrap(html.range(of: "e.katex=t()")?.lowerBound)
         let rendererAt = try XCTUnwrap(html.range(of: "const BUNDLE = ")?.lowerBound)
         XCTAssertLessThan(katexAt, rendererAt, "the library must be inlined before the renderer")
     }
@@ -132,7 +133,7 @@ final class AssessmentPageTests: XCTestCase {
         XCTAssertTrue(html.contains("font-family: 'Inter';"))
         // The guarded call is part of the renderer and stays; without the
         // library it is a no-op, which is the whole point of the guard.
-        XCTAssertTrue(html.contains("typeof renderMathInElement === 'function'"))
+        XCTAssertTrue(html.contains("typeof katex === 'object'"))
     }
 }
 

@@ -55,7 +55,9 @@ describe("renderLatex — error handling", () => {
 
 describe("renderLatex — K-12 macros", () => {
   test("\\degree renders as the degree symbol", () => {
-    const out = renderLatex("$45\\degree$");
+    // C-2: `$45\degree$` opens with a digit, so it is now literal text; the
+    // escape hatch `${...}$` is how an author writes math starting with one.
+    const out = renderLatex("${45\\degree}$");
     expect(out).toContain("class=\"katex\"");
     // The output HTML contains the circ glyph; we just check it doesn't
     // fall back to an error span.
@@ -114,5 +116,45 @@ describe("renderLatex — mixed content ordering", () => {
     expect(xMath).toBeLessThan(b);
     expect(b).toBeLessThan(yMath);
     expect(yMath).toBeLessThan(c);
+  });
+});
+
+// C-2 (docs/multi-source-stimulus-design.md): a single `$` immediately before
+// a digit is a dollar amount, never a math opener.
+describe("renderLatex — C-2 dollar amounts are not math", () => {
+  test("the pilot shape renders as literal text with every $ present", () => {
+    const out = renderLatex(
+      "Costs rose from $57,600 to between $30,000–$120,000 a year.",
+    );
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe(
+      "Costs rose from $57,600 to between $30,000–$120,000 a year.",
+    );
+  });
+
+  test("$5x$ (digit right after the opener) is literal text", () => {
+    const out = renderLatex("$5x$");
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe("$5x$");
+  });
+
+  test("$x = 5$ still renders math", () => {
+    expect(renderLatex("$x = 5$")).toContain('class="katex"');
+  });
+
+  test("${5x+3}$ still renders math (the escape hatch)", () => {
+    expect(renderLatex("${5x+3}$")).toContain('class="katex"');
+  });
+
+  test("$$5x$$ still renders display math", () => {
+    const out = renderLatex("$$5x$$");
+    expect(out).toContain('class="katex"');
+    expect(out).toContain("katex-display");
+  });
+
+  test("\\$5 and $x$ gives a literal $5 plus math", () => {
+    const out = renderLatex("\\$5 and $x$");
+    expect(out).toContain("$5 and ");
+    expect(out).toContain('class="katex"');
   });
 });

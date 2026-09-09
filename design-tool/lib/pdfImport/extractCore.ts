@@ -78,6 +78,11 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   "inside $...$ in stems, choices and pairs (H2O becomes $\\mathrm{H_2O}$,",
   "x squared becomes $x^2$, 3.5 x 10^4 becomes $3.5 \\times 10^{4}$), never",
   "as flat text; table column and row labels take KaTeX the same way.",
+  // C-2 (docs/multi-source-stimulus-design.md): a `$` directly before a digit
+  // is never a math opener in either renderer, so a dollar amount must carry
+  // the backslash to render as a literal `$`.
+  "Write a dollar amount with a backslash before the sign (\\$57,600), never",
+  "as math: a $ directly before a digit is never a math delimiter.",
   "Leave correct_answer values as plain text.",
   "The text may contain markers like [FIGURE 3] where a figure (a graph,",
   "diagram, table or picture) sits in the document. When one or more",

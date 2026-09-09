@@ -40,11 +40,11 @@ public enum AssessmentPage {
             title: title,
             styles: [katex.css, itemStyles],
             scripts: [
-                // KaTeX + auto-render first, so the renderer's closing
-                // renderMathInElement call finds them. Both are pure
-                // libraries; neither touches the tree until asked.
+                // KaTeX first, so the renderer's closing math pass finds it.
+                // A pure library; it touches nothing until asked. C-2
+                // (2026-09-09): auto-render is NO LONGER inlined — the
+                // renderer splits with its own `mathSegments` instead.
                 katex.js,
-                katex.autoRender,
                 "const BUNDLE = \(JSONEmbedding.escapeForScriptElement(bundleJSON));",
                 "const OFFLINE = \(offline);",
                 KatexBundle.macrosScript,
@@ -491,7 +491,7 @@ public enum AssessmentPage {
       // first with italic inside it. Still DOM only: the markers become
       // strong / em ELEMENTS with text-node children; nothing authored is
       // parsed as markup. Math segments are left as plain text nodes for
-      // renderMathInElement to find afterwards.
+      // the closing math pass to find afterwards.
       var BOLD_RE = /\*\*([^*\s](?:[^*\n]*?[^*\s])?)\*\*/g;
       var ITALIC_RE = /(^|[\s(\[{"'\u201c\u2018])_([^_\s](?:[^_\n]*?[^_\s])?)_(?=$|[\s.,;:!?)\]}"'\u201d\u2019])/g;
 
@@ -503,6 +503,16 @@ public enum AssessmentPage {
           if (ch === '\\' && text.charAt(i + 1) === '$') { i += 2; continue; }
           if (ch === '$') {
             var display = text.charAt(i + 1) === '$';
+            // C-2 (James, 2026-09-09, docs/multi-source-stimulus-design.md): a
+            // single `$` whose next character is a digit is money, not an
+            // opener — `$57,600 … $30,000` in a pilot stimulus rendered as
+            // math. `$$` display openers and `\$` escapes are unchanged; an
+            // author who wants math starting with a digit writes `${5x+3}$`
+            // or `$ 5x+3$`.
+            if (!display && text.charAt(i + 1) >= '0' && text.charAt(i + 1) <= '9') {
+              i += 1;
+              continue;
+            }
             var open = display ? 2 : 1;
             var scan = i + open, close = -1;
             while (scan < len) {
@@ -2928,21 +2938,89 @@ public enum AssessmentPage {
       // text stays visible rather than the page failing. Same options as the
       // design tool's server-side renderer: errors render red, never throw;
       // strict off; trust off, so no \href / \url / \html* commands.
-      if (typeof renderMathInElement === 'function') {
+      //
+      // C-2 (2026-09-09, docs/multi-source-stimulus-design.md): the walk below
+      // is our own, not KaTeX's auto-render. Auto-render splits with a plain
+      // delimiter search — no hook for the "a `$` before a digit is money"
+      // rule, and it opens math on a backslash-escaped `\$` too — so it is no
+      // longer inlined. This pass uses `mathSegments`, the one tokenizer the
+      // client already shares with the design tool's renderers, and unescapes
+      // `\$` to `$` in text exactly as `renderLatex`'s pushText does.
+      var MATH_SKIP_TAGS = {
+        textarea: true, input: true, select: true, script: true, style: true, canvas: true
+      };
+
+      // A fragment for one merged run of text, or null when it holds neither
+      // math nor an escaped dollar (`\$57,600`, as the importer now writes
+      // money, must lose its backslash even in prose with no math at all).
+      function mathFragment(text) {
+        var segs = mathSegments(text);
+        var hasMath = segs.some(function (seg) { return seg.math; });
+        if (!hasMath && text.indexOf('\\$') === -1) return null;
+        var frag = document.createDocumentFragment();
+        segs.forEach(function (seg) {
+          if (!seg.math) {
+            frag.appendChild(document.createTextNode(seg.text.replace(/\\\$/g, '$')));
+            return;
+          }
+          var display = seg.text.slice(0, 2) === '$$';
+          var open = display ? 2 : 1;
+          var tex = seg.text.slice(open, seg.text.length - open);
+          var span = document.createElement('span');
+          try {
+            katex.render(tex, span, {
+              displayMode: display,
+              throwOnError: false,
+              errorColor: '#cc0000',
+              strict: 'ignore',
+              trust: false,
+              macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
+            });
+            frag.appendChild(span);
+          } catch (e) {
+            // throwOnError keeps parse errors red rather than thrown, but a
+            // TypeError still can escape; the raw source is better than a gap.
+            console.log('KaTeX render failed: ' + (e && e.message));
+            frag.appendChild(document.createTextNode(seg.text));
+          }
+        });
+        return frag;
+      }
+
+      function renderMathIn(el) {
+        var kids = el.childNodes;
+        for (var i = 0; i < kids.length; i++) {
+          var node = kids[i];
+          if (node.nodeType === 3) {
+            // Adjacent text nodes are merged first, as auto-render did, so an
+            // expression split across nodes still parses as one.
+            var text = node.textContent || '';
+            var next = node.nextSibling, extra = 0;
+            while (next && next.nodeType === 3) {
+              text += next.textContent || '';
+              next = next.nextSibling;
+              extra += 1;
+            }
+            var frag = mathFragment(text);
+            if (!frag) { i += extra; continue; }
+            for (var d = 0; d < extra; d++) el.removeChild(node.nextSibling);
+            i += frag.childNodes.length - 1;
+            el.replaceChild(frag, node);
+          } else if (node.nodeType === 1) {
+            var tag = (node.nodeName || '').toLowerCase();
+            if (MATH_SKIP_TAGS[tag] === true) continue;
+            // Never re-enter markup KaTeX itself produced.
+            if ((' ' + (node.className || '') + ' ').indexOf(' katex ') !== -1) continue;
+            renderMathIn(node);
+          }
+        }
+      }
+
+      if (typeof katex === 'object' && katex && typeof katex.render === 'function') {
         try {
-          renderMathInElement(root, {
-            delimiters: [
-              { left: '$$', right: '$$', display: true },
-              { left: '$', right: '$', display: false }
-            ],
-            throwOnError: false,
-            errorColor: '#cc0000',
-            strict: 'ignore',
-            trust: false,
-            macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
-          });
+          renderMathIn(root);
         } catch (e) {
-          console.log('KaTeX renderMathInElement failed: ' + (e && e.message));
+          console.log('KaTeX math pass failed: ' + (e && e.message));
         }
       }
     })();

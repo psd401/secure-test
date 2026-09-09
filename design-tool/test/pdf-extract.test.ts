@@ -265,6 +265,28 @@ describe("extractor prompt (E1/E2/E4/E7a/E8)", () => {
       /KEEP each \[FIGURE n\] marker, on a line of its own, exactly where that figure is printed/,
     );
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("escape double quotes");
+    // C-2: a `$` directly before a digit is never a math opener, so a dollar
+    // amount is written with a backslash.
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("\\$57,600");
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(
+      "a $ directly before a digit is never a math delimiter",
+    );
+  });
+
+  // C-2: the repair path must not mangle `\$` — an unescaped backslash gets
+  // doubled, which parses back to the same literal `\$`.
+  test("the JSON repair path preserves a backslash-escaped dollar", () => {
+    const broken =
+      '[{"type":"essay","stem":"Costs rose to \\$57,600, the question, "why?" matters"}]';
+    const parsed = parsePdfCandidates(broken, "t") as { stem: string }[];
+    expect(parsed[0]!.stem).toBe(
+      'Costs rose to \\$57,600, the question, "why?" matters',
+    );
+    // Valid JSON with a properly doubled backslash is untouched by the strict
+    // parse and still yields a literal `\$`.
+    expect(
+      parsePdfCandidates('[{"type":"essay","stem":"costs \\\\$57,600"}]', "t"),
+    ).toEqual([{ type: "essay", stem: "costs \\$57,600" }]);
   });
 });
 

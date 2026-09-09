@@ -243,6 +243,46 @@ final class RendererHarness {
         }
         return false;
       };
+      // C-2 (2026-09-09): the closing math pass walks the tree with the real
+      // Node API rather than handing it to auto-render, so the shim grew the
+      // read-only halves of it — `childNodes` is an alias of `children`,
+      // `nodeType` / `nodeName` are derived from the tag, and `nextSibling`
+      // is looked up in the parent — plus removeChild / replaceChild.
+      Object.defineProperty(n, 'childNodes', { get: function () { return this.children; } });
+      Object.defineProperty(n, 'nodeType', {
+        get: function () {
+          if (this.tagName === '#text') return 3;
+          return this.isFragment ? 11 : 1;
+        }
+      });
+      Object.defineProperty(n, 'nodeName', { get: function () { return this.tagName; } });
+      Object.defineProperty(n, 'nextSibling', {
+        get: function () {
+          var parent = this.parentNode;
+          if (!parent) return null;
+          var at = parent.children.indexOf(this);
+          if (at === -1 || at + 1 >= parent.children.length) return null;
+          return parent.children[at + 1];
+        }
+      });
+      n.removeChild = function (child) {
+        var at = this.children.indexOf(child);
+        if (at !== -1) {
+          this.children.splice(at, 1);
+          child.parentNode = null;
+        }
+        return child;
+      };
+      n.replaceChild = function (fresh, old) {
+        var at = this.children.indexOf(old);
+        if (at === -1) return old;
+        var incoming = fresh && fresh.isFragment ? fresh.children.slice() : [fresh];
+        if (fresh && fresh.isFragment) fresh.children = [];
+        for (var k = 0; k < incoming.length; k++) incoming[k].parentNode = this;
+        this.children.splice.apply(this.children, [at, 1].concat(incoming));
+        old.parentNode = null;
+        return old;
+      };
       n.appendChild = function (child) {
         if (child && child.isFragment) {
           var kids = child.children.slice();
@@ -335,6 +375,10 @@ final class RendererHarness {
         var node = __node(tag);
         return tag === 'canvas' ? __canvas(node) : node;
       },
+      // KaTeX builds its own markup through these when the real library is
+      // loaded into the harness (C-2); the SVG halves of a formula come
+      // through createElementNS.
+      createElementNS: function (ns, tag) { return __node(tag); },
       createTextNode: function (text) {
         var n = __node('#text');
         n.textContent = String(text);

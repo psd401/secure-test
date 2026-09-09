@@ -33,7 +33,7 @@ final class RendererEmphasisTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('em', \(stem))"), 1)
         XCTAssertEqual(try h.string("__first('em', \(stem)).textContent"), "abiotic")
         // The markers are gone from the visible text; math and the literal
-        // underscores are untouched (renderMathInElement runs later).
+        // underscores are untouched (the math pass runs later).
         XCTAssertEqual(
             try h.string("\(stem).textContent"),
             "Which is NOT an abiotic factor? Solve $x_1 + x_2$ for x ______ snake_case"

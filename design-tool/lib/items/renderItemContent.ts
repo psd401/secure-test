@@ -88,6 +88,15 @@ function tokenizeMath(input: string): Token[] {
     }
     if (ch === "$") {
       const isDisplay = input[cursor + 1] === "$";
+      // C-2 (docs/multi-source-stimulus-design.md): a single `$` whose next
+      // character is a digit is a dollar amount, never a math opener — prose
+      // like "$57,600 to $30,000" was rendering the run between two amounts
+      // as math. `$$` display openers and `\$` are unchanged. An author who
+      // wants math starting with a digit writes `${5x+3}$` or `$ 5x+3$`.
+      if (!isDisplay && input[cursor + 1] !== undefined && input[cursor + 1]! >= "0" && input[cursor + 1]! <= "9") {
+        cursor += 1;
+        continue;
+      }
       const openLen = isDisplay ? 2 : 1;
       let scan = cursor + openLen;
       let closeAt = -1;
