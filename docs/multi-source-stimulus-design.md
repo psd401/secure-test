@@ -251,6 +251,11 @@ the same panel); 6 with a sitting.
 - **D-4** Slice 1 (line breaks) ships now as its own commit.
 - **D-5** Priority: now, ahead of the queued 4b / 4c rows and the gradebook
   CSV — this is the initial pilot assessment.
+- **D-6** (slice 4, accepted in review 2026-09-09) The `side_by_side`
+  width is read ONCE at build time, not on resize: re-paging would rebuild
+  the item tree and drop uncommitted essay text and live drawing strokes.
+  A CSS media query stacks the two columns if the window is dragged
+  smaller afterwards; the client is fullscreen by default (batch 4, S-8).
 
 ## Open questions
 
@@ -384,7 +389,27 @@ runner image has no system fonts, so a chart whose labels are real text
 Docker gotcha: colima shares `$HOME` only — a bind mount from `/private/tmp`
 is silently empty inside the container.
 
-**Hazard until slice 4 ships:** the v1.1.0 client decodes `sources` as an
+2026-09-09, afternoon: **slice 4 BUILT in the second terminal and MERGED**
+(`1a6d516` + `5fe50fb` on `claude/multi-source-client`, merged from `5fe50fb`;
+`swift test` 529, `xcodebuild` green, both re-run in the main session).
+`StimulusSource` decode (absent → `[]`, unknown layout still → inline);
+the source pane under a set's introduction — several sources = a
+`role="tablist"` with the keypad's roving-tabindex model (Left / Right
+wrap, Home / End), one source = a labelled panel, panels focusable and
+scrolling inside 60 vh, text through `textWithAssets`, `pre-line`, tokens
+only, the open source kept in memory per set; `side_by_side` = one page
+with the stimulus left (55 %) and every member right when the viewport is
+≥ 1100 px at build, `own_page` behaviour below it with the disclosure
+reading "Show the sources" (D-6 above); `layoutOf` is the single decision
+point. Fixture: the position-4 essay becomes a `side_by_side` set with two
+sources (a line break + bold, an asset ref); the generator needs
+`DESIGN_TOOL_DELIVERY_SECRET`. 22 rows in `client/MANUAL-CHECKS.md`
+("Multi-source stimulus — sources beside the question"), NOT run. Slices
+1–5 are now all on `main`; slice 6 (rows) is what remains, after the
+deploy + `migrate-aurora.sh` (0030) and a client rebuild.
+
+**Hazard until slice 4 ships (now merged — stands until the next client
+release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
 published with sources before the next client release shows students the
 introduction only. Slice 3 (import) needs no route change — the panel just
