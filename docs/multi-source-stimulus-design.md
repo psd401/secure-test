@@ -417,6 +417,17 @@ importer bundle only. Verified from the main session with
 2 / 3 / 5; the client rows need a rebuild (slice 4 is on `main`, not yet
 released).
 
+2026-09-09 ~13:00 PT: **slice 6 rows WRITTEN, none run** — teacher side
+rows 79–92 in `docs/design-tool-manual-checks.md` ("Multi-source stimulus —
+the import, the editor, the preview": the pilot import's 4 chart figures /
+1 essay / 1 set with A–D, the card's sources + badge + layout, Discard a
+figure then Add → refs inside Source C with the titles as alt, the editor's
+Sources list incl. Move / Remove / Add + the readiness gap, preview + print,
+export → import remap, publish → the client hand-off, two regressions);
+client side the 22 rows from slice 4. Order: rows 79–90 on the origin
+(Claude in Chrome, James's account), a client rebuild, then the client rows
+on the same published fixture (`Multi-source hand-run 2026-09-09`).
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
