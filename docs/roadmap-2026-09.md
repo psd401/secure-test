@@ -196,3 +196,13 @@ causes, the shape (D-1…D-5 decided the same day) and six slices; slice 1
 (`white-space: pre-line` on stems and stimulus bodies, client + preview +
 editor live preview) built the same session. Everything else on this page
 queues behind it.
+
+2026-09-09 evening: **row S rows RUN** — teacher rows 79–92 (13 ✅, one
+half) and the client sitting (two passes, 18 of 22 ✅, VoiceOver rows
+deferred). Findings C-1…C-7 in `docs/multi-source-stimulus-design.md`
+§Progress; **C-1 (real-session build reads a narrow viewport → falls back
+to the passage page; add a student toggle) and C-2 (dollar amounts in
+prose render as KaTeX) are HIGH and go before anything else queued**; C-4
+(pinch-zoom + click-to-enlarge on charts) is James's decision; C-6 (the
+Accommodations tab's checkboxes look saved without Save) is a small
+design-tool fix.

@@ -448,6 +448,64 @@ Published on the origin** (paged, one essay, sources A–C, three charts in
 C) for the 22 client rows; the scratch drafts (the re-import copy, the
 raster regression) were deleted. The extraction took ~70 s on the origin.
 
+2026-09-09 ~16:30 PT: **client sitting RUN — two passes** (James at the
+rebuilt client on the origin, Claude on the teacher side; results in
+`client/MANUAL-CHECKS.md`): pass 1 a REAL `AEAssessmentSession` on the
+fixture, pass 2 a simulated one on a copy `Multi-source hand-run
+2026-09-09 (accommodations)` (imported from the export, zoom / contrast /
+font allowed, paged, published — a fresh assessment gives a fresh
+attempt; both stay on the origin with their attempts). **18 of 22 rows ✅
+or ✅-with-caveat; the two VoiceOver rows not run (C-3); two rows not
+exercisable on the fixture.** Tabs, scrolling, keyboard, line breaks, the
+charts inside Source C, answer safety, tab memory, the three
+accommodations on the pane, stack-on-shrink, resume and hand-in all as
+designed. Findings:
+
+- **C-1 (HIGH — build next).** In the real session the page built with a
+  narrow viewport and took the own_page fallback (passage page + the
+  collapsed pane) even though the wire said `side_by_side`; the simulated
+  session on the same Mac built wide and behaved. Cause: the AAC `begin()`
+  transition is resizing the window at the moment the page builds, and
+  D-6 reads the width once. Fix: evaluate `WIDE` on the first layout pass
+  after the session is active (or re-evaluate once on `DID BEGIN` before
+  the first paint), plus **a student toggle "Sources beside / above the
+  question"** (James's ask) — and keep the passage page + collapsed pane
+  presentation, which James found good on both pages.
+- **C-2 (HIGH — the pilot document itself).** Source B's dollar amounts
+  (`$57,600 … $30,000–$120,000`) were read as KaTeX delimiters and
+  rendered as math (italic, odd spacing). Fix on BOTH renderers
+  (`renderItemContent` / `renderLatex` and the client's auto-render
+  pass): a `$` immediately followed by a digit never opens math; the
+  importer prompt can also write currency as `\$`. Design-tool + client,
+  S.
+- **C-3.** VoiceOver's first-run Quick Start opens as another app and is
+  invisible / unresponsive under AAC. Row setup: dismiss it once outside
+  a session (Cmd-F5 → V). The two VoiceOver rows re-run next sitting.
+- **C-4 (decision, James).** Students want to zoom a chart. Two parts:
+  (a) `WKWebView.allowsMagnification` is off (the default) — there is no
+  lockdown or integrity reason not to enable pinch-to-zoom (it never
+  leaves the page; the peek captures the magnified view, which is fine;
+  pointer mapping for drawing / drag already goes through
+  `getBoundingClientRect`), bounded 1×–3× with a Reset in the Session
+  menu (Cmd-0); (b) click-to-enlarge on an image inside a source or stem
+  (an overlay, Esc to close) — easier than pinching precisely. Both S.
+- **C-5 (rows + guide).** There is NO student accommodations toolbar; the
+  three paint from the VALUE in the student's row (TIDE strings
+  `1.5X` / `Reverse Contrast` / `On`), gated by the assessment's allowed
+  list, and overrides are per assessment. The sitting guide said
+  "toolbar" — corrected in the rows; the fixture recipe now says: allowed
+  list on the assessment AND a per-student override on THAT assessment.
+- **C-6 (design tool, S).** The assessment's Accommodations tab keeps the
+  checkboxes ticked after navigating away without Save, so a teacher
+  believes they stuck. Needs the stimulus card's "Unsaved changes" cue or
+  autosave.
+- **C-7 (dev, XS).** `client/scripts/launch-client.ts` does not forward
+  `SECURE_TEST_NO_FULLSCREEN`; the narrow rows ran only because C-1 forced
+  the fallback.
+
+Order proposed: C-2 → C-1 → C-6 → C-4 (after the decision) → C-7 with the
+next launcher touch. The next client release should carry C-1 and C-2.
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
