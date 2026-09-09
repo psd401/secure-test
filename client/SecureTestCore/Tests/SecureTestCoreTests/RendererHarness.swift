@@ -145,6 +145,16 @@ final class RendererHarness {
         node.parentNode = null;
       }
       n.parentNode = null;
+      // Real `Node.contains`, which the drawing item's focusout handler uses to
+      // tell "focus moved inside this item" from "focus left it".
+      n.contains = function (other) {
+        var at = other;
+        while (at) {
+          if (at === this) return true;
+          at = at.parentNode;
+        }
+        return false;
+      };
       n.appendChild = function (child) {
         if (child && child.isFragment) {
           var kids = child.children.slice();
@@ -270,6 +280,38 @@ final class RendererHarness {
     };
 
     var console = { log: function () {} };
+
+    // Drawing auto-save (slice 2): JavaScriptCore has no timers at all, so the
+    // debounce would simply never fire — and "never fires" is indistinguishable
+    // from "does not schedule". These record what was scheduled and let a test
+    // run it on demand, which is the only way the five-second idle is testable
+    // here.
+    var __timers = [];
+    var __timerId = 0;
+    function setTimeout(fn, ms) {
+      __timerId += 1;
+      __timers.push({ id: __timerId, fn: fn, ms: ms });
+      return __timerId;
+    }
+    function clearTimeout(id) {
+      for (var i = 0; i < __timers.length; i++) {
+        if (__timers[i].id === id) {
+          __timers.splice(i, 1);
+          return;
+        }
+      }
+    }
+    window.setTimeout = setTimeout;
+    window.clearTimeout = clearTimeout;
+
+    /// Runs and removes every pending timer, in the order they were scheduled.
+    function __fireTimers() {
+      var due = __timers.slice();
+      __timers = [];
+      for (var i = 0; i < due.length; i++) due[i].fn();
+    }
+
+    function __pendingTimers() { return __timers.length; }
 
     // Depth-first walk. `sel` is a tag name, or `.class`, matched on the
     // space-separated className list so `word-count over` still matches

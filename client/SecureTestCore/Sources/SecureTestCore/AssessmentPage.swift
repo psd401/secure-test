@@ -1319,6 +1319,28 @@ public enum AssessmentPage {
         }
       }
 
+      // Drawing auto-save (docs/drawing-tools-design.md §Auto-save, D-8, slice
+      // 2). Every save is a full upload — toDataURL, a new slot, a new S3
+      // object — so it is idle-debounced rather than per stroke: five seconds
+      // after the student stops, and at once at the points where the work is
+      // about to leave the screen.
+      var AUTO_SAVE_IDLE_MS = 5000;
+
+      // The flush hook of every drawing item on the page, so a page turn and
+      // Finish can save them all without knowing where they are. Each hook is a
+      // no-op unless that item is dirty, so the flush points never post a
+      // redundant upload.
+      var DRAWING_FLUSHES = [];
+      function flushAllDrawings() {
+        for (var f = 0; f < DRAWING_FLUSHES.length; f++) {
+          try {
+            DRAWING_FLUSHES[f]();
+          } catch (e) {
+            console.log('drawing flush failed: ' + (e && e.message));
+          }
+        }
+      }
+
       // Drawing background (docs/drawing-background-design.md, D-1..D-3): the
       // graph paper is painted INTO the canvas, before any stroke and before
       // the P-1 restore, so `toDataURL` carries the paper with the work and
@@ -1544,6 +1566,15 @@ public enum AssessmentPage {
 
         function widthNow() { return PEN_SIZES[tool][size]; }
 
+        // --- auto-save state (D-8) -----------------------------------------
+        // `dirty` is "the picture has changed since the last save we started";
+        // `inFlight` is "one upload is already out". One at a time: the host
+        // starts a Task per upload, and two racing for the same item would make
+        // the "Saved." label a guess.
+        var dirty = false;
+        var inFlight = false;
+        var idleTimer = null;
+
         // What `paintBackground` hands the pen back to. Kept on the element so
         // one item's tools can never reach another item's canvas.
         function recordPen() {
@@ -1686,6 +1717,7 @@ public enum AssessmentPage {
           strokes.pop();
           rebuild();
           undoButton.disabled = strokes.length === 0;
+          touched();
         }
 
         // The "Draw something first." guard. Eraser-only work on a blank canvas
@@ -1697,6 +1729,69 @@ public enum AssessmentPage {
           }
           return false;
         }
+
+        // --- auto-save (D-8) ------------------------------------------------
+        // Guarded: a runtime without timers (a stripped build) simply never
+        // auto-saves, and the Save drawing button is still the whole path.
+        function cancelIdle() {
+          if (idleTimer !== null && typeof clearTimeout === 'function') {
+            window.clearTimeout(idleTimer);
+          }
+          idleTimer = null;
+        }
+
+        // Every change the student makes to the picture: the end of a pen or
+        // eraser stroke, an undo, a Clear. The timer restarts from zero, so a
+        // student mid-drawing is never interrupted by an upload.
+        function touched() {
+          cancelIdle();
+          if (!isMarked()) {
+            // Nothing to upload, and that is not the same as nothing happening:
+            // the student may have just undone or cleared everything they had.
+            // A blank PNG is not an answer, and the server keeps the last
+            // picture that WAS saved — so no timer is scheduled and the dirty
+            // flag goes with it. Clearing an answer for real is the teacher's
+            // path, not a blank upload.
+            dirty = false;
+            return;
+          }
+          dirty = true;
+          if (typeof setTimeout !== 'function') return;
+          idleTimer = window.setTimeout(function () {
+            idleTimer = null;
+            flushNow();
+          }, AUTO_SAVE_IDLE_MS);
+        }
+
+        // The idle timer's callback, and the flush points' one entry point.
+        function flushNow() {
+          cancelIdle();
+          // Offline every save is ignored by the host and relabelled, so
+          // auto-save is off there; the manual button still posts, because the
+          // host's "drawing ignored" line is the hand-run evidence.
+          if (OFFLINE_MODE) return;
+          if (!dirty || !isMarked()) return;
+          // The result callback sends what is dirty when it arrives.
+          if (inFlight) return;
+          inFlight = true;
+          dirty = false;
+          status.className = 'drawing-status';
+          status.textContent = 'Saving…';
+          postDrawing(item.id, canvas.toDataURL('image/png'));
+        }
+        DRAWING_FLUSHES.push(flushNow);
+        // The per-block hook the pager and Finish reach for; also what a test
+        // presses.
+        wrap.__flushDrawing = flushNow;
+
+        // Focus leaving the item — Tab into the next question, a page turn's
+        // focus move — is a save point: the work is about to leave the screen.
+        // Focus moving between the toolbar and the canvas is not.
+        wrap.onfocusout = function (event) {
+          var to = event ? event.relatedTarget : null;
+          if (to && typeof wrap.contains === 'function' && wrap.contains(to)) return;
+          flushNow();
+        };
 
         // D-5: Cmd-Z undoes while focus is inside THIS drawing item — read on
         // the wrap, not the document, so two drawing items cannot undo each
@@ -1763,6 +1858,9 @@ public enum AssessmentPage {
           }
         };
         function endStroke() {
+          // Only a stroke that actually happened restarts the auto-save timer:
+          // pointerleave fires on a pointer that was never down too.
+          var drew = current !== null;
           drawing = false;
           if (context && current && current.tool === 'eraser') {
             // The under-paint hands the normal mode back itself when it paints;
@@ -1772,6 +1870,7 @@ public enum AssessmentPage {
             }
           }
           current = null;
+          if (drew) touched();
         }
         canvas.onpointerup = endStroke;
         canvas.onpointerleave = endStroke;
@@ -1802,6 +1901,9 @@ public enum AssessmentPage {
           undoButton.disabled = true;
           status.className = 'drawing-status';
           status.textContent = '';
+          // Cancels a pending auto-save of work that is now gone; schedules
+          // nothing, because a cleared canvas is not an answer to upload.
+          touched();
         };
         controls.appendChild(clear);
 
@@ -1823,6 +1925,22 @@ public enum AssessmentPage {
           status.textContent = OFFLINE_MODE
             ? 'Offline mode: not saved to a server.'
             : 'Saving…';
+          // Offline the button is exactly what it was before auto-save: post,
+          // label, no state to keep (no callback will ever arrive to clear it).
+          if (OFFLINE_MODE) {
+            postDrawing(item.id, canvas.toDataURL('image/png'));
+            return;
+          }
+          // Otherwise it is the same single-flight path the timer uses: a
+          // student forcing a save now must not start a second upload beside
+          // the one already out. The result callback sends this one.
+          cancelIdle();
+          if (inFlight) {
+            dirty = true;
+            return;
+          }
+          inFlight = true;
+          dirty = false;
           postDrawing(item.id, canvas.toDataURL('image/png'));
         };
         controls.appendChild(save);
@@ -1871,8 +1989,14 @@ public enum AssessmentPage {
         // The host calls this back once the bytes are actually stored, so the
         // student is told their work is saved only when it is.
         wrap.__drawingSaved = function (ok) {
+          inFlight = false;
           status.className = ok ? 'drawing-status saved' : 'drawing-status';
           status.textContent = ok ? 'Saved.' : 'Could not save. Tell your teacher.';
+          // Drew more while the upload was out: send that now, so the label is
+          // true of the picture on screen. On a failure nothing is retried on
+          // its own — a loop against a broken network would post forever; the
+          // next change starts the idle timer again.
+          if (ok && dirty) flushNow();
         };
         canvas.__markedForTest = function () { return isMarked(); };
 
@@ -2029,6 +2153,11 @@ public enum AssessmentPage {
 
         button.onclick = function () {
           button.disabled = true;
+          // Auto-save flush point (D-8), BEFORE the submit goes: a drawing
+          // changed in the last five seconds would otherwise be handed in
+          // unsaved. The host's upload gate is the other half — it holds the
+          // submit until the bytes these posts start have landed.
+          flushAllDrawings();
           // Offline, no __secureTestSubmitResult will ever arrive: the
           // hand-in completes here, so the label says so and the button stays
           // disabled as it would after a confirmed hand-in. The post still
@@ -2312,6 +2441,11 @@ public enum AssessmentPage {
 
         function show(n) {
           if (n < 0 || n >= pages.length) return;
+          // Auto-save flush point (D-8): a drawing about to be hidden by a page
+          // turn saves at once rather than waiting out its idle timer. Every
+          // block, not only this page's — a hook with nothing dirty is a no-op,
+          // and the pager does not know which page a drawing sits on.
+          flushAllDrawings();
           at = n;
           pages.forEach(function (page, i) {
             if (i === n) page.el.removeAttribute('hidden');

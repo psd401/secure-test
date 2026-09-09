@@ -36,6 +36,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     let view: NSView
     private let webView: LockedDownWebView
     private let log: (String) -> Void
+    /// Drawing auto-save (`docs/drawing-tools-design.md` §Auto-save, slice 2):
+    /// uploads run in their own Tasks, so the hand-in has to know whether any
+    /// is still out. The page flushes its dirty drawings when Finish is
+    /// pressed; this is what keeps the submit from overtaking them.
+    private let uploadGate = UploadGate()
     /// On-demand peek: the student-facing notice strip (decision 6.6). The
     /// state is Core's `PeekNotice` (finding 8.1: dismissable, re-shown by
     /// every later peek); the strip below mirrors it — one label plus a
@@ -484,6 +489,21 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
+                // Drawing uploads first: the page has just flushed its dirty
+                // drawings, and a response that names an upload slot cannot be
+                // spooled until those bytes are stored. Bounded, so a wedged
+                // upload delays the hand-in rather than blocking it.
+                let pending = await self.uploadGate.waitForIdle(timeout: .seconds(20))
+                if pending > 0 {
+                    self.log("submit refused: \(pending) drawing upload(s) still in flight")
+                    AppDelegate.logError(
+                        kind: "submit_blocked",
+                        message: "\(pending) drawing upload(s) still in flight",
+                        context: ["uploads_in_flight": String(pending)]
+                    )
+                    self.reportSubmit(ok: false)
+                    return
+                }
                 let spool = try await self.spoolForSession()
                 let flushed = self.noteDropped(await spool.flush(using: client))
                 guard flushed.remaining == 0 else {
@@ -542,6 +562,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
         Task { @MainActor [weak self] in
             guard let self else { return }
+            // Counted for the whole Task, ok or not: a failed upload is no
+            // longer in flight and must not hold the hand-in open. `defer`
+            // cannot await, so the release is its own small Task — which can
+            // only ever make the gate close LATER, never sooner.
+            let gate = self.uploadGate
+            await gate.begin()
+            defer { Task { await gate.end() } }
             do {
                 // The size is declared before the URL is signed: a presigned
                 // PUT binds an exact Content-Length and cannot express a

@@ -394,3 +394,52 @@ commit).** The tools, as designed, all in `client/SecureTestCore`:
 
 Built by an Opus 5 / medium subagent from this page; diff reviewed and
 both checks re-run in the main session before the commit.
+
+**Slice 2 BUILT 2026-09-08 (local, one commit).** Auto-save, as §Auto-save
+describes:
+
+- `AssessmentPage.swift`: per-item `dirty` / `inFlight` / idle timer.
+  `touched()` runs at the end of a real stroke (a `pointerleave` with no
+  pointer down does nothing), on Undo and on Clear; it restarts the 5 s
+  timer when the item is answered, and when it is not (undo-to-zero, Clear,
+  eraser-only on a blank canvas) it schedules nothing and drops `dirty` — a
+  blank PNG is not an answer and the server keeps the last saved picture.
+  `flushNow()` is the single entry point: off offline, no-op unless dirty
+  and answered, deferred while a save is in flight, else "Saving…" + one
+  post. The host callback clears `inFlight` and, on success with new work
+  dirty, posts again at once; on failure nothing retries on its own. The
+  manual Save drawing button keeps its copy and guard and rides the same
+  single-flight path (offline it behaves exactly as before). Flush points:
+  every drawing block registers in `DRAWING_FLUSHES`; the pager's `show(n)`
+  (the one funnel for Previous / Next / strip / review jumps) and Finish's
+  onclick (before the submit post) call `flushAllDrawings()`;
+  `wrap.onfocusout` flushes when `relatedTarget` is outside the item.
+- `UploadGate.swift` (new, Core): an actor counting uploads in flight —
+  `begin()` / `end()` / `inFlight` / `waitForIdle(timeout:)` resumed from
+  `end()` by continuation, with a timeout that returns the count still out.
+- `AssessmentViewController.swift`: `handleDrawing` brackets its Task with
+  `begin()` and a deferred `end()`; `handleSubmit` waits for idle (20 s)
+  before the spool flush and refuses with `submit refused: N drawing
+  upload(s) still in flight` + a `submit_blocked` error event.
+- Harness: `Node.contains`, a recording `setTimeout` / `clearTimeout`,
+  `__fireTimers()`, `__pendingTimers()`. Tests: `RendererDrawingAutoSaveTests`
+  (19) and `UploadGateTests` (5). `swift test` 489 pass (was 465);
+  `xcodebuild … build` succeeds.
+- Three readings, recorded: (1) a manual Save pressed while an upload is
+  out sets `dirty` without a timer, so if that upload then FAILS the newer
+  picture waits for the student's next change — the label says "Could not
+  save. Tell your teacher.", nothing is silent; (2) Clear on a canvas that
+  had a saved picture uploads nothing, so the server's last picture stays
+  the answer until the student draws again — withdrawing a drawing for
+  real is not a student path today; (3) the gate's `begin()` runs inside
+  the upload Task and the submit's `waitForIdle` inside its own, both
+  hopping from the main actor to the gate in enqueue order — FIFO among
+  equal-priority jobs in practice, not a language guarantee. If a hand-run
+  ever shows a submit overtaking an upload, the fix is a `@MainActor` gate
+  whose `begin()` is synchronous before the Task is spawned.
+- Not testable headlessly: the real 5 s cadence, the `focusout` path in
+  WebKit, the host gate under a real hand-in. Slice 3's rows.
+
+Built by an Opus 5 / medium subagent (one interrupted, a second finished
+and verified the tree); diff reviewed and both checks re-run in the main
+session before the commit.
