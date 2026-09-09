@@ -54,12 +54,27 @@ has, or will have, its own design page; this page is the order and the why.
 | 5 | **Reporting R1–R2** — **R1 + print report BUILT + merged 2026-09-07 evening**, deploy started (rev 13 expected); gradebook CSV WAITS for sample exports (D-R3); rows 69–74 / R2-P1…P6 unrun | `docs/reporting-design.md` | shape it with the first real sittings; E11 waits for the same teacher input | design tool, ∥ with 4 |
 | 6 | **Reporting R3**: gradebook integration (PowerSchool official, Schoology covered too) | `docs/reporting-design.md` R3 | post-pilot; needs sample files + district-admin keys → the IT / admin ask list | design tool + infra |
 | 4b | **Math entry** (James, 2026-09-08, S-6): a calculator-style keypad for short-text math (fractions, exponents, roots, Greek, ±, ×, ÷ — inserts KaTeX-safe text and re-renders the preview), plus a **spike** on handwriting recognition from the touchpad (Vision `VNRecognizeTextRequest` over a stroke image; PencilKit is iOS-only) | `docs/client-ui-pass-design.md` findings table; design note first | asked for after the first sitting; the keypad closes the `\mathrm{…` confusion for good, handwriting is a maybe | client — **fresh session**; design note Fable / high; keypad Opus 5 / medium (one slice, M); handwriting spike Opus 5 / high (half a day, go / no-go), post-pilot unless the spike is cheap |
+| 4b-f | **Math entry follow-ups** (from `docs/math-entry-design.md` §Follow-ups, 2026-09-08; unscheduled): a per-item teacher flag `math_input` so the keypad opens without a `$` in the stem (schema + editor + both bundles + migration); the editor's key field gets the same symbol keys and a hint naming the equivalence rules, and the review queue / results / print render a student's short-text answer through KaTeX as the client does; numeric equivalence for short text (`1/2` ≡ `0.5`, tolerance — adjacent to E11, James's policy); Greek case kept in the fold if a teacher needs `Δ` ≠ `δ`; a "next slot" key if the rows show students lost between `}` and `{`; the drawing toolbar onto the same roving tabindex; the handwriting spike (post-pilot, §Handwriting of that page) | `docs/math-entry-design.md` | recorded when 4b was designed; none blocks the keypad | unscheduled |
 | 4c | **Drawing tools** (James, 2026-09-08, S-7): pen size, colour, eraser, undo on the drawing item; the PNG contract with the paper background stays (tools paint into the same canvas) | design note first, then one slice | asked for after the first sitting; equity for graph-heavy math | client — **fresh session**; design note Fable / medium; build Opus 5 / medium (M); Sonnet 5 / medium for the rows |
 
 Parallel lines as in the 2026-09-03 batch: design-tool batches (1, 5) can
 run in a second terminal beside client batches (2, 4); batch 3 touches both
 sides and should own the tree while it runs. One owner for
 `packages/schema`, migrations, the Swift bundle model and the fixture.
+
+## Pilot feedback — questions to put to the pilot teachers and students
+
+Things deliberately NOT built until the pilot says they are wanted. Each is
+a question for the feedback round, not a backlog item.
+
+- **A digit pad on the math keys** (`docs/math-entry-design.md` D-2.4,
+  James 2026-09-08): the keypad ships with structure, operator and Greek
+  keys only; digits, letters and `+ − = /` come from the keyboard. Ask
+  students whether they reached for on-screen digits (touch / motor needs)
+  and teachers whether any student needed them.
+- **E11 rescoring after a key change** — waits for teacher input (above).
+- **Gradebook CSV shape** (D-R3) — waits for sample PowerTeacher Pro /
+  Schoology exports.
 
 ## Findings from the 2026-09-03 sitting (James: place them in the sequence — done above; nothing built)
 
