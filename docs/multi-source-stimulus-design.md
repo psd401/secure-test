@@ -265,4 +265,30 @@ the same panel); 6 with a sitting.
 ## Progress
 
 2026-09-09: this note written; decisions D-1…D-5 made the same day. Slice 1
-built in the same session (see the commit). Nothing else built.
+built in the same session (`d20eeb9`).
+
+2026-09-09, later: **slice 2 BUILT** (Opus 5 agent from this note, diff
+reviewed and every check re-run in the main session). Migration **0030**
+(`sources jsonb not null default '[]'`, the layout CHECK widened to
+`side_by_side`) applied to the local dev + test DBs — **Aurora needs
+`migrate-aurora.sh` after the next deploy**. `StimulusSourceSchema`
+`{label 1–80 trimmed, text ≤ 20 000}` × ≤ 12 on `ItemSetSchema.sources`
+(default `[]`, so a pre-slice bundle imports unchanged and every exported
+set now carries the key); create + PATCH take `sources` whole; export /
+delivery / preview scan source texts for `asset:` refs and import remaps
+them; the preview renders one `<section class="source">` per source with
+`pre-line`, `side_by_side` prints like `own_page`; readiness: the
+empty-stimulus gap needs intro AND sources empty, an empty source is
+`Source "B" for question N is empty`; the editor's stimulus card has the
+Sources list (label, the same content editor as the introduction, Move,
+Remove, "Add a source" → next letter) and the third layout option; the
+results page and scoring queue stems got `whitespace-pre-line` (the slice 1
+fold). Schema package 114 → 121 tests, design-tool 1327 → 1345, typecheck
+clean. Not deployed.
+
+**Hazard until slice 4 ships:** the v1.1.0 client decodes `sources` as an
+unknown key (dropped) and renders `side_by_side` as `inline`, so a set
+published with sources before the next client release shows students the
+introduction only. Slice 3 (import) needs no route change — the panel just
+starts sending `sources` on `POST …/item-sets`. The Swift fixture
+regeneration in slice 4 will add `sources: []` to every set once.

@@ -84,7 +84,12 @@ async function listItems(id: string) {
   });
   return (await res.json()) as {
     items: { id: string; position: number; item_set_id: string | null }[];
-    item_sets: { id: string; stimulus_text: string; layout: string }[];
+    item_sets: {
+      id: string;
+      stimulus_text: string;
+      layout: string;
+      sources: { label: string; text: string }[];
+    }[];
   };
 }
 
@@ -279,6 +284,86 @@ describe("item sets — attach / detach / delete", () => {
     expect(body.item_set).toMatchObject({ stimulus_text: "Figure 1: $x^2$", layout: "own_page" });
     expect((await patchSet(id, item_set.id, { layout: "sideways" })).status).toBe(400);
     expect((await patchSet(id, item_set.id, {})).status).toBe(400);
+  });
+});
+
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md):
+// `sources` is an ordered {label, text} list on the set, written whole.
+describe("item sets — sources (multi-source stimulus slice 2)", () => {
+  const twoSources = [
+    { label: "Source A", text: "Two roads diverged\nin a yellow wood" },
+    { label: "Source B", text: "Ridership fell by a third." },
+  ];
+
+  test("create accepts sources and side_by_side; the items list carries them", async () => {
+    const { id, q } = await seed();
+    const res = await createSet(id, {
+      item_ids: [q[0]],
+      stimulus_text: "Use all the sources.",
+      sources: twoSources,
+      layout: "side_by_side",
+    });
+    expect(res.status).toBe(201);
+    const { item_set } = (await res.json()) as {
+      item_set: { id: string; layout: string; sources: { label: string; text: string }[] };
+    };
+    expect(item_set.layout).toBe("side_by_side");
+    expect(item_set.sources).toEqual(twoSources);
+    const list = await listItems(id);
+    expect(list.item_sets[0]!.sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    // Line breaks survive the column — the whole point of a poem as a source.
+    expect(list.item_sets[0]!.sources[0]!.text).toContain("\n");
+  });
+
+  test("a set created without sources reads back as an empty list", async () => {
+    const { id, q } = await seed();
+    const res = await createSet(id, { item_ids: [q[0]] });
+    expect(res.status).toBe(201);
+    expect(((await res.json()) as { item_set: { sources: unknown } }).item_set.sources).toEqual([]);
+  });
+
+  test("PATCH replaces the whole list, reorders, and empties it", async () => {
+    const { id, q } = await seed();
+    const { item_set } = (await (await createSet(id, { item_ids: [q[0]], sources: twoSources })).json()) as {
+      item_set: { id: string };
+    };
+    const reordered = [twoSources[1]!, twoSources[0]!];
+    const ok = await patchSet(id, item_set.id, { sources: reordered });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { item_set: { sources: { label: string }[] } }).item_set.sources.map((s) => s.label))
+      .toEqual(["Source B", "Source A"]);
+    const cleared = await patchSet(id, item_set.id, { sources: [] });
+    expect(cleared.status).toBe(200);
+    expect(((await cleared.json()) as { item_set: { sources: unknown } }).item_set.sources).toEqual([]);
+  });
+
+  test("PATCH accepts side_by_side and still refuses an unknown layout", async () => {
+    const { id, q } = await seed();
+    const { item_set } = (await (await createSet(id, { item_ids: [q[0]] })).json()) as { item_set: { id: string } };
+    const ok = await patchSet(id, item_set.id, { layout: "side_by_side" });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { item_set: { layout: string } }).item_set.layout).toBe("side_by_side");
+    expect((await patchSet(id, item_set.id, { layout: "beside" })).status).toBe(400);
+  });
+
+  test("bounds: 13 sources, an 81-char label, a blank label and 20k+ text are all 400", async () => {
+    const { id, q } = await seed();
+    const { item_set } = (await (await createSet(id, { item_ids: [q[0]] })).json()) as { item_set: { id: string } };
+    const thirteen = Array.from({ length: 13 }, (_, i) => ({ label: `S${i}`, text: "x" }));
+    expect((await patchSet(id, item_set.id, { sources: thirteen })).status).toBe(400);
+    expect((await patchSet(id, item_set.id, { sources: [{ label: "a".repeat(81), text: "x" }] })).status).toBe(400);
+    expect((await patchSet(id, item_set.id, { sources: [{ label: "   ", text: "x" }] })).status).toBe(400);
+    expect((await patchSet(id, item_set.id, { sources: [{ label: "Source A", text: "x".repeat(20001) }] })).status).toBe(400);
+    // Twelve is the cap, and an empty text is savable (readiness flags it).
+    const twelve = Array.from({ length: 12 }, (_, i) => ({ label: `S${i}`, text: "" }));
+    expect((await patchSet(id, item_set.id, { sources: twelve })).status).toBe(200);
+  });
+
+  test("a source write is locked after publish, like the stimulus text", async () => {
+    const { id, q } = await seed();
+    const { item_set } = (await (await createSet(id, { item_ids: [q[0]] })).json()) as { item_set: { id: string } };
+    await setStatus(id, "published");
+    expect((await patchSet(id, item_set.id, { sources: twoSources })).status).toBe(409);
   });
 });
 

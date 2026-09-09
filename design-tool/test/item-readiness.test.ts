@@ -125,6 +125,37 @@ describe("stimulusGaps — source-backed sets (E12)", () => {
   });
 });
 
+// Multi-source stimulus slice 2: an introduction may be blank once the
+// reading lives in the sources; an individual empty source is the gap.
+describe("stimulusGaps — sources (multi-source stimulus slice 2)", () => {
+  const items: ReadinessItem[] = [
+    { type: "essay", stem: "Write", item_set_id: "s1", choices: [], correct_choice_ids: [], correct_answer: null, pairs: null, sequence: null, image_asset_id: null, correct_region_ids: null },
+  ];
+  test("sources with an empty introduction are not an empty stimulus", () => {
+    expect(
+      stimulusGaps(items, [{ id: "s1", stimulus_text: "", sources: [{ label: "Source A", text: "A poem." }] }]),
+    ).toEqual([]);
+  });
+  test("each empty source is named by its label", () => {
+    expect(
+      stimulusGaps(items, [{
+        id: "s1",
+        stimulus_text: "Use all three.",
+        sources: [
+          { label: "Source A", text: "A poem." },
+          { label: "Source B", text: "  " },
+          { label: "Source C", text: "" },
+        ],
+      }]),
+    ).toEqual(['Source "Source B" for question 1 is empty', 'Source "Source C" for question 1 is empty']);
+  });
+  test("no introduction and no sources is still an empty stimulus", () => {
+    expect(stimulusGaps(items, [{ id: "s1", stimulus_text: "", sources: [] }])).toEqual([
+      "Stimulus for question 1 is empty",
+    ]);
+  });
+});
+
 // E3 slice 2: a table needs a grid with headings; keys are optional.
 describe("questionGaps: table (E3)", () => {
   const grid = {

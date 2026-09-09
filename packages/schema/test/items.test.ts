@@ -659,6 +659,61 @@ describe("ItemBundleSchema item_sets (E5 slice 1)", () => {
   });
 });
 
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): a set
+// may carry ordered labelled sources, and `side_by_side` is a third layout.
+describe("ItemSetSchema sources (multi-source stimulus slice 2)", () => {
+  const items = [
+    { type: "essay", id: "i1", stem: "One" },
+    { type: "essay", id: "i2", stem: "Two" },
+  ];
+  const base = { test_id: "t", title: "T", items };
+  const set = (extra: Record<string, unknown>) => ({
+    ...base,
+    item_sets: [{ id: "s1", stimulus: "Read the four sources.", item_ids: ["i1"], ...extra }],
+  });
+
+  test("sources parse in order and keep their labels", () => {
+    const parsed = ItemBundleSchema.parse(
+      set({
+        sources: [
+          { label: "Source A", text: "Two roads diverged\nin a yellow wood" },
+          { label: "Source B", text: "Public transit ridership fell." },
+        ],
+      }),
+    );
+    expect(parsed.item_sets![0]!.sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    expect(parsed.item_sets![0]!.sources[0]!.text).toContain("\n");
+  });
+
+  test("a set without the key parses with sources: [] (older bundles)", () => {
+    expect(ItemBundleSchema.parse(set({})).item_sets![0]!.sources).toEqual([]);
+  });
+
+  test("side_by_side is accepted; an unknown layout is still rejected", () => {
+    expect(ItemBundleSchema.parse(set({ layout: "side_by_side" })).item_sets![0]!.layout).toBe("side_by_side");
+    expect(ItemBundleSchema.safeParse(set({ layout: "beside" })).success).toBe(false);
+  });
+
+  test("bounds: at most 12 sources, label 1–80 trimmed, text 20 000", () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ label: `S${i}`, text: "x" }));
+    expect(ItemBundleSchema.safeParse(set({ sources: many })).success).toBe(false);
+    expect(ItemBundleSchema.safeParse(set({ sources: [{ label: "", text: "x" }] })).success).toBe(false);
+    expect(ItemBundleSchema.safeParse(set({ sources: [{ label: "   ", text: "x" }] })).success).toBe(false);
+    expect(ItemBundleSchema.safeParse(set({ sources: [{ label: "a".repeat(81), text: "x" }] })).success).toBe(false);
+    expect(
+      ItemBundleSchema.safeParse(set({ sources: [{ label: "Source A", text: "x".repeat(20001) }] })).success,
+    ).toBe(false);
+    // An empty text is legal on the wire — the editor saves a source before
+    // the teacher pastes into it; readiness is what flags it.
+    expect(ItemBundleSchema.safeParse(set({ sources: [{ label: "Source A", text: "" }] })).success).toBe(true);
+  });
+
+  test("a label is trimmed on the way through", () => {
+    const parsed = ItemBundleSchema.parse(set({ sources: [{ label: "  Source A  ", text: "x" }] }));
+    expect(parsed.item_sets![0]!.sources[0]!.label).toBe("Source A");
+  });
+});
+
 // E12 slice 1: the teacher bundle may carry a set's source link; the
 // delivery bundle may flag a missing source answer. Both optional.
 describe("item set source (E12)", () => {

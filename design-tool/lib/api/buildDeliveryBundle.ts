@@ -226,7 +226,8 @@ export async function buildDeliveryBundle(
     db,
     assessment.owner_sub,
     itemRows,
-    itemSets.map((s) => s.stimulus),
+    // Multi-source stimulus slice 2: source texts carry `asset:` refs too.
+    itemSets.flatMap((s) => [s.stimulus, ...s.sources.map((src) => src.text)]),
   );
 
   // Client paging follow-up (D-4), extended by P-1: which of these questions

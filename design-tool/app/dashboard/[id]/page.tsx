@@ -67,7 +67,9 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
         initialItemSets={itemSetRows.map((s) => ({
           id: s.id,
           stimulus_text: s.stimulus_text,
-          layout: s.layout as "inline" | "own_page",
+          // Multi-source stimulus slice 2: the set's labelled sources.
+          sources: s.sources ?? [],
+          layout: s.layout as "inline" | "own_page" | "side_by_side",
           source: s.source,
         }))}
         assessment={{

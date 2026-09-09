@@ -263,6 +263,38 @@ describe("DeliveryBundleSchema item_sets (E5 slice 1)", () => {
       }).success,
     ).toBe(false);
   });
+
+  // Multi-source stimulus slice 2: sources are student-facing, so the student
+  // bundle carries the same shape the teacher bundle does (nothing here can
+  // hold a key, so ADR 0016's two-format rule is untouched).
+  test("carries sources and side_by_side; a set without the key parses as []", () => {
+    const parsed = DeliveryBundleSchema.parse({
+      test_id: "t", title: "T", items,
+      item_sets: [{
+        id: "s",
+        stimulus: "Use all four sources.",
+        layout: "side_by_side",
+        sources: [{ label: "Source A", text: "A poem\nin two lines" }, { label: "Source B", text: "An article." }],
+        item_ids: ["i1", "i2"],
+      }],
+    });
+    expect(parsed.item_sets![0]!.layout).toBe("side_by_side");
+    expect(parsed.item_sets![0]!.sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    const older = DeliveryBundleSchema.parse({
+      test_id: "t", title: "T", items,
+      item_sets: [{ id: "s", stimulus: "x", item_ids: ["i1", "i2"] }],
+    });
+    expect(older.item_sets![0]!.sources).toEqual([]);
+  });
+
+  test("rejects a 13th source and an empty label", () => {
+    const withSources = (sources: unknown) => ({
+      test_id: "t", title: "T", items,
+      item_sets: [{ id: "s", stimulus: "x", sources, item_ids: ["i1", "i2"] }],
+    });
+    expect(DeliveryBundleSchema.safeParse(withSources(Array.from({ length: 13 }, (_, i) => ({ label: `S${i}`, text: "x" })))).success).toBe(false);
+    expect(DeliveryBundleSchema.safeParse(withSources([{ label: "", text: "x" }])).success).toBe(false);
+  });
 });
 
 // Client paging: the bundle-level layout flag, optional, "scroll" | "paged".

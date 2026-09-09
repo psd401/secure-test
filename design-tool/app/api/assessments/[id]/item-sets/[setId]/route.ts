@@ -53,6 +53,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       .update(item_sets)
       .set({
         ...(body.stimulus_text !== undefined ? { stimulus_text: body.stimulus_text } : {}),
+        // Multi-source stimulus slice 2: replace semantics, like the text —
+        // the whole ordered list arrives or nothing changes.
+        ...(body.sources !== undefined ? { sources: body.sources } : {}),
         ...(body.layout !== undefined ? { layout: body.layout } : {}),
         ...(body.source_item_id !== undefined ? { source_item_id: body.source_item_id } : {}),
         updated_at: new Date(),

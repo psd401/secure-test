@@ -54,6 +54,10 @@ export async function exportItemSets(
       return {
         id: set.id,
         stimulus: set.stimulus_text,
+        // Multi-source stimulus slice 2: the labelled sources ride BOTH
+        // bundles for the same reason the stimulus does — a source is
+        // student-facing, and nothing in it can hold a key.
+        sources: set.sources ?? [],
         layout: set.layout as ItemSetLayout,
         item_ids: members.map((m) => m.id),
         ...(opts.withSource && set.source_item_id && srcAssessment

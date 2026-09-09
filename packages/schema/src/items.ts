@@ -287,11 +287,30 @@ export const BundleAssetSchema = z.object({
 // own: its items must sit next to each other in `items` order and the set
 // sits where its first item sits. Both bundles carry the same shape — a
 // stimulus is student-facing by definition (James, 2026-09-01).
-export const ItemSetLayoutSchema = z.enum(["inline", "own_page"]);
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): one
+// labelled source of a multi-source set — a poem, an article, a chart's
+// excerpt. `text` follows stem content rules exactly as `stimulus` does, so
+// the same asset map and the same KaTeX / emphasis renderers serve it. Named
+// StimulusSource, not ItemSetSource: that name is already taken by the E12
+// teacher-only per-student link below and the two are unrelated.
+export const StimulusSourceSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  text: z.string().max(20000),
+});
+export type StimulusSource = z.infer<typeof StimulusSourceSchema>;
+
+// D-2: `side_by_side` is a third value the teacher picks, never inferred
+// from the source count. A client that predates it falls back to inline.
+export const ItemSetLayoutSchema = z.enum(["inline", "own_page", "side_by_side"]);
 export const ItemSetSchema = z.object({
   id: z.string().min(1),
   stimulus: z.string().max(20000),
   layout: ItemSetLayoutSchema.default("inline"),
+  // Multi-source stimulus slice 2: the sources printed under the
+  // introduction, in document order. Both bundles carry them — a source is
+  // student-facing by definition, like the stimulus itself. Bundles written
+  // before this slice parse with `sources: []`.
+  sources: z.array(StimulusSourceSchema).max(12).default([]),
   item_ids: z.array(z.string().min(1)).min(1),
 });
 export type ItemSet = z.infer<typeof ItemSetSchema>;

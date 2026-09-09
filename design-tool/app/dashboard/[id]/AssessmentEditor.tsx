@@ -144,10 +144,19 @@ interface AssessmentView {
 // E5 slice 1: a stimulus (passage / figure / data) shared by the contiguous
 // questions whose item_set_id names it. Rendered once, above the first of
 // them; the set has no position of its own.
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): the
+// ordered labelled sources under the introduction. Edited whole and PATCHed
+// whole — a source has no id of its own (D-1).
+interface StimulusSourceView {
+  label: string;
+  text: string;
+}
+
 interface ItemSetView {
   id: string;
   stimulus_text: string;
-  layout: "inline" | "own_page";
+  sources: StimulusSourceView[];
+  layout: "inline" | "own_page" | "side_by_side";
   /** E12: the source question this stimulus pulls each student's answer from. */
   source?: {
     item_id: string;
@@ -759,7 +768,7 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       const res = await call(`${apiBase}/items`);
       const body = (await res.json()) as {
         items: ItemRow[];
-        item_sets: { id: string; stimulus_text: string; layout: string }[];
+        item_sets: { id: string; stimulus_text: string; sources?: StimulusSourceView[]; layout: string }[];
       };
       const fresh = body.items.map(rowToView);
       setItems((prev) => {
@@ -777,7 +786,8 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       const sets: ItemSetView[] = body.item_sets.map((s) => ({
         id: s.id,
         stimulus_text: s.stimulus_text,
-        layout: s.layout as "inline" | "own_page",
+        sources: s.sources ?? [],
+        layout: s.layout as ItemSetView["layout"],
       }));
       setItemSets((prev) => {
         const byId = new Map(prev.map((s) => [s.id, s]));
@@ -1086,6 +1096,41 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     setItemSets((prev) => prev.map((s) => (s.id === setId ? mut(s) : s)));
   }
 
+  // ---- Multi-source stimulus slice 2: the set's labelled sources ----
+  // Edited in place on the ItemSetView; "Save stimulus" PATCHes the whole
+  // ordered list, so nothing here talks to the server on its own.
+  function updateSources(setId: string, mut: (list: StimulusSourceView[]) => StimulusSourceView[]) {
+    updateSet(setId, (sv) => ({ ...sv, sources: mut(sv.sources) }));
+  }
+
+  function updateSource(setId: string, index: number, mut: (s: StimulusSourceView) => StimulusSourceView) {
+    updateSources(setId, (list) => list.map((s, i) => (i === index ? mut(s) : s)));
+  }
+
+  /** "Source A", "Source B", … then "Source 27" past the alphabet. */
+  function nextSourceLabel(count: number): string {
+    return count < 26 ? `Source ${String.fromCharCode(65 + count)}` : `Source ${count + 1}`;
+  }
+
+  function addSource(setId: string) {
+    updateSources(setId, (list) => [...list, { label: nextSourceLabel(list.length), text: "" }]);
+  }
+
+  function moveSource(setId: string, index: number, delta: -1 | 1) {
+    updateSources(setId, (list) => {
+      const to = index + delta;
+      if (to < 0 || to >= list.length) return list;
+      const next = [...list];
+      const [moved] = next.splice(index, 1);
+      next.splice(to, 0, moved!);
+      return next;
+    });
+  }
+
+  function removeSource(setId: string, index: number) {
+    updateSources(setId, (list) => list.filter((_, i) => i !== index));
+  }
+
   function dropSetLocally(setId: string) {
     setItemSets((prev) => prev.filter((s) => s.id !== setId));
     setPersistedSets((prev) => {
@@ -1111,6 +1156,7 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       const view: ItemSetView = {
         id: body.item_set.id,
         stimulus_text: body.item_set.stimulus_text,
+        sources: body.item_set.sources ?? [],
         layout: body.item_set.layout,
       };
       setItemSets((prev) => [...prev, view]);
@@ -1157,12 +1203,18 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     try {
       const res = await call(
         `${apiBase}/item-sets/${setId}`,
-        jsonInit("PATCH", { stimulus_text: set.stimulus_text, layout: set.layout }),
+        jsonInit("PATCH", {
+          stimulus_text: set.stimulus_text,
+          // Multi-source stimulus slice 2: sources go whole, in order.
+          sources: set.sources,
+          layout: set.layout,
+        }),
       );
       const body = (await res.json()) as { item_set: ItemSetView };
       const saved: ItemSetView = {
         ...set,
         stimulus_text: body.item_set.stimulus_text,
+        sources: body.item_set.sources ?? [],
         layout: body.item_set.layout,
       };
       setItemSets((prev) => prev.map((s) => (s.id === setId ? saved : s)));
@@ -1783,7 +1835,9 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                           ? `Question ${bounds.first + 1}`
                           : `Questions ${bounds.first + 1}–${bounds.last + 1}`}
                       </span>
-                      {set.stimulus_text.trim().length === 0 ? (
+                      {/* Multi-source stimulus slice 2: an empty introduction
+                          is fine once the reading lives in the sources. */}
+                      {set.stimulus_text.trim().length === 0 && set.sources.length === 0 ? (
                         <Badge variant="warning">Empty</Badge>
                       ) : null}
                       {setDirty ? <Badge variant="outline">Unsaved changes</Badge> : null}
@@ -1803,6 +1857,8 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                       >
                         <NativeSelectOption value="inline">Shown above its questions</NativeSelectOption>
                         <NativeSelectOption value="own_page">On its own page</NativeSelectOption>
+                        {/* Multi-source stimulus slice 2 (D-2): the teacher picks it. */}
+                        <NativeSelectOption value="side_by_side">Side by side (sources beside the question)</NativeSelectOption>
                       </NativeSelect>
                       <Button
                         type="button"
@@ -1866,6 +1922,119 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                     </div>
                   ) : null}
                   <MathPreview text={set.stimulus_text} />
+                  {/* Multi-source stimulus slice 2: the labelled sources under
+                      the introduction — a poem, an article, a chart excerpt.
+                      Each row is the same content editor the introduction
+                      uses, so KaTeX, images and emphasis behave identically. */}
+                  <div className="mt-4 border-t border-border pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Sources
+                      </span>
+                      {!isLocked ? (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => addSource(set.id)}>
+                          <ListPlus aria-hidden />
+                          Add a source
+                        </Button>
+                      ) : null}
+                    </div>
+                    {set.sources.length === 0 ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Add a source for each labelled passage, article, or chart these questions draw on.
+                      </p>
+                    ) : (
+                      <ol className="mt-2 space-y-3">
+                        {set.sources.map((src, si) => (
+                          <li key={si} className="rounded-md border border-border bg-background p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <input
+                                type="text"
+                                aria-label="Source label"
+                                value={src.label}
+                                disabled={isLocked}
+                                maxLength={80}
+                                onChange={(e) =>
+                                  updateSource(set.id, si, (s) => ({ ...s, label: e.target.value }))
+                                }
+                                className="w-48 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                              />
+                              {src.text.trim().length === 0 ? <Badge variant="warning">Empty</Badge> : null}
+                              <span className="ml-auto flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => moveSource(set.id, si, -1)}
+                                  disabled={isLocked || si === 0}
+                                  aria-label={`Move ${src.label || "source"} up`}
+                                >
+                                  <ArrowUp aria-hidden />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => moveSource(set.id, si, 1)}
+                                  disabled={isLocked || si === set.sources.length - 1}
+                                  aria-label={`Move ${src.label || "source"} down`}
+                                >
+                                  <ArrowDown aria-hidden />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => removeSource(set.id, si)}
+                                  disabled={isLocked}
+                                  aria-label={`Remove ${src.label || "source"}`}
+                                >
+                                  <X aria-hidden />
+                                </Button>
+                              </span>
+                            </div>
+                            <textarea
+                              value={src.text}
+                              disabled={isLocked}
+                              aria-label={`Text of ${src.label || "source"}`}
+                              onChange={(e) =>
+                                updateSource(set.id, si, (s) => ({ ...s, text: e.target.value }))
+                              }
+                              rows={5}
+                              placeholder="Paste the source exactly as it is printed; line breaks are kept."
+                              className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                            />
+                            {!isLocked ? (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <ImagePicker
+                                  onInsert={(md) =>
+                                    updateSource(set.id, si, (s) => ({
+                                      ...s,
+                                      text: s.text ? `${s.text} ${md}` : md,
+                                    }))
+                                  }
+                                />
+                                <EmphasisButtons
+                                  apply={(next) =>
+                                    updateSource(set.id, si, (s) => ({ ...s, text: next(s.text) }))
+                                  }
+                                />
+                                <MathTranslator
+                                  onInsert={(wrapped) =>
+                                    updateSource(set.id, si, (s) => ({
+                                      ...s,
+                                      text: s.text ? `${s.text} ${wrapped}` : wrapped,
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ) : null}
+                            <MathPreview text={src.text} />
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
                   {set.source ? (
                     <div className="mt-2 rounded border border-primary/40 bg-primary/5 p-2 text-xs">
                       <span className="font-medium">Each student sees their own answer</span> to &ldquo;{set.source.stem.slice(0, 120)}&rdquo; from{" "}

@@ -140,6 +140,9 @@ export function questionGaps(item: ReadinessItem): string[] {
 export interface ReadinessSet {
   id: string;
   stimulus_text: string;
+  /** Multi-source stimulus slice 2: the labelled sources under the
+   * introduction; a set carrying any of them is not "empty". */
+  sources?: { label: string; text: string }[];
   /** E12: a source-backed stimulus is each student's own answer; the
    * lead-in may be empty, and a draft source is worth a warning. */
   source?: { assessment_name: string; assessment_status: string } | null;
@@ -149,12 +152,17 @@ export interface ReadinessSet {
  * E5 slice 1: a set whose stimulus is still empty, named by the question it
  * opens ("Stimulus for question 3 is empty"). An empty set cannot exist (it is
  * deleted with its last question), so this is the only stimulus gap.
+ * Multi-source stimulus slice 2: an introduction may legitimately be blank
+ * once the reading lives in the sources, so the empty-stimulus gap now needs
+ * BOTH to be empty; each source with no text of its own is its own gap,
+ * named by the label the teacher gave it.
  */
 export function stimulusGaps(items: ReadinessItem[], sets: ReadinessSet[]): string[] {
   const gaps: string[] = [];
   for (const set of sets) {
     const first = items.findIndex((it) => it.item_set_id === set.id);
     if (first < 0) continue;
+    const sources = set.sources ?? [];
     if (set.source) {
       // E12 (decision D-2): a draft source warns, never blocks.
       if (set.source.assessment_status !== "published") {
@@ -162,8 +170,12 @@ export function stimulusGaps(items: ReadinessItem[], sets: ReadinessSet[]): stri
       }
       continue;
     }
-    if (!blank(set.stimulus_text)) continue;
-    gaps.push(`Stimulus for question ${first + 1} is empty`);
+    if (blank(set.stimulus_text) && sources.length === 0) {
+      gaps.push(`Stimulus for question ${first + 1} is empty`);
+    }
+    for (const src of sources) {
+      if (blank(src.text)) gaps.push(`Source "${src.label}" for question ${first + 1} is empty`);
+    }
   }
   return gaps;
 }

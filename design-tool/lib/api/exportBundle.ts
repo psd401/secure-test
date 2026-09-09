@@ -221,7 +221,9 @@ export async function buildExportBundle(
     db,
     ownerSub,
     itemRows,
-    itemSets.map((s) => s.stimulus),
+    // Multi-source stimulus slice 2: a figure inside a source is an
+    // `asset:` ref like any other, so every source text is scanned too.
+    itemSets.flatMap((s) => [s.stimulus, ...s.sources.map((src) => src.text)]),
   );
 
   // Slice 21: round-trip the accommodations metadata. Skip emit when

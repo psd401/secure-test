@@ -317,7 +317,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   HTML-escaped, math is KaTeX, image refs resolve owner-scoped
                   or come back as inline-red placeholders — no injection vector. */}
               <div
-                className="mt-1 text-sm"
+                className="mt-1 whitespace-pre-line text-sm"
                 dangerouslySetInnerHTML={{
                   __html: renderItemContent(item.stem, resolvedAssets),
                 }}

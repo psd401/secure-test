@@ -588,6 +588,40 @@ describe("item sets on the delivery bundle (E5 slice 1)", () => {
     });
     expect(body.items.map((i) => i.id)).toEqual(rows.map((r) => r.id));
   });
+
+  // Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): a
+  // source is student-facing by definition, so the student bundle carries the
+  // same {label, text} list the teacher bundle does.
+  test("carries the set's sources and side_by_side to the student", async () => {
+    const db = getDb();
+    const [a] = await db.insert(assessments).values({ owner_sub: OWNER, name: "Sourced" }).returning();
+    const [row] = await db
+      .insert(items)
+      .values({ assessment_id: a!.id, position: 0, type: "essay", stem: "Synthesise." })
+      .returning();
+    const [set] = await db
+      .insert(item_sets)
+      .values({
+        assessment_id: a!.id,
+        stimulus_text: "Use all the sources.",
+        layout: "side_by_side",
+        sources: [
+          { label: "Source A", text: "Two roads diverged\nin a yellow wood" },
+          { label: "Source B", text: "Ridership fell." },
+        ],
+      })
+      .returning();
+    await db.update(items).set({ item_set_id: set!.id }).where(eq(items.id, row!.id));
+    await admitStudent(a!.id);
+
+    const body = (await (await getDelivery(a!.id)).json()) as {
+      item_sets: { layout: string; sources: { label: string; text: string }[] }[];
+    };
+    expect(DeliveryBundleSchema.safeParse(body).success).toBe(true);
+    expect(body.item_sets[0]!.layout).toBe("side_by_side");
+    expect(body.item_sets[0]!.sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    expect(body.item_sets[0]!.sources[0]!.text).toContain("\n");
+  });
 });
 
 // Client paging: the bundle says "paged" only when the teacher chose it;

@@ -911,6 +911,102 @@ describe("item sets on import (E5 slice 1)", () => {
     expect(copySets[0]!.source_item_id).toBeNull();
   });
 
+  // Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md):
+  // sources ride the teacher bundle, and a figure inside a source remaps to
+  // the copy's own asset row exactly as one in the introduction does.
+  test("recreates a set's sources, remapping an asset ref inside one of them", async () => {
+    asUser("teacher-1");
+    const incomingUuid = "22222222-2222-2222-2222-222222222222";
+    const png = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+      0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+      0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0, 5,
+      0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ]);
+    const res = await postImport({
+      test_id: "sourced",
+      title: "With sources",
+      items: [{ type: "essay", id: "e1", stem: "Synthesise the sources." }],
+      item_sets: [{
+        id: "s1",
+        stimulus: "Use all the sources.",
+        layout: "side_by_side",
+        sources: [
+          { label: "Source A", text: "Two roads diverged\nin a yellow wood" },
+          { label: "Source B", text: `See ![chart](asset:${incomingUuid}) for the trend.` },
+        ],
+        item_ids: ["e1"],
+      }],
+      assets: { [incomingUuid]: { content_type: "image/png", base64: Buffer.from(png).toString("base64") } },
+    });
+    expect(res.status).toBe(201);
+    const { assessment } = (await res.json()) as { assessment: { id: string } };
+    const db = getDb();
+    const [set] = await db.select().from(item_sets).where(eq(item_sets.assessment_id, assessment.id));
+    expect(set!.layout).toBe("side_by_side");
+    const sources = set!.sources;
+    expect(sources.map((s) => s.label)).toEqual(["Source A", "Source B"]);
+    expect(sources[0]!.text).toContain("\n");
+    expect(sources[1]!.text).not.toContain(`asset:${incomingUuid}`);
+    expect(sources[1]!.text).toMatch(/asset:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+  });
+
+  test("export emits the sources and the layout, and a re-import round-trips them", async () => {
+    asUser("teacher-1");
+    const first = await postImport({
+      test_id: "sourced-rt",
+      title: "Round trip",
+      items: [{ type: "essay", id: "e1", stem: "Synthesise." }],
+      item_sets: [{
+        id: "s1",
+        stimulus: "Use all the sources.",
+        layout: "side_by_side",
+        sources: [{ label: "Source A", text: "A poem." }, { label: "Source B", text: "An article." }],
+        item_ids: ["e1"],
+      }],
+    });
+    const firstId = ((await first.json()) as { assessment: { id: string } }).assessment.id;
+    const { GET } = await import("../app/api/assessments/[id]/export/route");
+    const exported = await GET(
+      new Request(`http://localhost/api/assessments/${firstId}/export?include_hidden_rubrics=1`),
+      { params: Promise.resolve({ id: firstId }) },
+    );
+    expect(exported.status).toBe(200);
+    const bundle = (await exported.json()) as {
+      item_sets: { layout: string; sources: { label: string; text: string }[] }[];
+    };
+    expect(bundle.item_sets[0]!.layout).toBe("side_by_side");
+    expect(bundle.item_sets[0]!.sources).toEqual([
+      { label: "Source A", text: "A poem." },
+      { label: "Source B", text: "An article." },
+    ]);
+
+    const second = await postImport(bundle);
+    expect(second.status).toBe(201);
+    const secondId = ((await second.json()) as { assessment: { id: string } }).assessment.id;
+    const db = getDb();
+    const [copy] = await db.select().from(item_sets).where(eq(item_sets.assessment_id, secondId));
+    expect(copy!.layout).toBe("side_by_side");
+    expect(copy!.sources).toEqual([
+      { label: "Source A", text: "A poem." },
+      { label: "Source B", text: "An article." },
+    ]);
+  });
+
+  test("a bundle written before sources existed imports the set with an empty list", async () => {
+    const res = await postImport({
+      test_id: "older",
+      title: "Older bundle",
+      items: [{ type: "essay", id: "e1", stem: "Write" }],
+      item_sets: [{ id: "s1", stimulus: "Read this.", item_ids: ["e1"] }],
+    });
+    expect(res.status).toBe(201);
+    const { assessment } = (await res.json()) as { assessment: { id: string } };
+    const db = getDb();
+    const [set] = await db.select().from(item_sets).where(eq(item_sets.assessment_id, assessment.id));
+    expect(set!.sources).toEqual([]);
+  });
+
   test("a bundle whose set is not contiguous is rejected at the schema gate", async () => {
     const res = await postImport({
       test_id: "bad",

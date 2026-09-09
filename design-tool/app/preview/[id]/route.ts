@@ -67,7 +67,12 @@ export async function GET(req: Request, ctx: RouteContext) {
     ...s,
     source: summaries.get(s.id) ? { stem: summaries.get(s.id)!.stem, assessment_name: summaries.get(s.id)!.assessment_name } : null,
   }));
-  const textsToScan: string[] = itemSets.map((s) => s.stimulus);
+  // Multi-source stimulus slice 2: a source's text resolves its `asset:`
+  // refs through the same owner-scoped lookup as the introduction.
+  const textsToScan: string[] = itemSets.flatMap((s) => [
+    s.stimulus,
+    ...s.sources.map((src) => src.text),
+  ]);
   for (const item of itemRows) {
     textsToScan.push(item.stem);
     const choices = (item.choices ?? []) as { id: string; text: string }[];

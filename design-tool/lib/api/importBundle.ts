@@ -475,6 +475,13 @@ export async function importBundleForOwner(
           .values({
             assessment_id: row!.id,
             stimulus_text: rewriteAssetRefs(set.stimulus, remap),
+            // Multi-source stimulus slice 2: each source's text remaps its
+            // asset refs exactly as the introduction does, so a figure inside
+            // Source C points at the copy's own asset row.
+            sources: set.sources.map((src) => ({
+              label: src.label,
+              text: rewriteAssetRefs(src.text, remap),
+            })),
             layout: set.layout,
             source_item_id: sourceItemId,
           })

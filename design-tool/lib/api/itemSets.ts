@@ -13,11 +13,21 @@ import { ITEM_SET_LAYOUTS, assessments, item_sets, items } from "@/db/schema";
 export const StimulusText = z.string().max(20000);
 export const ItemSetLayoutSchema = z.enum(ITEM_SET_LAYOUTS);
 
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): the
+// labelled sources under the introduction. Same bounds as the shared wire
+// schema (StimulusSourceSchema) so a set the teacher saves and a set that
+// arrives by import cannot differ; `sources` is replaced whole on write, like
+// `stimulus_text`, because a source has no id to address it by (D-1).
+export const StimulusSources = z
+  .array(z.object({ label: z.string().trim().min(1).max(80), text: StimulusText }))
+  .max(12);
+
 export const CreateItemSetBody = z.object({
   /** The items to group, in any order; they must be contiguous in the
    * assessment order and in no other set. */
   item_ids: z.array(z.string().uuid()).min(1),
   stimulus_text: StimulusText.optional(),
+  sources: StimulusSources.optional(),
   layout: ItemSetLayoutSchema.optional(),
 });
 export type CreateItemSetBody = z.infer<typeof CreateItemSetBody>;
@@ -25,13 +35,18 @@ export type CreateItemSetBody = z.infer<typeof CreateItemSetBody>;
 export const UpdateItemSetBody = z
   .object({
     stimulus_text: StimulusText.optional(),
+    sources: StimulusSources.optional(),
     layout: ItemSetLayoutSchema.optional(),
     // E12 slice 1: the essay / short-text question elsewhere whose saved
     // answer each student sees as this stimulus; null clears it.
     source_item_id: z.string().uuid().nullable().optional(),
   })
   .refine(
-    (b) => b.stimulus_text !== undefined || b.layout !== undefined || b.source_item_id !== undefined,
+    (b) =>
+      b.stimulus_text !== undefined ||
+      b.sources !== undefined ||
+      b.layout !== undefined ||
+      b.source_item_id !== undefined,
     { message: "nothing to update" },
   );
 export type UpdateItemSetBody = z.infer<typeof UpdateItemSetBody>;

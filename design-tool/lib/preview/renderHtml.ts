@@ -82,7 +82,11 @@ export interface PreviewItem {
 export interface PreviewItemSet {
   id: string;
   stimulus: string;
-  layout: "inline" | "own_page";
+  layout: "inline" | "own_page" | "side_by_side";
+  /** Multi-source stimulus slice 2: the labelled sources under the
+   * introduction, in order. Print has no side-by-side, so they simply
+   * follow it as blocks. */
+  sources?: { label: string; text: string }[];
   item_ids: string[];
   /** E12 slice 4: the stimulus is each student's own answer to this
    * question; the teacher's preview and print show a placeholder there. */
@@ -398,13 +402,34 @@ function renderStimulus(
       ? `Question ${firstIndex + 1}`
       : `Questions ${firstIndex + 1}–${lastIndex + 1}`;
   const lead = set.stimulus.trim() ? renderItemContent(set.stimulus, resolved) : "";
+  // Multi-source stimulus slice 2: each source is its own labelled section
+  // after the introduction, in order. A set that HAS sources is not "no
+  // stimulus text yet" — the introduction is optional once sources carry the
+  // reading; an individual source with no text is what gets flagged.
+  const sources = set.sources ?? [];
+  const sourcesHtml = sources
+    .map((src, i) => {
+      const headingId = `src-${set.id}-${i}`;
+      const text = src.text.trim()
+        ? renderItemContent(src.text, resolved)
+        : `<span class="stimulus-empty">(empty source)</span>`;
+      return (
+        `<section class="source" aria-labelledby="${escapeHtml(headingId)}">` +
+        `<h3 id="${escapeHtml(headingId)}" class="source-label">${escapeHtml(src.label)}</h3>` +
+        `<div class="source-body">${text}</div>` +
+        `</section>`
+      );
+    })
+    .join("");
   const body = set.source
     ? `${lead}<div class="stimulus-source">Each student&#39;s own answer to &ldquo;${escapeHtml(set.source.stem)}&rdquo; (${escapeHtml(set.source.assessment_name)}) appears here.</div>`
-    : lead || `<span class="stimulus-empty">(no stimulus text yet)</span>`;
+    : lead ||
+      (sources.length > 0 ? "" : `<span class="stimulus-empty">(no stimulus text yet)</span>`);
   return (
     `<section class="stimulus stimulus-${set.layout}" aria-label="Stimulus for ${escapeHtml(range)}">` +
     `<p class="stimulus-label">${escapeHtml(range)}</p>` +
     `<div class="stimulus-body">${body}</div>` +
+    sourcesHtml +
     `</section>`
   );
 }
@@ -474,6 +499,12 @@ export function renderAssessmentHtml(
        a poem or a paragraphed passage collapsed into prose before. */
     .stimulus-body { margin: 0; white-space: pre-line; }
     .stimulus-empty { color: #9b5400; font-size: 12px; font-style: italic; }
+    /* Multi-source stimulus slice 2: one labelled block per source, under the
+       introduction. pre-line for the same reason .stimulus-body has it — a
+       poem or a paragraphed article is authored with its line breaks. */
+    .source { margin: 12px 0 0; padding: 10px 12px; background: #fff; border: 1px solid #d6dce8; border-radius: 4px; }
+    .source-label { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: #3a4a6a; }
+    .source-body { margin: 0; white-space: pre-line; }
     .stimulus-source { margin-top: 8px; padding: 10px 12px; border: 1px dashed #8a94a6; border-radius: 4px; color: #3a4a6a; font-size: 13px; font-style: italic; }
     .stem { margin: 0 0 8px; white-space: pre-line; }
     .choice { display: block; margin: 6px 0; }
@@ -547,6 +578,8 @@ export function renderAssessmentHtml(
       .tool-btn { background: #2d323d; border-color: #3a3f4a; color: #c8cdd6; }
       .stimulus { background: #22252c; border-color: #3a3f4a; border-left-color: #4c8dff; }
       .stimulus-label { color: #a9b6d3; }
+      .source { background: #1e2128; border-color: #3a3f4a; }
+      .source-label { color: #a9b6d3; }
       .fill-table th { background: #22252c; }
       .fill-table th, .fill-table td { border-color: #555; }
     }
@@ -557,8 +590,11 @@ export function renderAssessmentHtml(
       body { margin: 0; background: #fff; color: #000; }
       .item { break-inside: avoid; page-break-inside: avoid; border-bottom-color: #ccc; }
       .stimulus { background: #fff; border-color: #999; border-left-color: #000; break-inside: avoid; page-break-inside: avoid; }
-      /* own_page: the stimulus starts a fresh sheet (decision 4.2). */
-      .stimulus-own_page { break-before: page; page-break-before: always; }
+      /* own_page: the stimulus starts a fresh sheet (decision 4.2).
+         Multi-source stimulus slice 2: paper has no side-by-side, so
+         side_by_side prints exactly like own_page. */
+      .stimulus-own_page, .stimulus-side_by_side { break-before: page; page-break-before: always; }
+      .source { background: #fff; border-color: #999; break-inside: avoid; page-break-inside: avoid; }
       .mark, .write-line, .write-area { border-color: #000; }
       .fill-table th { background: #fff; }
       .fill-table th, .fill-table td { border-color: #000; }

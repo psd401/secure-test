@@ -711,7 +711,9 @@ describe("item sets in the preview (E5 slice 1)", () => {
     expect(html).toContain('class="stimulus stimulus-own_page"');
     expect(html).toContain("Question 1</p>");
     expect(html).toContain("no stimulus text yet");
-    expect(html).toContain(".stimulus-own_page { break-before: page;");
+    // Multi-source stimulus slice 2: side_by_side joined own_page on this
+    // rule (paper has no side-by-side), so the selector is now a pair.
+    expect(html).toContain(".stimulus-own_page, .stimulus-side_by_side { break-before: page;");
   });
 
   // Multi-source stimulus slice 1 (2026-09-09): authored line breaks survive in
@@ -729,6 +731,68 @@ describe("item sets in the preview (E5 slice 1)", () => {
   test("no sets → no stimulus markup (byte-stable for existing previews)", () => {
     const html = renderAssessmentHtml(assessment, items, new Map(), {});
     expect(html).not.toContain('class="stimulus ');
+  });
+});
+
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): the
+// introduction, then one labelled section per source, in order.
+describe("multi-source stimulus in the preview (slice 2)", () => {
+  test("two sources render as labelled sections in document order", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{
+        id: "s1",
+        stimulus: "Use all the sources.",
+        layout: "inline",
+        sources: [
+          { label: "Source A", text: "Two roads diverged\nin a yellow wood" },
+          { label: "Source B", text: "Ridership fell by $\\tfrac13$." },
+        ],
+        item_ids: ["i1"],
+      }],
+    });
+    expect(html).toContain('<section class="source" aria-labelledby="src-s1-0">');
+    expect(html).toContain('<h3 id="src-s1-0" class="source-label">Source A</h3>');
+    expect(html).toContain('<h3 id="src-s1-1" class="source-label">Source B</h3>');
+    expect(html.indexOf("src-s1-0")).toBeLessThan(html.indexOf("src-s1-1"));
+    // The introduction still opens the block, above both sources.
+    expect(html.indexOf("Use all the sources.")).toBeLessThan(html.indexOf("src-s1-0"));
+    // Same content renderer as a stem: line breaks survive, math is KaTeX.
+    expect(html).toContain(".source-body { margin: 0; white-space: pre-line; }");
+    expect(html).toContain("Two roads diverged\nin a yellow wood");
+    expect(html).not.toContain("$\\tfrac13$");
+  });
+
+  test("a source with no text is flagged; sources with a blank introduction are not", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{
+        id: "s2",
+        stimulus: "",
+        layout: "side_by_side",
+        sources: [{ label: "Source A", text: "A poem." }, { label: "Source B", text: "" }],
+        item_ids: ["i1"],
+      }],
+    });
+    expect(html).toContain("(empty source)");
+    // The set carries its reading in the sources, so it is not "no stimulus
+    // text yet" — that flag is for a set with nothing at all.
+    expect(html).not.toContain("no stimulus text yet");
+    expect(html).toContain('class="stimulus stimulus-side_by_side"');
+  });
+
+  test("a set with neither introduction nor sources is still flagged", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{ id: "s3", stimulus: "", layout: "inline", sources: [], item_ids: ["i1"] }],
+    });
+    expect(html).toContain("no stimulus text yet");
+    expect(html).not.toContain('class="source"');
+  });
+
+  test("a label is escaped, never emitted as markup", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{ id: "s4", stimulus: "x", layout: "inline", sources: [{ label: "<b>A</b>", text: "y" }], item_ids: ["i1"] }],
+    });
+    expect(html).toContain("&lt;b&gt;A&lt;/b&gt;");
+    expect(html).not.toContain("<b>A</b>");
   });
 });
 

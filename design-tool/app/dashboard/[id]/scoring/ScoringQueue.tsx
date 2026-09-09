@@ -358,7 +358,7 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
             HTML-escaped, math is KaTeX, image refs resolve owner-scoped
             or come back as inline-red placeholders — no injection vector. */}
         <p
-          className="mt-1 line-clamp-2 text-xs text-muted-foreground"
+          className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground"
           dangerouslySetInnerHTML={{ __html: entry.item.stem_html }}
         />
         {entry.outline ? (

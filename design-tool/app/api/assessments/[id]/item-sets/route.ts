@@ -99,6 +99,9 @@ export async function POST(req: Request, ctx: RouteContext) {
       .values({
         assessment_id: id,
         stimulus_text: body.stimulus_text ?? "",
+        // Multi-source stimulus slice 2: sources may arrive with the set (the
+        // import panel posts them together); absent means the column default.
+        sources: body.sources ?? [],
         layout: body.layout ?? "inline",
       })
       .returning();

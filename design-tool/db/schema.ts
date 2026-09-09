@@ -162,8 +162,17 @@ export type ItemConfig = {
 // (it ships in the delivery bundle). `layout`: 'inline' renders the stimulus
 // once above its group; 'own_page' gives it a page of its own on the client
 // and a page break in print.
-export const ITEM_SET_LAYOUTS = ["inline", "own_page"] as const;
+// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md, D-2):
+// 'side_by_side' shows the sources beside the question on the client and
+// prints like 'own_page'. The teacher picks it; it is never inferred.
+export const ITEM_SET_LAYOUTS = ["inline", "own_page", "side_by_side"] as const;
 export type ItemSetLayout = (typeof ITEM_SET_LAYOUTS)[number];
+
+// Multi-source stimulus slice 2 (D-1): the labelled sources of a set, in
+// order, as a JSON column rather than a child table — a source has no
+// identity outside its set and nothing ever references one. `stimulus_text`
+// stays and reads as the introduction above them.
+export type StimulusSourceRow = { label: string; text: string };
 
 export const item_sets = pgTable(
   "item_sets",
@@ -173,6 +182,10 @@ export const item_sets = pgTable(
       .notNull()
       .references(() => assessments.id, { onDelete: "cascade" }),
     stimulus_text: text("stimulus_text").notNull().default(""),
+    // Multi-source stimulus slice 2: ordered {label, text} entries; bounds
+    // (label 1–80, text 20 000, at most 12) live at the write boundary in
+    // lib/api/itemSets.ts, same posture as stimulus_text's own bound.
+    sources: jsonb("sources").$type<StimulusSourceRow[]>().notNull().default(sql`'[]'::jsonb`),
     layout: text("layout").notNull().default("inline"),
     // E12 slice 1 (docs/e12-per-student-stimulus-design.md): an essay or
     // short-text question in ANOTHER assessment of the same owner whose
@@ -193,7 +206,7 @@ export const item_sets = pgTable(
     assessmentIdIdx: index("item_sets_assessment_id_idx").on(t.assessment_id),
     layoutCheck: check(
       "item_sets_layout_check",
-      sql`${t.layout} in ('inline', 'own_page')`,
+      sql`${t.layout} in ('inline', 'own_page', 'side_by_side')`,
     ),
   }),
 );
