@@ -46,6 +46,7 @@ has, or will have, its own design page; this page is the order and the why.
 |---|---|---|---|---|
 | 0 | Run the 29 rows + row 19 | — | students hit unverified code otherwise | James + Chrome |
 | 0b | **Client fixes from the 2026-09-03 sitting**: hotspot regions overlaid on the image (the renderer has never had CSS — four grey buttons under the picture), the math preview on every short-text answer, match marked answered only when every pair is set | this page, "Findings from the 2026-09-03 sitting" | a shipped defect plus two one-line fixes; one rebuild, ahead of the first package | client, ∥ with 1 |
+| **S** | **Multi-source stimulus** (2026-09-09, from the first pilot assessment: one essay prompt followed by four labelled sources and three vector charts — the import returned the essay alone): `sources: [{label, text}]` on a set, a `side_by_side` layout, source tabs in the client, the prompt rewritten for single-question sets with sources after the prompt, vector charts rasterised on the server (spike S4) | `docs/multi-source-stimulus-design.md` | **NOW, ahead of everything queued (D-5 there)** — it is the initial pilot assessment; slice 1 (line breaks) built 2026-09-09 | both sides |
 | 1 | **Scoring hygiene** — BUILT 2026-09-03 (`eb2c969` / `df899b2` / `7d9a3e0`, rows 59–61 unrun): auto-score on submit, F-1 drawing viewer, student number + section on results and CSV | `docs/reporting-design.md` R0 | unblocks scoring and everything in 5 | design tool |
 | 2 | **Package + sign the client** — **v1.0.0 2026-09-07, v1.1.0 PUBLISHED 2026-09-08** (hand-install row still open): v1.0.0 published on `psd401/secure-test` (notarized app + pkg), real AAC session on the notarized build, D-R4 no PPPC, IT handoff drafted (ops repo); fleet scope pending; with the AppKit half of branding (icon, accent, one name, About / version, build stamp), and fix the `psd-sign` skill; its real-session hand-run re-checks predictive text in the essay (finding 8.4) | `docs/client-release-plan.md` (+ `docs/client-ui-pass-design.md` slice C) | gates the pilot and the IT afternoon; the first package is what IT and students see | client + release |
 | 2b | **Public repository**: sweep, squash, move development there; archive this repo; a private ops repo for what stays internal | `docs/public-release-plan.md` | the release's `gh release` needs a public home; runs beside 2 and must finish before 2's release slice | docs + infra config, ∥ with 2 |
@@ -187,3 +188,11 @@ via `migrate-aurora.sh`) + math-entry slice 1a; health 200. Colima had to be
 started by hand first (`colima start`; it stays stopped after a reboot and
 `cdk deploy` then fails at the Docker build). CDK CLI 2.1140.0 is available —
 the bump stays a separate step after a deploy.
+
+2026-09-09: **row S opened** — the first pilot assessment (an AP Seminar-style
+free-response: one essay, four labelled sources, three vector charts) imported
+as the essay alone. `docs/multi-source-stimulus-design.md` has the measured
+causes, the shape (D-1…D-5 decided the same day) and six slices; slice 1
+(`white-space: pre-line` on stems and stimulus bodies, client + preview +
+editor live preview) built the same session. Everything else on this page
+queues behind it.
