@@ -4,8 +4,14 @@
 //
 // Run when DeliveryBundleSchema or the delivery route changes:
 //   cd design-tool
-//   DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test \
+//   DESIGN_TOOL_DELIVERY_SECRET=<any value> \
+//     DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test \
 //     bun scripts/generate-delivery-fixture.ts
+//
+// The secret seals the per-attempt match/order ids; any value works, since the
+// fixture's ids are read back off the bundle by the Swift tests rather than
+// named — but a DIFFERENT value churns them, so expect a large diff when the
+// value changes.
 //
 // Writes to client/SecureTestCore/Tests/SecureTestCoreTests/Fixtures/.
 import { createHash } from "node:crypto";
@@ -229,6 +235,34 @@ await db
   .update(items)
   .set({ item_set_id: FIXTURE_SET_ID })
   .where(inArray(items.id, seededItems.filter((r) => r.position === 2 || r.position === 3).map((r) => r.id)));
+
+// Multi-source stimulus slice 4: a second set — one essay (position 4) with two
+// labelled sources and `side_by_side`, so the Swift decoder and the renderer
+// harness are verified against bytes the delivery route really emits. Source A
+// carries an authored line break and `**bold**` (slice 1's `pre-line` rule);
+// Source B carries an `![alt](asset:…)` ref, so a source's assets ride the same
+// bundling path a stem's do.
+const FIXTURE_SOURCED_SET_ID = "66666666-6666-4666-8666-666666666666";
+await db.insert(item_sets).values({
+  id: FIXTURE_SOURCED_SET_ID,
+  assessment_id: a.id,
+  stimulus_text: "Read both sources, then answer the question.",
+  layout: "side_by_side",
+  sources: [
+    {
+      label: "Source A",
+      text: "**Rain and rivers**\nWater falls, then runs back to the sea.",
+    },
+    {
+      label: "Source B",
+      text: "A cell under the lens: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)",
+    },
+  ],
+});
+await db
+  .update(items)
+  .set({ item_set_id: FIXTURE_SOURCED_SET_ID })
+  .where(inArray(items.id, seededItems.filter((r) => r.position === 4).map((r) => r.id)));
 
 // Slice 62: the route requires a student principal now, so the fixture is built
 // through the same builder the route calls rather than by faking a session. A

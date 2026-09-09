@@ -208,6 +208,32 @@ public enum AssessmentPage {
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
     .stimulus-body { margin: 0; line-height: 1.5; white-space: pre-line; }
     .stimulus-body img { max-width: 100%; max-height: 480px; display: block; margin: 8px 0; border: 1px solid var(--line); border-radius: 4px; }
+    /* Multi-source stimulus slice 4: the labelled sources under a set's
+       introduction. Tokens only, so the eight contrast sets and the zoom levels
+       (batch 4) reach the pane with no rule of their own. */
+    .source-pane { margin-top: 12px; }
+    .source-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--panel-line); }
+    .source-tab { font: inherit; font-size: 0.875rem; padding: 6px 12px; border: none; border-bottom: 3px solid transparent; background: transparent; color: var(--ink-soft); cursor: pointer; }
+    .source-tab-open { border-bottom-color: var(--accent); color: var(--accent-ink); background: var(--accent); border-radius: 4px 4px 0 0; }
+    .source-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .source-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.8125rem; font-weight: 600; color: var(--ink-soft); }
+    /* A two-page article must not push the answer box off the screen, so the
+       panel scrolls inside the pane rather than growing the page. */
+    .source-panel { max-height: 60vh; overflow: auto; padding: 8px 2px 0; }
+    .source-panel[hidden] { display: none; }
+    .source-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .source-body { margin: 0; line-height: 1.5; white-space: pre-line; }
+    .source-body img { max-width: 100%; max-height: 480px; display: block; margin: 8px 0; border: 1px solid var(--line); border-radius: 4px; }
+    /* side_by_side: the sources left, the question(s) right, each column
+       scrolling on its own. The columns are chosen at build time (>= 1100 px);
+       this query is the safety net for a window dragged smaller afterwards. */
+    .side-by-side { display: flex; gap: 24px; align-items: flex-start; }
+    .side-by-side > .side-source { flex: 0 0 55%; min-width: 0; max-height: 78vh; overflow: auto; }
+    .side-by-side > .side-questions { flex: 1 1 auto; min-width: 0; max-height: 78vh; overflow: auto; }
+    @media (max-width: 1099px) {
+      .side-by-side { display: block; }
+      .side-by-side > .side-source, .side-by-side > .side-questions { max-height: none; overflow: visible; }
+    }
     /* E7(b): a short-text answer typed as a formula previews as rendered math. */
     .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: var(--ink); }
@@ -2453,6 +2479,19 @@ public enum AssessmentPage {
       // tree it did before the flag existed.
       var PAGED = !!(BUNDLE && BUNDLE.layout === 'paged');
 
+      // Multi-source stimulus slice 4: `side_by_side` is two columns only when
+      // there is room for them. Read ONCE, at build time — re-paging on a
+      // resize would rebuild the tree and take unsaved typing and unsaved
+      // strokes with it, and the client is fullscreen by default (batch 4,
+      // S-8). Narrower than the threshold the set behaves exactly like
+      // own_page; the two-column body itself collapses in CSS if the window is
+      // dragged smaller after the build. `__forceWide` is the test harness's
+      // hook — JavaScriptCore has no window metrics at all.
+      var LAYOUT_MIN_WIDE_PX = 1100;
+      var WIDE = typeof window.__forceWide === 'boolean'
+        ? window.__forceWide
+        : (typeof window.innerWidth === 'number' ? window.innerWidth >= LAYOUT_MIN_WIDE_PX : true);
+
       var root = document.getElementById('items');
       // Offline path (James, 2026-08-28, follow-up to finding 8.5): a standing
       // notice under the heading, because MC / short-text / essay answers
@@ -2480,6 +2519,102 @@ public enum AssessmentPage {
         members.forEach(function (id) { setOfItem[id] = set; });
       });
 
+      // Multi-source stimulus slice 4: which source a set has open, kept in
+      // memory only (nothing posts) so a page turn inside the set comes back
+      // to the source the student was reading.
+      var OPEN_SOURCE = {};
+
+      // The labelled sources under a set's introduction. Several sources are
+      // tabs — the WAI-ARIA tab pattern, with the roving-tabindex model the
+      // math keypad already uses (D-3.1), so the strip is ONE Tab stop. One
+      // source is a labelled panel: a strip of one tab is furniture.
+      function sourcePane(set) {
+        var sources = (set.sources || []).filter(function (source) {
+          return source && typeof source.label === 'string' && typeof source.text === 'string';
+        });
+        if (sources.length === 0) return null;
+        var pane = document.createElement('div');
+        pane.className = 'source-pane';
+        var panels = [];
+        var single = sources.length === 1;
+        sources.forEach(function (source, i) {
+          var panel = document.createElement('div');
+          panel.className = 'source-panel';
+          panel.setAttribute('id', 'source-' + set.id + '-' + i);
+          // The panel scrolls (CSS), so it is focusable — a keyboard student
+          // must be able to scroll a long source without a pointer.
+          panel.setAttribute('tabindex', '0');
+          panel.setAttribute('aria-labelledby', 'source-tab-' + set.id + '-' + i);
+          if (single) {
+            panel.setAttribute('role', 'group');
+            var heading = document.createElement('h3');
+            heading.className = 'source-label';
+            heading.setAttribute('id', 'source-tab-' + set.id + '-' + i);
+            heading.textContent = source.label;
+            panel.appendChild(heading);
+          } else {
+            panel.setAttribute('role', 'tabpanel');
+          }
+          var body = document.createElement('div');
+          body.className = 'source-body';
+          body.appendChild(textWithAssets(source.text));
+          panel.appendChild(body);
+          panels.push(panel);
+        });
+        if (single) {
+          pane.appendChild(panels[0]);
+          return pane;
+        }
+        var strip = document.createElement('div');
+        strip.className = 'source-tabs';
+        strip.setAttribute('role', 'tablist');
+        strip.setAttribute('aria-label', 'Sources');
+        var tabs = [];
+        var open = OPEN_SOURCE[set.id];
+        if (typeof open !== 'number' || open < 0 || open >= sources.length) open = 0;
+        var select = function (index) {
+          open = index;
+          OPEN_SOURCE[set.id] = index;
+          for (var i = 0; i < tabs.length; i++) {
+            tabs[i].setAttribute('aria-selected', i === index ? 'true' : 'false');
+            tabs[i].setAttribute('tabindex', i === index ? '0' : '-1');
+            tabs[i].className = i === index ? 'source-tab source-tab-open' : 'source-tab';
+            if (i === index) panels[i].removeAttribute('hidden');
+            else panels[i].setAttribute('hidden', '');
+          }
+        };
+        sources.forEach(function (source, i) {
+          var tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'source-tab';
+          tab.setAttribute('role', 'tab');
+          tab.setAttribute('id', 'source-tab-' + set.id + '-' + i);
+          tab.setAttribute('aria-controls', 'source-' + set.id + '-' + i);
+          tab.textContent = source.label;
+          tab.onclick = function () { select(i); };
+          tabs.push(tab);
+          strip.appendChild(tab);
+        });
+        // Left / Right move between the tabs and wrap; Home / End go to the
+        // ends. Read on the strip, so it covers every tab with one handler.
+        strip.onkeydown = function (event) {
+          if (!event || !tabs.length) return;
+          var next = -1;
+          if (event.key === 'ArrowRight') next = (open + 1) % tabs.length;
+          else if (event.key === 'ArrowLeft') next = (open + tabs.length - 1) % tabs.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = tabs.length - 1;
+          else return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          select(next);
+          if (typeof tabs[next].focus === 'function') tabs[next].focus();
+        };
+        pane.appendChild(strip);
+        panels.forEach(function (panel) { pane.appendChild(panel); });
+        select(open);
+        return pane;
+      }
+
       function stimulusBlock(set) {
         var block = document.createElement('section');
         block.className = 'stimulus stimulus-' + (set.layout === 'own_page' ? 'own_page' : 'inline');
@@ -2493,6 +2628,10 @@ public enum AssessmentPage {
         body.className = 'stimulus-body';
         body.appendChild(textWithAssets(set.stimulus));
         block.appendChild(body);
+        // Slice 4: the introduction on top, the sources beneath it — under
+        // every layout, since side_by_side only changes where the block goes.
+        var pane = sourcePane(set);
+        if (pane) block.appendChild(pane);
         // E12 slice 3 (decision D-4): when the stimulus should be the
         // student's own earlier answer and it did not come from the source
         // assessment, the block carries a writing area — empty when nothing
@@ -2560,9 +2699,20 @@ public enum AssessmentPage {
           heading.setAttribute('tabindex', '-1');
           heading.textContent = label;
           el.appendChild(heading);
-          var page = { el: el, label: label, short: short, heading: heading, holder: null, set: null, items: [] };
+          // `body` is where a member item lands: the page itself, or the
+          // right-hand column of a side_by_side page (slice 4).
+          var page = { el: el, label: label, short: short, heading: heading, holder: null, set: null, items: [], body: el };
           pages.push(page);
           return page;
+        }
+
+        // Multi-source stimulus slice 4: what this build actually does with a
+        // set's layout. `side_by_side` is two columns on a wide viewport and
+        // own_page below the threshold — one place, so the passage page, the
+        // disclosure and the member routing all agree.
+        function layoutOf(set) {
+          if (set.layout === 'side_by_side') return WIDE ? 'side_by_side' : 'own_page';
+          return set.layout === 'own_page' ? 'own_page' : 'inline';
         }
 
         function rangeOf(set) {
@@ -2576,7 +2726,8 @@ public enum AssessmentPage {
           var set = setOfItem[item.id];
           if (opener) {
             var block = stimulusBlock(opener);
-            if (opener.layout === 'own_page') {
+            var mode = layoutOf(opener);
+            if (mode === 'own_page') {
               opener.__block = block;
               var passage = newPage('passage', 'Passage for ' + rangeOf(opener), 'P');
               passage.holder = document.createElement('div');
@@ -2593,22 +2744,41 @@ public enum AssessmentPage {
                   rangeOf(opener).replace(/^questions? /, '') + ' of ' + total,
                 String(opener.__first + 1) + (opener.__first === opener.__last ? '' : '\u2013' + (opener.__last + 1))
               );
-              shared.el.appendChild(block);
+              if (mode === 'side_by_side') {
+                // The sources left, the member(s) right, each column scrolling
+                // on its own; every member of the set shares this one page.
+                var split = document.createElement('div');
+                split.className = 'side-by-side';
+                var left = document.createElement('div');
+                left.className = 'side-source';
+                left.appendChild(block);
+                var right = document.createElement('div');
+                right.className = 'side-questions';
+                split.appendChild(left);
+                split.appendChild(right);
+                shared.el.appendChild(split);
+                shared.body = right;
+              } else {
+                shared.el.appendChild(block);
+              }
               setPages[opener.id] = shared;
             }
           }
-          if (set && set.layout !== 'own_page' && setPages[set.id]) {
-            setPages[set.id].el.appendChild(itemBlock(item));
+          if (set && layoutOf(set) !== 'own_page' && setPages[set.id]) {
+            setPages[set.id].body.appendChild(itemBlock(item));
             setPages[set.id].items.push(item.id);
             return;
           }
           var page = newPage('question', 'Question ' + (index + 1) + ' of ' + total, String(index + 1));
           page.items.push(item.id);
-          if (set && set.layout === 'own_page') {
+          if (set && layoutOf(set) === 'own_page') {
             var ref = document.createElement('details');
             ref.className = 'passage-ref';
             var summary = document.createElement('summary');
-            summary.textContent = 'Show the passage';
+            // Slice 4: a set that carries sources calls them sources.
+            summary.textContent = (set.sources || []).length > 0
+              ? 'Show the sources'
+              : 'Show the passage';
             ref.appendChild(summary);
             page.holder = document.createElement('div');
             page.holder.className = 'passage-holder';

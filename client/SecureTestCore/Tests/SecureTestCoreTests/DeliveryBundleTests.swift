@@ -205,11 +205,44 @@ final class DeliveryBundleTests: XCTestCase {
     // E5 slice 2: the stimulus set the fixture carries over positions 2–3.
     func testDecodesItemSetsWithTheirMembersInOrder() throws {
         let bundle = try loadBundle()
-        XCTAssertEqual(bundle.itemSets.count, 1)
+        XCTAssertEqual(bundle.itemSets.count, 2)
         let set = try XCTUnwrap(bundle.itemSets.first)
         XCTAssertEqual(set.layout, .ownPage)
         XCTAssertTrue(set.stimulus.contains("asset:33333333-3333-4333-8333-333333333333"))
         XCTAssertEqual(set.itemIds, [bundle.items[1].id, bundle.items[2].id])
+        XCTAssertEqual(set.sources, [], "a set with no sources decodes as an empty list")
+    }
+
+    /// Multi-source stimulus slice 4: the fixture's second set — one essay
+    /// (position 4) with two labelled sources and the side_by_side layout.
+    func testDecodesASetsLabelledSourcesAndTheSideBySideLayout() throws {
+        let bundle = try loadBundle()
+        let set = try XCTUnwrap(bundle.itemSets.last)
+        XCTAssertEqual(set.layout, .sideBySide)
+        XCTAssertEqual(set.stimulus, "Read both sources, then answer the question.")
+        XCTAssertEqual(set.itemIds, [bundle.items[3].id])
+        XCTAssertEqual(set.sources.map(\.label), ["Source A", "Source B"])
+        // The authored line break survives the whole way to the client, which
+        // is what slice 1's `pre-line` rule renders.
+        XCTAssertTrue(set.sources[0].text.contains("\n"))
+        XCTAssertTrue(set.sources[0].text.contains("**Rain and rivers**"))
+        XCTAssertTrue(set.sources[1].text.contains("asset:33333333-3333-4333-8333-333333333333"))
+    }
+
+    /// An older bundle has no `sources` key at all; it must not fail the set.
+    func testASetWithNoSourcesKeyDecodesAsAnEmptyList() throws {
+        let json = #"{"id":"s","stimulus":"Read.","layout":"inline","item_ids":["i1"]}"#
+        let set = try JSONDecoder().decode(ItemSet.self, from: Data(json.utf8))
+        XCTAssertEqual(set.sources, [])
+        XCTAssertEqual(set.layout, .inline)
+    }
+
+    /// And a layout this build has not heard of still renders (as inline)
+    /// rather than failing the whole bundle.
+    func testAnUnknownLayoutStillDecodesAsInline() throws {
+        let json = #"{"id":"s","stimulus":"Read.","layout":"sideways","item_ids":["i1"]}"#
+        let set = try JSONDecoder().decode(ItemSet.self, from: Data(json.utf8))
+        XCTAssertEqual(set.layout, .inline)
     }
 }
 

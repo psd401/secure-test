@@ -1327,3 +1327,59 @@ simulator — blank `SECURE_TEST_SIMULATE_LOCKDOWN` on the command line.
 | Teacher side, the prose item (no `$` stem) | Scores exactly as it did before this slice — a plain exact-match comparison, untouched by the fold changes | Not run |
 | **Regression, E7(b):** type `H_2O` by keyboard only, no keypad keys pressed | The preview still renders H₂O and the posted response is the typed text `H_2O`, unaffected by the keypad's presence | Not run |
 | **Regression, resume:** after answering a keyed item, relaunch and rejoin the same sitting | The restored field shows the keypad-produced text (e.g. `\frac{1}{2}`) and its formula preview is repainted to match, exactly as P-1 built for typed text | Not run |
+
+## Multi-source stimulus — sources beside the question (2026-09-09)
+
+`docs/multi-source-stimulus-design.md` slice 4 (the client), on top of slice 2
+(`ed59110`, the server contract: `item_sets[].sources` and the third layout
+`side_by_side` on both wire formats). Client only — the server half of what
+these rows read is already on `main` but **is NOT deployed to the origin**, so
+the fixture has to be authored on a design tool that carries slice 2 (local
+dev, or the origin once it is deployed). Rebuild the client first — `cd client
+&& xcodebuild -project SecureTest.xcodeproj -scheme SecureTest -destination
+'platform=macOS' build` — and check the built page carries the new code before
+starting:
+
+```
+find ~/Library/Developer/Xcode/DerivedData -name SecureTest.debug.dylib \
+  | xargs grep -ac 'source-pane\|side-by-side\|Show the sources'
+```
+each should come back non-zero (the real code lives in the dylib; the outer
+binary is Xcode's launcher stub).
+
+**Fixture.** An assessment with **paged** student layout carrying, in order:
+one ordinary question, then an item set over ONE essay with layout **Side by
+side** and **two sources** — "Source A" whose text has an authored blank line
+and a `**bold**` heading line, "Source B" whose text carries an image (add one
+from the Images page, so the bytes are real — a hand-pasted base64 loses bytes,
+2026-09-03) — then a second set with exactly ONE source, then a plain question.
+Build it either with `design-tool/samples/_build-client-rows-fixture.ts` (add
+the sourced sets to it) and File → Open the exported bundle, or author it in
+the editor and publish. Run the one-day teacher-row script first if the sitting
+is against the origin.
+
+| Check | Expect | Result |
+|---|---|---|
+| Join the sitting, reach the side-by-side question on the fullscreen client | One page: the introduction and the source tabs on the left (about 55 % of the width), the essay box on the right; the page does not scroll as a whole | Not run |
+| Click "Source B", then "Source A" | The panel under the strip swaps; exactly one source is visible at a time; the selected tab carries the accent underline and fill | Not run |
+| Scroll inside a long source panel | The panel scrolls on its own; the essay box on the right stays where it is | Not run |
+| Tab into the tab strip, then press Right, Right | The strip is ONE Tab stop; Right moves the selection AND the focus and wraps from the last tab back to the first | Not run |
+| Press Left, then Home, then End | Left wraps backwards; Home opens the first source; End opens the last | Not run |
+| Tab once more from the selected tab | Focus lands on the open panel (it is focusable so the source can be scrolled by keyboard), then on the essay box | Not run |
+| VoiceOver (Cmd-F5) on a tab | Announces the label, "tab", selected state and the position in the strip ("Source A, selected, tab, 1 of 2") | Not run |
+| VoiceOver on the open panel | Announces the panel as labelled by its tab, then reads the source text; an image in Source B is read by its alt text | Not run |
+| Look at Source A's text | The authored blank line is still a line break — the paragraphs did not collapse into one run of prose; the `**bold**` heading is bold | Not run |
+| Look at Source B | The image renders at a sensible size inside the panel, not overflowing it | Not run |
+| The set with exactly one source | No tab strip at all — a heading with the source's label above its text | Not run |
+| Type an answer in the essay box, then click a tab and come back | The typed text is untouched; switching sources never touches the answer | Not run |
+| Move to the next question and back with the pager | The source that was open is still the one open (kept in memory, nothing posts) | Not run |
+| Accommodations: Zoom 150 % on the side-by-side page | Both columns stay usable; if the window is now effectively narrow the columns stack rather than crushing — record which happens (the note's open question: is 1100 px the right threshold at 150 %?) | Not run |
+| Accommodations: Color Contrast = Reverse Contrast (and one more set, e.g. Yellow on Blue) | Tab labels, the selected tab's fill and the source text are all readable; the selected tab is distinguishable by more than colour (it also carries the underline) | Not run |
+| Optional font = Atkinson Hyperlegible | The source text and the tab labels both take the font | Not run |
+| **Narrow fallback:** relaunch with `SECURE_TEST_NO_FULLSCREEN=1` and drag the window under about 1100 px, then join and reach the set | The set is a passage page ("Passage for question N") carrying the sources, then the question page with a collapsed disclosure reading **"Show the sources"** (not "Show the passage") | Not run |
+| On that question page, open the disclosure | The same source pane appears in place — tabs still work, and there is only ever one copy of the pane on the page | Not run |
+| A set with no sources, narrow | Its disclosure still reads "Show the passage" | Not run |
+| Drag the window narrower AFTER the page has built (side-by-side already on screen) | The two columns stack instead of crushing; the page does not re-page (the layout is chosen once at build — this is the CSS safety net, deliberate) | Not run |
+| **Resume:** answer the essay, quit, relaunch, sign in, rejoin the same sitting | The essay text is restored (P-1) and the side-by-side page rebuilds; the open source starts at the first tab again (in memory only, by design) | Not run |
+| Hand in from the side-by-side page's Review page | The hand-in succeeds; the teacher side shows the essay answer | Not run |
+| **Real session** (no `SECURE_TEST_SIMULATE_LOCKDOWN`): repeat the tab clicks and one keyboard pass inside a real `AEAssessmentSession` | Same behaviour; no beep, no focus loss, and Cmd-E still ends the session | Not run |

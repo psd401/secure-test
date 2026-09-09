@@ -6,22 +6,15 @@ import XCTest
 /// Q2 · Q3 · Q4 … Q9 · review = 11 pages. Scroll mode builds the tree every
 /// other renderer suite already asserts on; these tests only add the flag.
 final class RendererPagingTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     private func paged() throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
         json.replaceSubrange(range, with: "\"layout\": \"paged\", \"test_id\":")
         return try RendererHarness(bundleJSON: json)
     }
 
     func testScrollModeBuildsNoPagesAndNoBar() throws {
-        let h = try RendererHarness(bundleJSON: try fixtureJSON())
+        let h = try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON())
         XCTAssertEqual(try h.int("__count('.page')"), 0)
         XCTAssertEqual(try h.int("__count('.pager')"), 0)
         XCTAssertEqual(try h.string("__root.children[0].className"), "item")
@@ -35,7 +28,9 @@ final class RendererPagingTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.page')"), 11)
         XCTAssertEqual(try h.int("__count('.item')"), 9, "every question is still in the tree")
         let kinds = try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')")
-        XCTAssertEqual(kinds, "question,passage,question,question,question,question,question,question,question,question,review")
+        // Page 4 is the side_by_side set's shared page (multi-source slice 4);
+        // the harness has no window metrics, so the renderer treats it as wide.
+        XCTAssertEqual(kinds, "question,passage,question,question,questions,question,question,question,question,question,review")
         XCTAssertEqual(try h.string("__all('.page-label')[0].textContent"), "Question 1 of 9")
         XCTAssertEqual(try h.string("__all('.page-label')[1].textContent"), "Passage for questions 2\u{2013}3")
         XCTAssertEqual(try h.string("__all('.page-label')[2].textContent"), "Question 2 of 9")
@@ -73,7 +68,9 @@ final class RendererPagingTests: XCTestCase {
     /// it is never in two places.
     func testThePassageTravelsBetweenItsPageAndTheOpenQuestionsDisclosure() throws {
         let h = try paged()
-        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
+        // Two stimulus blocks now: this set's, and the sourced set's on its
+        // own side_by_side page.
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 2)
         try h.eval("__all('button', __first('.pager-strip'))[1].onclick()")
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 1)
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[1])"), 0)
@@ -82,7 +79,7 @@ final class RendererPagingTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[2])"), 1)
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 0)
         XCTAssertEqual(try h.string("__first('summary', __all('.page')[2]).textContent"), "Show the passage")
-        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 2)
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[3])"), 1, "Q3 is a member too")
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[4])"), 0, "Q4 is not")
     }
@@ -138,16 +135,9 @@ final class RendererPagingTests: XCTestCase {
 /// answered_item_ids (this attempt's saved answers) and kept current as the
 /// page posts. Scroll mode never shows them.
 final class RendererAnsweredMarksTests: XCTestCase {
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     /// The fixture, paged, with the given item indexes already answered.
     private func paged(answered: [Int]) throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let probe = try RendererHarness(bundleJSON: json)
         let ids = try answered.map { try XCTUnwrap(probe.string("BUNDLE.items[\($0)].id")) }
         let list = ids.map { "\"\($0)\"" }.joined(separator: ",")
@@ -223,7 +213,7 @@ final class RendererAnsweredMarksTests: XCTestCase {
     }
 
     func testScrollModeIgnoresTheField() throws {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
         json.replaceSubrange(range, with: "\"answered_item_ids\": [\"anything\"], \"test_id\":")
         let h = try RendererHarness(bundleJSON: json)

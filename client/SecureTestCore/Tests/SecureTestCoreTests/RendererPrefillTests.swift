@@ -18,18 +18,11 @@ final class RendererPrefillTests: XCTestCase {
     /// The harness canvas's own `toDataURL` payload, reused as the stored bytes.
     private static let pngBase64 = "SEVMTE8="
 
-    private func fixtureJSON() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/delivery-bundle.json")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     /// A harness on the untouched fixture, used to read the ids the bundle
     /// actually carries (match and order ids are per-attempt sealed values,
     /// so they cannot be written down here).
     private func probe() throws -> RendererHarness {
-        try RendererHarness(bundleJSON: try fixtureJSON())
+        try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON())
     }
 
     private func itemIDs() throws -> [String] {
@@ -44,7 +37,7 @@ final class RendererPrefillTests: XCTestCase {
         uploads: [String: String] = [:],
         paged: Bool = false
     ) throws -> RendererHarness {
-        var json = try fixtureJSON()
+        var json = try RendererHarness.fixtureJSON()
         let ids = try itemIDs()
         let responses = saved
             .sorted { $0.key < $1.key }
@@ -274,8 +267,8 @@ final class RendererPrefillTests: XCTestCase {
     /// neither field; the tree they build must be exactly what it was before
     /// this slice existed.
     func testABundleWithNoSavedFieldsBuildsTheSameTreeAsOneWithEmptyMaps() throws {
-        let plain = try RendererHarness(bundleJSON: try fixtureJSON())
-        var json = try fixtureJSON()
+        let plain = try RendererHarness(bundleJSON: try RendererHarness.fixtureJSON())
+        var json = try RendererHarness.fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
         json.replaceSubrange(range, with: "\"saved_responses\": {}, \"saved_uploads\": {}, \"test_id\":")
         let empty = try RendererHarness(bundleJSON: json)

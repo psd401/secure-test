@@ -1,10 +1,10 @@
 {
-  "test_id": "01ce897b-a55f-4aff-9de7-968f4183465a",
+  "test_id": "3023b565-4aae-4332-8b66-8fa2eaff90f4",
   "title": "Delivery Fixture",
   "items": [
     {
       "type": "multiple_choice_single",
-      "id": "c0dc145d-35af-4ca7-915f-6a281dc40986",
+      "id": "bd4565b2-8053-41d9-849f-9df206381611",
       "stem": "Which organelle produces ATP?",
       "choices": [
         {
@@ -23,7 +23,7 @@
     },
     {
       "type": "multiple_choice_multi",
-      "id": "2a1ce688-54da-4c55-aa3c-d01a97bf7866",
+      "id": "f62c1120-de76-48fd-83f4-7882ebd8efb0",
       "stem": "Select all prime numbers. </script><b>not markup</b>",
       "choices": [
         {
@@ -42,12 +42,12 @@
     },
     {
       "type": "short_text",
-      "id": "c7d5c2e6-4b0a-40b3-aedd-e9bc402473ee",
+      "id": "85457366-cea1-41c4-8e1d-e6d8aaa8d7d8",
       "stem": "Name the process shown here: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)"
     },
     {
       "type": "essay",
-      "id": "54c7908c-330d-4fd8-a1db-6ba6d854b39f",
+      "id": "9a2b494b-bb19-4222-bedb-95fc2a8b46a1",
       "stem": "Explain how the author builds their argument. Use $E = mc^2$ if relevant.",
       "max_word_count": 400,
       "placeholder": "Write your response here…",
@@ -80,63 +80,63 @@
     },
     {
       "type": "match",
-      "id": "90f1fafa-2cb9-4b8a-8a13-04314569298d",
+      "id": "6bb082ca-5165-47b2-b353-ba567fadb6c8",
       "stem": "Match each animal to its young.",
       "lefts": [
         {
-          "id": "3e8dfc54ea73c11e72ff916f",
+          "id": "9d1c43b893fba3eff58c60a6",
           "text": "Dog"
         },
         {
-          "id": "2c957ec6762754c250365a5c",
+          "id": "bfe02bd44a633283cd47c0f3",
           "text": "Cat"
         },
         {
-          "id": "c16c17a3e3faf14b80aa1713",
+          "id": "1f98e7d98530458abf8efd65",
           "text": "Cow"
         }
       ],
       "rights": [
         {
-          "id": "bce79b6a720c02e533d8c66c",
-          "text": "Kitten"
-        },
-        {
-          "id": "c141bbd1f317f97505b8608f",
+          "id": "00f064f06f864dfed34db582",
           "text": "Puppy"
         },
         {
-          "id": "cd0701aa227e14cee60eda49",
+          "id": "66e94ad54d7467a17bcb78fa",
+          "text": "Kitten"
+        },
+        {
+          "id": "9486eb1199545282a6ee278e",
           "text": "Calf"
         }
       ]
     },
     {
       "type": "order",
-      "id": "1c7df834-66fe-4ddb-9bca-ac91580510df",
+      "id": "3c92e133-f60d-41cc-bb4d-41a3787b0929",
       "stem": "Put the water-cycle stages in order.",
       "entries": [
         {
-          "id": "697ad40a869e629a6715b842",
-          "label": "Collection"
+          "id": "18d0eb9132da503521f32006",
+          "label": "Precipitation"
         },
         {
-          "id": "9b344f09a36795958bb89df5",
-          "label": "Evaporation"
-        },
-        {
-          "id": "ac31504cdb0c9afa9c75c105",
+          "id": "2aa903216ec6d750bbc53435",
           "label": "Condensation"
         },
         {
-          "id": "e7814c282b577e427f78919b",
-          "label": "Precipitation"
+          "id": "40f7883f6f10df6f9a732cd2",
+          "label": "Evaporation"
+        },
+        {
+          "id": "adf6932046a23bf31dcc35e2",
+          "label": "Collection"
         }
       ]
     },
     {
       "type": "hotspot",
-      "id": "2d2028f2-6d8c-401b-8fdd-b5bd7589aae6",
+      "id": "e39b5088-e68d-41a9-955c-7fc415a6f508",
       "stem": "Click the nucleus.",
       "image_asset_id": "33333333-3333-4333-8333-333333333333",
       "regions": [
@@ -158,7 +158,7 @@
     },
     {
       "type": "drawing_upload",
-      "id": "7d235df9-b4c4-4448-a241-a39600cffc59",
+      "id": "24ccafe1-260e-4dea-9ffd-f12e10f324d8",
       "stem": "Sketch the free-body diagram.",
       "canvas": {
         "width": 1000,
@@ -168,7 +168,7 @@
     },
     {
       "type": "table",
-      "id": "8341b894-6665-4e36-8cce-2488a99aa6ce",
+      "id": "5858f126-e2b0-488d-be3b-7d73190023dc",
       "stem": "Enter the counts from your chi-square work.",
       "columns": [
         {
@@ -198,9 +198,28 @@
       "id": "55555555-5555-4555-8555-555555555555",
       "stimulus": "Cells at work: ![cell diagram](asset:33333333-3333-4333-8333-333333333333) Use the diagram for the next two questions.",
       "layout": "own_page",
+      "sources": [],
       "item_ids": [
-        "2a1ce688-54da-4c55-aa3c-d01a97bf7866",
-        "c7d5c2e6-4b0a-40b3-aedd-e9bc402473ee"
+        "f62c1120-de76-48fd-83f4-7882ebd8efb0",
+        "85457366-cea1-41c4-8e1d-e6d8aaa8d7d8"
+      ]
+    },
+    {
+      "id": "66666666-6666-4666-8666-666666666666",
+      "stimulus": "Read both sources, then answer the question.",
+      "layout": "side_by_side",
+      "sources": [
+        {
+          "label": "Source A",
+          "text": "**Rain and rivers**\nWater falls, then runs back to the sea."
+        },
+        {
+          "label": "Source B",
+          "text": "A cell under the lens: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)"
+        }
+      ],
+      "item_ids": [
+        "9a2b494b-bb19-4222-bedb-95fc2a8b46a1"
       ]
     }
   ],
