@@ -110,6 +110,9 @@ final class RendererHarness {
 
     private static let domShim = #"""
     var __messages = [];
+    // Roadmap 4b slice 1b: the node `focus()` was last called on, read back as
+    // `document.activeElement`.
+    var __focused = null;
 
     function __node(tag) {
       var n = {
@@ -127,7 +130,51 @@ final class RendererHarness {
         },
         set: function (v) { this._text = String(v); this.children = []; }
       });
+      // Roadmap 4b slice 1b (2026-09-08, docs/math-entry-design.md): the input
+      // surface the math keypad writes through. The shim had no selection API at
+      // all, so caret behaviour — the whole point of a keypad — was untestable.
+      // `selectionStart` / `selectionEnd` start null, which is what a field
+      // nobody has clicked into reports; the renderer falls back to the end of
+      // the value for exactly that case. `value` is deliberately NOT defaulted
+      // to '': RendererPrefillTests reads an unrestored field's `value` back as
+      // undefined to prove nothing was prefilled, so the keypad's helpers treat
+      // undefined as the empty string instead.
+      n.selectionStart = null;
+      n.selectionEnd = null;
+      n.setSelectionRange = function (start, end) {
+        this.selectionStart = start;
+        this.selectionEnd = end;
+      };
+      // WebKit's own semantics for the 'end' mode: replace [start, end) and
+      // collapse the selection to just after the inserted text. The renderer
+      // then moves the caret itself, so this is only the starting point.
+      n.setRangeText = function (text, start, end, mode) {
+        var value = String(this.value === null || this.value === undefined ? '' : this.value);
+        if (typeof start !== 'number') {
+          start = this.selectionStart === null ? value.length : this.selectionStart;
+          end = this.selectionEnd === null ? start : this.selectionEnd;
+        }
+        this.value = value.slice(0, start) + text + value.slice(end);
+        if (mode === 'end' || mode === undefined) {
+          this.selectionStart = start + String(text).length;
+          this.selectionEnd = this.selectionStart;
+        }
+      };
+      // `document.activeElement` reads this, so a test can tell "the pointer
+      // click put focus back in the field" from "it left it on the key" (D-3.1).
+      n.focus = function () { __focused = this; };
+      n.blur = function () { if (__focused === this) __focused = null; };
       n.attributes = {};
+      // Real reflection, because the math keypad collapses with the `hidden`
+      // ATTRIBUTE (that is what `.math-keys[hidden]` beats `display: flex` with)
+      // and the paging code sets the same attribute directly.
+      Object.defineProperty(n, 'hidden', {
+        get: function () { return this.getAttribute('hidden') !== null; },
+        set: function (v) {
+          if (v) this.setAttribute('hidden', '');
+          else this.removeAttribute('hidden');
+        }
+      });
       n.setAttribute = function (name, value) { this.attributes[name] = String(value); };
       n.getAttribute = function (name) {
         return Object.prototype.hasOwnProperty.call(this.attributes, name)
@@ -257,7 +304,8 @@ final class RendererHarness {
         n.isFragment = true;
         return n;
       },
-      getElementById: function (id) { return id === 'items' ? __root : null; }
+      getElementById: function (id) { return id === 'items' ? __root : null; },
+      get activeElement() { return __focused; }
     };
 
     var window = {

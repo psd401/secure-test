@@ -211,6 +211,40 @@ public enum AssessmentPage {
     /* Fix slice S-4 (2026-09-08 sitting): half-typed math is normal, so a parse failure
        says so in words instead of showing KaTeX's red error markup. */
     .formula-preview-note { display: inline-block; margin-left: 0.25rem; font-size: 0.8125rem; color: var(--ink-soft); }
+    /* Roadmap 4b slice 1b (2026-09-08, docs/math-entry-design.md): the math
+       keypad under the short-text preview (D-2.1 — field, preview, toggle, pad,
+       so the picture is never pushed off the bottom at zoom 3X while the student
+       is pressing keys). Tokens and rem ONLY: the eight contrast sets and the
+       nine zoom levels reach the pad for free, and PageShellTests' no-literal-hex
+       rule holds without exception here — unlike the drawing swatches, no key has
+       a colour of its own. The toggle and the keys take the same treatment as
+       `.pager-strip button` / `.drawing-controls button`; the active pair is
+       `--accent` / `--accent-ink`, which every contrast set inverts, so the
+       pressed instant reads on all eight. Keys are `min-height` / `min-width`
+       2.75rem (the S-3 lesson: targets too tight to hit), and the three rows
+       each take a full line (`flex: 1 0 100%`) so the pad reads as Structure /
+       Operators / Greek at 1X and wraps into more lines at 3X rather than
+       scrolling sideways. The pad is collapsed with the `hidden` attribute, so
+       the rule below is what beats `display: flex`. */
+    .math-keys-toggle {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .math-keys-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .math-keys { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.5rem; }
+    .math-keys[hidden] { display: none; }
+    .math-keys-row { display: flex; flex-wrap: wrap; gap: 0.375rem; flex: 1 0 100%; }
+    .math-keys button {
+      min-height: 2.75rem; min-width: 2.75rem;
+      font: inherit; font-size: 1rem; padding: 0 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .math-keys button:active {
+      background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+    }
+    .math-keys button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* E12 slice 3: the outline a student writes in place of a missing earlier answer. */
     .outline-inline { margin-top: 10px; }
     .outline-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
@@ -678,6 +712,207 @@ public enum AssessmentPage {
         }
       }
 
+      // Roadmap 4b slice 1b (2026-09-08, docs/math-entry-design.md): the math
+      // keypad. D-1.1: a key inserts the UNICODE character wherever one exists
+      // (× ÷ ± ≤ ≥ ≠ ° and the Greek letters) and LaTeX only for the four
+      // structures that have no single character (\frac, ^{}, _{}, \sqrt{}) —
+      // so the field reads as math to a human, the results page and the CSV
+      // read as math to a teacher, and the response contract is unchanged raw
+      // text. D-2.3: these 22 keys, in these three rows; no digit pad (D-2.4)
+      // and none of the optional keys (D-2.5).
+      // `key` is a stable name on `data-key` so a test (and a hand-run) can name
+      // a button without depending on its glyph; `label` is the aria-label, the
+      // words VoiceOver says; `tex` is the KaTeX-rendered face of a structure
+      // key (the key shows the shape it makes) and `text` its fallback when the
+      // library is absent — the harness, or a stripped build.
+      var MATH_KEY_ROWS = [
+        [
+          { key: 'fraction', label: 'Fraction', tex: '\\frac{a}{b}', text: 'a/b', before: '\\frac{', after: '}{}', wrappedBack: 1 },
+          { key: 'exponent', label: 'Exponent', tex: 'x^{2}', text: 'x²', before: '^{', after: '}' },
+          { key: 'subscript', label: 'Subscript', tex: 'x_{2}', text: 'x₂', before: '_{', after: '}' },
+          { key: 'sqrt', label: 'Square root', tex: '\\sqrt{a}', text: '√a', before: '\\sqrt{', after: '}' },
+          { key: 'open-paren', label: 'Open parenthesis', text: '(', before: '(' },
+          { key: 'close-paren', label: 'Close parenthesis', text: ')', before: ')' }
+        ],
+        [
+          { key: 'times', label: 'Times', text: '×', before: '×' },
+          { key: 'divide', label: 'Divided by', text: '÷', before: '÷' },
+          { key: 'pm', label: 'Plus or minus', text: '±', before: '±' },
+          { key: 'le', label: 'Less than or equal to', text: '≤', before: '≤' },
+          { key: 'ge', label: 'Greater than or equal to', text: '≥', before: '≥' },
+          { key: 'ne', label: 'Not equal to', text: '≠', before: '≠' },
+          { key: 'degree', label: 'Degrees', text: '°', before: '°' }
+        ],
+        [
+          { key: 'pi', label: 'Pi', text: 'π', before: 'π' },
+          { key: 'theta', label: 'Theta', text: 'θ', before: 'θ' },
+          { key: 'alpha', label: 'Alpha', text: 'α', before: 'α' },
+          { key: 'beta', label: 'Beta', text: 'β', before: 'β' },
+          { key: 'delta', label: 'Delta', text: 'Δ', before: 'Δ' },
+          { key: 'lambda', label: 'Lambda', text: 'λ', before: 'λ' },
+          { key: 'mu', label: 'Mu', text: 'μ', before: 'μ' },
+          { key: 'sigma', label: 'Sigma', text: 'Σ', before: 'Σ' },
+          { key: 'omega', label: 'Omega', text: 'Ω', before: 'Ω' }
+        ]
+      ];
+
+      // D-1.4: the caret contract. With nothing selected the insertion is the
+      // empty structure and the caret lands in its FIRST slot, so the preview
+      // shows an empty fraction bar the moment the key is pressed and fills in
+      // as the student types. With a selection, the selection becomes the first
+      // slot and the caret lands where the student writes next — inside the
+      // denominator for a fraction (`wrappedBack` 1, one character back from
+      // the end), after the closing brace for ^ / _ / root, and after the
+      // character for a symbol key.
+      function insertMath(input, before, after, wrappedBack) {
+        after = after || '';
+        var value = (input.value === null || input.value === undefined) ? '' : String(input.value);
+        var start = typeof input.selectionStart === 'number' ? input.selectionStart : value.length;
+        var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+        if (start > end) { var swap = start; start = end; end = swap; }
+        if (start < 0) start = 0;
+        if (end > value.length) end = value.length;
+        var selected = value.slice(start, end);
+        var text = before + selected + after;
+        var caret = selected
+          ? start + text.length - (wrappedBack || 0)
+          : start + before.length;
+        // setRangeText is standard WebKit and participates in the field's own
+        // undo stack, so Cmd-Z undoes an insertion without an Edit menu (there
+        // is none). The splice is the fallback for a host without it.
+        if (typeof input.setRangeText === 'function') {
+          input.setRangeText(text, start, end, 'end');
+        } else {
+          input.value = value.slice(0, start) + text + value.slice(end);
+        }
+        if (typeof input.setSelectionRange === 'function') {
+          input.setSelectionRange(caret, caret);
+        }
+      }
+
+      // The keypad for one short-text field. Per item, not per page: an
+      // insertion has exactly one target input, and an inline item set puts
+      // several short-text fields on one page.
+      function mathKeypad(item, input, preview) {
+        var padId = 'math-keys-' + item.id;
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'math-keys-toggle';
+        toggle.textContent = 'Math keys';
+        toggle.setAttribute('aria-controls', padId);
+
+        var pad = document.createElement('div');
+        pad.className = 'math-keys';
+        pad.setAttribute('id', padId);
+        pad.setAttribute('role', 'toolbar');
+        pad.setAttribute('aria-label', 'Math keys');
+
+        // D-2.2: every short-text field gets the toggle — the client cannot tell
+        // a history answer from a chemistry one — but it OPENS by default only
+        // where the stem carries `$`, the page's one existing signal that a
+        // question is math-shaped (the same signal the hint uses). State is per
+        // item, in this closure, and is not persisted: a paging turn rebuilds
+        // the page and re-opening is one click.
+        var open = /\$/.test(item.stem || '');
+        function applyOpen() {
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if (open) pad.removeAttribute('hidden');
+          else pad.setAttribute('hidden', '');
+        }
+        toggle.onclick = function () {
+          open = !open;
+          applyOpen();
+        };
+
+        var keyButtons = [];
+        var rovingIndex = 0;
+        // D-3.1, the WAI-ARIA toolbar pattern: ONE Tab stop for the whole pad.
+        // Twenty-two Tab stops between the field and the next question would be
+        // a real cost for a keyboard-only student.
+        function setRoving(index) {
+          rovingIndex = index;
+          for (var i = 0; i < keyButtons.length; i++) {
+            keyButtons[i].setAttribute('tabindex', i === index ? '0' : '-1');
+          }
+        }
+
+        function keyButton(spec) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.setAttribute('data-key', spec.key);
+          // No aria-pressed: these are momentary, not toggles — the drawing
+          // toolbar's pressed model does not apply.
+          button.setAttribute('aria-label', spec.label);
+          var glyph = document.createElement('span');
+          glyph.setAttribute('aria-hidden', 'true');
+          var rendered = false;
+          if (spec.tex && typeof katex === 'object' && katex && typeof katex.render === 'function') {
+            try {
+              var options = katexOptions(false);
+              options.displayMode = false;
+              katex.render(spec.tex, glyph, options);
+              rendered = true;
+            } catch (e) {
+              rendered = false;
+            }
+          }
+          if (!rendered) glyph.textContent = spec.text;
+          button.appendChild(glyph);
+          // D-3.1: a pointer click must never take focus off the field, or the
+          // student's caret and selection are gone before the insertion runs.
+          button.onpointerdown = function (e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          };
+          button.onclick = function (event) {
+            insertMath(input, spec.before, spec.after, spec.wrappedBack);
+            renderFormulaPreview(preview, input.value);
+            // D-3.2, the `change` trap: a programmatic value change fires
+            // neither `input` nor `change`, so without this post a student who
+            // typed, pressed a key by keyboard (focus leaves the field ->
+            // `change` posts the OLD value) and pressed Next would hand in the
+            // pre-keypad text.
+            post(item.id, { type: 'short_text', text: input.value });
+            // Refocus only after a POINTER activation. A student who Tabbed to
+            // the pad and pressed Space wants to press the next key, not be
+            // yanked back to the field; they return with Shift-Tab.
+            if (event && event.detail > 0 && typeof input.focus === 'function') {
+              input.focus();
+            }
+          };
+          return button;
+        }
+
+        for (var r = 0; r < MATH_KEY_ROWS.length; r++) {
+          var row = document.createElement('div');
+          row.className = 'math-keys-row';
+          for (var k = 0; k < MATH_KEY_ROWS[r].length; k++) {
+            var button = keyButton(MATH_KEY_ROWS[r][k]);
+            keyButtons.push(button);
+            row.appendChild(button);
+          }
+          pad.appendChild(row);
+        }
+        setRoving(0);
+
+        // Left / Right move between keys and wrap; Home / End go to the ends.
+        // Read on the pad, so it covers every key without 22 handlers.
+        pad.onkeydown = function (event) {
+          if (!event || !keyButtons.length) return;
+          var next = -1;
+          if (event.key === 'ArrowRight') next = (rovingIndex + 1) % keyButtons.length;
+          else if (event.key === 'ArrowLeft') next = (rovingIndex + keyButtons.length - 1) % keyButtons.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = keyButtons.length - 1;
+          else return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          setRoving(next);
+          if (typeof keyButtons[next].focus === 'function') keyButtons[next].focus();
+        };
+
+        applyOpen();
+        return { toggle: toggle, pad: pad };
+      }
+
       function shortTextField(item) {
         var wrap = document.createElement('div');
         wrap.className = 'short-text-wrap';
@@ -698,7 +933,9 @@ public enum AssessmentPage {
         if (/\$/.test(item.stem || '')) {
           var hint = document.createElement('p');
           hint.className = 'formula-hint';
-          hint.textContent = 'Subscript with _ and superscript with ^ (H_2O, x^2). Your answer shows below as it will be read.';
+          // Roadmap 4b slice 1b (D-4.2): the hint now names the keypad first —
+          // typing the notation is the fallback, not the instruction.
+          hint.textContent = 'Use the math keys below, or type _ for a subscript and ^ for an exponent. Your answer shows below as it will be read.';
           wrap.appendChild(hint);
         }
         var preview = document.createElement('div');
@@ -706,6 +943,12 @@ public enum AssessmentPage {
         preview.setAttribute('aria-live', 'polite');
         wrap.appendChild(preview);
         input.oninput = function () { renderFormulaPreview(preview, input.value); };
+        // Roadmap 4b slice 1b (D-2.1): field -> preview -> toggle -> pad, so the
+        // rendered answer stays directly under the text it renders and the pad
+        // is below both.
+        var keypad = mathKeypad(item, input, preview);
+        wrap.appendChild(keypad.toggle);
+        wrap.appendChild(keypad.pad);
         // P-1: the typed text comes back, and its formula preview with it —
         // otherwise a restored `H_2O` would show without the subscript the
         // student was shown when they typed it.
