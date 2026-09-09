@@ -382,3 +382,13 @@ script (James at the keyboard; colima had to be started first — it does not
 come back after a reboot). The same deploy carried math-entry slice 1a
 (`docs/math-entry-design.md`). Rows 75–77 are now runnable on the origin;
 row 78 still needs a second staff account.**
+
+**Rows 75 / 77 run 2026-09-08 evening on the origin (rev 15):** 75 ✅ on the
+`(copy)` fixture's one attempt (dialog copy, Cancel inert, matrix empties,
+footer gone; `attempt_deletions` row and CSV not read back, S3 half vacuous —
+no uploads on that attempt); 77 half — the ended session's monitor shows
+Delete attempt live on the handed-in row (the monitor URL loads for an ended
+sitting though the panel links it only while open); the disabled
+open+in-progress state and the drop to "not joined" wait for a live client
+sitting. Row 71's ✓ Complete case was seen on the same attempt first.
+Row 78 still needs a second staff account.
