@@ -1184,3 +1184,61 @@ CSS, which is not harness-testable by construction; S-4's copy and its
 | **S-5** Hover a different region while one is selected | The hover wash is clearly LIGHTER than the selected one — the two states are never confusable | Not run |
 | **S-5** Tab to the regions with the keyboard | Every region shows a visible focus ring, including the selected one; the ring is distinguishable from the selected fill | Not run |
 | **S-5** Repeat under one contrast pair and at zoom 3.0 | The selected state takes that pair's accent and stays visible; the region still tracks the picture | Not run |
+
+## Drawing tools — pen size, colour, eraser, undo, auto-save (2026-09-08)
+
+`docs/drawing-tools-design.md` slices 1 (tools, commit `2cba37e`) and 2
+(auto-save, commit `5530cee`). Client only — no deploy needed. Rebuild
+first — `cd client && xcodebuild -project SecureTest.xcodeproj -scheme
+SecureTest -destination 'platform=macOS' build` per CLAUDE.md — and verify
+the built page carries `drawing-tools` before starting. Fixture: a
+Published, paged assessment with a **blank** drawing, a **grid** drawing
+and a **grid with axes** drawing, one of them with a picture already saved
+in an earlier sitting (for the restored-picture rows) — the `Client rows
+hand-run 2026-09-08` fixture carries the grid + axes one; add a blank and a
+grid one, or re-import. Re-run the one-day teacher-row script first. Demo
+student (`<demo-student-A>`-style placeholders only — never a real name or
+number). The Cmd-Z and hand-in rows need a **real** AAC session — blank
+`SECURE_TEST_SIMULATE_LOCKDOWN` on the command line. stderr's `drawing
+saved for item …` and `submit refused: … still in flight` are the evidence
+for the save rows; where a stored PNG is the evidence, read it back with
+`aws s3 cp` on `responses/<attempt>/<item>/` the same way the background
+section does.
+
+| Check | Expect | Result |
+|---|---|---|
+| Open a drawing item and look above the canvas | A toolbar strip with ten buttons in order: Pen, Eraser, Thin, Medium, Thick, Black, Red, Blue, Green, Undo; Pen / Medium / Black pressed; Undo greyed | Not run |
+| Select Thin, then Medium, then Thick and draw a stroke each time | Thin is visibly the thinnest line, Medium matches today's pen, Thick is visibly the thickest | Not run |
+| Select each colour in turn and draw a stroke | The stroke is that colour's ink (black, red, blue, green) and the swatch dot beside the button's label matches it | Not run |
+| Select the Eraser | The four colour buttons grey out (disabled) | Not run |
+| Draw ink over a grid or axes drawing, then erase across it, including across a grid line | The eraser removes ink in a smooth round band about 4× the pen width; the grid and axes lines are intact under and around the erased band (open the saved PNG) | Not run |
+| Erase on the **blank** canvas | The saved PNG stays transparent where erased — no white blobs | Not run |
+| Relaunch and rejoin a question with a restored picture, then erase part of it | The baseline under the erased band is gone and the paper (grid/axes, or transparent for blank) shows through | Not run |
+| Draw several strokes (pen and eraser mixed), then press Undo repeatedly | Each press removes exactly one stroke, in reverse order; the paper is never removed; Undo greys out once the list is empty | Not run |
+| Relaunch onto a question with a restored picture, then press Undo | Undo stays greyed — the restored picture cannot be undone — until a new stroke is drawn | Not run |
+| Press Clear, then press Undo | Nothing happens; Undo stays greyed (Clear is not an undo step) | Not run |
+| Undo every stroke, then press Save drawing | "Draw something first." | Not run |
+| **Real AAC session:** focus a toolbar button, draw a stroke, press Cmd-Z | The stroke is undone | Not run |
+| **Real AAC session:** click the canvas to focus it, draw a stroke, press Cmd-Z | The stroke is undone | Not run |
+| **Real AAC session:** Tab into an essay item's textarea, type text, press Cmd-Z | The essay's own undo removes the typed text; no drawing on the page is affected | Not run |
+| Save a drawing carrying every colour, an erased band and the paper | The stored PNG (read via `aws s3 cp`) shows ink in every colour used, the erasures, and the paper intact | Not run |
+| Set Color Contrast = **Reverse Contrast**, rejoin, open a drawing item | The toolbar's pressed state is readable, every swatch dot is visible with its name beside it | Not run |
+| Set Color Contrast = **Yellow on Blue**, rejoin, open a drawing item | Same: pressed state readable, every swatch dot visible with its name | Not run |
+| Under either dark contrast set, look at the **blank** canvas on screen, then draw with Black | The canvas shows as white paper on screen (D-6) and the black ink is visible against it | Not run |
+| Under either dark contrast set, save that blank drawing and read the stored PNG | Still transparent — D-6 is a screen-only ground, the PNG contract is unchanged | Not run |
+| Set Zoom = **3X**, open a drawing item | The toolbar strip wraps into multiple rows instead of overflowing; drawing still lands under the pointer | Not run |
+| VoiceOver (Cmd-F5) over the toolbar | Each button reads its name and its pressed / dimmed state; the canvas reads "Drawing area" | Not run |
+| Look at Clear and Save drawing | Styled like the page's other buttons, not WebKit's default button chrome | Not run |
+| Draw one stroke and wait ~5 s without touching the canvas again | Status reads "Saving…" then "Saved."; stderr shows exactly ONE `drawing saved` line for the whole idle period | Not run |
+| Draw several strokes within the same 5 s window, then stop | Still exactly one `drawing saved` line after the idle period, not one per stroke | Not run |
+| Draw continuously (never idle 5 s) for 15 s, then stop | No `drawing saved` line appears until 5 s after the LAST stroke | Not run |
+| Draw a stroke during the "Saving…" moment of a prior save | A second `drawing saved` line follows the first at once, not after another 5 s wait | Not run |
+| Draw two strokes, then press Undo once | A save fires ~5 s later (Undo dirties the picture) | Not run |
+| Undo every stroke, or press Clear | No new `drawing saved` line follows; the earlier saved picture stays the answer on the server | Not run |
+| On an untouched canvas, press Save drawing | Still "Draw something first." — the manual button and its guard are unchanged | Not run |
+| Paged mode: draw a stroke, then press Next immediately (well under 5 s) | `drawing saved` appears at once, before the idle timer would have fired | Not run |
+| Draw a stroke, then Tab focus out of the drawing item to the next question | `drawing saved` appears at once (flush on focus-out) | Not run |
+| Draw a stroke, then press Finish and hand in within a second | stderr shows the upload's `drawing saved` before the submit; the attempt's stored answer for that item carries the new drawing (check teacher-side); no `submit refused: … still in flight` unless the upload genuinely stalled | Not run |
+| Cmd-O offline bundle: draw a stroke and wait 10 s | Nothing posts — no `drawing ignored` line appears until the button is pressed | Not run |
+| Cmd-O offline bundle: press Save drawing | stderr shows `drawing ignored`; on screen: "Offline mode: not saved to a server." | Not run |
+| Relaunch (fresh sign-in) onto a question with a restored picture, and do not draw | Status shows "Saved." with no new stroke; no auto-save fires until a new stroke is drawn | Not run |

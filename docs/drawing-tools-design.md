@@ -443,3 +443,20 @@ describes:
 Built by an Opus 5 / medium subagent (one interrupted, a second finished
 and verified the tree); diff reviewed and both checks re-run in the main
 session before the commit.
+
+**Slice 3 — rows WRITTEN 2026-09-08, NOT run.** Thirty-five rows in
+`client/MANUAL-CHECKS.md` "Drawing tools — pen size, colour, eraser, undo,
+auto-save (2026-09-08)": the strip and its defaults, each size and colour,
+the eraser over grid / axes / blank / a restored picture, Undo semantics
+(mixed strokes, the restored baseline, after Clear, to zero), Cmd-Z in a
+real AAC session (toolbar focus, canvas focus, the essay untouched), the
+stored PNG, Reverse Contrast and Yellow on Blue incl. the D-6 blank canvas
+on screen vs its transparent PNG, zoom 3×, VoiceOver, the styled Clear /
+Save buttons; then auto-save (one `drawing saved` per idle period,
+continuous drawing, re-post during "Saving…", Undo saves, undo-to-zero /
+Clear do not, the manual button, page turn, focus-out, Finish within a
+second, the offline bundle, the relaunch). Needs a client rebuild, the
+2026-09-08 fixture plus a blank and a grid drawing, the one-day
+teacher-row script, and a real session for the Cmd-Z and hand-in rows.
+Written by a Sonnet 5 / medium subagent from this page; reviewed in the
+main session.
