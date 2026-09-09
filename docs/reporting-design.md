@@ -376,3 +376,9 @@ audit table rather than a log line; owner-only; no button on the matrix
 row. Rows 75–78 in `docs/design-tool-manual-checks.md` — NOT run; they
 need the deploy plus `migrate-aurora.sh` for 0029.
 
+**Delete attempt DEPLOYED 2026-09-08 ~20:25 PT — task def rev 15, rollout
+COMPLETED, /api/health 200; `migrate-aurora.sh` ran for 0029 in the same
+script (James at the keyboard; colima had to be started first — it does not
+come back after a reboot). The same deploy carried math-entry slice 1a
+(`docs/math-entry-design.md`). Rows 75–77 are now runnable on the origin;
+row 78 still needs a second staff account.**

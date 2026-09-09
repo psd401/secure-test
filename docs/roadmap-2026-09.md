@@ -181,3 +181,9 @@ main session; one review tightening on 1a (parentheses dropped only beside `/`
 or `√`). Rows (slice 2) written to `client/MANUAL-CHECKS.md`, NOT run; the
 digit pad sits in §Pilot feedback; follow-ups in row 4b-f; the handwriting
 spike stays post-pilot. Nothing pushed at the time of writing.
+
+2026-09-08 ~20:25 PT: **DEPLOYED rev 15** — delete-attempt (migration 0029
+via `migrate-aurora.sh`) + math-entry slice 1a; health 200. Colima had to be
+started by hand first (`colima start`; it stays stopped after a reboot and
+`cdk deploy` then fails at the Docker build). CDK CLI 2.1140.0 is available —
+the bump stays a separate step after a deploy.

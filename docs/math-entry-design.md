@@ -621,3 +621,8 @@ James the same day, all recommendations accepted. Nothing built yet.
 
 Slice 2 written 2026-09-08: 42 hand-run rows in `client/MANUAL-CHECKS.md`
 ("Math entry — the keypad on short-text items"), not yet run.
+
+**Slice 1a DEPLOYED 2026-09-08 ~20:25 PT — rev 15, health 200, no
+migration of its own** (the deploy also carried delete-attempt's 0029). The
+teacher-side auto-score rows in `client/MANUAL-CHECKS.md` can now pass; the
+client half waits for the rebuild and the next release.
