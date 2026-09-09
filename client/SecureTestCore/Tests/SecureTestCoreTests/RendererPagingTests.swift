@@ -35,7 +35,9 @@ final class RendererPagingTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.page')"), 11)
         XCTAssertEqual(try h.int("__count('.item')"), 9, "every question is still in the tree")
         let kinds = try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')")
-        XCTAssertEqual(kinds, "question,passage,question,question,question,question,question,question,question,question,review")
+        // Page 4 is the side_by_side set's shared page (multi-source slice 4);
+        // the harness has no window metrics, so the renderer treats it as wide.
+        XCTAssertEqual(kinds, "question,passage,question,question,questions,question,question,question,question,question,review")
         XCTAssertEqual(try h.string("__all('.page-label')[0].textContent"), "Question 1 of 9")
         XCTAssertEqual(try h.string("__all('.page-label')[1].textContent"), "Passage for questions 2\u{2013}3")
         XCTAssertEqual(try h.string("__all('.page-label')[2].textContent"), "Question 2 of 9")
@@ -73,7 +75,9 @@ final class RendererPagingTests: XCTestCase {
     /// it is never in two places.
     func testThePassageTravelsBetweenItsPageAndTheOpenQuestionsDisclosure() throws {
         let h = try paged()
-        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
+        // Two stimulus blocks now: this set's, and the sourced set's on its
+        // own side_by_side page.
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 2)
         try h.eval("__all('button', __first('.pager-strip'))[1].onclick()")
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 1)
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[1])"), 0)
@@ -82,7 +86,7 @@ final class RendererPagingTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[2])"), 1)
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 0)
         XCTAssertEqual(try h.string("__first('summary', __all('.page')[2]).textContent"), "Show the passage")
-        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 2)
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[3])"), 1, "Q3 is a member too")
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[4])"), 0, "Q4 is not")
     }

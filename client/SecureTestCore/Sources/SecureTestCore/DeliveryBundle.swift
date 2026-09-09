@@ -60,6 +60,14 @@ public struct BundleAsset: Decodable, Equatable, Sendable {
     }
 }
 
+/// Multi-source stimulus slice 4: one labelled source under a set's
+/// introduction. `text` follows stem content rules, so the page renders it
+/// through the same path a stem takes.
+public struct StimulusSource: Decodable, Equatable, Sendable {
+    public let label: String
+    public let text: String
+}
+
 /// E5 slice 2: a stimulus — a passage, a figure, a data table — shared by the
 /// contiguous items whose ids it lists. Mirrors @secure-test/schema's
 /// ItemSetSchema. `stimulus` follows stem content rules (text with
@@ -72,11 +80,19 @@ public struct ItemSet: Decodable, Equatable, Sendable {
     public enum Layout: String, Decodable, Sendable {
         case inline
         case ownPage = "own_page"
+        /// Multi-source stimulus slice 4: the sources beside the question on a
+        /// wide viewport; narrower than that the page falls back to own_page.
+        case sideBySide = "side_by_side"
     }
 
     public let id: String
+    /// Multi-source stimulus slice 2: the INTRODUCTION when the set carries
+    /// sources — it may be empty, with the whole reading in `sources`.
     public let stimulus: String
     public let layout: Layout
+    /// Empty on a set with no sources, and on every bundle built before the
+    /// slice that added the key.
+    public let sources: [StimulusSource]
     public let itemIds: [String]
     /// E12 slice 3: a stimulus that should be this student's own earlier
     /// answer. `inlineItemId` is where the page posts the outline the
@@ -88,7 +104,7 @@ public struct ItemSet: Decodable, Equatable, Sendable {
     public let inlineText: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, stimulus, layout
+        case id, stimulus, layout, sources
         case itemIds = "item_ids"
         case sourceMissing = "source_missing"
         case inlineItemId = "inline_item_id"
@@ -103,6 +119,7 @@ public struct ItemSet: Decodable, Equatable, Sendable {
         // failing the whole bundle — the stimulus still reaches the student.
         layout = Layout(rawValue: try c.decodeIfPresent(String.self, forKey: .layout) ?? "inline")
             ?? .inline
+        sources = try c.decodeIfPresent([StimulusSource].self, forKey: .sources) ?? []
         itemIds = try c.decode([String].self, forKey: .itemIds)
         sourceMissing = try c.decodeIfPresent(Bool.self, forKey: .sourceMissing) ?? false
         inlineItemId = try c.decodeIfPresent(String.self, forKey: .inlineItemId)

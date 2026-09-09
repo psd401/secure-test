@@ -28,7 +28,10 @@ final class RendererHarness {
     ///   - bundleJSON: the payload, as `AssessmentPage.html` would embed it.
     ///   - offline: the `OFFLINE` constant the page emits beside `BUNDLE`
     ///     (finding 8.5); false is the server path, as in the page's default.
-    init(bundleJSON: String, offline: Bool = false) throws {
+    ///   - prelude: JavaScript run against the shim BEFORE the renderer, for
+    ///     the handful of window facts JavaScriptCore has none of — the
+    ///     multi-source slice's `window.__forceWide` is read once at build.
+    init(bundleJSON: String, offline: Bool = false, prelude: String? = nil) throws {
         guard let context = JSContext() else {
             throw HarnessError.javaScript("could not create JSContext")
         }
@@ -47,6 +50,11 @@ final class RendererHarness {
 
         context.evaluateScript("var OFFLINE = \(offline);")
         if let thrown { throw HarnessError.javaScript("offline flag: \(thrown)") }
+
+        if let prelude {
+            context.evaluateScript(prelude)
+            if let thrown { throw HarnessError.javaScript("prelude: \(thrown)") }
+        }
 
         context.evaluateScript(AssessmentPage.rendererScript)
         if let thrown { throw HarnessError.javaScript("renderer: \(thrown)") }

@@ -19,23 +19,35 @@ final class RendererStimulusTests: XCTestCase {
     }
 
     /// A bundle with the fixture's items and the given `item_sets` value.
+    /// Scans for the matching bracket rather than the first `],` — since the
+    /// multi-source slice a set's value contains arrays of its own.
     private func harness(itemSets: String) throws -> RendererHarness {
         var json = try fixtureJSON()
         let range = try XCTUnwrap(json.range(of: "\"item_sets\": ["))
-        let end = try XCTUnwrap(json.range(of: "],", range: range.upperBound..<json.endIndex))
-        json.replaceSubrange(range.lowerBound..<end.upperBound, with: "\"item_sets\": \(itemSets),")
+        var depth = 1
+        var end = range.upperBound
+        while depth > 0, end < json.endIndex {
+            if json[end] == "[" { depth += 1 }
+            if json[end] == "]" { depth -= 1 }
+            end = json.index(after: end)
+        }
+        XCTAssertEqual(depth, 0, "unbalanced item_sets array in the fixture")
+        json.replaceSubrange(range.lowerBound..<end, with: "\"item_sets\": \(itemSets)")
         return try RendererHarness(bundleJSON: json)
     }
 
     func testRendersTheStimulusOnceBeforeTheFirstMember() throws {
         let h = try harness()
-        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
-        // Root order: item 0, stimulus, item 1, item 2, …
+        // Two sets since the multi-source slice: own_page over items 1–2 and
+        // side_by_side over item 3 (which renders inline on the scroll path).
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 2)
+        // Root order: item 0, stimulus, item 1, item 2, stimulus, item 3, …
         XCTAssertEqual(try h.string("__root.children[0].className"), "item")
         XCTAssertEqual(try h.string("__root.children[1].className"), "stimulus stimulus-own_page")
         XCTAssertEqual(try h.string("__root.children[2].className"), "item in-set")
         XCTAssertEqual(try h.string("__root.children[3].className"), "item in-set")
-        XCTAssertEqual(try h.string("__root.children[4].className"), "item")
+        XCTAssertEqual(try h.string("__root.children[4].className"), "stimulus stimulus-inline")
+        XCTAssertEqual(try h.string("__root.children[5].className"), "item in-set")
     }
 
     func testLabelsTheQuestionRangeAndRendersTextAndImage() throws {
@@ -53,7 +65,7 @@ final class RendererStimulusTests: XCTestCase {
     func testAllItemsStillRenderAndOnlyMembersAreMarked() throws {
         let h = try harness()
         XCTAssertEqual(try h.int("__count('.item')"), 9)
-        XCTAssertEqual(try h.int("__count('.in-set')"), 2)
+        XCTAssertEqual(try h.int("__count('.in-set')"), 3)
     }
 
     func testNoSetsMeansNoStimulusMarkup() throws {
