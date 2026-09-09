@@ -506,6 +506,18 @@ designed. Findings:
 Order proposed: C-2 → C-1 → C-6 → C-4 (after the decision) → C-7 with the
 next launcher touch. The next client release should carry C-1 and C-2.
 
+**Decisions (James, 2026-09-09 evening):**
+- **D-7** C-4: BOTH — pinch-to-zoom (`allowsMagnification`, 1×–3×, "Actual
+  size" Cmd-0 in the Session menu) AND click-to-enlarge on images in stems
+  and sources.
+- **D-8** C-6: autosave the Accommodations tab (debounced PATCH per change
+  with a saving / saved indicator), not an unsaved-changes cue.
+- **D-9** C-7: fullscreen stays the way the app starts; the launcher
+  pass-through is a dev-only convenience.
+- Scheduling: roadmap row **S-f** — a fresh session, models and efforts
+  per item there; C-2 and C-1 first; ships as client v1.2.0 plus one
+  deploy.
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
