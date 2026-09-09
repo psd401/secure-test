@@ -428,6 +428,26 @@ client side the 22 rows from slice 4. Order: rows 79–90 on the origin
 (Claude in Chrome, James's account), a client rebuild, then the client rows
 on the same published fixture (`Multi-source hand-run 2026-09-09`).
 
+2026-09-09 ~14:30 PT: **teacher rows 79–92 RUN on the origin** (Claude in
+Chrome as James; results in `docs/design-tool-manual-checks.md`): **13 ✅,
+row 90 half** (the delivery-bundle half waits for the client sitting). The
+pilot import: 4 chart figures, 1 essay, 1 set with Sources A–D at 803 /
+5730 / 4168 / 2214 chars, `side_by_side` proposed, no source flagged on
+this run (C above the line — run-to-run variance against the 93.5 %
+evidence run); Discard figure 2 + Add put three refs with the printed
+titles as alt inside Source C and no leftover marker; the editor's Sources
+list, Move, Remove, the readiness gap (`Source "Source D" for question 1
+is empty` — a re-added source takes the next letter after the ones
+present), preview + print, export → import all as designed. Two readings
+worth keeping: the S3-backed `/api/assets` images take ~100–270 ms each,
+so a DOM read right after the preview loads sees them 0 × 0 (they do
+load); a same-owner re-import keeps the same asset ids (per-owner
+content-hash dedupe), so the remap is only visible with a foreign id (the
+unit test). The fixture **`Multi-source hand-run 2026-09-09` stays
+Published on the origin** (paged, one essay, sources A–C, three charts in
+C) for the 22 client rows; the scratch drafts (the re-import copy, the
+raster regression) were deleted. The extraction took ~70 s on the origin.
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
