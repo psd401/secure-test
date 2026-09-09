@@ -118,6 +118,168 @@ describe("extractPdfLayout", () => {
   });
 });
 
+// Multi-source stimulus slice 5 (docs/multi-source-stimulus-design.md):
+// vector figures — a chart drawn as paths, clustered and rasterised.
+import {
+  CAPTION_GAP_PT,
+  type Box,
+  type CanvasImport,
+  captionAbove,
+  clusterPathBoxes,
+} from "../lib/pdfImport/extractFigures";
+import { type VectorChartSpec, makeVectorChartPdf } from "./helpers/pdf";
+
+const CHART: VectorChartSpec = {
+  // Top-left page space: [120, 792-580, 420, 792-400] = [120, 212, 420, 392].
+  region: { x: 120, y: 400, width: 300, height: 180 },
+  bars: 8,
+  caption: "Average uncertainty, 2000-2022",
+  inside: ["10", "20", "30"],
+  above: ["Source C", "A paragraph of the source."],
+  below: ["Note. Something about the chart."],
+  rule: true,
+  pageRect: true,
+};
+
+describe("clusterPathBoxes", () => {
+  test("unions boxes within the gap and leaves distant ones alone", () => {
+    const a: Box = [0, 0, 10, 10];
+    const b: Box = [15, 0, 25, 10]; // 5 pt from a
+    const c: Box = [200, 200, 210, 210];
+    const out = clusterPathBoxes([a, b, c], 12);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ box: [0, 0, 25, 10], paths: 2 });
+    expect(out[1]).toEqual({ box: [200, 200, 210, 210], paths: 1 });
+    // A chain merges transitively even though the ends are far apart.
+    const chain = clusterPathBoxes([[0, 0, 10, 10], [20, 0, 30, 10], [40, 0, 50, 10]], 12);
+    expect(chain).toEqual([{ box: [0, 0, 50, 10], paths: 3 }]);
+  });
+});
+
+describe("captionAbove", () => {
+  const line = (y: number, plain: string, bold: boolean) => ({ y, text: plain, plain, bold, x: 0 });
+  test("takes the nearest bold line above, joining a wrapped title", () => {
+    const lines = [
+      line(10, "Body text well above", false),
+      line(60, "A two-line chart title", true),
+      line(76, "continued here", true),
+      line(200, "below the cluster", true),
+    ];
+    expect(captionAbove(lines, 96)).toBe("A two-line chart title continued here");
+    // Nothing bold close enough above.
+    expect(captionAbove([line(10, "far away", true)], 200)).toBeUndefined();
+    expect(captionAbove([line(10, "not bold", false)], 20)).toBeUndefined();
+    expect(CAPTION_GAP_PT).toBe(24);
+  });
+
+  test("brackets are stripped so the caption can be an image alt", () => {
+    expect(captionAbove([{ y: 10, text: "Rate [%] of x", plain: "Rate [%] of x", bold: true, x: 0 }], 20)).toBe(
+      "Rate % of x",
+    );
+  });
+});
+
+describe("extractPdfLayout: vector figures", () => {
+  test("clusters a drawn chart, rasterises it, captions it and takes its text", async () => {
+    const layout = await extractPdfLayout(makeVectorChartPdf(CHART));
+    expect(layout.figures).toHaveLength(1);
+    const f = layout.figures[0]!;
+    expect(f.source).toBe("vector");
+    expect(f.page).toBe(1);
+    // The union of the bars and the two axes is exactly the region.
+    [120, 212, 420, 392].forEach((want, i) => expect(Math.abs(f.bbox[i]! - want)).toBeLessThanOrEqual(2));
+    expect(f.caption).toBe(CHART.caption);
+    expect(f.omitted).toBeUndefined();
+    // The crop is the bbox at scale 2 with VECTOR_CROP_PAD_PT of margin.
+    expect(f.width_px).toBe((420 + 4) * 2 - (120 - 4) * 2);
+    expect(f.height_px).toBe((392 + 4) * 2 - (212 - 4) * 2);
+    const png = Buffer.from(f.data_url!.slice("data:image/png;base64,".length), "base64");
+    expect(pngDimensions(png)).toEqual({ width: f.width_px, height: f.height_px });
+    expect(f.bytes).toBe(png.length);
+    expect(f.bytes).toBeGreaterThan(500);
+
+    const lines = layout.textWithMarkers.split("\n");
+    // The bold title stays in the text; the marker sits at the cluster's top,
+    // right after it. The axis values inside the chart are gone.
+    expect(lines).toEqual([
+      "Source C",
+      "A paragraph of the source.",
+      `**${CHART.caption}**`,
+      "[FIGURE 1]",
+      "Note. Something about the chart.",
+    ]);
+  });
+
+  test("a lone rule, a page-size rect and a small drawing are not figures", async () => {
+    // Only the rule and the page background: one painted path and one
+    // page-cover rect, so nothing clusters into a figure.
+    const bare = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, bars: 0, inside: [], region: { x: 0, y: 0, width: 0, height: 0 } }),
+    );
+    expect(bare.figures).toEqual([]);
+    expect(bare.textWithMarkers).not.toContain("[FIGURE");
+    // Enough paths, but the drawing is under MIN_FIGURE_PT on both sides.
+    const tiny = await extractPdfLayout(
+      makeVectorChartPdf({
+        ...CHART,
+        inside: [],
+        region: { x: 120, y: 400, width: MIN_FIGURE_PT - 5, height: MIN_FIGURE_PT - 5 },
+      }),
+    );
+    expect(tiny.figures).toEqual([]);
+    // Big enough, but only three painted paths (one bar plus the two axes).
+    const sparse = await extractPdfLayout(makeVectorChartPdf({ ...CHART, bars: 1, inside: [] }));
+    expect(sparse.figures).toEqual([]);
+  });
+
+  test("a text-only page renders nothing — the canvas is never loaded", async () => {
+    let loads = 0;
+    const spy: CanvasImport = async () => {
+      loads += 1;
+      return await import("@napi-rs/canvas");
+    };
+    const layout = await extractPdfLayout(makeTextPdf(LINES), { ...DEFAULT_FIGURE_LIMITS, canvasImport: spy });
+    expect(layout.figures).toEqual([]);
+    expect(loads).toBe(0);
+    // …and it IS loaded for a page that has a cluster.
+    await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside: [] }), {
+      ...DEFAULT_FIGURE_LIMITS,
+      canvasImport: spy,
+    });
+    expect(loads).toBe(1);
+  });
+
+  test("a canvas that will not load costs no raster figure and no text", async () => {
+    const broken: CanvasImport = () => Promise.reject(new Error("no native binary"));
+    const vector = await extractPdfLayout(makeVectorChartPdf({ ...CHART }), {
+      ...DEFAULT_FIGURE_LIMITS,
+      canvasImport: broken,
+    });
+    expect(vector.figures).toEqual([]);
+    // The chart's own labels stay in the text — nothing owns them now.
+    expect(vector.textWithMarkers).toContain("Source C");
+    expect(vector.textWithMarkers).toContain("10");
+    expect(vector.textWithMarkers).not.toContain("[FIGURE");
+    // The raster walk is untouched.
+    const raster = await extractPdfLayout(makeTextAndImagePdf(LINES, IMAGE), {
+      ...DEFAULT_FIGURE_LIMITS,
+      canvasImport: broken,
+    });
+    expect(raster.figures).toHaveLength(1);
+    expect(raster.figures[0]).toMatchObject({ source: "raster", width_px: 2 });
+    expect(raster.textWithMarkers).toContain("[FIGURE 1]");
+  });
+
+  test("the byte limits apply to a vector figure too", async () => {
+    const capped = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside: [] }), {
+      ...DEFAULT_FIGURE_LIMITS,
+      maxFigureBytes: 10,
+    });
+    expect(capped.figures[0]).toMatchObject({ source: "vector", data_url: null, bytes: 0, omitted: "too_large" });
+    expect(capped.textWithMarkers).toContain("[FIGURE 1]");
+  });
+});
+
 // E6 (2026-09-02): emphasis from the text layer's font runs.
 import { emphasisMarks, emphasizeRuns, extractPdfLayout as extractLayoutE6, styleOfFont } from "../lib/pdfImport/extractFigures";
 

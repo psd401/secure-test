@@ -326,6 +326,64 @@ text into the figure and re-measures), but the model also dropped the
 excerpt's footnote and citation line — real text the teacher should paste
 back, which is exactly what the badge asks. The 85 % ratio stays.
 
+2026-09-09, afternoon: **spike S4 RAN — GO (local half)**, then **slice 5
+BUILT** (Opus 5 agent, diff reviewed + checks re-run in the main session).
+Spike: `@napi-rs/canvas@1.0.9` + unpdf's `renderPageAsImage` renders a page
+at scale 2 in ~50 ms after a 1.3 s warm-up, the cropped chart is legible;
+the pilot's chart pages carry ~500 painted paths against 3 on a text page,
+so path density separates charts cleanly. Measured: `constructPath` args
+are `[paintOp, pathData, minMax]` with `minMax` in current user space (the
+walk's CTM maps it, verified against the page-2 header rule and rendered
+crops); it arrives as a typed array. Build: painted paths (paint ops
+resolved by name through `OPS`; `endPath` / `clip` and page-size rects
+skipped) clustered at 12 pt, kept at ≥ 8 paths and ≥ 40 pt each side; the
+page rendered once per page with a cluster and each cluster cropped (+4 pt)
+to PNG; `PdfFigure.source: "raster" | "vector"` + `caption` (the nearest
+bold line above within 24 pt, joined with contiguous bold lines because
+every pilot title wraps; raw font style, not the E6 page-majority guard,
+because a title can be most of a page's characters; brackets stripped,
+200 chars); text lines whose baseline sits inside a cluster leave the page
+text; `MAX_PATHS_PER_PAGE = 4000` bounds the merge; a failing canvas import
+or render drops vector figures with a warning and nothing else. Prompt: a
+marker never goes into a stem or the introduction, but **inside a source's
+text the model keeps each `[FIGURE n]` on its own line where the figure is
+printed**; the panel counts source-placed figures into the set, uploads
+each figure once, turns each kept marker into `![caption](asset:uuid)` at
+Add, strips markers of discarded figures whole-line, and tags vector
+figures "chart" in the strip. `next.config.ts`:
+`serverExternalPackages: ["@napi-rs/canvas"]` (the `.node` binary is
+traced, not bundled — the macOS build's standalone output carries it).
+design-tool 1357 → 1366 tests, typecheck clean.
+
+**Bedrock evidence on the pilot** (one run, 40 s): **4 vector figures, not
+3 — page 6 carries two charts** (71 + 426 paths; pages 7 and 8 one each,
+~490 paths); captions are the full two-line printed titles; Source C's
+text carries all four markers on their own lines; the set lists
+`figures: [1,2,3,4]`, `side_by_side`; sources A / B / C / D at 99.9 / 98.6 /
+**93.5** / 96.4 % — none flagged. A crop written from the JSON is a
+complete, legible chart. **Finding:** the pilot's axis labels, tick values
+and country names are drawn as paths, not text, so the text-drop rule
+removes nothing here (it fires on the hand-built fixture); Source C's
+remaining gap is model variance plus the citation / footnote.
+
+**Container half of S4 — GO, with one Dockerfile fix.** The builder stage
+(`node:22-slim`, linux-arm64, glibc) rendered the pilot's three chart pages
+and the crop byte-for-byte as macOS did (~50 ms a page). The runner image
+carried the traced `.bun` store entries (`@napi-rs/canvas`, the
+`linux-arm64-gnu` and `-musl` binaries) but **no
+`design-tool/node_modules/@napi-rs/canvas` link** — Next's standalone
+writes that link only for `next` — so `require("@napi-rs/canvas")` from the
+route chunk failed and the extractor's guard would have hidden it as "no
+vector figures" in production. Fix in `design-tool/Dockerfile`: the runner
+stage copies bun's own `node_modules/@napi-rs` symlink directory from the
+builder; verified in the rebuilt image from the route's directory as the
+`node` user: the package loads, draws and encodes a PNG. **Open:** the
+runner image has no system fonts, so a chart whose labels are real text
+(not the pilot — its labels are paths) may rasterise without glyphs; add
+`fonts-dejavu-core` to the runner stage if a hand-run shows blank labels.
+Docker gotcha: colima shares `$HOME` only — a bind mount from `/private/tmp`
+is silently empty inside the container.
+
 **Hazard until slice 4 ships:** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
 published with sources before the next client release shows students the

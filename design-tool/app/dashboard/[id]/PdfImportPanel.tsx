@@ -42,7 +42,9 @@ interface ExtractResult {
   extracted_count: number;
   missing_numbers: number[] | null;
   shortfall: boolean;
-  // E5 slice 4: raster figures found in the PDF, in document order.
+  // E5 slice 4: figures found in the PDF, in document order. Multi-source
+  // stimulus slice 5 adds vector ones — charts drawn as paths, rasterised on
+  // the server — with the printed title line above them as `caption`.
   figures: {
     n: number;
     page: number;
@@ -50,6 +52,8 @@ interface ExtractResult {
     height_px: number;
     data_url: string | null;
     omitted?: string;
+    source?: "raster" | "vector";
+    caption?: string;
   }[];
   figure_count: number;
   // E5 slice 3: proposed stimulus sets over candidate indexes. `source` says
@@ -118,6 +122,15 @@ function workTypeOptions(type: string): readonly WorkType[] {
   if (type === "drawing_upload" || type === "essay") return ["drawing_upload", "essay"];
   if (type === "table") return ["table", "essay"];
   return [];
+}
+
+// Multi-source stimulus slice 5: the figure markers a source's text still
+// carries. The model is told to keep one on its own line where the figure is
+// printed; Add turns each into an image ref (or strips it when the teacher
+// discarded that figure).
+const FIGURE_MARKER_RE = /\[FIGURE (\d+)\]/g;
+export function figureNumbersIn(text: string): number[] {
+  return [...new Set([...text.matchAll(FIGURE_MARKER_RE)].map((m) => Number(m[1])))];
 }
 
 function typeLabel(c: Candidate): string {
@@ -198,12 +211,20 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
       // Multi-source stimulus slice 3: `sources` / `layout` always ride the
       // response, but default them so an older cached response cannot crash
       // the card.
+      const known = new Set((body.figures ?? []).map((f) => f.n));
       setSets(
-        (body.proposed_sets ?? []).map((s) => ({
-          ...s,
-          sources: s.sources ?? [],
-          layout: s.layout ?? "inline",
-        })),
+        (body.proposed_sets ?? []).map((s) => {
+          const sources = s.sources ?? [];
+          // Slice 5: a figure a source's text places is used by the set — it
+          // shows in the card's thumbnails and can be discarded there.
+          const inSources = sources.flatMap((src) => figureNumbersIn(src.text)).filter((n) => known.has(n));
+          return {
+            ...s,
+            sources,
+            figures: [...new Set([...s.figures, ...inSources])],
+            layout: s.layout ?? "inline",
+          };
+        }),
       );
     } catch (e) {
       setError((e as Error).message);
@@ -276,8 +297,25 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     setError(null);
     let postedIds: string[] = [];
     try {
+      // Slice 5: one upload per figure, shared between the introduction and
+      // the source texts that place it. The alt is the printed caption (the
+      // chart title) when the extractor found one.
+      const uploaded = new Map<number, string>();
+      const assetFor = async (n: number): Promise<string> => {
+        const hit = uploaded.get(n);
+        if (hit) return hit;
+        const id = await uploadFigure(n);
+        uploaded.set(n, id);
+        return id;
+      };
+      const altFor = (n: number) => result.figures.find((f) => f.n === n)?.caption ?? `Figure ${n}`;
+      // A figure a source places sits inside that source, not above the set.
+      const placedInSources = new Set(set.sources.flatMap((s) => figureNumbersIn(s.text)));
       const refs: string[] = [];
-      for (const n of set.figures) refs.push(`![Figure ${n}](asset:${await uploadFigure(n)})`);
+      for (const n of set.figures) {
+        if (placedInSources.has(n)) continue;
+        refs.push(`![${altFor(n)}](asset:${await assetFor(n)})`);
+      }
       for (const i of set.item_indexes) {
         if (added.has(i)) continue;
         const id = await postItem(i, result.candidates[i]!, targetId);
@@ -289,9 +327,28 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
       // the create call (slice 2 made the route take both). `shortened` is a
       // panel-only hint and never leaves the browser; a source the teacher
       // emptied the label of is dropped rather than failing the write schema.
-      const sources = set.sources
-        .map((s) => ({ label: s.label.trim(), text: s.text }))
-        .filter((s) => s.label.length > 0);
+      // Slice 5: each `[FIGURE n]` a source kept becomes the picture at that
+      // point; a marker for a figure the teacher discarded (or that never
+      // came back) is stripped rather than shown to a student.
+      const kept = new Set(
+        set.figures.filter((n) => result.figures.some((f) => f.n === n && f.data_url)),
+      );
+      const sources: { label: string; text: string }[] = [];
+      for (const s of set.sources) {
+        const label = s.label.trim();
+        if (label.length === 0) continue;
+        let text = s.text;
+        for (const n of figureNumbersIn(text)) {
+          if (kept.has(n)) {
+            text = text.split(`[FIGURE ${n}]`).join(`![${altFor(n)}](asset:${await assetFor(n)})`);
+          } else {
+            // Whole line out, so a discarded figure leaves no blank gap.
+            text = text.replace(new RegExp(`^[ \\t]*\\[FIGURE ${n}\\][ \\t]*\\n?`, "gm"), "");
+            text = text.split(`[FIGURE ${n}]`).join("");
+          }
+        }
+        sources.push({ label, text });
+      }
       const res = await fetch(`/api/assessments/${targetId}/item-sets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -630,6 +687,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                         )}
                         <span className="block text-[11px]">
                           Figure {f.n} · p{f.page}
+                          {/* Slice 5: a chart drawn as paths, rasterised here. */}
+                          {f.source === "vector" ? (
+                            <span className="ml-1 rounded bg-primary/10 px-1 py-0.5">chart</span>
+                          ) : null}
                         </span>
                       </li>
                     ))}

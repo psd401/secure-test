@@ -258,6 +258,12 @@ describe("extractor prompt (E1/E2/E4/E7a/E8)", () => {
     // E5 slice 3: the set contract and the quoting rule.
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"item_sets"');
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("[FIGURE 3]");
+    // Multi-source stimulus slice 5: a marker still never goes into a stem or
+    // the introduction, but inside a source's text it stays where the figure
+    // is printed — that is where the panel puts the picture at Add.
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toMatch(
+      /KEEP each \[FIGURE n\] marker, on a line of its own, exactly where that figure is printed/,
+    );
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("escape double quotes");
   });
 });

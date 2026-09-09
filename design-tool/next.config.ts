@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   // the workspace root or @secure-test/schema is left out of the trace.
   output: "standalone",
   outputFileTracingRoot: fileURLToPath(new URL("..", import.meta.url)),
+  // Multi-source stimulus slice 5 (docs/multi-source-stimulus-design.md):
+  // vector figures are rasterised through @napi-rs/canvas, whose `.node`
+  // binary must be traced into the standalone output rather than bundled.
+  serverExternalPackages: ["@napi-rs/canvas"],
 };
 
 export default nextConfig;

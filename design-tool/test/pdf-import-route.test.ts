@@ -9,7 +9,7 @@ import { MAX_OCR_BYTES, MAX_OCR_PAGES } from "../lib/pdfImport/extractCore";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 
-import { makeEmptyPagesPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
+import { makeEmptyPagesPdf, makeTextAndImagePdf, makeTextPdf, makeVectorChartPdf } from "./helpers/pdf";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -205,6 +205,34 @@ describe("POST items/import-pdf", () => {
     const sbody = (await scanned.json()) as { figures: unknown[]; figure_count: number };
     expect(sbody.figures).toEqual([]);
     expect(sbody.figure_count).toBe(0);
+  });
+
+  // Multi-source stimulus slice 5: a chart drawn as paths (no image XObject)
+  // comes back as an ordinary figure with source "vector" and the printed
+  // title above it as its caption.
+  test("a drawn chart rides the response as a vector figure", async () => {
+    const id = await createAssessment("Vector figures");
+    const res = await postPdf(
+      id,
+      makeVectorChartPdf({
+        region: { x: 120, y: 380, width: 320, height: 180 },
+        bars: 9,
+        caption: "Uncertainty by year",
+        inside: ["10", "20"],
+        above: ["MC: What is 2+2? | a:3 | b:4 | *b"],
+        below: ["Note. A note under the chart."],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string }[];
+      figures: { n: number; page: number; source: string; caption?: string; data_url: string | null }[];
+      figure_count: number;
+    };
+    expect(body.candidates).toHaveLength(1);
+    expect(body.figure_count).toBe(1);
+    expect(body.figures[0]).toMatchObject({ n: 1, page: 1, source: "vector", caption: "Uncertainty by year" });
+    expect(body.figures[0]!.data_url?.startsWith("data:image/png;base64,")).toBe(true);
   });
 
   // E5 slice 3: the model's sets come back over validated indexes with their

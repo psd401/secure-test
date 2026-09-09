@@ -111,7 +111,15 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   "line stays with the text.",
   "A document with one question and labelled sources is ONE item_set: the",
   'question in item_indexes, the sources in "sources".',
-  "Never put the [FIGURE n] marker text itself into a stem or stimulus.",
+  "Never put the [FIGURE n] marker text itself into a stem or into the",
+  '"stimulus" introduction.',
+  // Multi-source stimulus slice 5: a chart printed inside Source C has to
+  // come back inside that source's text, at the point it is printed —
+  // otherwise the panel has nowhere to put the picture and the student reads
+  // a source with a hole in it. The panel turns each kept marker into an
+  // image ref at Add.
+  "Inside a source's \"text\", KEEP each [FIGURE n] marker, on a line of its",
+  "own, exactly where that figure is printed in the source.",
   "The text marks the document's own emphasis as **bold** and _italic_.",
   "Keep those markers exactly where they are in stems, choices, pairs and",
   "stimulus text; never add markers the document does not have, and never",

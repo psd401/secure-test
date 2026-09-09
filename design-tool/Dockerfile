@@ -42,6 +42,14 @@ WORKDIR /app
 COPY --from=builder /repo/design-tool/.next/standalone ./
 COPY --from=builder /repo/design-tool/.next/static ./design-tool/.next/static
 COPY --from=builder /repo/design-tool/public ./design-tool/public
+# Multi-source stimulus slice 5 (docs/multi-source-stimulus-design.md, spike
+# S4): @napi-rs/canvas is a serverExternalPackage, so the route requires it
+# at runtime by name. The trace copies the package's real files into
+# node_modules/.bun/… but writes no `design-tool/node_modules/@napi-rs/canvas`
+# link (only `next` gets one), and the require then fails — the extractor's
+# guard hides that as "no vector figures". Copying bun's own symlink from the
+# builder restores the resolution path; it points at the traced store.
+COPY --from=builder /repo/design-tool/node_modules/@napi-rs ./design-tool/node_modules/@napi-rs
 # Boot shim (slice 3): assembles DATABASE_URL from the ECS-injected DB_*
 # secret vars, then imports server.js — or, with `migrate` as its argument,
 # the bundled migrator (a one-off ECS run-task; infra/README.md "Migrating
