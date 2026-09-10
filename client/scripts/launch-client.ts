@@ -19,6 +19,8 @@ const child = spawn(`${app}/Contents/MacOS/SecureTest`, [], {
     ...(process.env.SECURE_TEST_TOKEN ? { SECURE_TEST_TOKEN: process.env.SECURE_TEST_TOKEN } : {}),
     // Observability slice 4 hand-run: the debug crash menu item (Session menu).
     ...(process.env.SECURE_TEST_DEBUG_CRASH ? { SECURE_TEST_DEBUG_CRASH: process.env.SECURE_TEST_DEBUG_CRASH } : {}),
+    // C-7 / D-9 (docs/multi-source-stimulus-design.md): dev-only pass-through; fullscreen stays the app default.
+    ...(process.env.SECURE_TEST_NO_FULLSCREEN ? { SECURE_TEST_NO_FULLSCREEN: process.env.SECURE_TEST_NO_FULLSCREEN } : {}),
   },
   detached: true, stdio: ["ignore", "ignore", err],
 });

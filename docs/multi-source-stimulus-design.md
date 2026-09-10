@@ -572,6 +572,9 @@ next launcher touch. The next client release should carry C-1 and C-2.
   subset rule). Tests: design-tool 1386 (+7: `autosave.test.ts`, one
   PATCH-shape test). Teacher row: tick, navigate away, reload — still
   ticked (rows slice).
+- **C-7 BUILT 2026-09-09 (D-9).** `client/scripts/launch-client.ts`
+  forwards `SECURE_TEST_NO_FULLSCREEN` like the other knobs; the app's
+  fullscreen default is untouched. No tests (the launcher has none).
 
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
