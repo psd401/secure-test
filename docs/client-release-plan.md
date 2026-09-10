@@ -272,3 +272,11 @@ keypad (4b slice 1b), drawing tools (4c slices 1–2). All hand-run at least
 once (client/MANUAL-CHECKS.md; S-f 27/41, multi-source 18/22). The one-line
 release note sits with James for `gh release create` (v1.1.0's shape).
 Steps from here are by hand per `client/RELEASING.md`.
+
+**v1.2.0 PUBLISHED 2026-09-09 ~20:27 PT** on `psd401/secure-test`
+(`SecureTest-1.2.0.pkg`, app + pkg both notarized and stapled, tag
+`v1.2.0` = `3a63809`, the bump commit; `/releases/latest` serves 1.2.0 and
+`/releases/latest/download/SecureTest-1.2.0.pkg` → 302). Archive / export /
+entitlement checks ran from the main session, the psd-sign skill's steps
+3–8 too; the `gh release create` was James's (the classifier denied it
+here). Still open: the hand-install row on a district Mac.
