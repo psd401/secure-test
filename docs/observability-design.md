@@ -434,7 +434,7 @@ topic being deployed with a confirmed subscription.
 route read it but nothing set it). `feedback.app_commit` reads
 `APP_COMMIT`, which nothing injects yet — the server has no build stamp
 (the client's `PSDBuildCommit` has no server twin). Follow-up: a Docker
-build arg → `APP_COMMIT` in the image, surfaced on `/api/health` too.
+build arg → `APP_COMMIT` in the image, surfaced on `/api/health` too. **DONE 2026-09-09:** the CDK image asset passes `buildArgs.APP_COMMIT` = `git rev-parse HEAD` at synth, the Dockerfile's runner stage carries it as `ENV APP_COMMIT`, and `/api/health` answers `{ ok, commit }` (`commit: null` on local dev). Verify after the next deploy: `curl https://<origin>/api/health` shows the deployed commit.
 `.env.local.example` could not be edited from the session (`.env*` is
 denied); James adds `NOTIFY_PROVIDER=mock` / `NOTIFY_TOPIC_ARN=` /
 `NOTIFY_REGION=` lines by hand.

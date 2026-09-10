@@ -30,10 +30,16 @@ RUN cd design-tool && bun run build
 RUN cd design-tool && bun build db/migrate.ts --target=node --format=esm --outfile db/migrate.mjs
 
 FROM node:22.23.2-slim AS runner
+# Build stamp (docs/observability-design.md slice 3 follow-up): the git
+# commit the image was built from, passed by the CDK image asset as a build
+# arg. Surfaced on /api/health and written into feedback.app_commit. Empty
+# when built by hand without --build-arg.
+ARG APP_COMMIT=""
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
-    PORT=3000
+    PORT=3000 \
+    APP_COMMIT=$APP_COMMIT
 WORKDIR /app
 
 # Standalone layout mirrors the workspace (outputFileTracingRoot = repo

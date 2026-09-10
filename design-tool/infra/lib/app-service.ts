@@ -13,6 +13,16 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
 import { Construct } from "constructs";
+import { execFileSync } from "node:child_process";
+
+/** The checkout's HEAD commit, or "" when git is unavailable (e.g. a CI export). */
+function gitHead(): string {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+}
 
 export interface AppServiceProps {
   readonly envName: string;
@@ -91,6 +101,10 @@ export class AppService extends Construct {
       directory: path.join(__dirname, "..", "..", ".."),
       file: "design-tool/Dockerfile",
       platform: ecrAssets.Platform.LINUX_ARM64,
+      // Build stamp for /api/health and feedback.app_commit. Read at synth;
+      // the asset hash already changes with every source edit, so stamping
+      // the commit does not cause extra rebuilds on its own.
+      buildArgs: { APP_COMMIT: gitHead() },
     });
 
     // Explicit task role so the grants below are attached to a construct we

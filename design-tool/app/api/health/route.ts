@@ -8,5 +8,8 @@ import { NextResponse } from "next/server";
  * ambiguously in CloudWatch.
  */
 export function GET() {
-  return NextResponse.json({ ok: true });
+  // `commit` is the image's build stamp (Dockerfile ARG APP_COMMIT, set by
+  // the CDK image asset); null on a local dev server. The repository is
+  // public, so the hash reveals nothing.
+  return NextResponse.json({ ok: true, commit: process.env.APP_COMMIT || null });
 }
