@@ -455,6 +455,43 @@ describe("slice 21 — construct_altering opt-in", () => {
   });
 });
 
+// C-6 / D-8 (docs/multi-source-stimulus-design.md): the Accommodations tab
+// now autosaves a PATCH carrying ONLY these two fields (never the rest of
+// the metadata row) — confirm the route leaves everything else untouched.
+describe("PATCH with only allowed_accommodations + construct_altering (accommodations autosave shape)", () => {
+  test("updates the two accommodation fields and leaves name / time_limit_seconds alone", async () => {
+    asUser("teacher-1");
+    const createRes = await callCreate({
+      name: "autosave-subject",
+      time_limit_seconds: 1200,
+    });
+    const id = ((await createRes.json()) as { assessment: { id: string } })
+      .assessment.id;
+
+    const res = await callPatch(id, {
+      allowed_accommodations: ["color_contrast", "tts_for_ela_reading"],
+      construct_altering: ["tts_for_ela_reading"],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      assessment: {
+        name: string;
+        time_limit_seconds: number | null;
+        allowed_accommodations: string[];
+        construct_altering: string[];
+      };
+    };
+    expect([...body.assessment.allowed_accommodations].sort()).toEqual([
+      "color_contrast",
+      "tts_for_ela_reading",
+    ]);
+    expect(body.assessment.construct_altering).toEqual(["tts_for_ela_reading"]);
+    // Untouched.
+    expect(body.assessment.name).toBe("autosave-subject");
+    expect(body.assessment.time_limit_seconds).toBe(1200);
+  });
+});
+
 describe("slice 19 — time_limit_seconds round-trip", () => {
   test("create accepts time_limit_seconds and round-trips", async () => {
     asUser("teacher-1");

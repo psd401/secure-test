@@ -61,6 +61,7 @@ import { MatchPairsEditor } from "./MatchPairsEditor";
 import { SequenceEditor } from "./SequenceEditor";
 import { HotspotEditor } from "./HotspotEditor";
 import { TableEditor } from "./TableEditor";
+import { createAutosave } from "@/lib/autosave";
 
 // UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
 // and deep links land on the same panel. Param values are stable; the labels
@@ -667,32 +668,31 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     return groups;
   }, []);
 
+  // C-6 / D-8 (docs/multi-source-stimulus-design.md): both toggles derive
+  // allowed_accommodations and construct_altering from the SAME computed
+  // next pair, then hand that pair to the autosave debounce — never a stale
+  // value from a state setter's closure.
   function toggleAccommodation(id: string) {
-    setAllowedAccommodations((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const nextAllowed = new Set(allowedAccommodations);
+    if (nextAllowed.has(id)) nextAllowed.delete(id);
+    else nextAllowed.add(id);
     // Unchecking the primary checkbox MUST also drop the id from the
     // construct_altering set — the invariant is "construct_altering ⊆
     // allowed_accommodations" and the API enforces it. Keep client +
     // server in agreement so save doesn't 400.
-    setConstructAltering((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    const nextConstructAltering = new Set(constructAltering);
+    if (!nextAllowed.has(id)) nextConstructAltering.delete(id);
+    setAllowedAccommodations(nextAllowed);
+    setConstructAltering(nextConstructAltering);
+    scheduleAccomSave(nextAllowed, nextConstructAltering);
   }
 
   function toggleConstructAltering(id: string) {
-    setConstructAltering((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const nextConstructAltering = new Set(constructAltering);
+    if (nextConstructAltering.has(id)) nextConstructAltering.delete(id);
+    else nextConstructAltering.add(id);
+    setConstructAltering(nextConstructAltering);
+    scheduleAccomSave(allowedAccommodations, nextConstructAltering);
   }
   const [addType, setAddType] = useState<ItemType>("multiple_choice_single");
 
@@ -804,10 +804,10 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     refresh();
   }
 
-  // Settings and Accommodations share one PATCH (the whole metadata row) but
-  // each tab reports into its own status line, beside its own Save.
-  async function saveMetadata(which: "settings" | "accommodations") {
-    const setSave = which === "settings" ? setSettingsSave : setAccomSave;
+  // The Settings tab keeps an explicit Save (name/description/time
+  // limit/AI/layout). Accommodations autosaves instead — see the
+  // createAutosave wiring below.
+  async function saveMetadata() {
     setError(null);
     // Convert minutes → seconds at the API boundary. Empty input → null
     // (no time limit). Validation matches what the create form enforces.
@@ -816,12 +816,12 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     if (trimmed.length > 0) {
       const m = Number.parseInt(trimmed, 10);
       if (Number.isNaN(m) || m <= 0) {
-        setSave({ kind: "failed", message: "Time limit must be a whole number of minutes." });
+        setSettingsSave({ kind: "failed", message: "Time limit must be a whole number of minutes." });
         return;
       }
       time_limit_seconds = m * 60;
     }
-    setSave({ kind: "saving" });
+    setSettingsSave({ kind: "saving" });
     try {
       await call(apiBase, {
         method: "PATCH",
@@ -832,16 +832,65 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
           time_limit_seconds,
           allow_llm_authoring: allowLlm,
           student_layout: studentLayout,
-          allowed_accommodations: [...allowedAccommodations],
-          construct_altering: [...constructAltering],
         }),
       });
-      setSave({ kind: "saved", at: new Date() });
+      setSettingsSave({ kind: "saved", at: new Date() });
       refresh();
     } catch (e) {
-      setSave({ kind: "failed", message: describe(e) });
+      setSettingsSave({ kind: "failed", message: describe(e) });
     }
   }
+
+  // C-6 / D-8 (docs/multi-source-stimulus-design.md): the Accommodations tab
+  // used to only persist on a "Save accommodations" click — a teacher who
+  // ticked boxes and navigated away lost the change silently. Autosave with
+  // a 600ms debounce instead; created once via a lazy ref so the debounce
+  // timer and in-flight tracking survive re-renders. `call` / `refresh` /
+  // `describe` are function declarations (hoisted within the component),
+  // safe to close over here regardless of source order.
+  const accomAutosaveRef = useRef<ReturnType<
+    typeof createAutosave<{ allowed: string[]; constructAltering: string[] }>
+  > | null>(null);
+  if (accomAutosaveRef.current === null) {
+    accomAutosaveRef.current = createAutosave({
+      delayMs: 600,
+      save: async (value) => {
+        await call(apiBase, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            allowed_accommodations: value.allowed,
+            construct_altering: value.constructAltering,
+          }),
+        });
+        refresh();
+      },
+      onState: (state, err) => {
+        if (state === "saving") setAccomSave({ kind: "saving" });
+        else if (state === "saved") setAccomSave({ kind: "saved", at: new Date() });
+        else if (state === "failed") setAccomSave({ kind: "failed", message: describe(err) });
+        // "idle" is never emitted by createAutosave; nothing to do.
+      },
+    });
+  }
+
+  function scheduleAccomSave(nextAllowed: Set<string>, nextConstructAltering: Set<string>) {
+    if (isLocked) return;
+    accomAutosaveRef.current?.schedule({
+      allowed: [...nextAllowed],
+      constructAltering: [...nextConstructAltering],
+    });
+  }
+
+  // Flush a pending accommodations autosave before it can be lost: when the
+  // teacher switches away from the tab, and on unmount (covered by the same
+  // cleanup when the tab is still "accommodations" at that point).
+  useEffect(() => {
+    if (activeTab !== "accommodations") return;
+    return () => {
+      accomAutosaveRef.current?.flush();
+    };
+  }, [activeTab]);
 
   // Publish / Unpublish are status-only PATCHes — the one change the server
   // accepts on a published row (lib/api/requireDraft.ts, isUnlockOnlyPatch).
@@ -1466,7 +1515,7 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
         <div className="flex items-center gap-3">
           <Button
             type="button"
-            onClick={() => saveMetadata("settings")}
+            onClick={() => saveMetadata()}
             disabled={isPending || isLocked || settingsSave.kind === "saving"}
           >
             Save settings
@@ -1549,13 +1598,9 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
         </fieldset>
 
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            onClick={() => saveMetadata("accommodations")}
-            disabled={isPending || isLocked || accomSave.kind === "saving"}
-          >
-            Save accommodations
-          </Button>
+          <span className="text-xs text-muted-foreground">
+            Changes save automatically.
+          </span>
           <StatusLine state={accomSave} />
         </div>
       </section>

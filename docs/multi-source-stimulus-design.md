@@ -556,6 +556,22 @@ next launcher touch. The next client release should carry C-1 and C-2.
   client 548 (+9: `PageLoadGateTests`, `RendererLayoutToggleTests`).
   NOT provable headlessly: that the deferred build reads the
   post-transition width — needs a real AAC session (rows slice).
+- **C-6 BUILT 2026-09-09 (D-8).** The Accommodations tab autosaves:
+  `lib/autosave.ts` is a small debounced single-flight primitive (600 ms,
+  James 3.1; a change during a flight runs once more afterwards with the
+  newest value; a failure shows in the status line and the next change
+  retries; `flush()` on leaving the tab and on unmount); each toggle
+  computes the next pair and schedules a PATCH carrying ONLY
+  `allowed_accommodations` + `construct_altering`, so a half-typed
+  Settings edit is never persisted by a tick, and the Settings tab's Save
+  (kept, James 3.2) no longer sends the two sets — the tabs cannot
+  overwrite each other. "Save accommodations" is gone; "Changes save
+  automatically." + the existing status line replace it. Nothing
+  schedules while the assessment is locked. No migration, no route
+  change (the PATCH route already took a partial body and enforces the
+  subset rule). Tests: design-tool 1386 (+7: `autosave.test.ts`, one
+  PATCH-shape test). Teacher row: tick, navigate away, reload — still
+  ticked (rows slice).
 
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
