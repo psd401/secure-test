@@ -216,10 +216,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 const code = openCodeFor.get(a.id);
                 return (
                   <TableRow key={a.id}>
-                    {/* A-1: the name is the elastic column — block + truncate
-                        so a long name shortens (full name in the title)
-                        instead of pushing the actions past the card edge. */}
-                    <TableCell className="max-w-md">
+                    {/* A-1: the name is the elastic column. Auto table layout
+                        ignores max-width on a cell, so w-full + max-w-0 makes
+                        this cell take whatever the fixed columns leave and the
+                        block + truncate link shortens a long name (full name
+                        in the title) instead of pushing the actions past the
+                        card edge. */}
+                    <TableCell className="w-full max-w-0">
                       <Link
                         href={`/dashboard/${a.id}`}
                         className="block truncate font-medium hover:underline"
