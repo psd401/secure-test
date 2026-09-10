@@ -73,6 +73,12 @@ export const assessments = pgTable(
     // assessment authored before this column was) or "paged" (one question
     // at a time in the client). Rides the delivery bundle only as "paged".
     student_layout: text("student_layout").notNull().default("scroll"),
+    // Archive (docs/archive-and-delete-design.md, D-2/D-3): null = live.
+    // A timestamp rather than a boolean so a list can say "Archived 12 Sep"
+    // and a later retention sweep has something to sort on. Archiving is NOT
+    // a status change — a published assessment stays published while
+    // archived, so unarchiving restores it exactly.
+    archived_at: timestamp("archived_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -547,6 +553,10 @@ export const test_sessions = pgTable(
     code: text("code").notNull(),
     status: text("status").notNull().default("open"),
     expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // Archive (docs/archive-and-delete-design.md, D-2): null = live. Hides a
+    // finished sitting from the Test sessions tab without deleting it —
+    // attendance and the monitor's history keep working on an archived row.
+    archived_at: timestamp("archived_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

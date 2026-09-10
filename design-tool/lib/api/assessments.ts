@@ -47,6 +47,11 @@ export const UpdateAssessmentBody = z
     allowed_accommodations: AllowedAccommodations.optional(),
     construct_altering: ConstructAltering.optional(),
     status: z.enum(["draft", "published"]).optional(),
+    // Archive (docs/archive-and-delete-design.md, D-3). Status-only, like the
+    // unlock: the route refuses a body that carries `archived` together with
+    // anything else, so archiving can never smuggle an edit past the publish
+    // lock.
+    archived: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     // Subset check only when both arrays are present in the patch.

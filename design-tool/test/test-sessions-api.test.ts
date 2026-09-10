@@ -99,6 +99,18 @@ async function close(sessionId: string) {
   });
 }
 
+async function archive(sessionId: string, archived: boolean) {
+  const { PATCH } = await import("../app/api/test-sessions/[sessionId]/route");
+  return PATCH(
+    new Request("http://localhost/x", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ archived }),
+    }),
+    { params: Promise.resolve({ sessionId }) },
+  );
+}
+
 async function redeem(code: string) {
   const { POST } = await import("../app/api/test-sessions/redeem/route");
   return POST(
@@ -233,6 +245,110 @@ describe("POST /api/test-sessions/:id/close", () => {
 
     principal = { sub: TEACHER, role: "staff" };
     expect((await close(test_session.id)).status).toBe(404);
+  });
+});
+
+// Archive (docs/archive-and-delete-design.md, D-2): the sitting leaves the
+// list without leaving the database.
+describe("PATCH /api/test-sessions/:id — archive", () => {
+  test("a closed sitting archives, and archiving twice keeps the date", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    const { test_session } = await (await post({ assessment_id: assessment.id })).json();
+    await close(test_session.id);
+
+    const res = await archive(test_session.id, true);
+    expect(res.status).toBe(200);
+    const first = await res.json();
+    expect(first.test_session.archived_at).not.toBeNull();
+    expect(first.test_session.status).toBe("closed");
+
+    const again = await archive(test_session.id, true);
+    expect(again.status).toBe(200);
+    expect((await again.json()).test_session.archived_at).toBe(
+      first.test_session.archived_at,
+    );
+  });
+
+  test("an open, unexpired sitting is refused with 409 session_open", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    const { test_session } = await (await post({ assessment_id: assessment.id })).json();
+
+    const res = await archive(test_session.id, true);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "session_open" });
+  });
+
+  // Expired-but-unclosed counts as closed here, as everywhere else.
+  test("an expired open sitting archives", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    const [stale] = await getDb()
+      .insert(test_sessions)
+      .values({
+        assessment_id: assessment.id,
+        owner_sub: TEACHER,
+        code: "EXPARC",
+        status: "open",
+        expires_at: new Date(Date.now() - 60_000),
+      })
+      .returning();
+    expect((await archive(stale!.id, true)).status).toBe(200);
+  });
+
+  test("unarchiving clears the timestamp", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    const { test_session } = await (await post({ assessment_id: assessment.id })).json();
+    await close(test_session.id);
+    await archive(test_session.id, true);
+
+    const res = await archive(test_session.id, false);
+    expect(res.status).toBe(200);
+    expect((await res.json()).test_session.archived_at).toBeNull();
+  });
+
+  test("cannot archive another teacher's sitting", async () => {
+    principal = { sub: OTHER_TEACHER, role: "staff" };
+    const theirs = await seedAssessment(OTHER_TEACHER);
+    const { test_session } = await (await post({ assessment_id: theirs.id })).json();
+    await close(test_session.id);
+
+    principal = { sub: TEACHER, role: "staff" };
+    expect((await archive(test_session.id, true)).status).toBe(404);
+  });
+
+  test("the list hides archived sittings by default and ?archived=1 returns only them", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    const live = await (await post({ assessment_id: assessment.id })).json();
+    const gone = await (await post({ assessment_id: assessment.id })).json();
+    await close(gone.test_session.id);
+    await archive(gone.test_session.id, true);
+
+    const shown = await (await list()).json();
+    expect(shown.test_sessions.map((s: { id: string }) => s.id)).toEqual([
+      live.test_session.id,
+    ]);
+
+    const hidden = await (await list("?archived=1")).json();
+    expect(hidden.test_sessions.map((s: { id: string }) => s.id)).toEqual([
+      gone.test_session.id,
+    ]);
+  });
+
+  test("a sitting cannot be opened on an archived assessment", async () => {
+    principal = { sub: TEACHER, role: "staff" };
+    const assessment = await seedAssessment();
+    await getDb()
+      .update(assessments)
+      .set({ archived_at: new Date() })
+      .where(eq(assessments.id, assessment.id));
+
+    const res = await post({ assessment_id: assessment.id });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("archived");
   });
 });
 

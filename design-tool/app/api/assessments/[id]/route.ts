@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, eq, notInArray } from "drizzle-orm";
+import { and, asc, count, eq, gt, notInArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
   assessment_student_overrides,
   attempts,
   items,
+  test_sessions,
 } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
@@ -51,17 +52,77 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   let body;
+  let rawKeys: string[] = [];
   try {
-    body = UpdateAssessmentBody.parse(await req.json());
+    const raw = await req.json();
+    body = UpdateAssessmentBody.parse(raw);
+    rawKeys =
+      raw && typeof raw === "object" && !Array.isArray(raw)
+        ? Object.keys(raw as Record<string, unknown>)
+        : [];
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
+
+  // Archive (docs/archive-and-delete-design.md, D-3) is the SECOND status-only
+  // PATCH beside the unlock, and stays status-only: a body carrying `archived`
+  // alongside any other key is refused outright rather than half-applied.
+  const isArchivePatch = body.archived !== undefined;
+  if (isArchivePatch && rawKeys.length !== 1) {
+    return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
+  }
+
   const owned = await loadOwnedAssessment(id, auth.session.sub);
   if (owned.status === 404) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
   if (owned.status === 403) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+
+  // Archive runs BEFORE the publish lock and is accepted on a published row:
+  // the lock exists so a delivered bundle cannot change under a student, and
+  // archiving changes no content. A published assessment stays published while
+  // archived, so unarchiving restores it exactly.
+  if (isArchivePatch) {
+    const db = getDb();
+    const archived = body.archived === true;
+    // Idempotent, and deliberately not a re-stamp: archiving an already
+    // archived row keeps its original date (the list shows it) and skips the
+    // open-sitting guard, since the state asked for is already the state.
+    if (archived === (owned.row.archived_at !== null)) {
+      return NextResponse.json({ assessment: owned.row });
+    }
+    if (archived) {
+      // The same rule the delete-attempt route applies: close the sittings
+      // first. An expired-but-unclosed sitting counts as closed, as everywhere
+      // else — nothing flips status the moment a sitting expires.
+      const [openSitting] = await db
+        .select({ id: test_sessions.id })
+        .from(test_sessions)
+        .where(
+          and(
+            eq(test_sessions.assessment_id, id),
+            eq(test_sessions.status, "open"),
+            gt(test_sessions.expires_at, new Date()),
+          ),
+        )
+        .limit(1);
+      if (openSitting) {
+        return NextResponse.json(
+          { ok: false, error: "session_open" },
+          { status: 409 },
+        );
+      }
+    }
+    const [updated] = await db
+      .update(assessments)
+      .set({ archived_at: archived ? new Date() : null, updated_at: new Date() })
+      .where(
+        and(eq(assessments.id, id), eq(assessments.owner_sub, auth.session.sub)),
+      )
+      .returning();
+    return NextResponse.json({ assessment: updated });
   }
 
   // Slice 19 publish lock: while published, accept ONLY the unlock —

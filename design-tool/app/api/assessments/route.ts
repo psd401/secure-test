@@ -1,18 +1,30 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { CreateAssessmentBody } from "@/lib/api/assessments";
 
-export async function GET() {
+export async function GET(req?: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   const db = getDb();
+  // Archive (docs/archive-and-delete-design.md, D-4): archived rows are hidden
+  // by default and `?archived=1` shows ONLY them, so the two lists partition
+  // the teacher's assessments rather than overlapping.
+  const wantArchived =
+    req !== undefined && new URL(req.url).searchParams.get("archived") === "1";
   const rows = await db
     .select()
     .from(assessments)
-    .where(eq(assessments.owner_sub, auth.session.sub))
+    .where(
+      and(
+        eq(assessments.owner_sub, auth.session.sub),
+        wantArchived
+          ? isNotNull(assessments.archived_at)
+          : isNull(assessments.archived_at),
+      ),
+    )
     .orderBy(desc(assessments.updated_at));
   return NextResponse.json({ assessments: rows });
 }

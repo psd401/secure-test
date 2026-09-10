@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -44,13 +44,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
 
+  // Archive (docs/archive-and-delete-design.md, D-4): archived sittings are
+  // hidden by default; `?archived=1` shows ONLY them.
+  const wantArchived =
+    new URL(req.url).searchParams.get("archived") === "1";
+
   const db = getDb();
-  const scope = assessmentId
-    ? and(
-        eq(test_sessions.owner_sub, auth.session.sub),
-        eq(test_sessions.assessment_id, assessmentId),
-      )
-    : eq(test_sessions.owner_sub, auth.session.sub);
+  const scope = and(
+    eq(test_sessions.owner_sub, auth.session.sub),
+    assessmentId ? eq(test_sessions.assessment_id, assessmentId) : undefined,
+    wantArchived
+      ? isNotNull(test_sessions.archived_at)
+      : isNull(test_sessions.archived_at),
+  );
 
   const rows = await db
     .select()
@@ -94,6 +100,12 @@ export async function POST(req: Request) {
   // the assessment's state is not.
   if (assessment.status !== "published") {
     return NextResponse.json({ ok: false, error: "not_published" }, { status: 409 });
+  }
+  // Archive (docs/archive-and-delete-design.md): nothing new starts on an
+  // archived assessment. Existing sittings, attempts and results are
+  // untouched and still reachable from the editor.
+  if (assessment.archived_at !== null) {
+    return NextResponse.json({ ok: false, error: "archived" }, { status: 409 });
   }
 
   // Slice 79: a scope narrows "all my sections"; it never widens it. A

@@ -4,7 +4,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { attempts, students } from "../db/schema";
+import { attempts, students, test_sessions } from "../db/schema";
 import { mintSessionJWT, SESSION_COOKIE_NAME } from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -43,12 +43,12 @@ async function sessionCookieHeader(sub: string): Promise<string> {
   return `${SESSION_COOKIE_NAME}=${jwt}`;
 }
 
-async function callList(cookie?: string) {
+async function callList(query = "", cookie?: string) {
   const { GET } = await import("../app/api/assessments/route");
-  const req = new Request("http://localhost/api/assessments", {
+  const req = new Request(`http://localhost/api/assessments${query}`, {
     headers: cookie ? { cookie } : {},
   });
-  return GET();
+  return GET(req);
 }
 
 async function callCreate(body: unknown, cookie?: string) {
@@ -297,6 +297,127 @@ describe("DELETE /api/assessments/[id] — D-1 has_attempts guard", () => {
     const res = await callDelete(created.assessment.id);
     expect(res.status).toBe(204);
     expect((await callGetById(created.assessment.id)).status).toBe(404);
+  });
+});
+
+// Archive (docs/archive-and-delete-design.md, D-2/D-3): a status-only PATCH
+// that is accepted on a published row, refused while a sitting is live, and
+// hides the row from the default list without changing anything else.
+describe("PATCH /api/assessments/[id] — archive", () => {
+  async function createPublished(name: string): Promise<string> {
+    const created = (await (await callCreate({ name })).json()) as {
+      assessment: { id: string };
+    };
+    const id = created.assessment.id;
+    expect((await callPatch(id, { status: "published" })).status).toBe(200);
+    return id;
+  }
+
+  async function seedSitting(
+    assessmentId: string,
+    opts: { status: "open" | "closed"; expiresInMs: number; code: string },
+  ) {
+    await getDb().insert(test_sessions).values({
+      assessment_id: assessmentId,
+      owner_sub: "teacher-1",
+      code: opts.code,
+      status: opts.status,
+      expires_at: new Date(Date.now() + opts.expiresInMs),
+    });
+  }
+
+  test("archiving a published assessment succeeds and leaves it published", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("archive-me");
+
+    const res = await callPatch(id, { archived: true });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      assessment: { archived_at: string | null; status: string };
+    };
+    expect(body.assessment.archived_at).not.toBeNull();
+    expect(body.assessment.status).toBe("published");
+  });
+
+  test("archiving is idempotent and keeps the original date", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("archive-twice");
+    const first = (await (await callPatch(id, { archived: true })).json()) as {
+      assessment: { archived_at: string };
+    };
+    const second = await callPatch(id, { archived: true });
+    expect(second.status).toBe(200);
+    const body = (await second.json()) as { assessment: { archived_at: string } };
+    expect(body.assessment.archived_at).toBe(first.assessment.archived_at);
+  });
+
+  test("an open, unexpired sitting refuses the archive with 409 session_open", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("has-a-live-sitting");
+    await seedSitting(id, { status: "open", expiresInMs: 60_000, code: "LIVEAA" });
+
+    const res = await callPatch(id, { archived: true });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "session_open" });
+  });
+
+  // An expired-but-unclosed sitting counts as closed here, as everywhere else.
+  test("an expired open sitting does not block the archive", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("stale-sitting");
+    await seedSitting(id, { status: "open", expiresInMs: -60_000, code: "STALEA" });
+    expect((await callPatch(id, { archived: true })).status).toBe(200);
+  });
+
+  test("unarchiving clears the timestamp", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("unarchive-me");
+    await callPatch(id, { archived: true });
+
+    const res = await callPatch(id, { archived: false });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { assessment: { archived_at: string | null } };
+    expect(body.assessment.archived_at).toBeNull();
+  });
+
+  // Status-only, like the unlock: archiving must not be a door for an edit.
+  test("archived together with another field is a 400", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("no-smuggling");
+    const res = await callPatch(id, { archived: true, name: "renamed" });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("invalid_body");
+    // Nothing applied.
+    const after = (await (await callGetById(id)).json()) as {
+      assessment: { name: string; archived_at: string | null };
+    };
+    expect(after.assessment.name).toBe("no-smuggling");
+    expect(after.assessment.archived_at).toBeNull();
+  });
+
+  test("another teacher cannot archive my assessment", async () => {
+    asUser("teacher-1");
+    const id = await createPublished("not-yours");
+    asUser("teacher-2");
+    // 403, the posture loadOwnedAssessment takes on every assessment route.
+    expect((await callPatch(id, { archived: true })).status).toBe(403);
+  });
+
+  test("the list hides archived rows by default and ?archived=1 returns only them", async () => {
+    asUser("teacher-1");
+    await callCreate({ name: "still live" });
+    const archivedId = await createPublished("gone quiet");
+    await callPatch(archivedId, { archived: true });
+
+    const live = (await (await callList()).json()) as {
+      assessments: { name: string }[];
+    };
+    expect(live.assessments.map((a) => a.name)).toEqual(["still live"]);
+
+    const archived = (await (await callList("?archived=1")).json()) as {
+      assessments: { name: string }[];
+    };
+    expect(archived.assessments.map((a) => a.name)).toEqual(["gone quiet"]);
   });
 });
 
