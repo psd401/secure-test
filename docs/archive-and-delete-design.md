@@ -6,7 +6,7 @@ the same day by James: teachers should be able to delete drafts at any time,
 and archive test sessions — and assessments — so the lists stop growing.
 Design tool only; nothing in the client or the shared schema moves.
 Decisions marked **D-n** are James's and are listed at the end; **§Progress
-says what is built** (nothing yet).
+says what is built** (slices 0–4, 2026-09-09; rows unrun).
 
 ## What exists that this stands on
 
