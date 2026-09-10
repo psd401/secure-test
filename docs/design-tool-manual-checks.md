@@ -429,3 +429,31 @@ both sets of rows, or keep it if it becomes the pilot's real assessment.
 | 90 | Set the assessment's student layout to **paged**, Publish, open a Test session | Publish succeeds with no stimulus gap; the delivery bundle (`/api/assessments/<id>/delivery` as the demo student, or File → Open on an exported bundle in the rebuilt client) carries the set with `sources` and `side_by_side`. Hand off to the client rows | ⚠️ half 2026-09-09: Settings → "One question at a time" saved (`student_layout: paged`), Publish → status published with no gap. The delivery-bundle half (sources + side_by_side on the wire as the student) waits for the client sitting — the fixture stays Published on the origin for it |
 | 91 | **Regression, E5:** import a sample quiz whose figures are raster images (Unit 1 or Solubility from the sample folder) | Figures still come back tagged as before (no **chart** tag), the sets pair as they did on 2026-09-01, no `sources` on the cards, layout **Shown above its questions** | ✅ 2026-09-09 (a scratch draft, deleted after): the Unit 1 sample → "3 figures found in the PDF", **no chart tag** on any, "11 proposed · 2 page(s)", three stimulus cards all **Shown above its questions**, no source rows on any card |
 | 92 | **Regression, a plain set:** on any draft, "Add stimulus above" a question, type an introduction, Save, Publish | Works as before slice 2; the Sources list shows only its hint text; the wire carries `sources: []` | ✅ 2026-09-09 (same scratch draft): Add question → "Add stimulus above" → the set arrived on the wire as `layout: inline, sources: []` with the Sources hint text only; typing an introduction + Save persisted it with `sources: []`. Publish not exercised (the blank MC would gap on its own text, unchanged logic) |
+
+## Row S-f — C-2 money vs math, C-6 Accommodations autosave (2026-09-09)
+
+`docs/multi-source-stimulus-design.md` "Row S-f progress" (C-2, C-6; D-8).
+Needs the next deploy — C-2's tokenizer change and C-6's autosave are on
+`main`, not yet on `<origin>`. The fixture used for the client rows (Row
+S-f, `client/MANUAL-CHECKS.md`) — `Row S-f hand-run 2026-09-09` — is authored
+here first, so rows 93–97 double as its authoring check.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 93 | Author Source A of the new fixture's stimulus with the money prose `Costs rose from $57,600 to between $30,000–$120,000 a year.`, an escaped `\$5`, `$x^2 + 1$`, and `${5x+3}$`; look at the editor's live preview | Every `$` in the money prose and the `\$5` renders literally (no italic/odd-spacing math run); `$x^2 + 1$` and `${5x+3}$` render as math | |
+| 94 | Save, then open the student preview (`/preview/<id>`) and the print view (`?print=1`) on the same set | Both surfaces agree with the editor: money literal, `\$5` → `$5`, the two math runs rendered, matching `renderLatex.ts`'s and `renderItemContent.ts`'s shared digit-after-`$` rule | |
+| 95 | On the essay's stem, author `$5x$` alongside a picture | `$5x$` renders literally in the editor preview, the student preview, and print | |
+| 96 | Import a hand-built PDF (test-helper style, no teacher content) whose text contains a dollar amount like `$57,600` | The imported stem text carries `\$57,600` — assert by rendering, not by exact wording, since Bedrock's phrasing varies; the rendered stem shows a literal `$57,600`, not math |  |
+| 97 | On the same set, look for a `$$…$$` display block (add one if none exists) | Renders as a display equation on all three surfaces, unchanged by the C-2 fix | |
+| 98 | On a Draft assessment's Accommodations tab, tick two accommodations | The status line reads "Saving…" then "Saved" without a page reload | |
+| 99 | After "Saved," navigate to another tab (Questions or Settings) and back to Accommodations | Both accommodations are still ticked | |
+| 100 | Reload the page | Both accommodations are still ticked (persisted, not just local state) | |
+| 101 | Tick "Changes what is measured" under one accommodation, reload | The construct-altering checkbox is still ticked | |
+| 102 | Untick the parent accommodation whose child was construct-altering, reload | The child checkbox clears immediately (construct_altering ⊆ allowed_accommodations) and stays cleared after the reload | |
+| 103 | Tick several accommodations in quick succession (rapid clicks) | Exactly one "Saved" settles at the end (not one per click); open the Network tab first — only one PATCH per quiet period fires, and its body carries only `allowed_accommodations` and `construct_altering` | |
+| 104 | Publish the assessment, then return to its Accommodations tab | The fieldset is disabled (locked); ticking has no effect and no PATCH fires | |
+| 105 | On a Draft, edit the assessment's name on the Settings tab WITHOUT clicking Save, switch to Accommodations and tick one, then reload the page | The tick persisted; the unsaved name edit did NOT persist (Settings Save no longer bundles the accommodation sets, and an unsaved Settings edit is never carried by a tick) | |
+| 106 | With an accommodation already ticked from row 105, go to Settings and click Save | The accommodation ticks are unchanged by the Settings save | |
+| 107 | Force an accommodations save to fail (e.g. simulate a network failure, or tick an id the API rejects if one is reachable) | The status line reads "Failed" with a message; ticking again afterward retries the save (no page reload needed) | |
+| 108 | Look at the Accommodations tab's action area | There is no "Save accommodations" button; the line "Changes save automatically." is present beside the status line | |
+

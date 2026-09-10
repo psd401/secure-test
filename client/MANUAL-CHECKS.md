@@ -1383,3 +1383,83 @@ is against the origin.
 | **Resume:** answer the essay, quit, relaunch, sign in, rejoin the same sitting | The essay text is restored (P-1) and the side-by-side page rebuilds; the open source starts at the first tab again (in memory only, by design) | ✅ 2026-09-09 pass 2 (simulated lockdown, fixture `… (accommodations)`): essay text restored on rejoin; first-tab state not called out |
 | Hand in from the side-by-side page's Review page | The hand-in succeeds; the teacher side shows the essay answer | ⚠️ half 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 16, fixture `Multi-source hand-run 2026-09-09`): hand-in confirmed (log: `attempt … handed in` → `lockdown ending: hand-in confirmed` → DID END); the teacher-side Results view of the essay was not opened |
 | **Real session** (no `SECURE_TEST_SIMULATE_LOCKDOWN`): repeat the tab clicks and one keyboard pass inside a real `AEAssessmentSession` | Same behaviour; no beep, no focus loss, and Cmd-E still ends the session | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 16, fixture `Multi-source hand-run 2026-09-09`) was the real session: tab clicks and the keyboard pass worked inside AAC; Cmd-E / Cmd-Q after hand-in were absorbed because the session was already ending on hand-in (8.3's deferred end — the log shows the two presses between end() and DID END), which is the designed order, not a fault |
+
+## Row S-f — multi-source follow-ups C-1 / C-2 / C-4 (2026-09-09)
+
+`docs/multi-source-stimulus-design.md` "Row S-f progress" (C-2, C-1, C-4; C-6
+and C-7 are design-tool-only / launcher-only and are not client rows). Client
+v1.2.0 candidate. Rebuild first — `cd client && xcodebuild -project
+SecureTest.xcodeproj -scheme SecureTest -destination 'platform=macOS' build`
+— and verify the built page carries the new code before starting:
+
+```
+find ~/Library/Developer/Xcode/DerivedData -name SecureTest.debug.dylib \
+  | xargs grep -ac 'renderMathIn\|layout-toggle\|image-overlay\|page load gate'
+```
+each should come back non-zero (the real code lives in the dylib; the outer
+binary is Xcode's launcher stub).
+
+**Fixture.** A fresh Published, **paged** assessment on `<origin>`, named
+`Row S-f hand-run 2026-09-09`: one item set, layout **Side by side**, with
+two sources — Source A's text includes the money prose `Costs rose from
+$57,600 to between $30,000–$120,000 a year.`, an escaped `\$5`, a real math
+run `$x^2 + 1$`, and a digit-start math run written `${5x+3}$`; Source B
+carries a `![chart](asset:…)` picture (a real image from the Images page, per
+the 2026-09-03 rule — never a hand-pasted base64) — over one essay whose stem
+also has a picture and a literal `$5x$`; one hotspot item with its own
+picture; one plain multiple-choice or short-text question outside the set.
+Build it from a file (`design-tool/samples/_build-client-rows-fixture.ts` is
+the pattern) and import it on `<origin>`, or author it directly in the editor
+and Publish. Re-run the one-day teacher-row script first so the demo
+student's roster row is current. `docs/design-tool-manual-checks.md` row 93
+checks the same fixture's stem/source text in the design tool first — a row
+below says "cross-reference" against that row number.
+
+Rows marked **real session** need the actual `AEAssessmentSession` — blank
+`SECURE_TEST_SIMULATE_LOCKDOWN` on the command line; **simulated** rows use
+it as usual. `SECURE_TEST_NO_FULLSCREEN=1` is now forwarded by the launcher
+(C-7) for the narrow rows — no manual env-var surgery needed.
+
+| Check | Expect | Result |
+|---|---|---|
+| Open Source A | `Costs rose from $57,600 to between $30,000–$120,000 a year.` renders with every `$` literal — none of the four dollar signs opens math | |
+| In the same source, find `\$5` | Renders as the literal text `$5` | |
+| In the same source, find `$x^2 + 1$` | Renders as math: x², properly spaced | |
+| In the same source, find `${5x+3}$` | Renders as math (the brace escape hatch for a digit-start expression) | |
+| Open the essay stem | `$5x$` renders as literal text `$5x$`, not math | |
+| Cross-reference: compare Source A's rendering here against the design tool's preview of the same set (row 93) | Both surfaces agree on which runs are money and which are math | |
+| Look for a `$$…$$` display block anywhere on the fixture (add one to Source A if none was authored) | Unchanged — still renders as a display equation | |
+| **Real session:** join, reach the side-by-side set | Two columns (source pane left, essay right), not the own_page passage-page fallback; before the page appears the student log shows `page load gate: opened` | |
+| **Simulated session:** same set | Same two-column layout; log shows `page load gate: opened` too | |
+| Across both passes, grep the student log for the backstop line | `page load gate: backstop after 5 s — building anyway` never appears in a normal run (the gate should open promptly, not time out) | |
+| Look at the two-column page | A `role="group"` toggle reads "Sources: Beside the question \| Above the question" sits above the split | |
+| Click "Above the question", then "Beside the question" | The source pane moves above the essay (the split gains `stacked`), then returns beside it | |
+| Under Color Contrast = Reverse Contrast, look at the toggle | The pressed button ("Beside" or "Above") is visibly distinguished (not colour alone) | |
+| Tab to the toggle group, then Tab again | Both buttons are reachable by Tab; Space or Enter on a focused button activates it | |
+| Set the toggle to "Above", turn to the next question with the pager, then back to the set's page | The "Above" choice is still in effect (in-memory, per set) | |
+| If the fixture has a second side-by-side set, set its toggle independently of the first | The two sets' toggle states do not affect each other | |
+| Type a few words into the essay box, then click the toggle | The typed text is untouched by toggling | |
+| **Narrow fallback:** join with `SECURE_TEST_NO_FULLSCREEN=1` and a window under ~1100 px | The set renders as a passage page + "Show the sources" disclosure, own_page style, with NO beside/above toggle | |
+| Force a failed begin: join with `SECURE_TEST_SIMULATE_LOCKDOWN=refuses` | The page still appears promptly once lockdown settles to `.idle` — the gate opens on `.idle`, not only `.active` | |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=slow` (finding 8.3: begin lands after 2 s) | The page appears only after DID BEGIN (~2 s, log `page load gate: opened`), not before — the backstop line does NOT appear (2 s < 5 s); the 5 s backstop itself has no simulator value and stays a unit-tested path | |
+| **Real session, C-4:** on the side-by-side page, pinch in on the trackpad | The page magnifies | |
+| Pinch further past 3× and let go | Magnification snaps back to 3× once the pinch settles (KVO clamp) — record whether KVO actually fires for a real pinch or only for the menu path | |
+| Press ⌘= three times from Actual Size | Magnification steps ×1.25 each press, capping at 3× (no further growth on a fourth press) | |
+| Press ⌘- from 3× | Steps back out ×1.25 per press toward 1× | |
+| Press ⌘0 | Returns to Actual Size (1×) from any zoom level | |
+| With the demo student's 1.5X zoom accommodation active, repeat ⌘= a few times | The page's own zoom and the pinch/menu zoom compose without breaking layout or scroll | |
+| On the entry / sign-in screen (before joining), check the Session menu | Actual Size, Zoom In, Zoom Out are all disabled | |
+| Click a picture inside a source | An overlay opens: the picture large, a caption reading "<source label> — <alt>", a Close button that is focused | |
+| Click a picture in the essay stem (not inside a source) | Overlay opens with the alt text alone as the caption (no source-label prefix) | |
+| Press Esc while the overlay is open | Closes; focus returns to the picture that opened it (visible focus ring) | |
+| Click the dark backdrop area of the overlay | Closes the overlay | |
+| Click the enlarged picture itself inside the overlay | Also closes the overlay | |
+| Press Enter, then separately Space, on a focused (not-yet-open) picture | Both open the overlay | |
+| Click the hotspot item's picture | It does NOT enlarge — no overlay opens, and the hotspot regions still respond to clicks for answering | |
+| Under Color Contrast = Reverse Contrast, open the overlay | The dark scrim and caption text stay readable | |
+| Under Color Contrast = Yellow on Blue, open the overlay | Same: scrim and caption readable | |
+| With the overlay open, press Tab repeatedly from Close | Focus is free to leave the dialog (not trapped) — record this as known/expected, not a bug | |
+| Open one picture's overlay, then click a different picture (e.g. the essay stem's) without closing first | The same one dialog swaps to the second picture rather than stacking a second dialog | |
+| Start dragging an order item (if the fixture has an order question), open an image overlay from elsewhere, close it with Esc, then press Esc again to cancel the drag | The order-drag's own Escape still cancels a drag after the overlay's Escape has been used once | |
+| VoiceOver (Cmd-F5, outside a session first per finding C-3 — dismiss Quick Start before joining) on the beside/above toggle group | Announces the group label "Where the sources appear" and each button with its pressed state | |
+| VoiceOver on an enlargeable picture and the overlay's Close button | The picture announces as a button with its enlarge label; opening the overlay moves focus to Close, which announces as a button | |
