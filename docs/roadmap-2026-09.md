@@ -96,7 +96,7 @@ Not a finding but recorded here: `client/MANUAL-CHECKS.md` Clear-answer row
 "Clear on a never-answered item" cannot be exercised — the button is
 disabled until a choice is made, by design.
 
-## Finding from the 2026-09-09 hand-run (James: "add the delete-draft slice to the roadmap")
+## Finding from the 2026-09-09 hand-run (James: "add the delete-draft slice to the roadmap") — **widened 2026-09-09 to delete draft + archive assessments and test sessions; `docs/archive-and-delete-design.md` is the record (D-1…D-4, slices 0–4)**
 
 | Finding | What | Where | Size |
 |---|---|---|---|
