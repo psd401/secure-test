@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The Keychain-backed store this replaces is purged at launch.
     private let tokens = InMemoryTokenStore()
     private var lockdown: AssessmentLockdown?
+    /// C-1: this attempt's page-load gate, opened when the lockdown session
+    /// settles. One per `showAssessment`; nil on the offline path.
+    private var pageLoadGate: PageLoadGate?
     /// AAC-2b: set from each loaded bundle's accommodations before its
     /// beginLockdown(); read by makeSession per begin(). Restrictive until a
     /// bundle says otherwise.
@@ -376,6 +379,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             peekResponder = nil
         }
         attemptHandedIn = false
+        // C-1 (docs/multi-source-stimulus-design.md): one gate per attempt, set
+        // on the controller BEFORE its fetch Task gets to run, so the page
+        // builds after the AAC begin() transition has finished resizing the
+        // window rather than during it. The offline path gets none. The student
+        // sees the "Loading your test…" notice while it is shut.
+        let gate = isServerDelivered ? PageLoadGate() : nil
+        pageLoadGate = gate
+        controller.pageLoadGate = gate
         controller.onBundleLoaded = { [weak self] bundle in
             self?.setClipboardAllowed(bundle.allowClipboard)
             // AAC-2b: resolve this attempt's session knobs before the begin
@@ -385,6 +396,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // offline --bundle path — that one exists to look at the renderer.
             if isServerDelivered {
                 self?.beginLockdown()
+            } else {
+                // C-1: no begin, so nothing will ever settle — never hold the
+                // page for the backstop's sake.
+                self?.openPageLoadGate()
             }
         }
         controller.onBackToTests = { [weak self] in
@@ -534,6 +549,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginLockdown() {
         if lockdown == nil { lockdown = makeLockdown() }
         lockdown?.begin()
+        // C-1: begin() is a no-op while a session is already up, and a
+        // cooperative session can be `.active` by the time it returns — in both
+        // cases no further state change is coming, so nothing else would open
+        // the gate.
+        if lockdown?.state != .starting { openPageLoadGate() }
+    }
+
+    /// C-1: releases the page build. Idempotent in the gate itself, so every
+    /// settled state can call it.
+    private func openPageLoadGate() {
+        guard let gate = pageLoadGate else { return }
+        Task { await gate.open() }
     }
 
     private func endLockdown(reason: String) {
@@ -543,6 +570,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func lockdownStateChanged(_ state: AssessmentLockdown.State) {
+        // C-1: `.active` is the state the page build is waiting for, and
+        // `.idle` here is the settled aftermath of a begin that failed, was
+        // interrupted, or ended — every one of them means no resize is coming,
+        // so a failed begin must never hold the page for the full backstop.
+        // `.starting` is the one state that keeps it shut.
+        if state != .starting { openPageLoadGate() }
         switch state {
         case .idle:
             endSessionItem?.isEnabled = false

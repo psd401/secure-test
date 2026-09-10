@@ -83,6 +83,14 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// UX pass 2: the page asked to go back to "Your tests" (post-hand-in).
     var onBackToTests: (() -> Void)?
 
+    /// C-1 (`docs/multi-source-stimulus-design.md`): the page build waits on
+    /// this before it reads the viewport width, because `onBundleLoaded` begins
+    /// lockdown and the AAC transition is still resizing the window at that
+    /// moment. Set by the host immediately after `init`, which is before the
+    /// fetch Task gets to run; nil (the offline path, and any host that does not
+    /// lock down) means no wait at all.
+    var pageLoadGate: PageLoadGate?
+
     /// Where the assessment comes from. `.file` keeps the offline path that
     /// slice 53 established — it is the only way to look at the renderer in this
     /// environment — while `.server` is the real one. The file URL is whatever
@@ -154,6 +162,20 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     self.bundle = bundle
                     self.log("bundle fetched: \(bundle.items.count) items")
                     self.onBundleLoaded?(bundle)
+                    // C-1: `onBundleLoaded` is what begins lockdown, and the
+                    // AAC begin() transition resizes the window — so build the
+                    // page only once the session has settled, or the renderer's
+                    // one-shot width read takes a `side_by_side` set to the
+                    // own_page fallback. The student sees the "Loading your
+                    // test…" notice meanwhile. The backstop means a session
+                    // that never answers delays the test rather than swallowing
+                    // it; the offline path passes no gate and never waits.
+                    if let gate = self.pageLoadGate {
+                        let opened = await gate.wait(timeout: .seconds(5))
+                        self.log(opened
+                            ? "page load gate: opened"
+                            : "page load gate: backstop after 5 s — building anyway")
+                    }
                     self.loadHostPage(AssessmentPage.html(title: bundle.title, bundleJSON: json))
                 } catch {
                     // Refusing beats rendering a partial test: a student handed

@@ -234,6 +234,25 @@ public enum AssessmentPage {
       .side-by-side { display: block; }
       .side-by-side > .side-source, .side-by-side > .side-questions { max-height: none; overflow: visible; }
     }
+    /* C-1 (2026-09-09, docs/multi-source-stimulus-design.md): the student's own
+       choice of where the sources sit. `stacked` is deliberately the SAME
+       collapse the query above performs — "above the question" is the narrow
+       presentation, asked for rather than forced — duplicated instead of joined
+       to it because the query's rules must stay conditional on the width and
+       these must not. The toggle takes `.drawing-controls button` /
+       `.pager-strip button` treatment: tokens and rem only, so the eight
+       contrast sets and the nine zoom levels (batch 4) reach it for free. */
+    .side-by-side.stacked { display: block; }
+    .side-by-side.stacked > .side-source, .side-by-side.stacked > .side-questions { max-height: none; overflow: visible; }
+    .layout-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem; }
+    .layout-toggle-label { font-size: 0.8125rem; color: var(--ink-soft); }
+    .layout-toggle button {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .layout-toggle button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .layout-toggle button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* E7(b): a short-text answer typed as a formula previews as rendered math. */
     .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: var(--ink); }
@@ -2699,6 +2718,11 @@ public enum AssessmentPage {
         var total = ITEMS.length;
         var pages = [];
         var setPages = {};   // set id → the page an inline set's members share
+        // C-1 (2026-09-09): set id → the student put this set's sources ABOVE
+        // the question. In memory only, and never read at build time: the page
+        // DOM persists across page turns, so the choice survives without
+        // anything being rebuilt, and a relaunch reasonably starts over.
+        var stackedSets = {};
 
         function newPage(kind, label, short) {
           var el = document.createElement('section');
@@ -2723,6 +2747,41 @@ public enum AssessmentPage {
         function layoutOf(set) {
           if (set.layout === 'side_by_side') return WIDE ? 'side_by_side' : 'own_page';
           return set.layout === 'own_page' ? 'own_page' : 'inline';
+        }
+
+        // C-1 (2026-09-09): the two-button group that moves one set's sources
+        // between the left column and above the question. A group rather than a
+        // single toggle so both destinations are named on screen (James); the
+        // pressed one carries aria-pressed="true", which is also what the CSS
+        // fills. Nothing is rebuilt — the class on the split is the whole
+        // change, so no answer, no stroke and no caret is disturbed.
+        function layoutToggle(setId, split) {
+          var group = document.createElement('div');
+          group.className = 'layout-toggle';
+          group.setAttribute('role', 'group');
+          group.setAttribute('aria-label', 'Where the sources appear');
+          var label = document.createElement('span');
+          label.className = 'layout-toggle-label';
+          label.textContent = 'Sources:';
+          group.appendChild(label);
+          var beside = document.createElement('button');
+          var above = document.createElement('button');
+          var paint = function () {
+            var stacked = !!stackedSets[setId];
+            split.className = stacked ? 'side-by-side stacked' : 'side-by-side';
+            beside.setAttribute('aria-pressed', stacked ? 'false' : 'true');
+            above.setAttribute('aria-pressed', stacked ? 'true' : 'false');
+          };
+          beside.type = 'button';
+          beside.textContent = 'Beside the question';
+          beside.onclick = function () { stackedSets[setId] = false; paint(); };
+          above.type = 'button';
+          above.textContent = 'Above the question';
+          above.onclick = function () { stackedSets[setId] = true; paint(); };
+          group.appendChild(beside);
+          group.appendChild(above);
+          paint();
+          return group;
         }
 
         function rangeOf(set) {
@@ -2766,6 +2825,10 @@ public enum AssessmentPage {
                 right.className = 'side-questions';
                 split.appendChild(left);
                 split.appendChild(right);
+                // C-1: the student's own "beside / above" choice, above the
+                // split it governs. Only a real two-column page gets one — the
+                // narrow fallback is already the stacked presentation.
+                shared.el.appendChild(layoutToggle(opener.id, split));
                 shared.el.appendChild(split);
                 shared.body = right;
               } else {

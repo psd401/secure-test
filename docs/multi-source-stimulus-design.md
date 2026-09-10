@@ -537,6 +537,25 @@ next launcher touch. The next client release should carry C-1 and C-2.
   text until rewritten. Tests: design-tool 1379 (+13), client 539 (+10,
   `RendererMathPassTests` incl. the real vendored KaTeX in a JSContext
   through the harness's prelude). Rows: not yet written (rows slice next).
+- **C-1 BUILT 2026-09-09.** Cause confirmed in code: `onBundleLoaded`
+  begins lockdown BEFORE the controller loads the page, so the build
+  always ran during the AAC `begin()` resize. Part 1: a Core
+  `PageLoadGate` actor; the controller awaits it between the bundle
+  fetch and `loadHostPage` (5 s backstop, James 2.1, logged either way;
+  the "Loading your test…" notice is what shows meanwhile); the app opens
+  it on every lockdown state except `.starting` (`.active`, and `.idle`
+  = the settled aftermath of a failed / interrupted / ended begin), when
+  `begin()` did not take, and at once on the offline path (no gate).
+  `WIDE` is still read once at build — it now reads the settled width.
+  Part 2: every side_by_side page carries a two-button group (James 2.2)
+  "Sources: Beside the question | Above the question" (`role=group`,
+  `aria-pressed`); "Above" adds `stacked` to the split, which is the
+  media query's collapse applied on request; per set, in memory, survives
+  page turns because the page DOM persists; narrow builds (own_page
+  fallback) get no toggle and keep the passage page + disclosure. Tests:
+  client 548 (+9: `PageLoadGateTests`, `RendererLayoutToggleTests`).
+  NOT provable headlessly: that the deferred build reads the
+  post-transition width — needs a real AAC session (rows slice).
 
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
