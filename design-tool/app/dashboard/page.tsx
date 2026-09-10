@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
 import { assessments, attempts, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
 import { AcceptShareButton } from "@/components/app/AcceptShareButton";
+import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { closesAt, formatDate, plural } from "@/lib/ui/format";
@@ -35,20 +36,40 @@ export const metadata: Metadata = { title: "Assessments" };
  * strip above the list with the code and a Monitor link — until this slice
  * neither sessions nor the monitor were reachable from here at all.
  */
-export default async function DashboardPage() {
+interface PageProps {
+  searchParams: Promise<{ archived?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: PageProps) {
   const session = await readStaffSessionFromCookies();
   if (!session) {
     redirect("/login?next=/dashboard");
   }
 
+  // D-4 (docs/archive-and-delete-design.md): a server component, so the
+  // archived/live views are two page loads (`?archived=1`) rather than
+  // client state — the same split as GET /api/assessments.
+  const { archived: archivedParam } = await searchParams;
+  const showArchived = archivedParam === "1";
+
   const db = getDb();
   const now = new Date();
-  const [rows, openSessions, questionCounts, attemptCounts] = await Promise.all([
+  const [rows, archivedCount, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
       .from(assessments)
-      .where(eq(assessments.owner_sub, session.sub))
+      .where(
+        and(
+          eq(assessments.owner_sub, session.sub),
+          showArchived ? isNotNull(assessments.archived_at) : isNull(assessments.archived_at),
+        ),
+      )
       .orderBy(desc(assessments.updated_at)),
+    db
+      .select({ n: count() })
+      .from(assessments)
+      .where(and(eq(assessments.owner_sub, session.sub), isNotNull(assessments.archived_at)))
+      .then((r) => r[0]?.n ?? 0),
     // Same predicate as GET /api/test-sessions (owner) narrowed to sessions
     // whose window is still running — the monitor's own definition of open.
     db
@@ -162,12 +183,18 @@ export default async function DashboardPage() {
       {rows.length === 0 ? (
         <EmptyState
           icon={<FilePlus2 />}
-          title="No assessments yet"
-          description="Create one to start adding questions, or import a file you exported earlier."
+          title={showArchived ? "No archived assessments." : "No assessments yet"}
+          description={
+            showArchived
+              ? undefined
+              : "Create one to start adding questions, or import a file you exported earlier."
+          }
           action={
-            <Button asChild>
-              <Link href="/dashboard/new">New assessment</Link>
-            </Button>
+            showArchived ? undefined : (
+              <Button asChild>
+                <Link href="/dashboard/new">New assessment</Link>
+              </Button>
+            )
           }
         />
       ) : (
@@ -180,7 +207,7 @@ export default async function DashboardPage() {
                 <TableHead className="text-right">Questions</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead className="text-right">
-                  <span className="sr-only">Results</span>
+                  <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -205,6 +232,11 @@ export default async function DashboardPage() {
                             Open session · <span className="font-mono">{code}</span>
                           </Badge>
                         ) : null}
+                        {/* D-2 / D-4 (docs/archive-and-delete-design.md): the
+                            archived view's own badge — a timestamp rather than
+                            a status change, so unarchiving restores the row
+                            exactly. */}
+                        {a.archived_at ? <Badge variant="neutral">Archived {formatDate(a.archived_at)}</Badge> : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -216,14 +248,18 @@ export default async function DashboardPage() {
                     {/* R1 (docs/reporting-design.md): until this the results
                         matrix was reachable only from inside the editor, which
                         is the wrong place to look for "how did they do?".
-                        Published only — a draft has no attempts to report on. */}
+                        Published only — a draft has no attempts to report on.
+                        D-4: an archived row drops the Results shortcut — it's
+                        still reachable from the editor, this list just stops
+                        offering it as a live action. */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {a.status === "published" ? (
+                        {!a.archived_at && a.status === "published" ? (
                           <Button asChild variant="outline" size="sm">
                             <Link href={`/dashboard/${a.id}/results`}>Results</Link>
                           </Button>
                         ) : null}
+                        <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
                         {/* D-1 / D-4: a row action beside Results, same
                             disabled-and-noted posture as the editor's
                             Settings-tab Delete draft. */}
@@ -243,6 +279,22 @@ export default async function DashboardPage() {
           </Table>
         </div>
       )}
+
+      {/* D-4: the two lists partition the teacher's assessments; the count
+          hides the link once there is nothing archived to switch to. */}
+      {showArchived ? (
+        <p className="text-sm">
+          <Link href="/dashboard" className="text-muted-foreground hover:underline">
+            Hide archived
+          </Link>
+        </p>
+      ) : archivedCount > 0 ? (
+        <p className="text-sm">
+          <Link href="/dashboard?archived=1" className="text-muted-foreground hover:underline">
+            Show archived ({archivedCount})
+          </Link>
+        </p>
+      ) : null}
     </main>
   );
 }

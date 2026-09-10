@@ -91,6 +91,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
             []) as string[],
           construct_altering: (assessment.construct_altering ?? []) as string[],
           attempt_count: attemptCountRow?.n ?? 0,
+          archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
         }}
         initialItems={itemRows.map((r) => ({
           id: r.id,

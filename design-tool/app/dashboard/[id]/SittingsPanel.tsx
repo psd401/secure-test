@@ -49,7 +49,7 @@ import {
   sessionState,
 } from "@/components/app/StatusBadge";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
-import { closesAt, formatWhen } from "@/lib/ui/format";
+import { closesAt, formatDate, formatWhen } from "@/lib/ui/format";
 import {
   LIVE_INTERVAL_MS,
   ago,
@@ -89,6 +89,8 @@ interface Sitting {
   created_at: string;
   section_ps_id: string | null;
   student_ps_ids: string[] | null;
+  /** D-2 (docs/archive-and-delete-design.md): null = live. */
+  archived_at: string | null;
 }
 
 interface Attendance {
@@ -108,6 +110,8 @@ interface Props {
   assessmentName: string;
   /** Sittings can only be created on a published assessment (server-enforced). */
   isPublished: boolean;
+  /** D-2 / D-3 (docs/archive-and-delete-design.md): hides the create form — nothing new can start on an archived assessment. */
+  archived?: boolean;
   /** UX pass 1, slice 4 (A-10): opens the editor's Publish dialog from the draft notice. */
   onPublish?: () => void;
 }
@@ -155,10 +159,22 @@ function describe(e: unknown): string {
   return copy.showCode ? `${copy.message} ${code}` : copy.message;
 }
 
-export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPublish }: Props) {
+export function SittingsPanel({
+  assessmentId,
+  assessmentName,
+  isPublished,
+  archived = false,
+  onPublish,
+}: Props) {
   const [sections, setSections] = useState<Section[]>([]);
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
   const [sittings, setSittings] = useState<Sitting[]>([]);
+  // D-2 / D-4 (docs/archive-and-delete-design.md): both lists are fetched
+  // whenever either could have changed, so the toggle's count is known
+  // without a round trip when the teacher clicks it — simpler than a
+  // partition-in-place scheme over one combined fetch.
+  const [archivedSittings, setArchivedSittings] = useState<Sitting[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   // Explicit load state (SM-04): a failed first fetch shows an error with
@@ -188,6 +204,17 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
     setSittings(body.test_sessions);
   }, [assessmentId]);
 
+  // D-2 / D-4: the archived list, fetched alongside the live one so the
+  // toggle's "(n)" is known before it is ever clicked.
+  const loadArchivedSittings = useCallback(async () => {
+    const res = await fetch(`/api/test-sessions?assessment_id=${assessmentId}&archived=1`, {
+      signal: AbortSignal.timeout(FIRST_LOAD_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await readError(res);
+    const body = (await res.json()) as { test_sessions: Sitting[] };
+    setArchivedSittings(body.test_sessions);
+  }, [assessmentId]);
+
   const loadAll = useCallback(async () => {
     // Breadcrumb for the stall investigation: a stuck "Loading" with this
     // line present in the console means the fetch hung; absent means the
@@ -203,13 +230,13 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
       const secBody = (await secRes.json()) as { sections: Section[] };
       setSections(secBody.sections);
       setSectionPsId((prev) => prev || (secBody.sections[0]?.ps_id ?? ""));
-      await loadSittings();
+      await Promise.all([loadSittings(), loadArchivedSittings()]);
       setLoadState("ready");
     } catch (err) {
       setLoadError(describe(err));
       setLoadState("error");
     }
-  }, [loadSittings]);
+  }, [loadSittings, loadArchivedSittings]);
 
   useEffect(() => {
     void loadAll();
@@ -276,6 +303,8 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveId]);
+
+  const displayedSittings = showArchived ? archivedSittings : sittings;
 
   const sectionById = useMemo(() => {
     const m = new Map<string, Section>();
@@ -344,6 +373,35 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
     }
   }
 
+  // D-2 (docs/archive-and-delete-design.md): archive/unarchive one sitting.
+  // Reversible, so no confirm dialog, unlike Close. 409 session_open reuses
+  // the panel's existing actionError channel — the same rule Close applies.
+  async function toggleArchiveSitting(s: Sitting) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/test-sessions/${s.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ archived: s.archived_at === null }),
+      });
+      if (!res.ok) {
+        const err = await readError(res);
+        if (err.code === "session_open") {
+          setActionError("Close the session first.");
+          return;
+        }
+        throw err;
+      }
+      setNow(Date.now());
+      await Promise.all([loadSittings(), loadArchivedSittings()]);
+    } catch (err) {
+      setActionError(describe(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadAttendance(id: string) {
     try {
       const res = await fetch(`/api/test-sessions/${id}/attendance`);
@@ -406,7 +464,14 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
         <CardContent className="space-y-4">
           <h3 className="text-lg font-semibold">Start a test session</h3>
 
-          {!isPublished ? (
+          {/* D-2 / D-3 (docs/archive-and-delete-design.md): nothing new can
+              start on an archived assessment (server-enforced, 409
+              `archived`) — the form doesn't even get the chance to try. */}
+          {archived ? (
+            <p className="text-sm text-muted-foreground">
+              This assessment is archived. Unarchive it on the Settings tab to start a session.
+            </p>
+          ) : !isPublished ? (
             <Alert variant="warning">
               <AlertTitle>Publish the assessment to start a test session.</AlertTitle>
               <AlertDescription>
@@ -423,7 +488,7 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
             </Alert>
           ) : null}
 
-          {sections.length === 0 ? (
+          {!archived && sections.length === 0 ? (
             <Alert variant="warning">
               <AlertTitle>Your class list hasn&apos;t arrived from PowerSchool yet.</AlertTitle>
               <AlertDescription>
@@ -434,6 +499,8 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
             </Alert>
           ) : null}
 
+          {archived ? null : (
+          <>
           <fieldset className="space-y-2" disabled={!isPublished || sections.length === 0}>
             <legend className="text-sm font-medium">Who is it for?</legend>
             <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -550,38 +617,61 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
             <PlayCircle aria-hidden />
             {busy ? "Starting…" : "Start session"}
           </Button>
+          </>
+          )}
         </CardContent>
       </Card>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Test sessions ({sittings.length})</h3>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => loadSittings().catch((e) => setActionError(describe(e)))}
-          >
-            Refresh
-          </Button>
+          <h3 className="text-lg font-semibold">Test sessions ({displayedSittings.length})</h3>
+          <span className="flex gap-2">
+            {/* D-2 / D-4: the same toggle shape as the Assessments home —
+                the count is known from the load-time fetch, not a guess. */}
+            {archivedSittings.length > 0 || showArchived ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowArchived((prev) => !prev)}
+              >
+                {showArchived ? "Hide archived" : `Show archived (${archivedSittings.length})`}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                Promise.all([loadSittings(), loadArchivedSittings()]).catch((e) =>
+                  setActionError(describe(e)),
+                )
+              }
+            >
+              Refresh
+            </Button>
+          </span>
         </div>
 
-        {sittings.length === 0 ? (
+        {displayedSittings.length === 0 ? (
           <EmptyState
             icon={<PlayCircle />}
-            title="No test sessions yet"
+            title={showArchived ? "No archived test sessions." : "No test sessions yet"}
             description={
-              isPublished
-                ? "Start one above. Students open Secure Test and enter the code you read out."
-                : "Publish the assessment, then start a session — students join with a code you read out."
+              showArchived
+                ? undefined
+                : isPublished
+                  ? "Start one above. Students open Secure Test and enter the code you read out."
+                  : "Publish the assessment, then start a session — students join with a code you read out."
             }
           />
         ) : (
           <ul className="space-y-3">
-            {sittings.map((s) => {
+            {displayedSittings.map((s) => {
               const state = sessionState(s, now);
               const open = state === "open";
+              const archived = s.archived_at !== null;
               const att = attendance[s.id];
               return (
                 <li key={s.id}>
@@ -597,15 +687,25 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
                               ? closesAt(s.expires_at, new Date(now))
                               : `Started ${formatWhen(s.created_at, new Date(now))}`}
                           </span>
+                          {/* D-2 / D-4: a timestamp, not a status change —
+                              unarchiving restores the row exactly. */}
+                          {s.archived_at ? (
+                            <span className="text-sm text-muted-foreground">
+                              Archived {formatDate(s.archived_at)}
+                            </span>
+                          ) : null}
                         </div>
                         <span className="flex shrink-0 flex-wrap gap-2">
-                          {open ? (
+                          {/* D-4: an archived sitting drops Show code / Monitor
+                              / Close — nothing new can join it and there is
+                              nothing left to close. Attendance stays. */}
+                          {!archived && open ? (
                             <Button type="button" variant="outline" size="sm" onClick={() => setShowCode(s)}>
                               <Presentation aria-hidden />
                               Show code
                             </Button>
                           ) : null}
-                          {open ? (
+                          {!archived && open ? (
                             <Button asChild size="sm">
                               <Link href={`/dashboard/${assessmentId}/monitor/${s.id}`}>
                                 <Monitor aria-hidden />
@@ -622,7 +722,7 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
                           >
                             {expanded === s.id ? "Hide attendance" : "Attendance"}
                           </Button>
-                          {open ? (
+                          {!archived && open ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -631,6 +731,32 @@ export function SittingsPanel({ assessmentId, assessmentName, isPublished, onPub
                               onClick={() => setPendingClose(s)}
                             >
                               Close session
+                            </Button>
+                          ) : null}
+                          {/* D-2: Archive on a closed/expired live row, in the
+                              same slot Close session occupies while open;
+                              Unarchive on an archived one. Reversible, so no
+                              confirm dialog. */}
+                          {!archived && !open ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void toggleArchiveSitting(s)}
+                            >
+                              Archive
+                            </Button>
+                          ) : null}
+                          {archived ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void toggleArchiveSitting(s)}
+                            >
+                              Unarchive
                             </Button>
                           ) : null}
                         </span>

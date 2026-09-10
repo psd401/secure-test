@@ -362,11 +362,52 @@ describe("the Assessments list", () => {
       .returning();
 
     const { default: DashboardPage } = await import("../app/dashboard/page");
-    const html = renderToStaticMarkup(await DashboardPage());
+    const html = renderToStaticMarkup(
+      await DashboardPage({ searchParams: Promise.resolve({}) }),
+    );
 
     expect(html).toContain(`/dashboard/${published!.id}/results`);
     expect(html).toContain(">Results</a>");
     expect(html).not.toContain(`/dashboard/${draft!.id}/results`);
+  });
+
+  // D-4 (docs/archive-and-delete-design.md): the two lists partition the
+  // teacher's assessments — the default view never shows an archived row,
+  // and ?archived=1 shows only them.
+  test("archived assessments are hidden by default and shown on ?archived=1", async () => {
+    const db = getDb();
+    const [live] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Live one", status: "draft" })
+      .returning();
+    const [archived] = await db
+      .insert(assessments)
+      .values({
+        owner_sub: OWNER,
+        name: "Archived one",
+        status: "draft",
+        archived_at: new Date("2026-09-05T00:00:00Z"),
+      })
+      .returning();
+
+    const { default: DashboardPage } = await import("../app/dashboard/page");
+
+    const defaultHtml = renderToStaticMarkup(
+      await DashboardPage({ searchParams: Promise.resolve({}) }),
+    );
+    expect(defaultHtml).toContain(live!.name);
+    expect(defaultHtml).not.toContain(archived!.name);
+    expect(defaultHtml).toContain("Show archived (1)");
+    expect(defaultHtml).not.toContain("Hide archived");
+
+    const archivedHtml = renderToStaticMarkup(
+      await DashboardPage({ searchParams: Promise.resolve({ archived: "1" }) }),
+    );
+    expect(archivedHtml).toContain(archived!.name);
+    expect(archivedHtml).not.toContain(live!.name);
+    expect(archivedHtml).toContain("Archived");
+    expect(archivedHtml).toContain("Hide archived");
+    expect(archivedHtml).not.toContain("Show archived");
   });
 });
 

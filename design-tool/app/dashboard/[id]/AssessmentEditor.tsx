@@ -143,6 +143,8 @@ interface AssessmentView {
   construct_altering: string[];
   /** D-1 (docs/archive-and-delete-design.md): governs the Settings-tab Delete draft action. */
   attempt_count: number;
+  /** D-2 / D-3: null = live. ISO string, or null. */
+  archived_at: string | null;
 }
 
 // E5 slice 1: a stimulus (passage / figure / data) shared by the contiguous
@@ -613,6 +615,13 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
   const [deleteDraftOpen, setDeleteDraftOpen] = useState(false);
   const [deletingDraft, setDeletingDraft] = useState(false);
   const [deleteDraftError, setDeleteDraftError] = useState<string | null>(null);
+  // D-2 / D-3: Settings-tab "Archive" / "Unarchive". Tracked locally (not
+  // derived from `assessment`, which never changes) and updated from the
+  // PATCH response — archiving is not a publish-lock state, so it needs its
+  // own source of truth the way `isLocked` reads the persisted status.
+  const [archivedAt, setArchivedAt] = useState<string | null>(assessment.archived_at);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   // UX pass 1, slice 5 (A-05..A-08): the list is authoritative on the client.
   // Each card is compared with its last persisted snapshot for "Unsaved
@@ -953,6 +962,31 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       setDeleteDraftError(describe(new ApiError("network", 0)));
     } finally {
       setDeletingDraft(false);
+    }
+  }
+
+  // D-2 / D-3: Archive is NOT disabled by the publish lock — archiving a
+  // Published assessment is allowed, since it changes no content the lock
+  // protects. Same 409 session_open guard as the sitting archive.
+  async function toggleArchive() {
+    setArchiveBusy(true);
+    setArchiveError(null);
+    try {
+      const res = await call(apiBase, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ archived: archivedAt === null }),
+      });
+      const body = (await res.json()) as { assessment?: { archived_at?: string | null } };
+      setArchivedAt(body.assessment?.archived_at ?? null);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "session_open") {
+        setArchiveError("Close its open test session first.");
+      } else {
+        setArchiveError(describe(e));
+      }
+    } finally {
+      setArchiveBusy(false);
     }
   }
 
@@ -1406,7 +1440,14 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
         <PageHeader
           crumbs={[{ label: "Assessments", href: "/dashboard" }]}
           title={assessment.name}
-          status={<AssessmentStatusBadge status={assessment.status} />}
+          status={
+            <>
+              <AssessmentStatusBadge status={assessment.status} />
+              {/* D-2 / D-3: a status change never happens on archive — this
+                  badge is the only thing that says so at a glance. */}
+              {archivedAt ? <Badge variant="neutral">Archived</Badge> : null}
+            </>
+          }
           description={assessment.description || undefined}
           actions={
             <>
@@ -1563,6 +1604,28 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
             Save settings
           </Button>
           <StatusLine state={settingsSave} />
+        </div>
+
+        {/* D-2 / D-3: NOT gated by isLocked — archiving a Published
+            assessment is allowed, since it changes no content the publish
+            lock protects. */}
+        <div className="border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void toggleArchive()}
+            disabled={archiveBusy}
+          >
+            {archiveBusy ? (archivedAt ? "Unarchiving…" : "Archiving…") : archivedAt ? "Unarchive" : "Archive"}
+          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Archived assessments leave the list; sessions, attempts and results are kept.
+          </p>
+          {archiveError ? (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {archiveError}
+            </p>
+          ) : null}
         </div>
 
         {/* D-1 (docs/archive-and-delete-design.md): a draft with attempts on it
@@ -2818,6 +2881,7 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
           assessmentId={assessment.id}
           assessmentName={assessment.name}
           isPublished={assessment.status === "published"}
+          archived={archivedAt !== null}
           onPublish={() => setPublishOpen("publish")}
         />
       </TabsContent>
