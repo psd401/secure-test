@@ -96,6 +96,12 @@ Not a finding but recorded here: `client/MANUAL-CHECKS.md` Clear-answer row
 "Clear on a never-answered item" cannot be exercised — the button is
 disabled until a choice is made, by design.
 
+## Finding from the 2026-09-09 hand-run (James: "add the delete-draft slice to the roadmap")
+
+| Finding | What | Where | Size |
+|---|---|---|---|
+| **No way to delete an assessment from the UI** | `DELETE /api/assessments/[id]` exists (owner-only; `requireDraft` 409s on a Published row, so "Unpublish, then delete" is the path), but neither the Assessments list nor the editor offers it — every hand-run cleanup so far has gone through the route from the browser console. Slice: a **"Delete draft"** action on the editor's Settings tab (Draft only; hidden or disabled with a note on a Published row; a confirm dialog naming the assessment and its question count; on 204 route to the list). No route change, no migration; one editor test for the disabled state. | design tool — `AssessmentEditor.tsx` Settings tab; the route already carries the guard | XS — Sonnet 5 / medium, rides the next design-tool deploy |
+
 ## Finding from the 2026-09-07 signed-build run (James: "put a delete path on our roadmap") — **BUILT 2026-09-08** (see `docs/reporting-design.md` §Progress; rows 75–78 in `docs/design-tool-manual-checks.md` unrun)
 
 | Finding | What | Where | Size |
