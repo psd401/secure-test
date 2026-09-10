@@ -24,7 +24,12 @@ export function ArchiveAssessmentButton({ id, archived }: { id: string; archived
         body: JSON.stringify({ archived: !archived }),
       });
       if (res.ok) {
-        window.location.reload();
+        // A-2 (docs/archive-and-delete-design.md): an unarchive from the
+        // archived view (?archived=1) would reload onto an empty archived
+        // page — land on the live list instead, where the row now is.
+        // Archiving reloads the current view so the live list re-renders.
+        if (archived) window.location.assign("/dashboard");
+        else window.location.reload();
         return;
       }
       const body = (await res.json().catch(() => ({}))) as { error?: unknown };

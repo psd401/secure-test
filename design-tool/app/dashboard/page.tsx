@@ -10,7 +10,7 @@ import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
-import { closesAt, formatDate, plural } from "@/lib/ui/format";
+import { closesAt, formatDate } from "@/lib/ui/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -239,8 +239,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         {a.archived_at ? <Badge variant="neutral">Archived {formatDate(a.archived_at)}</Badge> : null}
                       </div>
                     </TableCell>
+                    {/* A-1 (docs/archive-and-delete-design.md): the bare
+                        number — the header says "Questions"; with three row
+                        actions the "N questions" copy pushed the table past
+                        the card and hid Delete behind a horizontal scroll. */}
                     <TableCell className="text-right tabular-nums">
-                      {plural(questionsFor.get(a.id) ?? 0, "question")}
+                      {questionsFor.get(a.id) ?? 0}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(a.updated_at)}
