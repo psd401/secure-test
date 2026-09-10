@@ -260,3 +260,15 @@ v1.0.0. Hand-install on a district Mac from this pkg closes batch 2.
 `/releases/latest/download/SecureTest-1.1.0.pkg` → 302). Installomator's
 `/releases/latest` now serves 1.1.0. Still open: the hand-install row on a
 district Mac (batch 2's last), and IT's fleet scope.
+
+**v1.2.0 PREPARED 2026-09-09 evening** — `MARKETING_VERSION` 1.2.0 in both
+configurations (this commit is the bump; archive from it so About shows
+`1.2.0 (<sha>)`), `swift test` 568 / `xcodebuild` green after the bump.
+Contents since v1.1.0 (`0e52d02`): multi-source stimulus slice 4 (sources
+pane, side_by_side), row S-f C-1 / C-2 / C-4 / C-7 (page-load gate +
+Beside / Above toggle, money never math + the client's own math pass,
+pinch + ⌘0 / ⌘= / ⌘- + click-to-enlarge, launcher pass-through), math
+keypad (4b slice 1b), drawing tools (4c slices 1–2). All hand-run at least
+once (client/MANUAL-CHECKS.md; S-f 27/41, multi-source 18/22). The one-line
+release note sits with James for `gh release create` (v1.1.0's shape).
+Steps from here are by hand per `client/RELEASING.md`.

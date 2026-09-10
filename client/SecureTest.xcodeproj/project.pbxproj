@@ -316,7 +316,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				CODE_SIGN_ENTITLEMENTS = SecureTest/SecureTest.entitlements;
 				/* AAC-2a (2026-08-27) -> real App ID (2026-09-03): the client signed against
 				   PoC-A's App ID while James's portal role could not create this one or enable
@@ -386,7 +386,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				CODE_SIGN_ENTITLEMENTS = SecureTest/SecureTest.entitlements;
 				/* AAC-2a (2026-08-27) -> real App ID (2026-09-03): the client signed against
 				   PoC-A's App ID while James's portal role could not create this one or enable
