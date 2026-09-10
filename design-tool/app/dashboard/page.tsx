@@ -216,8 +216,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 const code = openCodeFor.get(a.id);
                 return (
                   <TableRow key={a.id}>
+                    {/* A-1: the name is the elastic column — block + truncate
+                        so a long name shortens (full name in the title)
+                        instead of pushing the actions past the card edge. */}
                     <TableCell className="max-w-md">
-                      <Link href={`/dashboard/${a.id}`} className="font-medium hover:underline">
+                      <Link
+                        href={`/dashboard/${a.id}`}
+                        className="block truncate font-medium hover:underline"
+                        title={a.name}
+                      >
                         {a.name}
                       </Link>
                       {a.description ? (
