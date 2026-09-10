@@ -3,6 +3,15 @@ import { needsAnswerKey } from "./readiness";
 
 import { useState } from "react";
 
+// S-f-1 (docs/multi-source-stimulus-design.md, Row S-f sitting 2026-09-09):
+// the importer writes money as `\$57,600` so the renderers never open math
+// on it (C-2), but this one-line card prints the stem as plain text and
+// showed the backslash. The card never renders math — it is a truncated
+// preview — so only the escape is dropped here; the stored stem keeps it.
+export function cardText(stem: string): string {
+  return stem.replace(/\\\$/g, "$");
+}
+
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
 // for scanned/image PDFs, has the model read the pages directly — slice 44
 // AI OCR, ADR 0015) and an LLM (mock by default) proposes candidate items.
@@ -930,7 +939,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                           </span>
                         ) : null}
                       </span>
-                      <p className="truncate text-sm">{c.stem}</p>
+                      <p className="truncate text-sm">{cardText(c.stem)}</p>
                       {workTypeOptions(c.type).length > 0 && !added.has(i) ? (
                         <label className="mt-1 block text-xs text-muted-foreground">
                           Add as{" "}
