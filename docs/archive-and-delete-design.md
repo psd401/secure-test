@@ -120,4 +120,30 @@ says what is built** (nothing yet).
 
 ## Progress
 
-Nothing built yet.
+- **Slice 0 — 2026-09-09, `505fd9e`.** This note; the roadmap row points here.
+- **Slice 1 — 2026-09-09, `0b81b24`.** `DELETE /api/assessments/[id]` answers
+  409 `has_attempts` (with the count) after `requireDraft`; "Delete draft"
+  on the Settings tab and a "Delete" row action on the Assessments list
+  (`DeleteDraftButton.tsx`, page reload on 204 — no app router, the
+  dashboard tree is rendered headless by `reporting-views.test.tsx`), both
+  disabled with a note when Published or with attempts. 1392 tests.
+- **Slice 2 — 2026-09-09, `f24802f`.** Migration **0031** `archived_at` on
+  both tables (dev + test applied; Aurora after the deploy); `{archived}` on
+  the assessment PATCH runs before the publish lock, status-only (400 with
+  any other key), 409 `session_open`; new `PATCH /api/test-sessions/[sessionId]`;
+  sitting creation 409 `archived`; both GET lists hide archived unless
+  `?archived=1` (then only archived). Idempotent without re-stamping.
+  1407 tests.
+- **Slice 3 — 2026-09-09, `6e8a4bc`.** Assessments home `?archived=1` +
+  Show / Hide archived link + badge + `ArchiveAssessmentButton.tsx`; the
+  Test sessions tab fetches both lists, toggle beside Refresh, Archive on
+  closed rows / Unarchive on archived ones, create form replaced by a note
+  on an archived assessment; editor Archived badge + Settings-tab
+  Archive / Unarchive outside the publish lock. 1410 tests.
+- **Slice 4 — 2026-09-09.** Rows 109–121 in
+  `docs/design-tool-manual-checks.md`, NOT run; they need the next deploy +
+  `migrate-aurora.sh` (0031). Pattern held: Sonnet 5 for slices 1 + 3,
+  Opus 5 for slice 2, each diff reviewed and `bun test` + typecheck re-run
+  in the main session before its commit; one fix on agent output (slice 1's
+  `useRouter` try/catch replaced by the page-reload pattern
+  `DeleteAttemptAndReturn` already uses).

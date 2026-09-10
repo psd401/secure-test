@@ -457,3 +457,28 @@ here first, so rows 93–97 double as its authoring check.
 | 107 | Force an accommodations save to fail (e.g. simulate a network failure, or tick an id the API rejects if one is reachable) | The status line reads "Failed" with a message; ticking again afterward retries the save (no page reload needed) | |
 | 108 | Look at the Accommodations tab's action area | There is no "Save accommodations" button; the line "Changes save automatically." is present beside the status line | ✅ 2026-09-09 (Claude in Chrome on the origin, rev 17): no "Save accommodations" button; "Changes save automatically." beside the status line |
 
+
+## Delete draft + archive (2026-09-09)
+
+`docs/archive-and-delete-design.md` (D-1…D-4, slices 1–3). Needs the next
+deploy AND `migrate-aurora.sh` for **0031** (`archived_at` on `assessments`
+and `test_sessions`). Fixture: a scratch draft with two questions, a
+Published copy of it with one closed sitting and one handed-in attempt (the
+2026-09-08 client-rows fixture or `Row S-f hand-run 2026-09-09` already
+carry attempts and sittings).
+
+| # | Do | Expect | Result |
+|---|---|---|---|
+| 109 | Open a Draft that has never been sat → Settings tab → **Delete draft** → read the dialog → Cancel; then again → **Delete draft** | The dialog is titled "Delete <name>?" and says "2 questions will be removed. This can't be undone."; Cancel changes nothing. Confirming lands on the Assessments list with the row gone | |
+| 110 | On the Assessments list, find a Draft row → **Delete** (beside the actions) → confirm | Same dialog; on confirm the page reloads and the row is gone | |
+| 111 | On a Published assessment: Settings tab and the list row | "Delete draft" / "Delete" is disabled; the Settings tab reads "Unpublish to delete." beneath it, the list button's tooltip says the same | |
+| 112 | Unpublish an assessment that has at least one attempt (any status) → Settings tab and the list row | The delete control is disabled with "N attempts — archive instead." (correct count, singular for 1). `DELETE /api/assessments/<id>` from the console answers 409 `{ error: "has_attempts", attempts: N }` and the row survives | |
+| 113 | On a Published assessment with an OPEN test session → Settings tab → **Archive** | Inline "Close its open test session first."; nothing changes. The list row's Archive answers the same | |
+| 114 | Close that session (or use one with no open session) → **Archive** on the Settings tab | The button flips to **Unarchive**, an "Archived" badge appears beside the status badge in the header, status stays Published, the Test sessions tab replaces the create form with "This assessment is archived. Unarchive it on the Settings tab to start a session." Attempts, Results and the review queue are still reachable | |
+| 115 | Go to the Assessments list | The archived row is gone from the default list; a "Show archived (n)" link sits beneath the table with the right count. Click it: the archived view shows the row with an "Archived <date>" badge, no Results button, Unarchive + the (disabled, "archive instead") Delete; "Hide archived" returns to the live list. With nothing archived the link is absent | |
+| 116 | In the archived view → **Unarchive** | The page reloads, the row is back in the live list, the badge is gone, Results is offered again; the editor header's Archived badge is gone and the sittings create form is back | |
+| 117 | `POST /api/test-sessions` for an archived assessment (or watch the form: it is hidden) | 409 `{ error: "archived" }` | |
+| 118 | Test sessions tab with at least one CLOSED (or expired) sitting → **Archive** on that row | The row leaves the list, the heading's count drops, "Show archived (1)" appears beside Refresh. Open rows have no Archive button (Close session sits there instead) | |
+| 119 | **Show archived** → the archived row | Shows "Archived <date>", only Attendance + Unarchive (no Show code / Monitor / Close); Attendance still expands with the sitting's roster. **Unarchive** puts it back in the live list; "Hide archived" and the toggle disappears once nothing is archived | |
+| 120 | `PATCH /api/test-sessions/<openSittingId> { "archived": true }` from the console while that sitting is open | 409 `session_open`; the same body against a sitting owned by another teacher answers 404 | (needs a second staff account for the 404 half, same blocker as row 29) |
+| 121 | Student side: with an assessment archived (its sittings all closed), open Secure Test as a student who sat it | "Your tests" does not list it; a code from one of its closed sittings is refused as before. Unarchive + a new session admits them again | |
