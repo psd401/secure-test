@@ -32,8 +32,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// diagnosis: no menu item binds the key). Autoenable off; enabled only
     /// while a session is starting or active, from lockdownStateChanged.
     private var endSessionItem: NSMenuItem?
+    /// C-4 / D-7: Actual Size / Zoom In / Zoom Out. Pinned by `isEnabled` from
+    /// `screen` like the File and clipboard items — there is nothing to zoom on
+    /// the entry screen, and autoenabling is off on this menu.
+    private var zoomItems: [NSMenuItem] = []
     private var screen: OfflineBundle.Screen = .entry {
-        didSet { openBundleItem?.isEnabled = OfflineBundle.canOpen(on: screen) }
+        didSet {
+            openBundleItem?.isEnabled = OfflineBundle.canOpen(on: screen)
+            let onAssessment = screen != .entry
+            zoomItems.forEach { $0.isEnabled = onAssessment }
+        }
     }
     /// In memory on purpose (James, 2026-08-31, follow-on to UX pass 2
     /// slice 9): the session JWT dies with the process, so every launch
@@ -840,6 +848,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CrashReporter.triggerDebugCrash()
     }
 
+    /// C-4 / D-7: the Session menu's zoom items, forwarded to whichever
+    /// assessment controller is on screen. Nil is not an error — the items are
+    /// disabled off the assessment screens, and a stale key press is a no-op.
+    @objc private func zoomInPage() { controller?.zoomIn() }
+
+    @objc private func zoomOutPage() { controller?.zoomOut() }
+
+    @objc private func zoomActualSize() { controller?.actualSize() }
+
     /// The standard About panel, with the build stamp in the version line.
     ///
     /// `.version` is set to "" on purpose: AppKit renders `.applicationVersion`
@@ -920,6 +937,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         endSession.target = self
         endSession.isEnabled = false
         endSessionItem = endSession
+        // C-4 / D-7 (docs/multi-source-stimulus-design.md): the keyboard half of
+        // pinch-to-zoom. These route through the MENU, like Cmd-E, so the
+        // shortcuts still reach the host inside a real AAC session rather than
+        // depending on anything the page can do for itself.
+        sessionMenu.addItem(.separator())
+        let actualSize = sessionMenu.addItem(
+            withTitle: "Actual Size",
+            action: #selector(zoomActualSize),
+            keyEquivalent: "0"
+        )
+        let zoomIn = sessionMenu.addItem(
+            withTitle: "Zoom In",
+            action: #selector(zoomInPage),
+            keyEquivalent: "="
+        )
+        let zoomOut = sessionMenu.addItem(
+            withTitle: "Zoom Out",
+            action: #selector(zoomOutPage),
+            keyEquivalent: "-"
+        )
+        for item in [actualSize, zoomIn, zoomOut] {
+            item.target = self
+            item.isEnabled = false
+        }
+        zoomItems = [actualSize, zoomIn, zoomOut]
         // Observability slice 4: the crash path cannot be unit-tested (a
         // raised SIGSEGV takes the test runner with it), so it is hand-run
         // instead — and needs a way to be raised on purpose. Present ONLY

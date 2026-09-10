@@ -367,6 +367,13 @@ final class RendererHarness {
     var __root = __node('div');
     __root.id = 'items';
 
+    // C-4 (2026-09-09): the image overlay is appended to `document.body`, which
+    // the shim had no notion of — everything before it lived inside #items. It
+    // is deliberately NOT the parent of __root: the selector helpers still
+    // default to the item tree, so a test that wants the overlay asks for it by
+    // passing `document.body`.
+    var __body = __node('body');
+
     var document = {
       oncopy: null,
       oncut: null,
@@ -389,6 +396,7 @@ final class RendererHarness {
         n.isFragment = true;
         return n;
       },
+      body: __body,
       getElementById: function (id) { return id === 'items' ? __root : null; },
       get activeElement() { return __focused; }
     };

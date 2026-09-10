@@ -58,6 +58,16 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// "Loading your test…" notice and then the real page.
     private var pendingHostLoads = 0
 
+    /// C-4 / D-7: the pinch clamp. `allowsMagnification` gives WKWebView the
+    /// gesture but no bounds of its own, and there is no "the gesture ended"
+    /// callback on the view — so the clamp is applied to the gesture's RESULT:
+    /// KVO reports each magnification the pinch settles on and this pulls it
+    /// back inside 1–3× when it went outside.
+    private var magnificationObservation: NSKeyValueObservation?
+    /// Set while this controller is the one writing `magnification`, so the
+    /// observer above does not re-enter on its own correction.
+    private var settingMagnification = false
+
     /// Observability slice 4: the `BLOCKED …` family in one place. The stderr
     /// text is unchanged — the file line is the addition. `what` is the short
     /// stable token that becomes the error kind's context; nothing from the
@@ -123,6 +133,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
         self.webView = LockedDownWebView(frame: .zero, configuration: config)
         self.webView.allowsLinkPreview = false
+        // C-4 / D-7 (2026-09-09, docs/multi-source-stimulus-design.md): a chart
+        // imported from a PDF prints small, and a student cannot read it. The
+        // trackpad pinch is the gesture they already know; the Session menu's
+        // three items are the keyboard path, and both go through `ZoomLevel`.
+        self.webView.allowsMagnification = true
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 980, height: 700))
         // Batch 4 slice D: the ground behind and around the web view is
@@ -146,6 +161,15 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         controller.add(self, name: Self.withdrawChannel)
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        magnificationObservation = webView.observe(\.magnification, options: [.new]) {
+            [weak self] view, _ in
+            guard let self, !self.settingMagnification else { return }
+            let current = Double(view.magnification)
+            let clamped = ZoomLevel.clamp(current)
+            guard abs(clamped - current) > 0.001 else { return }
+            self.applyMagnification(clamped)
+            self.log(String(format: "zoom: pinch clamped to %.2fx", clamped))
+        }
 
         // baseURL: nil produces a no-origin document, which WebKit denies
         // localStorage and document.cookie outright (PoC-B auto-probes). A test
@@ -298,6 +322,31 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             </div>
             """
         )
+    }
+
+    // MARK: zoom (C-4 / D-7)
+
+    /// The three Session-menu items land here. They go through the MENU rather
+    /// than through the page's own key handling so the shortcuts still work
+    /// inside a real AAC session, the same reasoning as Cmd-E.
+    func zoomIn() { setZoom(ZoomLevel.zoomedIn(from: Double(webView.magnification))) }
+
+    func zoomOut() { setZoom(ZoomLevel.zoomedOut(from: Double(webView.magnification))) }
+
+    func actualSize() { setZoom(ZoomLevel.minimum) }
+
+    func setZoom(_ factor: Double) {
+        let clamped = ZoomLevel.clamp(factor)
+        applyMagnification(clamped)
+        log(String(format: "zoom: %.2fx", clamped))
+    }
+
+    /// The one place `magnification` is written, with the re-entrancy flag the
+    /// KVO observer reads.
+    private func applyMagnification(_ factor: Double) {
+        settingMagnification = true
+        webView.magnification = CGFloat(factor)
+        settingMagnification = false
     }
 
     // MARK: on-demand peek (P2)

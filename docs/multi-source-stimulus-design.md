@@ -575,6 +575,27 @@ next launcher touch. The next client release should carry C-1 and C-2.
 - **C-7 BUILT 2026-09-09 (D-9).** `client/scripts/launch-client.ts`
   forwards `SECURE_TEST_NO_FULLSCREEN` like the other knobs; the app's
   fullscreen default is untouched. No tests (the launcher has none).
+- **C-4 BUILT 2026-09-09 (D-7, both parts).** Pinch: `allowsMagnification`
+  on the assessment web view, clamped 1×–3× by a Core `ZoomLevel` (step
+  ×1.25) — WKWebView has no gesture-ended callback, so a KVO observation
+  on `magnification` pulls a pinch back inside the range after it
+  settles; Session menu gains Actual Size ⌘0, Zoom In ⌘=, Zoom Out ⌘-
+  (James 4.1), routed through the menu like ⌘E so they reach the host in
+  a real session; enabled off the entry screen. Click-to-enlarge: every
+  picture built by `textWithAssets` for a stem, a stimulus body or a
+  source body is a focusable button (`enlargeable`, Enter / Space / click)
+  opening one page-wide `role=dialog` overlay — the image at up to 80vh
+  on a paper card, caption = "<source label> — <alt>" (James 4.2) or the
+  alt alone, Close button; Esc (chained `document.onkeydown`, the order
+  drag's own Escape still wraps it), Close, or a click anywhere dismiss
+  and focus returns to the picture. The hotspot picture and the drawing
+  prompt build their own `img` and are untouched; choices carry no
+  images. Tests: client 568 (+20: `ZoomLevelTests`,
+  `RendererImageOverlayTests`; the shim gained `document.body`). NOT
+  provable headlessly: the pinch itself and whether KVO fires for it,
+  ⌘0 / ⌘= / ⌘- inside a real session, magnification × the page's zoom
+  accommodation, the scrim under the eight contrast sets, focus is not
+  trapped in the dialog (Tab can leave it) — rows.
 
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an

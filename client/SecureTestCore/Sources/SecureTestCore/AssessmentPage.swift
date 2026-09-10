@@ -253,6 +253,34 @@ public enum AssessmentPage {
     }
     .layout-toggle button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     .layout-toggle button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* C-4 / D-7 (2026-09-09, docs/multi-source-stimulus-design.md): a picture in
+       a stem, a stimulus or a source opens full-window on click, Enter or Space
+       — a chart imported from a PDF prints at a size nobody can read. The scrim
+       is a literal rgba rather than a token on purpose: it must stay a DARK veil
+       under all eight contrast sets, and an --ink-derived one inverts to
+       near-white on the dark sets and stops reading as a backdrop. No hex, so
+       PageShellTests' no-literal-hex rule still holds. Everything else is tokens
+       and rem, so contrast, Atkinson and the nine zoom levels reach it free. */
+    .enlargeable { cursor: zoom-in; }
+    .enlargeable:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .image-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      padding: 2rem; background: rgba(0, 0, 0, 0.72);
+    }
+    /* display: flex would beat the attribute on its own (the math keypad's lesson). */
+    .image-overlay[hidden] { display: none; }
+    /* The figure is a paper card so caption and Close keep their token contrast
+       under the dark sets too — paper-on-scrim text would vanish there. */
+    .image-overlay-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; max-width: 95vw; padding: 1rem; border-radius: 8px; background: var(--paper); }
+    .image-overlay-figure img { max-width: calc(95vw - 2rem); max-height: 80vh; object-fit: contain; border-radius: 4px; }
+    .image-overlay-caption { max-width: 60ch; font-size: 0.875rem; text-align: center; color: var(--ink); }
+    .image-overlay-close {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .image-overlay-close:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* E7(b): a short-text answer typed as a formula previews as rendered math. */
     .formula-hint { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .formula-preview { min-height: 1.6em; margin: 4px 0 0; padding: 2px 6px; color: var(--ink); }
@@ -600,11 +628,121 @@ public enum AssessmentPage {
         }).join('');
       }
 
+      // C-4 / D-7: click-to-enlarge. One overlay for the whole page, built the
+      // first time a picture is opened and re-used after that — opening a
+      // second picture swaps the image rather than stacking dialogs.
+      var overlayEl = null;
+      var overlayImg = null;
+      var overlayCaption = null;
+      var overlayClose = null;
+      // The element the student came from, so Esc / Close / a backdrop click
+      // put the keyboard back where it was.
+      var overlayOpener = null;
+
+      function overlayIsOpen() {
+        return overlayEl !== null && overlayEl.getAttribute('hidden') === null;
+      }
+
+      function closeImageOverlay() {
+        if (!overlayIsOpen()) return;
+        overlayEl.setAttribute('hidden', '');
+        var opener = overlayOpener;
+        overlayOpener = null;
+        if (opener && typeof opener.focus === 'function') opener.focus();
+      }
+
+      function buildImageOverlay() {
+        var overlay = document.createElement('div');
+        overlay.className = 'image-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('hidden', '');
+        // A click ANYWHERE on the overlay dismisses — the backdrop, the
+        // caption, and the picture itself, which is where a student who
+        // enlarged it by clicking will click again.
+        overlay.onclick = function () { closeImageOverlay(); };
+
+        var figure = document.createElement('figure');
+        figure.className = 'image-overlay-figure';
+        overlayImg = document.createElement('img');
+        figure.appendChild(overlayImg);
+        overlayCaption = document.createElement('figcaption');
+        overlayCaption.className = 'image-overlay-caption';
+        figure.appendChild(overlayCaption);
+        overlayClose = document.createElement('button');
+        overlayClose.type = 'button';
+        overlayClose.className = 'image-overlay-close';
+        overlayClose.textContent = 'Close';
+        overlayClose.onclick = function () { closeImageOverlay(); };
+        figure.appendChild(overlayClose);
+
+        overlay.appendChild(figure);
+        document.body.appendChild(overlay);
+        overlayEl = overlay;
+        return overlay;
+      }
+
+      /// `caption` is what the picture belongs to (a source's label) and may be
+      /// empty; the alt text is the description the teacher wrote.
+      function openImageOverlay(source, caption) {
+        var overlay = overlayEl || buildImageOverlay();
+        var alt = source.alt || '';
+        var line = caption ? (alt ? caption + ' — ' + alt : caption) : alt;
+        overlayImg.src = source.src;
+        overlayImg.alt = alt;
+        overlayCaption.textContent = line;
+        overlay.setAttribute('aria-label', line || 'Enlarged image');
+        overlay.removeAttribute('hidden');
+        overlayOpener = source;
+        if (typeof overlayClose.focus === 'function') overlayClose.focus();
+      }
+
+      // A picture is a button as well as a picture: pointer, Enter and Space,
+      // and a tab stop so a keyboard-only student can reach it at all.
+      function makeEnlargeable(img, caption) {
+        img.className = img.className ? img.className + ' enlargeable' : 'enlargeable';
+        img.setAttribute('tabindex', '0');
+        img.setAttribute('role', 'button');
+        img.setAttribute('aria-label', img.alt ? 'Enlarge image: ' + img.alt : 'Enlarge image');
+        img.onclick = function () { openImageOverlay(img, caption); };
+        img.onkeydown = function (event) {
+          if (!event) return;
+          if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          openImageOverlay(img, caption);
+        };
+      }
+
+      // Escape closes it. Read on the document — the focus is on the Close
+      // button, but a student may have clicked the picture and moved focus
+      // nowhere in particular — and the previous handler is CHAINED, so the
+      // order item's own mid-drag Escape (which installs itself the same way,
+      // later, and therefore wraps this one) keeps working. The swallow is
+      // conditional on the overlay actually being open, so nothing else loses
+      // its Escape while it is shut.
+      var previousDocumentKeydown = document.onkeydown;
+      document.onkeydown = function (event) {
+        if (event && event.key === 'Escape' && overlayIsOpen()) {
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          closeImageOverlay();
+          return;
+        }
+        if (typeof previousDocumentKeydown === 'function') return previousDocumentKeydown(event);
+      };
+
       // Splits `![alt](asset:uuid)` refs out of authored text, emitting text
       // nodes (with E6 emphasis) for the prose and img elements for the refs.
       // Built as DOM rather than markup so nothing authored can become an
       // element.
-      function textWithAssets(text) {
+      //
+      // C-4 / D-7 (2026-09-09, docs/multi-source-stimulus-design.md): `context`
+      // marks the picture as CONTENT — a stem, a stimulus body or a source
+      // body — which is what may be clicked open. It is optional so that a
+      // future caller rendering furniture gets plain images by default; the
+      // hotspot picture and the drawing prompt build their own `img` and are
+      // outside this function entirely. `context.caption` is what the picture
+      // belongs to (a source's label), shown beside its alt text in the overlay.
+      function textWithAssets(text, context) {
         var frag = document.createDocumentFragment();
         if (typeof text !== 'string' || text.length === 0) return frag;
         var last = 0, m;
@@ -620,6 +758,7 @@ public enum AssessmentPage {
             var img = document.createElement('img');
             img.src = 'data:' + asset.content_type + ';base64,' + asset.base64;
             img.alt = alt;
+            if (context) makeEnlargeable(img, (context && context.caption) || '');
             frag.appendChild(img);
           } else {
             var span = document.createElement('span');
@@ -2586,7 +2725,10 @@ public enum AssessmentPage {
           }
           var body = document.createElement('div');
           body.className = 'source-body';
-          body.appendChild(textWithAssets(source.text));
+          // C-4: a picture inside a source carries its source's label into the
+          // enlarged view — "Source B — <alt>" — because that is what tells the
+          // student which document the chart came out of.
+          body.appendChild(textWithAssets(source.text, { caption: source.label }));
           panel.appendChild(body);
           panels.push(panel);
         });
@@ -2655,7 +2797,9 @@ public enum AssessmentPage {
         block.appendChild(label);
         var body = document.createElement('div');
         body.className = 'stimulus-body';
-        body.appendChild(textWithAssets(set.stimulus));
+        // C-4: content, so it enlarges. No caption of its own — the alt text
+        // the teacher wrote is all there is to say about it.
+        body.appendChild(textWithAssets(set.stimulus, { caption: '' }));
         block.appendChild(body);
         // Slice 4: the introduction on top, the sources beneath it — under
         // every layout, since side_by_side only changes where the block goes.
@@ -2699,7 +2843,8 @@ public enum AssessmentPage {
         wrap.className = setOfItem[item.id] ? 'item in-set' : 'item';
         var stem = document.createElement('p');
         stem.className = 'stem';
-        stem.appendChild(textWithAssets(item.stem));
+        // C-4: a stem's picture enlarges too, under its own alt text.
+        stem.appendChild(textWithAssets(item.stem, { caption: '' }));
         wrap.appendChild(stem);
         var answer = answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
