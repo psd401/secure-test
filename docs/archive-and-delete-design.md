@@ -147,3 +147,4 @@ says what is built** (slices 0–4, 2026-09-09; rows unrun).
   in the main session before its commit; one fix on agent output (slice 1's
   `useRouter` try/catch replaced by the page-reload pattern
   `DeleteAttemptAndReturn` already uses).
+- **DEPLOYED 2026-09-09 ~21:30 PT** with S-f-1 + `APP_COMMIT`: rev 18, `/api/health` `{ ok, commit: bc2a1ce… }`, Aurora at 0031 (`migrate-aurora.sh`, 32 rows). Rows 109–121 still unrun.
