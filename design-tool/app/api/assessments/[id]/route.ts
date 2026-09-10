@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, count, eq, notInArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
   assessment_student_overrides,
+  attempts,
   items,
 } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -185,6 +186,24 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (draftGuard) return draftGuard;
 
   const db = getDb();
+
+  // D-1 (docs/archive-and-delete-design.md): deleting a draft with attempts
+  // on it would hard-delete every response/upload with no audit trail — the
+  // delete-attempt route (docs/reporting-design.md) is the only sanctioned
+  // way to remove student work, one attempt at a time. Refuse instead of
+  // deleting quietly; the dialog reads this as "archive instead".
+  const [attemptCountRow] = await db
+    .select({ n: count() })
+    .from(attempts)
+    .where(eq(attempts.assessment_id, id));
+  const n = attemptCountRow?.n ?? 0;
+  if (n > 0) {
+    return NextResponse.json(
+      { ok: false, error: "has_attempts", attempts: n },
+      { status: 409 },
+    );
+  }
+
   await db.delete(assessments).where(eq(assessments.id, id));
   return new NextResponse(null, { status: 204 });
 }

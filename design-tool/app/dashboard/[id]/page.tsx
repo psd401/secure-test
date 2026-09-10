@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, items, type ItemType } from "@/db/schema";
+import { assessments, attempts, items, type ItemType } from "@/db/schema";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -60,6 +60,13 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
     .orderBy(asc(items.position));
   // E5 slice 1: the stimulus sets, in assessment order.
   const itemSetRows = await loadItemSetsInOrder(id);
+  // D-1 (docs/archive-and-delete-design.md): the Settings-tab delete action
+  // needs this to decide whether to offer "Delete draft" or "N attempts —
+  // archive instead" without a round trip to the DELETE route first.
+  const [attemptCountRow] = await db
+    .select({ n: count() })
+    .from(attempts)
+    .where(eq(attempts.assessment_id, id));
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -83,6 +90,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           allowed_accommodations: (assessment.allowed_accommodations ??
             []) as string[],
           construct_altering: (assessment.construct_altering ?? []) as string[],
+          attempt_count: attemptCountRow?.n ?? 0,
         }}
         initialItems={itemRows.map((r) => ({
           id: r.id,

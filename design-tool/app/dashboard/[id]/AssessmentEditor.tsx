@@ -21,6 +21,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/app/EmptyState";
 import { ApiError, itemErrorCopy } from "@/lib/ui/errorCopy";
+import { plural } from "@/lib/ui/format";
 import { NextStepCard } from "@/components/app/NextStepCard";
 import { PageHeader } from "@/components/app/PageHeader";
 import { PreviewFrame } from "@/components/app/PreviewFrame";
@@ -140,6 +141,8 @@ interface AssessmentView {
   student_layout: "scroll" | "paged";
   allowed_accommodations: string[];
   construct_altering: string[];
+  /** D-1 (docs/archive-and-delete-design.md): governs the Settings-tab Delete draft action. */
+  attempt_count: number;
 }
 
 // E5 slice 1: a stimulus (passage / figure / data) shared by the contiguous
@@ -606,6 +609,10 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
   const [sourcePickerFor, setSourcePickerFor] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // D-1 (docs/archive-and-delete-design.md): Settings-tab "Delete draft".
+  const [deleteDraftOpen, setDeleteDraftOpen] = useState(false);
+  const [deletingDraft, setDeletingDraft] = useState(false);
+  const [deleteDraftError, setDeleteDraftError] = useState<string | null>(null);
 
   // UX pass 1, slice 5 (A-05..A-08): the list is authoritative on the client.
   // Each card is compared with its last persisted snapshot for "Unsaved
@@ -911,6 +918,41 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       setError(describe(e));
     } finally {
       setPublishBusy(false);
+    }
+  }
+
+  // D-1 (docs/archive-and-delete-design.md): a raw fetch rather than call()
+  // because the 409 body carries `attempts` — a field call()'s ApiError
+  // doesn't preserve — and the dialog needs that count, not just a message.
+  async function deleteDraft() {
+    setDeletingDraft(true);
+    setDeleteDraftError(null);
+    try {
+      const res = await fetch(apiBase, { method: "DELETE" });
+      if (res.status === 204) {
+        router.push("/dashboard");
+        return;
+      }
+      let body: { error?: unknown; attempts?: unknown } = {};
+      try {
+        body = (await res.json()) as typeof body;
+      } catch {
+        // not JSON
+      }
+      if (res.status === 409 && body.error === "has_attempts") {
+        const n = typeof body.attempts === "number" ? body.attempts : 0;
+        setDeleteDraftError(`${plural(n, "attempt")} — archive instead.`);
+      } else {
+        setDeleteDraftError(
+          describe(
+            new ApiError(typeof body.error === "string" ? body.error : `http_${res.status}`, res.status),
+          ),
+        );
+      }
+    } catch {
+      setDeleteDraftError(describe(new ApiError("network", 0)));
+    } finally {
+      setDeletingDraft(false);
     }
   }
 
@@ -1521,6 +1563,31 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
             Save settings
           </Button>
           <StatusLine state={settingsSave} />
+        </div>
+
+        {/* D-1 (docs/archive-and-delete-design.md): a draft with attempts on it
+            can't be deleted here either — the confirm dialog reads that back
+            from the DELETE route, this disables the button up front so the
+            teacher isn't invited to try. */}
+        <div className="border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => {
+              setDeleteDraftError(null);
+              setDeleteDraftOpen(true);
+            }}
+            disabled={isLocked || assessment.attempt_count > 0}
+          >
+            Delete draft
+          </Button>
+          {isLocked ? (
+            <p className="mt-1 text-xs text-muted-foreground">Unpublish to delete.</p>
+          ) : assessment.attempt_count > 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {plural(assessment.attempt_count, "attempt")} — archive instead.
+            </p>
+          ) : null}
         </div>
       </section>
       </TabsContent>
@@ -2800,6 +2867,44 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               {deleting ? "Deleting…" : "Delete question"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* D-1 (docs/archive-and-delete-design.md): confirm dialog for the
+          Settings-tab Delete draft action. The has_attempts note re-reads
+          from the DELETE route in case the assessment gained attempts under
+          this page (another tab, another sitting) since it loaded. */}
+      <AlertDialog
+        open={deleteDraftOpen}
+        onOpenChange={(open) => {
+          if (!open && !deletingDraft) setDeleteDraftOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {assessment.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {plural(items.length, "question")} will be removed. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteDraftError ? (
+            <Alert variant="destructive">
+              <AlertTitle>{deleteDraftError}</AlertTitle>
+            </Alert>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDraft}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void deleteDraft();
+              }}
+              disabled={deletingDraft}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingDraft ? "Deleting…" : "Delete draft"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -4,6 +4,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
+import { attempts, students } from "../db/schema";
 import { mintSessionJWT, SESSION_COOKIE_NAME } from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -259,6 +260,43 @@ describe("DELETE /api/assessments/[id]", () => {
     asUser("teacher-2");
     const res = await callDelete(created.assessment.id);
     expect(res.status).toBe(403);
+  });
+});
+
+// D-1 (docs/archive-and-delete-design.md): a draft with attempts refuses to
+// delete — the delete-attempt route is the only sanctioned way to remove
+// student work, one attempt at a time with its own audit row.
+describe("DELETE /api/assessments/[id] — D-1 has_attempts guard", () => {
+  test("a draft with an attempt on it 409s with the count instead of deleting", async () => {
+    asUser("teacher-1");
+    const createRes = await callCreate({ name: "has-an-attempt" });
+    const created = (await createRes.json()) as { assessment: { id: string } };
+    const id = created.assessment.id;
+
+    const db = getDb();
+    const [student] = await db
+      .insert(students)
+      .values({ owner_sub: "teacher-1", ssid: "1", name: "Some Student" })
+      .returning();
+    await db.insert(attempts).values({ assessment_id: id, student_id: student!.id });
+
+    const res = await callDelete(id);
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { ok: boolean; error: string; attempts: number };
+    expect(body).toEqual({ ok: false, error: "has_attempts", attempts: 1 });
+
+    // The row is still there — nothing was deleted.
+    expect((await callGetById(id)).status).toBe(200);
+  });
+
+  test("a draft with no attempts still deletes with 204", async () => {
+    asUser("teacher-1");
+    const createRes = await callCreate({ name: "no-attempts-still-deletes" });
+    const created = (await createRes.json()) as { assessment: { id: string } };
+
+    const res = await callDelete(created.assessment.id);
+    expect(res.status).toBe(204);
+    expect((await callGetById(created.assessment.id)).status).toBe(404);
   });
 });
 

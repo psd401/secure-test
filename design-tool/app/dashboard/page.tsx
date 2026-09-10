@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { and, count, desc, eq, gt } from "drizzle-orm";
 import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
-import { assessments, items, test_sessions } from "@/db/schema";
+import { assessments, attempts, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
 import { AcceptShareButton } from "@/components/app/AcceptShareButton";
+import { DeleteDraftButton } from "./DeleteDraftButton";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { closesAt, formatDate, plural } from "@/lib/ui/format";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
 
   const db = getDb();
   const now = new Date();
-  const [rows, openSessions, questionCounts] = await Promise.all([
+  const [rows, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
       .from(assessments)
@@ -74,8 +75,18 @@ export default async function DashboardPage() {
       .innerJoin(assessments, eq(assessments.id, items.assessment_id))
       .where(eq(assessments.owner_sub, session.sub))
       .groupBy(items.assessment_id),
+    // D-1 / D-4 (docs/archive-and-delete-design.md): the row-level Delete
+    // action needs this to disable itself and show "N attempts — archive
+    // instead" without a round trip to the DELETE route first.
+    db
+      .select({ assessment_id: attempts.assessment_id, n: count() })
+      .from(attempts)
+      .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
+      .where(eq(assessments.owner_sub, session.sub))
+      .groupBy(attempts.assessment_id),
   ]);
   const questionsFor = new Map(questionCounts.map((c) => [c.assessment_id, c.n]));
+  const attemptsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c.n]));
   // Slice C: offers from colleagues that have not been added yet. Accepted
   // ones already appear in the list below as the teacher's own copy.
   const pendingShares = session.email
@@ -207,11 +218,23 @@ export default async function DashboardPage() {
                         is the wrong place to look for "how did they do?".
                         Published only — a draft has no attempts to report on. */}
                     <TableCell className="text-right">
-                      {a.status === "published" ? (
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/dashboard/${a.id}/results`}>Results</Link>
-                        </Button>
-                      ) : null}
+                      <div className="flex justify-end gap-2">
+                        {a.status === "published" ? (
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/dashboard/${a.id}/results`}>Results</Link>
+                          </Button>
+                        ) : null}
+                        {/* D-1 / D-4: a row action beside Results, same
+                            disabled-and-noted posture as the editor's
+                            Settings-tab Delete draft. */}
+                        <DeleteDraftButton
+                          id={a.id}
+                          name={a.name}
+                          questionCount={questionsFor.get(a.id) ?? 0}
+                          attemptCount={attemptsFor.get(a.id) ?? 0}
+                          status={a.status}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
