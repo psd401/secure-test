@@ -597,6 +597,14 @@ next launcher touch. The next client release should carry C-1 and C-2.
   accommodation, the scrim under the eight contrast sets, focus is not
   trapped in the dialog (Tab can leave it) — rows.
 
+2026-09-09 ~18:50 PT: **PUSHED (`origin/main` = `09a0b65`) and DEPLOYED —
+task definition rev 17, rollout COMPLETED, `/api/health` 200; no
+migration (Aurora stays at 0030).** Run from the main session after James
+re-logged in to SSO; `cdk diff` showed the container image only. The
+origin now carries C-2 (server side) and C-6, so rows 93–108 can run.
+The client is rebuilt from `09a0b65` (the four Row S-f markers are in the
+dylib) for the client rows; v1.2.0 is NOT released yet.
+
 **Hazard until slice 4 ships (now merged — stands until the next client
 release):** the v1.1.0 client decodes `sources` as an
 unknown key (dropped) and renders `side_by_side` as `inline`, so a set
