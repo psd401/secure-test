@@ -314,7 +314,9 @@ typecheck re-run in the main session before each commit, as in the
   put "Use this rubric" off-screen; `DialogContent` is fixed + centred with
   no max height). `DialogContent` capped at `100vh - 2rem` with overflow,
   the proposal table `max-h-[55vh] overflow-y-auto` so the name field and
-  buttons stay pinned; the saved-rubrics list gets the same cap. Row 154.
+  buttons stay pinned; the saved-rubrics list gets the same cap. Row 154 ✅ on rev 24 with the
+  real rubric. **DEPLOYED 2026-09-11 ~12:33 PT: rev 24, `/api/health`
+  commit `0d630b8`, no migration.**
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,
