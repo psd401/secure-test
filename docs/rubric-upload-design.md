@@ -292,6 +292,11 @@ typecheck re-run in the main session before each commit, as in the
   queue's level picker (it already was one) offers Below / Meets / Exceeds
   and pre-fills from the proposal. +12 tests across four files; the queue
   card needs a hand-run row (no DOM harness).
+- **DEPLOYED 2026-09-11 ~10:55 PT** (`bf56c1f`, which also sets
+  `RUBRIC_EXTRACTOR_PROVIDER=bedrock` on the task definition — the essay
+  scorer was already bedrock): task def rev 22, rollout COMPLETED,
+  `/api/health` commit = HEAD, Aurora at 0033 via `migrate-aurora.sh` (34
+  journal rows). Rows 122–153 still unrun (row 153's deploy half done).
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,
