@@ -297,6 +297,13 @@ typecheck re-run in the main session before each commit, as in the
   scorer was already bedrock): task def rev 22, rollout COMPLETED,
   `/api/health` commit = HEAD, Aurora at 0033 via `migrate-aurora.sh` (34
   journal rows). Rows 122–153 still unrun (row 153's deploy half done).
+- **Rows 122–142 RUN 2026-09-11** (Chrome on the origin, rev 22): all
+  ✅ (143 blocked on a second staff account; 124's file-wins half not
+  exercised). Findings R-1 (`style_guess` fires on every table rubric —
+  proposal: warn only for the ambiguous one-criterion shape), R-2 (fresh
+  ids coincide with the library's by construction — reword), R-3 (409 copy
+  unreachable behind the editor lock) in `docs/design-tool-manual-checks.md`.
+  Rows 144–152 wait on a sitting; the Draft fixture stays on the origin.
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,
