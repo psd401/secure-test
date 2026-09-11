@@ -560,3 +560,33 @@ screenshot before every dialog click and read dialog text from the DOM
 | 152 | **(sitting)** After the Bedrock extract/score calls above, open the design-tool log group in the CloudWatch console (AWS console, Chrome) and filter on `event = "ai_usage"` | One log line per successful Converse call, each JSON with `surface` (`rubric-extract` / `essay-score`), `model`, `input_tokens`, `output_tokens`, `latency_ms`, `owner_sub` — no line for a failed/guardrail-blocked call | (Bedrock sitting, Chrome + AWS console) |
 | 153 | Deploy: push → `cdk diff` (expect image only) → `cdk deploy` → `infra/scripts/migrate-aurora.sh` → `GET /api/health` | `cdk diff` shows no infra change beyond the image; deploy rolls out; migrate-aurora applies **0032** and **0033** and the journal table shows **34** rows; `/api/health` reports `commit` = the deployed HEAD | |
 | 154 | Upload a TALL rubric (a real one with six or more criteria and long descriptors — the AP Seminar EOC rubric James attached 2026-09-11 is the case) at a 1470 × 835 viewport | The dialog never exceeds the viewport; the criteria table scrolls inside the dialog while the warnings, "Rubric name", "Save to my rubrics", Cancel and "Use this rubric" stay visible; "Use a saved rubric…" with a long library scrolls its list the same way | ✅ 2026-09-11 on rev 24 with James's real six-page rubric (DOCX): dialog 712 px tall in an 835 px viewport, the criteria table scrolls (459 of 1102 px visible), name field + all buttons on screen; four criteria × four levels, points 0/2/4/6, no warnings — matches the source (Bedrock) |
+
+## Time limit + unfinished attempts (2026-09-11)
+
+`docs/time-limit-and-unfinished-attempts-design.md` §Progress, slices 1–3
+(D-1…D-4), all BUILT 2026-09-11, NONE run. Two fixtures on `<origin>`,
+Published: **`Time limit hand-run 2026-09-11`** — a **3-minute** time limit
+set on the Settings tab, two multiple-choice items with keys and one essay,
+paged or inline (either), sat by `<demo-student-A>`; and a second copy,
+**`Time limit hand-run 2026-09-11 (no limit)`** — the same items, Settings
+tab time limit left blank. Re-run the one-day teacher-row script first. Rows
+155–163 use the limited fixture unless noted; 164 uses the no-limit copy;
+165 is the deploy row. The console rows (161, 162) are the browser's
+JavaScript console against the origin, signed in as the teacher/student as
+noted — read the response body, not just the status.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 155 | Open a session on the limited fixture, `<demo-student-A>` joins and answers some items but does not hand in; open the results matrix while the sitting is still open | The row reads "Not handed in — k of N answered" in the Scoring column (no Total/% cells), a **Hand in** button beside it | |
+| 156 | While still mid-test, open that student's per-student results page (`/dashboard/<id>/results/<attemptId>`) | Page opens (no 404): "Not handed in · Started `<time>` · k of N answered" under the name, every saved answer rendered as usual, no score section, Hand in beside Delete | |
+| 157 | On the matrix row, the per-student page, or the Monitor row, hover/inspect the Hand in button while the test session is still open | Disabled; its title attribute reads "End the test session first, then hand in." (same rule as Delete) | |
+| 158 | Close the test session, then click Hand in on the matrix row → confirm dialog | Dialog: "Hand in for `<demo-student-A>`?" / "Their k answered questions become their final answers and auto-scoring runs. They will not be able to change them." — Hand in / Cancel | |
+| 159 | Click Hand in on the row-158 dialog | 200; the row becomes a normal submitted row — Total/% filled in, and a small "Handed in by teacher" line under the Complete/unscored cell; the per-student page shows the same line next to the submitted time | |
+| 160 | Click Hand in again on the same (now submitted) attempt (Monitor row or a repeat `POST /api/attempts/<id>/hand-in` from the console) | 409 `already_submitted`; the UI shows "Already handed in." | |
+| 161 | On the Monitor page for the row-158 sitting (before it's closed, on a fresh in-progress attempt from the no-limit or a third fixture) | Hand in sits beside Delete in the Actions column on the in-progress row, disabled by the same "End the test session first, then hand in." rule as row 157 | |
+| 162 | Start a new attempt on the limited fixture, let the 3-minute deadline pass WITHOUT closing the test session, then click Hand in | Succeeds without closing the session first — the deadline-passed relaxation (D-4/A). Confirm the sitting is still shown open elsewhere in the UI while this succeeds | |
+| 163 | After the same deadline has passed (session still open or closed, attempt still in_progress), from the browser console as the signed-in student session: `POST /api/attempts/<attemptId>/responses` with any answer body | 409 `time_expired` in the response body | |
+| 164 | Open `/dashboard/<id>/results/print?attempt=<the row-159 attemptId>` | The print report shows "Handed in by teacher" next to the submission line, same wording as the matrix/per-student page | |
+| 165 | With the row-159 (teacher-handed-in) attempt and an in-progress attempt both present: check the review queue, the CSV export, and the results-matrix analytics footer | The in-progress attempt appears nowhere in the review queue, the CSV, or the analytics footer/Complete count — only the submitted-status matrix row and per-student page show it at all | |
+| 166 | From the console, `GET` the delivery bundle for the **limited** fixture's attempt (the same request the client makes on join) vs. the **no-limit** copy's attempt | Limited bundle carries both `time_limit_ends_at` (ISO 8601) and `server_now`; the no-limit bundle has NEITHER field — never one without the other | |
+| 167 | Deploy: push → `cdk diff` (expect image only) → `cdk deploy` → `infra/scripts/migrate-aurora.sh` → `GET /api/health` | `cdk diff` shows no infra change beyond the image; deploy rolls out; migrate-aurora applies **0034** and the journal table shows **35** rows; `/api/health` reports `commit` = the deployed HEAD | |

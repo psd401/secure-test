@@ -1463,3 +1463,57 @@ it as usual. `SECURE_TEST_NO_FULLSCREEN=1` is now forwarded by the launcher
 | Start dragging an order item (if the fixture has an order question), open an image overlay from elsewhere, close it with Esc, then press Esc again to cancel the drag | The order-drag's own Escape still cancels a drag after the overlay's Escape has been used once | |
 | VoiceOver (Cmd-F5, outside a session first per finding C-3 — dismiss Quick Start before joining) on the beside/above toggle group | Announces the group label "Where the sources appear" and each button with its pressed state | |
 | VoiceOver on an enlargeable picture and the overlay's Close button | The picture announces as a button with its enlarge label; opening the overlay moves focus to Close, which announces as a button | |
+
+## Time limit — countdown banner, notices, session ends at zero (2026-09-11)
+
+`docs/time-limit-and-unfinished-attempts-design.md` §Progress, slice 2
+(D-2/D-3/D-4), BUILT 2026-09-11, NONE run. Client v1.3.0 candidate. Rebuild
+first — `cd client && xcodebuild -project SecureTest.xcodeproj -scheme
+SecureTest -destination 'platform=macOS' build` — and verify the built page
+carries the new code:
+
+```
+find ~/Library/Developer/Xcode/DerivedData -name SecureTest.debug.dylib \
+  | xargs grep -ac 'time-limit-hide\|__timeLimit\|time_expired'
+```
+each should come back non-zero.
+
+**Fixture.** Use the design-tool hand-run's two fixtures on `<origin>`
+(`docs/design-tool-manual-checks.md` "Time limit + unfinished attempts"):
+**`Time limit hand-run 2026-09-11`** — a **3-minute** limit, two MC + one
+essay, paged — and **`Time limit hand-run 2026-09-11 (no limit)`**, the same
+items with no limit set. A 3-minute limit is short enough to reach zero in
+one sitting and puts the countdown under 5 minutes from the very first tick
+— the design's "late-start" case — so the 5-minute notice fires immediately
+and the 1-minute notice fires about two minutes later; no need for a longer
+fixture. Re-run the one-day teacher-row script first.
+
+Rows marked **real session** need the actual `AEAssessmentSession` (blank
+`SECURE_TEST_SIMULATE_LOCKDOWN` on the command line) because they exercise
+the exit path at zero (`endLockdown` → `DID END`) — D-2's hard rule that
+anything ending a session ships a real exit. Rows marked **simulated** use
+`SECURE_TEST_SIMULATE_LOCKDOWN` as usual; the countdown model itself
+(`TimeLimitCountdown`) is the same code either way.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Simulated.** Join the limited fixture, look under the header | A "Time left 3:00" banner appears immediately (first tick fires on `start()`, never a blank minute) | |
+| **Simulated.** Join the no-limit fixture | No banner anywhere on the page | |
+| **Simulated.** Watch the banner for several seconds | Counts down one second at a time (2:59, 2:58, …) | |
+| **Simulated.** At the very first tick on the 3-minute fixture | The "5 minutes left" amber notice already shows (late-start case: 3:00 remaining is already under the 5-minute threshold) | |
+| **Simulated.** Leave the notice alone | Auto-dismisses on its own after about 8 seconds | |
+| **Simulated.** Bring up a new notice and click its dismiss / let it re-appear | Dismissable early by the student; never appears a second time for the same threshold | |
+| **Simulated.** Click the banner's × | Banner disappears immediately; its accessible label is "Hide the timer" | |
+| **Simulated.** After hiding the banner (previous row), wait for the 1-minute notice | The notice still appears — hiding the banner does not hide the notices (D-3: they are not the student's to switch off) | |
+| **Simulated.** Wait until about two minutes have elapsed (around 1:00 remaining) | The "1 minute left" notice fires once | |
+| **Simulated.** While a notice is showing, keep typing in an answer field (e.g. the essay box) | The notice never steals focus or interrupts typing — keystrokes and cursor position are untouched | |
+| **Simulated.** With the banner still visible, watch it cross under 1:00 remaining | The banner switches to the Clay danger colour | |
+| **Simulated.** On the paged layout, turn to the next page and back while the banner is visible | The banner is still there, still counting, after the page turn | |
+| **Simulated.** Under a dark / Reverse Contrast contrast set, look at the banner and a notice | Both render on the contrast set's tokens — readable, not hardcoded light-mode colours | |
+| **Real session.** Let the limited fixture's countdown reach zero | The secure session ends on its own (log shows `time limit reached — ending the secure session` → `endLockdown(reason: "time_expired")` → `DID END`); no beep, no stuck window | |
+| **Real session.** After the session ends at zero | The sheet reads "Time is up." / "Your answers are saved." with exactly one button, "Back to your tests" (no "Stay here") | |
+| **Real session.** Click "Back to your tests" on that sheet | Returns to the Your-tests list; the client does not attempt to hand in on the student's behalf | |
+| **Simulated.** After zero (real or simulated), from the student's own machine try to save an answer (e.g. change an MC choice) | The POST is refused 409 `time_expired`; the log records the drop but nothing is shown to the student — no error banner, no interruption | |
+| **Simulated.** Cross-check the teacher's Monitor / results matrix for this attempt after it expires (no hand-in yet) | Still shows as in-progress ("Not handed in — k of N answered") — the client does not submit at zero (D-2) | |
+| **Simulated.** Quit before zero, relaunch, sign in, rejoin the same sitting | The banner resumes counting from the SAME deadline as before quitting (started_at-based), not a fresh 3:00 from the moment of rejoining | |
+| **Simulated.** Set the Mac's clock 10 minutes fast, then join (or rejoin) the limited fixture | The banner still shows the correct remaining time for the attempt (the bundle's `server_now` offset corrects for the skewed clock), not a countdown thrown off by 10 minutes | |

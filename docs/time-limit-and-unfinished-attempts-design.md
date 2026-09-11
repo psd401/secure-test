@@ -192,3 +192,25 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
   print and the pages say "Handed in by teacher". Enable rule = sitting
   open only (the deadline relaxation surfaces as the 409 text). Design-tool
   1572 (+10), typecheck clean.
+- **Slice 4 — 2026-09-11.** Rows written, NONE run. Teacher rows 155–167 in
+  `docs/design-tool-manual-checks.md` ("Time limit + unfinished attempts")
+  against two Published fixtures on `<origin>`: `Time limit hand-run
+  2026-09-11` (3-minute limit, two MC + one essay) and `Time limit hand-run
+  2026-09-11 (no limit)` (same items, no limit) — cover the matrix/
+  per-student "Not handed in" views, the Hand in guards (`session_open`,
+  `already_submitted`, the deadline-passed relaxation), the 409
+  `time_expired` on a late response, "Handed in by teacher" on the matrix/
+  per-student page/print, in-progress rows staying out of the CSV/queue/
+  analytics, the delivery bundle's `time_limit_ends_at` + `server_now`
+  pairing, and the deploy (row 167: migration 0034, journal 35 rows). Client
+  rows in `client/MANUAL-CHECKS.md` ("Time limit — countdown banner,
+  notices, session ends at zero") reuse the same two fixtures: banner
+  presence/absence, per-second countdown, the late-start 5-minute notice
+  (a 3-minute limit starts under the 5-minute threshold), the 1-minute
+  notice, dismiss ("Hide the timer"), notices surviving a hidden banner,
+  the danger colour under a minute, no focus stealing, survival across page
+  turns, contrast-set rendering, the real-session exit at zero (`DID END`,
+  the "Time is up." sheet, one button), the post-zero 409 being silent to
+  the student, the teacher matrix staying in-progress after expiry, deadline
+  persistence across relaunch/rejoin, and clock-skew correction via
+  `server_now`. The client half ships in the next release (v1.3.0).
