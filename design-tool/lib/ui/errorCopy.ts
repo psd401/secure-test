@@ -189,6 +189,28 @@ export function attemptDeleteErrorCopy(code: string): ErrorCopy {
   }
 }
 
+/**
+ * POST /api/attempts/[attemptId]/hand-in — the teacher's "Hand in" (time
+ * limit / unfinished attempts, docs/time-limit-and-unfinished-attempts-design.md).
+ * Copy taken from the design note's "Confirm dialog copy" section.
+ */
+export function attemptHandInErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "session_open":
+      return { message: "Close the test session first.", showCode: false };
+    case "already_submitted":
+      return { message: "Already handed in.", showCode: false };
+    case "forbidden":
+      return { message: "Only the assessment's owner can hand in an attempt.", showCode: false };
+    case "not_found":
+      return { message: "That attempt is already gone. Refresh the page.", showCode: false };
+    case "network":
+      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+    default:
+      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+  }
+}
+
 /** app/api/students/[id]/accommodations and the overrides routes. */
 export function accommodationErrorCopy(code: string): ErrorCopy {
   switch (code) {

@@ -163,3 +163,32 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
   `submitted_by_sub`, `answered_count`, null totals in progress; timeline /
   print labels for both kinds. Design-tool 1562 (+29), schema 123 (+2),
   typecheck clean.
+- **Slice 2 — 2026-09-11** (client, built ∥ slice 3). `DeliveryBundle`
+  decodes the two instants and `deadline(receivedAt:)` = receipt +
+  (`ends_at` − `server_now`), so a skewed Mac counts the right seconds;
+  `TimeLimitCountdown` (pure, injectable scheduler, reads the clock every
+  tick so a sleeping Mac loses the time it slept; `mm:ss` / `h:mm:ss`
+  rounded up; notices once each incl. the late-start case; danger under
+  60 s; expiry once; dismiss suppresses only the tick); the renderer's
+  `.time-limit` strip (tokens only, first child of `#items` so it survives
+  page turns, `window.__timeLimit.update`, × on a new `timer` channel,
+  `aria-live="off"` — the notices are the announced channel); the view
+  controller shows the notices through the peek strip in Ochre with an 8 s
+  auto-dismiss (peek disclosures unchanged); at zero `AppDelegate` reports
+  `time_expired`, ends the lockdown with that reason and shows "Time is
+  up. / Your answers are saved." with one button; post-deadline 409s are
+  logged, not raised. `swift test` 587 (+19), `xcodebuild` green. Ships in
+  the next client release.
+- **Slice 3 — 2026-09-11** (teacher UI). `HandInAttemptControl` (mirrors
+  Delete; `handInConfirmCopy`; `attemptHandInErrorCopy` 409 texts) +
+  `HandInAttemptAndReload`; `ResultsRow.sitting_open`; the matrix passes
+  `include_in_progress` — in-progress rows read "Not handed in — k of N
+  answered" in the Scoring column with the Hand in control (there is no
+  separate Results column; the name is the link), no totals, the Complete
+  verdict and analytics stay submitted-only; the per-student page renders
+  an in-progress attempt (badge, started time, answered count, every saved
+  answer, no score section) with Hand in beside Delete, both disabled
+  while the sitting is open; Monitor gains Hand in on in-progress rows;
+  print and the pages say "Handed in by teacher". Enable rule = sitting
+  open only (the deadline relaxation surfaces as the 409 text). Design-tool
+  1572 (+10), typecheck clean.

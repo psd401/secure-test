@@ -6,7 +6,7 @@
 // the page function gives an element tree renderToStaticMarkup can render —
 // the same shape the error-boundary tests use.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { renderToStaticMarkup } from "react-dom/server";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -374,6 +374,20 @@ async function renderAttempt(assessmentId: string, attemptId: string) {
   return renderToStaticMarkup(element);
 }
 
+async function renderPrint(
+  assessmentId: string,
+  searchParams: Record<string, string> = {},
+) {
+  const { default: PrintPage } = await import(
+    "../app/dashboard/[id]/results/print/page"
+  );
+  const element = await PrintPage({
+    params: Promise.resolve({ id: assessmentId }),
+    searchParams: Promise.resolve(searchParams),
+  });
+  return renderToStaticMarkup(element);
+}
+
 describe("the Assessments list", () => {
   test("a published assessment carries a Results link; a draft does not", async () => {
     const db = getDb();
@@ -592,5 +606,130 @@ describe("the per-student attempt page", () => {
       .values({ owner_sub: OWNER, name: "Other", status: "published" })
       .returning();
     await expect(renderAttempt(other!.id, scene.aliceAttempt.id)).rejects.toThrow();
+  });
+});
+
+// Time limit / unfinished attempts
+// (docs/time-limit-and-unfinished-attempts-design.md, slice 3): the teacher
+// UI on top of slice 1's `include_in_progress` flag and `submitted_by_sub`.
+describe("in-progress attempts on the teacher surfaces", () => {
+  async function seedInProgressAttempt(
+    assessmentId: string,
+    opts: { sittingStatus?: "open" | "closed" } = {},
+  ) {
+    const db = getDb();
+    const [carol] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "444", name: "Carol Overlay" })
+      .returning();
+    const itemRows = await db
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, assessmentId))
+      .orderBy(asc(items.position));
+
+    let sittingId: string | null = null;
+    if (opts.sittingStatus) {
+      const [sitting] = await db
+        .insert(test_sessions)
+        .values({
+          assessment_id: assessmentId,
+          owner_sub: OWNER,
+          owner_email: TEACHER_EMAIL,
+          code: `IP${Math.floor(Math.random() * 100000)}`,
+          status: opts.sittingStatus,
+          expires_at: new Date(Date.now() + 3600_000),
+        })
+        .returning();
+      sittingId = sitting!.id;
+    }
+
+    const [carolAttempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: assessmentId,
+        student_id: carol!.id,
+        test_session_id: sittingId,
+        status: "in_progress" as const,
+        started_at: new Date("2026-09-11T20:00:00Z"),
+      })
+      .returning();
+    await db.insert(responses).values({
+      attempt_id: carolAttempt!.id,
+      item_id: itemRows[0]!.id,
+      response: { type: "multiple_choice_single", choice_id: "a" },
+    });
+    return { carolAttempt: carolAttempt!, itemCount: itemRows.length };
+  }
+
+  test("the matrix shows an in-progress row's Not-handed-in line, no totals, and a Hand in control", async () => {
+    const scene = await seedScene();
+    const { itemCount } = await seedInProgressAttempt(scene.assessment.id);
+
+    const html = await renderResults(scene.assessment.id);
+    expect(html).toContain("Carol Overlay");
+    expect(html).toContain(`Not handed in — 1 of ${itemCount} answered`);
+    expect(html).toContain("Hand in");
+    // Neither Complete verdict names Carol's row: Alice and Bob still supply
+    // the only "to score" / "✓ Complete" text on the page.
+    expect(html.match(/✓ Complete/g)).toHaveLength(1);
+  });
+
+  test("the matrix's Hand in control is disabled while the attempt's own sitting is open", async () => {
+    const scene = await seedScene();
+    await seedInProgressAttempt(scene.assessment.id, { sittingStatus: "open" });
+    const html = await renderResults(scene.assessment.id);
+    expect(html).toContain("End the test session first, then hand in.");
+    expect(html).toContain("disabled=\"\"");
+  });
+
+  test("the matrix's Hand in control is enabled once the sitting is closed", async () => {
+    const scene = await seedScene();
+    await seedInProgressAttempt(scene.assessment.id, { sittingStatus: "closed" });
+    const html = await renderResults(scene.assessment.id);
+    expect(html).not.toContain("End the test session first, then hand in.");
+  });
+
+  test("the per-student page renders an in-progress attempt: badge, started time, answered count, the answer, no score section, a Hand in control", async () => {
+    const scene = await seedScene();
+    const { carolAttempt, itemCount } = await seedInProgressAttempt(scene.assessment.id);
+
+    const html = await renderAttempt(scene.assessment.id, carolAttempt.id);
+    expect(html).toContain("Not handed in");
+    expect(html).toContain(`${1} of ${itemCount} answered`);
+    expect(html).toContain("Copper"); // her one saved answer, rendered
+    expect(html).toContain("Hand in");
+    expect(html).toContain("Delete attempt");
+    // Nothing has been scored yet: no "Not scored yet" noise, no method word.
+    expect(html).not.toContain("Not scored yet");
+    expect(html).not.toContain("auto-scored");
+  });
+
+  test("a teacher-handed-in attempt shows 'Handed in by teacher' on the matrix, the per-student page and the print report", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const [dave] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "555", name: "Dave Overlay" })
+      .returning();
+    const [daveAttempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: scene.assessment.id,
+        student_id: dave!.id,
+        status: "submitted" as const,
+        submitted_at: SUBMITTED_AT,
+        submitted_by_sub: OWNER,
+      })
+      .returning();
+
+    const matrixHtml = await renderResults(scene.assessment.id);
+    expect(matrixHtml).toContain("Handed in by teacher");
+
+    const attemptHtml = await renderAttempt(scene.assessment.id, daveAttempt!.id);
+    expect(attemptHtml).toContain("Handed in by teacher");
+
+    const printHtml = await renderPrint(scene.assessment.id);
+    expect(printHtml).toContain("Handed in by teacher");
   });
 });

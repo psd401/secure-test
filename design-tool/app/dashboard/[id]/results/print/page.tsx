@@ -342,7 +342,13 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
               {assessment.name}
               {singleStudent && sectionFilter ? ` · ${sectionFilter}` : ""}
             </p>
-            <p className="meta">Handed in {printWhen(row.submitted_at)}</p>
+            <p className="meta">
+              Handed in {printWhen(row.submitted_at)}
+              {/* Time limit / unfinished attempts (D-1/A): print stays
+                  submitted-only, but a teacher-forced hand-in still gets
+                  attributed on the family-facing report. */}
+              {row.submitted_by_sub ? " · Handed in by teacher" : ""}
+            </p>
             <p className="meta">{scoreLine(row)}</p>
             <table>
               <caption className="sr-only">Marks per question</caption>

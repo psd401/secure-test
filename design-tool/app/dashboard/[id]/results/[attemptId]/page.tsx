@@ -28,6 +28,7 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
+import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
 
 export const dynamic = "force-dynamic";
 
@@ -203,9 +204,12 @@ function TableGrid({
  *
  * Identity, totals and the section label are `buildResults`' — the same
  * numbers the matrix shows, from one code path, so a per-student page can
- * never disagree with the row it was opened from. That is also why an
- * IN-PROGRESS attempt 404s here: buildResults is submitted-only, and a
- * report on unfinished work is a different feature.
+ * never disagree with the row it was opened from.
+ *
+ * Time limit / unfinished attempts (D-1/B): `include_in_progress` means an
+ * IN-PROGRESS attempt no longer 404s here — it renders with a "Not handed
+ * in" badge, the answered count, every saved answer (no score section, since
+ * nothing has been scored), and a Hand-in control beside Delete.
  */
 export default async function AttemptResultPage({ params }: PageProps) {
   const session = await readStaffSessionFromCookies();
@@ -236,7 +240,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
     notFound();
   }
 
-  const results = await buildResults(id, session.sub, session.email);
+  const results = await buildResults(id, session.sub, session.email, {
+    include_in_progress: true,
+  });
   const row = results.rows.find((r) => r.attempt_id === attemptId);
   if (!row) {
     notFound();
@@ -318,22 +324,56 @@ export default async function AttemptResultPage({ params }: PageProps) {
           {assessment.name}
         </p>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm">
-            Handed in{" "}
-          {row.submitted_at ? formatWhen(row.submitted_at) : "—"} ·{" "}
-          <strong>
-            {row.total_points} / {row.max_points}
-          </strong>{" "}
-          ·{" "}
-          {row.unscored_count === 0
-            ? `${row.percent ?? 0}%`
-            : `${row.unscored_count} unscored`}
-          </p>
-          <DeleteAttemptAndReturn
-            attemptId={attemptId}
-            assessmentId={id}
-            studentName={row.student.name || row.student.ssid || "this student"}
-          />
+          {row.status === "in_progress" ? (
+            <p className="text-sm">
+              <span className="font-medium text-warning-foreground">Not handed in</span>{" "}
+              · Started {attempt.started_at ? formatWhen(attempt.started_at) : "—"} ·{" "}
+              {row.answered_count} of {results.items.length} answered
+            </p>
+          ) : (
+            <p className="text-sm">
+              Handed in{" "}
+              {row.submitted_at ? formatWhen(row.submitted_at) : "—"} ·{" "}
+              <strong>
+                {row.total_points} / {row.max_points}
+              </strong>{" "}
+              ·{" "}
+              {row.unscored_count === 0
+                ? `${row.percent ?? 0}%`
+                : `${row.unscored_count} unscored`}
+              {/* Time limit / unfinished attempts (D-1/A): who ended this
+                  attempt, next to when. */}
+              {row.submitted_by_sub ? (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  Handed in by teacher
+                </span>
+              ) : null}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {row.status === "in_progress" ? (
+              <HandInAttemptAndReload
+                attemptId={attemptId}
+                studentName={row.student.name || row.student.ssid || "this student"}
+                answeredCount={row.answered_count}
+                disabledReason={
+                  row.sitting_open
+                    ? "End the test session first, then hand in."
+                    : undefined
+                }
+              />
+            ) : null}
+            <DeleteAttemptAndReturn
+              attemptId={attemptId}
+              assessmentId={id}
+              studentName={row.student.name || row.student.ssid || "this student"}
+              disabledReason={
+                row.status === "in_progress" && row.sitting_open
+                  ? "End the test session first, then delete."
+                  : undefined
+              }
+            />
+          </div>
         </div>
       </div>
 
@@ -418,39 +458,44 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 ) : null}
               </div>
 
-              <div className="mt-3 border-t border-border pt-2 text-sm">
-                {final ? (
-                  <p>
-                    <strong>
-                      {final.points} / {final.max_points}
-                    </strong>{" "}
-                    <span className="text-muted-foreground">
-                      ({METHOD_WORD[final.method] ?? final.method})
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">
-                    Not scored yet ({itemMaxPoints(item)} point
-                    {itemMaxPoints(item) === 1 ? "" : "s"} available)
-                  </p>
-                )}
-                {final ? (
-                  <RubricScoreDetail rows={finalDetail.rows} overall={finalDetail.overall} />
-                ) : null}
-                {proposed && !final ? (
-                  // Never counted, and the page says so in the same breath as
-                  // the number so it cannot be read as a score.
-                  <p className="mt-1 text-xs">
-                    AI proposal: {proposed.points} / {proposed.max_points} (not counted)
-                  </p>
-                ) : null}
-                {proposed && !final ? (
-                  <RubricScoreDetail
-                    rows={proposedDetail.rows}
-                    overall={proposedDetail.overall}
-                  />
-                ) : null}
-              </div>
+              {/* Time limit / unfinished attempts (D-1/B): an in-progress
+                  attempt has nothing scored — auto-scoring runs on hand-in —
+                  so this whole section is a no-op noise floor until then. */}
+              {row.status === "in_progress" ? null : (
+                <div className="mt-3 border-t border-border pt-2 text-sm">
+                  {final ? (
+                    <p>
+                      <strong>
+                        {final.points} / {final.max_points}
+                      </strong>{" "}
+                      <span className="text-muted-foreground">
+                        ({METHOD_WORD[final.method] ?? final.method})
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Not scored yet ({itemMaxPoints(item)} point
+                      {itemMaxPoints(item) === 1 ? "" : "s"} available)
+                    </p>
+                  )}
+                  {final ? (
+                    <RubricScoreDetail rows={finalDetail.rows} overall={finalDetail.overall} />
+                  ) : null}
+                  {proposed && !final ? (
+                    // Never counted, and the page says so in the same breath
+                    // as the number so it cannot be read as a score.
+                    <p className="mt-1 text-xs">
+                      AI proposal: {proposed.points} / {proposed.max_points} (not counted)
+                    </p>
+                  ) : null}
+                  {proposed && !final ? (
+                    <RubricScoreDetail
+                      rows={proposedDetail.rows}
+                      overall={proposedDetail.overall}
+                    />
+                  ) : null}
+                </div>
+              )}
             </article>
           );
         })}

@@ -50,6 +50,7 @@ import {
   type StudentState,
 } from "@/components/app/StatusBadge";
 import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
+import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt } from "@/lib/ui/format";
@@ -455,6 +456,18 @@ function StudentRow({
         {r.attempt_id && r.status !== "not_joined" ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
+            {/* Time limit / unfinished attempts (D-1/A): a student who ran
+                out of time or otherwise never handed in. Same enable rule as
+                Delete beside it. */}
+            {r.status === "in_progress" ? (
+              <HandInAttemptControl
+                attemptId={r.attempt_id}
+                studentName={r.name}
+                answeredCount={r.answered}
+                onHandedIn={onDeleted}
+                disabledReason={sessionClosed ? undefined : "End the test session first, then hand in."}
+              />
+            ) : null}
             {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
                 while the student may still be locked in — the route 409s
                 for the same case (`session_open`). */}

@@ -122,6 +122,7 @@ function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "c
     submitted_at: null,
     submitted_by_sub: null,
     answered_count: 0,
+    sitting_open: false,
     total_points: 0,
     scored_max_points: 0,
     unscored_count: 0,

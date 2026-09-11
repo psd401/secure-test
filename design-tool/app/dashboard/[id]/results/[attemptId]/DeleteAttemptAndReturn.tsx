@@ -12,15 +12,18 @@ export function DeleteAttemptAndReturn({
   attemptId,
   assessmentId,
   studentName,
+  disabledReason,
 }: {
   attemptId: string;
   assessmentId: string;
   studentName: string;
+  disabledReason?: string;
 }) {
   return (
     <DeleteAttemptControl
       attemptId={attemptId}
       studentName={studentName}
+      disabledReason={disabledReason}
       onDeleted={() => {
         window.location.assign(`/dashboard/${assessmentId}/results`);
       }}

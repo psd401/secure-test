@@ -8,6 +8,7 @@ import { buildResults, type ResultsCell, type ResultsRow } from "@/lib/scoring/r
 import { formatMean } from "@/lib/reporting/analytics";
 import { UUID_RE } from "@/lib/uuid";
 import { loadItemAnalytics } from "./analyticsQuery";
+import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     );
   }
 
-  const results = await buildResults(id, session.sub, session.email);
+  // Time limit / unfinished attempts (D-1/B): in-progress rows join the
+  // matrix so a teacher can see and hand in an unfinished attempt, not just
+  // ones already handed in. The Complete marker and the analytics footer
+  // below stay submitted-only (loadItemAnalytics queries `submitted` attempts
+  // directly, and the Complete check below is guarded on `row.status`).
+  const results = await buildResults(id, session.sub, session.email, {
+    include_in_progress: true,
+  });
   const { analytics, submitted_count } = await loadItemAnalytics(id);
 
   const raw = (await searchParams).section;
@@ -228,24 +236,61 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                       {cellText(cell)}
                     </td>
                   ))}
-                  <td className="px-2 py-2 text-right font-medium">
-                    {row.total_points}/{row.max_points}
-                  </td>
-                  <td className="px-2 py-2 text-right text-muted-foreground">
-                    {row.percent === null ? "" : `${row.percent}%`}
-                  </td>
-                  {/* Text + a glyph, never colour alone: this cell is the
-                      answer to "is this one finished?" and has to survive a
-                      greyscale print and a colour-blind reader. */}
-                  <td className="px-2 py-2 text-right whitespace-nowrap">
-                    {row.unscored_count === 0 ? (
-                      <span className="text-success-foreground">✓ Complete</span>
-                    ) : (
-                      <span className="text-muted-foreground">
-                        {row.unscored_count} to score
-                      </span>
-                    )}
-                  </td>
+                  {row.status === "in_progress" ? (
+                    <>
+                      {/* No totals for unfinished work (D-1/B) — the "k of N
+                          answered" line replaces both the Total and %
+                          columns; nothing has been scored. */}
+                      <td
+                        className="px-2 py-2 text-right text-muted-foreground"
+                        colSpan={2}
+                      >
+                        Not handed in — {row.answered_count} of {results.items.length}{" "}
+                        answered
+                      </td>
+                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                        <HandInAttemptAndReload
+                          attemptId={row.attempt_id}
+                          studentName={row.student.name || row.student.ssid || "this student"}
+                          answeredCount={row.answered_count}
+                          disabledReason={
+                            row.sitting_open
+                              ? "End the test session first, then hand in."
+                              : undefined
+                          }
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-2 py-2 text-right font-medium">
+                        {row.total_points}/{row.max_points}
+                      </td>
+                      <td className="px-2 py-2 text-right text-muted-foreground">
+                        {row.percent === null ? "" : `${row.percent}%`}
+                      </td>
+                      {/* Text + a glyph, never colour alone: this cell is the
+                          answer to "is this one finished?" and has to survive
+                          a greyscale print and a colour-blind reader. */}
+                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                        {row.unscored_count === 0 ? (
+                          <span className="text-success-foreground">✓ Complete</span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {row.unscored_count} to score
+                          </span>
+                        )}
+                        {/* Time limit / unfinished attempts (D-1/A): the
+                            row's only trace, on the matrix, that a teacher
+                            (not the student) ended this attempt. */}
+                        {row.submitted_by_sub ? (
+                          <div className="text-xs font-normal text-muted-foreground">
+                            Handed in by teacher
+                          </div>
+                        ) : null}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

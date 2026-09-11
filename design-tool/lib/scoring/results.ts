@@ -68,6 +68,14 @@ export interface ResultsRow {
   // on every row, but it is the in-progress rows that need it: "Not handed in
   // — k of N answered" is the only honest thing to show where a score goes.
   answered_count: number;
+  // Slice 3 (teacher UI): true only for an in-progress row whose sitting is
+  // OPEN — the same "the student may be locked in and mid-answer" signal
+  // `sittingIsOpen` (lib/api/staffAttempt.ts) guards Hand-in and Delete with
+  // server-side. False for every submitted row and for an in-progress row
+  // with no sitting or a closed one. The UI mirrors the guard rather than the
+  // route's deadline relaxation (D-4) — simplest, and a teacher who hits the
+  // 409 anyway sees the same "close the session" text inline.
+  sitting_open: boolean;
   cells: ResultsCell[]; // aligned with items order
   // Null on an in-progress row: nothing has been scored, and printing a 0
   // where a total belongs reads as a mark of zero.
@@ -201,6 +209,10 @@ export async function buildResults(
   const sectionPsIdBySessionId = new Map(
     testSessionRows.map((t) => [t.id, t.section_ps_id]),
   );
+  // Slice 3: the same rows carry `status`, which is all `sitting_open` needs.
+  const sessionStatusBySessionId = new Map(
+    testSessionRows.map((t) => [t.id, t.status]),
+  );
   const sittingSectionPsIds = [
     ...new Set(
       testSessionRows.map((t) => t.section_ps_id).filter((v): v is string => !!v),
@@ -318,6 +330,10 @@ export async function buildResults(
     });
     const rosterPsId = student?.roster_ps_id ?? null;
     const rosterStudent = rosterPsId ? rosterStudentByPsId.get(rosterPsId) : undefined;
+    const sittingOpen =
+      inProgress &&
+      attempt.test_session_id !== null &&
+      sessionStatusBySessionId.get(attempt.test_session_id) === "open";
     const percent =
       !inProgress && unscored === 0 && assessmentMaxPoints > 0
         ? Math.round((100 * total) / assessmentMaxPoints)
@@ -343,6 +359,7 @@ export async function buildResults(
       submitted_at: attempt.submitted_at?.toISOString() ?? null,
       submitted_by_sub: attempt.submitted_by_sub,
       answered_count: answered,
+      sitting_open: sittingOpen,
       cells,
       total_points: inProgress ? null : total,
       scored_max_points: inProgress ? null : scoredMax,
