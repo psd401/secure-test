@@ -317,3 +317,15 @@ typecheck re-run in the main session before each commit, as in the
   item-config, 20 editor-logic. (The list summary's max points imports
   `rubricMaxPoints` from `scoreCore` — the agent's local copy was folded
   after slice 4 landed.)
+- **Slice 5 — 2026-09-11.** `lib/reporting/printFeedback.ts`
+  (`selectPrintFeedback(rubric, finalRationale)` — gated on
+  `with_feedback === true` and a FINAL score's rationale, rows through
+  `rubricScoreRows` so the level label prints, never the raw id). The
+  print page's `?attempt=` view fetches the essay items with the flag,
+  their responses and the final scores, and prints a "Feedback — Qn"
+  block (criterion / level / points / comment, then the overall rationale)
+  under the student's marks — the page never renders the answer text, so
+  "under the answer" became "under the marks and integrity line" — with
+  one framing line before the first block and no "AI" wording;
+  `break-inside: avoid`. Proposed scores never print; the section view is
+  unchanged. +9 tests (helper + page).

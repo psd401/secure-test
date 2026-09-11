@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempt_events } from "@/db/schema";
+import { assessments, attempt_events, items, responses, scores } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { formatMean } from "@/lib/reporting/analytics";
 import { formatIntegrityLine } from "@/lib/reporting/printIntegrity";
+import { selectPrintFeedback, type PrintFeedback } from "@/lib/reporting/printFeedback";
 import { itemTypeLabel, summarizeCohort } from "@/lib/reporting/printSummary";
 import { buildResults, type ResultsCell, type ResultsRow } from "@/lib/scoring/results";
 import { formatDate, formatDateTime } from "@/lib/ui/format";
@@ -100,6 +101,10 @@ const PRINT_CSS = `
 .report th.num, .report td.num { text-align: right; }
 .report .student-page { margin-top: 2rem; }
 .report .integrity { margin-top: .75rem; }
+.report .feedback-framing { margin-top: 1rem; }
+.report .feedback-block { margin-top: .75rem; break-inside: avoid; page-break-inside: avoid; }
+.report .feedback-block h3 { font-size: 11pt; margin: 0 0 .25rem; }
+.report .feedback-block table { margin-top: .25rem; }
 .report .toolbar { margin: 0 auto 1rem; max-width: 52rem; padding: 1rem 1.5rem 0;
   display: flex; gap: 1rem; align-items: center; }
 @media print {
@@ -149,6 +154,64 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
   const singleStudent = attemptFilter !== null;
   if (singleStudent) {
     rows = rows.filter((r) => r.attempt_id === attemptFilter);
+  }
+
+  // D-6 (slice 5): the family-facing single-attempt view may show rubric
+  // feedback for an essay item whose rubric opted in
+  // (`student_visibility.with_feedback`) and whose response has a FINAL
+  // score — never a proposal. Fetched only for `?attempt=`; the section
+  // (multi-student) view is unchanged (slice 5 scope).
+  const feedbackByPosition: Array<{ position: number; feedback: PrintFeedback }> = [];
+  if (singleStudent && rows.length === 1) {
+    const attemptRowId = rows[0]!.attempt_id;
+    const itemConfigRows = await db
+      .select({ id: items.id, position: items.position, type: items.type, config: items.config })
+      .from(items)
+      .where(eq(items.assessment_id, id))
+      .orderBy(asc(items.position));
+    const essayItemIds = itemConfigRows
+      .filter(
+        (i) =>
+          i.type === "essay" && i.config.rubric?.student_visibility?.with_feedback === true,
+      )
+      .map((i) => i.id);
+    const responseRows =
+      essayItemIds.length > 0
+        ? await db
+            .select({ id: responses.id, item_id: responses.item_id })
+            .from(responses)
+            .where(
+              and(
+                eq(responses.attempt_id, attemptRowId),
+                inArray(responses.item_id, essayItemIds),
+              ),
+            )
+        : [];
+    const responseIdByItem = new Map(responseRows.map((r) => [r.item_id, r.id]));
+    const finalScoreRows =
+      responseRows.length > 0
+        ? await db
+            .select({ response_id: scores.response_id, rationale: scores.rationale })
+            .from(scores)
+            .where(
+              and(
+                inArray(
+                  scores.response_id,
+                  responseRows.map((r) => r.id),
+                ),
+                eq(scores.status, "final"),
+              ),
+            )
+        : [];
+    const rationaleByResponseId = new Map(finalScoreRows.map((s) => [s.response_id, s.rationale]));
+
+    for (const item of itemConfigRows) {
+      if (!essayItemIds.includes(item.id)) continue;
+      const responseId = responseIdByItem.get(item.id);
+      const rationale = responseId ? rationaleByResponseId.get(responseId) : undefined;
+      const feedback = selectPrintFeedback(item.config.rubric ?? null, rationale);
+      if (feedback) feedbackByPosition.push({ position: item.position, feedback });
+    }
   }
 
   const cohort = summarizeCohort(rows);
@@ -305,6 +368,42 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
             <p className="integrity">
               Integrity: {formatIntegrityLine(eventsByAttempt.get(row.attempt_id) ?? [])}
             </p>
+            {feedbackByPosition.length > 0 ? (
+              <>
+                <p className="meta feedback-framing">
+                  Scored with a rubric; the comments below explain each score.
+                </p>
+                {feedbackByPosition.map(({ position, feedback }) => (
+                  <div key={position} className="feedback-block">
+                    <h3>Feedback — Q{position + 1}</h3>
+                    <table>
+                      <caption className="sr-only">Rubric feedback for Q{position + 1}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Criterion</th>
+                          <th scope="col">Level</th>
+                          <th scope="col" className="num">
+                            Points
+                          </th>
+                          <th scope="col">Comment</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {feedback.rows.map((r) => (
+                          <tr key={r.criterion_id}>
+                            <td>{r.criterion_name}</td>
+                            <td>{r.level_label}</td>
+                            <td className="num">{r.points}</td>
+                            <td>{r.rationale ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {feedback.overall ? <p className="meta">{feedback.overall}</p> : null}
+                  </div>
+                ))}
+              </>
+            ) : null}
           </section>
         ))}
       </main>

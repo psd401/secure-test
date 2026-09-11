@@ -403,6 +403,146 @@ describe("print report — ?attempt= single-student mode", () => {
   });
 });
 
+describe("print report — D-6 rubric feedback on the single-attempt view", () => {
+  const FEEDBACK_RUBRIC = {
+    style: "analytic" as const,
+    criteria: [
+      {
+        id: "c1",
+        name: "Thesis",
+        levels: [
+          { id: "l1", label: "Strong", points: 4 },
+          { id: "l2", label: "Weak", points: 1 },
+        ],
+      },
+    ],
+    student_visibility: { with_feedback: true },
+  };
+  const FEEDBACK_RATIONALE = {
+    criterion_scores: [
+      { criterion_id: "c1", level_id: "l1", points: 4, rationale: "Clear, specific claim." },
+    ],
+    overall_rationale: "Strong work overall.",
+  };
+
+  async function seedRubricEssayScenario(opts: {
+    withFeedback: boolean;
+    status: "final" | "proposed";
+  }) {
+    const db = getDb();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Rubric Feedback Fixture" })
+      .returning();
+    const a = assessment!;
+    const [item] = await db
+      .insert(items)
+      .values({
+        assessment_id: a.id,
+        position: 0,
+        type: "essay",
+        stem: "Essay",
+        config: {
+          scoring_method: "human",
+          rubric: {
+            ...FEEDBACK_RUBRIC,
+            student_visibility: { with_feedback: opts.withFeedback },
+          },
+        },
+      })
+      .returning();
+    const [student] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "rf-1", name: "Rae Feedback" })
+      .returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: a.id,
+        student_id: student!.id,
+        status: "submitted" as const,
+        started_at: new Date("2026-09-11T16:00:00Z"),
+        submitted_at: new Date("2026-09-11T17:00:00Z"),
+      })
+      .returning();
+    const [response] = await db
+      .insert(responses)
+      .values({
+        attempt_id: attempt!.id,
+        item_id: item!.id,
+        response: { type: "essay", text: "SECRET-ESSAY-PROSE-FEEDBACK" },
+      })
+      .returning();
+    await db.insert(scores).values({
+      response_id: response!.id,
+      method: "ai",
+      points: 4,
+      max_points: 4,
+      rationale: FEEDBACK_RATIONALE,
+      scorer: "bedrock",
+      status: opts.status,
+      reviewed_by_sub: opts.status === "final" ? OWNER : null,
+    });
+    return { assessment: a, attempt: attempt! };
+  }
+
+  test("flag on + a final score prints the framing line, the level label, points and rationale", async () => {
+    const { assessment, attempt } = await seedRubricEssayScenario({
+      withFeedback: true,
+      status: "final",
+    });
+    const html = await render(assessment.id, { attempt: attempt.id });
+
+    expect(html).toContain("Scored with a rubric; the comments below explain each score.");
+    expect(html).toContain("Feedback");
+    expect(html).toContain("Thesis");
+    // The level LABEL prints, never the raw id "l1".
+    expect(html).toContain("Strong");
+    expect(html).not.toContain(">l1<");
+    expect(html).toContain("Clear, specific claim.");
+    expect(html).toContain("Strong work overall.");
+    // Still never the free-text response.
+    expect(html).not.toContain("SECRET-ESSAY-PROSE-FEEDBACK");
+  });
+
+  test("flag off prints the score only — no feedback block, no framing line", async () => {
+    const { assessment, attempt } = await seedRubricEssayScenario({
+      withFeedback: false,
+      status: "final",
+    });
+    const html = await render(assessment.id, { attempt: attempt.id });
+
+    expect(html).not.toContain("Scored with a rubric");
+    expect(html).not.toContain("Clear, specific claim.");
+    expect(html).not.toContain("Strong work overall.");
+    // The mark itself still prints as always.
+    expect(html).toContain("4/4");
+  });
+
+  test("a proposed-only score never prints feedback, even with the flag on", async () => {
+    const { assessment, attempt } = await seedRubricEssayScenario({
+      withFeedback: true,
+      status: "proposed",
+    });
+    const html = await render(assessment.id, { attempt: attempt.id });
+
+    expect(html).not.toContain("Scored with a rubric");
+    expect(html).not.toContain("Clear, specific claim.");
+    expect(html).not.toContain("Strong work overall.");
+  });
+
+  test("the section (multi-student) view never shows feedback, even with the flag on", async () => {
+    const { assessment } = await seedRubricEssayScenario({
+      withFeedback: true,
+      status: "final",
+    });
+    const html = await render(assessment.id);
+
+    expect(html).not.toContain("Scored with a rubric");
+    expect(html).not.toContain("Clear, specific claim.");
+  });
+});
+
 describe("print report — ?section= filter", () => {
   test("a section nobody resolves to reports nobody", async () => {
     const { assessment } = await seedPrintScenario();
