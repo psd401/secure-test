@@ -202,6 +202,8 @@ export class AppService extends Construct {
       MATH_TRANSLATOR_PROVIDER: "bedrock",
       ESSAY_SCORER_PROVIDER: "bedrock",
       PDF_EXTRACTOR_PROVIDER: "bedrock",
+      // Rubric upload (docs/rubric-upload-design.md, slice 1).
+      RUBRIC_EXTRACTOR_PROVIDER: "bedrock",
       GUARDRAIL_PROVIDER: "bedrock",
       GUARDRAIL_ID: props.guardrailId,
       GUARDRAIL_VERSION: "1",
