@@ -129,6 +129,15 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 `.env.local` sets it and the launcher forwards it. Record in
 `client/MANUAL-CHECKS.md` under "Signed build".
 
+## Released
+
+- **v1.3.0 — 2026-09-11** (built from `c37921e`): managed-preference
+  configuration (the section above), no localhost fallback, the not-set-up
+  message; plus the time limit, math keypad, drawing tools and the
+  multi-source follow-ups since v1.2.0. Release notes carry the "Requires
+  configuration profile" block (placeholders). First release that needs the
+  profile scoped alongside the pkg.
+
 ## Open
 
 - No `LSApplicationCategoryType` yet (archive warning); add
