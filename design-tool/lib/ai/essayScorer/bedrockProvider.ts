@@ -3,8 +3,8 @@ import {
   ESSAY_SCORE_MAX_TOKENS,
   ESSAY_SCORE_SYSTEM_PROMPT,
   buildEssayScoreUserPrompt,
-  isScorableRubricStyle,
   parseScoreResult,
+  scoringView,
   validateAgainstRubric,
 } from "./scoreCore";
 import type {
@@ -30,21 +30,20 @@ export const bedrockEssayScorer: EssayScorerProvider = {
   },
 
   async scoreEssay(req: ScoreEssayRequest): Promise<ScoreEssayResult> {
-    if (!isScorableRubricStyle(req.rubric)) {
-      throw new Error(
-        `bedrock: rubric style "${req.rubric.style}" is not AI-scorable (analytic/holistic only)`,
-      );
-    }
+    // D-5: the model sees the scoring view (single-point targets expanded
+    // into the below/meets/exceeds ladder), and the returned selections are
+    // bounds-checked against that same view.
+    const rubric = scoringView(req.rubric);
     const text = await converseText({
       modelId: process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL,
       systemText: ESSAY_SCORE_SYSTEM_PROMPT,
-      userText: buildEssayScoreUserPrompt(req),
+      userText: buildEssayScoreUserPrompt({ ...req, rubric }),
       maxTokens: ESSAY_SCORE_MAX_TOKENS,
       temperature: 0,
       errPrefix: "bedrock",
     });
     const result = parseScoreResult(text, "bedrock");
-    const bounds = validateAgainstRubric(result, req.rubric);
+    const bounds = validateAgainstRubric(result, rubric);
     if (!bounds.valid) {
       throw new Error(`bedrock: model score failed rubric bounds: ${bounds.reason}`);
     }

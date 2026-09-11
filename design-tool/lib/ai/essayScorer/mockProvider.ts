@@ -1,7 +1,4 @@
-import {
-  rubricMaxPoints,
-  isScorableRubricStyle,
-} from "./scoreCore";
+import { rubricMaxPoints, scoringView } from "./scoreCore";
 import type {
   EssayScorerProvider,
   ScoreEssayRequest,
@@ -13,23 +10,22 @@ import type {
 // Confidence defaults to 0.9 (above the hybrid auto-finalize gate) and is
 // overridable per-call via MOCK_ESSAY_SCORER_CONFIDENCE so tests can
 // exercise both sides of the hybrid threshold without module mocking.
+//
+// D-5: it picks from the SCORING VIEW, so a single-point rubric's middle
+// level is `<target>.meets` — the same derived ids a real provider returns.
 
 export const mockEssayScorer: EssayScorerProvider = {
   id: "mock",
 
   async scoreEssay(req: ScoreEssayRequest): Promise<ScoreEssayResult> {
-    if (!isScorableRubricStyle(req.rubric)) {
-      throw new Error(
-        `mock: rubric style "${req.rubric.style}" is not AI-scorable (analytic/holistic only)`,
-      );
-    }
+    const rubric = scoringView(req.rubric);
     const envConfidence = Number(process.env.MOCK_ESSAY_SCORER_CONFIDENCE);
     const confidence =
       Number.isFinite(envConfidence) && envConfidence >= 0 && envConfidence <= 1
         ? envConfidence
         : 0.9;
 
-    const criterion_scores = req.rubric.criteria.map((c) => {
+    const criterion_scores = rubric.criteria.map((c) => {
       const level = c.levels[Math.floor(c.levels.length / 2)]!;
       return {
         criterion_id: c.id,
@@ -41,7 +37,7 @@ export const mockEssayScorer: EssayScorerProvider = {
     return {
       criterion_scores,
       points: criterion_scores.reduce((s, c) => s + c.points, 0),
-      max_points: rubricMaxPoints(req.rubric),
+      max_points: rubricMaxPoints(rubric),
       overall_rationale:
         "Mock scoring: middle level chosen for every criterion. Replace with a real provider for meaningful scores.",
       confidence,

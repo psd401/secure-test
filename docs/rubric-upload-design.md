@@ -277,3 +277,18 @@ typecheck re-run in the main session before each commit, as in the
   the route's `hint` + `issues`. No DOM harness exists in the repo, so the
   logic is exported and tested directly (`renderToStaticMarkup` for the
   markup). 1460 tests (+20), typecheck clean.
+- **Slice 4 — 2026-09-11** (built in parallel with slice 3).
+  `scoringView(rubric)` in `scoreCore.ts` expands each single-point target
+  into `<id>.below` 0 / `.meets` P (descriptor kept) / `.exceeds` P; the
+  view reports `style: "analytic"` so it satisfies `RubricSchema`'s
+  cardinality (nothing reads the view's style — the prompt keys on the
+  labels); `isScorableRubricStyle` is always true; both providers, the AI
+  route and the manual-score route validate against the view (the authored
+  target id now 400s on a single-point item — no such score could exist
+  before); `describeLevel` resolves derived ids for UIs;
+  `lib/reporting/rubricScoreView.ts` (`rubricScoreRows`, `overallRationale`)
+  feeds a per-criterion table on the queue's proposal card and the
+  per-student page (final AND proposed) — slice 5 reuses it for print; the
+  queue's level picker (it already was one) offers Below / Meets / Exceeds
+  and pre-fills from the proposal. +12 tests across four files; the queue
+  card needs a hand-run row (no DOM harness).

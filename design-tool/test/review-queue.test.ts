@@ -625,3 +625,133 @@ describe("review queue: table items (E3)", () => {
     expect(body.entries).toHaveLength(0);
   });
 });
+
+// Slice 4 of docs/rubric-upload-design.md (D-5): a single-point rubric is
+// scored through the derived below/meets/exceeds ladder — the AI proposes
+// those ids and the manual route accepts them (and only them).
+describe("single-point scoring (D-5)", () => {
+  const SINGLE_POINT: Rubric = {
+    style: "single_point",
+    criteria: [
+      {
+        id: "focus",
+        name: "Focus",
+        levels: [{ id: "t", label: "Target", points: 2 }],
+      },
+      {
+        id: "evidence",
+        name: "Evidence",
+        levels: [{ id: "t2", label: "Target", points: 1 }],
+      },
+    ],
+  };
+
+  async function seedSinglePoint(method: "human" | "ai") {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Single point" })
+      .returning();
+    const [item] = await db
+      .insert(items)
+      .values({
+        assessment_id: a!.id,
+        position: 0,
+        type: "essay",
+        stem: "Single-point essay",
+        config: { rubric: SINGLE_POINT, scoring_method: method },
+      })
+      .returning();
+    const [student] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "891", name: "SP Student" })
+      .returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: a!.id,
+        student_id: student!.id,
+        status: "submitted",
+        submitted_at: new Date(),
+      })
+      .returning();
+    const [response] = await db
+      .insert(responses)
+      .values({
+        attempt_id: attempt!.id,
+        item_id: item!.id,
+        response: { type: "essay", text: "An essay against a single-point rubric." },
+      })
+      .returning();
+    return { db, assessment: a!, attempt: attempt!, response: response! };
+  }
+
+  test("the queue asks for the target total as the denominator", async () => {
+    const s = await seedSinglePoint("human");
+    const body = (await (await getQueue(s.assessment.id)).json()) as {
+      entries: Array<{ item: { max_points: number; rubric: Rubric | null } }>;
+    };
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0]!.item.max_points).toBe(3);
+    expect(body.entries[0]!.item.rubric?.style).toBe("single_point");
+  });
+
+  test("a manual score takes the derived below/meets/exceeds ids", async () => {
+    const s = await seedSinglePoint("human");
+    const res = await postManualScore(s.response.id, {
+      points: 2,
+      max_points: 3,
+      criterion_scores: [
+        { criterion_id: "focus", level_id: "t.meets", points: 2, rationale: "one claim" },
+        { criterion_id: "evidence", level_id: "t2.below", points: 0, rationale: "thin" },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const [row] = await s.db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, s.response.id));
+    expect(row!.status).toBe("final");
+    const stored = row!.rationale as {
+      criterion_scores: Array<{ level_id: string }>;
+    };
+    expect(stored.criterion_scores.map((c) => c.level_id)).toEqual([
+      "t.meets",
+      "t2.below",
+    ]);
+  });
+
+  test("the authored target id is rejected — the view is the contract", async () => {
+    const s = await seedSinglePoint("human");
+    const res = await postManualScore(s.response.id, {
+      points: 3,
+      max_points: 3,
+      criterion_scores: [
+        { criterion_id: "focus", level_id: "t", points: 2 },
+        { criterion_id: "evidence", level_id: "t2", points: 1 },
+      ],
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("rubric_bounds");
+  });
+
+  test("AI scoring writes derived ids and the rubric's own maximum", async () => {
+    const s = await seedSinglePoint("ai");
+    expect((await postAiScore(s.attempt.id)).status).toBe(200);
+    const [row] = await s.db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, s.response.id));
+    expect(row!.status).toBe("proposed");
+    expect(row!.max_points).toBe(3);
+    expect(row!.points).toBe(3); // mock picks the middle level = meets
+    const stored = row!.rationale as {
+      criterion_scores: Array<{ level_id: string }>;
+    };
+    expect(stored.criterion_scores.map((c) => c.level_id)).toEqual([
+      "t.meets",
+      "t2.meets",
+    ]);
+  });
+});

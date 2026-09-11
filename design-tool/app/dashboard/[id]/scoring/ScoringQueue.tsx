@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/schema";
+import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
+import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 import { tableCellMatches } from "@/lib/scoring/auto";
 
 // Slice 39: client panel for the review queue. Two groups fall out of the
@@ -76,6 +78,25 @@ function rubricMax(rubric: Rubric): number {
     (sum, c) => sum + Math.max(...c.levels.map((l) => l.points)),
     0,
   );
+}
+
+/**
+ * D-5: the levels a teacher picks from — the rubric as authored for
+ * analytic/holistic, the derived Below / Meets / Exceeds target ladder for
+ * a single-point rubric. Same view the AI scored against, so an override
+ * writes ids the manual-score route accepts.
+ */
+function pickableRubric(rubric: Rubric): Rubric {
+  return scoringView(rubric);
+}
+
+/** Level picks a proposal implies: criterion_id → level_id. */
+function picksFromProposal(entry: QueueEntry): Record<string, string> {
+  const picked: Record<string, string> = {};
+  for (const cs of entry.proposed?.rationale?.criterion_scores ?? []) {
+    picked[cs.criterion_id] = cs.level_id;
+  }
+  return picked;
 }
 
 function responseText(entry: QueueEntry): string {
@@ -184,6 +205,16 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { entries: QueueEntry[] };
       setEntries(body.entries);
+      // D-6: an override starts from what the AI proposed, so a teacher who
+      // disagrees with one criterion changes that one instead of re-picking
+      // the whole rubric. Anything the teacher has already touched wins.
+      const prefill: Record<string, Record<string, string>> = {};
+      for (const entry of body.entries) {
+        if (!entry.item.rubric || !entry.proposed) continue;
+        const picked = picksFromProposal(entry);
+        if (Object.keys(picked).length > 0) prefill[entry.response_id] = picked;
+      }
+      setPicks((prev) => ({ ...prefill, ...prev }));
     } catch (e) {
       setError(`load queue: ${(e as Error).message}`);
     } finally {
@@ -226,8 +257,8 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
   }
 
   function saveRubricScore(entry: QueueEntry) {
-    const rubric = entry.item.rubric;
-    if (!rubric) return;
+    if (!entry.item.rubric) return;
+    const rubric = pickableRubric(entry.item.rubric);
     const selection = picks[entry.response_id] ?? {};
     const criterion_scores = rubric.criteria.map((c) => {
       const levelId = selection[c.id];
@@ -284,8 +315,8 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
   const needsManual = entries.filter((e) => !e.proposed);
 
   function rubricPicker(entry: QueueEntry) {
-    const rubric = entry.item.rubric;
-    if (!rubric) return null;
+    if (!entry.item.rubric) return null;
+    const rubric = pickableRubric(entry.item.rubric);
     const selection = picks[entry.response_id] ?? {};
     const complete = rubric.criteria.every((c) => selection[c.id]);
     const total = rubric.criteria.reduce((sum, c) => {
@@ -336,6 +367,40 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
             Save final score
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // D-6: the proposal's per-criterion reading — the level the model chose
+  // and why — above the overall rationale, so the teacher approves what the
+  // family will read. Same rows the results page (and slice 5's print page)
+  // render, from lib/reporting/rubricScoreView.
+  function proposalDetail(entry: QueueEntry) {
+    const rows = rubricScoreRows(entry.item.rubric, entry.proposed?.rationale);
+    if (rows.length === 0) return null;
+    const cell = "border border-border px-2 py-1 align-top text-xs";
+    return (
+      <div className="mt-2 overflow-x-auto">
+        <table className="min-w-max border-collapse">
+          <thead>
+            <tr>
+              <th className={`${cell} bg-muted text-left font-medium`}>Criterion</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Level</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Points</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.criterion_id}>
+                <td className={cell}>{r.criterion_name}</td>
+                <td className={cell}>{r.level_label}</td>
+                <td className={cell}>{r.points}</td>
+                <td className={`${cell} text-muted-foreground`}>{r.rationale ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -414,6 +479,7 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
                 </button>
               </div>
             </div>
+            {proposalDetail(entry)}
             {entry.proposed.rationale?.overall_rationale ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 {entry.proposed.rationale.overall_rationale}

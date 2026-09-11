@@ -10,6 +10,7 @@ import { getEssayScorerProvider } from "@/lib/ai/essayScorer/provider";
 import {
   HYBRID_AUTO_FINALIZE_CONFIDENCE,
   isScorableRubricStyle,
+  scoringView,
   validateAgainstRubric,
 } from "@/lib/ai/essayScorer/scoreCore";
 import { effectiveScoringMethod } from "@/lib/api/items";
@@ -48,10 +49,16 @@ export async function aiScoreResponse(opts: {
   }
   const rubric = item.config.rubric;
   if (!rubric || !isScorableRubricStyle(rubric)) {
-    // Write boundary requires a rubric for ai/hybrid; single_point styles
-    // are not AI-scorable yet (scoreCore). Either way: unscorable.
+    // The write boundary requires a rubric for ai/hybrid. Every style is
+    // scorable since slice 4 (single_point through the derived ladder), so
+    // in practice only a missing rubric lands here — the style question is
+    // still asked through scoreCore rather than assumed here.
     return { kind: "unscorable" };
   }
+  // D-5: the gate, the prompt and the bounds check all run against the
+  // scoring view; the stored criterion_scores therefore carry the derived
+  // `<target>.meets` ids for a single-point rubric.
+  const view = scoringView(rubric);
   const parsed = ItemResponseSchema.safeParse(response.response);
   if (!parsed.success || parsed.data.type !== "essay" || !parsed.data.text.trim()) {
     return { kind: "unscorable" };
@@ -79,7 +86,7 @@ export async function aiScoreResponse(opts: {
       return { kind: "blocked" };
     }
     const result = outcome.result;
-    const bounds = validateAgainstRubric(result, rubric);
+    const bounds = validateAgainstRubric(result, view);
     if (!bounds.valid) {
       return { kind: "provider_error" };
     }

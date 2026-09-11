@@ -11,12 +11,77 @@ export const HYBRID_AUTO_FINALIZE_CONFIDENCE = 0.85;
 
 export const ESSAY_SCORE_MAX_TOKENS = 2000;
 
-// v1 scores analytic + holistic rubrics. single_point rubrics have one
-// level per criterion (the target); scoring them means judging
-// below/at/above target, which doesn't reduce to level selection — those
-// items stay human-scored until a dedicated shape exists.
-export function isScorableRubricStyle(rubric: Rubric): boolean {
-  return rubric.style === "analytic" || rubric.style === "holistic";
+// Every rubric style is AI-scorable (slice 4 of docs/rubric-upload-design.md,
+// D-5). analytic + holistic are level selection as authored; single_point
+// becomes level selection through the derived below/meets/exceeds ladder
+// `scoringView` builds. The export stays because aiScoreResponse still asks
+// the question at the point where a missing rubric is also caught; it is
+// now always true.
+export function isScorableRubricStyle(_rubric: Rubric): boolean {
+  return true;
+}
+
+/** The three synthetic levels a single-point target expands into. */
+export const SINGLE_POINT_LEVEL_SUFFIXES = ["below", "meets", "exceeds"] as const;
+
+/**
+ * D-5: what the scorer, the validators and the UIs see.
+ *
+ * analytic / holistic pass through unchanged. A single-point criterion
+ * carries ONE level — the target, worth P — and scoring it means judging
+ * below / at / above, so the view expands it into three levels:
+ *   `<targetId>.below`   "Below target"   0
+ *   `<targetId>.meets`   "Meets target"   P  (the target's descriptor)
+ *   `<targetId>.exceeds` "Exceeds target" P
+ * `exceeds` earns the same points as `meets` because a single-point
+ * rubric's maximum IS the target; the value of the distinction is the
+ * rationale. rubricMaxPoints is therefore unchanged by the expansion
+ * (asserted in the tests).
+ *
+ * The view's style is reported as "analytic" so the result is a rubric
+ * RubricSchema would accept (its superRefine requires exactly one level
+ * per single_point criterion); nothing downstream reads the view's style,
+ * and the prompt tells the model what the Below/Meets/Exceeds labels mean.
+ */
+export function scoringView(rubric: Rubric): Rubric {
+  if (rubric.style !== "single_point") return rubric;
+  return {
+    ...rubric,
+    style: "analytic",
+    criteria: rubric.criteria.map((c) => {
+      const target = c.levels[0]!;
+      return {
+        ...c,
+        levels: [
+          { id: `${target.id}.below`, label: "Below target", points: 0 },
+          {
+            id: `${target.id}.meets`,
+            label: "Meets target",
+            points: target.points,
+            ...(target.descriptor ? { descriptor: target.descriptor } : {}),
+          },
+          { id: `${target.id}.exceeds`, label: "Exceeds target", points: target.points },
+        ],
+      };
+    }),
+  };
+}
+
+/**
+ * Resolve a stored (possibly derived) level id against the scoring view, so
+ * a UI can render "Meets target" for `t.meets` and the authored label for
+ * every other style. null when the ids do not resolve — a rubric edited
+ * after the score was written.
+ */
+export function describeLevel(
+  rubric: Rubric,
+  criterion_id: string,
+  level_id: string,
+): { label: string; points: number } | null {
+  const view = scoringView(rubric);
+  const criterion = view.criteria.find((c) => c.id === criterion_id);
+  const level = criterion?.levels.find((l) => l.id === level_id);
+  return level ? { label: level.label, points: level.points } : null;
 }
 
 export function rubricMaxPoints(rubric: Rubric): number {
@@ -30,7 +95,11 @@ export const ESSAY_SCORE_SYSTEM_PROMPT = [
   "You are a careful K-12 assessment scorer. You will be given an essay",
   "prompt, a student's response, and a scoring rubric as JSON.",
   "Score the response against EVERY rubric criterion by choosing exactly",
-  "one level per criterion. Quote or reference specific evidence from the",
+  "one level per criterion.",
+  "When a level is labelled Below / Meets / Exceeds target, the criterion",
+  "states one target: judge which of the three applies and quote the",
+  "evidence.",
+  "Quote or reference specific evidence from the",
   "student's response in each rationale. Be fair and consistent; do not",
   "reward length over substance. Respond with ONLY a JSON object, no",
   "markdown fences, in this exact shape:",

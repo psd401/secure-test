@@ -18,6 +18,11 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
+import {
+  overallRationale,
+  rubricScoreRows,
+  type RubricScoreRow,
+} from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
 import { tableCellMatches } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
@@ -50,10 +55,56 @@ function splitScores(rows: ScoreRow[]): {
   return { final, proposed };
 }
 
-function rationaleText(rationale: unknown): string | null {
-  if (!rationale || typeof rationale !== "object") return null;
-  const overall = (rationale as { overall_rationale?: unknown }).overall_rationale;
-  return typeof overall === "string" && overall.trim() ? overall : null;
+/**
+ * D-6: the per-criterion reading of a rubric score — the chosen level and
+ * its rationale — above the overall rationale, for FINAL and PROPOSED
+ * scores alike (the teacher is reviewing, not publishing). Rows come from
+ * `rubricScoreRows` so slice 5's print page renders the same reading.
+ */
+function RubricScoreDetail({
+  rows,
+  overall,
+}: {
+  rows: RubricScoreRow[];
+  overall: string | null;
+}) {
+  if (rows.length === 0) {
+    return overall ? (
+      <p className="mt-1 text-xs text-muted-foreground">{overall}</p>
+    ) : null;
+  }
+  const cell = "border border-border px-2 py-1 align-top text-xs";
+  return (
+    <div className="mt-2">
+      <div className="overflow-x-auto">
+        <table className="min-w-max border-collapse">
+          <thead>
+            <tr>
+              <th className={`${cell} bg-muted text-left font-medium`}>Criterion</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Level</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Points</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.criterion_id}>
+                <td className={cell}>{r.criterion_name}</td>
+                <td className={cell}>{r.level_label}</td>
+                <td className={cell}>{r.points}</td>
+                <td className={`${cell} text-muted-foreground`}>
+                  {r.rationale ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {overall ? (
+        <p className="mt-1 text-xs text-muted-foreground">{overall}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function AnswerLines({ lines }: { lines: AnswerLine[] }) {
@@ -305,8 +356,15 @@ export default async function AttemptResultPage({ params }: PageProps) {
           const { final, proposed } = splitScores(
             response ? (scoresByResponse.get(response.id) ?? []) : [],
           );
-          const finalRationale = rationaleText(final?.rationale);
-          const proposedRationale = rationaleText(proposed?.rationale);
+          const rubric = item.config.rubric ?? null;
+          const finalDetail = {
+            rows: rubricScoreRows(rubric, final?.rationale),
+            overall: overallRationale(final?.rationale),
+          };
+          const proposedDetail = {
+            rows: rubricScoreRows(rubric, proposed?.rationale),
+            overall: overallRationale(proposed?.rationale),
+          };
           return (
             <article key={item.id} className="rounded-lg border border-border p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -376,8 +434,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     {itemMaxPoints(item) === 1 ? "" : "s"} available)
                   </p>
                 )}
-                {finalRationale ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{finalRationale}</p>
+                {final ? (
+                  <RubricScoreDetail rows={finalDetail.rows} overall={finalDetail.overall} />
                 ) : null}
                 {proposed && !final ? (
                   // Never counted, and the page says so in the same breath as
@@ -386,8 +444,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     AI proposal: {proposed.points} / {proposed.max_points} (not counted)
                   </p>
                 ) : null}
-                {proposed && !final && proposedRationale ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{proposedRationale}</p>
+                {proposed && !final ? (
+                  <RubricScoreDetail
+                    rows={proposedDetail.rows}
+                    overall={proposedDetail.overall}
+                  />
                 ) : null}
               </div>
             </article>

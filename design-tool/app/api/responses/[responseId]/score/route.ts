@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { scores } from "@/db/schema";
 import {
   rubricMaxPoints,
+  scoringView,
   validateAgainstRubric,
 } from "@/lib/ai/essayScorer/scoreCore";
 import { ManualScoreBody, loadResponseChain } from "@/lib/api/reviewActions";
@@ -82,13 +83,17 @@ export async function POST(req: Request, ctx: RouteContext) {
         { status: 400 },
       );
     }
+    // D-5: picks are validated against the SCORING VIEW, so a single-point
+    // item takes the derived `<target>.below|.meets|.exceeds` ids the queue
+    // offers and the AI proposes. Identity for analytic/holistic, and the
+    // max is unchanged by the expansion, so the rule above still holds.
     const bounds = validateAgainstRubric(
       {
         criterion_scores: body.criterion_scores,
         points: body.points,
         max_points: body.max_points,
       },
-      rubric,
+      scoringView(rubric),
     );
     if (!bounds.valid) {
       return NextResponse.json(

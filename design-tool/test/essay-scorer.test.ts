@@ -3,7 +3,7 @@
 // idempotency, guardrail wiring). DB parts use the items-api harness.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import type { Rubric } from "@secure-test/schema";
+import { RubricSchema, type Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
@@ -18,10 +18,13 @@ import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { mockEssayScorer } from "../lib/ai/essayScorer/mockProvider";
 import {
+  ESSAY_SCORE_SYSTEM_PROMPT,
   HYBRID_AUTO_FINALIZE_CONFIDENCE,
+  describeLevel,
   isScorableRubricStyle,
   parseScoreResult,
   rubricMaxPoints,
+  scoringView,
   validateAgainstRubric,
 } from "../lib/ai/essayScorer/scoreCore";
 
@@ -104,7 +107,14 @@ const RUBRIC: Rubric = {
 const SINGLE_POINT: Rubric = {
   style: "single_point",
   criteria: [
-    { id: "c1", name: "Focus", levels: [{ id: "t", label: "Target", points: 1 }] },
+    {
+      id: "c1",
+      name: "Focus",
+      levels: [
+        { id: "t", label: "Target", points: 2, descriptor: "Holds one clear claim." },
+      ],
+    },
+    { id: "c2", name: "Evidence", levels: [{ id: "t2", label: "Target", points: 1 }] },
   ],
 };
 
@@ -113,9 +123,9 @@ describe("scoreCore validators", () => {
     expect(rubricMaxPoints(RUBRIC)).toBe(5);
   });
 
-  test("isScorableRubricStyle: analytic/holistic yes, single_point no", () => {
+  test("isScorableRubricStyle: every style, single_point included (D-5)", () => {
     expect(isScorableRubricStyle(RUBRIC)).toBe(true);
-    expect(isScorableRubricStyle(SINGLE_POINT)).toBe(false);
+    expect(isScorableRubricStyle(SINGLE_POINT)).toBe(true);
   });
 
   const good = {
@@ -169,6 +179,83 @@ describe("scoreCore validators", () => {
   });
 });
 
+// Slice 4 of docs/rubric-upload-design.md (D-5): single-point rubrics score
+// through a derived below/meets/exceeds ladder.
+describe("scoringView (D-5)", () => {
+  test("analytic and holistic pass through unchanged", () => {
+    expect(scoringView(RUBRIC)).toBe(RUBRIC);
+  });
+
+  test("a single-point target becomes below / meets / exceeds", () => {
+    const view = scoringView(SINGLE_POINT);
+    const focus = view.criteria[0]!;
+    expect(focus.levels).toEqual([
+      { id: "t.below", label: "Below target", points: 0 },
+      {
+        id: "t.meets",
+        label: "Meets target",
+        points: 2,
+        descriptor: "Holds one clear claim.",
+      },
+      { id: "t.exceeds", label: "Exceeds target", points: 2 },
+    ]);
+    // The view is a rubric RubricSchema accepts (single_point cardinality is
+    // exactly one level, so the expansion is reported as analytic).
+    expect(view.style).toBe("analytic");
+    expect(RubricSchema.safeParse(view).success).toBe(true);
+  });
+
+  test("the expansion does not move the rubric maximum", () => {
+    expect(rubricMaxPoints(scoringView(SINGLE_POINT))).toBe(
+      rubricMaxPoints(SINGLE_POINT),
+    );
+    expect(rubricMaxPoints(SINGLE_POINT)).toBe(3);
+    expect(rubricMaxPoints(scoringView(RUBRIC))).toBe(rubricMaxPoints(RUBRIC));
+  });
+
+  test("the view is idempotent", () => {
+    const once = scoringView(SINGLE_POINT);
+    expect(scoringView(once)).toEqual(once);
+  });
+
+  test("describeLevel resolves derived ids and ordinary ones", () => {
+    expect(describeLevel(SINGLE_POINT, "c1", "t.meets")).toEqual({
+      label: "Meets target",
+      points: 2,
+    });
+    expect(describeLevel(SINGLE_POINT, "c1", "t.below")).toEqual({
+      label: "Below target",
+      points: 0,
+    });
+    expect(describeLevel(RUBRIC, "ideas", "i3")).toEqual({
+      label: "Proficient",
+      points: 3,
+    });
+    // The authored target id is not a scoring selection any more.
+    expect(describeLevel(SINGLE_POINT, "c1", "t")).toBeNull();
+    expect(describeLevel(RUBRIC, "nope", "i3")).toBeNull();
+  });
+
+  test("validateAgainstRubric rejects an analytic-style id on a single-point rubric", () => {
+    const view = scoringView(SINGLE_POINT);
+    const raw = {
+      criterion_scores: [
+        { criterion_id: "c1", level_id: "t", points: 2, rationale: "r" },
+        { criterion_id: "c2", level_id: "t2.meets", points: 1, rationale: "r" },
+      ],
+      points: 3,
+      max_points: 3,
+    };
+    const verdict = validateAgainstRubric(raw, view);
+    expect(verdict.valid).toBe(false);
+    expect((verdict as { reason: string }).reason).toContain('unknown level "t"');
+  });
+
+  test("the system prompt explains the Below / Meets / Exceeds labels", () => {
+    expect(ESSAY_SCORE_SYSTEM_PROMPT).toContain("Below / Meets / Exceeds target");
+  });
+});
+
 describe("mockEssayScorer", () => {
   test("returns a rubric-valid middle-level result", async () => {
     const result = await mockEssayScorer.scoreEssay({
@@ -192,10 +279,22 @@ describe("mockEssayScorer", () => {
     expect(result.confidence).toBe(0.4);
   });
 
-  test("refuses single_point rubrics", async () => {
-    await expect(
-      mockEssayScorer.scoreEssay({ stem: "s", response_text: "t", rubric: SINGLE_POINT }),
-    ).rejects.toThrow(/not AI-scorable/);
+  test("scores a single_point rubric through the derived ladder", async () => {
+    const result = await mockEssayScorer.scoreEssay({
+      stem: "s",
+      response_text: "t",
+      rubric: SINGLE_POINT,
+    });
+    // Middle of three derived levels = meets.
+    expect(result.criterion_scores.map((c) => c.level_id)).toEqual([
+      "t.meets",
+      "t2.meets",
+    ]);
+    expect(result.points).toBe(3);
+    expect(result.max_points).toBe(3);
+    expect(validateAgainstRubric(result, scoringView(SINGLE_POINT))).toEqual({
+      valid: true,
+    });
   });
 });
 

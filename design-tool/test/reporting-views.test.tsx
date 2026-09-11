@@ -109,6 +109,25 @@ async function seedScene() {
         position: 1,
         type: "essay",
         stem: "Explain your reasoning",
+        // D-5 / D-6: a single-point rubric, so the page has to render the
+        // derived below/meets/exceeds labels, not the stored ids.
+        config: {
+          rubric: {
+            style: "single_point",
+            criteria: [
+              {
+                id: "focus",
+                name: "Focus",
+                levels: [{ id: "t", label: "Target", points: 2 }],
+              },
+              {
+                id: "evidence",
+                name: "Evidence",
+                levels: [{ id: "t2", label: "Target", points: 2 }],
+              },
+            ],
+          },
+        },
       },
       {
         assessment_id: assessment!.id,
@@ -272,7 +291,13 @@ async function seedScene() {
       points: 3,
       max_points: 4,
       scorer: OWNER,
-      rationale: { overall_rationale: "Clear reasoning, thin evidence." },
+      rationale: {
+        criterion_scores: [
+          { criterion_id: "focus", level_id: "t.meets", points: 2, rationale: "One clear claim." },
+          { criterion_id: "evidence", level_id: "t2.below", points: 0, rationale: "Two quotes, unexplained." },
+        ],
+        overall_rationale: "Clear reasoning, thin evidence.",
+      },
       status: "final",
     },
     // A PROPOSAL: shown on the page, never counted anywhere.
@@ -512,6 +537,22 @@ describe("the per-student attempt page", () => {
     const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
     expect(html).toContain("auto-scored");
     expect(html).toContain("scored by you");
+    expect(html).toContain("Clear reasoning, thin evidence.");
+  });
+
+  test("a rubric score reads criterion by criterion, single-point levels named (D-6)", async () => {
+    const scene = await seedScene();
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("Criterion");
+    expect(html).toContain("Focus");
+    expect(html).toContain("Meets target");
+    expect(html).toContain("One clear claim.");
+    expect(html).toContain("Evidence");
+    expect(html).toContain("Below target");
+    expect(html).toContain("Two quotes, unexplained.");
+    // The stored ids never reach the teacher.
+    expect(html).not.toContain("t.meets");
+    // The overall rationale still closes the block.
     expect(html).toContain("Clear reasoning, thin evidence.");
   });
 
