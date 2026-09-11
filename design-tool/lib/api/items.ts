@@ -73,6 +73,12 @@ const EssayItem = z.object({
   // Slice 33: reuse the shared wire schema so the rubric shape has a single
   // source of truth across API body and bundle.
   rubric: RubricSchema.optional(),
+  // Rubric library slice 3 (D-4): which `rubrics` row the rubric above was
+  // copied from. Editor metadata only — never read by scoring, the delivery
+  // bundle or export. Three states, like scoring_method: omitted = the
+  // detach rule below decides, explicit null = detach, a uuid = attach (the
+  // route checks the caller owns that rubric).
+  rubric_id: z.string().uuid().nullable().optional(),
 });
 
 // Slice 47: matching. No choices / correct_answer — the pair list is the
@@ -462,7 +468,50 @@ export function itemConfigForWrite(
   if (body.max_word_count !== undefined) config.max_word_count = body.max_word_count;
   if (body.placeholder) config.placeholder = body.placeholder;
   if (body.rubric !== undefined) config.rubric = body.rubric;
+  const rubricId = resolveRubricId(body, existing);
+  if (rubricId) config.rubric_id = rubricId;
   return config;
+}
+
+/**
+ * Rubric library slice 3 (D-4), copy semantics. `config.rubric` is the
+ * item's authoritative copy; `config.rubric_id` only records where that copy
+ * came from, so it survives exactly as long as the copy is unchanged:
+ *
+ * - an explicit id attaches (the route has already checked the caller owns
+ *   that rubric);
+ * - an explicit null detaches;
+ * - omitted + the rubric unchanged preserves the stored id (a PATCH that
+ *   only renames the stem must not drop the provenance);
+ * - omitted + the rubric CHANGED detaches — the teacher edited their copy,
+ *   and a later change in the library must never rescore it behind their
+ *   back. Removing the rubric entirely detaches too.
+ */
+function resolveRubricId(
+  body: { rubric?: unknown; rubric_id?: string | null },
+  existing?: ItemConfig,
+): string | undefined {
+  if (body.rubric_id !== undefined) return body.rubric_id ?? undefined;
+  if (body.rubric === undefined) return undefined;
+  const unchanged =
+    existing?.rubric !== undefined &&
+    canonicalJson(existing.rubric) === canonicalJson(body.rubric);
+  return unchanged ? existing?.rubric_id : undefined;
+}
+
+/** JSON with object keys sorted, so "did the rubric change?" compares
+ * CONTENT: the stored copy comes back from jsonb in insertion order and the
+ * body's comes from the editor, and a plain JSON.stringify would call a
+ * re-ordered but identical rubric a detach. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 export function compactCellKeys(

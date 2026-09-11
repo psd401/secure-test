@@ -154,13 +154,48 @@ export function RubricProposalView({ rubric, warnings }: RubricProposalViewProps
   );
 }
 
+/** Rubric library slice 3 (D-4): the file name without its extension is the
+ * teacher's own word for the rubric, so it is the best default title.
+ * Falls back to "Rubric" for the paste path (no file) or a nameless one. */
+export function defaultRubricTitle(file: File | null): string {
+  const base = (file?.name ?? "").replace(/\.[^.]+$/, "").trim();
+  return base.length > 0 ? base.slice(0, 200) : "Rubric";
+}
+
+export type SaveRubricOutcome =
+  | { ok: true; id: string }
+  | { ok: false; message: string };
+
+/** Rubric library slice 3: POST the proposal to the teacher's library. The
+ * dialog stays on the proposal pane afterwards — saving and using are
+ * independent, and a teacher who saves usually wants to use it too. */
+export async function saveRubricToLibrary(
+  title: string,
+  rubric: Rubric,
+): Promise<SaveRubricOutcome> {
+  const res = await fetch("/api/rubrics", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, rubric, source: "upload" }),
+  });
+  const body = (await res.json().catch(() => null)) as
+    | { rubric?: { id?: string }; hint?: string }
+    | null;
+  if (!res.ok || !body?.rubric?.id) {
+    return { ok: false, message: body?.hint ?? "Could not save the rubric." };
+  }
+  return { ok: true, id: body.rubric.id };
+}
+
 interface Props {
   assessmentId: string;
   /** The editor's current rubric, if any — merged into the proposal
    * (student_visibility) and checked for authored content before a
    * confirm. */
   currentRubric: Rubric | null;
-  onApply: (rubric: Rubric) => void;
+  /** `meta.rubric_id` is set only when the proposal was saved to the library
+   * first — applying then records where the item's copy came from. */
+  onApply: (rubric: Rubric, meta?: { rubric_id?: string }) => void;
   disabled?: boolean;
 }
 
@@ -174,6 +209,13 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
     null,
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Rubric library slice 3: the proposal pane's second action. `savedId` is
+  // the library row once saved — applying afterwards carries it as the
+  // item's `rubric_id`.
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function reset() {
     setFile(null);
@@ -182,6 +224,10 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
     setError(null);
     setProposal(null);
     setConfirmOpen(false);
+    setTitle("");
+    setSaving(false);
+    setSavedId(null);
+    setSaveError(null);
   }
 
   function closeAndReset() {
@@ -190,8 +236,24 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
   }
 
   function apply(rubric: Rubric) {
-    onApply(mergeRubricProposal(currentRubric, rubric));
+    onApply(
+      mergeRubricProposal(currentRubric, rubric),
+      savedId ? { rubric_id: savedId } : undefined,
+    );
     closeAndReset();
+  }
+
+  async function save() {
+    if (!proposal) return;
+    setSaving(true);
+    setSaveError(null);
+    const outcome = await saveRubricToLibrary(title.trim(), proposal.rubric);
+    setSaving(false);
+    if (!outcome.ok) {
+      setSaveError(outcome.message);
+      return;
+    }
+    setSavedId(outcome.id);
   }
 
   // E19-style guard (RubricEditor's criteriaAndLevelsLost): only a rubric
@@ -216,6 +278,7 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
       return;
     }
     setProposal({ rubric: outcome.rubric, warnings: outcome.warnings });
+    setTitle(defaultRubricTitle(file));
   }
 
   return (
@@ -299,6 +362,31 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
           ) : (
             <div className="space-y-3">
               <RubricProposalView rubric={proposal.rubric} warnings={proposal.warnings} />
+              <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+                <label className="text-sm">
+                  <span className="block text-xs text-muted-foreground">
+                    Rubric name
+                  </span>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    disabled={saving || savedId !== null}
+                    aria-label="Rubric name"
+                    className="mt-0.5 w-56 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={save}
+                  disabled={saving || savedId !== null || title.trim().length === 0}
+                >
+                  {savedId ? "Saved" : saving ? "Saving…" : "Save to my rubrics"}
+                </Button>
+                {saveError ? (
+                  <p className="text-sm text-destructive">{saveError}</p>
+                ) : null}
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={closeAndReset}>
                   Cancel

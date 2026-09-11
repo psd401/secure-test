@@ -5,6 +5,7 @@ import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
 import { CreateItemBody, itemConfigForWrite } from "@/lib/api/items";
+import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 import { loadOwnedAssessment } from "@/lib/api/loadOwned";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
@@ -64,6 +65,13 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
   const draftGuard = requireDraft(owned.row);
   if (draftGuard) return draftGuard;
+  // Rubric library slice 3: an item may point at a rubric in the caller's
+  // OWN library only.
+  const rubricGuard = await rejectUnownedRubricId(
+    body.type === "essay" ? body.rubric_id : null,
+    auth.session.sub,
+  );
+  if (rubricGuard) return rubricGuard;
 
   const db = getDb();
   const inserted = await db.transaction(async (tx) => {

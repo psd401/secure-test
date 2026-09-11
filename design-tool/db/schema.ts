@@ -125,6 +125,12 @@ export type ItemConfig = {
   max_word_count?: number;
   placeholder?: string;
   rubric?: Rubric;
+  // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
+  // COPIED from, if any. Editor metadata only — `rubric` above stays the
+  // authoritative copy, and nothing downstream (scoring, delivery bundle,
+  // export) reads this. Cleared when the teacher edits the rubric by hand
+  // (detach) or when the library row is deleted.
+  rubric_id?: string;
   // Slice 47: match items — the pair list IS the answer key (left belongs
   // with its own right; pair ids unique, enforced at the write boundary).
   pairs?: MatchPair[];
@@ -1269,3 +1275,45 @@ export const attempt_deletions = pgTable(
 
 export type AttemptDeletionRow = typeof attempt_deletions.$inferSelect;
 export type AttemptDeletionInsert = typeof attempt_deletions.$inferInsert;
+
+// Rubric library (docs/rubric-upload-design.md §"Rubric library and reuse",
+// D-4), slice 3. A per-teacher shelf of reusable rubrics. Owner-scoped like
+// students/assessments; sharing between staff rides the existing
+// assessment-share copy semantics later, not here.
+//
+// Copy-on-apply is the whole design: applying a library rubric to an essay
+// writes a COPY into items.config.rubric (fresh criterion/level ids) and
+// records where it came from in items.config.rubric_id. Editing the item's
+// rubric afterwards detaches it (rubric_id cleared) — a change in the
+// library must never rescore an item behind a teacher's back (E11 territory).
+// So there is deliberately NO foreign key from items to this table: the id
+// is provenance metadata, and deleting a library rubric only detaches.
+export const RUBRIC_SOURCES = ["upload", "editor"] as const;
+export type RubricSource = (typeof RUBRIC_SOURCES)[number];
+
+export const rubrics = pgTable(
+  "rubrics",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    owner_sub: text("owner_sub").notNull(),
+    title: text("title").notNull(),
+    /** The shared `RubricSchema` shape, validated at the write boundary
+     * (lib/api/rubrics.ts) exactly as items.config.rubric is. */
+    rubric: jsonb("rubric").$type<Rubric>().notNull(),
+    /** Where the teacher got it: the upload dialog, or hand-authored. */
+    source: text("source").notNull().default("upload"),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    ownerSubIdx: index("rubrics_owner_sub_idx").on(t.owner_sub),
+    sourceCheck: check("rubrics_source_check", sql`source IN ('upload', 'editor')`),
+  }),
+);
+
+export type RubricRow = typeof rubrics.$inferSelect;
+export type RubricInsert = typeof rubrics.$inferInsert;

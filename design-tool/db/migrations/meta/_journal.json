@@ -232,6 +232,13 @@
       "when": 1789146552314,
       "tag": "0032_guardrail_surface_rubric_extract",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789147612569,
+      "tag": "0033_rubrics",
+      "breakpoints": true
     }
   ]
 }

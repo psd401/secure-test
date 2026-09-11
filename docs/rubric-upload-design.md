@@ -292,3 +292,28 @@ typecheck re-run in the main session before each commit, as in the
   queue's level picker (it already was one) offers Below / Meets / Exceeds
   and pre-fills from the proposal. +12 tests across four files; the queue
   card needs a hand-run row (no DOM harness).
+- **Slice 3 — 2026-09-11.** The library. **Migration 0033** `rubrics`
+  (`owner_sub`, `title`, `rubric jsonb`, `source` CHECK upload|editor,
+  owner index; applied to dev + test); `GET/POST /api/rubrics` (summaries:
+  title, style, criteria count, max points, source, newest updated first)
+  and `GET/PATCH/DELETE /api/rubrics/[id]` — ownership is in the WHERE
+  clause, so another teacher's rubric is 404 rather than 403, and DELETE
+  detaches every item of the owner that names it (drops `rubric_id`,
+  NEVER touches `config.rubric`). `config.rubric_id` on essay items:
+  optional uuid on create/PATCH, 400 `rubric_not_found` when it is not the
+  caller's, and the copy semantics — an explicit id attaches, an explicit
+  null detaches, an omitted id survives a PATCH that leaves the rubric
+  alone and is cleared when the rubric changed (content compare, key order
+  ignored). Editor: "Save to my rubrics" beside "Use this rubric" on the
+  proposal pane (title pre-filled from the file name, stays on the pane
+  after a save so an apply can carry the saved id) and `SavedRubricsDialog`
+  — "Use a saved rubric…", the same confirm, a deep copy with fresh
+  `c1…`/`l1…` ids keeping the editor's `student_visibility`;
+  `RubricEditor`'s `onChange` gained `meta?.rubric_id`, and
+  `AssessmentEditor` writes `rubric_id: meta?.rubric_id ?? null` so a hand
+  edit detaches client-side too. `rubric_id` is editor metadata only —
+  both bundle builders project config by key, and a test proves neither the
+  export nor the delivery bundle carries it. New tests: 21 route /
+  item-config, 20 editor-logic. (The list summary's max points imports
+  `rubricMaxPoints` from `scoreCore` — the agent's local copy was folded
+  after slice 4 landed.)

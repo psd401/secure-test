@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { RubricUploadDialog } from "./RubricUploadDialog";
+import { SavedRubricsDialog } from "./SavedRubricsDialog";
 
 // Slice 33: rubric authoring sub-form for essay items. One unified structure
 // serves all three styles (analytic / holistic / single_point) as cardinality
@@ -120,9 +121,17 @@ export function isDefaultRubric(rubric: Rubric): boolean {
   );
 }
 
+/** Rubric library slice 3 (D-4): where an applied rubric came from. Present
+ * ONLY when the change is an apply of a library rubric — every hand edit
+ * below calls `onChange` without it, which is the client-side half of the
+ * detach rule the server enforces in `itemConfigForWrite`. */
+export interface RubricChangeMeta {
+  rubric_id?: string;
+}
+
 interface Props {
   value: Rubric | null;
-  onChange: (rubric: Rubric | null) => void;
+  onChange: (rubric: Rubric | null, meta?: RubricChangeMeta) => void;
   disabled?: boolean;
   /** Rubric upload slice 2: the route the "Upload rubric…" dialog posts to
    * is per-assessment. */
@@ -143,6 +152,11 @@ export function RubricEditor({ value, onChange, disabled, assessmentId }: Props)
         </button>
         <RubricUploadDialog
           assessmentId={assessmentId}
+          currentRubric={null}
+          onApply={onChange}
+          disabled={disabled}
+        />
+        <SavedRubricsDialog
           currentRubric={null}
           onApply={onChange}
           disabled={disabled}
@@ -226,6 +240,11 @@ export function RubricEditor({ value, onChange, disabled, assessmentId }: Props)
         <div className="flex items-center gap-2">
           <RubricUploadDialog
             assessmentId={assessmentId}
+            currentRubric={rubric}
+            onApply={onChange}
+            disabled={disabled}
+          />
+          <SavedRubricsDialog
             currentRubric={rubric}
             onApply={onChange}
             disabled={disabled}

@@ -105,6 +105,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           max_word_count: r.config?.max_word_count ?? null,
           placeholder: r.config?.placeholder ?? null,
           rubric: r.config?.rubric ?? null,
+          rubric_id: r.config?.rubric_id ?? null,
           pairs: r.config?.pairs ?? null,
           sequence: r.config?.sequence ?? null,
           image_asset_id: r.config?.image_asset_id ?? null,

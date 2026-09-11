@@ -102,6 +102,11 @@ interface ItemView {
   placeholder: string | null;
   // Essay-only rubric (slice 33); null when unset / for other types.
   rubric: Rubric | null;
+  // Rubric library slice 3 (D-4): which saved rubric the copy above came
+  // from, when it came from one. Cleared the moment the teacher edits the
+  // rubric by hand (the detach rule, mirrored from the server so the UI's
+  // state matches what a save would store).
+  rubric_id: string | null;
   // Match-only pair list (slice 47); null for every other type.
   pairs: MatchPair[] | null;
   // Order-only sequence (slice 48); null for every other type.
@@ -215,6 +220,7 @@ interface ItemRow {
     max_word_count?: number | null;
     placeholder?: string | null;
     rubric?: Rubric | null;
+    rubric_id?: string | null;
     pairs?: MatchPair[] | null;
     sequence?: SequenceEntry[] | null;
     image_asset_id?: string | null;
@@ -249,6 +255,7 @@ function rowToView(r: ItemRow): ItemView {
     max_word_count: r.config?.max_word_count ?? null,
     placeholder: r.config?.placeholder ?? null,
     rubric: r.config?.rubric ?? null,
+    rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
     sequence: r.config?.sequence ?? null,
     image_asset_id: r.config?.image_asset_id ?? null,
@@ -369,6 +376,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: null,
       image_asset_id: null,
@@ -393,6 +401,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: null,
       image_asset_id: null,
@@ -417,6 +426,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: [
         { id: "p1", left: "", right: "" },
         { id: "p2", left: "", right: "" },
@@ -444,6 +454,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: [
         { id: "s1", label: "" },
@@ -471,6 +482,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: null,
       image_asset_id: null,
@@ -495,6 +507,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: null,
       image_asset_id: null,
@@ -520,6 +533,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       max_word_count: null,
       placeholder: null,
       rubric: null,
+      rubric_id: null,
       pairs: null,
       sequence: null,
       image_asset_id: null,
@@ -552,6 +566,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
     max_word_count: null,
     placeholder: null,
     rubric: null,
+    rubric_id: null,
     pairs: null,
     sequence: null,
     image_asset_id: null,
@@ -1092,6 +1107,12 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       if (item.max_word_count != null) body.max_word_count = item.max_word_count;
       if (item.placeholder) body.placeholder = item.placeholder;
       if (item.rubric) body.rubric = item.rubric;
+      // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
+      // ways. The server detaches an omitted rubric_id whenever the rubric
+      // changed; sending null when the teacher has edited by hand (the view
+      // cleared it below) and the id when one was applied keeps the stored
+      // config equal to what this editor is showing either way.
+      body.rubric_id = item.rubric_id;
     }
     if (item.type === "match") {
       body.pairs = item.pairs ?? [];
@@ -2647,8 +2668,14 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                       </span>
                       <RubricEditor
                         value={item.rubric}
-                        onChange={(rubric) =>
-                          updateItem(item.id, (i) => ({ ...i, rubric }))
+                        onChange={(rubric, meta) =>
+                          updateItem(item.id, (i) => ({
+                            ...i,
+                            rubric,
+                            // Applying a saved rubric attaches it; every
+                            // hand edit arrives without meta and detaches.
+                            rubric_id: meta?.rubric_id ?? null,
+                          }))
                         }
                         disabled={isLocked}
                         assessmentId={assessment.id}

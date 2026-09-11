@@ -5,6 +5,7 @@ import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft";
 import { UpdateItemBody, itemConfigForWrite } from "@/lib/api/items";
+import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -98,6 +99,14 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 409 },
     );
   }
+
+  // Rubric library slice 3: an item may point at a rubric in the caller's
+  // OWN library only.
+  const rubricGuard = await rejectUnownedRubricId(
+    body.type === "essay" ? body.rubric_id : null,
+    auth.session.sub,
+  );
+  if (rubricGuard) return rubricGuard;
 
   const db = getDb();
   const [updated] = await db
