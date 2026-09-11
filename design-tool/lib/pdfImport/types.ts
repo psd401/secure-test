@@ -42,5 +42,6 @@ export interface PdfExtractResult {
 export interface PdfExtractorProvider {
   /** Stable identifier for logging/telemetry. */
   readonly id: string;
-  extract(req: PdfExtractRequest): Promise<PdfExtractResult>;
+  /** `ownerSub` (docs/rubric-upload-design.md D-7): the ai_usage log field. */
+  extract(req: PdfExtractRequest, ownerSub?: string): Promise<PdfExtractResult>;
 }

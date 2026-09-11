@@ -15,6 +15,16 @@ import {
   mock,
   test,
 } from "bun:test";
+import { setLogSink } from "../lib/log";
+
+// D-7 (docs/rubric-upload-design.md, slice 6): captures every structured log
+// line emitted during this file's tests, same seam + module-scope-swap
+// convention as test/server-error-record.test.ts — the sink is process-wide,
+// so it is installed once here and restored on process exit rather than per
+// test. `ai_usage` tests below reset the array themselves.
+let logLines: Record<string, unknown>[] = [];
+const restoreLogSink = setLogSink((line) => logLines.push(JSON.parse(line)));
+process.on("exit", () => setLogSink(restoreLogSink));
 
 interface ConverseResponse {
   output?: {
@@ -420,6 +430,7 @@ describe("converseText document block (ADR 0015)", () => {
     userText: "hello",
     maxTokens: 16,
     errPrefix: "bedrock",
+    surface: "item-gen" as const,
   };
 
   test("no document → single text content block (existing shape unchanged)", async () => {
@@ -629,5 +640,159 @@ describe("bedrockGuardrail.check (ApplyGuardrail)", () => {
       "../lib/safeguarding/provider"
     );
     expect(getGuardrailProvider()).toBe(bedrockGuardrail);
+  });
+});
+
+// D-7 (docs/rubric-upload-design.md, slice 6): converseTextWithMeta and
+// converseTool each emit one `ai_usage` line after a successful send.
+// bedrockGuardrail.check is NOT covered here — ApplyGuardrail's `usage`
+// field (GuardrailUsage: topic/content/word/PII policy UNIT COUNTS) carries
+// no input/output token fields at all, so there is nothing token-shaped to
+// log for that call; logAiUsage is wired only into the two Converse helpers.
+describe("ai_usage log line (docs/rubric-upload-design.md D-7)", () => {
+  beforeEach(() => {
+    logLines.length = 0;
+  });
+
+  function lastAiUsageLine(): Record<string, unknown> | undefined {
+    return [...logLines].reverse().find((l) => l.event === "ai_usage");
+  }
+
+  test("converseTool (item-gen via bedrockItemProvider): surface, model, usage, latency, owner_sub", async () => {
+    setNextResponse({
+      ...itemResponse({
+        type: "short_text",
+        stem: "Q",
+        choices: [],
+        correct_choice_ids: [],
+        correct_answer: "A",
+      }),
+      usage: { inputTokens: 120, outputTokens: 40, totalTokens: 160 },
+    });
+    const { bedrockItemProvider } = await import("../lib/ai/bedrockProvider");
+    await bedrockItemProvider.generateItem(
+      {
+        assessment_id: "00000000-0000-0000-0000-000000000001",
+        item_type: "short_text",
+        prompt: "Q",
+      },
+      "teacher-sub-1",
+    );
+    const line = lastAiUsageLine();
+    expect(line).toMatchObject({
+      level: "info",
+      event: "ai_usage",
+      surface: "item-gen",
+      model: "us.anthropic.claude-sonnet-4-6",
+      input_tokens: 120,
+      output_tokens: 40,
+      total_tokens: 160,
+      owner_sub: "teacher-sub-1",
+    });
+    expect(typeof line!.latency_ms).toBe("number");
+  });
+
+  test("converseTextWithMeta (pdf-import via bedrockPdfExtractor): surface, usage; owner_sub omitted when not passed", async () => {
+    setNextResponse({
+      ...textResponse("[]"),
+      usage: { inputTokens: 500, outputTokens: 10, totalTokens: 510 },
+    });
+    const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");
+    await bedrockPdfExtractor.extract({ text: "T", page_count: 1 });
+    const line = lastAiUsageLine();
+    expect(line).toMatchObject({
+      surface: "pdf-import",
+      model: "us.anthropic.claude-sonnet-4-6",
+      input_tokens: 500,
+      output_tokens: 10,
+      total_tokens: 510,
+    });
+    // No ownerSub was passed to extract() — the field must not appear at all
+    // (dropped by lib/log.ts's `undefined` rule), not appear as null.
+    expect(Object.prototype.hasOwnProperty.call(line!, "owner_sub")).toBe(false);
+  });
+
+  test("essay-score surface via bedrockEssayScorer, with owner_sub", async () => {
+    setNextResponse({
+      ...textResponse(
+        JSON.stringify({
+          criterion_scores: [
+            { criterion_id: "c1", level_id: "l2", points: 2, rationale: "ok" },
+          ],
+          points: 2,
+          max_points: 3,
+          overall_rationale: "Solid.",
+          confidence: 0.9,
+        }),
+      ),
+      usage: { inputTokens: 900, outputTokens: 60, totalTokens: 960 },
+    });
+    const { bedrockEssayScorer } = await import("../lib/ai/essayScorer/bedrockProvider");
+    await bedrockEssayScorer.scoreEssay(
+      {
+        stem: "Explain.",
+        response_text: "Because.",
+        rubric: {
+          style: "analytic",
+          criteria: [
+            {
+              id: "c1",
+              name: "Clarity",
+              levels: [
+                { id: "l1", label: "Below", points: 0 },
+                { id: "l2", label: "Meets", points: 2 },
+                { id: "l3", label: "Exceeds", points: 3 },
+              ],
+            },
+          ],
+        },
+      },
+      "teacher-sub-2",
+    );
+    const line = lastAiUsageLine();
+    expect(line).toMatchObject({
+      surface: "essay-score",
+      input_tokens: 900,
+      output_tokens: 60,
+      total_tokens: 960,
+      owner_sub: "teacher-sub-2",
+    });
+  });
+
+  test("missing usage on the response logs nulls for every token field, never throws", async () => {
+    setNextResponse(textResponse("x")); // no `usage` at all
+    const { bedrockMathTranslator } = await import(
+      "../lib/ai/mathTranslator/bedrockProvider"
+    );
+    const out = await bedrockMathTranslator.translate({
+      prompt: "Q",
+      display_mode: "inline",
+    });
+    expect(out.latex).toBe("x");
+    const line = lastAiUsageLine();
+    expect(line).toMatchObject({
+      surface: "math-translate",
+      input_tokens: null,
+      output_tokens: null,
+      total_tokens: null,
+    });
+  });
+
+  test("rubric-extract surface via bedrockRubricExtractor", async () => {
+    setNextResponse({
+      ...textResponse('{"style":"holistic","criteria":[]}'),
+      usage: { inputTokens: 300, outputTokens: 20, totalTokens: 320 },
+    });
+    const { bedrockRubricExtractor } = await import(
+      "../lib/ai/rubricExtractor/bedrockProvider"
+    );
+    await bedrockRubricExtractor.extract({ text: "A rubric." });
+    const line = lastAiUsageLine();
+    expect(line).toMatchObject({
+      surface: "rubric-extract",
+      input_tokens: 300,
+      output_tokens: 20,
+      total_tokens: 320,
+    });
   });
 });

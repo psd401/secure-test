@@ -20,7 +20,10 @@ export const bedrockMathTranslator: MathTranslatorProvider = {
     return `bedrock-${process.env.BEDROCK_MATH_MODEL ?? DEFAULT_MODEL}`;
   },
 
-  async translate(req: TranslateMathRequest): Promise<TranslateMathResult> {
+  async translate(
+    req: TranslateMathRequest,
+    ownerSub?: string,
+  ): Promise<TranslateMathResult> {
     const text = await converseText({
       modelId: process.env.BEDROCK_MATH_MODEL ?? DEFAULT_MODEL,
       systemText: MATH_SYSTEM_PROMPT,
@@ -28,6 +31,8 @@ export const bedrockMathTranslator: MathTranslatorProvider = {
       maxTokens: MATH_MAX_TOKENS,
       temperature: 0,
       errPrefix: "bedrock",
+      surface: "math-translate",
+      ownerSub,
     });
     return { latex: finalizeLatex(text, "bedrock") };
   },

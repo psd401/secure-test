@@ -26,7 +26,10 @@ export const bedrockPdfExtractor: PdfExtractorProvider = {
     return `bedrock-${process.env.BEDROCK_PDF_EXTRACT_MODEL ?? DEFAULT_MODEL}`;
   },
 
-  async extract(req: PdfExtractRequest): Promise<PdfExtractResult> {
+  async extract(
+    req: PdfExtractRequest,
+    ownerSub?: string,
+  ): Promise<PdfExtractResult> {
     // Scanned path (ADR 0015): attach the PDF as a Converse document block
     // so the model reads the pages visually; same system prompt and JSON
     // contract as the text path.
@@ -41,6 +44,8 @@ export const bedrockPdfExtractor: PdfExtractorProvider = {
         ? { document: { bytes: scanned, name: req.file_name ?? "document" } }
         : {}),
       errPrefix: "bedrock",
+      surface: "pdf-import",
+      ownerSub,
     });
     const parsed = parsePdfExtraction(text, "bedrock", {
       truncated: stopReason === "max_tokens",

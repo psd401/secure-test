@@ -329,3 +329,15 @@ typecheck re-run in the main session before each commit, as in the
   one framing line before the first block and no "AI" wording;
   `break-inside: avoid`. Proposed scores never print; the section view is
   unchanged. +9 tests (helper + page).
+- **Slice 6 — 2026-09-11.** `converseText` / `converseTextWithMeta` /
+  `converseTool` take a required `surface` (`ConverseSurface` union, the
+  same five values as the guardrail surfaces) and an optional `ownerSub`,
+  and emit one `log.info("ai_usage", { surface, model, input_tokens,
+  output_tokens, total_tokens, latency_ms, owner_sub })` after every
+  successful send (nulls when `usage` is absent, never throws). The five
+  provider interfaces gained an optional `ownerSub` second parameter and
+  every route / action passes the session sub it already held.
+  `bedrockGuardrail` untouched — ApplyGuardrail's `usage` is policy-unit
+  counts, not tokens. Metric filter = a later infra slice
+  (`docs/observability-design.md`). +5 tests. **Full suite after slices
+  1–6: 1532 pass, typecheck clean.**

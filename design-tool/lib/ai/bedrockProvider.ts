@@ -126,7 +126,10 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
     return `bedrock-${process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL}`;
   },
 
-  async generateItem(req: GenerateItemRequest): Promise<GenerateItemResult> {
+  async generateItem(
+    req: GenerateItemRequest,
+    ownerSub?: string,
+  ): Promise<GenerateItemResult> {
     const input = await converseTool({
       modelId: process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL,
       systemText: ITEM_SYSTEM_PROMPT,
@@ -134,6 +137,8 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
       maxTokens: ITEM_MAX_TOKENS,
       tool: emitItemTool,
       errPrefix: "bedrock",
+      surface: "item-gen",
+      ownerSub,
     });
     return normalizeItem(input);
   },

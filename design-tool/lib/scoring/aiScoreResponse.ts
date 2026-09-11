@@ -72,11 +72,14 @@ export async function aiScoreResponse(opts: {
       ownerSub,
       inputText: responseText,
       run: () =>
-        provider.scoreEssay({
-          stem: item.stem,
-          response_text: responseText,
-          rubric,
-        }),
+        provider.scoreEssay(
+          {
+            stem: item.stem,
+            response_text: responseText,
+            rubric,
+          },
+          ownerSub,
+        ),
       outputText: (r) =>
         [r.overall_rationale, ...r.criterion_scores.map((c) => c.rationale)].join(
           "\n",

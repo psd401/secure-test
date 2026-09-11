@@ -35,5 +35,9 @@ export type TranslateMathResult = z.infer<typeof TranslateMathResult>;
 export interface MathTranslatorProvider {
   /** Stable identifier persisted in API responses for triage. */
   readonly id: string;
-  translate(req: TranslateMathRequest): Promise<TranslateMathResult>;
+  /** `ownerSub` (docs/rubric-upload-design.md D-7): the ai_usage log field. */
+  translate(
+    req: TranslateMathRequest,
+    ownerSub?: string,
+  ): Promise<TranslateMathResult>;
 }

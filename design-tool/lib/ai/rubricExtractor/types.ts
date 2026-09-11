@@ -61,5 +61,9 @@ export interface RubricExtractResult {
 export interface RubricExtractorProvider {
   /** Stable identifier for logging/telemetry. */
   readonly id: string;
-  extract(req: RubricExtractRequest): Promise<RubricExtractResult>;
+  /** `ownerSub` (docs/rubric-upload-design.md D-7): the ai_usage log field. */
+  extract(
+    req: RubricExtractRequest,
+    ownerSub?: string,
+  ): Promise<RubricExtractResult>;
 }

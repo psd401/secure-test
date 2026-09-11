@@ -121,6 +121,7 @@ results.document = await section(
       // wrapper's sanitizer against the live validator.
       document: { bytes: pdf, name: "smoke_probe.v1.pdf" },
       errPrefix: "bedrock_smoke",
+      surface: "pdf-import",
     });
     console.log("answer:", answer.trim());
     if (!/olympia/i.test(answer)) {

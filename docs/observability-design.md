@@ -148,6 +148,11 @@ deploy.
 - An admin "errors" page is deferred (D-10, recommended): the role model
   has no admin claim yet (`docs/design-tool-plan.md`, the safeguarding
   page's blocker); the email + tables cover the pilot.
+- Rubric upload slice 6 (docs/rubric-upload-design.md D-7) added a structured
+  `event:"ai_usage"` log line (surface, model, input/output/total tokens,
+  latency_ms, owner_sub) on every Bedrock Converse call — no table, this log
+  group only. A CloudWatch metric filter on `event:"ai_usage"` (spend per
+  surface, maybe per owner_sub) is a later infra slice, not built here.
 
 ## Slices
 

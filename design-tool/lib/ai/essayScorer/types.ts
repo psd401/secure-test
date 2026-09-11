@@ -42,5 +42,9 @@ export type ScoreEssayResult = z.infer<typeof ScoreEssayResult>;
 export interface EssayScorerProvider {
   /** Stable identifier persisted as scores.scorer for triage. */
   readonly id: string;
-  scoreEssay(req: ScoreEssayRequest): Promise<ScoreEssayResult>;
+  /** `ownerSub` (docs/rubric-upload-design.md D-7): the ai_usage log field. */
+  scoreEssay(
+    req: ScoreEssayRequest,
+    ownerSub?: string,
+  ): Promise<ScoreEssayResult>;
 }

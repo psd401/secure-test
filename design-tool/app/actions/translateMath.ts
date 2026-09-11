@@ -48,7 +48,7 @@ export async function translateMath(
       surface: "math-translate",
       ownerSub: session.sub,
       inputText: parsed.data.prompt,
-      run: () => provider.translate(parsed.data),
+      run: () => provider.translate(parsed.data, session.sub),
       outputText: (r) => r.latex,
     });
   } catch (err) {

@@ -38,5 +38,13 @@ export interface ItemGeneratorProvider {
    * "mock", "anthropic-sonnet-4-6", "openai-gpt-5-1".
    */
   readonly id: string;
-  generateItem(req: GenerateItemRequest): Promise<GenerateItemResult>;
+  /**
+   * `ownerSub` (docs/rubric-upload-design.md D-7) rides along for the
+   * `ai_usage` log line's spend-per-teacher field; providers with nothing
+   * to log (the mock) ignore it.
+   */
+  generateItem(
+    req: GenerateItemRequest,
+    ownerSub?: string,
+  ): Promise<GenerateItemResult>;
 }

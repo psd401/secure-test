@@ -26,7 +26,10 @@ export const bedrockRubricExtractor: RubricExtractorProvider = {
     return `bedrock-${process.env.BEDROCK_RUBRIC_EXTRACT_MODEL ?? DEFAULT_MODEL}`;
   },
 
-  async extract(req: RubricExtractRequest): Promise<RubricExtractResult> {
+  async extract(
+    req: RubricExtractRequest,
+    ownerSub?: string,
+  ): Promise<RubricExtractResult> {
     // D-1: a PDF / DOCX rubric rides as a Converse document block so the
     // model sees the table layout; Markdown and pasted text go as text.
     const doc = req.document;
@@ -48,6 +51,8 @@ export const bedrockRubricExtractor: RubricExtractorProvider = {
           }
         : {}),
       errPrefix: "bedrock",
+      surface: "rubric-extract",
+      ownerSub,
     });
     return {
       rubric: parseRubricExtraction(text, "bedrock", {

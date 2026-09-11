@@ -213,7 +213,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     // Scanned branch: no pre-model text exists to screen, so the input
     // stage is skipped (ADR 0015); the output stage below still runs.
     ...(scanned ? {} : { inputText: reqBody.data.text }),
-    run: () => provider.extract(reqBody.data),
+    run: () => provider.extract(reqBody.data, auth.session.sub),
     // E5 slice 3: proposed stimuli are model output too — same screen.
     outputText: (r) =>
       [

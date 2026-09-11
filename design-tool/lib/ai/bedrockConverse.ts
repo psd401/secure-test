@@ -7,6 +7,7 @@ import {
   type Tool,
   type ToolConfiguration,
 } from "@aws-sdk/client-bedrock-runtime";
+import { log } from "@/lib/log";
 
 // Amazon Bedrock access via the AWS SDK's Converse API + SigV4, emulating the
 // proven pattern in the social-stories project (see ADR 0007). Claude Sonnet
@@ -88,6 +89,41 @@ export interface ConverseDocument {
   format?: ConverseDocumentFormat;
 }
 
+// Token usage logging (docs/rubric-upload-design.md, D-7). Every AI surface
+// that calls Converse — one value per bedrockProvider.ts-style module, not
+// per prompt variant within it. Kept here (not derived from
+// db/schema.ts's GUARDRAIL_SURFACES) so this file has no dependency on the
+// db layer; the values are the same set by convention.
+export type ConverseSurface =
+  | "item-gen"
+  | "math-translate"
+  | "pdf-import"
+  | "essay-score"
+  | "rubric-extract";
+
+// Emits the ai_usage log line (D-7). Never throws — a field read off a
+// malformed/missing `usage` becomes null rather than losing the call's
+// success. `startedAt` is a `performance.now()` timestamp taken by the
+// caller before `send()`.
+function logAiUsage(opts: {
+  surface: ConverseSurface;
+  modelId: string;
+  ownerSub: string | undefined;
+  usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined;
+  startedAt: number;
+}): void {
+  const usage = opts.usage;
+  log.info("ai_usage", {
+    surface: opts.surface,
+    model: opts.modelId,
+    input_tokens: usage?.inputTokens ?? null,
+    output_tokens: usage?.outputTokens ?? null,
+    total_tokens: usage?.totalTokens ?? null,
+    latency_ms: Math.round(performance.now() - opts.startedAt),
+    owner_sub: opts.ownerSub,
+  });
+}
+
 // Plain-text Converse turn — used by the math translator (text in, LaTeX out)
 // and the PDF extractor. An optional PDF document block can precede the text
 // (ADR 0015: Claude reads scanned pages directly; no local rasterization).
@@ -99,6 +135,8 @@ export async function converseText(opts: {
   temperature?: number;
   document?: ConverseDocument;
   errPrefix: string;
+  surface: ConverseSurface;
+  ownerSub?: string;
 }): Promise<string> {
   return (await converseTextWithMeta(opts)).text;
 }
@@ -114,6 +152,8 @@ export async function converseTextWithMeta(opts: {
   temperature?: number;
   document?: ConverseDocument;
   errPrefix: string;
+  surface: ConverseSurface;
+  ownerSub?: string;
 }): Promise<{ text: string; stopReason: string | undefined }> {
   const content: ContentBlock[] = [];
   if (opts.document) {
@@ -126,6 +166,7 @@ export async function converseTextWithMeta(opts: {
     });
   }
   content.push({ text: opts.userText });
+  const startedAt = performance.now();
   let response: ConverseCommandOutput;
   try {
     response = await bedrockClient().send(
@@ -139,6 +180,13 @@ export async function converseTextWithMeta(opts: {
   } catch (err) {
     wrapBedrockError(err, opts.errPrefix);
   }
+  logAiUsage({
+    surface: opts.surface,
+    modelId: opts.modelId,
+    ownerSub: opts.ownerSub,
+    usage: response.usage,
+    startedAt,
+  });
   const text = response.output?.message?.content?.find((b) => b.text)?.text;
   if (!text) {
     throw new Error(`${opts.errPrefix}_returned_no_text`);
@@ -156,12 +204,15 @@ export async function converseTool(opts: {
   temperature?: number;
   tool: Tool;
   errPrefix: string;
+  surface: ConverseSurface;
+  ownerSub?: string;
 }): Promise<Record<string, unknown>> {
   const toolName = opts.tool.toolSpec?.name;
   const toolConfig: ToolConfiguration = {
     tools: [opts.tool],
     ...(toolName ? { toolChoice: { tool: { name: toolName } } } : {}),
   };
+  const startedAt = performance.now();
   let response: ConverseCommandOutput;
   try {
     response = await bedrockClient().send(
@@ -176,6 +227,13 @@ export async function converseTool(opts: {
   } catch (err) {
     wrapBedrockError(err, opts.errPrefix);
   }
+  logAiUsage({
+    surface: opts.surface,
+    modelId: opts.modelId,
+    ownerSub: opts.ownerSub,
+    usage: response.usage,
+    startedAt,
+  });
   const toolUse = response.output?.message?.content?.find((b) => b.toolUse)
     ?.toolUse;
   if (!toolUse?.input) {

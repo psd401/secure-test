@@ -228,7 +228,10 @@ export async function POST(req: Request, ctx: RouteContext) {
       // still runs.
       ...(extractReq.text !== undefined ? { inputText: extractReq.text } : {}),
       run: async () => {
-        const result: RubricExtractResult = await provider.extract(extractReq);
+        const result: RubricExtractResult = await provider.extract(
+          extractReq,
+          auth.session.sub,
+        );
         // Normalisation is inside the guarded call so a rubric that cannot
         // be made at all fails before anything is screened or returned.
         return normalizeRubric(result.rubric);

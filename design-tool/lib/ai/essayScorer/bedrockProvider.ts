@@ -29,7 +29,10 @@ export const bedrockEssayScorer: EssayScorerProvider = {
     return `bedrock-${process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL}`;
   },
 
-  async scoreEssay(req: ScoreEssayRequest): Promise<ScoreEssayResult> {
+  async scoreEssay(
+    req: ScoreEssayRequest,
+    ownerSub?: string,
+  ): Promise<ScoreEssayResult> {
     // D-5: the model sees the scoring view (single-point targets expanded
     // into the below/meets/exceeds ladder), and the returned selections are
     // bounds-checked against that same view.
@@ -41,6 +44,8 @@ export const bedrockEssayScorer: EssayScorerProvider = {
       maxTokens: ESSAY_SCORE_MAX_TOKENS,
       temperature: 0,
       errPrefix: "bedrock",
+      surface: "essay-score",
+      ownerSub,
     });
     const result = parseScoreResult(text, "bedrock");
     const bounds = validateAgainstRubric(result, rubric);

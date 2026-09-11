@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       surface: "item-gen",
       ownerSub: auth.session.sub,
       inputText: body.prompt,
-      run: () => provider.generateItem(body),
+      run: () => provider.generateItem(body, auth.session.sub),
       outputText: (item) => itemProposalText(item),
     });
   } catch (err) {
