@@ -194,10 +194,42 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
     /// past that the response is still listed and the field says saved without
     /// the picture. Empty when the server sent none.
     public let savedUploads: [String: BundleAsset]
+    /// Time limit slice 2 (`docs/time-limit-and-unfinished-attempts-design.md`,
+    /// D-2): when THIS attempt's time runs out, as the server computed it from
+    /// `attempts.started_at + time_limit_seconds`. Nil when the assessment has
+    /// no limit — and on every bundle built before the field existed.
+    ///
+    /// Kept as the wire strings, parsed on demand, for the same reason
+    /// `MySittings` does: the server writes fractional seconds and
+    /// `JSONDecoder`'s `.iso8601` strategy refuses them, and a date that will
+    /// not parse must cost the timer rather than the whole test.
+    public let timeLimitEndsAt: String?
+    /// The server's own clock at the instant the bundle was built. Rides only
+    /// alongside `timeLimitEndsAt`; see `deadline(receivedAt:)`.
+    public let serverNow: String?
+
+    /// The deadline to count down to, in THIS Mac's clock.
+    ///
+    /// Deliberately not `timeLimitEndsAt` as a wall-clock instant: a classroom
+    /// Mac whose clock is minutes off would then be given minutes too few or
+    /// too many. The server sends both ends of its own measurement, so what
+    /// crosses the wire is a DURATION — `ends_at − server_now` — and the client
+    /// adds it to its own "now" at receipt. A skewed clock still counts the
+    /// right number of seconds.
+    ///
+    /// Nil unless both fields are present and parseable.
+    public func deadline(receivedAt: Date = Date()) -> Date? {
+        guard let endsAt = timeLimitEndsAt.flatMap(ISO8601.parse),
+              let sentAt = serverNow.flatMap(ISO8601.parse)
+        else { return nil }
+        return receivedAt.addingTimeInterval(endsAt.timeIntervalSince(sentAt))
+    }
 
     private enum CodingKeys: String, CodingKey {
         case title, items, assets, accommodations, layout
         case testId = "test_id"
+        case timeLimitEndsAt = "time_limit_ends_at"
+        case serverNow = "server_now"
         case answeredItemIds = "answered_item_ids"
         case constructAltering = "construct_altering"
         case allowClipboard = "allow_clipboard"
@@ -237,6 +269,11 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
             try c.decodeIfPresent([String: ItemResponse].self, forKey: .savedResponses) ?? [:]
         savedUploads =
             try c.decodeIfPresent([String: BundleAsset].self, forKey: .savedUploads) ?? [:]
+        // Both or neither, by the server's own rule — but decoded
+        // independently, so a bundle carrying only one of them simply has no
+        // deadline rather than failing to decode at all.
+        timeLimitEndsAt = try c.decodeIfPresent(String.self, forKey: .timeLimitEndsAt)
+        serverNow = try c.decodeIfPresent(String.self, forKey: .serverNow)
     }
 
     public static func decode(from data: Data) throws -> DeliveryBundle {

@@ -368,4 +368,72 @@ final class DeliveryDecodingEdgeCaseTests: XCTestCase {
         """#
         XCTAssertThrowsError(try DeliveryBundle.decode(from: Data(json.utf8)))
     }
+
+    // MARK: time limit (slice 2)
+
+    /// Absent on an assessment with no limit — and on every bundle built
+    /// before the field existed, which is the fixture.
+    func testNoDeadlineWhenTheBundleCarriesNoTimeLimit() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/delivery-bundle.json")
+        let bundle = try DeliveryBundle.decode(from: try Data(contentsOf: url))
+        XCTAssertNil(bundle.timeLimitEndsAt)
+        XCTAssertNil(bundle.serverNow)
+        XCTAssertNil(bundle.deadline())
+    }
+
+    func testDecodesTheTimeLimitInstants() throws {
+        let json = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T18:45:00.000Z",
+         "server_now":"2026-09-11T18:00:00.000Z"}
+        """#
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        XCTAssertEqual(bundle.timeLimitEndsAt, "2026-09-11T18:45:00.000Z")
+        XCTAssertEqual(bundle.serverNow, "2026-09-11T18:00:00.000Z")
+    }
+
+    /// The point of carrying both instants: what crosses the wire is a
+    /// DURATION, so a Mac whose clock is an hour out still counts the right
+    /// forty-five minutes.
+    func testDeadlineIsTheServerDurationAddedToThisMacsOwnNow() throws {
+        let json = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T18:45:00.000Z",
+         "server_now":"2026-09-11T18:00:00.000Z"}
+        """#
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        let skewed = Date(timeIntervalSince1970: 1_000_000)
+        let deadline = try XCTUnwrap(bundle.deadline(receivedAt: skewed))
+        XCTAssertEqual(deadline.timeIntervalSince(skewed), 45 * 60, accuracy: 0.001)
+    }
+
+    /// Fractional seconds are what the server writes; a server that stopped
+    /// writing them must still parse.
+    func testDeadlineParsesWithAndWithoutFractionalSeconds() throws {
+        let json = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T18:30:00Z",
+         "server_now":"2026-09-11T18:00:00Z"}
+        """#
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        let at = Date(timeIntervalSince1970: 42)
+        XCTAssertEqual(try XCTUnwrap(bundle.deadline(receivedAt: at)).timeIntervalSince(at), 1800, accuracy: 0.001)
+    }
+
+    /// Both or neither is the server's rule; one alone simply has no deadline
+    /// rather than failing the whole bundle.
+    func testOneInstantAloneIsNoDeadline() throws {
+        let json = #"""
+        {"test_id":"t","title":"T","items":[],"time_limit_ends_at":"2026-09-11T18:45:00.000Z"}
+        """#
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        XCTAssertNil(bundle.deadline())
+        let unparseable = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"whenever","server_now":"2026-09-11T18:00:00.000Z"}
+        """#
+        XCTAssertNil(try DeliveryBundle.decode(from: Data(unparseable.utf8)).deadline())
+    }
 }

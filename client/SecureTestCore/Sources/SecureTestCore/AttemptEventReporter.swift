@@ -19,6 +19,10 @@ public enum AttemptEventKind: String, CaseIterable, Sendable {
     /// is in the server's ALERT_EVENT_KINDS and lights "Needs attention".
     /// Detail is `{ kind, message }`.
     case clientError = "client_error"
+    /// Time limit slice 2 (D-2): this attempt's clock reached zero and the
+    /// client ended the secure session. It does NOT hand in — the attempt stays
+    /// in progress for the teacher to review or hand in themselves.
+    case timeExpired = "time_expired"
 }
 
 /// Slice 92: fire-and-forget event reporting for the teacher monitor.
@@ -49,6 +53,10 @@ public final class AttemptEventReporter: @unchecked Sendable {
         // budget as the lifecycle — a network fault is exactly the condition
         // that produces one and would otherwise lose it.
         .clientError,
+        // Time limit: the one event that explains why a student's session ended
+        // and their attempt is unfinished. Losing it to a flaky network would
+        // leave the teacher's timeline claiming nothing happened.
+        .timeExpired,
     ]
     private static let maxAttempts = 4
 

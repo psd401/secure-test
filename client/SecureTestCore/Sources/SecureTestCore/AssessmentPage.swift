@@ -203,6 +203,30 @@ public enum AssessmentPage {
       border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--paper));
       border-radius: 6px; padding: 8px 12px; font-size: 0.875rem; margin: 0 0 16px;
     }
+    /* Time limit slice 2 (docs/time-limit-and-unfinished-attempts-design.md,
+       D-3): the countdown strip under the heading. It lives in the PAGE rather
+       than in the titlebar so it is inside what the locked-down web view shows
+       full screen, inherits the student's contrast set and zoom, and is carried
+       into the teacher's peek frame. Tokens only, like every rule here; under a
+       minute the strip carries `danger` and turns Clay. */
+    .time-limit {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 16px;
+      padding: 6px 10px; font-size: 0.875rem;
+      color: var(--ink); background: var(--panel);
+      border: 1px solid var(--panel-line); border-radius: 6px;
+    }
+    .time-limit-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .time-limit.danger {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 12%, var(--paper));
+      border-color: color-mix(in srgb, var(--danger) 45%, var(--paper));
+    }
+    .time-limit-hide {
+      margin-left: auto; font: inherit; font-size: 1rem; line-height: 1;
+      padding: 2px 8px; color: inherit; background: var(--paper);
+      border: 1px solid var(--line-strong); border-radius: 6px;
+    }
+    .time-limit-hide:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
     .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
@@ -2661,6 +2685,67 @@ public enum AssessmentPage {
         : (typeof window.innerWidth === 'number' ? window.innerWidth >= LAYOUT_MIN_WIDE_PX : true);
 
       var root = document.getElementById('items');
+
+      // Time limit (docs/time-limit-and-unfinished-attempts-design.md, D-3):
+      // the countdown strip, first thing under the heading, above everything
+      // the page builds afterwards — so it stays put through every page turn.
+      //
+      // The PAGE decides whether there is a strip at all (the bundle carries
+      // the deadline); the HOST owns the clock and pushes the text in through
+      // `window.__timeLimit.update` once a second, the same shape as
+      // `__secureTestSubmitResult`. Nothing here reads a clock: a page that
+      // counted for itself would be a second, disagreeing timer, and the one
+      // that matters is the host's, which is offset from the server's.
+      var timeStrip = null;
+      var timeValue = null;
+      var timeHidden = false;
+
+      function buildTimeLimit() {
+        var strip = document.createElement('div');
+        strip.className = 'time-limit';
+        // role=status without a live region: the host rewrites this every
+        // second, and announcing each rewrite would talk over the question.
+        strip.setAttribute('role', 'status');
+        strip.setAttribute('aria-live', 'off');
+        var label = document.createElement('span');
+        label.className = 'time-limit-label';
+        label.textContent = 'Time left';
+        var value = document.createElement('span');
+        value.className = 'time-limit-value';
+        value.textContent = '—';
+        var hide = document.createElement('button');
+        hide.type = 'button';
+        hide.className = 'time-limit-hide';
+        hide.textContent = '×';
+        hide.setAttribute('aria-label', 'Hide the timer');
+        hide.onclick = function () {
+          // D-3: hidden for the rest of the attempt. The host is told so it can
+          // stop pushing text — it keeps counting, and the notices and the end
+          // of the session at zero are not the student's to switch off.
+          timeHidden = true;
+          strip.setAttribute('hidden', '');
+          try {
+            window.webkit.messageHandlers.timer.postMessage({ dismiss: true });
+          } catch (e) {}
+        };
+        strip.appendChild(label);
+        strip.appendChild(value);
+        strip.appendChild(hide);
+        timeStrip = strip;
+        timeValue = value;
+        return strip;
+      }
+
+      window.__timeLimit = {
+        update: function (text, danger) {
+          if (!timeValue || timeHidden) return;
+          timeValue.textContent = String(text);
+          timeStrip.className = danger ? 'time-limit danger' : 'time-limit';
+        }
+      };
+
+      if (BUNDLE && BUNDLE.time_limit_ends_at) root.appendChild(buildTimeLimit());
+
       // Offline path (James, 2026-08-28, follow-up to finding 8.5): a standing
       // notice under the heading, because MC / short-text / essay answers
       // carry no status label of their own and would otherwise show no

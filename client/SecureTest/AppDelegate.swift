@@ -79,6 +79,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// stretch after an emergency end is exactly when a teacher wants eyes.
     private var peekResponder: PeekResponder?
     private var attemptHandedIn = false
+    /// Time limit slice 2 (`docs/time-limit-and-unfinished-attempts-design.md`,
+    /// D-2 / D-3): this attempt's clock, or nil when the assessment has no
+    /// limit. One per attempt, started from the bundle's deadline and stopped
+    /// when the attempt leaves the screen.
+    private var countdown: TimeLimitCountdown?
+    /// Set when the countdown reached zero, so the session-ended sheet reads
+    /// "Time is up." instead of the ordinary copy.
+    private var sessionEndedByTimeLimit = false
+    /// One session-ended sheet per attempt screen. The time-limit path can
+    /// reach `presentSessionEndedSheetIfNeeded` both through the lockdown's
+    /// `.idle` state and directly (a session that was never active), and two
+    /// stacked sheets would be worse than either.
+    private var sessionEndedSheetShown = false
 
     /// Observability slice 4 (`docs/observability-design.md`): this build's
     /// identity, on every error line and every pre-formatted crash line.
@@ -319,6 +332,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CrashReporter.prepare(stamp: Self.buildStamp, attemptID: nil)
         controller = nil
         attemptHandedIn = false
+        // Time limit: the attempt is gone, and so is its clock.
+        countdown?.stop()
+        countdown = nil
+        sessionEndedByTimeLimit = false
+        sessionEndedSheetShown = false
         seedTokenFromLaunchArgumentsIfPresent()
         let client = APIClient(
             baseURL: Self.serverBaseURL,
@@ -387,6 +405,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             peekResponder = nil
         }
         attemptHandedIn = false
+        countdown?.stop()
+        countdown = nil
+        sessionEndedByTimeLimit = false
+        sessionEndedSheetShown = false
         // C-1 (docs/multi-source-stimulus-design.md): one gate per attempt, set
         // on the controller BEFORE its fetch Task gets to run, so the page
         // builds after the AAC begin() transition has finished resizing the
@@ -404,6 +426,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // offline --bundle path — that one exists to look at the renderer.
             if isServerDelivered {
                 self?.beginLockdown()
+                // Time limit (D-2): the deadline is computed from the bundle's
+                // own two instants at RECEIPT — `ends_at − server_now` added to
+                // this Mac's now — so a skewed clock counts the right number of
+                // seconds. Absent on an assessment with no limit, and on the
+                // offline path, where there is no attempt to run out.
+                self?.startCountdownIfNeeded(for: bundle)
             } else {
                 // C-1: no begin, so nothing will ever settle — never hold the
                 // page for the backstop's sake.
@@ -414,7 +442,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.log("back to your tests pressed (in-page) — leaving the attempt screen")
             self?.showEntry()
         }
+        controller.onTimerDismissed = { [weak self] in
+            // D-3: the banner is hidden for the rest of the attempt. The clock
+            // keeps running — the notices and the end of the session at zero
+            // are not the student's to switch off.
+            self?.countdown?.dismiss()
+        }
         controller.onHandedIn = { [weak self] in
+            // Time limit: handed in, so there is nothing left to run out.
+            self?.countdown?.stop()
             // Before endLockdown, so focus noise stops but the reporter is
             // still there for the lockdown_end the teardown produces.
             self?.attemptHandedIn = true
@@ -462,6 +498,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return responder
+    }
+
+    // MARK: time limit (slice 2)
+
+    /// Start this attempt's clock, if it has one.
+    ///
+    /// Everything the countdown decides — the text, the two notices, the danger
+    /// colour, zero — lives in `TimeLimitCountdown` and is unit-tested; this is
+    /// only where each decision is presented. The scheduler is the main-queue
+    /// one, like the lockdown's own watchdog.
+    private func startCountdownIfNeeded(for bundle: DeliveryBundle) {
+        countdown?.stop()
+        countdown = nil
+        guard let deadline = bundle.deadline() else { return }
+        Self.log("time limit: \(Int(deadline.timeIntervalSinceNow))s left on this attempt")
+        let clock = TimeLimitCountdown(
+            deadline: deadline,
+            scheduler: DispatchLockdownScheduler.main
+        )
+        clock.onTick = { [weak self] text, danger in
+            Task { @MainActor in
+                self?.controller?.updateTimeLimit(text: text, danger: danger)
+            }
+        }
+        clock.onNotice = { [weak self] notice in
+            Task { @MainActor in
+                Self.log("time limit: \(notice.text)")
+                self?.controller?.showTimeNotice(notice.text)
+            }
+        }
+        clock.onExpired = { [weak self] in
+            Task { @MainActor in
+                self?.timeLimitExpired()
+            }
+        }
+        countdown = clock
+        clock.start()
+    }
+
+    /// Zero (D-2). The secure session ends; the attempt does NOT hand itself in
+    /// — it stays in progress so the teacher can review it, or hand it in for
+    /// the student, from the design tool.
+    private func timeLimitExpired() {
+        Self.log("time limit reached — ending the secure session")
+        sessionEndedByTimeLimit = true
+        // The flag first: from here the server refuses this attempt's answers
+        // with 409 `time_expired`, and those drops are expected rather than
+        // reportable.
+        controller?.timeExpired = true
+        // Retried like the other lifecycle kinds — this is the event that
+        // explains an unfinished attempt on the teacher's timeline.
+        eventReporter?.report(.timeExpired)
+        let wasActive = lockdown?.isActive == true
+        endLockdown(reason: "time_expired")
+        // A session that was never up (a failed begin, the cooperative
+        // fallback) produces no `.idle` transition, so nothing else would tell
+        // the student what happened.
+        if !wasActive { presentSessionEndedSheetIfNeeded() }
     }
 
     // MARK: focus (slice 92)
@@ -671,12 +765,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// beside the handed-in notice is the route there.
     private func presentSessionEndedSheetIfNeeded() {
         guard screen == .serverAttempt, !attemptHandedIn, !quitInProgress, let window else { return }
+        guard !sessionEndedSheetShown else { return }
+        sessionEndedSheetShown = true
         let alert = NSAlert()
-        alert.messageText = "Secure session ended"
-        alert.informativeText =
-            "Your answers are saved. You can keep working here, or go back to your tests."
-        alert.addButton(withTitle: "Back to your tests")
-        alert.addButton(withTitle: "Stay here")
+        // Time limit (D-2): one button, because there is nothing to stay for —
+        // the server refuses this attempt's answers from here, so "Stay here"
+        // would offer a page that can no longer save anything.
+        if sessionEndedByTimeLimit {
+            alert.messageText = "Time is up."
+            alert.informativeText = "Your answers are saved."
+            alert.addButton(withTitle: "Back to your tests")
+        } else {
+            alert.messageText = "Secure session ended"
+            alert.informativeText =
+                "Your answers are saved. You can keep working here, or go back to your tests."
+            alert.addButton(withTitle: "Back to your tests")
+            alert.addButton(withTitle: "Stay here")
+        }
         alert.beginSheetModal(for: window) { [weak self] response in
             if response == .alertFirstButtonReturn {
                 self?.backToTests()

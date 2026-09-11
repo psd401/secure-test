@@ -32,6 +32,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// multiple-choice item. The page cannot delete its own saved response —
     /// the ingest API is server-side — so it asks the host to withdraw it.
     static let withdrawChannel = "withdraw"
+    /// Time limit slice 2 (D-3): the countdown banner's ×. The page hides its
+    /// own strip; this tells the host to stop pushing text into it. Nothing
+    /// else rides this channel — the clock itself is the host's.
+    static let timerChannel = "timer"
 
     let view: NSView
     private let webView: LockedDownWebView
@@ -48,8 +52,20 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// "is viewing" at request time, "viewed at H:MM" once the frame has
     /// gone.
     private var peekNotice = PeekNotice()
-    private var peekBanner: NSView?
+    private var peekBanner: PeekBannerView?
     private var peekLabel: NSTextField?
+    private var peekDismissButton: NSButton?
+    /// Time limit slice 2: which notice the strip is currently carrying, so the
+    /// auto-dismiss a "5 minutes left" schedules cannot take a peek disclosure
+    /// down with it (the peek notice stays until the student closes it — 8.1).
+    private var noticeToken = 0
+    /// Time limit slice 2: set once the clock has run out. The server answers
+    /// 409 `time_expired` to anything the spool sends after that, which the
+    /// spool already treats as permanent and drops (`isPermanent`); this stops
+    /// the drop from ALSO being reported as a client error. The student has
+    /// been told the test is over by the sheet — a red notice on the teacher's
+    /// monitor for the expected aftermath is noise, not a signal.
+    var timeExpired = false
     /// How many navigations the HOST still owes the web view. Every
     /// `loadHTMLString` this controller issues goes through `loadHostPage`,
     /// which increments this; the navigation delegate allows an `about:`
@@ -92,6 +108,9 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
     /// UX pass 2: the page asked to go back to "Your tests" (post-hand-in).
     var onBackToTests: (() -> Void)?
+
+    /// Time limit slice 2 (D-3): the student pressed the countdown banner's ×.
+    var onTimerDismissed: (() -> Void)?
 
     /// C-1 (`docs/multi-source-stimulus-design.md`): the page build waits on
     /// this before it reads the viewport width, because `onBundleLoaded` begins
@@ -159,6 +178,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         controller.add(self, name: Self.submitChannel)
         controller.add(self, name: Self.homeChannel)
         controller.add(self, name: Self.withdrawChannel)
+        controller.add(self, name: Self.timerChannel)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         magnificationObservation = webView.observe(\.magnification, options: [.new]) {
@@ -361,31 +381,73 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// view the render captures, so the teacher's frame shows the student
     /// was told.
     func showPeekNotice(_ text: String) {
+        noticeToken += 1
         peekNotice.show(text)
-        syncPeekBanner()
+        syncPeekBanner(tint: PSDColor.whulge, dismissLabel: "Dismiss the teacher viewing notice")
+    }
+
+    // MARK: time limit (slice 2)
+
+    /// The banner text, once a second, from `TimeLimitCountdown`. Straight into
+    /// the page — the strip lives there (D-3) so it is inside what the
+    /// locked-down web view shows, follows the student's contrast set and zoom,
+    /// and is captured into the peek frame like everything else they see.
+    func updateTimeLimit(text: String, danger: Bool) {
+        let escaped = text.replacingOccurrences(of: "\"", with: "")
+        webView.evaluateJavaScript(
+            "window.__timeLimit && window.__timeLimit.update(\"\(escaped)\", \(danger));",
+            completionHandler: nil
+        )
+    }
+
+    /// "5 minutes left" / "1 minute left" (D-3), on the SAME strip the peek
+    /// disclosure uses — it is already the client's one unobtrusive,
+    /// non-modal, focus-preserving notice surface.
+    ///
+    /// Two differences from a peek notice, and only two: it is Ochre rather
+    /// than Whulge, and it takes itself down after eight seconds. The
+    /// disclosure's own behaviour is untouched — it has no auto-dismiss,
+    /// because it is a statement about privacy the student chooses when to
+    /// clear, and a later peek always re-shows it.
+    func showTimeNotice(_ text: String) {
+        noticeToken += 1
+        let token = noticeToken
+        peekNotice.show(text)
+        syncPeekBanner(tint: PSDColor.warn, dismissLabel: "Dismiss the time notice")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            // Only if nothing has been shown since: a peek disclosure that
+            // arrived in those eight seconds must not be cleared by this.
+            guard let self, self.noticeToken == token else { return }
+            self.peekNotice.dismiss()
+            self.syncPeekBanner(tint: PSDColor.warn, dismissLabel: "Dismiss the time notice")
+        }
     }
 
     /// Finding 8.1: the Dismiss button. Only the strip goes — nothing is
     /// reported, nothing server-side changes — and the next peek's
     /// `showPeekNotice` brings it back.
     @objc private func dismissPeekNotice(_ sender: Any?) {
+        noticeToken += 1
         peekNotice.dismiss()
-        syncPeekBanner()
+        peekBanner?.isHidden = true
     }
 
     /// Mirror the `PeekNotice` value into the strip: hidden while there is
     /// nothing to say, otherwise built on first use and updated in place.
-    private func syncPeekBanner() {
+    private func syncPeekBanner(tint: NSColor, dismissLabel: String) {
         guard let text = peekNotice.text else {
             peekBanner?.isHidden = true
             return
         }
         let banner = peekBanner ?? makePeekBanner()
         peekLabel?.stringValue = text
+        peekDismissButton?.setAccessibilityLabel(dismissLabel)
+        banner.fill = tint
+        banner.needsDisplay = true
         banner.isHidden = false
     }
 
-    private func makePeekBanner() -> NSView {
+    private func makePeekBanner() -> PeekBannerView {
         let height: CGFloat = 24
         let banner = PeekBannerView(
             frame: NSRect(
@@ -437,6 +499,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         view.addSubview(banner)
         peekBanner = banner
         peekLabel = label
+        peekDismissButton = dismiss
         return banner
     }
 
@@ -504,6 +567,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             handleWithdraw(message.body)
             return
         }
+        if message.name == Self.timerChannel {
+            log("time limit: banner hidden by the student")
+            onTimerDismissed?()
+            return
+        }
         guard message.name == Self.responseChannel else {
             blocked("message on unexpected channel", detail: message.name)
             return
@@ -527,6 +595,16 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     private func noteDropped(_ result: ResponseSpool.FlushResult) -> ResponseSpool.FlushResult {
         if result.dropped > 0 {
             log("responses DROPPED: \(result.dropped) refused permanently by the server (attempt already handed in?)")
+            // Time limit slice 2: after the clock ran out the server answers
+            // 409 `time_expired` to every answer, so a drop here is the
+            // EXPECTED aftermath of a session that ended on time. Logged (the
+            // line above), not retried (the spool's `isPermanent` rule), and
+            // not raised as an error the student or the monitor sees — the
+            // "Time is up" sheet already said what happened.
+            if timeExpired {
+                log("responses DROPPED after the time limit — expected, not reported")
+                return result
+            }
             // Slice 4: the single most consequential client failure there is
             // — a student's answers refused for good. In-attempt, so it also
             // lights "Needs attention" on the teacher's monitor (D-4).
@@ -879,15 +957,21 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 /// itself — paints it the way the original background-drawing label was:
 /// the teacher's frame keeps showing the student was told.
 private final class PeekBannerView: NSView {
+    /// PSD Whulge #346780 (client-ui-pass-design.md §C) rather than
+    /// systemIndigo: the strip is district chrome, and a system colour shifts
+    /// with the OS accent. Literal sRGB so the captured peek frame is the same
+    /// colour on every Mac. Slice D: named once in `PSDColor`.
+    ///
+    /// Time limit slice 2: the same strip carries the two countdown notices in
+    /// Ochre (`--warn`), so "5 minutes left" does not read as a privacy
+    /// disclosure. A property rather than two views — the notice is one strip,
+    /// one label, one × for the whole attempt.
+    var fill: NSColor = PSDColor.whulge
+
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        // PSD Whulge #346780 (client-ui-pass-design.md §C) rather than
-        // systemIndigo: the strip is district chrome, and a system colour
-        // shifts with the OS accent. Literal sRGB so the captured peek frame
-        // is the same colour on every Mac.
-        // Slice D: the same literal, now named once in `PSDColor`.
-        PSDColor.whulge.withAlphaComponent(0.92).setFill()
+        fill.withAlphaComponent(0.92).setFill()
         bounds.fill()
     }
 }

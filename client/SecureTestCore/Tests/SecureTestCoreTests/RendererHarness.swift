@@ -143,6 +143,11 @@ final class RendererHarness {
         try messages(on: "__withdrawals")
     }
 
+    /// Time limit slice 2: the banner's × posts one of these.
+    func postedTimerDismissals() throws -> [[String: Any]] {
+        try messages(on: "__timerDismissals")
+    }
+
     private func messages(on global: String) throws -> [[String: Any]] {
         let json = try eval("JSON.stringify(\(global))").toString() ?? "[]"
         let parsed = try JSONSerialization.jsonObject(with: Data(json.utf8))
@@ -363,6 +368,7 @@ final class RendererHarness {
     var __uploads = [];
     var __submits = [];
     var __withdrawals = [];
+    var __timerDismissals = [];
 
     var __root = __node('div');
     __root.id = 'items';
@@ -415,6 +421,11 @@ final class RendererHarness {
           },
           withdraw: {
             postMessage: function (body) { __withdrawals.push(body); }
+          },
+          // Time limit slice 2: the banner's × tells the host to stop pushing
+          // text into a strip nobody can see.
+          timer: {
+            postMessage: function (body) { __timerDismissals.push(body); }
           }
         }
       }

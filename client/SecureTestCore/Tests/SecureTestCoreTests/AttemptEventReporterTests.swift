@@ -159,6 +159,11 @@ final class AttemptEventReporterTests: XCTestCase {
                 // Observability slice 4 (D-4). The server's CHECK constraint
                 // and ALERT_EVENT_KINDS gained it in the same batch.
                 "client_error",
+                // Time limit slice 2 (D-2). Slice 1 widened the server's kind
+                // CHECK and listed it in the client-postable set in the same
+                // batch; `teacher_hand_in`, added by the same migration, is
+                // deliberately NOT here — the client can never post it.
+                "time_expired",
             ]
         )
     }
