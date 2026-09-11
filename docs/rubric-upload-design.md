@@ -292,6 +292,23 @@ typecheck re-run in the main session before each commit, as in the
   queue's level picker (it already was one) offers Below / Meets / Exceeds
   and pre-fills from the proposal. +12 tests across four files; the queue
   card needs a hand-run row (no DOM harness).
+- **Slice 7 — 2026-09-11.** Rows 122–153 written in
+  `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
+  DOCX / Markdown / pasted-text ingestion, missing-points warning,
+  single-point / holistic proposals, non-rubric 422, .pptx 415, >5MB 413,
+  Published 409, confirm-vs-no-confirm apply, `student_visibility` survives,
+  Save persists, Cancel is a no-op), library rows (save, list, apply with
+  fresh ids + `rubric_id`, hand-edit detach, library PATCH/DELETE leave the
+  item's copy alone, cross-owner 404 blocked pending a second staff
+  account), single-point AI-scoring rows on a real sitting (proposal table,
+  override picker, approved final, manual save), feedback rows (the print
+  page's framing line + per-criterion table gated on `with_feedback` +
+  FINAL, flag off, proposed-only, the section view never shows it), one
+  `ai_usage` CloudWatch row, and the deploy row for 0032 + 0033. Fixture
+  recipe: a Draft with one essay item per rubric style plus a hand-built
+  PDF/DOCX/Markdown-table rubric file for the upload rows, and a second
+  Published copy with one single-point hybrid essay for the
+  `<demo-student-A>` sitting.
 - **Slice 3 — 2026-09-11.** The library. **Migration 0033** `rubrics`
   (`owner_sub`, `title`, `rubric jsonb`, `source` CHECK upload|editor,
   owner index; applied to dev + test); `GET/POST /api/rubrics` (summaries:

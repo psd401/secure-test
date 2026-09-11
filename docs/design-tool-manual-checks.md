@@ -482,3 +482,56 @@ carry attempts and sittings).
 | 119 | **Show archived** → the archived row | Shows "Archived <date>", only Attendance + Unarchive (no Show code / Monitor / Close); Attendance still expands with the sitting's roster. **Unarchive** puts it back in the live list; "Hide archived" and the toggle disappears once nothing is archived | ✅ 2026-09-10: archived row shows "Archived Sep 10, 2026", Attendance + Unarchive only; Attendance expanded (1 of 1 joined); Unarchive → "No archived test sessions." while the view is still on archived, Hide archived → (2) live rows and the toggle gone |
 | 120 | `PATCH /api/test-sessions/<openSittingId> { "archived": true }` from the console while that sitting is open | 409 `session_open`; the same body against a sitting owned by another teacher answers 404 | (needs a second staff account for the 404 half, same blocker as row 29) |
 | 121 | Student side: with an assessment archived (its sittings all closed), open Secure Test as a student who sat it | "Your tests" does not list it; a code from one of its closed sittings is refused as before. Unarchive + a new session admits them again | |
+
+## Rubric upload, library, single-point scoring, feedback, ai_usage (2026-09-11)
+
+`docs/rubric-upload-design.md` §Progress, slices 1–6 (D-1…D-7), all BUILT
+2026-09-11, NONE run. Two fixtures: a Draft `Rubric upload hand-run
+2026-09-11` with one essay item per rubric style (blank at first, for rows
+122–136) plus a hand-built PDF/DOCX/Markdown-table rubric file for the
+upload rows (`design-tool/test/helpers/pdf.ts`-style, no teacher content —
+build a plain one-criterion analytic table, a points-free version, and a
+single-point "criteria / target" list); and a second, Published copy with
+one essay carrying a single-point rubric (`scoring_method: hybrid`) for a
+sitting with `<demo-student-A>`. Rows marked **Bedrock** need
+`RUBRIC_EXTRACTOR_PROVIDER=bedrock` (and, for the scoring rows,
+`ESSAY_SCORER_PROVIDER=bedrock`) on the origin — the mock provider returns a
+fixed analytic rubric and cannot exercise the point-ladder / style /
+error rows. Rows marked **sitting** need the Published fixture handed in by
+`<demo-student-A>`. Everything else is a Chrome-only teacher row against a
+Draft. `migrate-aurora.sh` still owes **0032** + **0033**.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 122 | On the analytic item, "Upload rubric…" → choose a hand-built PDF rubric with printed points per level | Extract; the dialog shows the read-only proposal table (criterion name, each level's label + "(N pts)" + descriptor, no warning banner) | (Bedrock) |
+| 123 | Same PDF rubric saved as .docx, upload it | Same proposal table as row 122 (DOCX rides as a Converse document block, same as PDF) | (Bedrock) |
+| 124 | Paste a Markdown table version of the rubric into the paste box (no file chosen) | Extract takes the text path; same proposal table; the "Extract" button is enabled once either the file or the paste box has content, and a file always wins if both are filled | (Bedrock) |
+| 125 | Copy a rubric table out of a Google Doc and paste it (plain text, tab/space-separated) into the paste box | Same proposal table; the dialog's own copy ("A Google Doc: download as .docx or .pdf, or paste it here.") is the only Drive-related guidance — no picker, no OAuth prompt | (Bedrock) |
+| 126 | Upload a rubric PDF with the points column blank on every level | A warning above the table: the `points_assigned` message names every level it touched (e.g. "Points were not printed — assigned …"); the table's levels show the auto-assigned points | (Bedrock) |
+| 127 | Upload a single-point rubric ("criteria / target" list, no columns) | Proposal `style` = single_point; every level row's left-hand label reads **Target** (not the model's own wording), each with its points and descriptor | (Bedrock) |
+| 128 | Upload a holistic rubric (one overall scale, several levels) | Proposal `style` = holistic, one criterion row with all its levels listed under it | (Bedrock) |
+| 129 | Upload a PDF that is not a rubric (e.g. a plain paragraph of prose) | 422; the dialog shows the route's hint verbatim: "The AI could not read a rubric out of this. Check that the file contains the rubric table, or paste the rubric as text and try again." | (Bedrock) |
+| 130 | Upload a .pptx file | 415; dialog shows: "Upload a PDF, a Word document (.docx), Markdown or a plain-text file. A Google Doc can be downloaded as .docx or .pdf, or pasted." | |
+| 131 | Upload a rubric PDF over 5 MB | 413; dialog shows exactly "The file is over 5 MB." (fixed copy, not the route's hint) | |
+| 132 | Publish the fixture, then open the item and try "Upload rubric…" | 409; dialog shows exactly "Unpublish the assessment to change rubrics." Unpublish first to continue the remaining rows | |
+| 133 | Extract a proposal on the **blank** item (rubric never touched — the pristine "+ Add rubric" default), click "Use this rubric"; separately, on the analytic item after typing a criterion name, extract and click "Use this rubric" | Blank item: applies immediately, no confirm. Authored item: an AlertDialog "Replace the current rubric?" — "The criteria and levels you have written will be discarded and replaced with the uploaded rubric. This can't be undone." with "Keep the current rubric" / "Replace it"; only "Replace it" applies | |
+| 134 | Before extracting, tick "During the assessment" and "With feedback (Phase 3)" on the item's current rubric, then upload and apply a proposal | After apply, both checkboxes are still ticked (the proposal itself carries no `student_visibility` — the editor's existing flags are kept, not the extractor's) | (Bedrock) |
+| 135 | After applying a proposal (row 122 or 127), click the item's own Save | Rubric persists — reload the editor and the applied criteria/levels are still there | (Bedrock) |
+| 136 | Open "Upload rubric…", type paste text, then Cancel (not Extract) | Dialog closes; the item's rubric is unchanged, no network call was made beyond any prior Extract | |
+| 137 | Extract a proposal (row 122), type/keep the pre-filled title (the file name without its extension), click "Save to my rubrics" | Button reads "Saving…" then **"Saved"** (disabled after); the title field also disables once saved | (Bedrock) |
+| 138 | On any essay item, "Use a saved rubric…" | Dialog "Your saved rubrics" lists the row 137 rubric: title, then one line "`<Style>` · N criteri`on/a` · N pt`s`" (e.g. "Analytic · 1 criterion · 1 pt") | |
+| 139 | Pick the saved rubric from row 138 on a **different** essay item, apply, Save the item | The item's rubric criteria/level ids are NOT the library row's ids (inspect via the export or Chrome devtools on the item PATCH body — fresh `c1…`/`l1…`); the item PATCH body carries `rubric_id` set to the library row's id | |
+| 140 | On the item from row 139, hand-edit a level's points, then Save | The item's `rubric_id` clears (PATCH body carries `rubric_id: null` or it is simply absent per the detach rule) — the item keeps the edited rubric content | |
+| 141 | `PATCH /api/rubrics/<id>` from the console (or a future library-edit UI) changing the saved rubric's title or content | 200; the item that applied it earlier (row 139, before its own edit) is unaffected — its `config.rubric` is unchanged | |
+| 142 | `DELETE` the row-137 library rubric (console or a future UI) | 204; the item that still carries `rubric_id` pointing at it (if any remain) loses only `rubric_id` — its `config.rubric` content is untouched; "Use a saved rubric…" no longer lists it | |
+| 143 | `GET /api/rubrics/<another-teacher's-id>` (or apply-by-id) | 404 `{ ok: false, error: "not_found" }`, never 403 | (needs a second staff account — blocked, same as row 29/120) |
+| 144 | **(sitting)** On the Published single-point fixture, after `<demo-student-A>` hands in, Scoring queue → **Score with AI** on the essay response | The proposal card's per-criterion table (Criterion / Level / Points / Why) shows the chosen level as **Below target**, **Meets target** or **Exceeds target** for each criterion, with the model's rationale in the Why column | (Bedrock sitting) |
+| 145 | On the same card, open "Override with my own score" | The level picker offers exactly three buttons per criterion — **Below target** / **Meets target** / **Exceeds target** — pre-filled (highlighted) to match the AI's picks from row 144 | (Bedrock sitting) |
+| 146 | Click **Approve** on the row 144 proposal, then open the per-student results page for that attempt | The essay's row shows the same per-criterion table (Criterion / Level / Points) with the level read as Below/Meets/Exceeds target, for the FINAL score | (Bedrock sitting) |
+| 147 | On a different single-point response (or after Re-run AI to get a fresh proposal), change one criterion's pick in the override panel to a different Below/Meets/Exceeds level and click "Save final score" | Saves; the response's final score reflects the manually chosen derived level id and its points | (sitting) |
+| 148 | **(sitting)** With the fixture's rubric's "With feedback (Phase 3)" ticked and a FINAL score on the essay, open `/dashboard/<id>/results/print?attempt=<attemptId>` | Under the student's marks/integrity line: "Scored with a rubric; the comments below explain each score." then "Feedback — Q`n`" with a table (Criterion / Level / Points / Comment) showing Below/Meets/Exceeds target labels and the rationale, then the overall rationale if any; the word "AI" appears nowhere on the page | (Bedrock sitting) |
+| 149 | Untick "With feedback" on the rubric, re-score/re-finalize, reload the same print page | The Feedback block is gone; only the score line prints, as before this batch | (sitting) |
+| 150 | On an item with a rubric but only a **proposed** (not yet approved) score | The print page shows no Feedback block for that item — proposals never print, decided or not | (sitting) |
+| 151 | Open the section print view (`/dashboard/<id>/results/print?section=<label>`, no `?attempt=`) on a section that includes the row-148 student | No Feedback block anywhere on the page, even for the student whose single-student view showed one — the section view only ever shows scores | |
+| 152 | **(sitting)** After the Bedrock extract/score calls above, open the design-tool log group in the CloudWatch console (AWS console, Chrome) and filter on `event = "ai_usage"` | One log line per successful Converse call, each JSON with `surface` (`rubric-extract` / `essay-score`), `model`, `input_tokens`, `output_tokens`, `latency_ms`, `owner_sub` — no line for a failed/guardrail-blocked call | (Bedrock sitting, Chrome + AWS console) |
+| 153 | Deploy: push → `cdk diff` (expect image only) → `cdk deploy` → `infra/scripts/migrate-aurora.sh` → `GET /api/health` | `cdk diff` shows no infra change beyond the image; deploy rolls out; migrate-aurora applies **0032** and **0033** and the journal table shows **34** rows; `/api/health` reports `commit` = the deployed HEAD | |
