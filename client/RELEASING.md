@@ -70,6 +70,53 @@ psd401/secure-test --title "Secure Test v<v>" --notes "<one line>"`
 stapling; `plutil -p Contents/Info.plist | grep PSDBuildCommit` matches the
 release commit.
 
+## Configuration profile
+
+**The app is unusable without one.** It reads its server origin and its
+Google client id from launch arguments, then the environment, then its own
+managed preferences — and a Finder or Jamf launch supplies neither argument
+nor environment. There is no longer a localhost fallback (v1.2.0 shipped one
+and district Macs came up with a blank card, 2026-09-11); an unconfigured Mac
+now shows "This Mac isn't set up for Secure Test yet."
+
+Deploy a `com.apple.ManagedClient.preferences` profile alongside the pkg —
+`client/config-profile.example.mobileconfig` is the skeleton:
+
+| Preference domain | Key | Type | Value |
+|---|---|---|---|
+| `net.psd401.securetest.client` | `ServerURL` | string | the design-tool origin, e.g. `https://<origin>` |
+| `net.psd401.securetest.client` | `GoogleClientID` | string | the NATIVE OAuth client id (not the web client) |
+
+`ServerURL` must be an `http(s)` URL with a host; anything else is logged as
+unusable and treated as missing. An empty or whitespace-only value counts as
+unset at every level, so a blank key in a profile does not shadow the
+environment.
+
+Precedence, highest first:
+
+1. `--server <url>` / `--google-client-id <id>` launch arguments
+2. `SECURE_TEST_SERVER` / `SECURE_TEST_GOOGLE_CLIENT_ID` environment
+3. the `ServerURL` / `GoogleClientID` managed preferences
+
+The launch log names the source of each value at startup:
+`config: server URL from managed preference`,
+`config: google client id from environment`,
+`config: server URL not configured`.
+
+### Checking it without Jamf
+
+```
+defaults write net.psd401.securetest.client ServerURL https://<origin>
+defaults write net.psd401.securetest.client GoogleClientID <native-google-client-id>
+# launch /Applications/SecureTest.app from Finder, then:
+defaults delete net.psd401.securetest.client
+```
+
+A profile's `Forced` payload and a local `defaults write` land in the same
+place as far as the app is concerned, so this exercises the real code path.
+The dev launcher (`client/scripts/launch-client.ts`) always sets the
+environment variables, so development is unaffected either way.
+
 ## Hand-run before announcing
 
 One real AAC session from the packaged copy (install the `.pkg` on a
@@ -87,4 +134,6 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 - No `LSApplicationCategoryType` yet (archive warning); add
   `public.app-category.education` in a later slice.
 - The packaged copy's hand-install on a district Mac (slice 4's last row)
-  is not done until `MANUAL-CHECKS.md` says so.
+  is not done until `MANUAL-CHECKS.md` says so. That run installs the
+  configuration profile above first — without it the app shows the
+  not-set-up message and nothing else.

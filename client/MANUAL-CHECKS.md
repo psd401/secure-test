@@ -872,7 +872,7 @@ and there is no delete path; roadmap finding 2026-09-07).
 | Join a sitting whose attempt is already submitted | refused client-side: `join declined: attempt … is already submitted — staying on the entry screen` (finding 10.1) | ✅ 2026-09-07 — seen on the `E6 / E7(b)` sitting during the (simulated) first launch, on the origin |
 | KaTeX in the real session | sub/superscripts render in stems | ✅ 2026-09-07 — James: subscripts and superscripts displayed correctly in `Chemistry sample` |
 | Predictive text in the essay inside the REAL session (finding 8.4) | no inline completion with `predictiveKeyboard=false` | **OPEN** 2026-09-07 — James did not watch for it; re-check on the next real sitting before closing 8.4 |
-| Install `SecureTest-1.0.0.pkg` from the v1.0.0 release on a district Mac (Jamf or by hand), launch `/Applications/SecureTest.app` | Gatekeeper opens it with no warning; sign in, join, one real session (`REAL AEAssessmentSession` → `DID BEGIN` → hand in → `DID END`), no TCC prompt; About reads `1.0.0 (c719eb586e45)` | NOT RUN 2026-09-07 — waits on a district Mac (release plan slice 4's last row) |
+| Install the configuration profile (`client/config-profile.example.mobileconfig`, real values from the ops repo) FIRST, then install `SecureTest-1.0.0.pkg` from the release on a district Mac (Jamf or by hand), launch `/Applications/SecureTest.app` | Gatekeeper opens it with no warning; the card shows Sign in with Google (NOT the not-set-up message) and stderr reads `config: server URL from managed preference` / `config: google client id from managed preference`; sign in, join, one real session (`REAL AEAssessmentSession` → `DID BEGIN` → hand in → `DID END`), no TCC prompt; About reads `1.0.0 (c719eb586e45)` | NOT RUN 2026-09-07 — waits on a district Mac (release plan slice 4's last row) |
 
 Wanted after seeing the signed app (James, 2026-09-07), for batch 4's UI
 pass: brand the grey AAC background, the home (entry) screen and the
@@ -1517,3 +1517,29 @@ anything ending a session ships a real exit. Rows marked **simulated** use
 | **Simulated.** Cross-check the teacher's Monitor / results matrix for this attempt after it expires (no hand-in yet) | Still shows as in-progress ("Not handed in — k of N answered") — the client does not submit at zero (D-2) | |
 | **Simulated.** Quit before zero, relaunch, sign in, rejoin the same sitting | The banner resumes counting from the SAME deadline as before quitting (started_at-based), not a fresh 3:00 from the moment of rejoining | |
 | **Simulated.** Set the Mac's clock 10 minutes fast, then join (or rejoin) the limited fixture | The banner still shows the correct remaining time for the attempt (the bundle's `server_now` offset corrects for the skewed clock), not a countdown thrown off by 10 minutes | |
+
+
+## Managed-preference configuration (2026-09-11)
+
+`ClientConfiguration` (Core) decides where the server origin and the Google
+client id come from; `swift test` covers the precedence itself. What it cannot
+cover is the part that broke on district Macs: a Finder / Jamf launch with no
+arguments and no environment, and whether an MDM `Forced` payload actually
+reaches a sandboxed app's `UserDefaults`. Every row below needs the packaged
+app in `/Applications` and a look at stderr (`log stream --predicate
+'process == "SecureTest"'`, or launch from Terminal to watch the `[security]`
+lines directly).
+
+Clear the local state between rows with
+`defaults delete net.psd401.securetest.client`.
+
+| Check | Expect | Result |
+|---|---|---|
+| (a) No profile, no `defaults`, no environment — launch `/Applications/SecureTest.app` from Finder | The card carries "This Mac isn't set up for Secure Test yet. Ask your teacher or IT for help." and nothing else — no Sign in with Google, no code box. stderr has BOTH `config: server URL not configured` and `config: google client id not configured` | NOT RUN |
+| (b) `defaults write net.psd401.securetest.client ServerURL https://<origin>` and `… GoogleClientID <native id>`, relaunch from Finder | No message; Sign in with Google is back. stderr: `config: server URL from managed preference` and `config: google client id from managed preference`. Sign in, see Your tests, join a sitting — all as normal | NOT RUN |
+| (c) With (b)'s defaults still written, launch from Terminal with `SECURE_TEST_SERVER=<origin> SECURE_TEST_GOOGLE_CLIENT_ID=<id>` set | stderr says `from environment` for both — the environment beats the managed preference | NOT RUN |
+| (d) Same again plus `--server <url> --google-client-id <id>` on the command line | stderr says `from launch argument` for both — arguments beat the environment | NOT RUN |
+| (e) `defaults delete …` then write ONLY `ServerURL`; launch from Finder | The not-set-up message is shown; stderr reads `config: server URL from managed preference` AND `config: google client id not configured` | NOT RUN |
+| (f) Dev launcher against local dev, unchanged: `bun --env-file=design-tool/.env.local client/scripts/launch-client.ts <app>` | Exactly as before this slice — sign-in button, sign in, join. stderr: `from environment` for both | NOT RUN |
+| (g) Dev `--token` posture with no client id: launch with `SECURE_TEST_SERVER=<origin>` and `SECURE_TEST_TOKEN=<jwt>`, no client id anywhere | NO not-set-up message (a token session suppresses it); the code box and Your tests are shown as before; stderr: `no SECURE_TEST_GOOGLE_CLIENT_ID — sign-in button hidden…` | NOT RUN |
+| (h) A typo'd origin: `defaults write net.psd401.securetest.client ServerURL example.invalid`, relaunch | stderr: `config: server URL from managed preference is not a usable http(s) URL — ignored` then `config: server URL not configured`; the not-set-up message is shown rather than a silent failure later | NOT RUN |

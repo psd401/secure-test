@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Secure Test — managed preferences (example)
+
+  The app reads two settings, in this order: launch arguments, then the
+  environment, then the managed preferences below. A Finder or Jamf launch
+  supplies neither argument nor environment, so on a district Mac THIS profile
+  is the only thing that configures the app. Without it the app shows
+  "This Mac isn't set up for Secure Test yet." and nothing else — there is
+  deliberately no fallback server.
+
+    ServerURL       the design-tool origin the client talks to. Must be an
+                    http(s) URL with a host (e.g. https://<origin>); anything
+                    else is logged as unusable and treated as missing.
+    GoogleClientID  the NATIVE Google OAuth client id (the iOS/macOS-type
+                    client — no secret, reverse-client-id redirect). NOT the
+                    design tool's web client id; the server accepts both in
+                    OIDC_AUDIENCE, but only the native one works from the app.
+
+  Replace every <placeholder> below, including the two UUIDs (`uuidgen`), and
+  sign the profile before deploying it. The real values live in the ops
+  repository, not here.
+
+  Local check without Jamf:
+    defaults write net.psd401.securetest.client ServerURL https://<origin>
+    defaults write net.psd401.securetest.client GoogleClientID <native-google-client-id>
+    defaults delete net.psd401.securetest.client
+-->
+<plist version="1.0">
+<dict>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadIdentifier</key>
+  <string>net.psd401.securetest.client.settings</string>
+  <key>PayloadUUID</key>
+  <string>&lt;profile-uuid&gt;</string>
+  <key>PayloadDisplayName</key>
+  <string>Secure Test — settings</string>
+  <key>PayloadOrganization</key>
+  <string>Peninsula School District</string>
+  <key>PayloadDescription</key>
+  <string>Server origin and Google client id for the Secure Test student client.</string>
+  <key>PayloadScope</key>
+  <string>System</string>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadType</key>
+      <string>com.apple.ManagedClient.preferences</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>PayloadIdentifier</key>
+      <string>net.psd401.securetest.client.settings.prefs</string>
+      <key>PayloadUUID</key>
+      <string>&lt;payload-uuid&gt;</string>
+      <key>PayloadDisplayName</key>
+      <string>Secure Test preferences</string>
+      <key>PayloadContent</key>
+      <dict>
+        <key>net.psd401.securetest.client</key>
+        <dict>
+          <key>Forced</key>
+          <array>
+            <dict>
+              <key>mcx_preference_settings</key>
+              <dict>
+                <key>ServerURL</key>
+                <string>https://&lt;origin&gt;</string>
+                <key>GoogleClientID</key>
+                <string>&lt;native-google-client-id&gt;</string>
+              </dict>
+            </dict>
+          </array>
+        </dict>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>

@@ -130,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // launch legible on a Mac nobody is watching.
         Self.installErrorSink()
         Self.purgeLegacyKeychainToken()
+        Self.resolveConfiguration()
         installMainMenu()
 
         // Slice 92: focus changes are reported for the whole server attempt
@@ -304,17 +305,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// The Google OAuth client id for the NATIVE client (an iOS/macOS-type
-    /// client in Google Cloud — it has no secret, and its redirect is the
-    /// reverse-client-id scheme). Distinct from the design tool's web client;
-    /// the server lists both in OIDC_AUDIENCE (slice 77).
-    private static var googleClientID: String? {
-        let args = ProcessInfo.processInfo.arguments
-        if let flag = args.firstIndex(of: "--google-client-id"), args.indices.contains(flag + 1) {
-            return args[flag + 1]
-        }
-        let fromEnv = ProcessInfo.processInfo.environment["SECURE_TEST_GOOGLE_CLIENT_ID"] ?? ""
-        return fromEnv.isEmpty ? nil : fromEnv
+    /// Where this Mac's server origin and Google client id come from
+    /// (`ClientConfiguration`, 2026-09-11): launch arguments, then the
+    /// environment, then the managed preferences an MDM configuration profile
+    /// writes into this app's preference domain. The Google client id is the
+    /// NATIVE client (an iOS/macOS-type client in Google Cloud — no secret,
+    /// redirect is the reverse-client-id scheme), distinct from the design
+    /// tool's web client; the server lists both in OIDC_AUDIENCE (slice 77).
+    ///
+    /// A Finder or Jamf launch supplies neither argument nor environment, which
+    /// is why the profile exists — see `client/RELEASING.md`, "Configuration
+    /// profile". There is no localhost fallback: unconfigured is a state the
+    /// entry screen names rather than a silent connection to nothing.
+    private static var resolvedConfiguration: ClientConfiguration?
+
+    static var configuration: ClientConfiguration {
+        resolvedConfiguration ?? resolveConfiguration()
+    }
+
+    /// Resolves once at launch and logs one line per value naming the source,
+    /// so a Mac that comes up blank says why on stderr.
+    @discardableResult
+    private static func resolveConfiguration() -> ClientConfiguration {
+        let resolved = ClientConfiguration(
+            arguments: ProcessInfo.processInfo.arguments,
+            environment: ProcessInfo.processInfo.environment,
+            // A `Forced` payload from a configuration profile surfaces through
+            // the standard defaults like any other value, inside the sandbox
+            // too — nothing else is needed to read one.
+            defaults: { UserDefaults.standard.string(forKey: $0) }
+        )
+        resolvedConfiguration = resolved
+        for line in resolved.logLines { log(line) }
+        return resolved
     }
 
     private func showEntry() {
@@ -337,15 +360,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         countdown = nil
         sessionEndedByTimeLimit = false
         sessionEndedSheetShown = false
-        seedTokenFromLaunchArgumentsIfPresent()
+        let config = Self.configuration
+        // A seeded token is a credential for a server; with none configured it
+        // has nothing to authenticate against, so the app stays in the
+        // unconfigured state rather than half-signed-in against nowhere.
+        if config.serverURL != nil {
+            seedTokenFromLaunchArgumentsIfPresent()
+        }
+        // With no server URL the client is never exercised: `signIn` is nil,
+        // no token is seeded, so the entry screen shows the not-configured
+        // message and reaches nothing. The placeholder only exists because
+        // `APIClient` takes a URL.
         let client = APIClient(
-            baseURL: Self.serverBaseURL,
+            baseURL: config.serverURL ?? Self.unconfiguredPlaceholderURL,
             transport: URLSessionTransport(),
             tokens: tokens
         )
 
         var signIn: (() async throws -> SignedInSession)?
-        if let clientID = Self.googleClientID {
+        if let clientID = config.googleClientID, config.serverURL != nil {
             let presenter = WebViewAuthPresenter(window: window)
             let flow = GoogleSignInFlow(
                 config: .google(clientID: clientID),
@@ -360,7 +393,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.log("no SECURE_TEST_GOOGLE_CLIENT_ID — sign-in button hidden; token from --token / SECURE_TEST_TOKEN only")
         }
 
-        let entry = SessionEntryViewController(client: client, signIn: signIn, log: Self.log) { [weak self] assessmentID, attemptID in
+        let entry = SessionEntryViewController(
+            client: client,
+            signIn: signIn,
+            configured: config.isFullyConfigured,
+            log: Self.log
+        ) { [weak self] assessmentID, attemptID in
             self?.showAssessment(
                 source: .server(
                     client: client,
@@ -847,11 +885,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.log("clipboard \(allowed ? "enabled" : "disabled") for this assessment")
     }
 
-    static var serverBaseURL: URL {
-        let raw = ProcessInfo.processInfo.environment["SECURE_TEST_SERVER"]
-            ?? "http://localhost:3000"
-        return URL(string: raw) ?? URL(string: "http://localhost:3000")!
-    }
+    /// Stands in for a server URL that was never configured. Nothing is ever
+    /// sent to it — the entry screen shows the not-configured message and every
+    /// path that would use the client is closed (`showEntry`) — but `APIClient`
+    /// has to be handed some URL, and a reserved `.invalid` host cannot
+    /// resolve, so a future path that slipped through fails loudly and offline
+    /// rather than reaching a real host.
+    static let unconfiguredPlaceholderURL = URL(string: "https://secure-test-not-configured.invalid")!
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true

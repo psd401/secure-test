@@ -11,6 +11,13 @@ import SecureTestCore
 /// configured, in which case the token must come from `--token` /
 /// `SECURE_TEST_TOKEN` as before — the dev and CI posture is unchanged.
 ///
+/// Managed-preference slice (2026-09-11): `configured` is false when this Mac
+/// resolved no server URL and/or no Google client id (`ClientConfiguration`).
+/// The card then carries one sentence telling the student to ask for help,
+/// which is what the blank v1.2.0 card on a Jamf-installed app should have
+/// said. A `--token` session suppresses it: that posture supplies no client id
+/// on purpose.
+///
 /// Slice 84: the list is `GET /api/me/sittings` rendered from
 /// `SittingRowModel` (in the package, tested); a row's Join/Resume calls
 /// `startAttempt(testSessionID:)` directly — listed sittings never redeem.
@@ -40,10 +47,18 @@ final class SessionEntryViewController: NSObject {
     private let codeField = NSTextField()
     private let codeRow = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "")
+    /// Shown only when this Mac has no server URL or no Google client id and
+    /// no token session — the v1.2.0 field report's blank card, given words.
+    private let setupLabel = NSTextField(labelWithString: "")
     private let joinButton: PSDPrimaryButton
     private let onJoined: (_ assessmentID: String, _ attemptID: String) -> Void
     private let client: APIClient
     private let signIn: (() async throws -> SignedInSession)?
+    /// True when both the server URL and the Google client id resolved
+    /// (`ClientConfiguration`). False puts `setupLabel` on screen in place of
+    /// every control, unless a `--token` session already exists — the dev and
+    /// CI posture, which supplies no client id on purpose.
+    private let configured: Bool
     private let log: (String) -> Void
     private var signedInAs: String?
     private var rows: [SittingRowModel] = []
@@ -61,11 +76,13 @@ final class SessionEntryViewController: NSObject {
     init(
         client: APIClient,
         signIn: (() async throws -> SignedInSession)?,
+        configured: Bool = true,
         log: @escaping (String) -> Void,
         onJoined: @escaping (_ assessmentID: String, _ attemptID: String) -> Void,
     ) {
         self.client = client
         self.signIn = signIn
+        self.configured = configured
         self.log = log
         self.onJoined = onJoined
         self.signInButton = PSDPrimaryButton(title: "Sign in with Google", target: nil, action: nil)
@@ -243,6 +260,19 @@ final class SessionEntryViewController: NSObject {
             codeField.heightAnchor.constraint(equalToConstant: 32),
         ])
 
+        // The unconfigured message: the only thing in the card when this Mac
+        // has no server URL or no client id (managed-preference slice,
+        // 2026-09-11). Warn rather than danger — nothing is broken, this Mac
+        // just has not been set up yet — and word-wrapped inside the card.
+        setupLabel.stringValue = "This Mac isn't set up for Secure Test yet. Ask your teacher or IT for help."
+        setupLabel.textColor = PSDColor.warn
+        setupLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        setupLabel.maximumNumberOfLines = 3
+        setupLabel.lineBreakMode = .byWordWrapping
+        setupLabel.setAccessibilityRole(.staticText)
+        setupLabel.setAccessibilityLabel("This Mac isn't set up for Secure Test yet. Ask your teacher or IT for help.")
+        setupLabel.isHidden = true
+
         statusLabel.textColor = PSDColor.inkSoft
         statusLabel.maximumNumberOfLines = 3
         statusLabel.lineBreakMode = .byWordWrapping
@@ -252,7 +282,7 @@ final class SessionEntryViewController: NSObject {
         statusLabel.setAccessibilityRole(.staticText)
 
         let body = NSStackView(views: [
-            accountRow, testsRow, listScroll, listStatusLabel,
+            setupLabel, accountRow, testsRow, listScroll, listStatusLabel,
             separator, codeHeader, codeRow, statusLabel,
         ])
         body.orientation = .vertical
@@ -276,7 +306,7 @@ final class SessionEntryViewController: NSObject {
             row.translatesAutoresizingMaskIntoConstraints = false
             row.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
-        for full in [listScroll, listStatusLabel, separator, statusLabel] as [NSView] {
+        for full in [setupLabel, listScroll, listStatusLabel, separator, statusLabel] as [NSView] {
             full.translatesAutoresizingMaskIntoConstraints = false
             full.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
@@ -298,9 +328,10 @@ final class SessionEntryViewController: NSObject {
         ])
     }
 
-    /// Three states: no sign-in configured (token from the launch arguments,
-    /// nothing to show), signed out (button), signed in (who, the tests list,
-    /// and sign out).
+    /// Four states: not set up (no server URL and/or no client id, and no
+    /// token — one sentence and nothing else), no sign-in configured (token
+    /// from the launch arguments, nothing to show), signed out (button),
+    /// signed in (who, the tests list, and sign out).
     private func refreshSignInState() async {
         let signedIn = await client.isSignedIn()
         // After a relaunch there is no exchange response to remember the email
@@ -309,9 +340,15 @@ final class SessionEntryViewController: NSObject {
         if signedIn, signedInAs == nil {
             signedInAs = await client.signedInEmail()
         }
-        let configured = signIn != nil
-        signInButton.isHidden = !configured || signedIn
-        signOutButton.isHidden = !configured || !signedIn
+        let signInConfigured = signIn != nil
+        // Managed-preference slice: with the server URL or the client id
+        // missing there is nothing to sign into, so the card carries one
+        // sentence and nothing else. A `--token` session reports as signed in
+        // and keeps the dev/CI posture exactly as it was — no message.
+        let needsSetup = !configured && !signedIn
+        setupLabel.isHidden = !needsSetup
+        signInButton.isHidden = !signInConfigured || signedIn || needsSetup
+        signOutButton.isHidden = !signInConfigured || !signedIn
         signedInLabel.isHidden = !signedIn
         signedInLabel.stringValue = signedIn
             ? "Signed in\(signedInAs.map { " as \($0)" } ?? "")"
@@ -333,7 +370,10 @@ final class SessionEntryViewController: NSObject {
         }
         joinButton.isEnabled = signedIn
         codeField.isEnabled = signedIn
-        if configured && !signedIn {
+        if needsSetup {
+            statusLabel.stringValue = ""
+            log("entry: not configured — no server URL and/or no google client id")
+        } else if signInConfigured && !signedIn {
             statusLabel.stringValue = "Sign in with your school Google account first."
         }
         if signedIn {

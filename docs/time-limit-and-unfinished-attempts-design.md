@@ -192,6 +192,8 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
   print and the pages say "Handed in by teacher". Enable rule = sitting
   open only (the deadline relaxation surfaces as the 409 text). Design-tool
   1572 (+10), typecheck clean.
+- **DEPLOYED 2026-09-11 ~14:30 PT**: rev 25, `/api/health` commit `e384d1f`,
+  Aurora at 0034 (35 rows). The client half waits for the next release.
 - **Slice 4 — 2026-09-11.** Rows written, NONE run. Teacher rows 155–167 in
   `docs/design-tool-manual-checks.md` ("Time limit + unfinished attempts")
   against two Published fixtures on `<origin>`: `Time limit hand-run
