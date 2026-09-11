@@ -1,0 +1,255 @@
+# Rubric upload, single-point scoring, rubric reuse, student feedback
+
+Design note, 2026-09-11. Asked for by James the same day: the pilot is the
+chance to exercise AI scoring and feedback, and teachers cannot get a rubric
+into the design tool except by typing it. Design tool only; the client and
+the shared schema do not move (one optional field is added to the shared
+`RubricSchema`, additive and byte-stable for old bundles). Decisions marked
+**D-n** are James's and are listed at the end; **§Progress says what is
+built** (nothing yet).
+
+## What exists that this stands on
+
+- **The rubric model is done.** `RubricSchema` (`packages/schema/src/items.ts`)
+  — `style analytic | holistic | single_point`, criteria with levels, each
+  level `{id, label, points, descriptor?}`; the `superRefine` fixes the
+  cardinality per style. It lives in `items.config.rubric` on essay items,
+  is edited in `app/dashboard/[id]/RubricEditor.tsx`, rides the delivery
+  bundle only when `student_visibility.during_test` is set, and can also
+  arrive through the CSV importer's `rubric_json` column. **No AI path
+  produces one**; the PDF importer's prompt has no rubric shape.
+- **AI essay scoring is done** (slices 38–39): `lib/ai/essayScorer/`
+  (mock | bedrock, Sonnet 4.6, temperature 0, JSON-only, two-pass
+  validation in `scoreCore.ts`), `lib/scoring/aiScoreResponse.ts`
+  (guardrail surface `essay-score`; `ai` → proposed, `hybrid` → final at
+  confidence ≥ 0.85), routes `score-ai` / `rescore-ai` / `approve`, and the
+  review queue's proposal cards. Scores are append-only rows in `scores`
+  with the per-criterion selections and rationales in `rationale` jsonb.
+  Auto-score on submit (batch 1) runs auto-method items only; AI scoring is
+  teacher-triggered from the queue.
+- **`single_point` is authorable but not scorable.** `isScorableRubricStyle`
+  excludes it and both providers throw; the queue lists those responses for
+  hand scoring. A single-point criterion has ONE level (the target) whose
+  `points` the editor collects.
+- **`student_visibility.with_feedback` has zero readers.** It is the hook
+  wired in slice 33 for "Phase 3". The per-student results page
+  (`results/[attemptId]/page.tsx`) shows the **teacher** the
+  `overall_rationale` of the final and the proposed score; the per-criterion
+  rationales are shown nowhere; the family-facing print page
+  (`results/print?attempt=`) shows scores only. There is no student-side
+  results view at all — the family-facing print page is the only surface a
+  student ever sees after handing in.
+- **File ingestion exists for one shape only:** `import-pdf` takes a
+  multipart PDF (25 MiB cap), extracts text with unpdf and, when the PDF
+  looks scanned, sends the bytes as a Converse `document` block
+  (`lib/ai/bedrockConverse.ts`, hard-coded `format: "pdf"`). Nothing reads
+  DOCX or Markdown; no mammoth / remark dependency.
+- **No token accounting.** `converseText*` and `converseTool` discard
+  `response.usage`; the only spend controls are static caps.
+
+## Design
+
+### Formats and the ingestion path (D-1)
+
+Rubrics are tables. unpdf's text extraction flattens a table's columns into
+reading order, so a criterion's four level descriptors come out as an
+undifferentiated run — the Converse document block, where the model sees
+the layout, is **more accurate** for a PDF rubric, not merely a fallback
+for scans. Bedrock Converse accepts `pdf | docx | doc | md | txt | html |
+csv | xlsx` document blocks natively, so no parser dependency is needed.
+
+| Input | How it reaches the model | Why |
+|---|---|---|
+| PDF | document block, `format: "pdf"` | table layout survives; scans work for free |
+| DOCX | document block, `format: "docx"` | same; the commonest teacher source after PDF |
+| Markdown, plain text | text in the user turn | already structured; cheapest; guardrail input stage runs |
+| Pasted text | text in the user turn | covers Google Docs (copy the table or download as DOCX / PDF) — no Drive scope exists in the app and none is added |
+
+Cap 5 MiB and one document per request (a rubric is one to three pages;
+25 MiB is the item importer's cap for whole tests). Reject any other type
+with 415 `unsupported_type`. Google Docs / Sheets get no integration
+(D-1): the dialog's help text says "download as DOCX or PDF, or paste".
+
+`bedrockConverse.ts` gains a `format` on `document` (default `"pdf"` so the
+PDF importer is untouched) and the `sanitizeDocumentName` stays.
+
+### The extraction (D-2)
+
+- **Route** `POST /api/assessments/[id]/rubrics/extract` — staff, owner,
+  `requireDraft`; multipart (`file`) or JSON `{ text }`. **Writes nothing.**
+  Response `{ rubric, warnings: [{code, message}], source: {kind, chars |
+  bytes} }`, or the structured errors the PDF importer uses
+  (`rubric_extract_invalid_output` 422, `rubric_extract_failed` 502, each
+  with a teacher-facing `hint`). Same shape whether the rubric is destined
+  for one item or the library (below).
+- **Provider** `lib/ai/rubricExtractor/` mirroring `pdfImport/`:
+  `RUBRIC_EXTRACTOR_PROVIDER = mock | bedrock`, `types.ts`, `extractCore.ts`
+  (prompt, parse, normalise, warn), `bedrockProvider.ts` (Sonnet 4.6 via
+  `BEDROCK_RUBRIC_EXTRACT_MODEL`, temperature 0, `converseTextWithMeta` so
+  `max_tokens` maps to a truncation error), `mockProvider.ts` (a fixed
+  analytic rubric; a `MOCK_RUBRIC_STYLE` knob so tests reach the
+  single-point and holistic branches).
+- **Prompt contract:** ONE JSON object, `{ style, criteria: [{ name, levels:
+  [{ label, points | null, descriptor }] }], title? }`. Rules: keep
+  criterion and level wording verbatim; a rubric whose rows are criteria and
+  columns are performance levels is `analytic`; one criterion with several
+  levels is `holistic`; one column of "criteria / target" statements with
+  at most a yes-no or below / meets / above split is `single_point` with
+  the target as the one level; when a level's points are printed, copy
+  them, otherwise `null`; never invent a criterion. `RUBRIC_EXTRACT_MAX_TOKENS
+  = 6000`.
+- **Normalise + validate** (server, `extractCore.ts`): assign ids
+  (`c1…`, `l1…`), drop empty criteria, then run `RubricSchema`; a Zod failure
+  is 422 with the issues. **Points missing → auto-assign + warn (D-3):**
+  for analytic / holistic, levels with `null` points get a descending
+  ladder `n-1 … 0` (or, when SOME levels carry points, a linear fill between
+  the printed neighbours); single-point targets get `1`. Warning
+  `points_assigned` names every level it touched. Other warnings:
+  `style_guess` when the style was inferred from shape rather than named,
+  `few_levels` (a criterion under two levels in an analytic rubric is padded
+  with an empty "Not evident, 0" level and warned), `truncated_text` (any
+  descriptor over 2000 chars is cut).
+- **Guardrail:** `runGuarded` surface `rubric-extract`; input stage on the
+  text path, skipped on the document path (as `pdf-import` does for scans);
+  output stage on the joined criterion names + descriptors.
+- **Tests:** mock-provider route tests (owner 200 with warnings, other
+  owner 404, Published 409, 415, 413, invalid JSON 422, `max_tokens` 422);
+  `extractCore` unit tests for the point ladders (all missing, partial,
+  single-point), style inference, id assignment.
+
+### The editor dialog
+
+`RubricEditor` gains **"Upload rubric…"** beside the style select: a dialog
+with a file input (`.pdf,.docx,.md,.txt`) and a paste box, one Extract
+button. On success it renders the proposed rubric as the read-only table
+`renderHtml.ts` already draws for previews, with the warnings above it
+("Points were not printed — assigned 3, 2, 1, 0 on every level; check
+them"), and **"Use this rubric"** replaces the editor's state; the item's
+existing Save persists it. When a rubric is already authored the existing
+`criteriaAndLevelsLost` confirm runs first. Nothing is saved by the dialog.
+
+### Rubric library and reuse (D-4)
+
+- **Storage:** new table `rubrics` — `id, owner_sub, title, rubric jsonb,
+  source ('upload' | 'editor'), created_at, updated_at`; **migration 0032**.
+  Owner-scoped like everything else; sharing rides the existing
+  staff-share copy semantics later, not now.
+- **Items point at a library rubric optionally:** `config.rubric` stays the
+  item's authoritative copy (scoring, bundles and export do not change), and
+  `config.rubric_id` records where it came from. Editing the item's rubric
+  after applying one detaches it (`rubric_id` cleared) — copy semantics, the
+  same rule as shared assessments, so a change in the library never rescores
+  an item behind a teacher's back (E11 territory).
+- **Routes:** `GET/POST /api/rubrics`, `GET/PATCH/DELETE /api/rubrics/[id]`
+  (DELETE detaches items, never edits their copy). The extract dialog's
+  second button, **"Save to my rubrics"**, POSTs the proposed rubric with a
+  title (defaults to the model's `title` or the file name).
+- **Applying:** `RubricEditor` gains **"Use a saved rubric…"** — a list of the
+  teacher's rubrics (title, style, criteria count, max points), pick one,
+  the same confirm, the editor state becomes a copy with fresh ids. Apply to
+  several essays = open each item and pick it; no bulk apply in v1.
+- Not in scope: sharing rubrics between staff, versioning, a rubric page
+  outside the editor (the list lives in the dialog).
+
+### Single-point scoring (D-5)
+
+A single-point criterion carries one target; scoring it means judging
+below / at / above. That does reduce to level selection if the scorer sees
+a **derived ladder**: for each criterion, three synthetic levels
+`{ below: 0, meets: P, exceeds: P }` where `P` is the target's points (the
+extractor assigns 1 when none was printed, and the editor's total-points
+rule already refuses a 0-point rubric). `exceeds` earns the same points as
+`meets` because a single-point rubric's max is the target; the value of the
+distinction is the rationale, which is the whole point of single-point
+rubrics.
+
+- `scoreCore.ts`: `isScorableRubricStyle` accepts every style;
+  `scoringView(rubric)` returns the rubric unchanged for analytic /
+  holistic and the derived ladder for single-point (ids `<criterion>.below`
+  / `.meets` / `.exceeds`); the prompt and `validateAgainstRubric` run
+  against the view; `rubricMaxPoints` is unchanged (max of the ladder = P).
+- The stored `rationale.criterion_scores[].level_id` holds the derived id;
+  the queue and the results page render it as "Below target / Meets /
+  Exceeds" with the rationale. The manual-score route accepts the same
+  derived ids for single-point items.
+- The system prompt gains one sentence for the single-point case ("each
+  criterion states a target; judge below / meets / exceeds and quote the
+  evidence").
+
+### Student feedback (D-6)
+
+`with_feedback` gets its readers. The only surface a student or family
+sees is the print page, so:
+
+- **Family-facing print page** (`results/print?attempt=`): for each essay
+  item with a FINAL score whose rubric has `with_feedback`, a "Feedback"
+  block under the answer — the chosen level per criterion (label, points)
+  and its rationale, then the overall rationale. Proposed scores never
+  print (they are not decisions yet). Items without the flag print the
+  score only, as today.
+- **Per-student teacher page:** the per-criterion table for every rubric
+  score, final and proposed, regardless of the flag (the teacher is
+  reviewing, not publishing), replacing the overall-only text.
+- **The review queue's proposal card** gains the per-criterion rows too, so
+  the teacher approves what the family will read.
+- The rationale wording is the model's; there is no edit-before-publish in
+  v1. A teacher who disagrees scores manually (the manual form takes
+  `criterion_scores`; the queue can pre-fill it from the proposal — one
+  small addition) and the manual rationale prints instead.
+- Plain-language framing on the print page: "Scored with a rubric; the
+  comments below explain each score" — no mention of AI on the family page
+  (D-6, the score is the teacher's once final; the results page and queue
+  say "AI proposed" as today).
+
+### Token usage logging (D-7)
+
+`converseTextWithMeta` and `converseTool` read `response.usage` and emit one
+structured line through `lib/log.ts`: `{ event: "ai_usage", surface, model,
+input_tokens, output_tokens, latency_ms, owner_sub }`. Callers pass
+`surface` (item-gen, math, pdf-import, essay-score, rubric-extract,
+guardrail). A CloudWatch metric filter on `event:"ai_usage"` is a later
+infra slice; the log line is what the pilot needs to see spend per surface.
+No table.
+
+## Slices
+
+| # | What | Size / agent |
+|---|---|---|
+| 0 | This note; roadmap row | docs |
+| 1 | Extractor: `bedrockConverse` `format`, `lib/ai/rubricExtractor/` (mock + bedrock + core: prompt, parse, point ladders, warnings), the `rubrics/extract` route + guardrail surface, tests | M — Opus 5 / medium |
+| 2 | Editor dialog: Upload rubric… (file + paste), proposal table + warnings, Use this rubric, existing confirm; editor test | S — Sonnet 5 / medium |
+| 3 | Library: migration 0032 `rubrics`, `/api/rubrics` routes, `config.rubric_id` (+ detach on edit), Save to my rubrics, Use a saved rubric…; tests | M — Opus 5 / medium |
+| 4 | Single-point scoring: `scoringView`, prompt sentence, queue / results / manual-score rendering of the derived levels; tests with the mock provider | S — Opus 5 / medium |
+| 5 | Feedback: per-criterion tables on the queue card and the per-student page; the print page's Feedback block gated on `with_feedback` + FINAL; the manual form pre-filled from a proposal; tests (print golden) | S — Sonnet 5 / medium |
+| 6 | `ai_usage` log line on every Converse call, `surface` on each caller; test with the mock client | XS — Sonnet 5 / medium |
+| 7 | Rows in `docs/design-tool-manual-checks.md` (a real PDF rubric, a DOCX, a pasted Google-Doc table, a single-point one; score a demo essay hybrid; print the family page); deploy, then `migrate-aurora.sh` for 0032 | rows — Sonnet 5 |
+
+Order: 0 → 1 → 2 → (3 ∥ 4) → 5 → 6 → 7. Slice 6 can ride earlier if a
+deploy happens first. One commit per slice, diffs reviewed and `bun test` +
+typecheck re-run in the main session before each commit, as in the
+2026-09-09 batches.
+
+## Decisions
+
+- **D-1** Formats: PDF, DOCX, Markdown, plain text, pasted text; PDF / DOCX
+  as Converse document blocks (no parser dependency), Google Docs via
+  download or paste, no Drive integration. — James, 2026-09-11 (formats
+  asked for; the document-block route is the recommendation, taken)
+- **D-2** Extraction is a proposal — nothing is written until the teacher
+  accepts, the same pattern as PDF import. — recommendation, taken
+- **D-3** Missing points: auto-assign a descending ladder and warn, never
+  refuse. — James, 2026-09-11
+- **D-4** A per-teacher rubric library with copy-on-apply, so one upload
+  serves several essays. — James, 2026-09-11
+- **D-5** Single-point rubrics become AI-scorable through a derived
+  below / meets / exceeds ladder. — James, 2026-09-11
+- **D-6** Student feedback ships in the same batch: per-criterion rationale
+  on the family-facing print page when the teacher opts in, final scores
+  only, no "AI" label on the family page. — James, 2026-09-11 (scope);
+  print-page-only placement and the no-label framing are recommendations
+- **D-7** Token usage is logged per Converse call now, as a structured log
+  line. — James, 2026-09-11
+
+## Progress
+
+- **Slice 0 — 2026-09-11.** This note; the roadmap row points here.
