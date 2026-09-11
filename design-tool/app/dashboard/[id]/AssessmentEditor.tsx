@@ -2651,6 +2651,7 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                           updateItem(item.id, (i) => ({ ...i, rubric }))
                         }
                         disabled={isLocked}
+                        assessmentId={assessment.id}
                       />
                     </div>
                   </div>

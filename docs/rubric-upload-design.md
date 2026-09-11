@@ -266,3 +266,14 @@ typecheck re-run in the main session before each commit, as in the
   `bedrockConverse` document `format` (default pdf). Mock-provider markers
   (`THROW_TRUNCATED` etc.) instead of module mocks, as `mockPdfExtractor`.
   1440 tests (+27), typecheck clean; 0032 applied to dev + test.
+- **Slice 2 — 2026-09-11.** `RubricUploadDialog.tsx` mounted by
+  `RubricEditor` beside "+ Add rubric" AND beside the style select (a
+  teacher should not have to add a blank rubric first); file input
+  (`.pdf,.docx,.md,.txt`) + paste box, one Extract, warnings as amber notes
+  above a read-only proposal table (single-point rows read "Target"), "Use
+  this rubric" keeps the editor's `student_visibility`, confirms through an
+  AlertDialog when the current rubric is anything but the pristine
+  `defaultRubric()` (`isDefaultRubric`); 413 / 409 fixed copy, otherwise
+  the route's `hint` + `issues`. No DOM harness exists in the repo, so the
+  logic is exported and tested directly (`renderToStaticMarkup` for the
+  markup). 1460 tests (+20), typecheck clean.

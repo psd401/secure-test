@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { RubricUploadDialog } from "./RubricUploadDialog";
 
 // Slice 33: rubric authoring sub-form for essay items. One unified structure
 // serves all three styles (analytic / holistic / single_point) as cardinality
@@ -95,16 +96,43 @@ function normalizeForStyle(rubric: Rubric, style: RubricStyle): Rubric {
   return { ...rubric, style, criteria };
 }
 
+// Rubric upload slice 2 (docs/rubric-upload-design.md §"The editor
+// dialog"): whether `rubric` is still exactly the pristine shape
+// `defaultRubric()` seeds — the ONE shape "Upload rubric…" can replace
+// without a confirm. Anything a teacher typed into it (a renamed
+// criterion, an added level, a changed point value…) makes it "authored"
+// and worth protecting, the same posture as `criteriaAndLevelsLost` below.
+export function isDefaultRubric(rubric: Rubric): boolean {
+  if (rubric.style !== "analytic") return false;
+  if (rubric.criteria.length !== 1) return false;
+  const c = rubric.criteria[0]!;
+  if (c.name !== "Criterion 1" || c.levels.length !== 2) return false;
+  const [l0, l1] = c.levels;
+  return (
+    !!l0 &&
+    !!l1 &&
+    l0.label === "Does not meet" &&
+    l0.points === 0 &&
+    !l0.descriptor &&
+    l1.label === "Meets" &&
+    l1.points === 1 &&
+    !l1.descriptor
+  );
+}
+
 interface Props {
   value: Rubric | null;
   onChange: (rubric: Rubric | null) => void;
   disabled?: boolean;
+  /** Rubric upload slice 2: the route the "Upload rubric…" dialog posts to
+   * is per-assessment. */
+  assessmentId: string;
 }
 
-export function RubricEditor({ value, onChange, disabled }: Props) {
+export function RubricEditor({ value, onChange, disabled, assessmentId }: Props) {
   if (!value) {
     return (
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => onChange(defaultRubric())}
@@ -113,6 +141,12 @@ export function RubricEditor({ value, onChange, disabled }: Props) {
         >
           + Add rubric
         </button>
+        <RubricUploadDialog
+          assessmentId={assessmentId}
+          currentRubric={null}
+          onApply={onChange}
+          disabled={disabled}
+        />
       </div>
     );
   }
@@ -189,14 +223,22 @@ export function RubricEditor({ value, onChange, disabled }: Props) {
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          disabled={disabled}
-          className="rounded border border-destructive/40 px-2 py-0.5 text-sm text-destructive disabled:opacity-30"
-        >
-          Remove rubric
-        </button>
+        <div className="flex items-center gap-2">
+          <RubricUploadDialog
+            assessmentId={assessmentId}
+            currentRubric={rubric}
+            onApply={onChange}
+            disabled={disabled}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            disabled={disabled}
+            className="rounded border border-destructive/40 px-2 py-0.5 text-sm text-destructive disabled:opacity-30"
+          >
+            Remove rubric
+          </button>
+        </div>
       </div>
 
       <fieldset className="flex flex-wrap gap-4 text-sm">
