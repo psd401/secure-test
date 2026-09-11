@@ -575,6 +575,8 @@ tab time limit left blank. Re-run the one-day teacher-row script first. Rows
 JavaScript console against the origin, signed in as the teacher/student as
 noted — read the response body, not just the status.
 
+**Fixtures PREPARED on the origin 2026-09-11 ~15:10 PT** (via the API, both Published): `Time limit hand-run 2026-09-11` (3-minute limit, two keyed MC + one essay) and `Time limit hand-run 2026-09-11 (no limit)` (same items, no limit). Re-run the one-day teacher-row script on the day, open a session, sit as `<demo-student-A>`.
+
 | # | Check | Expected | Result |
 |---|---|---|---|
 | 155 | Open a session on the limited fixture, `<demo-student-A>` joins and answers some items but does not hand in; open the results matrix while the sitting is still open | The row reads "Not handed in — k of N answered" in the Scoring column (no Total/% cells), a **Hand in** button beside it | |
