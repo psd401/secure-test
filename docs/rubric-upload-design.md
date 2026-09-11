@@ -131,7 +131,8 @@ existing Save persists it. When a rubric is already authored the existing
 ### Rubric library and reuse (D-4)
 
 - **Storage:** new table `rubrics` — `id, owner_sub, title, rubric jsonb,
-  source ('upload' | 'editor'), created_at, updated_at`; **migration 0032**.
+  source ('upload' | 'editor'), created_at, updated_at`; **migration 0033**
+  (0032 went to slice 1's guardrail-surface CHECK).
   Owner-scoped like everything else; sharing rides the existing
   staff-share copy semantics later, not now.
 - **Items point at a library rubric optionally:** `config.rubric` stays the
@@ -218,11 +219,11 @@ No table.
 | 0 | This note; roadmap row | docs |
 | 1 | Extractor: `bedrockConverse` `format`, `lib/ai/rubricExtractor/` (mock + bedrock + core: prompt, parse, point ladders, warnings), the `rubrics/extract` route + guardrail surface, tests | M — Opus 5 / medium |
 | 2 | Editor dialog: Upload rubric… (file + paste), proposal table + warnings, Use this rubric, existing confirm; editor test | S — Sonnet 5 / medium |
-| 3 | Library: migration 0032 `rubrics`, `/api/rubrics` routes, `config.rubric_id` (+ detach on edit), Save to my rubrics, Use a saved rubric…; tests | M — Opus 5 / medium |
+| 3 | Library: migration 0033 `rubrics`, `/api/rubrics` routes, `config.rubric_id` (+ detach on edit), Save to my rubrics, Use a saved rubric…; tests | M — Opus 5 / medium |
 | 4 | Single-point scoring: `scoringView`, prompt sentence, queue / results / manual-score rendering of the derived levels; tests with the mock provider | S — Opus 5 / medium |
 | 5 | Feedback: per-criterion tables on the queue card and the per-student page; the print page's Feedback block gated on `with_feedback` + FINAL; the manual form pre-filled from a proposal; tests (print golden) | S — Sonnet 5 / medium |
 | 6 | `ai_usage` log line on every Converse call, `surface` on each caller; test with the mock client | XS — Sonnet 5 / medium |
-| 7 | Rows in `docs/design-tool-manual-checks.md` (a real PDF rubric, a DOCX, a pasted Google-Doc table, a single-point one; score a demo essay hybrid; print the family page); deploy, then `migrate-aurora.sh` for 0032 | rows — Sonnet 5 |
+| 7 | Rows in `docs/design-tool-manual-checks.md` (a real PDF rubric, a DOCX, a pasted Google-Doc table, a single-point one; score a demo essay hybrid; print the family page); deploy, then `migrate-aurora.sh` for 0032 + 0033 | rows — Sonnet 5 |
 
 Order: 0 → 1 → 2 → (3 ∥ 4) → 5 → 6 → 7. Slice 6 can ride earlier if a
 deploy happens first. One commit per slice, diffs reviewed and `bun test` +
@@ -252,4 +253,16 @@ typecheck re-run in the main session before each commit, as in the
 
 ## Progress
 
-- **Slice 0 — 2026-09-11.** This note; the roadmap row points here.
+- **Slice 0 — 2026-09-11, `d7008cb`.** This note; the roadmap row points here.
+- **Slice 1 — 2026-09-11.** `lib/ai/rubricExtractor/` (mock | bedrock,
+  `extractCore.ts`: prompt contract with `style_inferred`, one-object parse,
+  `normalizeRubric` — ids `c1…` / `l1…` unique across the rubric, D-3
+  ladders incl. linear fill between printed neighbours, `few_levels`
+  padding, a declared style the shape contradicts falls back to analytic +
+  `style_guess`, descriptor cut at 2000); `POST /api/assessments/[id]/rubrics/extract`
+  (multipart pdf / docx as document blocks, md / txt decoded to the text
+  path, JSON `{text}`; 415 / 413 / 422 / 502 with hints; guardrail surface
+  `rubric-extract`, **migration 0032** widens the `guardrail_events` CHECK);
+  `bedrockConverse` document `format` (default pdf). Mock-provider markers
+  (`THROW_TRUNCATED` etc.) instead of module mocks, as `mockPdfExtractor`.
+  1440 tests (+27), typecheck clean; 0032 applied to dev + test.

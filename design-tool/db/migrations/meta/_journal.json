@@ -225,6 +225,13 @@
       "when": 1789012570001,
       "tag": "0031_archived_at",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789146552314,
+      "tag": "0032_guardrail_surface_rubric_extract",
+      "breakpoints": true
     }
   ]
 }

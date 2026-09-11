@@ -449,6 +449,11 @@ export const GUARDRAIL_SURFACES = [
   // Slice 42: PDF item import — checks the extracted PDF text (input) and
   // the proposed item stems (output).
   "pdf-import",
+  // Rubric upload slice 1 (docs/rubric-upload-design.md): rubric extraction
+  // — checks the pasted / decoded rubric text (input; skipped on the
+  // PDF/DOCX document path, as pdf-import does for scans) and the proposed
+  // criterion names + descriptors (output).
+  "rubric-extract",
 ] as const;
 export type GuardrailSurfaceValue = (typeof GUARDRAIL_SURFACES)[number];
 
@@ -489,7 +494,7 @@ export const guardrail_events = pgTable(
     createdAtIdx: index("guardrail_events_created_at_idx").on(t.created_at),
     surfaceCheck: check(
       "guardrail_events_surface_check",
-      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import')`,
+      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import', 'rubric-extract')`,
     ),
     stageCheck: check(
       "guardrail_events_stage_check",

@@ -3,6 +3,7 @@ import {
   ConverseCommand,
   type ContentBlock,
   type ConverseCommandOutput,
+  type DocumentFormat,
   type Tool,
   type ToolConfiguration,
 } from "@aws-sdk/client-bedrock-runtime";
@@ -66,6 +67,27 @@ function sanitizeDocumentName(name: string): string {
   return cleaned || "document";
 }
 
+// Document formats Bedrock Converse accepts natively. The rubric extractor
+// (docs/rubric-upload-design.md, D-1) sends DOCX as well as PDF, so the
+// format is a caller choice; it defaults to "pdf" and the PDF importer is
+// untouched.
+export type ConverseDocumentFormat =
+  | "pdf"
+  | "docx"
+  | "doc"
+  | "md"
+  | "txt"
+  | "html"
+  | "csv"
+  | "xlsx";
+
+export interface ConverseDocument {
+  bytes: Uint8Array;
+  name: string;
+  /** Default "pdf" — the only format before the rubric extractor. */
+  format?: ConverseDocumentFormat;
+}
+
 // Plain-text Converse turn — used by the math translator (text in, LaTeX out)
 // and the PDF extractor. An optional PDF document block can precede the text
 // (ADR 0015: Claude reads scanned pages directly; no local rasterization).
@@ -75,7 +97,7 @@ export async function converseText(opts: {
   userText: string;
   maxTokens: number;
   temperature?: number;
-  document?: { bytes: Uint8Array; name: string };
+  document?: ConverseDocument;
   errPrefix: string;
 }): Promise<string> {
   return (await converseTextWithMeta(opts)).text;
@@ -90,14 +112,14 @@ export async function converseTextWithMeta(opts: {
   userText: string;
   maxTokens: number;
   temperature?: number;
-  document?: { bytes: Uint8Array; name: string };
+  document?: ConverseDocument;
   errPrefix: string;
 }): Promise<{ text: string; stopReason: string | undefined }> {
   const content: ContentBlock[] = [];
   if (opts.document) {
     content.push({
       document: {
-        format: "pdf",
+        format: (opts.document.format ?? "pdf") as DocumentFormat,
         name: sanitizeDocumentName(opts.document.name),
         source: { bytes: opts.document.bytes },
       },
