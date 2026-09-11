@@ -308,7 +308,8 @@ typecheck re-run in the main session before each commit, as in the
   the shape is ambiguous — one criterion with several levels (holistic or
   a one-row analytic table) — or when a declared style was overridden; a
   multi-criterion table and an all-one-level list are never warned. R-2 /
-  R-3 = rows 139 / 132 reworded. 28 extractor tests.
+  R-3 = rows 139 / 132 reworded. 28 extractor tests. **DEPLOYED 2026-09-11
+  ~11:35 PT: rev 23, `/api/health` commit `d61d703`, no migration.**
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,
