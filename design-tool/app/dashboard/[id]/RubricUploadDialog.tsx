@@ -112,7 +112,7 @@ interface RubricProposalViewProps {
  * reads "Target", matching the editor's own placeholder for that style. */
 export function RubricProposalView({ rubric, warnings }: RubricProposalViewProps) {
   return (
-    <div className="space-y-3">
+    <div className="max-h-[55vh] space-y-3 overflow-y-auto" data-scroll="proposal">
       {warnings.length > 0 ? (
         <ul className="space-y-1" aria-label="Warnings">
           {warnings.map((w, i) => (
@@ -304,7 +304,11 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        {/* Tall rubrics (finding 2026-09-11): the dialog is fixed and centred,
+            so without a max height a long proposal put the footer off-screen
+            with nothing scrollable. Cap it at the viewport and let the
+            proposal table scroll; the name field + buttons stay pinned. */}
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Upload a rubric</DialogTitle>
             <DialogDescription>

@@ -310,6 +310,11 @@ typecheck re-run in the main session before each commit, as in the
   multi-criterion table and an all-one-level list are never warned. R-2 /
   R-3 = rows 139 / 132 reworded. 28 extractor tests. **DEPLOYED 2026-09-11
   ~11:35 PT: rev 23, `/api/health` commit `d61d703`, no migration.**
+- **Tall-rubric scroll fix — 2026-09-11** (James: a real AP Seminar rubric
+  put "Use this rubric" off-screen; `DialogContent` is fixed + centred with
+  no max height). `DialogContent` capped at `100vh - 2rem` with overflow,
+  the proposal table `max-h-[55vh] overflow-y-auto` so the name field and
+  buttons stay pinned; the saved-rubrics list gets the same cap. Row 154.
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,

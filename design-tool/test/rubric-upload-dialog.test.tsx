@@ -195,6 +195,11 @@ describe("RubricProposalView", () => {
     expect(spHtml).not.toContain("On target");
   });
 
+  test("the proposal pane is a viewport-capped scroll region (tall rubrics, 2026-09-11)", () => {
+    const html = renderToStaticMarkup(<RubricProposalView rubric={PROPOSED_RUBRIC} warnings={[]} />);
+    expect(html).toContain('class="max-h-[55vh] space-y-3 overflow-y-auto"');
+  });
+
   test("no warnings → no warnings list rendered", () => {
     const html = renderToStaticMarkup(<RubricProposalView rubric={PROPOSED_RUBRIC} warnings={[]} />);
     expect(html).not.toContain('aria-label="Warnings"');

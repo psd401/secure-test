@@ -196,7 +196,7 @@ export function SavedRubricsDialog({ currentRubric, onApply, disabled }: Props) 
           else setOpen(true);
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Your saved rubrics</DialogTitle>
             <DialogDescription>
@@ -219,7 +219,7 @@ export function SavedRubricsDialog({ currentRubric, onApply, disabled }: Props) 
               </p>
             ) : null}
             {list && list.length > 0 ? (
-              <ul className="space-y-2" aria-label="Saved rubrics">
+              <ul className="max-h-[60vh] space-y-2 overflow-y-auto" aria-label="Saved rubrics">
                 {list.map((r) => (
                   <li key={r.id}>
                     <button
