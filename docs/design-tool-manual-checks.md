@@ -498,7 +498,11 @@ sitting with `<demo-student-A>`. Rows marked **Bedrock** need
 `ESSAY_SCORER_PROVIDER=bedrock`) on the origin — the mock provider returns a
 fixed analytic rubric and cannot exercise the point-ladder / style /
 error rows. Rows marked **sitting** need the Published fixture handed in by
-`<demo-student-A>`. Everything else is a Chrome-only teacher row against a
+`<demo-student-A>` — **prepared 2026-09-11 on the origin: `Rubric sitting
+hand-run 2026-09-11`, Published, one essay with the three-criterion
+single-point rubric (targets worth 1), `scoring_method: hybrid`,
+`with_feedback` on, `during_test` off** (re-run the one-day teacher-row
+script, open a session, sit it as the demo student, then rows 144–152). Everything else is a Chrome-only teacher row against a
 Draft. Aurora is at 0033 since the 2026-09-11 deploy (rev 22).
 
 **Run 2026-09-11 (rows 122–142, Claude in Chrome on the origin as James,
