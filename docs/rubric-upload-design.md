@@ -304,6 +304,11 @@ typecheck re-run in the main session before each commit, as in the
   ids coincide with the library's by construction — reword), R-3 (409 copy
   unreachable behind the editor lock) in `docs/design-tool-manual-checks.md`.
   Rows 144–152 wait on a sitting; the Draft fixture stays on the origin.
+- **R-1 BUILT 2026-09-11** (James: yes): `style_guess` is raised only when
+  the shape is ambiguous — one criterion with several levels (holistic or
+  a one-row analytic table) — or when a declared style was overridden; a
+  multi-criterion table and an all-one-level list are never warned. R-2 /
+  R-3 = rows 139 / 132 reworded. 28 extractor tests.
 - **Slice 7 — 2026-09-11.** Rows 122–153 written in
   `docs/design-tool-manual-checks.md`, NOT run: upload-dialog rows (PDF /
   DOCX / Markdown / pasted-text ingestion, missing-points warning,

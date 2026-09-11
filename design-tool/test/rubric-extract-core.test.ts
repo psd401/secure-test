@@ -189,9 +189,23 @@ describe("normalizeRubric: few_levels, style_guess, truncation", () => {
         criterion("Evidence", [level("T", 1)]),
       ],
     });
-    // One level each and no declared style → single_point by shape.
+    // One level each and no declared style → single_point by shape, which
+    // is unambiguous, so no warning (R-1).
     expect(guessed.rubric.style).toBe("single_point");
-    expect(guessed.warnings.some((w) => w.code === "style_guess")).toBe(true);
+    expect(guessed.warnings.some((w) => w.code === "style_guess")).toBe(false);
+  });
+
+  test("R-1: an inferred analytic table with several criteria is not warned", () => {
+    const { rubric, warnings } = normalizeRubric({
+      style: "analytic",
+      style_inferred: true,
+      criteria: [
+        criterion("Claim", [level("A", 2), level("B", 0)]),
+        criterion("Evidence", [level("A", 2), level("B", 0)]),
+      ],
+    });
+    expect(rubric.style).toBe("analytic");
+    expect(warnings.some((w) => w.code === "style_guess")).toBe(false);
   });
 
   test("a declared style the shape contradicts falls back to analytic", () => {

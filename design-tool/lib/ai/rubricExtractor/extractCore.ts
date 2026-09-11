@@ -271,6 +271,7 @@ export function normalizeRubric(raw: unknown): NormalizedRubric {
   const declared = typeof obj.style === "string" ? (obj.style as RubricStyle) : null;
   let style: RubricStyle;
   let guessed = obj.style_inferred === true;
+  let overridden = false;
   if (declared !== null && STYLES.includes(declared)) {
     style = declared;
   } else {
@@ -286,9 +287,18 @@ export function normalizeRubric(raw: unknown): NormalizedRubric {
   ) {
     style = "analytic";
     guessed = true;
+    overridden = true;
   }
 
-  if (guessed) {
+  // R-1 (hand-run 2026-09-11): real rubrics never name their style, so the
+  // model reports `style_inferred` on nearly every upload and a warning on
+  // each would be noise. Warn only when the shape itself is ambiguous —
+  // ONE criterion with several levels reads as holistic or as a one-row
+  // analytic table — or when a declared style had to be overridden above.
+  // A multi-criterion table (analytic) and an all-one-level list
+  // (single_point) are unambiguous by shape.
+  const ambiguousShape = drafts.length === 1 && drafts[0]!.levels.length >= 2;
+  if (guessed && (ambiguousShape || overridden)) {
     warnings.push({
       code: "style_guess",
       message:
