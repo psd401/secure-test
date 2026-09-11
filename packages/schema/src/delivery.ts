@@ -219,6 +219,22 @@ export const DeliveryBundleSchema = z
     // beyond that the response is still listed and the client shows the
     // answer as saved without the picture. Emitted only when non-empty.
     saved_uploads: z.record(z.string(), BundleAssetSchema).optional(),
+    // Time limit (docs/time-limit-and-unfinished-attempts-design.md, D-2/D-3):
+    // when THIS attempt's time runs out, as an ISO instant the server
+    // computed from `attempts.started_at + assessments.time_limit_seconds`.
+    // Per attempt, not per sitting — a student who relaunches or resumes in a
+    // later sitting keeps the same deadline, so the client must never derive
+    // it from its own idea of when the test began.
+    //
+    // Emitted only when the assessment HAS a limit, so a bundle without one
+    // is byte-identical to what every client before this field received.
+    time_limit_ends_at: z.string().datetime().optional(),
+    // The server's own clock at the moment the bundle was built, so a Mac
+    // with a skewed clock counts down the right number of seconds rather than
+    // the right wall-clock instant. Rides ONLY alongside `time_limit_ends_at`
+    // — it has no meaning on its own and emitting it unconditionally would
+    // change every bundle (and make them unrepeatable byte-for-byte).
+    server_now: z.string().datetime().optional(),
   })
   .superRefine((bundle, ctx) => {
     if (bundle.item_sets) {

@@ -8,6 +8,7 @@ import {
   loadOwnAttempt,
   notFound,
 } from "@/lib/api/studentAttempt";
+import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import {
   UPLOAD_MAX_BYTES,
   loadUploadForItem,
@@ -46,6 +47,10 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-4: the drawing-slot completion is a write like any other — a canvas
+  // finished after time is up does not land.
+  const expired = await refuseIfPastDeadline(db, access.attempt);
+  if (expired) return expired;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();

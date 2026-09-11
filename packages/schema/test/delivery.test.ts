@@ -317,6 +317,36 @@ describe("DeliveryBundleSchema answered_item_ids", () => {
   });
 });
 
+// Time limit (docs/time-limit-and-unfinished-attempts-design.md, D-2/D-3):
+// both fields are optional ISO instants. Absence is what a bundle for an
+// assessment with no limit looks like, and what every client before them saw.
+describe("DeliveryBundleSchema time_limit_ends_at / server_now", () => {
+  const base = { test_id: "t", title: "t", items: [] };
+  const WHEN = "2026-09-11T17:30:00.000Z";
+
+  test("accepts an ISO pair and accepts absence", () => {
+    const parsed = DeliveryBundleSchema.parse({
+      ...base,
+      time_limit_ends_at: WHEN,
+      server_now: "2026-09-11T17:00:00.000Z",
+    });
+    expect(parsed.time_limit_ends_at).toBe(WHEN);
+    expect(parsed.server_now).toBe("2026-09-11T17:00:00.000Z");
+    const bare = DeliveryBundleSchema.parse(base);
+    expect(bare.time_limit_ends_at).toBeUndefined();
+    expect(bare.server_now).toBeUndefined();
+  });
+
+  test("rejects anything that is not an ISO instant", () => {
+    expect(
+      DeliveryBundleSchema.safeParse({ ...base, time_limit_ends_at: "3:08 PM" }).success,
+    ).toBe(false);
+    expect(
+      DeliveryBundleSchema.safeParse({ ...base, server_now: 1789160238519 }).success,
+    ).toBe(false);
+  });
+});
+
 // P-1 (docs/resume-prefill-design.md): this attempt's saved answers and the
 // drawing bytes they name. The values are the student-response union, so the
 // field cannot express anything but an answer a student posted.

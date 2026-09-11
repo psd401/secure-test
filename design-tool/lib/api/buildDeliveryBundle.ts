@@ -182,6 +182,14 @@ export async function buildDeliveryBundle(
   attemptId: string,
   /** E12 slice 2: whose saved answers seed source-backed stimuli. */
   studentId: string,
+  /**
+   * Time limit (D-2/D-3): the instant THIS attempt's time runs out, or null
+   * when the assessment has no limit. Computed by the caller through
+   * `lib/api/attemptDeadline.ts` — this builder is handed the answer rather
+   * than the arithmetic, because the same helper decides whether a write is
+   * still accepted and the two must not be able to disagree.
+   */
+  deadline: Date | null = null,
 ): Promise<{ bundle: unknown; bundledCount: number }> {
   const itemRows = await db
     .select()
@@ -266,6 +274,15 @@ export async function buildDeliveryBundle(
     // Client paging: emitted only as "paged"; absence means one scrolling
     // page, which is what every client before the field did anyway.
     ...(assessment.student_layout === "paged" ? { layout: "paged" as const } : {}),
+    // Time limit: BOTH keys or neither. `server_now` is meaningless without a
+    // deadline to count down to, and emitting it unconditionally would change
+    // every bundle an assessment without a limit has ever produced.
+    ...(deadline
+      ? {
+          time_limit_ends_at: deadline.toISOString(),
+          server_now: new Date().toISOString(),
+        }
+      : {}),
   };
 
   // DeliveryBundleSchema has no field that can hold an answer key, so this also

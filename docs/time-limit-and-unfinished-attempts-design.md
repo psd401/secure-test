@@ -145,4 +145,21 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
 
 ## Progress
 
-- **Slice 0 — 2026-09-11.** This note; roadmap row T.
+- **Slice 0 — 2026-09-11, `90731f0`.** This note; roadmap row T.
+- **Slice 1 — 2026-09-11.** **Migration 0034** (`attempts.submitted_by_sub`,
+  kinds `time_expired` + `teacher_hand_in`; applied to dev + test);
+  `lib/api/attemptDeadline.ts` (`deadlineFor`, `isPastDeadline` with the
+  30 s grace, `refuseIfPastDeadline`) used by the delivery bundle
+  (`time_limit_ends_at` + `server_now`, both or neither, so limit-less
+  bundles are byte-identical), the responses POST **and DELETE**, the
+  upload completion and the student submit (409 `time_expired`);
+  `POST /api/attempts/[attemptId]/hand-in` (owner-only via the new
+  `lib/api/staffAttempt.ts` shared with Delete; 409 `already_submitted`;
+  409 `session_open` on `status = open` alone — an expired-but-open sitting
+  still accepts writes, so it stays protective — relaxed once the deadline
+  passed; `submitted_by_sub`, `teacher_hand_in` event, auto-scoring pass);
+  `teacher_hand_in` is NOT client-postable (`CLIENT_ATTEMPT_EVENT_KINDS`);
+  `buildResults(…, { include_in_progress })` rows carry `status`,
+  `submitted_by_sub`, `answered_count`, null totals in progress; timeline /
+  print labels for both kinds. Design-tool 1562 (+29), schema 123 (+2),
+  typecheck clean.

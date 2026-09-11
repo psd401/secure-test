@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import {
-  ATTEMPT_EVENT_KINDS,
+  CLIENT_ATTEMPT_EVENT_KINDS,
   OBSERVABILITY_TEXT_MAX,
   assessments,
   attempt_events,
@@ -19,7 +19,7 @@ interface RouteContext {
 }
 
 const Body = z.object({
-  kind: z.enum(ATTEMPT_EVENT_KINDS),
+  kind: z.enum(CLIENT_ATTEMPT_EVENT_KINDS),
   detail: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -56,7 +56,9 @@ function normaliseDetail(
  *
  * The kind enum is strict (unknown → 400): the set is shared with the schema's
  * check constraint, and a drifting client should hear about it rather than
- * have its events quietly land as rows nothing displays.
+ * have its events quietly land as rows nothing displays. It is the CLIENT
+ * subset — `teacher_hand_in` is a record of a staff action and is written by
+ * the hand-in route alone.
  */
 export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStudent();

@@ -620,6 +620,13 @@ export const attempts = pgTable(
       .defaultNow(),
     // Set when status flips to 'submitted'; null while in progress.
     submitted_at: timestamp("submitted_at", { withTimezone: true }),
+    // Time limit / unfinished attempts (docs/time-limit-and-unfinished-attempts-design.md):
+    // WHO handed this attempt in. Null means the student did it themselves —
+    // which is every row that predates this column, and the overwhelming
+    // majority afterwards. A staff `sub` means a teacher forced the
+    // submission through POST /api/attempts/[attemptId]/hand-in, and the
+    // results surfaces say so beside `submitted_at`.
+    submitted_by_sub: text("submitted_by_sub"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -668,8 +675,29 @@ export const ATTEMPT_EVENT_KINDS = [
   // through the reporter that is already retrying lifecycle kinds.
   // detail is { kind, message } — never response text, never a stem.
   "client_error",
+  // Time limit (D-2): the client's countdown reached zero and it ended the
+  // secure session. The attempt deliberately stays in progress — this row is
+  // how a teacher knows why the student stopped.
+  "time_expired",
+  // D-1/A: the teacher forced the submission through the hand-in route.
+  // Server-written only; see CLIENT_ATTEMPT_EVENT_KINDS below.
+  "teacher_hand_in",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
+
+/**
+ * The subset a CLIENT may post to /api/attempts/[attemptId]/events.
+ *
+ * `teacher_hand_in` is a record of a staff action and is written by the
+ * hand-in route alone; a student client that could post it could plant a
+ * timeline line claiming a teacher did something they did not. Nothing is
+ * scored off these rows, so the damage is confusion rather than grades — but
+ * the fix costs one list, so the list exists.
+ */
+export type ClientAttemptEventKind = Exclude<AttemptEventKind, "teacher_hand_in">;
+export const CLIENT_ATTEMPT_EVENT_KINDS = ATTEMPT_EVENT_KINDS.filter(
+  (kind) => kind !== "teacher_hand_in",
+) as [ClientAttemptEventKind, ...ClientAttemptEventKind[]];
 
 // Kinds a teacher should be alerted about. `focus_loss` is the only one a
 // later event (focus_regained) clears; the rest stay alerts for the attempt's
@@ -701,7 +729,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'teacher_hand_in')`,
     ),
   }),
 );

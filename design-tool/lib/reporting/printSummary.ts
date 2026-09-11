@@ -32,11 +32,16 @@ export interface CohortSummary {
 }
 
 export function summarizeCohort(rows: readonly ResultsRow[]): CohortSummary {
-  const complete = rows.filter((r) => r.unscored_count === 0);
+  // Submitted-only, explicitly: the print report never passes
+  // `include_in_progress`, but an unfinished attempt with nothing answered
+  // would otherwise pass an `unscored_count === 0` test and count as complete.
+  const complete = rows.filter(
+    (r) => r.status === "submitted" && r.unscored_count === 0,
+  );
   const maxPoints = rows.length > 0 ? rows[0]!.max_points : null;
   const meanTotal =
     complete.length > 0
-      ? complete.reduce((s, r) => s + r.total_points, 0) / complete.length
+      ? complete.reduce((s, r) => s + (r.total_points ?? 0), 0) / complete.length
       : null;
   const submitted = rows
     .map((r) => r.submitted_at)

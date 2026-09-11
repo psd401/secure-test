@@ -100,6 +100,13 @@ export function eventLabel(kind: string): string {
     // row's detail for anyone reading the table behind it.
     case "client_error":
       return "The app hit a problem";
+    // Time limit (docs/time-limit-and-unfinished-attempts-design.md): the
+    // countdown reached zero and the client ended the secure session. NOT a
+    // hand-in — the attempt is still in progress and still the teacher's call.
+    case "time_expired":
+      return "Time ran out";
+    case "teacher_hand_in":
+      return "Handed in by the teacher";
     default:
       return kind;
   }

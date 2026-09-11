@@ -1,7 +1,7 @@
 // Slice 40: results matrix + generic CSV export. Totals must count FINAL
 // scores only — proposed AI scores surface as pending state, never points.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -297,6 +297,77 @@ describe("buildResults", () => {
     expect(bob.total_points).toBe(4);
     expect(bob.scored_max_points).toBe(5);
     expect(bob.unscored_count).toBe(0);
+  });
+
+  // Time limit / unfinished attempts
+  // (docs/time-limit-and-unfinished-attempts-design.md, D-1/B).
+  test("in-progress attempts are absent by default and present with the flag", async () => {
+    const { db, assessment } = await seedResultsScenario();
+    const itemRows = await db
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, assessment.id))
+      .orderBy(asc(items.position));
+    const [carol] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, ssid: "333", name: "Carol" })
+      .returning();
+    const [carolAttempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: assessment.id,
+        student_id: carol!.id,
+        status: "in_progress",
+      })
+      .returning();
+    // One answer saved, two questions untouched.
+    await db.insert(responses).values({
+      attempt_id: carolAttempt!.id,
+      item_id: itemRows[0]!.id,
+      response: { type: "multiple_choice_single", choice_id: "a" },
+    });
+
+    const without = await buildResults(assessment.id, OWNER);
+    expect(without.rows).toHaveLength(2);
+    expect(without.rows.map((r) => r.status)).toEqual(["submitted", "submitted"]);
+
+    const withFlag = await buildResults(assessment.id, OWNER, null, {
+      include_in_progress: true,
+    });
+    expect(withFlag.rows).toHaveLength(3);
+    const row = withFlag.rows.find((r) => r.student.ssid === "333")!;
+    expect(row.status).toBe("in_progress");
+    expect(row.submitted_at).toBeNull();
+    expect(row.answered_count).toBe(1);
+    expect(row.cells.map((c) => c.status)).toEqual([
+      "unscored",
+      "no_response",
+      "no_response",
+    ]);
+    expect(row.total_points).toBeNull();
+    expect(row.scored_max_points).toBeNull();
+    expect(row.percent).toBeNull();
+    // The assessment-level denominator is a constant, so it still rides.
+    expect(row.max_points).toBeGreaterThan(0);
+
+    // The submitted rows are unchanged by the flag being on.
+    const alice = withFlag.rows.find((r) => r.student.ssid === "111")!;
+    expect(alice.status).toBe("submitted");
+    expect(alice.total_points).toBe(1);
+    expect(alice.answered_count).toBe(3);
+  });
+
+  test("submitted_by_sub is null for a student hand-in and a sub for a teacher's", async () => {
+    const { db, assessment } = await seedResultsScenario();
+    const before = await buildResults(assessment.id, OWNER);
+    expect(before.rows.every((r) => r.submitted_by_sub === null)).toBe(true);
+
+    await db
+      .update(attempts)
+      .set({ submitted_by_sub: OWNER })
+      .where(eq(attempts.assessment_id, assessment.id));
+    const after = await buildResults(assessment.id, OWNER);
+    expect(after.rows.every((r) => r.submitted_by_sub === OWNER)).toBe(true);
   });
 
   test("empty assessment produces empty rows", async () => {

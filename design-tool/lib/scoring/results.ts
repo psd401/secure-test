@@ -42,6 +42,12 @@ export interface ResultsCell {
 
 export interface ResultsRow {
   attempt_id: string;
+  // Time limit / unfinished attempts
+  // (docs/time-limit-and-unfinished-attempts-design.md, D-1/B): every row
+  // says which it is. Only `include_in_progress` callers ever see
+  // "in_progress" — the CSV, the print report and the review queue stay
+  // submitted-only, because an unfinished attempt is not a result.
+  status: "submitted" | "in_progress";
   // Slice 78: ssid is nullable until the warehouse carries it. R0.3 adds the
   // roster-joined student number / email, and a resolved section label —
   // all null when the overlay row has no roster binding, no roster match, or
@@ -54,9 +60,19 @@ export interface ResultsRow {
     section: string | null;
   };
   submitted_at: string | null;
+  // Null when the student handed in themselves (every row before the column
+  // existed, and the overwhelming majority since); a staff sub when a teacher
+  // forced the submission through the hand-in route.
+  submitted_by_sub: string | null;
+  // How many of this assessment's questions carry a saved answer. Meaningful
+  // on every row, but it is the in-progress rows that need it: "Not handed in
+  // — k of N answered" is the only honest thing to show where a score goes.
+  answered_count: number;
   cells: ResultsCell[]; // aligned with items order
-  total_points: number;
-  scored_max_points: number;
+  // Null on an in-progress row: nothing has been scored, and printing a 0
+  // where a total belongs reads as a mark of zero.
+  total_points: number | null;
+  scored_max_points: number | null;
   unscored_count: number;
   // D-R1: the assessment-level constant denominator (same value on every
   // row — carried per row so the CSV and JSON need no second lookup).
@@ -88,6 +104,10 @@ export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
  *   `assessmentId`. Required, not optional: it scopes the student lookup so a
  *   roster row can never be read across tenants. See the note on the students
  *   query below for why the caller's check alone is not sufficient.
+ * @param options `include_in_progress` adds the attempts that have not been
+ *   handed in, as rows with no totals (D-1/B). Default false, so every caller
+ *   that predates it — the CSV, the print report, the review queue — keeps
+ *   the submitted-only results it has always had.
  * @param ownerEmail The owner's verified session email, used ONLY to resolve
  *   the sections they CURRENTLY teach (`studentsInTeachersSections`) for the
  *   enrollment-fallback section label. Null when the session carries no
@@ -97,6 +117,7 @@ export async function buildResults(
   assessmentId: string,
   ownerSub: string,
   ownerEmail?: string | null,
+  options: { include_in_progress?: boolean } = {},
 ): Promise<AssessmentResults> {
   const db = getDb();
   const itemRows = await db
@@ -111,7 +132,13 @@ export async function buildResults(
     .from(attempts)
     .where(eq(attempts.assessment_id, assessmentId))
     .orderBy(asc(attempts.started_at));
-  const submitted = attemptRows.filter((a) => a.status === "submitted");
+  // Named `submitted` throughout because that is what it was and still is by
+  // default; with the flag it is "the attempts this caller wants rows for".
+  const submitted = attemptRows.filter(
+    (a) =>
+      a.status === "submitted" ||
+      (options.include_in_progress === true && a.status === "in_progress"),
+  );
 
   // Scope the roster lookup to the caller, not just to the attempt's
   // student_id. The caller has already verified it owns the ASSESSMENT, but
@@ -254,13 +281,23 @@ export async function buildResults(
 
   const rows: ResultsRow[] = submitted.map((attempt) => {
     const student = studentsById.get(attempt.student_id);
+    const inProgress = attempt.status !== "submitted";
     let total = 0;
     let scoredMax = 0;
     let unscored = 0;
+    let answered = 0;
     const cells: ResultsCell[] = itemRows.map((item) => {
       const response = responseByCell.get(`${attempt.id}:${item.id}`);
       if (!response) {
         return { status: "no_response", points: null, max_points: null };
+      }
+      answered++;
+      // An unfinished attempt has no scores to show even if a stray one
+      // exists: nothing has been through the auto-scoring pass, which runs on
+      // hand-in. Every answered cell reads "unscored" until it does.
+      if (inProgress) {
+        unscored++;
+        return { status: "unscored", points: null, max_points: null };
       }
       const final = finalByResponse.get(response.id);
       if (final) {
@@ -282,11 +319,12 @@ export async function buildResults(
     const rosterPsId = student?.roster_ps_id ?? null;
     const rosterStudent = rosterPsId ? rosterStudentByPsId.get(rosterPsId) : undefined;
     const percent =
-      unscored === 0 && assessmentMaxPoints > 0
+      !inProgress && unscored === 0 && assessmentMaxPoints > 0
         ? Math.round((100 * total) / assessmentMaxPoints)
         : null;
     return {
       attempt_id: attempt.id,
+      status: inProgress ? ("in_progress" as const) : ("submitted" as const),
       student: student
         ? {
             ssid: student.ssid,
@@ -303,9 +341,11 @@ export async function buildResults(
             section: null,
           },
       submitted_at: attempt.submitted_at?.toISOString() ?? null,
+      submitted_by_sub: attempt.submitted_by_sub,
+      answered_count: answered,
       cells,
-      total_points: total,
-      scored_max_points: scoredMax,
+      total_points: inProgress ? null : total,
+      scored_max_points: inProgress ? null : scoredMax,
       unscored_count: unscored,
       max_points: assessmentMaxPoints,
       percent,
@@ -361,7 +401,7 @@ export function resultsToCsv(results: AssessmentResults): string {
         ...row.cells.map((c) =>
           c.status === "final" && c.points != null ? String(c.points) : "",
         ),
-        String(row.total_points),
+        String(row.total_points ?? ""),
         String(row.max_points),
         row.percent === null ? "" : String(row.percent),
         String(row.unscored_count),

@@ -640,6 +640,76 @@ describe("GET /api/assessments/:id/delivery — layout (client paging)", () => {
   });
 });
 
+// Time limit (docs/time-limit-and-unfinished-attempts-design.md, D-2/D-3):
+// the deadline rides the bundle only when the assessment HAS a limit, so
+// every bundle that existed before this field is byte-identical to what it
+// was. `server_now` never travels alone.
+describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now", () => {
+  test("both keys absent when the assessment has no limit; the body is byte-identical", async () => {
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    const body = await (await getDelivery(id)).json();
+    expect(body).not.toHaveProperty("time_limit_ends_at");
+    expect(body).not.toHaveProperty("server_now");
+
+    // Byte-stability: the only fields that vary between two builds of the
+    // same bundle are the shuffles, so compare the serialisation with those
+    // two items dropped.
+    const stable = (b: Record<string, unknown>) =>
+      JSON.stringify({
+        ...b,
+        items: (b.items as Array<{ type: string }>).filter(
+          (i) => i.type !== "match" && i.type !== "order",
+        ),
+      });
+    const again = await (await getDelivery(id)).json();
+    expect(stable(again)).toBe(stable(body));
+  });
+
+  test("with a limit, the deadline is started_at + time_limit_seconds and server_now rides along", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    await getDb()
+      .update(assessments)
+      .set({ time_limit_seconds: 1800 })
+      .where(eq(assessments.id, id));
+
+    const body = await (await getDelivery(id)).json();
+    const parsed = DeliveryBundleSchema.parse(body);
+    expect(parsed.time_limit_ends_at).toBe(
+      new Date(attempt.started_at.getTime() + 1800 * 1000).toISOString(),
+    );
+    expect(parsed.server_now).toBeDefined();
+    // The server's clock, not the client's, and near enough to now that a
+    // countdown built from the pair is right.
+    const skew = Math.abs(Date.now() - new Date(parsed.server_now!).getTime());
+    expect(skew).toBeLessThan(60_000);
+  });
+
+  test("the deadline is per ATTEMPT, so it does not move when the bundle is refetched", async () => {
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    await getDb()
+      .update(assessments)
+      .set({ time_limit_seconds: 600 })
+      .where(eq(assessments.id, id));
+    const first = await (await getDelivery(id)).json();
+    const second = await (await getDelivery(id)).json();
+    expect(second.time_limit_ends_at).toBe(first.time_limit_ends_at);
+  });
+
+  test("a zero or negative limit is treated as no limit", async () => {
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    await getDb()
+      .update(assessments)
+      .set({ time_limit_seconds: 0 })
+      .where(eq(assessments.id, id));
+    const body = await (await getDelivery(id)).json();
+    expect(body).not.toHaveProperty("time_limit_ends_at");
+  });
+});
+
 // Client paging follow-up (D-4): the bundle names the questions this attempt
 // has already answered — this attempt's rows only, this assessment's items
 // only — so the client's marks are honest after a relaunch.

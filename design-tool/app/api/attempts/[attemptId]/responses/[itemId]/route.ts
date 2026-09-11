@@ -13,6 +13,7 @@ import {
   notFound,
   unsealResponseIds,
 } from "@/lib/api/studentAttempt";
+import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import {
   loadUploadForItem,
   pruneSupersededUploads,
@@ -66,6 +67,12 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-4: once the attempt's time limit has run out (plus the grace that
+  // covers an autosave already in flight at the buzzer) the server stops
+  // taking answers, whatever the client believes. Assessments with no limit
+  // never reach the 409.
+  const expired = await refuseIfPastDeadline(db, access.attempt);
+  if (expired) return expired;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();
@@ -157,6 +164,12 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-4: once the attempt's time limit has run out (plus the grace that
+  // covers an autosave already in flight at the buzzer) the server stops
+  // taking answers, whatever the client believes. Assessments with no limit
+  // never reach the 409.
+  const expired = await refuseIfPastDeadline(db, access.attempt);
+  if (expired) return expired;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();

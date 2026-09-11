@@ -13,6 +13,7 @@ import {
   buildDeliveryBundle,
 } from "@/lib/api/buildDeliveryBundle";
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
+import { deadlineFor } from "@/lib/api/attemptDeadline";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -91,6 +92,10 @@ export async function GET(_req: Request, ctx: RouteContext) {
       accommodations,
       attempt.id,
       resolved.student.id,
+      // Time limit (D-2): `started_at + time_limit_seconds`, per attempt, so
+      // a relaunch or a resume in a later sitting counts down to the same
+      // instant. Null — and no new bundle keys — when there is no limit.
+      deadlineFor(attempt, assessment),
     );
     return NextResponse.json(bundle, {
       status: 200,

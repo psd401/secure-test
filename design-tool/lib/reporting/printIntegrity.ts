@@ -29,6 +29,9 @@ const PHRASES: Record<string, string> = {
   lockdown_failed: eventLabel("lockdown_failed"),
   lockdown_interrupted: eventLabel("lockdown_interrupted"),
   client_error: "The app hit a problem",
+  // Time limit (docs/time-limit-and-unfinished-attempts-design.md).
+  time_expired: "Time ran out",
+  teacher_hand_in: "Handed in by the teacher",
 };
 
 /**
@@ -47,6 +50,8 @@ const KIND_ORDER = [
   "emergency_exit",
   "quit",
   "lockdown_end",
+  "time_expired",
+  "teacher_hand_in",
   "client_error",
 ];
 

@@ -239,6 +239,13 @@
       "when": 1789147612569,
       "tag": "0033_rubrics",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789160238519,
+      "tag": "0034_attempt_hand_in",
+      "breakpoints": true
     }
   ]
 }

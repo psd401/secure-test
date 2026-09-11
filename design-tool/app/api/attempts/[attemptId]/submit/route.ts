@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { attempts } from "@/db/schema";
 import { requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
+import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -36,6 +37,14 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (access.attempt.status === "submitted") {
     return NextResponse.json({ attempt: access.attempt, already_submitted: true });
   }
+
+  // D-4: handing in after the deadline is the TEACHER's call, not the
+  // student's — the client ends the secure session at zero and deliberately
+  // leaves the attempt in progress (D-2), so a late submit here would be a
+  // client that ignored the clock. `POST /api/attempts/[attemptId]/hand-in`
+  // is the door that stays open.
+  const expired = await refuseIfPastDeadline(db, access.attempt);
+  if (expired) return expired;
 
   const now = new Date();
   const [row] = await db
