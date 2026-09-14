@@ -227,6 +227,8 @@ public enum AssessmentPage {
       border: 1px solid var(--line-strong); border-radius: 6px;
     }
     .time-limit-hide:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* display: flex outranks the UA [hidden] rule on its own (T-1, 2026-09-14). */
+    .time-limit[hidden] { display: none; }
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
     .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }

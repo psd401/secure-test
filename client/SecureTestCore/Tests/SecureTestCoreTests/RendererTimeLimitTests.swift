@@ -74,4 +74,14 @@ final class RendererTimeLimitTests: XCTestCase {
         XCTAssertTrue(try page.bool("__first('.time-limit').hidden"))
         XCTAssertEqual(try page.string("__first('.time-limit-value').textContent"), "4:00")
     }
+
+    // MARK: - the stylesheet
+
+    /// T-1 (2026-09-14): `display: flex` on `.time-limit` beat the UA
+    /// `[hidden]` rule, so the close button's `hidden` set froze the strip on
+    /// screen instead of removing it.
+    func testTheStylesheetHidesTheStripOnceHidden() throws {
+        let css = AssessmentPage.html(title: "T", bundleJSON: "{}")
+        XCTAssertTrue(css.contains(".time-limit[hidden] { display: none; }"))
+    }
 }
