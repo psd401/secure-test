@@ -457,15 +457,24 @@ function StudentRow({
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
             {/* Time limit / unfinished attempts (D-1/A): a student who ran
-                out of time or otherwise never handed in. Same enable rule as
-                Delete beside it. */}
+                out of time or otherwise never handed in. Enabled once the
+                session is closed — or, T-2, once this attempt's own deadline
+                has passed, which is exactly when the hand-in route drops its
+                `session_open` refusal (there is no answer in flight to
+                protect once the server is refusing their writes). Delete
+                beside it has no such relaxation in its route, so it keeps the
+                session-closed rule alone. */}
             {r.status === "in_progress" ? (
               <HandInAttemptControl
                 attemptId={r.attempt_id}
                 studentName={r.name}
                 answeredCount={r.answered}
                 onHandedIn={onDeleted}
-                disabledReason={sessionClosed ? undefined : "End the test session first, then hand in."}
+                disabledReason={
+                  sessionClosed || r.deadline_passed
+                    ? undefined
+                    : "End the test session first, then hand in."
+                }
               />
             ) : null}
             {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled

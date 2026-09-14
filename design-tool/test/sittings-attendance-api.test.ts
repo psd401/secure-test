@@ -1,7 +1,7 @@
 // Slice 82: the roster picker behind sitting creation, and attendance — who a
 // sitting expects versus who has joined or submitted.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments, attempts, items, responses, students } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
@@ -260,6 +260,73 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     expect(new Date(byId.get(STUDENT.ps_id)!.last_activity_at!).getTime()).toBe(lastSave.getTime());
     expect(byId.get(OTHER_STUDENT.ps_id)).toMatchObject({ answered: 0, total_items: 3, last_activity_at: null });
     expect(new Date(body.updated_at!).getTime()).toBe(lastSave.getTime());
+  });
+
+  // T-2 (the 2026-09-14 hand-run): the monitor row carries the same deadline
+  // answer the hand-in route uses, so its Hand in button enables on exactly
+  // what the route accepts rather than on the closed session alone.
+  test("T-2: an in-progress row reports deadline_passed once the limit plus grace is up", async () => {
+    principal = staffPrincipal(TEACHER);
+    const db = getDb();
+    const a = await seedAssessment();
+    const sitting = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+
+    type Body = { rows: { ps_id: string; status: string; deadline_passed: boolean }[] };
+    const read = async () =>
+      new Map(
+        ((await (await attendance(sitting.id)).json()) as Body).rows.map((r) => [r.ps_id, r]),
+      );
+
+    const [ada] = await db
+      .insert(students)
+      .values({ owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" })
+      .returning();
+    await db.insert(attempts).values({
+      assessment_id: a.id,
+      student_id: ada!.id,
+      test_session_id: sitting.id,
+      status: "in_progress",
+      started_at: new Date(Date.now() - 30 * 60_000),
+    });
+
+    // No limit on the assessment: nothing to be past, however long ago she
+    // started. The not-joined row is false too.
+    let byId = await read();
+    expect(byId.get(STUDENT.ps_id)).toMatchObject({
+      status: "in_progress",
+      deadline_passed: false,
+    });
+    expect(byId.get(OTHER_STUDENT.ps_id)).toMatchObject({
+      status: "not_joined",
+      deadline_passed: false,
+    });
+
+    // An hour allowed, thirty minutes in: still running.
+    await db
+      .update(assessments)
+      .set({ time_limit_seconds: 60 * 60 })
+      .where(eq(assessments.id, a.id));
+    byId = await read();
+    expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(false);
+
+    // Ten minutes allowed, thirty minutes in: past the deadline and its grace.
+    await db
+      .update(assessments)
+      .set({ time_limit_seconds: 10 * 60 })
+      .where(eq(assessments.id, a.id));
+    byId = await read();
+    expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(true);
+
+    // Handing in settles it — a submitted row never reports the deadline.
+    await db
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: new Date() })
+      .where(eq(attempts.assessment_id, a.id));
+    byId = await read();
+    expect(byId.get(STUDENT.ps_id)).toMatchObject({
+      status: "submitted",
+      deadline_passed: false,
+    });
   });
 
   test("an explicit list is exactly that list; an attempt outside today's scope is kept and flagged", async () => {

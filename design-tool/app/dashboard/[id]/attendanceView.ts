@@ -19,6 +19,10 @@ export interface AttendanceRow {
   section_label: string | null;
   status: "not_joined" | "in_progress" | "submitted";
   started_at: string | null;
+  /** T-2: the attempt's own deadline (+ grace) has passed — the hand-in
+   * route's relaxation of `session_open`, so the monitor's Hand in button can
+   * enable on exactly what the route accepts. */
+  deadline_passed: boolean;
   submitted_at: string | null;
   answered: number;
   total_items: number;

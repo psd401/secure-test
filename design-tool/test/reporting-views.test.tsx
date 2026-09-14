@@ -615,7 +615,13 @@ describe("the per-student attempt page", () => {
 describe("in-progress attempts on the teacher surfaces", () => {
   async function seedInProgressAttempt(
     assessmentId: string,
-    opts: { sittingStatus?: "open" | "closed" } = {},
+    opts: {
+      sittingStatus?: "open" | "closed";
+      /** T-2: an assessment-level time limit, and how long ago she started —
+       * together they decide `deadline_passed`. */
+      limitSeconds?: number;
+      startedAt?: Date;
+    } = {},
   ) {
     const db = getDb();
     const [carol] = await db
@@ -651,9 +657,15 @@ describe("in-progress attempts on the teacher surfaces", () => {
         student_id: carol!.id,
         test_session_id: sittingId,
         status: "in_progress" as const,
-        started_at: new Date("2026-09-11T20:00:00Z"),
+        started_at: opts.startedAt ?? new Date("2026-09-11T20:00:00Z"),
       })
       .returning();
+    if (opts.limitSeconds !== undefined) {
+      await db
+        .update(assessments)
+        .set({ time_limit_seconds: opts.limitSeconds })
+        .where(eq(assessments.id, assessmentId));
+    }
     await db.insert(responses).values({
       attempt_id: carolAttempt!.id,
       item_id: itemRows[0]!.id,
@@ -688,6 +700,36 @@ describe("in-progress attempts on the teacher surfaces", () => {
     await seedInProgressAttempt(scene.assessment.id, { sittingStatus: "closed" });
     const html = await renderResults(scene.assessment.id);
     expect(html).not.toContain("End the test session first, then hand in.");
+  });
+
+  // T-2 (the 2026-09-14 hand-run): the hand-in route drops its `session_open`
+  // refusal once the attempt's own deadline has passed, so the button must
+  // drop it too — otherwise the teacher is told to close a session the server
+  // no longer needs closed.
+  test("T-2: the matrix's Hand in control is enabled while the sitting is open once the deadline has passed", async () => {
+    const scene = await seedScene();
+    await seedInProgressAttempt(scene.assessment.id, {
+      sittingStatus: "open",
+      limitSeconds: 10 * 60,
+      startedAt: new Date(Date.now() - 30 * 60_000),
+    });
+    const html = await renderResults(scene.assessment.id);
+    expect(html).toContain("Hand in");
+    expect(html).not.toContain("End the test session first, then hand in.");
+  });
+
+  test("T-2: the per-student page's Hand in control is enabled while the sitting is open once the deadline has passed", async () => {
+    const scene = await seedScene();
+    const { carolAttempt } = await seedInProgressAttempt(scene.assessment.id, {
+      sittingStatus: "open",
+      limitSeconds: 10 * 60,
+      startedAt: new Date(Date.now() - 30 * 60_000),
+    });
+    const html = await renderAttempt(scene.assessment.id, carolAttempt.id);
+    expect(html).toContain("Hand in");
+    expect(html).not.toContain("End the test session first, then hand in.");
+    // Delete has no such relaxation in its route, so its own reason stands.
+    expect(html).toContain("End the test session first, then delete.");
   });
 
   test("the per-student page renders an in-progress attempt: badge, started time, answered count, the answer, no score section, a Hand in control", async () => {

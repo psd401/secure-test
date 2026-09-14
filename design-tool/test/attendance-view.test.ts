@@ -17,6 +17,7 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     section_label: "3(A)",
     status: "in_progress",
     started_at: iso(-30 * 60_000),
+    deadline_passed: false,
     submitted_at: null,
     answered: 3,
     total_items: 10,

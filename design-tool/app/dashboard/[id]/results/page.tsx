@@ -254,7 +254,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                           studentName={row.student.name || row.student.ssid || "this student"}
                           answeredCount={row.answered_count}
                           disabledReason={
-                            row.sitting_open
+                            row.sitting_open && !row.deadline_passed
                               ? "End the test session first, then hand in."
                               : undefined
                           }

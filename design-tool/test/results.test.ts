@@ -357,6 +357,81 @@ describe("buildResults", () => {
     expect(alice.answered_count).toBe(3);
   });
 
+  // T-2 (the 2026-09-14 hand-run): the row carries the same deadline answer
+  // the hand-in route uses, so the Hand in button stops refusing what the
+  // route accepts. Seeded through the DB rather than the route because this
+  // is `buildResults`'s own rule under test.
+  describe("deadline_passed", () => {
+    async function seedInProgress(
+      assessmentId: string,
+      opts: { limitSeconds?: number | null; startedMinutesAgo?: number } = {},
+    ) {
+      const db = getDb();
+      const [dana] = await db
+        .insert(students)
+        .values({ owner_sub: OWNER, ssid: "444", name: "Dana" })
+        .returning();
+      if (opts.limitSeconds !== undefined) {
+        await db
+          .update(assessments)
+          .set({ time_limit_seconds: opts.limitSeconds })
+          .where(eq(assessments.id, assessmentId));
+      }
+      await db.insert(attempts).values({
+        assessment_id: assessmentId,
+        student_id: dana!.id,
+        status: "in_progress",
+        started_at: new Date(Date.now() - (opts.startedMinutesAgo ?? 5) * 60_000),
+      });
+      const results = await buildResults(assessmentId, OWNER, null, {
+        include_in_progress: true,
+      });
+      return results.rows.find((r) => r.student.ssid === "444")!;
+    }
+
+    test("is false when the assessment has no time limit", async () => {
+      const { assessment } = await seedResultsScenario();
+      const row = await seedInProgress(assessment.id, { startedMinutesAgo: 600 });
+      expect(row.status).toBe("in_progress");
+      expect(row.deadline_passed).toBe(false);
+    });
+
+    test("is false while the limit has not elapsed", async () => {
+      const { assessment } = await seedResultsScenario();
+      // 60 minutes allowed, 5 minutes in.
+      const row = await seedInProgress(assessment.id, {
+        limitSeconds: 60 * 60,
+        startedMinutesAgo: 5,
+      });
+      expect(row.deadline_passed).toBe(false);
+    });
+
+    test("is true once the limit plus its grace has passed", async () => {
+      const { assessment } = await seedResultsScenario();
+      // 10 minutes allowed, started 30 minutes ago — past the 30 s grace too.
+      const row = await seedInProgress(assessment.id, {
+        limitSeconds: 10 * 60,
+        startedMinutesAgo: 30,
+      });
+      expect(row.deadline_passed).toBe(true);
+      // The sitting rule is untouched by it: this attempt has no sitting.
+      expect(row.sitting_open).toBe(false);
+    });
+
+    test("is false on a submitted row even when its deadline is long past", async () => {
+      const { db, assessment } = await seedResultsScenario();
+      await db
+        .update(assessments)
+        .set({ time_limit_seconds: 60 })
+        .where(eq(assessments.id, assessment.id));
+      const results = await buildResults(assessment.id, OWNER, null, {
+        include_in_progress: true,
+      });
+      expect(results.rows.every((r) => r.status === "submitted")).toBe(true);
+      expect(results.rows.every((r) => r.deadline_passed === false)).toBe(true);
+    });
+  });
+
   test("submitted_by_sub is null for a student hand-in and a sub for a teacher's", async () => {
     const { db, assessment } = await seedResultsScenario();
     const before = await buildResults(assessment.id, OWNER);

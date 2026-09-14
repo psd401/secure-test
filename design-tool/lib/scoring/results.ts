@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  assessments,
   attempts,
   items,
   responses,
@@ -12,6 +13,7 @@ import {
   type ItemRow,
 } from "@/db/schema";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
+import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { tableMaxPoints } from "@/lib/scoring/auto";
@@ -72,10 +74,18 @@ export interface ResultsRow {
   // OPEN — the same "the student may be locked in and mid-answer" signal
   // `sittingIsOpen` (lib/api/staffAttempt.ts) guards Hand-in and Delete with
   // server-side. False for every submitted row and for an in-progress row
-  // with no sitting or a closed one. The UI mirrors the guard rather than the
-  // route's deadline relaxation (D-4) — simplest, and a teacher who hits the
-  // 409 anyway sees the same "close the session" text inline.
+  // with no sitting or a closed one. The route's deadline relaxation (D-4) is
+  // carried separately as `deadline_passed`, so the UI matches the route
+  // exactly rather than refusing what the route would allow.
   sitting_open: boolean;
+  // T-2 (docs/time-limit-and-unfinished-attempts-design.md, hand-run
+  // 2026-09-14): true only for an in-progress row whose OWN deadline plus its
+  // grace has passed — the same `deadlineFor` / `isPastDeadline` the hand-in
+  // route uses, so the UI's enable rule (`!sitting_open || deadline_passed`)
+  // matches the route's relaxation exactly instead of blocking a hand-in the
+  // server would accept. False for every submitted row and for every
+  // assessment with no time limit (the overwhelming majority).
+  deadline_passed: boolean;
   cells: ResultsCell[]; // aligned with items order
   // Null on an in-progress row: nothing has been scored, and printing a 0
   // where a total belongs reads as a mark of zero.
@@ -134,6 +144,18 @@ export async function buildResults(
     .where(eq(items.assessment_id, assessmentId))
     .orderBy(asc(items.position));
   const assessmentMaxPoints = itemRows.reduce((sum, i) => sum + itemMaxPoints(i), 0);
+
+  // T-2: the one column this function needs off the assessment row — the
+  // time limit every in-progress row's deadline is measured from. One select,
+  // because the deadline is per attempt (`started_at + limit`) but the limit
+  // is per assessment.
+  const [assessmentRow] = await db
+    .select({ time_limit_seconds: assessments.time_limit_seconds })
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
+  const timeLimit = { time_limit_seconds: assessmentRow?.time_limit_seconds ?? null };
+  const now = new Date();
 
   const attemptRows = await db
     .select()
@@ -334,6 +356,10 @@ export async function buildResults(
       inProgress &&
       attempt.test_session_id !== null &&
       sessionStatusBySessionId.get(attempt.test_session_id) === "open";
+    // T-2: the same question the hand-in route asks, asked here so the button
+    // can stop refusing what the route accepts.
+    const deadlinePassed =
+      inProgress && isPastDeadline(now, deadlineFor(attempt, timeLimit));
     const percent =
       !inProgress && unscored === 0 && assessmentMaxPoints > 0
         ? Math.round((100 * total) / assessmentMaxPoints)
@@ -360,6 +386,7 @@ export async function buildResults(
       submitted_by_sub: attempt.submitted_by_sub,
       answered_count: answered,
       sitting_open: sittingOpen,
+      deadline_passed: deadlinePassed,
       cells,
       total_points: inProgress ? null : total,
       scored_max_points: inProgress ? null : scoredMax,

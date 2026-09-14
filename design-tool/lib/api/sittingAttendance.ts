@@ -14,6 +14,7 @@
 import { asc, count, eq, inArray, max } from "drizzle-orm";
 import {
   ALERT_EVENT_KINDS,
+  assessments,
   attempt_events,
   attempts,
   items,
@@ -26,6 +27,7 @@ import {
   type TestSessionRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel, studentDisplayName } from "@/lib/roster/teacherRoster";
 
@@ -45,6 +47,13 @@ export interface AttendanceRow {
   section_label: string | null;
   status: AttendanceStatus;
   started_at: Date | null;
+  /** T-2 (docs/time-limit-and-unfinished-attempts-design.md, hand-run
+   * 2026-09-14): true only for a joined, still-in-progress row whose own
+   * deadline plus its grace has passed — the same `deadlineFor` /
+   * `isPastDeadline` the hand-in route uses, so the monitor's Hand in button
+   * enables on exactly what the route accepts. False for `not_joined`, for
+   * submitted rows, and for an assessment with no time limit. */
+  deadline_passed: boolean;
   submitted_at: Date | null;
   /** Slice 85: items with a saved response, out of the assessment's items. */
   answered: number;
@@ -172,6 +181,19 @@ export async function attendanceForSitting(
     .from(items)
     .where(eq(items.assessment_id, sitting.assessment_id));
   const total_items = totalRows[0]?.total_items ?? 0;
+
+  // T-2: the assessment's time limit, read once — the deadline is per attempt
+  // (`started_at + limit`), the limit is per assessment.
+  const [assessmentRow] = await db
+    .select({ time_limit_seconds: assessments.time_limit_seconds })
+    .from(assessments)
+    .where(eq(assessments.id, sitting.assessment_id))
+    .limit(1);
+  const timeLimit = { time_limit_seconds: assessmentRow?.time_limit_seconds ?? null };
+  const now = new Date();
+  const deadlinePassed = (hit: (typeof joined)[number]) =>
+    hit.attempt.status === "in_progress" &&
+    isPastDeadline(now, deadlineFor(hit.attempt, timeLimit));
   const progress = new Map<string, { answered: number; last: Date | null }>();
   if (joined.length > 0) {
     const rows = await db
@@ -243,6 +265,7 @@ export async function attendanceForSitting(
       section_label: sections[0] ? sectionLabel(sections[0]) : null,
       status: hit ? (hit.attempt.status as AttendanceStatus) : "not_joined",
       started_at: hit?.attempt.started_at ?? null,
+      deadline_passed: hit ? deadlinePassed(hit) : false,
       submitted_at: hit?.attempt.submitted_at ?? null,
       answered: hit ? activity(hit).answered : 0,
       total_items,
@@ -261,6 +284,7 @@ export async function attendanceForSitting(
       section_label: null,
       status: hit.attempt.status as AttendanceStatus,
       started_at: hit.attempt.started_at,
+      deadline_passed: deadlinePassed(hit),
       submitted_at: hit.attempt.submitted_at,
       answered: activity(hit).answered,
       total_items,
