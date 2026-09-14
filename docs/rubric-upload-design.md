@@ -394,4 +394,9 @@ typecheck re-run in the main session before each commit, as in the
   needs-manual card for `ai` / `hybrid` items, calling the per-response
   `rescore-ai` route (it already appends a proposal whether or not one
   exists and refuses only once a final exists); the pilot teachers will hit
-  this on their first essay. Not built.
+  this on their first essay. **BUILT 2026-09-14** (`8539c15`: "Score with
+  AI" above the manual picker on any needs-manual `ai` / `hybrid` card,
+  posting through the existing `rerunAi` → `rescore-ai` path — same busy /
+  error handling, the refetch moves the entry to "AI proposals to review";
+  `offersAiScoring` + `ScoreWithAiRow` tested in `test/scoring-queue.test.tsx`;
+  row 144 reworded; not yet deployed).

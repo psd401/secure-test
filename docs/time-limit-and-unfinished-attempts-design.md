@@ -232,7 +232,10 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
     `[hidden] { display: none }`; the page has `.source-panel[hidden]`,
     `.image-overlay[hidden]`, `.math-keys[hidden]`, `.page[hidden]` rules
     and no `.time-limit[hidden]`. Fix: that one rule, plus a test that the
-    stylesheet carries it. Client only → v1.3.1.
+    stylesheet carries it. Client only → v1.3.1. **BUILT 2026-09-14**
+    (`acf8eb4`: the rule + `testTheStylesheetHidesTheStripOnceHidden`;
+    swift test 602, xcodebuild green; MANUAL-CHECKS row to re-run on
+    v1.3.1).
   - **T-2** — the deadline-passed relaxation exists only in the route
     (`hand-in/route.ts`: `if (!timeIsUp && sittingIsOpen) → 409`); the
     three `HandIn…` controls take `disabledReason` from `sitting_open` /
@@ -242,7 +245,12 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
     the monitor rows carry `deadline_passed` (assessment
     `time_limit_seconds` + attempt `started_at` vs now, the same rule as
     `isPastDeadline`), the controls enable on `!sitting_open ||
-    deadline_passed`. Design-tool, S.
+    deadline_passed`. Design-tool, S. **BUILT 2026-09-14** (`56c9964`:
+    `deadline_passed` on `ResultsRow` and the monitor's `AttendanceRow`,
+    computed with the route's own `deadlineFor` / `isPastDeadline`; the
+    three Hand in controls enable on it, Delete unchanged since its route
+    has no relaxation; tests in results / sittings-attendance-api /
+    reporting-views; row 162's UI half re-runnable; not yet deployed).
   - **T-3** — after the × at 2:11 no 1-minute notice was observed before
     zero. `clock.onNotice` → `showTimeNotice` does not read the strip's
     state, so it should have fired; the stderr log is not readable on a

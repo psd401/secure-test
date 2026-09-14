@@ -229,15 +229,17 @@ pilot teachers see the assessment fresh) and `Time limit hand-run
 sheet; the teacher hand-in ran through the route while the session was
 still open). The one-day teacher-row script had been lost and was rebuilt
 the same morning (`~/secure-test-hand-teacher-row.sh`, student number as
-its argument). **Findings, all proposals, nothing built:**
+its argument). **Findings (T-1 / T-2 / R-4 BUILT 2026-09-14 — `acf8eb4`
+/ `56c9964` / `8539c15`, not yet deployed or released; T-3 / C-8 open):**
 - **T-1 (client, v1.3.1):** the countdown banner's × freezes the strip at
   its last value instead of hiding it — `.time-limit { display: flex }`
   outranks the UA `[hidden]` rule and the page has no `.time-limit[hidden]`
-  rule (every other hideable does). One CSS line + a test.
+  rule (every other hideable does). One CSS line + a test. BUILT → v1.3.1.
 - **T-2 (design-tool):** Hand in stays disabled after the attempt's deadline
   while the sitting is open — the route relaxes `session_open` (D-4/A) but
   the matrix, per-student and Monitor controls enable on `sitting_open`
-  alone. The rows need a deadline-passed flag; S.
+  alone. The rows need a deadline-passed flag; S. BUILT (`deadline_passed`
+  on the results + monitor rows, the route's own helpers).
 - **T-3 (client, unverified):** no 1-minute notice was seen after the
   banner was hidden at 2:11; the notice is host-driven and should be
   independent of the strip — re-check with a Terminal launch so the log
@@ -247,7 +249,7 @@ its argument). **Findings, all proposals, nothing built:**
   picker, "Re-run AI" appears once a proposal exists, and the attempt-wide
   `score-ai` route has no caller. A "Score with AI" button on the
   needs-manual card (the `rescore-ai` route already accepts a response with
-  no prior proposal); S.
+  no prior proposal); S. BUILT (row 144 re-runnable on a Bedrock sitting).
 - **C-8 (design decision):** an `own_page` set shows no Beside / Above
   toggle — James expected the student to be able to choose. Options: offer
   the toggle on `own_page` sets too, or make `side_by_side` the default
