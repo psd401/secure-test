@@ -216,3 +216,35 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
   the student, the teacher matrix staying in-progress after expiry, deadline
   persistence across relaunch/rejoin, and clock-skew correction via
   `server_now`. The client half ships in the next release (v1.3.0).
+- **Hand-run 2026-09-14** (v1.3.0 installed through Jamf on a district
+  student Mac, a real student under a REAL `AEAssessmentSession`, James at
+  the student Mac, Claude in Chrome on the teacher side; fixture `Time limit
+  hand-run 2026-09-11`, plus the mid-test rows on `2026 AP Seminar EOC B`).
+  Client: banner from the start counting down from 3:00, the late-start
+  5-minute notice as the page loaded, the session ended on its own at zero,
+  "Time is up." with the single button back to Your tests, the attempt left
+  in progress ("Not handed in — 3 of 3 answered"). Teacher: 155 / 156 / 157
+  / 161 ✅, 159 / 160 / 164 ✅ through the route, 162 route ✅ / UI ❌, 158
+  / 163 / 165 / 166 not run (details in the rows). **Findings:**
+  - **T-1** — the banner's × froze the strip at 2:11 instead of hiding it.
+    `strip.setAttribute('hidden', '')` is right, but `.time-limit
+    { display: flex }` is an author rule and outranks the UA stylesheet's
+    `[hidden] { display: none }`; the page has `.source-panel[hidden]`,
+    `.image-overlay[hidden]`, `.math-keys[hidden]`, `.page[hidden]` rules
+    and no `.time-limit[hidden]`. Fix: that one rule, plus a test that the
+    stylesheet carries it. Client only → v1.3.1.
+  - **T-2** — the deadline-passed relaxation exists only in the route
+    (`hand-in/route.ts`: `if (!timeIsUp && sittingIsOpen) → 409`); the
+    three `HandIn…` controls take `disabledReason` from `sitting_open` /
+    `sessionClosed` alone, so the teacher sees "End the test session first,
+    then hand in." on an expired attempt while the session is open, and the
+    console POST succeeds. Fix: the results rows (matrix + per-student) and
+    the monitor rows carry `deadline_passed` (assessment
+    `time_limit_seconds` + attempt `started_at` vs now, the same rule as
+    `isPastDeadline`), the controls enable on `!sitting_open ||
+    deadline_passed`. Design-tool, S.
+  - **T-3** — after the × at 2:11 no 1-minute notice was observed before
+    zero. `clock.onNotice` → `showTimeNotice` does not read the strip's
+    state, so it should have fired; the stderr log is not readable on a
+    Finder launch, so this stays unverified — re-run with a Terminal launch
+    of the app binary and look for `time limit: 1 minute left`.

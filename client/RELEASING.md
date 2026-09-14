@@ -136,13 +136,20 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
   message; plus the time limit, math keypad, drawing tools and the
   multi-source follow-ups since v1.2.0. Release notes carry the "Requires
   configuration profile" block (placeholders). First release that needs the
-  profile scoped alongside the pkg.
+  profile scoped alongside the pkg. **Installed through Jamf (policy +
+  profile) on district Macs 2026-09-14**; the first real-student sittings
+  on a Jamf-installed build ran the same day.
 
 ## Open
 
 - No `LSApplicationCategoryType` yet (archive warning); add
   `public.app-category.education` in a later slice.
-- The packaged copy's hand-install on a district Mac (slice 4's last row)
-  is not done until `MANUAL-CHECKS.md` says so. That run installs the
-  configuration profile above first — without it the app shows the
-  not-set-up message and nothing else.
+- ~~The packaged copy's hand-install on a district Mac (slice 4's last
+  row).~~ DONE 2026-09-14 — v1.3.0 reached a district student Mac through
+  Jamf (the pkg policy plus the configuration profile above, installed by
+  IT without incident); a Finder launch showed Sign in with Google, a real
+  student sat two real sessions and handed in, no TCC prompt.
+  `MANUAL-CHECKS.md` "Signed build" is the record.
+- Next release (v1.3.1) carries the time-limit banner fix: the × froze the
+  strip instead of hiding it (finding T-1,
+  `docs/time-limit-and-unfinished-attempts-design.md`).

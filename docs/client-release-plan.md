@@ -280,3 +280,15 @@ Steps from here are by hand per `client/RELEASING.md`.
 entitlement checks ran from the main session, the psd-sign skill's steps
 3–8 too; the `gh release create` was James's (the classifier denied it
 here). Still open: the hand-install row on a district Mac.
+
+**Hand-install row DONE 2026-09-14 — batch 2 COMPLETE.** v1.3.0 reached a
+district student Mac through Jamf: the pkg by policy plus the
+`com.apple.ManagedClient.preferences` configuration profile, installed by IT
+without incident. A Finder launch (no arguments, no environment) showed Sign
+in with Google, so the MDM `Forced` payload reaches the sandboxed app; a
+real student signed in through ClassLink SSO, sat a real session on the
+first pilot assessment and handed in, then a second real session that ran
+to its time limit; no TCC prompt at any point. `client/MANUAL-CHECKS.md`
+"Signed build" (the last row) and "Time limit" are the record. The next
+release (v1.3.1) carries the time-limit banner fix found that afternoon
+(T-1, `docs/time-limit-and-unfinished-attempts-design.md` §Progress).

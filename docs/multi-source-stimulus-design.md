@@ -614,3 +614,16 @@ published with sources before the next client release shows students the
 introduction only. Slice 3 (import) needs no route change — the panel just
 starts sending `sources` on `POST …/item-sets`. The Swift fixture
 regeneration in slice 4 will add `sources: []` to every set once.
+
+**Finding C-8 — 2026-09-14** (the first real-student sitting on `2026 AP
+Seminar EOC B`, an `own_page` set with four sources, v1.3.0 from Jamf, real
+session): the sources rendered above the question with no way for the
+student to put them beside it — the Beside / Above toggle (C-1) exists only
+on `side_by_side` sets, as built, but James expected the choice to be the
+student's on this layout too. Options, James's decision: (a) offer the
+toggle on `own_page` sets as well (the passage-page presentation stays the
+default, "Beside" switches to the two-column split when the viewport is
+wide enough); (b) make `side_by_side` the default layout for a set that
+carries sources (import and the editor); (c) both. Not built. The teacher
+half of the "hand in from the side-by-side page" row is closed by this
+sitting (the essay answer showed on the per-student page).

@@ -49,7 +49,7 @@ has, or will have, its own design page; this page is the order and the why.
 | **S** | **Multi-source stimulus** (2026-09-09, from the first pilot assessment: one essay prompt followed by four labelled sources and three vector charts — the import returned the essay alone): `sources: [{label, text}]` on a set, a `side_by_side` layout, source tabs in the client, the prompt rewritten for single-question sets with sources after the prompt, vector charts rasterised on the server (spike S4) | `docs/multi-source-stimulus-design.md` | **NOW, ahead of everything queued (D-5 there)** — it is the initial pilot assessment; slice 1 (line breaks) built 2026-09-09 | both sides |
 | **S-f** | **Multi-source follow-ups from the 2026-09-09 sitting** (`docs/multi-source-stimulus-design.md` §Progress "Findings"; decisions D-7…D-9 there — James 2026-09-09: both zoom parts, autosave, fullscreen stays the launch default). In build order: **C-2** `$` directly before a digit never opens KaTeX — design-tool `renderLatex` / `renderItemContent` AND the client's auto-render pass, importer prompt writes currency as `\$`, tests both sides; **C-1** the client evaluates `WIDE` on the first layout pass after the session is active (not at script start) and gains a student toggle "Sources beside / above the question" (in-memory per set; the passage page + collapsed pane presentation stays); **C-4** `WKWebView.allowsMagnification` on, 1×–3×, Session menu "Actual size" Cmd-0, AND click-to-enlarge on any image in a stem or source (overlay, Esc / click closes); **C-6** the Accommodations tab autosaves (debounced PATCH per change, saving / saved indicator, Save button goes); **C-7** the dev launcher forwards `SECURE_TEST_NO_FULLSCREEN` (dev only — fullscreen remains the default); then re-run the two VoiceOver rows (Quick Start dismissed outside a session first). Ships as **client v1.2.0** (slice 4 + C-1 + C-2 + C-4) and one deploy (C-2 server + C-6). **ALL FIVE BUILT 2026-09-09** (`508d7d6` C-2, `8f9f09a` C-1, `e61d95b` C-6, `9c7d28c` C-7, `f6bfaa6` C-4; note §Progress "Row S-f progress" is the record); rows written, NOT run; nothing deployed, no release yet | `docs/multi-source-stimulus-design.md` | the pilot document shows C-2 on its own Source B; C-1 is what the student sees first in a real session | **fresh session — start here.** Main session Fable / medium orchestrates, one commit per slice, diffs reviewed + checks re-run in the main session before each commit. C-2: two **Opus 5 / medium** agents in parallel (design-tool renderer + tests ∥ client auto-render pre-pass + JSC tests — disjoint files, same checkout). C-1: **Opus 5 / medium** agent (client; the note's C-1 entry is the spec), M. C-4: **Opus 5 / medium** agent (client), S. C-6: **Sonnet 5 / medium** agent (design-tool), S. C-7: main session, XS. Rows: **Sonnet 5 / medium** per client slice into `client/MANUAL-CHECKS.md`; teacher rows for C-2 / C-6 into `docs/design-tool-manual-checks.md`. Release + deploy: James by hand (`client/RELEASING.md`, the deploy script pattern) |
 | 1 | **Scoring hygiene** — BUILT 2026-09-03 (`eb2c969` / `df899b2` / `7d9a3e0`, rows 59–61 unrun): auto-score on submit, F-1 drawing viewer, student number + section on results and CSV | `docs/reporting-design.md` R0 | unblocks scoring and everything in 5 | design tool |
-| 2 | **Package + sign the client** — **v1.0.0 2026-09-07, v1.1.0 PUBLISHED 2026-09-08** (hand-install row still open): v1.0.0 published on `psd401/secure-test` (notarized app + pkg), real AAC session on the notarized build, D-R4 no PPPC, IT handoff drafted (ops repo); fleet scope pending; with the AppKit half of branding (icon, accent, one name, About / version, build stamp), and fix the `psd-sign` skill; its real-session hand-run re-checks predictive text in the essay (finding 8.4) | `docs/client-release-plan.md` (+ `docs/client-ui-pass-design.md` slice C) | gates the pilot and the IT afternoon; the first package is what IT and students see | client + release |
+| 2 | **Package + sign the client** — **v1.0.0 2026-09-07, v1.1.0 PUBLISHED 2026-09-08** (hand-install row ✅ 2026-09-14 through Jamf — **batch 2 COMPLETE**): v1.0.0 published on `psd401/secure-test` (notarized app + pkg), real AAC session on the notarized build, D-R4 no PPPC, IT handoff drafted (ops repo); fleet scope pending; with the AppKit half of branding (icon, accent, one name, About / version, build stamp), and fix the `psd-sign` skill; its real-session hand-run re-checks predictive text in the essay (finding 8.4) | `docs/client-release-plan.md` (+ `docs/client-ui-pass-design.md` slice C) | gates the pilot and the IT afternoon; the first package is what IT and students see | client + release |
 | 2b | **Public repository**: sweep, squash, move development there; archive this repo; a private ops repo for what stays internal | `docs/public-release-plan.md` | the release's `gh release` needs a public home; runs beside 2 and must finish before 2's release slice | docs + infra config, ∥ with 2 |
 | 3 | **Observability** — **BUILT + DEPLOYED rev 12 2026-09-07** (Aurora 0028); teacher rows 62–68 ✅ incl. feedback email + synthetic alarm; client rows + row 67 open | `docs/observability-design.md` | shared SNS → email plumbing, events-table pattern, version stamp, one deploy; hear from classrooms you are not in | both sides |
 | 4 | **Client UI pass** — **BUILT 2026-09-07, HAND-RUN 2026-09-08** (three real-session passes; drag → pointer tracking after the HTML5 drop failed under LockedDownWebView; S-0…S-9 fixed the same day; fullscreen by default); open: VoiceOver pass, per-pair contrast screenshots; SHIPPED in v1.1.0 | `docs/client-ui-pass-design.md` slices A, B, D | largest hand-run burden, better with error signal in place; the accommodations half is equity work and may move ahead if a sitting with accommodated students comes first | client |
@@ -215,3 +215,40 @@ prose render as KaTeX) are HIGH and go before anything else queued**; C-4
 (pinch-zoom + click-to-enlarge on charts) is James's decision; C-6 (the
 Accommodations tab's checkboxes look saved without Save) is a small
 design-tool fix.
+
+2026-09-14: **first sitting on a district Mac — v1.3.0 installed through
+Jamf, a real student, real sessions; batch 2 COMPLETE.** IT's install
+(pkg policy + the managed-preferences profile) worked without incident; a
+Finder launch showed Sign in with Google, so the profile reaches the
+sandboxed app. Two sittings, James at the student Mac, Claude on the
+teacher side: `2026 AP Seminar EOC B` (mid-test teacher rows 155–157 /
+161 / 77 / 113 ✅, hand-in, essay on the per-student page, section filter
+row 70 ✅; the session was closed and the attempt deleted afterwards so the
+pilot teachers see the assessment fresh) and `Time limit hand-run
+2026-09-11` (the session ended on its own at zero with the "Time is up."
+sheet; the teacher hand-in ran through the route while the session was
+still open). The one-day teacher-row script had been lost and was rebuilt
+the same morning (`~/secure-test-hand-teacher-row.sh`, student number as
+its argument). **Findings, all proposals, nothing built:**
+- **T-1 (client, v1.3.1):** the countdown banner's × freezes the strip at
+  its last value instead of hiding it — `.time-limit { display: flex }`
+  outranks the UA `[hidden]` rule and the page has no `.time-limit[hidden]`
+  rule (every other hideable does). One CSS line + a test.
+- **T-2 (design-tool):** Hand in stays disabled after the attempt's deadline
+  while the sitting is open — the route relaxes `session_open` (D-4/A) but
+  the matrix, per-student and Monitor controls enable on `sitting_open`
+  alone. The rows need a deadline-passed flag; S.
+- **T-3 (client, unverified):** no 1-minute notice was seen after the
+  banner was hidden at 2:11; the notice is host-driven and should be
+  independent of the strip — re-check with a Terminal launch so the log
+  is readable.
+- **R-4 (design-tool, pilot-relevant):** an `ai` / `hybrid` essay has no UI
+  path to its FIRST AI proposal — the queue card offers only the manual
+  picker, "Re-run AI" appears once a proposal exists, and the attempt-wide
+  `score-ai` route has no caller. A "Score with AI" button on the
+  needs-manual card (the `rescore-ai` route already accepts a response with
+  no prior proposal); S.
+- **C-8 (design decision):** an `own_page` set shows no Beside / Above
+  toggle — James expected the student to be able to choose. Options: offer
+  the toggle on `own_page` sets too, or make `side_by_side` the default
+  layout for a set with sources.

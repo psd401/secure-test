@@ -383,3 +383,15 @@ typecheck re-run in the main session before each commit, as in the
   counts, not tokens. Metric filter = a later infra slice
   (`docs/observability-design.md`). +5 tests. **Full suite after slices
   1–6: 1532 pass, typecheck clean.**
+- **Finding R-4 — 2026-09-14** (the first real-student sitting on `2026 AP
+  Seminar EOC B`: analytic rubric, `scoring_method: ai`). After the hand-in
+  the essay landed in the queue under "Needs manual scoring" with only the
+  level picker and Save final score. There is no UI path to a FIRST AI
+  proposal: the card's "Re-run AI" renders only when `entry.proposed` is
+  set, and the attempt-wide `POST /api/attempts/[attemptId]/score-ai`
+  (slice 38) has no caller anywhere in the UI — row 144's "Score with AI"
+  button never existed. Proposal: a "Score with AI" button on the
+  needs-manual card for `ai` / `hybrid` items, calling the per-response
+  `rescore-ai` route (it already appends a proposal whether or not one
+  exists and refuses only once a final exists); the pilot teachers will hit
+  this on their first essay. Not built.
