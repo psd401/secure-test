@@ -13,6 +13,11 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 // clicking one level per criterion (auto-summed); non-rubric items take
 // bare points. Everything posts to the slice-39 action routes and
 // refetches.
+//
+// R-4 (docs/rubric-upload-design.md): an `ai` / `hybrid` item with no
+// proposal yet also gets a "Score with AI" button above the manual picker —
+// before this the per-response rescore-ai route was only reachable from the
+// proposal branch ("Re-run AI"), so a first proposal had no UI path at all.
 
 interface QueueEntry {
   response_id: string;
@@ -66,6 +71,45 @@ interface QueueEntry {
     } | null;
     scorer: string;
   } | null;
+}
+
+/**
+ * R-4: does this entry offer a FIRST AI proposal? True only for an
+ * `ai` / `hybrid` item that has no proposal yet — a `human` item never
+ * offers one, and once a proposal exists the card shows "Re-run AI".
+ */
+export function offersAiScoring(entry: {
+  item: { scoring_method: string };
+  proposed: unknown | null;
+}): boolean {
+  if (entry.proposed) return false;
+  return (
+    entry.item.scoring_method === "ai" || entry.item.scoring_method === "hybrid"
+  );
+}
+
+/** R-4: the needs-manual card's first-proposal row. Manual scoring stays below. */
+export function ScoreWithAiRow({
+  busy,
+  onClick,
+}: {
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button
+        disabled={busy}
+        onClick={onClick}
+        className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
+      >
+        Score with AI
+      </button>
+      <span className="text-xs text-muted-foreground">
+        Or score it yourself below.
+      </span>
+    </div>
+  );
 }
 
 interface Props {
@@ -496,37 +540,47 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
               )}
             </details>
           </div>
-        ) : entry.item.rubric ? (
-          rubricPicker(entry)
         ) : (
-          <div className="mt-2 flex items-center gap-2">
-            <label className="text-xs">
-              Points (of {entry.item.max_points}):{" "}
-              <input
-                type="number"
-                min={0}
-                max={entry.item.max_points}
-                step={entry.item.max_points > 1 ? 1 : 0.5}
-                value={rawPoints[entry.response_id] ?? ""}
-                onChange={(e) =>
-                  setRawPoints((prev) => ({
-                    ...prev,
-                    [entry.response_id]: e.target.value,
-                  }))
-                }
-                className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+          <>
+            {offersAiScoring(entry) ? (
+              <ScoreWithAiRow
+                busy={busy}
+                onClick={() => rerunAi(entry.response_id)}
               />
-            </label>
-            <button
-              disabled={
-                busy || (rawPoints[entry.response_id] ?? "").trim() === ""
-              }
-              onClick={() => saveRawScore(entry)}
-              className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
-            >
-              Save final score
-            </button>
-          </div>
+            ) : null}
+            {entry.item.rubric ? (
+              rubricPicker(entry)
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-xs">
+                  Points (of {entry.item.max_points}):{" "}
+                  <input
+                    type="number"
+                    min={0}
+                    max={entry.item.max_points}
+                    step={entry.item.max_points > 1 ? 1 : 0.5}
+                    value={rawPoints[entry.response_id] ?? ""}
+                    onChange={(e) =>
+                      setRawPoints((prev) => ({
+                        ...prev,
+                        [entry.response_id]: e.target.value,
+                      }))
+                    }
+                    className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+                  />
+                </label>
+                <button
+                  disabled={
+                    busy || (rawPoints[entry.response_id] ?? "").trim() === ""
+                  }
+                  onClick={() => saveRawScore(entry)}
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
+                >
+                  Save final score
+                </button>
+              </div>
+            )}
+          </>
         )}
       </li>
     );
