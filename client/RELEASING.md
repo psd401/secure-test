@@ -165,6 +165,20 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.3.2 — 2026-09-15** (built from `fa39945`, tag on `main`, published
+  ~11:25 PT): the end-state audit's two security slices (`ebe20ab` the
+  test page exists only while the session is active — no "Stay here", a
+  failed or hung begin() refuses instead of rendering; `49ac102` the dev
+  watchdog is OFF in Release — v1.3.1 ended every real session at 600 s —
+  and every development knob is Debug-only, no-entitlement refuses,
+  managed preferences outrank arguments) plus C-8(a) Beside / Above on
+  own_page sets. Archive already Developer ID + hardened runtime, six
+  entitlements intact, profile embedded; app + pkg notarized and stapled
+  from the session (psd-sign 0.5.0), `gh release create` by James.
+  `/releases/latest` = 1.3.2, 302. The v1.3.0 profile works unchanged. The
+  37 rows of the three 2026-09-15 sections in `MANUAL-CHECKS.md` are the
+  hand-run on THIS build (a real session). v1.3.1's 10-minute self-end is
+  the reason to move the fleet promptly.
 - **v1.3.1 — 2026-09-14** (built from `48afe60`, tag on `main`): deployment
   target 26.4 (was 26.5; IT asked — see "Open" below for the evidence) and
   the T-1 time-limit banner fix. Archive already Developer ID + hardened

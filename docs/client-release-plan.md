@@ -303,3 +303,15 @@ macOS 15 or older, and there are no `#available` checks. The 2026-09-07
 `MARKETING_VERSION` 1.3.1. Caveat recorded in `client/RELEASING.md`: no
 real session has run on 26.4 (no such Mac is available to James), so the
 release notes flag it and IT's first 26.4 session is the verification.
+
+**v1.3.2 PUBLISHED 2026-09-15** (built from `fa39945`; `client/RELEASING.md`
+"Released" is the record). It carries the 2026-09-15 end-state audit's fixes
+(`docs/roadmap-2026-09.md` §Progress): the shipped v1.3.0 / v1.3.1 builds
+ended every real session at ten minutes (a development watchdog with no
+fleet override), offered "Stay here" on an unlocked Mac afterwards, rendered
+the test when `begin()` failed, and honoured every `SECURE_TEST_*` knob from
+a Terminal launch. Release builds now arm no watchdog, return to Your tests
+on every non-hand-in end, refuse on a failed / hung begin, and ignore the
+development knobs (`client/SecureTest/BuildPosture.swift`). Jamf picks it up
+through Installomator; the configuration profile is unchanged. Hand-run:
+the three 2026-09-15 sections of `client/MANUAL-CHECKS.md` on this build.
