@@ -400,3 +400,25 @@ typecheck re-run in the main session before each commit, as in the
   error handling, the refetch moves the entry to "AI proposals to review";
   `offersAiScoring` + `ScoreWithAiRow` tested in `test/scoring-queue.test.tsx`;
   row 144 reworded; not yet deployed).
+
+**Finding R-5 — 2026-09-15 (first Bedrock scoring on the origin, five seeded
+essays via `seed-essays`, row 191):** three of five "Score with AI" calls
+answered 502 `provider_error`, deterministically for the two longest essays.
+Two causes, both in the scorer, both fixed the same afternoon:
+(a) with an analytic rubric whose level ids run `l1…l16` across four
+criteria, the model returned `level_id: "l4"` for criterion `c3` — the
+fourth level of that criterion numbered from `l1` — while its `points`
+named the level it meant; `validateAgainstRubric` refused a semantically
+right score. Fix: `reconcileLevelIds` repairs an unknown level id to the one
+level of that criterion carrying exactly the returned points (ambiguous →
+left for the validator), the provider logs the count, and the prompt now
+says ids are unique across the rubric and must be copied verbatim.
+(b) the 470-word essay's reply was cut at `ESSAY_SCORE_MAX_TOKENS = 2000`
+mid-JSON → "model did not return valid JSON". Fix: 4000 tokens, the prompt
+asks for two-to-three-sentence rationales, `parseScoreResult` takes the
+outermost braces out of prose wrapping, and the error line carries the
+Bedrock `stopReason`. `ESSAY_SCORER_PROMPT_VERSION` → 2026-09-15 (hash
+re-recorded). Also noted: the failure was logged only as a plain
+`console.error` line, invisible to the `level:"error"` metric filter — the
+teacher saw a 502 and the alarm saw nothing (follow-up: route it through
+`lib/log.ts`).

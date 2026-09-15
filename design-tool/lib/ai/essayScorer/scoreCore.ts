@@ -9,14 +9,18 @@ import { ScoreEssayResult } from "./types";
 // review queue.
 export const HYBRID_AUTO_FINALIZE_CONFIDENCE = 0.85;
 
-export const ESSAY_SCORE_MAX_TOKENS = 2000;
+// 2026-09-15 (pilot seeding): 2000 cut a four-criterion analytic score of a
+// 470-word essay mid-JSON — the model wrote long rationales and the reply
+// stopped at max_tokens, surfacing as "did not return valid JSON". 4000
+// leaves room; the prompt also asks for two-to-three-sentence rationales.
+export const ESSAY_SCORE_MAX_TOKENS = 4000;
 
 // Slice 1 of docs/scoring-corpus-design.md: the prompt's identity, stamped
 // on every AI score row so two runs a month apart are distinguishable.
 // BUMP IT BY HAND whenever the prompt text or the scoring view changes —
 // test/essay-prompt-version.test.ts hashes the prompt and fails until the
 // recorded hash and this date are both updated.
-export const ESSAY_SCORER_PROMPT_VERSION = "2026-09-14";
+export const ESSAY_SCORER_PROMPT_VERSION = "2026-09-15";
 
 // Every rubric style is AI-scorable (slice 4 of docs/rubric-upload-design.md,
 // D-5). analytic + holistic are level selection as authored; single_point
@@ -102,13 +106,16 @@ export const ESSAY_SCORE_SYSTEM_PROMPT = [
   "You are a careful K-12 assessment scorer. You will be given an essay",
   "prompt, a student's response, and a scoring rubric as JSON.",
   "Score the response against EVERY rubric criterion by choosing exactly",
-  "one level per criterion.",
+  "one level per criterion. Copy criterion_id and level_id EXACTLY as they",
+  "appear in the rubric JSON: level ids are unique across the whole rubric",
+  "and are NOT renumbered per criterion.",
   "When a level is labelled Below / Meets / Exceeds target, the criterion",
   "states one target: judge which of the three applies and quote the",
   "evidence.",
   "Quote or reference specific evidence from the",
   "student's response in each rationale. Be fair and consistent; do not",
-  "reward length over substance. Respond with ONLY a JSON object, no",
+  "reward length over substance. Keep each rationale to two or three",
+  "sentences. Respond with ONLY a JSON object, no",
   "markdown fences, in this exact shape:",
   '{"criterion_scores":[{"criterion_id":"...","level_id":"...","points":N,',
   '"rationale":"..."}],"points":N,"max_points":N,"overall_rationale":"...",',
@@ -147,7 +154,19 @@ export function parseScoreResult(text: string, errPrefix: string) {
   try {
     raw = JSON.parse(cleaned);
   } catch {
-    throw new Error(`${errPrefix}: model did not return valid JSON`);
+    // 2026-09-15: a reply that wraps the object in prose ("Here is the
+    // score: {...}") is still a score — take the outermost braces. A reply
+    // cut off at max_tokens has no closing brace and still fails here.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start === -1 || end <= start) {
+      throw new Error(`${errPrefix}: model did not return valid JSON`);
+    }
+    try {
+      raw = JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      throw new Error(`${errPrefix}: model did not return valid JSON`);
+    }
   }
   const parsed = ScoreEssayResult.safeParse(raw);
   if (!parsed.success) {
@@ -157,6 +176,8 @@ export function parseScoreResult(text: string, errPrefix: string) {
   }
   return parsed.data;
 }
+
+const EPS = 1e-6;
 
 export type RubricBoundsError = { valid: false; reason: string };
 export type RubricBoundsOk = { valid: true };
@@ -177,7 +198,6 @@ export function validateAgainstRubric(
   },
   rubric: Rubric,
 ): RubricBoundsOk | RubricBoundsError {
-  const EPS = 1e-6;
   const byId = new Map(rubric.criteria.map((c) => [c.id, c]));
   const seen = new Set<string>();
   let sum = 0;
@@ -216,4 +236,35 @@ export function validateAgainstRubric(
     return { valid: false, reason: `max_points ${result.max_points} != rubric max ${max}` };
   }
   return { valid: true };
+}
+
+/**
+ * 2026-09-15 (pilot essay seeding on the origin): with a rubric whose level
+ * ids run l1…l16 across four criteria, the model answered `level_id: "l4"`
+ * for criterion c3 — the fourth level of THAT criterion, numbered as if each
+ * criterion started at l1 — while its `points` named the level it meant.
+ * The bounds check then refused a score that was semantically right.
+ *
+ * So, before validation: a level id that does not exist under its criterion
+ * is repaired to the one level of that criterion carrying exactly the points
+ * the model returned. Zero or several candidates → left alone, and
+ * validateAgainstRubric reports it as before. Nothing else is touched; the
+ * repaired ids are returned so the provider can log how many it fixed.
+ */
+export function reconcileLevelIds<
+  T extends {
+    criterion_scores: Array<{ criterion_id: string; level_id: string; points: number }>;
+  },
+>(result: T, rubric: Rubric): { result: T; repaired: number } {
+  let repaired = 0;
+  const criterion_scores = result.criterion_scores.map((cs) => {
+    const criterion = rubric.criteria.find((c) => c.id === cs.criterion_id);
+    if (!criterion) return cs;
+    if (criterion.levels.some((l) => l.id === cs.level_id)) return cs;
+    const byPoints = criterion.levels.filter((l) => Math.abs(l.points - cs.points) <= EPS);
+    if (byPoints.length !== 1) return cs;
+    repaired += 1;
+    return { ...cs, level_id: byPoints[0]!.id };
+  });
+  return { result: { ...result, criterion_scores }, repaired };
 }

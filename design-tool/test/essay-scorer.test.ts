@@ -23,6 +23,7 @@ import {
   describeLevel,
   isScorableRubricStyle,
   parseScoreResult,
+  reconcileLevelIds,
   rubricMaxPoints,
   scoringView,
   validateAgainstRubric,
@@ -169,6 +170,46 @@ describe("scoreCore validators", () => {
   ])("rejects %s", (_label, result) => {
     const verdict = validateAgainstRubric(result, RUBRIC);
     expect(verdict.valid).toBe(false);
+  });
+
+  test("parseScoreResult takes the object out of prose wrapping (2026-09-15)", () => {
+    const body = JSON.stringify({
+      criterion_scores: [{ criterion_id: "c1", level_id: "l1", points: 1, rationale: "r" }],
+      points: 1,
+      max_points: 1,
+      overall_rationale: "ok",
+      confidence: 0.5,
+    });
+    const parsed = parseScoreResult(`Here is the score:\n${body}\nDone.`, "t");
+    expect(parsed.points).toBe(1);
+    expect(() => parseScoreResult("Here is the score: {\"points\": 1", "t")).toThrow(
+      "did not return valid JSON",
+    );
+  });
+
+  test("reconcileLevelIds repairs a per-criterion-numbered level id by points (2026-09-15)", () => {
+    const rubric: Rubric = {
+      style: "analytic",
+      criteria: [
+        { id: "c1", name: "A", levels: [{ id: "l1", label: "0", points: 0, descriptor: "" }, { id: "l2", label: "2", points: 2, descriptor: "" }] },
+        { id: "c2", name: "B", levels: [{ id: "l3", label: "0", points: 0, descriptor: "" }, { id: "l4", label: "2", points: 2, descriptor: "" }] },
+        { id: "c3", name: "C", levels: [{ id: "l5", label: "1", points: 1, descriptor: "" }, { id: "l6", label: "1b", points: 1, descriptor: "" }] },
+      ],
+    };
+    const result = {
+      criterion_scores: [
+        { criterion_id: "c1", level_id: "l2", points: 2 },
+        // the model numbered c2's levels from l1: "l2" here means l4
+        { criterion_id: "c2", level_id: "l2", points: 2 },
+        // two candidates carry 1 point — ambiguous, left alone
+        { criterion_id: "c3", level_id: "l9", points: 1 },
+      ],
+    };
+    const { result: fixed, repaired } = reconcileLevelIds(result, rubric);
+    expect(repaired).toBe(1);
+    expect(fixed.criterion_scores[1]!.level_id).toBe("l4");
+    expect(fixed.criterion_scores[2]!.level_id).toBe("l9");
+    expect(fixed.criterion_scores[0]!.level_id).toBe("l2");
   });
 
   test("parseScoreResult strips markdown fences and validates shape", () => {
