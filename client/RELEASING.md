@@ -19,14 +19,21 @@ checklist. First release: `v1.0.0`, 2026-09-07.
   one `Developer ID Installer: …`; `security find-identity -v -p
   codesigning | grep "Developer ID Application"` must print exactly one line.
 - **Notarization**: keychain profile `notarytool` (shared with LessonLens).
-- **Release repository**: `psd401/secure-test` (public; Installomator
-  fetches `/releases/latest` unauthenticated). Tag `v<version>`, one `.pkg`
-  asset named `SecureTest-<version>.pkg`.
+- **Release repository**: `psd401/secure-test` (public). Tag `v<version>`,
+  one `.pkg` asset named `SecureTest-<version>.pkg`, never draft or
+  prerelease.
+- **How the fleet gets it (IT, 2026-09-15)**: a custom **AutoPkg** recipe
+  (GitHub releases → Jamf), NOT Installomator — GitHub allows only 60
+  unauthenticated API calls per hour per IP, so IT uses AutoPkg for every
+  GitHub-hosted app. The pipeline auto-updates any release past 1.3.0
+  (confirmed by the fleet moving to v1.3.1 on its own). The release shape
+  above is what both tools key on, so it does not change; the Installomator
+  label drafted in the ops repository is moot.
 
 ## Version rule
 
 `MARKETING_VERSION` in the pbxproj is the version (digits and dots only —
-Installomator strips everything else). Bump it before archiving; the build
+the update pipeline reads it from the tag). Bump it before archiving; the build
 stamps the git sha into `PSDBuildCommit`, so About shows
 `<version> (<sha>)`. Tag = `v<MARKETING_VERSION>`; never reuse a tag.
 

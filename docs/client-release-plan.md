@@ -315,3 +315,12 @@ on every non-hand-in end, refuse on a failed / hung begin, and ignore the
 development knobs (`client/SecureTest/BuildPosture.swift`). Jamf picks it up
 through Installomator; the configuration profile is unchanged. Hand-run:
 the three 2026-09-15 sections of `client/MANUAL-CHECKS.md` on this build.
+
+**Distribution mechanism, corrected 2026-09-15 (IT):** the fleet is updated
+by a custom **AutoPkg** recipe reading GitHub releases, not Installomator —
+GitHub's 60-requests-per-hour unauthenticated API limit per IP rules
+Installomator out for GitHub-hosted apps district-wide. It auto-updates
+every release past 1.3.0 (v1.3.1 reached the fleet without a request). The
+release rules in `client/RELEASING.md` (tag `v<version>`, one `.pkg`, no
+draft / prerelease, public repository) are what the recipe keys on and stay
+as they are.
