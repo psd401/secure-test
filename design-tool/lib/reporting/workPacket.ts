@@ -25,9 +25,22 @@ export interface PacketQuery {
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-function firstParam(value: string | string[] | undefined): string | null {
-  if (Array.isArray(value)) return value[0] ?? null;
+/**
+ * The LAST value wins, not the first — slice 2's toolbar relies on this: the
+ * `questions` checkbox sits after a `questions=0` hidden field with the same
+ * name, so an unchecked box still submits (the hidden field's `0`) and a
+ * checked one overrides it (the checkbox's `1`, later in the form and so
+ * later in the query string). A repeated parameter from anywhere else (a
+ * hand-edited URL, a browser's history restore) resolves the same way.
+ */
+function lastParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value.length > 0 ? value[value.length - 1]! : null;
   return value ?? null;
+}
+
+function allValues(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) return value;
+  return value === undefined ? [] : [value];
 }
 
 /** `0` / `false` / `no` are off; an absent parameter falls back to `fallback`. */
@@ -45,19 +58,22 @@ function flag(raw: string | null, fallback: boolean): boolean {
  * of the four) rather than taking the page down.
  */
 export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
-  const rawSection = firstParam(searchParams.section);
+  const rawSection = lastParam(searchParams.section);
   const section = rawSection && rawSection.trim() !== "" ? rawSection.trim() : null;
 
-  const rawItems = firstParam(searchParams.items);
+  // `items` is a comma list (a hand-edited or bookmarked URL) OR one value per
+  // parameter (the toolbar's item checklist, one checkbox per question, all
+  // named `items`) — every value is split on commas and merged, so both
+  // shapes land the same set.
   const ids: string[] = [];
-  if (rawItems) {
-    for (const part of rawItems.split(",")) {
+  for (const raw of allValues(searchParams.items)) {
+    for (const part of raw.split(",")) {
       const id = part.trim().toLowerCase();
       if (UUID_RE.test(id) && !ids.includes(id)) ids.push(id);
     }
   }
 
-  const rawScores = (firstParam(searchParams.scores) ?? "").trim().toLowerCase();
+  const rawScores = (lastParam(searchParams.scores) ?? "").trim().toLowerCase();
   const scores = (PACKET_SCORE_MODES as readonly string[]).includes(rawScores)
     ? (rawScores as PacketScoresMode)
     : "none";
@@ -65,10 +81,27 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
   return {
     section,
     items: ids.length > 0 ? ids : null,
-    questions: flag(firstParam(searchParams.questions), true),
+    questions: flag(lastParam(searchParams.questions), true),
     scores,
-    anon: flag(firstParam(searchParams.anon), false),
+    anon: flag(lastParam(searchParams.anon), false),
   };
+}
+
+/**
+ * A short, plain-text label for the toolbar's item checklist: strip image
+ * refs, `$…$` math markers and the handful of markdown characters a stem may
+ * carry, collapse whitespace, then cut to `max` characters. Never throws; a
+ * blank stem gives `""`.
+ */
+export function stemExcerpt(stem: string, max = 60): string {
+  const stripped = (stem ?? "")
+    .replace(/!\[[^\]]*\]\(asset:[^)]*\)/gi, "")
+    .replace(/\$\$?/g, "")
+    .replace(/[*_`#>[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (stripped.length <= max) return stripped;
+  return `${stripped.slice(0, max - 1).trimEnd()}…`;
 }
 
 /**

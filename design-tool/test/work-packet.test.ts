@@ -10,6 +10,7 @@ import {
   packetScoreHeading,
   parsePacketQuery,
   selectPacketScores,
+  stemExcerpt,
   type PacketScoreRow,
 } from "../lib/reporting/workPacket";
 
@@ -30,8 +31,9 @@ describe("parsePacketQuery", () => {
   test("section is trimmed, and blank is the same as absent", () => {
     expect(parsePacketQuery({ section: "  English 9 · 3  " }).section).toBe("English 9 · 3");
     expect(parsePacketQuery({ section: "   " }).section).toBeNull();
-    // Next hands a repeated parameter as an array; the first wins.
-    expect(parsePacketQuery({ section: ["Biology", "Algebra"] }).section).toBe("Biology");
+    // Next hands a repeated parameter as an array; the LAST one wins (slice
+    // 2: the questions checkbox relies on this — see the lastParam test).
+    expect(parsePacketQuery({ section: ["Biology", "Algebra"] }).section).toBe("Algebra");
   });
 
   test("items is a comma list of uuids; junk is dropped, duplicates collapse, empty = all", () => {
@@ -41,6 +43,17 @@ describe("parsePacketQuery", () => {
     expect(parsePacketQuery({ items: "" }).items).toBeNull();
     // Case-folded, so a hand-edited URL matches the stored id.
     expect(parsePacketQuery({ items: A.toUpperCase() }).items).toEqual([A]);
+  });
+
+  test("items also accepts one value per parameter — the toolbar's checklist, one checkbox per item, all named `items`", () => {
+    expect(parsePacketQuery({ items: [A, B] }).items).toEqual([A, B]);
+    // Duplicates and junk drop the same way as the comma-list form.
+    expect(parsePacketQuery({ items: [A, "not-a-uuid", A] }).items).toEqual([A]);
+  });
+
+  test("questions=0 then questions=1 (the hidden-field-then-checkbox trick) reads as ON — the LAST value", () => {
+    expect(parsePacketQuery({ questions: ["0", "1"] }).questions).toBe(true);
+    expect(parsePacketQuery({ questions: ["1", "0"] }).questions).toBe(false);
   });
 
   test("questions defaults on and only 0 / false / no turn it off", () => {
@@ -239,5 +252,31 @@ describe("packetOrdering", () => {
   test("an unknown name sorts first rather than throwing", () => {
     const withBlank = [...rows, { attempt_id: "d", student: { name: "" } }];
     expect(packetOrdering(withBlank, false)[0]!.attempt_id).toBe("d");
+  });
+});
+
+describe("stemExcerpt — the toolbar's item-checklist label", () => {
+  test("plain text under the limit is unchanged", () => {
+    expect(stemExcerpt("Name the capital")).toBe("Name the capital");
+  });
+
+  test("math markers, image refs and light markdown are stripped", () => {
+    expect(stemExcerpt("What is $x^2$ when *x* = 3?")).toBe("What is x^2 when x = 3?");
+    expect(stemExcerpt("See ![chart](asset:11111111-1111-4111-8111-111111111111) above")).toBe(
+      "See above",
+    );
+    expect(stemExcerpt("# Heading\n_emph_ `code` [link]")).toBe("Heading emph code link");
+  });
+
+  test("longer than 60 characters is cut with an ellipsis, never mid-run over the limit", () => {
+    const long = "This stem goes on for quite a while past the sixty character mark, well past it";
+    const excerpt = stemExcerpt(long);
+    expect(excerpt.length).toBeLessThanOrEqual(60);
+    expect(excerpt.endsWith("…")).toBe(true);
+  });
+
+  test("blank or whitespace-only stems give an empty string", () => {
+    expect(stemExcerpt("")).toBe("");
+    expect(stemExcerpt("   ")).toBe("");
   });
 });

@@ -27,7 +27,10 @@ import {
   packetOrdering,
   packetScoreHeading,
   parsePacketQuery,
+  PACKET_SCORE_MODES,
   selectPacketScores,
+  stemExcerpt,
+  type PacketQuery,
 } from "@/lib/reporting/workPacket";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
@@ -122,6 +125,17 @@ const PRINT_CSS = `
 .packet .key-page table { width: auto; }
 .strip { margin: 0 auto 1rem; max-width: 52rem; padding: 1rem 1.5rem 0;
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+/* Slice 2's toolbar: a plain GET form, screen only. */
+.toolbar { margin: .5rem auto 1rem; max-width: 52rem; padding: 0 1.5rem;
+  display: flex; flex-direction: column; gap: .6rem; }
+.toolbar-items { display: flex; flex-wrap: wrap; gap: .15rem 1.25rem;
+  border: 1px solid #ccc; border-radius: .375rem; padding: .5rem .75rem; }
+.toolbar-items legend { padding: 0 .25rem; }
+.toolbar-item { display: block; font-size: .85rem; white-space: nowrap; }
+.toolbar-flag { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; }
+.toolbar-scores { display: flex; flex-wrap: wrap; gap: .25rem 1rem;
+  align-items: center; border: none; padding: 0; }
+.toolbar-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 @media print {
   header, nav, .strip, .screen-only { display: none !important; }
   .packet { max-width: none; padding: 0; font-size: 11pt; }
@@ -138,6 +152,25 @@ if(b){window.print();}});`;
 
 function printWhen(iso: string | null): string {
   return iso ? formatDateTime(iso) : "—";
+}
+
+/**
+ * A packet URL rebuilt from the current query, omitting whichever keys are
+ * named — used by "Select all" to drop `?items=` while keeping every other
+ * choice the teacher already made.
+ */
+function packetHref(
+  assessmentId: string,
+  query: PacketQuery,
+  omit: ReadonlySet<"items"> = new Set(),
+): string {
+  const params = new URLSearchParams();
+  if (query.section) params.set("section", query.section);
+  if (!omit.has("items") && query.items) params.set("items", query.items.join(","));
+  params.set("questions", query.questions ? "1" : "0");
+  params.set("scores", query.scores);
+  if (query.anon) params.set("anon", "1");
+  return `/dashboard/${assessmentId}/results/work?${params.toString()}`;
 }
 
 /** answerView's lines, with the ✓ / ✗ it supplies only where a key exists. */
@@ -281,21 +314,24 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   const results = await buildResults(id, session.sub, session.email);
   const handedIn = results.rows.filter((r) => r.status === "submitted");
 
+  // Every section with at least one handed-in attempt, plus a count of
+  // attempts that resolve to no section at all. Shared by the chooser below
+  // (no `?section=`) and the toolbar's section `<select>` once one is picked.
+  const sectionCounts = new Map<string, number>();
+  let unsectioned = 0;
+  for (const row of handedIn) {
+    if (row.student.section) {
+      sectionCounts.set(row.student.section, (sectionCounts.get(row.student.section) ?? 0) + 1);
+    } else {
+      unsectioned++;
+    }
+  }
+  const sections = [...sectionCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
   // ── No section: the chooser. One URL per section is the contract, so rather
   // than printing "all sections" this lists what there is to print. Screen
-  // only; there is nothing printable on this branch. Slice 2 replaces it with
-  // the full toolbar.
+  // only; there is nothing printable on this branch.
   if (query.section === null) {
-    const counts = new Map<string, number>();
-    let unsectioned = 0;
-    for (const row of handedIn) {
-      if (row.student.section) {
-        counts.set(row.student.section, (counts.get(row.student.section) ?? 0) + 1);
-      } else {
-        unsectioned++;
-      }
-    }
-    const sections = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     return (
       <main className="mx-auto max-w-2xl space-y-4 px-6 py-10">
         <h1 className="text-2xl font-semibold">Print student work</h1>
@@ -456,12 +492,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   return (
     <>
       <style>{PRINT_CSS}</style>
-      {/* Slice 2 of docs/student-work-export-design.md puts the toolbar form
-          HERE — the section select, the item checklist, the questions toggle,
-          the scores radio and the anonymous checkbox, as a plain GET form back
-          to this same route. Until then the options are URL parameters and
-          this strip carries the counts and the print button only. */}
-      <div className="strip">
+      <div className="strip screen-only">
         <button type="button" data-print className="rounded-md border px-3 py-1.5 text-sm">
           Print / Save as PDF
         </button>
@@ -477,6 +508,77 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           Back to results
         </a>
       </div>
+      {/* The toolbar: a plain GET form back to this same route, so the whole
+          packet stays a bookmarkable link and nothing here needs client JS.
+          "Select all" links rather than a JS-driven checkbox, and there is no
+          "Select none" — an empty packet is not a useful print, so the design
+          note's alternative (a link with no items) is skipped; see
+          docs/student-work-export-design.md §Progress for this deviation. */}
+      <form
+        method="GET"
+        action={`/dashboard/${assessment.id}/results/work`}
+        className="toolbar screen-only"
+      >
+        <div className="toolbar-row">
+          <label htmlFor="packet-section">Section</label>
+          <select id="packet-section" name="section" defaultValue={section}>
+            {sections.map(([label, count]) => (
+              <option key={label} value={label}>
+                {label} ({count} handed in)
+              </option>
+            ))}
+          </select>
+        </div>
+        <fieldset className="toolbar-items">
+          <legend>
+            Questions to include{" "}
+            <a href={packetHref(assessment.id, query, new Set(["items"]))}>Select all</a>
+          </legend>
+          {allItems.map((item) => (
+            <label key={item.id} className="toolbar-item">
+              <input
+                type="checkbox"
+                name="items"
+                value={item.id}
+                defaultChecked={
+                  query.items === null || query.items.includes(item.id.toLowerCase())
+                }
+              />{" "}
+              Q{item.position + 1} — {stemExcerpt(item.stem)}
+            </label>
+          ))}
+        </fieldset>
+        <label className="toolbar-flag">
+          {/* The hidden field submits `0` when the box is unchecked (an
+              unchecked checkbox submits nothing at all); when checked, the
+              box's own `1` follows it in the query string and wins —
+              parsePacketQuery reads the LAST `questions` value. */}
+          <input type="hidden" name="questions" value="0" />
+          <input type="checkbox" name="questions" value="1" defaultChecked={query.questions} />
+          Show questions (stems, choices, stimulus)
+        </label>
+        <fieldset className="toolbar-scores">
+          <legend>Scores</legend>
+          {PACKET_SCORE_MODES.map((mode) => (
+            <label key={mode} className="toolbar-flag">
+              <input
+                type="radio"
+                name="scores"
+                value={mode}
+                defaultChecked={query.scores === mode}
+              />
+              {mode}
+            </label>
+          ))}
+        </fieldset>
+        <label className="toolbar-flag">
+          <input type="checkbox" name="anon" value="1" defaultChecked={query.anon} />
+          Anonymous (labels + key page)
+        </label>
+        <button type="submit" className="rounded-md border px-3 py-1.5 text-sm self-start">
+          Update
+        </button>
+      </form>
       <main className="packet">
         {ordered.length === 0 ? (
           <p className="meta">

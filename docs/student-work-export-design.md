@@ -215,3 +215,57 @@ slice 1 here can exclude it from the start.
   per-section handed-in counts) rather than nothing, which is the thing slice
   2's toolbar replaces. Slice 2 still owns the toolbar form, the results-page
   button and the hand-run rows; an HTML comment marks where the form goes.
+- 2026-09-14 — **slice 2 BUILT** (not hand-run). The toolbar is a plain `GET`
+  form on `/results/work` (no client component, no JS beyond the existing
+  print-button script): a section `<select>` (every section with a
+  handed-in attempt, the current one selected — `sectionCounts` is now
+  computed once, above the `?section=` branch, so both the chooser and the
+  toolbar read it), an item checklist in delivery order (every item, `Qn` +
+  `stemExcerpt(item.stem)` — a new pure helper in `workPacket.ts` that strips
+  image refs, `$…$` math markers and light markdown, then cuts to 60 chars),
+  a `questions` checkbox, a `scores` radio (`PACKET_SCORE_MODES`) and an
+  `anon` checkbox, and an Update submit button beside the existing Print
+  button. The `questions` mechanism: a `<input type="hidden" name="questions"
+  value="0">` immediately before the checkbox (`value="1"`) — an unchecked
+  box submits nothing, so the hidden field's `0` is what reaches the server;
+  a checked box's `1` sits later in the form and so later in the query
+  string. `parsePacketQuery`'s parameter reader was renamed `lastParam` and
+  changed from first-wins to **last**-wins to make that work (a repeated
+  `section` in a hand-edited URL now resolves the same way — the existing
+  test for that was updated, not just left green by accident). `items`
+  changed from "one comma-joined value" to "one comma-joined value OR one
+  value per repeated parameter" (`allValues`), because the checklist is one
+  checkbox per item, all named `items` — both shapes parse to the same set.
+  Deviations from the note: (1) "Select all" is a link (`packetHref` rebuilds
+  the query with `items` omitted); there is no "Select none" — an empty
+  packet prints nothing useful, so the note's fallback ("`items=` of the
+  first item only") was skipped in favor of just not building it, noted in
+  an HTML comment on the page; (2) the "no section" bucket is NOT a select
+  option — slice 1 only ever counted unsectioned attempts, it never gave
+  them a route, so there is nothing for a select option to link to; the
+  count still prints as unstructured text where slice 1 left it, in the
+  chooser branch only. The results list page (`results/page.tsx`) gained a
+  "Print student work" link beside "Print report", landing on the chooser
+  (no `?section=`, since the packet needs one). Tests: `test/work-packet.test.ts`
+  gained `stemExcerpt` cases, the `lastParam`/`items`-as-array cases, and the
+  existing repeated-`section` case now expects the last value; `test/work-packet-page.test.tsx`
+  gained a "slice 2's toolbar" describe block (the select's selected option,
+  every checkbox checked by default and following `?items=`, "Select all"'s
+  href, the scores radio and anon checkbox following the query, and the
+  `questions=0` hidden-field-then-checkbox rendering) — a `packetBody()` test
+  helper scopes a handful of pre-existing "not printed" assertions to
+  `<main class="packet">` onward, since the toolbar's checklist now
+  legitimately prints every item's stem regardless of `?items=`/`?questions=`;
+  `test/reporting-views.test.tsx` gained one assertion for the results page's
+  new link. Counts: design-tool 1707 (was 1693; `resultsToCsv`'s golden-CSV
+  test is separately flaky, unrelated to this slice — see below), typecheck
+  clean. Rows 168–184 added to `docs/design-tool-manual-checks.md`, all NOT
+  RUN — slice 3 hand-runs them after the next deploy.
+- 2026-09-14 — **found, not caused, a pre-existing flake**: `test/results.test.ts`'s
+  `resultsToCsv > golden CSV` test fails intermittently (roughly 1 run in 2–5)
+  on `main` at `1301abb`, before any of this slice's changes — confirmed by
+  `git stash` and re-running it in isolation repeatedly on both the stashed
+  and unstashed tree. The failure never shows a diff (bun's output is
+  swallowed by the interleaved Postgres `NOTICE` lines from the surrounding
+  `afterEach` truncate), so the cause is unidentified; worth its own look,
+  not this slice's to fix.

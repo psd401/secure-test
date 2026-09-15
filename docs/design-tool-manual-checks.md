@@ -592,3 +592,29 @@ noted — read the response body, not just the status.
 | 165 | With the row-159 (teacher-handed-in) attempt and an in-progress attempt both present: check the review queue, the CSV export, and the results-matrix analytics footer | The in-progress attempt appears nowhere in the review queue, the CSV, or the analytics footer/Complete count — only the submitted-status matrix row and per-student page show it at all | NOT RUN 2026-09-14 — one attempt per student per assessment, so a single student cannot hold an in-progress attempt beside the handed-in one; needs a second student. Half-seen: while the row-155 attempt was in progress the analytics footer read "Across all 0 handed-in attempts" and Q1 "0 of 0" |
 | 166 | From the console, `GET` the delivery bundle for the **limited** fixture's attempt (the same request the client makes on join) vs. the **no-limit** copy's attempt | Limited bundle carries both `time_limit_ends_at` (ISO 8601) and `server_now`; the no-limit bundle has NEITHER field — never one without the other | |
 | 167 | Deploy: push → `cdk diff` (expect image only) → `cdk deploy` → `infra/scripts/migrate-aurora.sh` → `GET /api/health` | `cdk diff` shows no infra change beyond the image; deploy rolls out; migrate-aurora applies **0034** and the journal table shows **35** rows; `/api/health` reports `commit` = the deployed HEAD | |
+
+## Student work export — printable class packets (2026-09-14)
+
+`docs/student-work-export-design.md` §Progress, slices 1–2, BUILT 2026-09-14,
+NONE run. `/dashboard/<id>/results/work` — one page per handed-in student, a
+toolbar with a section select, an item checklist, a questions toggle, a
+scores radio and an anonymous checkbox, all as a plain `GET` form. Rows below
+need a Published assessment with a handed-in section (the client-fixes or
+row S-f fixture works, or a fresh one with a multi-page essay item and a
+2-question set so row 173 has something to narrow to); row 175 needs a
+Bedrock-scored essay (`scores=ai`); row 179 needs a second staff account.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 168 | `/dashboard/<id>/results/work` with no `?section=` | The chooser: every section with a handed-in attempt, each linking to its own `?section=` URL with its count; no printable content, nothing above "Print student work" prints | NOT RUN |
+| 169 | Pick a section from row 168; on the packet page, Save as PDF (or just read the rendered page) with defaults | One page per handed-in student, ordered by last name; each header carries name + student number; every multiple-choice question shows EVERY choice with ☑/☐, selected ticked; a drawing item shows the image | NOT RUN |
+| 170 | Save as PDF from row 169 and measure the saved file | Letter size; margin ≥ 1 inch on all four sides (top, bottom, left, right) | NOT RUN |
+| 171 | On a fixture with a long essay answer (several paragraphs), Save as PDF | The essay's answer block paginates across pages rather than being cut off or overflowing its border | NOT RUN |
+| 172 | On the toolbar, uncheck "Show questions", Update | Stems, choices-not-picked, stimulus and sources are gone; free-text and the SELECTED choice(s) still print; no ☐ appears anywhere (only selected choices print, with no glyph) | NOT RUN |
+| 173 | On the toolbar, uncheck every item except one question from a 2-question set, Update | Only that question prints, but the set's stimulus and its labelled sources still print above it | NOT RUN |
+| 174 | Toolbar scores = teacher, Update | Every item shows a "Teacher score" or "No teacher score" block; no AI block anywhere | NOT RUN |
+| 175 | Toolbar scores = ai, Update, on an item with a Bedrock AI proposal | The item shows an "AI proposal" (or "AI score (accepted)" if finalized) block with points and the rubric rows; no teacher block | NOT RUN |
+| 176 | Toolbar scores = both, on an item where only ONE side has a score | Both blocks render but the layout drops to a single column (`scores-one`) rather than one lonely half-width block; the missing side reads "No teacher score" / "No AI score" | NOT RUN |
+| 177 | Toolbar: check Anonymous, Update | No student page shows a name or student number anywhere — only "Student NN" labels; a final page headed "Teacher key — do not distribute" maps every label to its student, states the print date and attempt count; printing again with no new hand-ins gives the SAME labels | NOT RUN |
+| 178 | On the results page (`/dashboard/<id>/results`), click "Print student work" | Lands on the section chooser (row 168), same styling as "Print report" | NOT RUN |
+| 179 | Sign in as a different staff account and open another teacher's `/dashboard/<id>/results/work?section=...` | 404, not a page that confirms the assessment exists | NOT RUN |

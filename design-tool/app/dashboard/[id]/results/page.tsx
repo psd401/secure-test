@@ -132,6 +132,15 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           >
             Print report
           </a>
+          {/* Student work export slice 2 (docs/student-work-export-design.md):
+              lands on the section chooser — the packet itself needs a
+              section, which this link does not carry. */}
+          <a
+            href={`/dashboard/${assessment.id}/results/work`}
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+          >
+            Print student work
+          </a>
         </div>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">

@@ -95,6 +95,15 @@ async function render(
   return renderToStaticMarkup(element);
 }
 
+// Slice 2's toolbar lists EVERY item's Qn + stem excerpt in its checklist,
+// regardless of `?items=` / `?questions=`, so a stem string can legitimately
+// appear there even when the printed packet itself excludes that question.
+// Assertions about what actually PRINTS are scoped to this slice of the html.
+function packetBody(html: string): string {
+  const at = html.indexOf('<main class="packet"');
+  return at === -1 ? html : html.slice(at);
+}
+
 /**
  * One assessment with every item type, two students in the same section, both
  * handed in through the same sitting:
@@ -513,27 +522,31 @@ describe("work packet — one page per student, every item type", () => {
       section: SECTION,
       items: itemRows[1]!.id,
     });
-    expect(html).toContain("STEM-ESSAY");
-    expect(html).not.toContain("STEM-MC-MULTI");
-    expect(html).not.toContain("STEM-TABLE");
+    const body = packetBody(html);
+    expect(body).toContain("STEM-ESSAY");
+    expect(body).not.toContain("STEM-MC-MULTI");
+    expect(body).not.toContain("STEM-TABLE");
+    // The toolbar's checklist still lists every item, narrowed or not.
+    expect(html).toContain("STEM-MC-MULTI");
   });
 
   test("?questions=0 drops the stems and prints only what was chosen", async () => {
     const { assessment } = await seedPacketScene();
     const html = await render(assessment.id, { section: SECTION, questions: "0" });
+    const body = packetBody(html);
 
-    expect(html).not.toContain("STEM-ESSAY");
-    expect(html).not.toContain("STEM-MC-MULTI");
+    expect(body).not.toContain("STEM-ESSAY");
+    expect(body).not.toContain("STEM-MC-MULTI");
     // Answers stay — including the free text and the SELECTED choice text.
-    expect(html).toContain("ADA-ESSAY-PROSE");
-    expect(html).toContain("CHOICE-COPPER");
+    expect(body).toContain("ADA-ESSAY-PROSE");
+    expect(body).toContain("CHOICE-COPPER");
     // No checkbox lines, so an option this student did not choose is not
     // printed at all — Ada picked COPPER only, so NEON is absent from her page
     // (it is on Ben's, because he picked it).
-    const adaPage = html.slice(html.indexOf("Fixture, Ada"), html.indexOf("Sample, Ben"));
+    const adaPage = body.slice(body.indexOf("Fixture, Ada"), body.indexOf("Sample, Ben"));
     expect(adaPage).toContain("CHOICE-COPPER");
     expect(adaPage).not.toContain("CHOICE-NEON");
-    expect(html).not.toContain("☐");
+    expect(body).not.toContain("☐");
   });
 });
 
@@ -634,6 +647,86 @@ describe("work packet — anonymous mode (D-1)", () => {
     expect(html).not.toContain("Teacher key");
     expect(html).not.toContain("Student 01");
     expect(html.split('class="student-page').length - 1).toBe(2);
+  });
+});
+
+describe("work packet — slice 2's toolbar", () => {
+  test("the section select carries every handed-in section, the current one selected", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION });
+    expect(html).toContain('<select id="packet-section" name="section">');
+    expect(html).toContain(`<option value="${SECTION}" selected="">`);
+  });
+
+  test("every item shows as a checked checkbox by default, labelled Qn + a stem excerpt", async () => {
+    const { assessment, items: itemRows } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION });
+    for (const item of itemRows) {
+      const label = `Q${item.position + 1} — `;
+      expect(html).toContain(label);
+    }
+    // Every checklist checkbox is checked when ?items= is absent.
+    const checklistBoxes = html.match(/<input type="checkbox" name="items"[^>]*>/g) ?? [];
+    expect(checklistBoxes.length).toBe(itemRows.length);
+    for (const box of checklistBoxes) expect(box).toContain('checked=""');
+  });
+
+  test("?items= checks only the named items in the checklist", async () => {
+    const { assessment, items: itemRows } = await seedPacketScene();
+    const html = await render(assessment.id, {
+      section: SECTION,
+      items: itemRows[1]!.id,
+    });
+    const essayBox = html.match(
+      new RegExp(`<input type="checkbox" name="items"[^>]*value="${itemRows[1]!.id}"/>`),
+    )?.[0];
+    const otherBox = html.match(
+      new RegExp(`<input type="checkbox" name="items"[^>]*value="${itemRows[0]!.id}"/>`),
+    )?.[0];
+    expect(essayBox).toContain('checked=""');
+    expect(otherBox).not.toContain('checked=""');
+  });
+
+  test("Select all links to the same query with ?items= dropped", async () => {
+    const { assessment, items: itemRows } = await seedPacketScene();
+    const html = await render(assessment.id, {
+      section: SECTION,
+      items: itemRows[1]!.id,
+      scores: "both",
+    });
+    const expectedQuery = new URLSearchParams({
+      section: SECTION,
+      questions: "1",
+      scores: "both",
+    }).toString();
+    expect(html).toContain(
+      `href="/dashboard/${assessment.id}/results/work?${expectedQuery.replace(/&/g, "&amp;")}">Select all</a>`,
+    );
+    // The narrowed item itself is absent from the link (no items= at all).
+    const legendEnd = html.indexOf("</legend>");
+    expect(html.slice(0, legendEnd)).not.toContain("items=");
+  });
+
+  test("the scores radio follows ?scores=, and the anonymous checkbox follows ?anon=", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION, scores: "ai", anon: "1" });
+    expect(html).toContain('<input type="radio" name="scores" checked="" value="ai"/>');
+    expect(html).not.toContain('<input type="radio" name="scores" checked="" value="none"/>');
+    expect(html).toContain('<input type="checkbox" name="anon" checked="" value="1"/>');
+  });
+
+  test("questions=0 renders the hidden field plus an UNCHECKED questions box (the last-value trick)", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION, questions: "0" });
+    expect(html).toContain('<input type="hidden" name="questions" value="0"/>');
+    expect(html).toContain('<input type="checkbox" name="questions" value="1"/>');
+    expect(html).not.toContain('<input type="checkbox" name="questions" value="1" checked=""/>');
+  });
+
+  test("questions on (the default) checks the questions box", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION });
+    expect(html).toContain('<input type="checkbox" name="questions" checked="" value="1"/>');
   });
 });
 
@@ -741,19 +834,20 @@ describe("work packet — a set's stimulus, sources and pictures", () => {
   test("the stimulus and its sources print once, above the set's first question", async () => {
     const { assessment } = await seedSetScene();
     const html = await render(assessment.id, { section: SECTION });
+    const body = packetBody(html);
 
-    expect(html.split("STIMULUS-LEAD").length - 1).toBe(1);
-    expect(html).toContain("Source A");
-    expect(html).toContain("SOURCE-A-BODY");
-    expect(html).toContain("Source B");
+    expect(body.split("STIMULUS-LEAD").length - 1).toBe(1);
+    expect(body).toContain("Source A");
+    expect(body).toContain("SOURCE-A-BODY");
+    expect(body).toContain("Source B");
     // An image ref inside a source resolves owner-scoped, as in a stem.
-    expect(html).toContain("<img");
-    expect(html).not.toContain("image not found");
+    expect(body).toContain("<img");
+    expect(body).not.toContain("image not found");
     // Above Q1, not between the two questions.
-    expect(html.indexOf("STIMULUS-LEAD")).toBeLessThan(html.indexOf("SET-Q1"));
+    expect(body.indexOf("STIMULUS-LEAD")).toBeLessThan(body.indexOf("SET-Q1"));
     // The hotspot's own picture, then the region it picked beneath it.
-    expect(html).toContain("Picture for question 2");
-    expect(html).toContain("Region r1");
+    expect(body).toContain("Picture for question 2");
+    expect(body).toContain("Region r1");
   });
 
   test("?items= on the set's SECOND question still prints the stimulus above it", async () => {
@@ -762,9 +856,12 @@ describe("work packet — a set's stimulus, sources and pictures", () => {
       section: SECTION,
       items: itemRows[1]!.id,
     });
-    expect(html).toContain("STIMULUS-LEAD");
-    expect(html).toContain("SET-Q2");
-    expect(html).not.toContain("SET-Q1");
+    const body = packetBody(html);
+    expect(body).toContain("STIMULUS-LEAD");
+    expect(body).toContain("SET-Q2");
+    expect(body).not.toContain("SET-Q1");
+    // The checklist still lists Q1 by its stem, narrowed or not.
+    expect(html).toContain("SET-Q1");
   });
 
   test("?questions=0 drops the stimulus with the stems", async () => {

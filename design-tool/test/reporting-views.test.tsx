@@ -474,6 +474,15 @@ describe("the results matrix", () => {
     expect(html.match(/✓ Complete/g)).toHaveLength(1);
   });
 
+  // Student work export slice 2 (docs/student-work-export-design.md): the
+  // button lands on the packet's section chooser, since a packet needs one.
+  test("carries a Print student work link beside Print report", async () => {
+    const scene = await seedScene();
+    const html = await renderResults(scene.assessment.id);
+    expect(html).toContain(`href="/dashboard/${scene.assessment.id}/results/work"`);
+    expect(html).toContain(">Print student work</a>");
+  });
+
   test("the section filter narrows the rows and offers every section present", async () => {
     const scene = await seedScene();
     const results = await buildResults(scene.assessment.id, OWNER, TEACHER_EMAIL);
