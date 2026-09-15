@@ -88,6 +88,29 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
 }
 
 /**
+ * The handful of LaTeX commands a stem is likely to carry, as the symbol a
+ * checklist label should show (2026-09-14 hand-run: `\times` survived the
+ * `$` strip as a bare backslash word). Any other `\command` is dropped and
+ * braces go with it, so `\frac{1}{2}` reads `12` — an excerpt, not a render.
+ */
+const LATEX_EXCERPT_SYMBOLS: Record<string, string> = {
+  "\\times": "×",
+  "\\div": "÷",
+  "\\cdot": "·",
+  "\\pm": "±",
+  "\\le": "≤",
+  "\\leq": "≤",
+  "\\ge": "≥",
+  "\\geq": "≥",
+  "\\ne": "≠",
+  "\\neq": "≠",
+  "\\pi": "π",
+  "\\sqrt": "√",
+  "\\degree": "°",
+  "\\infty": "∞",
+};
+
+/**
  * A short, plain-text label for the toolbar's item checklist: strip image
  * refs, `$…$` math markers and the handful of markdown characters a stem may
  * carry, collapse whitespace, then cut to `max` characters. Never throws; a
@@ -97,6 +120,8 @@ export function stemExcerpt(stem: string, max = 60): string {
   const stripped = (stem ?? "")
     .replace(/!\[[^\]]*\]\(asset:[^)]*\)/gi, "")
     .replace(/\$\$?/g, "")
+    .replace(/\\[a-zA-Z]+/g, (cmd) => LATEX_EXCERPT_SYMBOLS[cmd] ?? "")
+    .replace(/[{}]/g, "")
     .replace(/[*_`#>[\]]/g, "")
     .replace(/\s+/g, " ")
     .trim();

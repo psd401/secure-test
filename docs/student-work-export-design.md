@@ -276,7 +276,8 @@ slice 1 here can exclude it from the start.
   lines and the table's `expected <key>` cells printed under `scores=none`
   and `scores=ai` — the key in a packet that may leave the teacher's hands.
   Now they print only with `scores=teacher` / `both` (`showKey`), with a
-  test. Cosmetic, unbuilt: the toolbar's stem excerpt keeps a bare `\times`
-  after stripping the `$`. Fixture readings, not defects: a `$`-before-digit
+  test. The toolbar's stem excerpt kept a bare `\times` after
+  stripping the `$` — FIXED the same night: common LaTeX commands map to
+  their symbol (× ÷ · ± ≤ ≥ ≠ π √ ° ∞), the rest and their braces vanish. Fixture readings, not defects: a `$`-before-digit
   stem prints raw on every page by C-2's rule; one stored short-text answer
   is `4^2^`.

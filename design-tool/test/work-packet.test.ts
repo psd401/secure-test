@@ -268,6 +268,15 @@ describe("stemExcerpt — the toolbar's item-checklist label", () => {
     expect(stemExcerpt("# Heading\n_emph_ `code` [link]")).toBe("Heading emph code link");
   });
 
+  test("LaTeX commands become symbols or vanish, braces go with them (2026-09-14)", () => {
+    expect(stemExcerpt("What is $6 \\times 7$? Type the number.")).toBe(
+      "What is 6 × 7? Type the number.",
+    );
+    expect(stemExcerpt("$x \\le 3$ and $\\sqrt{2}$, $\\pi$")).toBe("x ≤ 3 and √2, π");
+    // `_` is markdown emphasis to this stripper; `\mathrm` / `\frac` vanish.
+    expect(stemExcerpt("$\\mathrm{H_2O}$ is $\\frac{1}{2}$")).toBe("H2O is 12");
+  });
+
   test("longer than 60 characters is cut with an ellipsis, never mid-run over the limit", () => {
     const long = "This stem goes on for quite a while past the sixty character mark, well past it";
     const excerpt = stemExcerpt(long);
