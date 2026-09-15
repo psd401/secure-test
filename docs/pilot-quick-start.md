@@ -1,7 +1,7 @@
 # Secure Test — pilot quick-start
 
-For the teachers and students in the first classroom pilot (the week of
-2026-09-17). One page each: what to do, in the order you do it, and the
+For the teachers and students in the first classroom pilot (from
+2026-09-17, on **2026 AP Seminar EOC B v2**). One page each: what to do, in the order you do it, and the
 things that look wrong but aren't. Written against client v1.3.2 and the
 design tool as deployed 2026-09-15. Nothing here needs IT on the day;
 the student Macs already carry the app and its configuration profile.
@@ -12,31 +12,40 @@ page you were on.
 
 ---
 
-## Teacher — before the day
+## Teacher — the pilot assessment
+
+The pilot uses **2026 AP Seminar EOC B v2**, already shared with you. Its
+reading layout is set (sources beside the question, one question at a
+time) and its rubric is attached.
 
 1. **Sign in** at the design tool with your school Google account. You land
-   on **Assessments**.
-2. **Build or import.** *New assessment* for a blank one; *Import items from
+   on **Assessments**. The shared assessment sits under **Shared with you**.
+2. Press **Add to my assessments**. You now own a **copy**; later edits to
+   the original don't reach it, and yours don't reach anyone else's.
+3. Open the copy. It arrives as a **Draft**. Look it over (*Show preview*
+   renders it as the student will see it, minus the lockdown), then press
+   **Publish**. Only a Published assessment can start a test session.
+4. Leave **Settings → Time limit** blank unless you want the session to end
+   itself; if set, the student's session ends at zero and their answers are
+   kept.
+
+## Teacher — building your own (after the pilot)
+
+1. **Build or import.** *New assessment* for a blank one; *Import items from
    PDF* inside an assessment to read a paper test (it proposes questions and
    sources for you to accept); *Import assessment file* on the home page to
    load a `.json` a colleague shared.
-3. **Check the reading layout.** For a passage or sources shared by several
-   questions, the stimulus card's layout select has three choices. *Side by
-   side (sources beside the question)* is what the pilot teachers asked for;
-   it is the default whenever a stimulus carries sources. It needs
-   **Settings → How students move through the test → One question at a
-   time**, and it shows two columns only on a wide screen (a MacBook in
-   full screen qualifies). Students get a *Sources: Beside | Above* switch.
-4. **Time limit** (Settings) is optional. If set, the student's session ends
-   by itself at zero and their answers are kept; they cannot add more after
-   that. Leave it blank for an untimed sitting.
-5. **Show preview** renders the test as the student will see it, minus the
-   lockdown.
-6. **Publish.** A Published assessment is locked (a running test can't
+2. **Reading layout.** For a passage or sources shared by several questions,
+   the stimulus card's layout select has three choices. *Side by side
+   (sources beside the question)* is the default whenever a stimulus carries
+   sources. It needs **Settings → How students move through the test → One
+   question at a time**, and it shows two columns only on a wide screen (a
+   MacBook in full screen qualifies). Students get a *Sources: Beside |
+   Above* switch.
+3. **Publish.** A Published assessment is locked (a running test can't
    change). To edit, *Unpublish*, edit, *Publish* again — anyone already in
    a session keeps going on what they had.
-7. **Share** with a colleague by staff email. They get their **own copy**
-   to edit; later changes to yours don't reach theirs.
+4. **Share** with a colleague by staff email. They get their own copy.
 
 ## Teacher — on the day
 
