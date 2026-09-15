@@ -28,7 +28,9 @@ checklist. First release: `v1.0.0`, 2026-09-07.
   GitHub-hosted app. The pipeline auto-updates any release past 1.3.0
   (confirmed by the fleet moving to v1.3.1 on its own). The release shape
   above is what both tools key on, so it does not change; the Installomator
-  label drafted in the ops repository is moot.
+  label drafted in the ops repository is moot. The recipe runs a few
+  times a day and does not install over a running app, so a release never
+  lands mid-session.
 
 ## Version rule
 
