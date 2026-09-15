@@ -590,6 +590,14 @@ changes before each, no push without James's go-ahead.
 - **Numeric equivalence for short text** (`1/2` ≡ `0.5`, tolerance) — the
   table item already compares plain decimals (E3 D-3); extending that to
   short text is a scoring policy for James, adjacent to E11.
+  **DECIDED 2026-09-15 (James):** built as option (b) — when BOTH the key
+  and the answer parse as numbers (integers, decimals, fractions `a/b`,
+  scientific `3.2 x 10^5` / `3.2e5`, a trailing `%`) they compare
+  numerically with a small relative tolerance, **on by default**, with a
+  per-item "Answer form matters" checkbox that restores exact matching for
+  form-specific tasks ("in lowest terms"), and a hint under the key field
+  naming the forms that count. Units stay out until a teacher asks.
+  Existing scores are not rescored (E11 stays James's). Slice queued.
 - Greek **case preserved** in the fold if a teacher needs `Δ` ≠ `δ`.
 - A **"next slot"** key if the rows show students lost between `}` and `{`.
 - The drawing toolbar's ten Tab stops → roving tabindex, for consistency,

@@ -484,3 +484,11 @@ recipe); the CLI-made subscription lives outside the stack.
   is classifier-blocked in-session). Batch 3's remaining opens: the
   retention sweep for the four event tables (period = James's decision),
   the in-attempt `client_error` client row, T-3.
+
+**D-11 (James, 2026-09-15): event-table retention.** `server_error_events`,
+`client_error_events` and `guardrail_events` are swept at **90 days**;
+`feedback` is kept (teacher-authored). Mechanism: a sweep step in the
+nightly in-VPC roster-sync Lambda (already scheduled, already on the
+database) — no new infrastructure. Error rows carry metadata only, so the
+cost of 90 days is small and it covers a post-mortem the 30-day log group
+(D-8) has already lost. Slice queued 2026-09-15.

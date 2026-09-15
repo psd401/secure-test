@@ -256,3 +256,9 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
     state, so it should have fired; the stderr log is not readable on a
     Finder launch, so this stays unverified — re-run with a Terminal launch
     of the app binary and look for `time limit: 1 minute left`.
+    **Decision 2026-09-15 (James): verify-only, no build.** The notice
+    renders on the peek strip, a separate element from the dismissable
+    countdown banner, so the × cannot hide it; it also auto-dismisses after
+    8 s, which fits "not observed" as well as "did not fire". Re-check in
+    the v1.3.2 sitting with a 3-minute limit and the Debug app from
+    Terminal; if it fired and was missed, reconsider the 8 s.
