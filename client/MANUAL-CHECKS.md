@@ -1687,3 +1687,31 @@ Terminal so stderr is readable, and two attempts on two different assessments.
 | **The assessment view leaves no WebKit site data.** Delete `~/Library/Containers/net.psd401.securetest.client/Data/Library/WebKit` and `.../Caches`, then run a full sitting (join, answer, hand in) and quit | No new per-site WebKit storage under the container from the test page — `WebsiteData`/`LocalStorage` do not reappear with an entry for the assessment. (The sign-in sheet was already non-persistent.) Everything renders exactly as before: images, KaTeX, drawings, paging | NOT RUN |
 | **errors.log is capped.** With the app not running, append 900 junk JSON lines to `.../Application Support/SecureTest/errors.log`, then launch the app and let it record at least one error (e.g. sign in with the server unreachable) | The file settles at **500 lines or fewer** and under 512 KB; the NEWEST lines are the ones kept, and the newly recorded line is the last one in the file | NOT RUN |
 | **The drain still sends and prunes.** With a reachable server and a few lines in `errors.log`, sign in | `errors: client-error drain sent N of N line(s)`; the file shrinks by exactly those lines; a line recorded straight after lands at the end | NOT RUN |
+
+## Close session ends the sitting (row CS, 2026-09-15) — v1.3.3
+
+`docs/close-session-ends-attempts-design.md` slice 2. The teacher's **Close
+session** (and a session that runs out) now reaches a student who is still
+working: the peek poll answers `sitting: "closed"` within 5 s, every write is
+refused 409 `sitting_closed`, and the client ends the secure session, sends the
+student back to "Your tests" and tells them. It is **not** a hand-in (D-1) —
+the attempt stays in progress and Resume comes back as soon as some open
+session admits them.
+
+Needs the **server half deployed** (the origin), a real session, and the
+one-day teacher-row script re-run for the student. Rows marked "real session"
+cannot be exercised with `SECURE_TEST_SIMULATE_LOCKDOWN`.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Close ends the student's session (real session).** Student joined and typing in an essay; teacher presses Close session on the Monitor | Within ~5 s the Mac unlocks, the test comes off the screen, "Your tests" is back, and a one-button sheet reads **"Your teacher ended the test session."** / "Your answers are saved." stderr: `sitting closed (peek) — ending the secure session`, then `DID END` | NOT RUN |
+| **The event lands on the timeline.** Same student, on the teacher's per-student results page afterwards | A `sitting_closed` event at that moment (detail `via: peek`), and the attempt still reads **In progress** — no hand-in | NOT RUN |
+| **A student mid-typing loses at most the unflushed field (D-3).** Student typing in an essay when Close lands; compare what the teacher's queue shows | Everything posted before Close is there; at most the field still holding focus is short of its last keystrokes — an autosave in flight at the moment of Close can be refused. No error dialog about lost answers | NOT RUN |
+| **A refused write ends it too (real session).** Close the session, then have the student answer one more item BEFORE the next poll lands (within 5 s) | The same landing and the same sheet, reached through the write instead: stderr `responses DROPPED because the sitting is closed — expected, not reported`, `sitting closed (write)`, event detail `via: write`. **No** `responses_dropped` error row and nothing lights "Needs attention" | NOT RUN |
+| **An expired session ends the same way.** Start a sitting whose "How long" runs out while the student is working (a short session), do not press Close | At expiry + one poll the student lands home with the same sheet and a `sitting_closed` event. Nothing fires at the exact instant of expiry — it is lazy (D-2) | NOT RUN |
+| **Resume comes back only with an open session.** After the sheet, look at "Your tests"; then have the teacher open a NEW session for the same section and look again | First: the test is not offerable (no Resume). After the new session: the test is listed with **Resume**, and resuming shows every earlier answer prefilled | NOT RUN |
+| **One sheet, not two.** Close the session on a student whose time limit is also nearly up; or press Close twice | Exactly one sheet, whichever end arrived first, and exactly one attempt event for it. A second Close is a no-op on the client | NOT RUN |
+| **Hand in is still the teacher's.** After the student is home, teacher presses Hand in on the Monitor row | The attempt finalises with the answers as they stood; the student's screen is unaffected (they are already on "Your tests") | NOT RUN |
+| **Cmd-Q after the sheet is clean.** Dismiss the sheet, then Cmd-Q | The app quits with no beep and no second sheet; stderr shows no crash line, and `errors.log` gains nothing | NOT RUN |
+| **A v1.3.2 client against the new server (D-7).** Same sitting from a Mac still on v1.3.2, closed mid-test | The student's screen KEEPS GOING — the old client has no sitting field and no 409 handling — and every write is refused: stderr `responses DROPPED: N refused permanently by the server`. The teacher's view is right and Hand in works. This is the fallback the quick-start documents, not a bug | NOT RUN |
+| **An open sitting is untouched.** One ordinary sitting end to end (join, answer every type, drawings, hand in) with nothing closed | Unchanged by this slice: no `sitting closed` line anywhere, peek still works (ask for a look mid-test), hand-in and the handed-in notice as always | NOT RUN |

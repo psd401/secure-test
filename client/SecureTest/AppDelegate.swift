@@ -92,6 +92,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Set when the countdown reached zero, so the session-ended sheet reads
     /// "Time is up." instead of the ordinary copy.
     private var sessionEndedByTimeLimit = false
+    /// Row CS (`docs/close-session-ends-attempts-design.md`, D-4): set when the
+    /// teacher closed this attempt's test session (or it expired), so the
+    /// session-ended sheet reads "Your teacher ended the test session."
+    /// instead of the ordinary copy. Also the once-per-attempt guard for the
+    /// whole path — the peek poll and a refused write can both report it.
+    private var sessionEndedBySittingClosed = false
     /// One session-ended sheet per attempt screen. The time-limit path can
     /// reach `presentSessionEndedSheetIfNeeded` both through the lockdown's
     /// `.idle` state and directly (a session that was never active), and two
@@ -438,6 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         countdown?.stop()
         countdown = nil
         sessionEndedByTimeLimit = false
+        sessionEndedBySittingClosed = false
         sessionEndedSheetShown = false
         let config = Self.configuration
         // A seeded token is a credential for a server; with none configured it
@@ -525,6 +532,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         countdown?.stop()
         countdown = nil
         sessionEndedByTimeLimit = false
+        sessionEndedBySittingClosed = false
         sessionEndedSheetShown = false
         // C-1 (docs/multi-source-stimulus-design.md): one gate per attempt, set
         // on the controller BEFORE its fetch Task gets to run, so the page
@@ -571,6 +579,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // are not the student's to switch off.
             self?.countdown?.dismiss()
         }
+        // Row CS (D-5): a write refused with 409 `sitting_closed`. Off-main
+        // (the spool's flush has its own Task), so hop before touching any of
+        // this.
+        controller.onSittingClosed = { [weak self] in
+            Task { @MainActor in self?.sittingClosedDuringAttempt(via: "write") }
+        }
         controller.onHandedIn = { [weak self] in
             // Time limit: handed in, so there is nothing left to run out.
             self?.countdown?.stop()
@@ -603,6 +617,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scheduler: DispatchLockdownScheduler.main,
             log: { Self.log("peek: \($0)") }
         )
+        // Row CS (D-5): the poll is the channel — a closed sitting reaches a
+        // working client within one interval (5 s). The responder fires this
+        // once and stops itself.
+        responder.onSittingClosed = { [weak self] in
+            Task { @MainActor in self?.sittingClosedDuringAttempt(via: "peek") }
+        }
         responder.onPeekRequested = { [weak self, weak controller, weak responder] pending in
             Task { @MainActor in
                 guard let self, let controller, let responder, !self.attemptHandedIn else { return }
@@ -675,6 +695,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         eventReporter?.report(.timeExpired)
         let wasActive = lockdown?.isActive == true
         endLockdown(reason: "time_expired")
+        // A session that was never up (a failed begin, the cooperative
+        // fallback) produces no `.idle` transition, so nothing else would send
+        // the student home or tell them what happened.
+        if !wasActive { returnHomeAfterSessionEnd() }
+    }
+
+    // MARK: row CS — the teacher closed the session
+
+    /// Row CS (D-1 / D-4): the sitting this attempt belongs to is closed or
+    /// expired, so the server will accept nothing further from it.
+    ///
+    /// Deliberately the SAME landing as the time limit, and deliberately NOT a
+    /// hand-in: the attempt stays `in_progress` and resumable, because a
+    /// teacher may want a student to carry a task across several sessions
+    /// (D-1). The student is returned to "Your tests" and told; **Resume**
+    /// appears there again as soon as some open session admits them.
+    ///
+    /// Idempotent, and inert once anything else has already started ending the
+    /// session — the time limit, a hand-in, a quit. `via` is a short stable
+    /// token for the log and the event detail: "peek" (the 5 s poll saw it) or
+    /// "write" (an answer, an upload or the submit was refused).
+    private func sittingClosedDuringAttempt(via source: String) {
+        guard screen == .serverAttempt, !attemptHandedIn, !quitInProgress else { return }
+        guard !sessionEndedBySittingClosed, !sessionEndedByTimeLimit, !sessionEndedSheetShown else {
+            return
+        }
+        Self.log("sitting closed (\(source)) — ending the secure session")
+        sessionEndedBySittingClosed = true
+        // The flag first, as with the time limit: from here every refused write
+        // is the expected aftermath rather than a reportable drop.
+        controller?.sittingClosed = true
+        // Nothing left to ask the server about this attempt: the peek route
+        // answers for a closed sitting too, and the clock is moot.
+        peekResponder?.stop()
+        countdown?.stop()
+        // Retried like the rest of the lifecycle — the only thing that explains
+        // this exit on the teacher's timeline.
+        eventReporter?.report(.sittingClosed, detail: ["via": source])
+        let wasActive = lockdown?.isActive == true
+        endLockdown(reason: "sitting_closed")
         // A session that was never up (a failed begin, the cooperative
         // fallback) produces no `.idle` transition, so nothing else would send
         // the student home or tell them what happened.
@@ -971,12 +1031,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Read before `showEntry()`, which resets it along with the rest of the
         // attempt's state.
         let byTimeLimit = sessionEndedByTimeLimit
+        let bySittingClosed = sessionEndedBySittingClosed
         Self.log("secure session ended without a hand-in — leaving the test screen")
         let goHome: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
             self.showEntry()
             let alert = NSAlert()
-            if byTimeLimit {
+            if bySittingClosed {
+                // Row CS, D-4. Deliberately about the teacher rather than the
+                // clock: this is the copy a student reads when someone else
+                // ended their test, and "Your answers are saved." is the part
+                // that matters to them.
+                alert.messageText = "Your teacher ended the test session."
+                alert.informativeText = "Your answers are saved."
+            } else if byTimeLimit {
                 alert.messageText = "Time is up."
                 alert.informativeText = "Your answers are saved."
             } else {

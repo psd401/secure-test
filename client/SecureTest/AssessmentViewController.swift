@@ -66,6 +66,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// been told the test is over by the sheet — a red notice on the teacher's
     /// monitor for the expected aftermath is noise, not a signal.
     var timeExpired = false
+    /// Row CS (`docs/close-session-ends-attempts-design.md`, D-5): set once the
+    /// server has said this attempt's sitting is closed (or expired). Same
+    /// purpose as `timeExpired` above — from here the server refuses every
+    /// write with 409 `sitting_closed`, which the spool drops, and those drops
+    /// are the EXPECTED aftermath rather than a client error worth a red row on
+    /// the teacher's monitor.
+    var sittingClosed = false
     /// How many navigations the HOST still owes the web view. Every
     /// `loadHTMLString` this controller issues goes through `loadHostPage`,
     /// which increments this; the navigation delegate allows an `about:`
@@ -111,6 +118,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
     /// Time limit slice 2 (D-3): the student pressed the countdown banner's ×.
     var onTimerDismissed: (() -> Void)?
+
+    /// Row CS (D-4 / D-5): the server refused a write with 409
+    /// `sitting_closed` — the teacher closed the test session, or it ran out.
+    /// Fires at most once per controller; the host ends the secure session and
+    /// sends the student home. NOT called on the main actor (the spool's flush
+    /// runs on its own Task), so the host hops.
+    var onSittingClosed: (() -> Void)?
 
     /// C-1 (`docs/multi-source-stimulus-design.md`): the page build waits on
     /// this before it reads the viewport width, because `onBundleLoaded` begins
@@ -673,8 +687,25 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// Finding 10.1: the spool drops what the server refuses permanently
     /// (409 on a submitted attempt being the case seen live); say so in the
     /// [security] log rather than letting the answers vanish silently.
+    /// Row CS (D-5): once per controller, whatever refused first — a response
+    /// write, a drawing upload slot, or the submit.
+    private func noteSittingClosed() {
+        guard !sittingClosed else { return }
+        sittingClosed = true
+        log("sitting closed: the server refused a write for this attempt (teacher closed the session, or it expired)")
+        onSittingClosed?()
+    }
+
     @discardableResult
     private func noteDropped(_ result: ResponseSpool.FlushResult) -> ResponseSpool.FlushResult {
+        // Row CS: checked before the count, because a closed sitting is not an
+        // error — it is the end of the session, and the host's landing for it
+        // says so. Fired even if this flush happened to drop nothing else.
+        if result.sittingClosed {
+            log("responses DROPPED because the sitting is closed — expected, not reported")
+            noteSittingClosed()
+            return result
+        }
         if result.dropped > 0 {
             log("responses DROPPED: \(result.dropped) refused permanently by the server (attempt already handed in?)")
             // Time limit slice 2: after the clock ran out the server answers
@@ -754,6 +785,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 self.log("attempt \(attemptID) handed in")
                 self.onHandedIn?()
                 self.reportSubmit(ok: true)
+            } catch let error as APIError where error.isSittingClosed {
+                // Row CS: not a failure to report — the teacher ended the
+                // session while this student was handing in. The host takes it
+                // from here; their answers are already spooled and sent.
+                self.log("submit refused: the sitting is closed")
+                self.noteSittingClosed()
+                self.reportSubmit(ok: false)
             } catch {
                 self.log("SUBMIT FAILED: \(error)")
                 AppDelegate.logError(kind: "submit_failed", message: "\(error)")
@@ -822,6 +860,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
                 self.log("drawing saved for item \(itemID)")
                 self.reportDrawing(itemID: itemID, ok: true)
+            } catch let error as APIError where error.isSittingClosed {
+                // Row CS: the upload slot (or the response that names it) was
+                // refused because the sitting is closed. Same landing as any
+                // other write, and not a `drawing_upload_failed` error row.
+                self.log("drawing upload refused: the sitting is closed")
+                self.noteSittingClosed()
+                self.reportDrawing(itemID: itemID, ok: false)
             } catch {
                 self.log("DRAWING UPLOAD FAILED: \(error)")
                 AppDelegate.logError(

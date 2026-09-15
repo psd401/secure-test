@@ -12,16 +12,24 @@ final class PeekResponderTests: XCTestCase {
     private final class Probe: @unchecked Sendable {
         private let lock = NSLock()
         private var _pending: PendingPeek?
+        private var _sitting: SittingState?
         private var _fetchError: Error?
         private var _fetchCount = 0
         private var _uploads: [(peekID: String, imageBase64: String)] = []
         private var _uploadError: Error?
         private var _requested: [PendingPeek] = []
         private var _logs: [String] = []
+        private var _closedCount = 0
 
         var pending: PendingPeek? {
             get { lock.withLock { _pending } }
             set { lock.withLock { _pending = newValue } }
+        }
+        /// Row CS: what the poll says about the sitting. nil = the field was
+        /// absent, which is every server older than row CS.
+        var sitting: SittingState? {
+            get { lock.withLock { _sitting } }
+            set { lock.withLock { _sitting = newValue } }
         }
         var fetchError: Error? {
             get { lock.withLock { _fetchError } }
@@ -34,6 +42,7 @@ final class PeekResponderTests: XCTestCase {
             set { lock.withLock { _uploadError = newValue } }
         }
         var requested: [PendingPeek] { lock.withLock { _requested } }
+        var closedCount: Int { lock.withLock { _closedCount } }
         var logs: [String] { lock.withLock { _logs } }
 
         func countFetch() { lock.withLock { _fetchCount += 1 } }
@@ -42,6 +51,7 @@ final class PeekResponderTests: XCTestCase {
         }
         func recordRequest(_ pending: PendingPeek) { lock.withLock { _requested.append(pending) } }
         func log(_ line: String) { lock.withLock { _logs.append(line) } }
+        func countClosed() { lock.withLock { _closedCount += 1 } }
     }
 
     private struct StubError: Error {}
@@ -57,7 +67,7 @@ final class PeekResponderTests: XCTestCase {
             fetchPending: {
                 probe.countFetch()
                 if let error = probe.fetchError { throw error }
-                return probe.pending
+                return PeekPoll(pending: probe.pending, sitting: probe.sitting)
             },
             upload: { peekID, imageBase64 in
                 if let error = probe.uploadError { throw error }
@@ -65,6 +75,7 @@ final class PeekResponderTests: XCTestCase {
             }
         )
         responder.onPeekRequested = { probe.recordRequest($0) }
+        responder.onSittingClosed = { probe.countClosed() }
         return responder
     }
 
@@ -169,6 +180,97 @@ final class PeekResponderTests: XCTestCase {
         XCTAssertEqual(probe.logs.filter { $0.contains("peek poll recovered") }.count, 1)
         XCTAssertEqual(probe.requested.map(\.id), ["peek-1"])
         responder.stop()
+    }
+
+    // MARK: row CS — the sitting
+
+    /// D-5: a closed sitting reaches a working client through this poll, fires
+    /// once, and stops the poll. Once, because the app's response is to end the
+    /// secure session and send the student home — twice would stack sheets.
+    func testAClosedSittingFiresOnceAndStopsThePoll() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        probe.sitting = .closed
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 1)
+        XCTAssertEqual(scheduler.pendingCount, 0, "the poll stopped with it")
+
+        // Nothing further is asked, so nothing further can fire.
+        scheduler.advance(by: 30)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 1)
+        XCTAssertEqual(probe.fetchCount, 1)
+    }
+
+    /// An absent field is every server older than row CS: open, forever.
+    func testAnAbsentSittingFieldNeverFires() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        probe.sitting = nil
+        probe.pending = PendingPeek(id: "peek-1")
+        scheduler.advance(by: 15)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 0)
+        XCTAssertEqual(probe.requested.map(\.id), ["peek-1"], "peek still works")
+        responder.stop()
+    }
+
+    func testAnOpenSittingNeverFires() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        probe.sitting = .open
+        // One tick per advance: a tick that lands while a poll is in flight
+        // is skipped, so a single 20 s jump counts as one fetch.
+        scheduler.advance(by: 5)
+        await drain(responder)
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 0)
+        XCTAssertEqual(probe.fetchCount, 2, "still polling")
+        responder.stop()
+    }
+
+    /// A closed sitting takes precedence over a peek request arriving in the
+    /// same answer: the attempt is over, and the render would be the last thing
+    /// this responder ever did.
+    func testAClosedSittingWinsOverAPendingPeekInTheSameAnswer() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        probe.sitting = .closed
+        probe.pending = PendingPeek(id: "peek-1")
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 1)
+        XCTAssertEqual(probe.requested.count, 0)
+    }
+
+    /// Unknown value → open. The client must never end a test because the
+    /// server said something it did not recognise.
+    func testPeekPollDecodesTheSittingFieldPermissively() throws {
+        func poll(_ json: String) throws -> PeekPoll {
+            try JSONDecoder().decode(PeekPoll.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(try poll(#"{"pending":null,"sitting":"closed"}"#).sitting, .closed)
+        XCTAssertTrue(try poll(#"{"pending":null,"sitting":"closed"}"#).sittingIsClosed)
+        XCTAssertEqual(try poll(#"{"pending":null,"sitting":"open"}"#).sitting, .open)
+        XCTAssertFalse(try poll(#"{"pending":null,"sitting":"open"}"#).sittingIsClosed)
+        XCTAssertNil(try poll(#"{"pending":null}"#).sitting)
+        XCTAssertFalse(try poll(#"{"pending":null}"#).sittingIsClosed)
+        XCTAssertNil(try poll(#"{"pending":null,"sitting":"something-new"}"#).sitting)
+        XCTAssertFalse(try poll(#"{"pending":null,"sitting":"something-new"}"#).sittingIsClosed)
     }
 
     func testDeliverUploadsTheFrame() async {

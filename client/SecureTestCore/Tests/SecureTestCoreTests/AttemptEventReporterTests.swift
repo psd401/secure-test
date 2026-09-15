@@ -164,7 +164,20 @@ final class AttemptEventReporterTests: XCTestCase {
                 // batch; `teacher_hand_in`, added by the same migration, is
                 // deliberately NOT here — the client can never post it.
                 "time_expired",
+                // Row CS (D-1 / D-5). Client-postable, like `time_expired`
+                // and unlike `teacher_hand_in`.
+                "sitting_closed",
             ]
         )
+    }
+}
+
+extension AttemptEventReporterTests {
+    /// Row CS: the wire name, and the retry budget the lifecycle kinds get —
+    /// this is the event that explains an unfinished attempt on the teacher's
+    /// timeline, so losing it to a flaky network would be a silent gap.
+    func testSittingClosedIsRetriedLikeTheRestOfTheLifecycle() {
+        XCTAssertEqual(AttemptEventKind.sittingClosed.rawValue, "sitting_closed")
+        XCTAssertTrue(AttemptEventReporter.retriedKinds.contains(.sittingClosed))
     }
 }

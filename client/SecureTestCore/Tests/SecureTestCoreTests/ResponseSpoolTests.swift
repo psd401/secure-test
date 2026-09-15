@@ -205,6 +205,52 @@ final class ResponseSpoolFlushTests: XCTestCase {
         XCTAssertEqual(result.dropped, 1, "finding 10.1: the drop is counted so the host can say so")
     }
 
+    /// Row CS (D-5): the same drop, flagged. A 409 `sitting_closed` is
+    /// permanent — no later write from this attempt will be accepted while its
+    /// sitting is shut — so it is dropped like any other refusal; the flag is
+    /// how the host tells "the teacher ended the session" apart from "the
+    /// server threw your answers away" and sends the student home instead of
+    /// raising an error.
+    func testASittingClosedRefusalIsDroppedAndFlagged() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        try await spool.enqueue(attemptID: "at1", itemID: "i2", responseJSON: pick)
+
+        let transport = RecordingTransport(replies: [
+            .init(status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#),
+            .init(status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#),
+        ])
+        let result = await spool.flush(using: client(transport))
+
+        XCTAssertEqual(result.dropped, 2)
+        XCTAssertEqual(result.remaining, 0, "not left to block the queue")
+        XCTAssertTrue(result.sittingClosed)
+    }
+
+    /// Any other permanent refusal must NOT read as a closed sitting — it is
+    /// the `responses_dropped` error path, not the way home.
+    func testAnotherPermanentRefusalDoesNotFlagTheSitting() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+
+        let transport = RecordingTransport(replies: [
+            .init(status: 409, body: #"{"ok":false,"error":"attempt_submitted"}"#),
+        ])
+        let result = await spool.flush(using: client(transport))
+
+        XCTAssertEqual(result.dropped, 1)
+        XCTAssertFalse(result.sittingClosed)
+    }
+
+    /// The mapping itself, so the app's 409 handling has one place to read it.
+    func testTheSittingClosedErrorCodeMapping() {
+        XCTAssertTrue(APIError.refused(status: 409, code: "sitting_closed").isSittingClosed)
+        XCTAssertFalse(APIError.refused(status: 409, code: "attempt_submitted").isSittingClosed)
+        XCTAssertFalse(APIError.refused(status: 409, code: "time_expired").isSittingClosed)
+        XCTAssertFalse(APIError.refused(status: 409, code: nil).isSittingClosed)
+        XCTAssertFalse(APIError.notAuthenticated.isSittingClosed)
+    }
+
     func testRetryableStatusesAreNotDropped() async throws {
         for status in [408, 429] {
             let spoolPath = NSTemporaryDirectory() + "retry-\(status)-\(UUID().uuidString).sqlite"

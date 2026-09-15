@@ -340,15 +340,28 @@ final class UploadClientTests: XCTestCase {
         let transport = RecordingTransport(
             body: #"{"ok":true,"pending":{"id":"pk1","requested_at":"2026-08-28T12:00:00Z"}}"#
         )
-        let pending = try await client(transport).fetchPendingPeek(attemptID: "at1")
-        XCTAssertEqual(pending, PendingPeek(id: "pk1"))
+        let poll = try await client(transport).fetchPendingPeek(attemptID: "at1")
+        XCTAssertEqual(poll.pending, PendingPeek(id: "pk1"))
         XCTAssertEqual(transport.sent[0].httpMethod, "GET")
         XCTAssertEqual(transport.sent[0].url?.path, "/api/attempts/at1/peek/pending")
         XCTAssertEqual(transport.sent[0].value(forHTTPHeaderField: "Authorization"), "Bearer tok-123")
 
         let empty = RecordingTransport(body: #"{"ok":true,"pending":null}"#)
         let none = try await client(empty).fetchPendingPeek(attemptID: "at1")
-        XCTAssertNil(none)
+        XCTAssertNil(none.pending)
+        // Row CS: an older server says nothing about the sitting, which is open.
+        XCTAssertNil(none.sitting)
+    }
+
+    /// Row CS (D-5): the poll is where a closed sitting reaches the client.
+    func testFetchPendingPeekReadsTheSittingState() async throws {
+        let closed = RecordingTransport(body: #"{"ok":true,"pending":null,"sitting":"closed"}"#)
+        let poll = try await client(closed).fetchPendingPeek(attemptID: "at1")
+        XCTAssertTrue(poll.sittingIsClosed)
+
+        let open = RecordingTransport(body: #"{"ok":true,"pending":null,"sitting":"open"}"#)
+        let openPoll = try await client(open).fetchPendingPeek(attemptID: "at1")
+        XCTAssertFalse(openPoll.sittingIsClosed)
     }
 
     func testUploadPeekImagePostsTheFrame() async throws {

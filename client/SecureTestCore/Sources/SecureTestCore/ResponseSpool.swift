@@ -216,11 +216,19 @@ public actor ResponseSpool {
         /// student whose answers are being thrown away must not be the only
         /// one who never hears about it.
         public let dropped: Int
+        /// Row CS (D-5): at least one entry was refused with
+        /// `sitting_closed` — the teacher closed the sitting, or it expired.
+        /// Dropped like any other permanent refusal (there is nothing to
+        /// retry: no later write from this attempt will be accepted while its
+        /// sitting is shut), but the host needs to tell these apart, because
+        /// this one ends the session rather than raising an error.
+        public let sittingClosed: Bool
 
-        public init(sent: Int, remaining: Int, dropped: Int = 0) {
+        public init(sent: Int, remaining: Int, dropped: Int = 0, sittingClosed: Bool = false) {
             self.sent = sent
             self.remaining = remaining
             self.dropped = dropped
+            self.sittingClosed = sittingClosed
         }
     }
 
@@ -239,6 +247,7 @@ public actor ResponseSpool {
     public func flush(using client: APIClient) async -> FlushResult {
         var sent = 0
         var dropped = 0
+        var sittingClosed = false
         let queued = (try? pending()) ?? []
 
         for entry in queued {
@@ -261,6 +270,9 @@ public actor ResponseSpool {
                 if case .refused(let status, _) = error, Self.isPermanent(status) {
                     try? remove(attemptID: entry.attemptID, itemID: entry.itemID)
                     dropped += 1
+                    // Row CS: recorded, not acted on here — the spool's job is
+                    // still only to stop blocking the queue.
+                    if error.isSittingClosed { sittingClosed = true }
                     continue
                 }
                 break
@@ -268,7 +280,12 @@ public actor ResponseSpool {
                 break
             }
         }
-        return FlushResult(sent: sent, remaining: (try? count()) ?? 0, dropped: dropped)
+        return FlushResult(
+            sent: sent,
+            remaining: (try? count()) ?? 0,
+            dropped: dropped,
+            sittingClosed: sittingClosed
+        )
     }
 
     /// 4xx means the server understood and refused, so repeating it changes

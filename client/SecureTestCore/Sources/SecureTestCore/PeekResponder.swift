@@ -1,5 +1,46 @@
 import Foundation
 
+/// Row CS (`docs/close-session-ends-attempts-design.md`, D-5): whether the
+/// sitting this attempt belongs to is still open, as the peek poll reports it.
+///
+/// Decoded permissively on purpose — an unrecognised value (and an absent
+/// field, which is every server older than the row-CS deploy) reads as OPEN.
+/// The one thing this must never do is end a student's test because the server
+/// said something the client did not recognise.
+public enum SittingState: String, Sendable {
+    case open
+    case closed
+}
+
+/// The peek poll's whole answer. `pending` is the teacher's request for a look
+/// (unchanged since P2); `sitting` is row CS's addition.
+public struct PeekPoll: Decodable, Equatable, Sendable {
+    public let pending: PendingPeek?
+    /// nil = the server did not say, which means open (older server).
+    public let sitting: SittingState?
+
+    public init(pending: PendingPeek?, sitting: SittingState? = nil) {
+        self.pending = pending
+        self.sitting = sitting
+    }
+
+    /// The only question the client asks of it.
+    public var sittingIsClosed: Bool { sitting == .closed }
+
+    private enum CodingKeys: String, CodingKey {
+        case pending
+        case sitting
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pending = try container.decodeIfPresent(PendingPeek.self, forKey: .pending)
+        let raw = try container.decodeIfPresent(String.self, forKey: .sitting)
+        // Unknown string → nil → open. See the enum's note.
+        sitting = raw.flatMap(SittingState.init(rawValue:))
+    }
+}
+
 /// On-demand peek, the client's half (docs/on-demand-peek-design.md P2).
 ///
 /// Polls "does my teacher want a look?" every `interval` seconds while a
@@ -16,7 +57,7 @@ import Foundation
 /// only — a dead network at a 5 s cadence must not write a log line per
 /// tick for the length of an assessment.
 public final class PeekResponder: @unchecked Sendable {
-    public typealias FetchPending = @Sendable () async throws -> PendingPeek?
+    public typealias FetchPending = @Sendable () async throws -> PeekPoll
     public typealias Upload = @Sendable (_ peekID: String, _ imageBase64: String) async throws -> Void
 
     /// The 6.1 cadence. A constant here rather than an env knob: the server's
@@ -33,12 +74,19 @@ public final class PeekResponder: @unchecked Sendable {
     /// hops to the main actor itself.
     public var onPeekRequested: ((PendingPeek) -> Void)?
 
+    /// Row CS (D-5): the sitting this attempt belongs to is closed or expired.
+    /// Fired at most ONCE per responder — per attempt, because the responder is
+    /// made and discarded with the attempt — and the poll stops with it: there
+    /// is nothing further to ask, and the app is on its way home.
+    public var onSittingClosed: (() -> Void)?
+
     private var timer: LockdownTimer?
     /// Read by tests (9.2) to wait for the in-flight poll deterministically
     /// instead of yielding a guessed number of times.
     internal private(set) var pollInFlight = false
     private var lastSeenID: String?
     private var pollWasFailing = false
+    private var sittingClosedFired = false
 
     public convenience init(
         api: APIClient,
@@ -99,12 +147,12 @@ public final class PeekResponder: @unchecked Sendable {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let pending = try await self.fetchPending()
+                let poll = try await self.fetchPending()
                 if self.pollWasFailing {
                     self.pollWasFailing = false
                     self.log("peek poll recovered")
                 }
-                self.handle(pending)
+                self.handle(poll)
             } catch {
                 if !self.pollWasFailing {
                     self.pollWasFailing = true
@@ -115,8 +163,20 @@ public final class PeekResponder: @unchecked Sendable {
         }
     }
 
-    private func handle(_ pending: PendingPeek?) {
-        guard let pending, timer != nil else { return }
+    private func handle(_ poll: PeekPoll) {
+        guard timer != nil else { return }
+        // Row CS: checked BEFORE the peek request. A closed sitting means this
+        // attempt is over as far as the server is concerned; rendering a frame
+        // for it would be the last thing this responder did anyway.
+        if poll.sittingIsClosed {
+            guard !sittingClosedFired else { return }
+            sittingClosedFired = true
+            log("sitting reported closed by the server — ending this attempt's session")
+            stop()
+            onSittingClosed?()
+            return
+        }
+        guard let pending = poll.pending else { return }
         // The server replaces rather than stacks, so one id is one ask; the
         // 30 s pending TTL means a dropped upload resolves server-side.
         guard pending.id != lastSeenID else { return }

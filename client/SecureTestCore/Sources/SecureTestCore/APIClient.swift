@@ -55,6 +55,20 @@ public enum APIError: Error, Equatable {
     case decoding(String)
 }
 
+extension APIError {
+    /// Row CS (D-5): the server's error string for "this attempt's sitting is
+    /// closed or expired" — refused on every response write, drawing upload
+    /// slot and submit. A 409, so the spool already treats it as permanent
+    /// (`ResponseSpool.isPermanent`); this is how the app tells it apart from
+    /// the other permanent refusals and sends the student home.
+    public static let sittingClosedCode = "sitting_closed"
+
+    public var isSittingClosed: Bool {
+        if case .refused(_, let code) = self { return code == Self.sittingClosedCode }
+        return false
+    }
+}
+
 /// Server error bodies are `{ ok: false, error: "..." }` throughout the API.
 private struct ErrorBody: Decodable {
     let error: String?
@@ -108,10 +122,6 @@ public struct PendingPeek: Decodable, Equatable, Sendable {
     public init(id: String) {
         self.id = id
     }
-}
-
-struct PendingPeekEnvelope: Decodable {
-    let pending: PendingPeek?
 }
 
 public struct UploadTarget: Decodable, Equatable, Sendable {
@@ -314,13 +324,16 @@ public actor APIClient {
     /// On-demand peek: "does my teacher want a look?" — the PeekResponder's
     /// 5 s poll. Only a request younger than the server's pending TTL comes
     /// back, and null means no.
-    public func fetchPendingPeek(attemptID: String) async throws -> PendingPeek? {
-        let envelope: PendingPeekEnvelope = try await send(
+    ///
+    /// Row CS (D-5): the same answer now also carries `sitting`, so the one
+    /// poll a working client already makes is what tells it the teacher closed
+    /// the session. Returned whole rather than unwrapped to `pending`.
+    public func fetchPendingPeek(attemptID: String) async throws -> PeekPoll {
+        try await send(
             path: "/api/attempts/\(attemptID)/peek/pending",
             method: "GET",
             body: nil,
         )
-        return envelope.pending
     }
 
     /// On-demand peek: the rendered frame, base64 JPEG. Fire-and-forget at

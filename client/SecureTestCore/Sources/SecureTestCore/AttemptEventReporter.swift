@@ -23,6 +23,13 @@ public enum AttemptEventKind: String, CaseIterable, Sendable {
     /// client ended the secure session. It does NOT hand in — the attempt stays
     /// in progress for the teacher to review or hand in themselves.
     case timeExpired = "time_expired"
+    /// Row CS (`docs/close-session-ends-attempts-design.md`, D-1 / D-5): the
+    /// teacher closed this attempt's test session, or it ran out. The client
+    /// ends the secure session and sends the student home; the attempt stays
+    /// in progress and resumable, so this is the only thing on the teacher's
+    /// timeline that explains the exit. Detail is `{ via }` — "peek" (the 5 s
+    /// poll saw it) or "write" (an answer was refused 409 `sitting_closed`).
+    case sittingClosed = "sitting_closed"
 }
 
 /// Slice 92: fire-and-forget event reporting for the teacher monitor.
@@ -57,6 +64,9 @@ public final class AttemptEventReporter: @unchecked Sendable {
         // and their attempt is unfinished. Losing it to a flaky network would
         // leave the teacher's timeline claiming nothing happened.
         .timeExpired,
+        // Row CS: same reason as timeExpired — the one event that explains why
+        // a student's session ended with an unfinished attempt.
+        .sittingClosed,
     ]
     private static let maxAttempts = 4
 
