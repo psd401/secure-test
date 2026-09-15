@@ -2,7 +2,7 @@
 
 For the teachers and students in the first classroom pilot (from
 2026-09-17, on **2026 AP Seminar EOC B v2**). One page each: what to do, in the order you do it, and the
-things that look wrong but aren't. Written against client v1.3.2 and the
+things that look wrong but aren't. Written against client v1.3.3 and the
 design tool as deployed 2026-09-15. Nothing here needs IT on the day;
 the student Macs already carry the app and its configuration profile.
 
@@ -49,7 +49,8 @@ time) and its rubric is attached.
 
 ## Three clocks — what actually ends a student's test
 
-Only the first one stops a student who is already working.
+All three stop a student who is already working; only **Hand in** finalises
+their work.
 
 1. **The test time limit** (Settings, 55 minutes). Per student, from the
    moment that student opens the test. At zero the student's Mac ends the
@@ -57,18 +58,29 @@ Only the first one stops a student who is already working.
    the server accepts nothing more after a 30-second grace. Leaving and
    resuming does not restart it.
 2. **The session length** ("How long" when you start a session) and
-   **Close session**. These control who may **start or come back in**.
-   Once the session has expired or been closed, nobody new can join and a
-   student who left cannot resume — but a student already inside keeps
-   working until they hand in or their own time limit runs out. The
-   student's screen does not change when you close the session.
+   **Close session**. When the session runs out or you close it, every
+   student still inside is returned to **Your tests** within a few seconds
+   ("Your teacher ended the test session. Your answers are saved."). Their
+   work is NOT handed in: the attempt stays in progress, and they can press
+   **Resume** with everything intact the next time you open a session for
+   them. The Close dialog tells you how many students are still working.
+   The last field a student was typing in at that instant may be lost.
 3. **Hand in** on the Monitor. Your hand: it submits a student's work as it
    stands. The button is enabled once the session is closed or that
-   student's time limit has passed.
+   student's time limit has passed. Nothing is scored or reported until the
+   attempt is handed in — by the student's own **Finish and hand in**, or by
+   you.
 
 So with a 55-minute limit and a 55-minute session, a student who joins ten
-minutes late has until minute 65 unless you close the session and press
-Hand in on their row.
+minutes late is returned to Your tests when the session ends at minute 55;
+press **Hand in** on their row to finalise, or open another session and they
+continue where they left off.
+
+**Macs still on client v1.3.2** (About Secure Test shows the version; the
+fleet updates to v1.3.3 on its own): the screen keeps going after Close, but
+nothing the student does after that is accepted. Say "Finish and hand in"
+before you close, or rely on the 55-minute limit, which ends the session on
+its own.
 
 ## Teacher — on the day
 
@@ -88,9 +100,10 @@ Hand in on their row.
    once (they see a notice that you looked). **Hand in** submits for a
    student who left without finishing — it is enabled once the session is
    closed or the time limit has passed.
-6. **Close session** when everyone is done. Students still in the test keep
-   working until they hand in or their time limit ends (clock 2 above); use
-   **Hand in** on a row to end one by hand.
+6. **Close session** when everyone is done. Students still in the test are
+   returned to Your tests with their answers saved (clock 2 above) — the
+   dialog says how many. Their rows stay *In progress*; press **Hand in**
+   on each row to finalise, or open another session for them to continue.
 
 ## Teacher — after
 
@@ -126,6 +139,10 @@ Hand in on their row.
    the Mac and takes you back to **Your tests**. Your answers are saved;
    press **Resume** on the same test to continue, as long as the session
    is still open.
+7. If your screen says **"Your teacher ended the test session."**, the
+   session was closed or ran out. Your answers are saved; the test comes
+   back under **Your tests** with **Resume** when your teacher opens
+   another session.
 
 ---
 
@@ -134,14 +151,20 @@ Hand in on their row.
 - **"0 of 1 answered" while a student is typing an essay.** An essay
   saves when the student leaves the field (clicks elsewhere, turns the
   page, hands in). The Monitor catches up on the next poll.
-- **A student is still working after I closed the session.** Expected —
-  closing stops new joins and resumes, not students already inside (clock
-  2). Press **Hand in** on their row if they must stop.
+- **A student is still working after I closed the session.** Their Mac is
+  on client v1.3.2 (About Secure Test). Nothing they type after Close is
+  accepted; press **Hand in** on their row. On v1.3.3 the Mac returns them
+  to Your tests within a few seconds of Close (clock 2).
+- **A student's row still says In progress after I closed the session.**
+  Expected — Close returns them to Your tests with their answers saved but
+  does not hand in. Press **Hand in** on their row, or open another
+  session and they resume where they left off.
 - **A student's session ended by itself.** Either the teacher's time limit
-  ran out ("Time is up." on the student's screen, answers kept) or the Mac
-  is still on client v1.3.1, which ends every session after ten minutes.
-  About Secure Test shows the version; v1.3.2 fixes it and the fleet
-  updates on its own a few times a day.
+  ran out ("Time is up." on the student's screen, answers kept), the
+  session was closed or ran out ("Your teacher ended the test session."),
+  or the Mac is still on client v1.3.1, which ends every session after
+  ten minutes. About Secure Test shows the version; v1.3.2 fixes it and
+  the fleet updates on its own a few times a day.
 - **Sources appear above the question, not beside it.** The assessment's
   Settings is *One scrolling page*, or the stimulus layout is not *Side by
   side*, or the window is narrower than about 1100 px.

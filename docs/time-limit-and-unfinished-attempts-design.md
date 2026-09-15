@@ -262,3 +262,9 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
     8 s, which fits "not observed" as well as "did not fire". Re-check in
     the v1.3.2 sitting with a 3-minute limit and the Debug app from
     Terminal; if it fired and was missed, reconsider the 8 s.
+- **2026-09-15 — row CS.** Close session and sitting expiry now also end a
+  working student's session (`docs/close-session-ends-attempts-design.md`):
+  the sitting check (`lib/api/sittingOver.ts`, no grace) runs BEFORE
+  `refuseIfPastDeadline` on the same routes, and the client lands on the
+  same return-home path as `time_expired` with its own `sitting_closed`
+  event. The deadline's 30 s grace and D-1…D-4 here are unchanged.

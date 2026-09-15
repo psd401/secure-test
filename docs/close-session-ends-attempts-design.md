@@ -1,6 +1,6 @@
 # Close session ends every attempt — design note (scoped 2026-09-15, for a fresh session)
 
-**Status:** scoped and decided (D-1…D-7), nothing built. Needed before the
+**Status:** BUILT 2026-09-15, all three slices (see §Progress); server half awaits deploy + `migrate-aurora.sh` (0036), client half awaits the v1.3.3 release. Needed before the
 pilot sittings on 2026-09-17 (the pilot teachers' first feedback). Server
 half is a design-tool deploy; client half sits on `main` for **v1.3.3**,
 which James is holding — see §Timing.
@@ -141,14 +141,16 @@ an expired session's next keystroke ends the same way; a v1.3.2 client
 against the new server keeps its screen but every write is refused (D-7,
 the 409s on stderr).
 
-## Open questions for James (fresh session)
+## Open questions (resolved at build time, 2026-09-15)
 
-- Should a closed session's Close dialog offer "Hand in everyone now" as a
-  second button (one click instead of a row at a time)? Not required for
-  Thursday.
-- The `sitting_closed` attempt event: client-written (recommended, matches
-  `lockdown_end`) or server-written at Close?
+- "Hand in everyone now" on the Close dialog — NOT built (not required for
+  Thursday; roadmap candidate after pilot feedback).
+- The `sitting_closed` attempt event is CLIENT-written (matches
+  `lockdown_end`); the close route writes no event.
 
 ## Progress
 
 - 2026-09-15: scoped (this note). D-1…D-7 decided by James the same day: end the sitting, not the attempt (no hand-in, attempt stays in_progress and resumable); expiry counts; no grace. Hold on v1.3.3 LIFTED: the client half ships in v1.3.3 today, since nothing server-side can end a v1.3.2 client's session. Nothing built yet.
+- 2026-09-15: **slice 1 (server) BUILT.** `lib/api/sittingOver.ts` (`sittingIsOver` / `attemptSittingIsOver` / `refuseIfSittingOver`, no grace) guards the response write (PUT + DELETE), both drawing-upload halves (the slot mint as well as the completion — a slot that can never settle is worse than a refusal) and the student's own submit, placed after `attemptAcceptsWrites` and BEFORE the deadline so a closed sitting says `sitting_closed` even when time also ran out; the teacher's hand-in route is untouched. `GET …/peek/pending` gains `sitting: "open" | "closed"` (D-5; an attempt with no `test_session_id` — the `--token` posture, the seeder — reads "open" and is never refused). `POST …/close` keeps its semantics and idempotency and adds `in_progress: n`. New attempt-event kind **`sitting_closed`** (client-postable, labelled "Session closed by the teacher — returned to Your tests" in `attendanceView.eventLabel`, hence also the timeline, plus `printIntegrity`), **migration 0036** (drop + re-add `attempt_events_kind_check`), applied to dev and test. Close dialog copy (D-6) via the pure `closeDialogCopy(n)` / `countInProgress(rows)` in `attendanceView.ts`, used by both the Monitor (which always holds rows) and SittingsPanel (which holds rows only for a sitting whose Attendance has been expanded — it falls back to the old wording otherwise). `attemptAcceptsWrites`'s doc comment now points here instead of arguing the opposite. Tests: design-tool **1855** (from 1825) — `test/sitting-over.test.ts` (pure) + `test/sitting-closed.test.ts` (open sitting untouched; closed and expired × response / withdrawal / both upload halves / submit; no grace at one second past expiry; sitting-before-deadline ordering both ways; no-sitting attempt untouched; peek open→closed; close route count + idempotency + attempt untouched; teacher hand-in after a close; the new event kind accepted); typecheck clean. Teacher rows **195–200** in `docs/design-tool-manual-checks.md`, NOT RUN. Not deployed yet.
+- 2026-09-15: **slice 2 (client) BUILT** — `PeekPoll` carries `sitting` (absent or unrecognised = open; `PeekResponder.onSittingClosed` fires once per attempt and stops the poll), `APIError.isSittingClosed`, `ResponseSpool.FlushResult.sittingClosed` (the 409 is dropped as permanent as before, now flagged), the new `sitting_closed` attempt-event kind in the retried set, `AssessmentViewController.onSittingClosed` from the flush / drawing-upload / submit paths with the `responses_dropped` error suppressed, and `AppDelegate.sittingClosedDuringAttempt(via:)` reusing security slice 1's return-home path with the D-4 sheet ("Your teacher ended the test session." / "Your answers are saved."), idempotent against the time-limit, hand-in and quit ends. `MARKETING_VERSION` 1.3.3. Core 645 tests (was 635), Debug + Release `xcodebuild` green. 11 rows in `client/MANUAL-CHECKS.md` "Close session ends the sitting (row CS, 2026-09-15)" — NOT RUN.
+- 2026-09-15: **slice 3 (docs) DONE.** `docs/pilot-quick-start.md` "Three clocks" rewritten (Close and expiry return students to Your tests with answers saved; the Close dialog names the count; Hand in finalises; Resume in a later session; a v1.3.2 fallback paragraph), the Teacher step 6 / Student step 7 / "looks wrong" bullets updated, page header now says v1.3.3; time-limit note §Progress and roadmap row CS point here. Reviewed in the main session: the zero-count / count-unknown Close dialog copy was corrected (it still said "students already in can finish and hand in", no longer true). Both halves re-checked in the main session before commit. Next: deploy + `migrate-aurora.sh` (0036), then psd-sign v1.3.3 + `gh release create` (James) + the IT AutoPkg ask; rows 195–200 + the 11 client rows on the day.
