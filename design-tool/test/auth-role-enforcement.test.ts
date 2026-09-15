@@ -135,11 +135,21 @@ async function statusesFor(file: string, path: string): Promise<Map<string, numb
     const handler = mod[method];
     if (typeof handler !== "function") continue;
     const url = `http://localhost/${path.replace(/\[(\w+)\]/g, UUID)}`;
-    const response = (await (handler as Function)(
-      new Request(url, { method }),
-      { params: Promise.resolve(params) },
-    )) as Response;
-    results.set(method, response.status);
+    let status: number;
+    try {
+      const response = (await (handler as Function)(
+        new Request(url, { method }),
+        { params: Promise.resolve(params) },
+      )) as Response;
+      status = response.status;
+    } catch {
+      // A handler that throws is a 500 to the client (Next's onRequestError
+      // path). Today that is only api/debug/throw — row 67's knob (2026-09-14)
+      // — and only once the role gate has let staff through, which is exactly
+      // what this sweep is checking.
+      status = 500;
+    }
+    results.set(method, status);
   }
   return results;
 }
