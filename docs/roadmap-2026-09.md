@@ -393,3 +393,15 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 `client/MANUAL-CHECKS.md` "Client hygiene (2026-09-15) — v1.3.3 candidate"
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
+
+## Row CS — Close session ends every attempt (scoped 2026-09-15, BEFORE the pilot)
+
+Pilot teachers' first feedback: closing a session (and the session running
+out) must end the test for everyone still working; today only the
+per-attempt time limit does (`docs/pilot-quick-start.md` "Three clocks").
+`docs/close-session-ends-attempts-design.md` is the note — D-1…D-6 with
+recommendations, mechanism (server hands in in-progress attempts through
+the existing teacher hand-in path on Close and lazily on expiry; the
+client learns through the 5 s peek poll and the write 409), three slices
+(server → deploy Wednesday; client → v1.3.3 with the hygiene slice; docs).
+Next fresh session starts here.
