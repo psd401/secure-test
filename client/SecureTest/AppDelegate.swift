@@ -138,6 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // of the gated paths below could confuse a reader of the log.
         Self.log(BuildPosture.logLine)
         Self.purgeLegacyKeychainToken()
+        // Client hygiene (audit #17): last session's abandoned answers do not
+        // wait on this Mac for the next student to find.
+        Self.purgeStaleSpooledResponses(keeping: nil)
         Self.resolveConfiguration()
         installMainMenu()
 
@@ -312,6 +315,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Client hygiene (2026-09-15, audit #17): drop another attempt's stale
+    /// answers out of `responses.sqlite`.
+    ///
+    /// Runs at launch and on every return to the entry screen — the two
+    /// moments at which nobody is mid-test, so nothing that matters is in
+    /// flight. `keeping` is the attempt currently on screen; both call sites
+    /// pass nil, because at both of them there isn't one.
+    ///
+    /// Detached and never awaited: a student waiting for the sign-in screen
+    /// must not wait on a disk sweep, and a failure here is a log line, not a
+    /// launch failure. The 24-hour floor lives in `ResponseSpool.staleAfter` —
+    /// an unsent row younger than that is a student's only copy of their work
+    /// (finding 10.7) and is left alone whoever it belongs to.
+    private static func purgeStaleSpooledResponses(keeping attemptID: String?) {
+        let path = AssessmentViewController.spoolPath()
+        Task.detached(priority: .utility) {
+            do {
+                let spool = try ResponseSpool(path: path)
+                let removed = try await spool.purge(keeping: attemptID)
+                if removed > 0 {
+                    log("spool purged: \(removed) stale row(s) from other attempts removed")
+                }
+            } catch {
+                log("spool purge failed: \(error)")
+            }
+        }
+    }
+
     private func seedTokenFromLaunchArgumentsIfPresent() {
         // Security slice 2: a seeded bearer token is a dev/CI affordance — in
         // Release the only way to a session is Google sign-in.
@@ -398,6 +429,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller?.retire()
         controller = nil
         attemptHandedIn = false
+        // Client hygiene (audit #17): no attempt is on screen, so every row
+        // still spooled belongs to one that is over — purge whatever is past
+        // the 24-hour floor. Rows younger than that stay: a student who lost
+        // the network hands in when it comes back.
+        Self.purgeStaleSpooledResponses(keeping: nil)
         // Time limit: the attempt is gone, and so is its clock.
         countdown?.stop()
         countdown = nil

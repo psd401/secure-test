@@ -88,12 +88,36 @@ public final class ClientErrorLog: @unchecked Sendable {
     /// a student's container. 2 000 is the same cap the server side uses.
     public static let maxMessageLength = 2000
 
+    /// Client hygiene (2026-09-15, audit #18): the file is append-only and the
+    /// only thing that ever shortened it was a successful drain. A Mac that
+    /// never signs in — an unconfigured one, or one whose server is
+    /// unreachable — kept appending forever, and a crash loop appends fast.
+    ///
+    /// So the file is capped: once it passes either bound the oldest lines go
+    /// and the newest `maxLines` are kept. Dropping the OLDEST is the right
+    /// end to lose — the drain sends oldest-first, so anything still here at
+    /// the cap has been undeliverable for a long time, and the line that
+    /// explains the failure a student is looking at right now is the newest
+    /// one.
+    public static let maxLines = 500
+    public static let maxBytes = 512 * 1024
+
     public let fileURL: URL
     private let stamp: AppBuildStamp
     private let now: @Sendable () -> Date
     private let lock = NSLock()
     private var descriptor: Int32 = -1
     private var _attemptID: String?
+    /// The cap for this instance. The statics are the shipping values; the
+    /// tests pass small ones so the bound is reachable without writing half a
+    /// megabyte.
+    private let maxLines: Int
+    private let maxBytes: Int
+    /// Running size of the file, so the common path (append, under the cap)
+    /// costs no read. Seeded from the file at init and recomputed on every
+    /// rewrite.
+    private var byteCount = 0
+    private var lineCount = 0
 
     /// Fired after every record, on the caller's thread. The app hangs the
     /// `client_error` attempt event off this (D-4) so Core call sites need to
@@ -107,11 +131,15 @@ public final class ClientErrorLog: @unchecked Sendable {
     public init(
         fileURL: URL,
         stamp: AppBuildStamp,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        maxLines: Int = ClientErrorLog.maxLines,
+        maxBytes: Int = ClientErrorLog.maxBytes
     ) throws {
         self.fileURL = fileURL
         self.stamp = stamp
         self.now = now
+        self.maxLines = max(1, maxLines)
+        self.maxBytes = max(1, maxBytes)
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -119,6 +147,14 @@ public final class ClientErrorLog: @unchecked Sendable {
         descriptor = open(fileURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o600)
         if descriptor < 0 {
             throw ClientErrorLogError.couldNotOpen(errno)
+        }
+        // What a previous launch left behind counts against the cap, so a file
+        // already over it is trimmed on the first write rather than on the
+        // five-hundredth of this run.
+        let existing = (try? Data(contentsOf: fileURL)) ?? Data()
+        byteCount = existing.count
+        lineCount = existing.reduce(into: 0) { total, byte in
+            if byte == UInt8(ascii: "\n") { total += 1 }
         }
     }
 
@@ -215,7 +251,33 @@ public final class ClientErrorLog: @unchecked Sendable {
                 if written <= 0 { break }
                 offset += written
             }
+            byteCount += offset
         }
+        lineCount += bytes.reduce(into: 0) { total, byte in
+            if byte == UInt8(ascii: "\n") { total += 1 }
+        }
+        // Audit #18: the cap. Checked against counters rather than the file so
+        // the ordinary line costs no stat and no read.
+        if lineCount > maxLines || byteCount > maxBytes {
+            rewriteLocked { $0.suffix(maxLines).map(String.init) }
+        }
+    }
+
+    /// The one place the file is shortened. The descriptor is `O_APPEND` and
+    /// cannot truncate what it points at, so the path is rewritten atomically
+    /// and re-opened; the counters are re-seeded from what was actually
+    /// written. Caller holds the lock.
+    private func rewriteLocked(_ transform: ([Substring]) -> [String]) {
+        let data = (try? Data(contentsOf: fileURL)) ?? Data()
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let remaining = transform(text.split(separator: "\n", omittingEmptySubsequences: true))
+        let rebuilt = remaining.isEmpty ? "" : remaining.joined(separator: "\n") + "\n"
+        let bytes = Data(rebuilt.utf8)
+        try? bytes.write(to: fileURL, options: .atomic)
+        byteCount = bytes.count
+        lineCount = remaining.count
+        if descriptor >= 0 { close(descriptor) }
+        descriptor = open(fileURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o600)
     }
 
     /// Every line currently in the file, junk lines skipped. A half-written
@@ -257,16 +319,9 @@ public final class ClientErrorLog: @unchecked Sendable {
         guard count > 0 else { return }
         lock.lock()
         defer { lock.unlock() }
-        let data = (try? Data(contentsOf: fileURL)) ?? Data()
-        let text = String(data: data, encoding: .utf8) ?? ""
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
-        let remaining = lines.count > count ? lines[count...] : []
-        let rebuilt = remaining.isEmpty ? "" : remaining.joined(separator: "\n") + "\n"
-        // Rewrite through the path, then re-open: the descriptor is O_APPEND
-        // and cannot shorten the file it points at.
-        try? Data(rebuilt.utf8).write(to: fileURL, options: .atomic)
-        if descriptor >= 0 { close(descriptor) }
-        descriptor = open(fileURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o600)
+        rewriteLocked { lines in
+            lines.count > count ? lines[count...].map(String.init) : []
+        }
     }
 
     public func truncate() {

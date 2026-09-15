@@ -346,3 +346,50 @@ entitlement-stripped re-sign), a "Release vs Debug behaviour" list in
 `client/RELEASING.md`, and the env knobs marked Debug-only in
 `client/README.md`. Ships in the next client release (**v1.3.2**) — the
 watchdog fix does not reach the fleet until then.
+
+**Medium items built (v1.3.3 candidate, release held) — 2026-09-15, client
+only.** Three of the audit's Medium findings, built as one "client hygiene"
+slice. James decided to HOLD the release: this is built and tested, not cut.
+
+- **#17 `responses.sqlite` purge.** The spool keeps answer text in plaintext,
+  and rows only ever left it two ways — deleted when the server takes one,
+  cleared wholesale after a confirmed submit. An attempt that was abandoned,
+  crashed out of, or ended by the clock therefore left the previous student's
+  answers on a shared lab Mac for the next person who sat down. New:
+  `ResponseSpool.purge(keeping:olderThan:now:)`, called from
+  `applicationDidFinishLaunching` and from `showEntry()`, both with
+  `keeping: nil` — at neither moment is an attempt on screen. **No schema
+  migration was needed**: the table has carried `queued_at` since slice 67.
+  The policy the spool supports, and the judgement call: because a row is
+  deleted the instant it is sent, everything still spooled is UNSENT, which is
+  the offline case finding 10.7 exists for — the spool is the only copy of that
+  work. So the rule is not "delete other attempts" but "delete other attempts
+  that are stale": rows of the attempt on screen are never touched, and any
+  other attempt's rows go once they are past `ResponseSpool.staleAfter` (24 h).
+  A student who lost Wi-Fi yesterday afternoon still hands in this morning; a
+  row from last week is a leak with no owner left to claim it. One `[security]`
+  line with the count.
+- **#19 assessment web view on a non-persistent store.**
+  `configuration.websiteDataStore = .nonPersistent()`, matching
+  `WebViewAuthPresenter`. Nothing relied on persistence: the page is loaded
+  from a string with `baseURL: nil` (a no-origin document WebKit denies
+  localStorage and cookies outright), under `default-src 'none'` with
+  `img-src data:`, so no cache entry or site data was carrying anything.
+  Noted in a comment at the call site.
+- **#18 `errors.log` capped.** Newest 500 lines / 512 KB, enforced on append
+  against in-memory counters (so the ordinary line costs no read) and seeded
+  from the file at init, so a file an earlier launch left oversize is trimmed
+  on the first write rather than the five-hundredth. The oldest lines are what
+  goes — the drain sends oldest-first, so anything still present at the cap has
+  been undeliverable for a long time. **Not** cleared on hand-in: the drain
+  already sends after sign-in and prunes only what the server accepted, and
+  that path (`removeFirstLines`) is unchanged, now sharing one locked rewrite
+  core with the cap.
+
+**Fullscreen** and the hand-in end-state were left alone (decided).
+
+`swift test` 635 (626 + five spool-purge tests and four cap tests);
+`xcodebuild` green in **both** Debug and Release. Records:
+`client/MANUAL-CHECKS.md` "Client hygiene (2026-09-15) — v1.3.3 candidate"
+(6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
+`MARKETING_VERSION` deliberately NOT bumped.

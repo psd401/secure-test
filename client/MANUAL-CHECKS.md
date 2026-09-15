@@ -1660,3 +1660,30 @@ from Terminal so stderr is readable.
 | **Release with the entitlement stripped.** Take a Release build, ad-hoc re-sign it WITHOUT the AAC entitlement (`codesign -f -s -` with entitlements omitted), launch it and join a sitting | **No test is rendered at any point.** stderr: `lockdown session: REFUSED — no AAC entitlement in this RELEASE binary`, `lockdown FAILED TO BEGIN`, `SECURE START REFUSED`. The app lands on "Your tests" with "Couldn't start a secure session" / "Your test didn't open. Ask your teacher for help." | NOT RUN |
 | **Debug with no entitlement, unchanged.** A Debug build with no entitlement (the ordinary dev posture), join | The cooperative simulated fallback as always — `lockdown session: SIMULATED (no AAC entitlement in this binary)` — and the test renders. CI and unsigned dev builds must not become unusable | NOT RUN |
 | **Hand-in on the Release build.** One ordinary sitting end to end on the notarized Release app | Unchanged by this slice: join, answer, hand in, handed-in notice, back to your tests | NOT RUN |
+
+## Client hygiene (2026-09-15) — v1.3.3 candidate
+
+The audit's Medium items (`docs/roadmap-2026-09.md` §Progress 2026-09-15):
+`responses.sqlite` kept a finished attempt's plaintext answers forever (#17),
+`errors.log` grew without bound (#18), and the assessment web view used the
+on-disk WebKit store (#19).
+
+What changed: the spool gains `purge(keeping:olderThan:)`, run at launch and on
+every return to "Your tests"; it deletes rows belonging to any attempt other
+than the one on screen **once they are older than 24 hours** — a row is removed
+the moment the server takes it, so everything still spooled is unsent, and an
+unsent row from this morning is a student's only copy (finding 10.7). The
+assessment `WKWebViewConfiguration` now uses `.nonPersistent()`. `errors.log` is
+capped at the newest 500 lines / 512 KB; the drain still prunes from the front.
+
+Needs a Debug build via `client/scripts/launch-client.ts`, launched from
+Terminal so stderr is readable, and two attempts on two different assessments.
+
+| Check | Expect | Result |
+|---|---|---|
+| **A finished attempt's stale rows go at launch.** Join a sitting, answer two items, then quit mid-test WITHOUT handing in (Cmd-Q). Age the rows: `sqlite3 ~/Library/Containers/net.psd401.securetest.client/Data/Library/Application\ Support/SecureTest/responses.sqlite "UPDATE pending_responses SET queued_at = queued_at - 90000;"`. Relaunch | stderr carries `spool purged: N stale row(s) from other attempts removed`, and the table is empty afterwards (`SELECT count(*)` = 0) | NOT RUN |
+| **A fresh unsent row survives.** Repeat, but do NOT age the rows — relaunch straight away | No `spool purged` line (or a count that excludes them); the rows are still there. The student can rejoin and hand in | NOT RUN |
+| **The purge does not touch the attempt on screen.** Join, answer, go Back to your tests, rejoin the SAME attempt, hand in | Normal hand-in — no answers lost, the handed-in notice appears, the teacher's queue shows every answer | NOT RUN |
+| **The assessment view leaves no WebKit site data.** Delete `~/Library/Containers/net.psd401.securetest.client/Data/Library/WebKit` and `.../Caches`, then run a full sitting (join, answer, hand in) and quit | No new per-site WebKit storage under the container from the test page — `WebsiteData`/`LocalStorage` do not reappear with an entry for the assessment. (The sign-in sheet was already non-persistent.) Everything renders exactly as before: images, KaTeX, drawings, paging | NOT RUN |
+| **errors.log is capped.** With the app not running, append 900 junk JSON lines to `.../Application Support/SecureTest/errors.log`, then launch the app and let it record at least one error (e.g. sign in with the server unreachable) | The file settles at **500 lines or fewer** and under 512 KB; the NEWEST lines are the ones kept, and the newly recorded line is the last one in the file | NOT RUN |
+| **The drain still sends and prunes.** With a reachable server and a few lines in `errors.log`, sign in | `errors: client-error drain sent N of N line(s)`; the file shrinks by exactly those lines; a line recorded straight after lands at the end | NOT RUN |

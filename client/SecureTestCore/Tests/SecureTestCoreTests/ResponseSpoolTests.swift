@@ -287,3 +287,95 @@ final class ResponseSpoolClearTests: XCTestCase {
         XCTAssertEqual(survived, 1, "a failed flush must never clear the queue")
     }
 }
+
+/// Client hygiene (2026-09-15, audit #17): `responses.sqlite` holds plaintext
+/// answers, and before the purge an abandoned attempt left the previous
+/// student's work readable by the next person to use a shared lab Mac.
+///
+/// The property under test is the balance the purge has to strike: a row is
+/// deleted the moment the server takes it, so everything still spooled is
+/// UNSENT — the offline case (finding 10.7) where the spool is the only copy
+/// there is. Deleting by attempt alone would destroy a student's work; the
+/// purge deletes another attempt's rows only once they are stale.
+extension ResponseSpoolTests {
+    private var answer: String { #"{"type":"short_text","text":"42"}"# }
+
+    func testPurgeKeepsTheAttemptOnScreenHoweverOldItIs() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "current", itemID: "i1", responseJSON: answer)
+
+        // A week later, still the attempt on screen.
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(7 * 24 * 3600)
+        )
+
+        XCTAssertEqual(removed, 0)
+        let survived = try await spool.count()
+        XCTAssertEqual(survived, 1, "the attempt being sat must never be purged")
+    }
+
+    func testPurgeRemovesAnotherAttemptsStaleRows() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "yesterday", itemID: "i1", responseJSON: answer)
+        try await spool.enqueue(attemptID: "yesterday", itemID: "i2", responseJSON: answer)
+        try await spool.enqueue(attemptID: "current", itemID: "i1", responseJSON: answer)
+
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(25 * 3600)
+        )
+
+        XCTAssertEqual(removed, 2)
+        let left = try await spool.pending()
+        XCTAssertEqual(left.map(\.attemptID), ["current"])
+    }
+
+    /// A student who lost Wi-Fi yesterday afternoon and comes back this
+    /// morning still hands in. Under the 24-hour floor nothing goes, whoever
+    /// the row belongs to.
+    func testPurgeKeepsAnotherAttemptsFreshUnsentRows() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "earlier-today", itemID: "i1", responseJSON: answer)
+
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(6 * 3600)
+        )
+
+        XCTAssertEqual(removed, 0)
+        let survived = try await spool.count()
+        XCTAssertEqual(survived, 1, "an unsent row younger than a day is still a student's only copy")
+    }
+
+    /// The launch and entry-screen call sites: no attempt is on screen, so
+    /// every stale row goes and every fresh one stays.
+    func testPurgeWithNoAttemptOnScreenTakesEveryStaleRow() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "a", itemID: "i1", responseJSON: answer)
+        try await spool.enqueue(attemptID: "b", itemID: "i1", responseJSON: answer)
+
+        let removed = try await spool.purge(
+            keeping: nil,
+            now: Date().addingTimeInterval(25 * 3600)
+        )
+
+        XCTAssertEqual(removed, 2)
+        let survived = try await spool.count()
+        XCTAssertEqual(survived, 0)
+    }
+
+    func testPurgeKeepsAWithdrawalLikeAnyOtherRow() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueueWithdrawal(attemptID: "current", itemID: "i1")
+
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(25 * 3600)
+        )
+
+        XCTAssertEqual(removed, 0)
+        let survived = try await spool.count()
+        XCTAssertEqual(survived, 1)
+    }
+}

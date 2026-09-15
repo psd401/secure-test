@@ -156,6 +156,56 @@ public actor ResponseSpool {
         guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
     }
 
+    /// Client hygiene (2026-09-15, audit #17): drop another attempt's stale
+    /// answers off a shared Mac.
+    ///
+    /// `responses.sqlite` holds answer text in plaintext, and rows only ever
+    /// leave it two ways: `remove` once the server has taken the row, and
+    /// `clear(attemptID:)` after a confirmed submit. An attempt that was
+    /// abandoned, crashed out of, or ended by the clock therefore leaves the
+    /// PREVIOUS student's answers on disk for the next person to sit down —
+    /// readable by anyone with the container.
+    ///
+    /// Because a row is deleted the moment it is sent, every row still here is
+    /// unsent, which is the offline case finding 10.7 exists for: the spool is
+    /// the only copy of that work until the server is reachable. So the rule is
+    /// not "delete other attempts" but "delete other attempts that are stale":
+    ///
+    /// - rows of `keeping` (the attempt on screen) are never touched;
+    /// - rows of any other attempt go once they are older than `olderThan`.
+    ///
+    /// 24 hours is the default: a student who lost Wi-Fi yesterday afternoon
+    /// and comes back this morning still hands in, and a row from last week is
+    /// a leak with no owner left to claim it.
+    ///
+    /// Returns how many rows were deleted, for the caller's `[security]` line.
+    @discardableResult
+    public func purge(
+        keeping attemptID: String? = nil,
+        olderThan age: TimeInterval = ResponseSpool.staleAfter,
+        now: Date = Date()
+    ) throws -> Int {
+        let cutoff = now.timeIntervalSince1970 - age
+        let sql: String
+        if attemptID == nil {
+            sql = "DELETE FROM pending_responses WHERE queued_at < ?;"
+        } else {
+            sql = "DELETE FROM pending_responses WHERE queued_at < ? AND attempt_id <> ?;"
+        }
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_double(statement, 1, cutoff)
+        if let attemptID { bindText(statement, 2, attemptID) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
+        return Int(sqlite3_changes(db))
+    }
+
+    /// How old another attempt's unsent row has to be before the purge takes
+    /// it. One day, deliberately generous — the cost of keeping it a few hours
+    /// too long is small; the cost of deleting a student's only copy is their
+    /// whole test.
+    public static let staleAfter: TimeInterval = 24 * 60 * 60
+
     // MARK: flush
 
     public struct FlushResult: Equatable, Sendable {

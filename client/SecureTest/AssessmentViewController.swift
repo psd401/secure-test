@@ -187,6 +187,16 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         let controller = WKUserContentController()
         config.userContentController = controller
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // Client hygiene (2026-09-15, audit #19): nothing this web view touches
+        // is written to the on-disk WebKit store, matching what
+        // `WebViewAuthPresenter` already does for the sign-in sheet. The page
+        // is loaded with `baseURL: nil` (a no-origin document — no
+        // localStorage, no cookies), served from a string rather than the
+        // network, under `default-src 'none'` with images inline as base64, so
+        // there is nothing here that persistence was carrying: no cache entry,
+        // no site data, no favicon record of a student's test left in the
+        // container for the next user of a shared Mac.
+        config.websiteDataStore = .nonPersistent()
         // AAC-2b follow-up 3.2: inline predictions default OFF on macOS, so
         // the `word_completion` accommodation could never render (2026-08-28
         // hand-run). Unconditionally true is safe: the bundle isn't known

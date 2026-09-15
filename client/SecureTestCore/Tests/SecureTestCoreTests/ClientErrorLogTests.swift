@@ -161,3 +161,78 @@ final class ClientErrorLogTests: XCTestCase {
         }
     }
 }
+
+/// Client hygiene (2026-09-15, audit #18): before the cap the only thing that
+/// ever shortened `errors.log` was a successful drain, so a Mac that never
+/// signs in — an unconfigured one, or one whose server is unreachable — grew
+/// the file forever, and a crash loop grew it fast.
+extension ClientErrorLogTests {
+    private func cappedLog(maxLines: Int, maxBytes: Int = 512 * 1024) throws -> ClientErrorLog {
+        try ClientErrorLog(
+            fileURL: directory.appendingPathComponent("errors.log"),
+            stamp: AppBuildStamp(version: "1.0.0", commit: "abc1234"),
+            now: { Date(timeIntervalSince1970: 0) },
+            maxLines: maxLines,
+            maxBytes: maxBytes
+        )
+    }
+
+    func testTheFileIsCappedByLineCount() throws {
+        let log = try cappedLog(maxLines: 5)
+        for index in 0..<20 {
+            log.record(kind: "loop", message: "line \(index)")
+        }
+
+        let entries = log.readEntries()
+        XCTAssertEqual(entries.count, 5)
+        XCTAssertEqual(
+            entries.map(\.message),
+            ["line 15", "line 16", "line 17", "line 18", "line 19"],
+            "the NEWEST lines are what a human and the drain both want kept"
+        )
+    }
+
+    func testTheFileIsCappedByBytes() throws {
+        let log = try cappedLog(maxLines: 100, maxBytes: 1024)
+        for index in 0..<200 {
+            log.record(kind: "loop", message: String(repeating: "x", count: 200))
+        }
+
+        let size = try Data(contentsOf: log.fileURL).count
+        XCTAssertLessThan(size, 100 * 1024, "the byte bound trims long before the line bound")
+        XCTAssertFalse(log.readEntries().isEmpty, "trimming keeps the newest lines, not none")
+    }
+
+    /// A file a previous launch left over the cap is trimmed on the first
+    /// write of this one, not on the five-hundredth.
+    func testAnOversizeFileFromAnEarlierLaunchIsTrimmedAtOnce() throws {
+        let first = try cappedLog(maxLines: 5)
+        for index in 0..<5 {
+            first.record(kind: "old", message: "old \(index)")
+        }
+        XCTAssertEqual(first.readEntries().count, 5)
+
+        let second = try cappedLog(maxLines: 5)
+        second.record(kind: "new", message: "fresh")
+
+        let entries = second.readEntries()
+        XCTAssertEqual(entries.count, 5)
+        XCTAssertEqual(entries.last?.message, "fresh")
+        XCTAssertEqual(entries.first?.message, "old 1", "the oldest line went, not the newest")
+    }
+
+    /// The drain still owns the front of the file — the cap must not have
+    /// broken `removeFirstLines`, which is the path that sends and prunes.
+    func testTheDrainStillPrunesFromTheFront() throws {
+        let log = try cappedLog(maxLines: 50)
+        for index in 0..<6 {
+            log.record(kind: "k", message: "m\(index)")
+        }
+        log.removeFirstLines(2)
+
+        XCTAssertEqual(log.readEntries().map(\.message), ["m2", "m3", "m4", "m5"])
+
+        log.record(kind: "k", message: "m6")
+        XCTAssertEqual(log.readEntries().count, 5, "the counters survived the rewrite")
+    }
+}
