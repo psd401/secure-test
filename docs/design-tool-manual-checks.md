@@ -625,4 +625,14 @@ Bedrock-scored essay (`scores=ai`); row 179 needs a second staff account.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 180 | In the editor, add a source to a set with no sources; then change the layout to "On its own page" and add a second source | After the first source the layout select reads "Side by side (sources beside the question)"; after the second it stays on "On its own page" | NOT RUN |
+| 180 | In the editor, add a source to a set with no sources; then change the layout to "On its own page" and add a second source | After the first source the layout select reads "Side by side (sources beside the question)"; after the second it stays on "On its own page" | ✅ 2026-09-15 (Chrome on the origin, rev 30, scratch Draft deleted after): first source → select read `side_by_side`; set to `own_page` (value + dispatched `change`), second source → still `own_page` |
+
+## D-11 — event-table retention sweep (2026-09-15)
+
+`docs/observability-design.md` §Progress "D-11 BUILT". Row number picked
+as 190, above whatever the concurrent editor/scoring slice takes at
+181–185, to avoid a clash.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 190 | After the next scheduled 06:00 roster-sync run, read the roster-sync Lambda's CloudWatch log for that invocation | A `retention_sweep` line appears after the `roster_sync` line, carrying `retention_days: 90` and a deleted count for `server_error_events`, `client_error_events` and `guardrail_events`; the `feedback` table's row count (checked separately, e.g. via a read-only query) is unchanged from before the run | NOT RUN |
