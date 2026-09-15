@@ -631,6 +631,12 @@ sitting (the essay answer showed on the per-student page).
 **Decision 2026-09-15 (James): (c) both — (a) built in this slice, (b) the
 editor default is a design-tool slice.**
 
+**Live fix confirmed 2026-09-15 (James, student Mac on v1.3.1):** the first
+pilot assessment, re-published the same morning with the student layout
+`paged` and its sourced set on `side_by_side`, renders the sources beside the
+question as intended — no client change needed for that assessment; (a) and
+(b) are for the sets teachers build from here on.
+
 **C-8 (a) BUILT 2026-09-15 (client only).** The C-1 group is now built by
 every `own_page` QUESTION page as well, and only when `WIDE` (the same
 `LAYOUT_MIN_WIDE_PX` = 1100 read once at build; `__forceWide` in tests) — a
