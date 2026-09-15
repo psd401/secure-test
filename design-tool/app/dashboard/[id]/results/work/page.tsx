@@ -173,14 +173,21 @@ function packetHref(
   return `/dashboard/${assessmentId}/results/work?${params.toString()}`;
 }
 
-/** answerView's lines, with the ✓ / ✗ it supplies only where a key exists. */
-function AnswerLines({ lines }: { lines: AnswerLine[] }) {
+/**
+ * answerView's lines, with its ✓ / ✗ only when the packet shows the teacher's
+ * side (`showKey`, hand-run 2026-09-14 finding W-1): a mark against the key is
+ * the key, and a packet printed with `scores=none` or `scores=ai` may leave
+ * the teacher's hands (anonymous peer review, calibration).
+ */
+function AnswerLines({ lines, showKey }: { lines: AnswerLine[]; showKey: boolean }) {
   if (lines.length === 0) return <p className="meta muted">Nothing selected.</p>;
   return (
     <ul className="lines">
       {lines.map((line, i) => (
         <li key={i}>
-          {line.correct === null ? null : <span>{line.correct ? "✓" : "✗"} </span>}
+          {showKey && line.correct !== null ? (
+            <span>{line.correct ? "✓" : "✗"} </span>
+          ) : null}
           {line.text}
         </li>
       ))}
@@ -188,13 +195,16 @@ function AnswerLines({ lines }: { lines: AnswerLine[] }) {
   );
 }
 
-/** The per-student page's grid, in print ink: the student's cells, key beside. */
+/** The per-student page's grid, in print ink: the student's cells, and the
+ * key beside each only when the packet shows the teacher's side (W-1). */
 function TableGrid({
   item,
   cells,
+  showKey,
 }: {
   item: ItemRow;
   cells: Record<string, Record<string, string>>;
+  showKey: boolean;
 }) {
   const columns = item.config.columns ?? [];
   const rows = item.config.rows ?? [];
@@ -221,7 +231,7 @@ function TableGrid({
               return (
                 <td key={c.id}>
                   <div>{answer !== undefined && answer !== "" ? answer : "—"}</div>
-                  {key !== undefined ? (
+                  {showKey && key !== undefined ? (
                     <div className="muted">
                       {ok ? "✓" : "✗"} expected {key}
                     </div>
@@ -457,6 +467,10 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   const responseByCell = new Map(
     responseRows.map((r) => [`${r.attempt_id}:${r.item_id}`, r]),
   );
+
+  // W-1 (hand-run 2026-09-14): the teacher's key — ✓ / ✗ on keyed lines and
+  // the "expected" cell under a table — prints only with the teacher's side.
+  const showKey = query.scores === "teacher" || query.scores === "both";
 
   const scoreRows =
     query.scores !== "none" && responseRows.length > 0
@@ -694,9 +708,10 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                               }
                             ).cells ?? {}
                           }
+                          showKey={showKey}
                         />
                       ) : view.kind === "lines" ? (
-                        <AnswerLines lines={view.lines} />
+                        <AnswerLines lines={view.lines} showKey={showKey} />
                       ) : null}
                     </div>
 

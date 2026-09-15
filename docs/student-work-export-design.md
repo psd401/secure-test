@@ -267,3 +267,16 @@ slice 1 here can exclude it from the start.
   `buildResults` (ordered by `started_at` alone) returned them in either
   order. The fixture now seeds distinct `started_at`, and `buildResults`
   tie-breaks on attempt id. Three full-suite runs clean.
+- 2026-09-14 — **DEPLOYED (rev 26, `018a37c`, Aurora 0035) and rows 168–179 RUN
+  on the origin** (Claude in Chrome, teacher side; fixtures `Client rows
+  hand-run 2026-09-08` + `Multi-source hand-run 2026-09-09`): 168 / 169 / 172 /
+  174 / 176 / 177 / 178 ✅, 173 half, 170 CSS-only (PDF not measured), 171 /
+  175 / 179 NOT RUN (no long essay, no AI proposal, no second staff account
+  on the origin). **Finding W-1, fixed the same evening:** ✓ / ✗ on keyed
+  lines and the table's `expected <key>` cells printed under `scores=none`
+  and `scores=ai` — the key in a packet that may leave the teacher's hands.
+  Now they print only with `scores=teacher` / `both` (`showKey`), with a
+  test. Cosmetic, unbuilt: the toolbar's stem excerpt keeps a bare `\times`
+  after stripping the `$`. Fixture readings, not defects: a `$`-before-digit
+  stem prints raw on every page by C-2's rule; one stored short-text answer
+  is `4^2^`.

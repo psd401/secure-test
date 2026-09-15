@@ -483,7 +483,8 @@ describe("work packet — one page per student, every item type", () => {
 
   test("every item type draws: choices, text, match, order, hotspot, drawing, table", async () => {
     const { assessment } = await seedPacketScene();
-    const html = await render(assessment.id, { section: SECTION });
+    // scores=teacher so the key beside a table cell is expected below (W-1).
+    const html = await render(assessment.id, { section: SECTION, scores: "teacher" });
 
     expect(html).toContain("STEM-MC-MULTI");
     expect(html).toContain("STEM-MATCH");
@@ -498,6 +499,27 @@ describe("work packet — one page per student, every item type", () => {
     expect(html).toContain("Olympia");
     // An item with no answer says so rather than printing an empty block.
     expect(html).toContain("No answer.");
+  });
+
+  // W-1 (hand-run 2026-09-14): a mark against the key IS the key. A packet
+  // printed without the teacher's side (none, ai) may leave the teacher's
+  // hands, so ✓ / ✗ and the table's "expected" cells print only with
+  // scores=teacher or scores=both.
+  test("the key prints only with the teacher's side: no ✓ / ✗ / expected under none or ai", async () => {
+    const { assessment } = await seedPacketScene();
+    for (const scores of ["none", "ai"] as const) {
+      const html = await render(assessment.id, { section: SECTION, scores });
+      const body = packetBody(html);
+      expect(body).not.toContain("✓");
+      expect(body).not.toContain("✗");
+      expect(body).not.toContain("expected 12");
+    }
+    for (const scores of ["teacher", "both"] as const) {
+      const html = await render(assessment.id, { section: SECTION, scores });
+      const body = packetBody(html);
+      expect(body).toMatch(/[✓✗]/);
+      expect(body).toContain("expected 12");
+    }
   });
 
   test("EVERY choice prints with a checkbox glyph, the chosen one ticked", async () => {
