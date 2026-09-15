@@ -335,3 +335,45 @@ excludes `research` from the start.
   (all `human` method, none with a teacher final) — the corpus is empty until
   a pilot teacher scores essays. Nothing was created. The Bedrock run is one
   command when finals exist (README "Corpus runs on Aurora").
+- 2026-09-15 — **`seed-essays`, a fifth entrypoint mode (plus `roster-health`),
+  BUILT; nothing run against Aurora.** The corpus is still empty because no
+  teacher has scored an essay, and the pilot sittings start 2026-09-17 on an
+  essay assessment scored with AI plus a rubric — but the "Score with AI" path
+  (finding R-4) has never run against Bedrock on the origin, and proving it
+  needs submitted essays of visibly different quality. Producing five of those
+  through the macOS client means five real sittings, so this seeds them
+  instead: `design-tool/scripts/seed-essays.ts` +
+  `lib/dev/seedEssays.ts` + `lib/dev/sampleEssays.ts`
+  (`--assessment <uuid> --session-code <code> --student <number>=<quality> …
+  [--dry-run]`; qualities `high | mid | low | brief | offtopic`, written for
+  the AP Seminar-style four-source prompt and its four 0/2/4/6 rubric rows).
+  It mirrors the real routes — `findOrBindOverlay` against the assessment's
+  `owner_sub`, one attempt with the sitting on it, one
+  `ItemResponseSchema`-parsed `{ type: "essay", text }` per essay item,
+  `lockdown_begin` / `lockdown_end` events, then the submit route's flip and
+  the same idempotent `runAutoScoringPass`.
+  **Why it does NOT refuse under `NODE_ENV=production`, unlike
+  `seed-attempts.ts`:** running on the deployed database is the entire point.
+  What replaces the refusal is that nothing is discovered — every student is
+  named by a 5-8 digit number on the command line, the assessment must be
+  published, the sitting must be open and named by its code, section
+  admission is deliberately NOT re-derived (the teacher already decided it in
+  Start session → Picked students), and every refusal happens before a single
+  row is written. Non-essay items are skipped with a log line; the one
+  attempt per student per assessment means a re-run refuses and names the
+  attempt id to delete.
+  `roster-health` was added as a mode at the same time — the script already
+  existed and the one-off task is the only way to point it at Aurora.
+  **Test:** `test/seed-essays.test.ts` (18) against the test DB — the happy
+  path row by row (attempt, response text, overlay binding, both events,
+  `submitted_by_sub` still null), several students at different qualities,
+  non-essay items skipped, dry-run writing nothing at all, and ten refusals
+  each asserting the database is untouched (closed sitting, expired sitting,
+  wrong code, draft assessment, unknown assessment, no essay items, no roster
+  row, an existing attempt named by id, a bad student number, a repeated
+  student, an unknown quality). `test/docker-entrypoint.test.ts` (7) still
+  passes; `bun run typecheck` clean; both new scripts bundle to node-builtin
+  imports only.
+  **Not done here:** no deploy, so the modes reach the image only with the
+  next `cdk deploy`; rows 191-194 in `docs/design-tool-manual-checks.md` are
+  the hand-run.

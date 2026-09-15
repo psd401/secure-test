@@ -270,6 +270,70 @@ scripts/oneoff-aurora.sh compare --all --csv
   ceiling exits 3 and does **not** stop the task — it keeps scoring, and the
   run's rows and notes still land; re-read them with `compare`.
 
+## Seeding pilot essays
+
+Getting AI scoring in front of a teacher needs several submitted essays of
+different quality, and producing those through the macOS client means several
+real sittings. `seed-essays` writes them straight into the attempt tables
+instead, mirroring the join / answer / hand-in routes
+(`design-tool/lib/dev/seedEssays.ts`; the essays themselves are in
+`lib/dev/sampleEssays.ts`, written against the AP Seminar-style four-source
+prompt). Unlike `scripts/seed-attempts.ts` it is **meant** to run against the
+deployed database — which is why it discovers nothing: every student is named
+explicitly, the assessment must be published, and the sitting must be open and
+named by its code.
+
+Pre-steps in the app, in this order:
+
+1. **Publish** the assessment.
+2. **Start session** with *Picked students* = exactly the students you are
+   about to seed (this script does not check section admission — that
+   decision is yours, made here).
+3. Copy the **Session code** off the Test sessions tab.
+
+```bash
+# From design-tool/infra/, AWS creds loaded.
+# 1. Validate everything, write nothing:
+scripts/oneoff-aurora.sh seed-essays \
+  --assessment <assessment-uuid> --session-code <SESSION-CODE> \
+  --student <student-number>=high --student <student-number>=mid \
+  --student <student-number>=low --student <student-number>=brief \
+  --student <student-number>=offtopic --dry-run
+# 2. The real run (same arguments, minus --dry-run):
+scripts/oneoff-aurora.sh seed-essays \
+  --assessment <assessment-uuid> --session-code <SESSION-CODE> \
+  --student <student-number>=high --student <student-number>=mid \
+  --student <student-number>=low --student <student-number>=brief \
+  --student <student-number>=offtopic
+```
+
+- Qualities: `high | mid | low | brief | offtopic`. `brief` is a two-sentence
+  non-answer and `offtopic` is fluent prose about something else — both exist
+  so the AI's low end can be seen, not just its high end.
+- **One attempt per student per assessment.** A re-run refuses and names the
+  attempt id; delete that attempt on the student's results page first, then
+  re-run. Nothing partial is ever written — a refusal on the fourth student
+  means the first three were not seeded either.
+- Locally, the same script runs directly:
+  `bun --env-file=.env.local scripts/seed-essays.ts …`.
+- Exit codes: 0 seeded (or dry-ran), 1 refused with the reason on stderr,
+  2 a bad flag.
+- Then score them from the **Scoring queue** — this is the path finding R-4
+  added the "Score with AI" button to.
+
+## Roster health on Aurora
+
+`scripts/roster-health.ts` is the go-live checklist's SQL in one command, and
+the one-off task is the only way to point it at Aurora now that the cluster
+security group has no laptop CIDR:
+
+```bash
+scripts/oneoff-aurora.sh roster-health                     # counts + last 5 sync runs
+scripts/oneoff-aurora.sh roster-health <teacher@psd401.net> # plus that teacher's roster
+```
+
+Read-only. Exit 1 means the latest sync run did not succeed.
+
 ## Roster sync — local / manual run
 
 The same importer the Lambda runs, pointed at a directory:

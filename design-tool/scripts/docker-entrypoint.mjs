@@ -20,9 +20,11 @@
 // runtime image has no bun and the standalone trace does not carry
 // drizzle-orm/postgres as resolvable modules.
 //
-//   migrate  → db/migrate.mjs      (infra/README.md "Migrating Aurora")
-//   corpus   → score-corpus.mjs    (README "Corpus runs on Aurora")
-//   compare  → compare-runs.mjs
+//   migrate       → db/migrate.mjs     (infra/README.md "Migrating Aurora")
+//   corpus        → score-corpus.mjs   (README "Corpus runs on Aurora")
+//   compare       → compare-runs.mjs
+//   seed-essays   → seed-essays.mjs    (README "Seeding pilot essays")
+//   roster-health → roster-health.mjs
 //
 // A one-off ECS run-task on the service's own task definition is how any of
 // these reaches Aurora now that the cluster SG has no laptop CIDR
@@ -39,6 +41,15 @@ const MODES = {
   migrate: "../db/migrate.mjs",
   corpus: "./score-corpus.mjs",
   compare: "./compare-runs.mjs",
+  // Pilot essay seeding (docs/scoring-corpus-design.md §Progress,
+  // 2026-09-15). Unlike seed-attempts this one is MEANT to run against the
+  // deployed database: every student is named explicitly on the command
+  // line, so nothing is discovered and nothing is fabricated in bulk.
+  "seed-essays": "./seed-essays.mjs",
+  // Roster health, the SQL from the go-live checklist. Read-only, and the
+  // only way to run it against Aurora now that the cluster SG has no laptop
+  // CIDR.
+  "roster-health": "./roster-health.mjs",
 };
 
 const mode = process.argv[2];

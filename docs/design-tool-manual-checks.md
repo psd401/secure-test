@@ -661,3 +661,23 @@ rows 184–185 are editor-only.
 | 183 | Key `0.5`, a student answers `50%` | Scored INCORRECT (0 / 1) — the percent rule is both sides or neither | NOT RUN |
 | 184 | On the short-text card, tick "Answer form matters (exact match only)", save, run a sitting where the key is `1/2` and the student answers `0.5` | Scored INCORRECT; a student answering `1/2` is still correct | NOT RUN |
 | 185 | Open a short-text card in the editor; then Export JSON and re-import the file | The hint under the key field reads "Equivalent numbers count: 1/2, 0.5 and 50/100 all match. Check this for tasks like 'in lowest terms'."; the checkbox state survives export → import (only a ticked item carries `exact_form` in the JSON), and the checkbox is disabled on a Published assessment | NOT RUN |
+
+## Pilot essay seeding + Score with AI (2026-09-15)
+
+`docs/scoring-corpus-design.md` §Progress "2026-09-15". `seed-essays`
+(`design-tool/scripts/seed-essays.ts`, entrypoint mode `seed-essays`) writes
+submitted essays of five deliberate qualities without the macOS client, so the
+AI scoring path can be seen end to end before the 2026-09-17 pilot. **Needs the
+next deploy** — the mode only exists inside the image. Pre-steps, in order:
+Publish the essay assessment (the one with the rubric and `with_feedback` on);
+Start session with *Picked students* = the demo students; copy the Session
+code; run the one-day teacher-row script if the roster day has not flipped.
+Run `--dry-run` first. Deleting the seeded attempts afterwards is what lets the
+row be re-run.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 191 | `scripts/oneoff-aurora.sh seed-essays --assessment <uuid> --session-code <code> --student <student-number>=high --student <student-number>=mid --student <student-number>=low --student <student-number>=brief --student <student-number>=offtopic --dry-run`, then the same without `--dry-run` | The dry run prints one "would seed" line per student with its word count and writes nothing (the monitor still shows nobody joined); the real run prints an attempt id per student and exits 0 | NOT RUN |
+| 192 | Open the assessment's Scoring queue | Five handed-in attempts, each with the essay item needing manual scoring and the essay text readable on the card (paragraph breaks intact) | NOT RUN |
+| 193 | Press "Score with AI" on the `high`, `mid` and `low` attempts (the origin's `ESSAY_SCORER_PROVIDER` is `bedrock`) | Each proposes a score with per-criterion feedback against the uploaded rubric, and the three totals are visibly different — `high` well above `low` | NOT RUN |
+| 194 | Score the `brief` and `offtopic` attempts the same way | Both land near the bottom of the rubric, and the feedback says something a teacher would recognise as true — `brief` too short to show reasoning, `offtopic` not addressing the prompt or the sources | NOT RUN |

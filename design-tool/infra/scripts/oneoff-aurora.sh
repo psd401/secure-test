@@ -18,6 +18,9 @@
 #   oneoff-aurora.sh corpus --label "sonnet-4-6 vs pilot finals" \
 #       --with-human-final --dry-run
 #   oneoff-aurora.sh compare --all --csv
+#   oneoff-aurora.sh seed-essays --assessment <uuid> --session-code <code> \
+#       --student <student-number>=high --dry-run
+#   oneoff-aurora.sh roster-health [teacher@psd401.net]
 #
 # Every argument after the mode passes through to the bundled script
 # untouched (quoted args survive — the overrides JSON is built with jq when
@@ -31,7 +34,8 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: oneoff-aurora.sh <mode> [args…]   (modes: migrate, corpus, compare)" >&2
+  echo "usage: oneoff-aurora.sh <mode> [args…]" >&2
+  echo "  modes: migrate, corpus, compare, seed-essays, roster-health" >&2
   exit 2
 fi
 MODE="$1"
