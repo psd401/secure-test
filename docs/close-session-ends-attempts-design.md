@@ -1,10 +1,9 @@
 # Close session ends every attempt — design note (scoped 2026-09-15, for a fresh session)
 
-**Status:** scoped, nothing built. Needed before the pilot sittings on
-2026-09-17 (the pilot teachers' first feedback). Server half is a
-design-tool deploy; client half is **v1.3.3** (bundled with the client
-hygiene slice already on `main`) and reaches the fleet only through IT's
-AutoPkg runs — see §Timing.
+**Status:** scoped and decided (D-1…D-7), nothing built. Needed before the
+pilot sittings on 2026-09-17 (the pilot teachers' first feedback). Server
+half is a design-tool deploy; client half sits on `main` for **v1.3.3**,
+which James is holding — see §Timing.
 
 ## Problem
 
@@ -26,117 +25,121 @@ Teachers expect **Close session** (and, they will assume, the session
 running out) to end the test for everyone. The quick-start documents the
 current behaviour as a "looks wrong but isn't"; this note replaces it.
 
-## Decisions to make (recommendation first)
+## Decisions (James, 2026-09-15)
 
-- **D-1 What Close does to in-progress attempts.** Recommend: hand them in
-  as they stand through the existing teacher hand-in path — `status =
-  submitted`, `submitted_at = now`, `submitted_by_sub` = the teacher, one
-  `teacher_hand_in` attempt event per attempt (exactly what
-  `POST /api/attempts/[id]/hand-in` writes today, `route.ts:82-93`), then
-  `runAutoScoring` per attempt. Alternative: a new terminal status
-  (`ended_by_teacher`) — rejected: every reader (results, print, corpus,
-  delete) would need to learn it, and "handed in by the teacher" is already
-  a first-class state the per-student page names.
-- **D-2 Does session expiry (`expires_at`) do the same?** Recommend: yes —
-  the teacher who picked "This period · 55 min" means the period. No timer
-  fires at expiry, so it is enforced **lazily**: the next student write,
-  submit, or peek poll against an expired-or-closed sitting hands the
-  attempt in (server) and answers `sitting_closed` so the client stops.
-  Same 30 s grace as the deadline for an autosave already in flight.
-- **D-3 Client behaviour on learning the session is over.** Recommend:
-  reuse security slice 1's return-home path (`ebe20ab`): flush the focused
-  field and dirty drawings, end the secure session, `showEntry()`, one
-  button sheet — "Your teacher ended the test session. Your answers were
-  handed in." The attempt is already `submitted` server-side, so the flush
-  is best-effort within the grace.
-- **D-4 How the client learns.** Recommend: the existing 5-second peek poll
-  (`PeekResponder`, `GET /api/attempts/[id]/peek`) gains a `sitting`
-  field in its response — `"open" | "closed"` — and the answer-write 409
-  `already_submitted` gains `reason: "sitting_closed"`. No new channel, no
-  new timer; a closed session reaches a working client within ~5 s. The
-  poll already runs only while an attempt is on screen.
-- **D-5 Teacher-side copy.** The Close dialog (`SittingsPanel.tsx` ~886)
-  says how many are still working: "3 students are still working — their
-  tests will be handed in as they stand." Monitor rows flip to Handed in on
-  the next poll; the per-student page shows "Handed in by <teacher>" as it
-  does for a manual Hand in today.
-- **D-6 Interim without the client half.** With only the server half
-  deployed, a v1.3.2 student's screen keeps going after Close, but every
-  later write is refused (409) and the attempt is final and scored — the
-  teacher's view is right, the student's is stale. Acceptable for Thursday
-  if v1.3.3 has not reached the fleet; say so in the quick-start.
+- **D-1 What Close does to a student who is still working: it ends their
+  SITTING, not their attempt.** Handing in is the wrong status — a teacher
+  may want a student to work on a task across several sessions. The attempt
+  stays `in_progress`; the server refuses every further write from it while
+  its sitting is closed or expired; the student is returned to Your tests
+  and can **Resume** when the teacher opens another session (the join route
+  already rebinds an in-progress attempt to a new sitting, finding 8.2).
+  Finalising remains the teacher's: **Hand in** on the Monitor / results
+  row (enabled once the session is closed — T-2), or the student's own
+  Finish in a later session.
+- **D-2 Session expiry (`expires_at`) does exactly the same.** "This
+  period · 55 min" means the period. Enforced lazily — no timer fires at
+  expiry; the next write, submit or peek poll from an attempt whose sitting
+  is closed or expired is refused / answers `sitting_closed`.
+- **D-3 No grace.** A write that arrives after Close or expiry is refused
+  outright (the deadline's 30 s grace does not apply here). Consequence: an
+  autosave in flight at the moment of Close can be lost — the last field the
+  student was typing in. Accepted.
+- **D-4 Client behaviour.** Reuse security slice 1's return-home path
+  (`ebe20ab`): flush (best-effort — it will be refused if it lands after the
+  close), end the secure session, `showEntry()`, one-button sheet — "Your
+  teacher ended the test session. Your answers are saved." The Your tests
+  list then shows the test again with **Resume** only while some open
+  session admits the student.
+- **D-5 How the client learns.** The existing 5-second peek poll
+  (`PeekResponder`, `GET /api/attempts/[id]/peek`) gains `sitting: "open" |
+  "closed"`; the answer-write and submit routes answer 409
+  `{ error: "sitting_closed" }`. No new channel, no new timer; a closed
+  session reaches a working client within ~5 s.
+- **D-6 Teacher-side copy.** Close dialog: "N students are still working —
+  they will be returned to Your tests with their answers saved. Hand in
+  their work from the Monitor when you are ready, or open another session
+  for them to continue." Monitor rows stay In progress with Hand in enabled;
+  nothing changes on the per-student page.
+- **D-7 Interim without the client half.** Server half alone: a v1.3.2
+  student's screen keeps going after Close but every write is refused
+  (409 `sitting_closed`, spooled then dropped as `responses_dropped`); the
+  teacher's view is right and Hand in works. **v1.3.3 is HELD** (James) in
+  case this work or the pilot touches the client further; the client half
+  is built and ready to ride it.
 
 ## Mechanism
 
 **Server (design-tool).**
-- `lib/api/sittings/endAttempts.ts` (new): `handInOpenAttempts(db,
-  sitting, bySub, reason: "closed" | "expired")` — selects `attempts` where
-  `test_session_id = sitting.id AND status = 'in_progress'`, then per
-  attempt the same writes as the hand-in route (factor the route's body into
-  a shared `teacherHandIn(db, attempt, bySub)` so both call one function),
-  then `runAutoScoring`. Returns the count.
-- `POST /api/test-sessions/[id]/close`: after `status = closed`, call it;
-  return `{ ok, handed_in: n }`.
-- Lazy expiry: a shared `refuseIfSittingOver(db, attempt)` beside
-  `refuseIfPastDeadline`, used by the response write, submit and peek
-  routes: if the attempt's sitting is `closed` or `expires_at + 30 s <
-  now`, hand the attempt in (idempotent) and answer 409
-  `{ error: "already_submitted", reason: "sitting_closed" }` (peek: 200
-  with `sitting: "closed"`). Attempts not bound to a sitting (`--token`
-  dev, offline) are untouched.
-- Monitor / attendance: nothing new to store — `submitted_by_sub` already
-  distinguishes a teacher hand-in.
+- `lib/api/sittingOver.ts` (new): `sittingIsOver(sitting, now)` = `status
+  !== "open" || expires_at <= now`; `refuseIfSittingOver(db, attempt)` —
+  loads the attempt's `test_session_id` row (attempts with no sitting: the
+  `--token` dev posture and offline are untouched) and returns the 409
+  response `{ ok: false, error: "sitting_closed" }` or null. Used by the
+  response write (`attempts/[id]/responses/[itemId]` PUT + DELETE), the
+  drawing upload slot, and `submit`. Order: after `attemptAcceptsWrites`,
+  before `refuseIfPastDeadline`.
+- `GET /api/attempts/[id]/peek`: response gains `sitting: "open" |
+  "closed"` (computed the same way; unchanged otherwise).
+- `POST /api/test-sessions/[id]/close`: unchanged semantics; returns
+  `{ ok, in_progress: n }` so the dialog can say the count (the dialog reads
+  the count from the attendance rows it already has BEFORE confirming).
+- No status change, no event write on the server: the client reports its
+  own `lockdown_end` as today; a `sitting_closed` attempt event is written
+  by the CLIENT (new kind) so the per-student timeline explains the exit.
+- Results / Monitor: nothing new to store.
 
 **Client.**
-- `PeekResponder`: decode `sitting`; on `"closed"` call a new
-  `onSittingClosed` once. `AssessmentViewController`: on a 409 with
-  `reason: "sitting_closed"` call the same. AppDelegate wires it to the
-  return-home path with the D-3 copy; a `sitting_closed` attempt event is
-  NOT needed (the server wrote `teacher_hand_in`).
-- Core tests: decode; the responder fires once; the controller maps the 409.
+- `PeekResponder`: decode `sitting`; on `"closed"` fire `onSittingClosed`
+  once per attempt. `AssessmentViewController`: a 409 `sitting_closed` on
+  any write fires the same. AppDelegate: report `sitting_closed`, then the
+  D-4 return-home path. Core tests: decode, fires once, 409 mapping, the
+  event kind.
+- `DeliveryBundle` / schema: the new attempt-event kind `sitting_closed`
+  in the shared enum (packages/schema) + migration if the kind is a CHECK.
 
 ## Slices
 
-1. **Server** (Opus, one commit): shared `teacherHandIn`, close route hands
-   in + returns the count, lazy `refuseIfSittingOver` on write / submit /
-   peek, Close dialog count copy. Tests: close with 0 / n in-progress
-   attempts; expired sitting's next write hands in and 409s; peek reports
-   closed; hand-in route unchanged; time-limit rows still pass. Rows.
-   **Deploy Wednesday** (no migration).
-2. **Client** (Opus, one commit): poll field + 409 reason → return-home
-   sheet. `swift test`, both builds. Rows. **Cut v1.3.3 with the hygiene
-   slice**, psd-sign, `gh release create` (James).
-3. **Docs**: quick-start "Three clocks" rewritten (Close and expiry now end
-   tests; Hand in remains for one student), time-limit note §Progress,
-   roadmap row, this note §Progress.
+1. **Server** (Opus, one commit): `sittingOver`, the three guarded routes,
+   the peek field, the close route's count, the Close dialog copy, the new
+   event kind (schema + migration if needed). Tests: open sitting passes;
+   closed → 409 on write / upload / submit; expired → same; peek reports
+   closed; time-limit rows unaffected; hand-in unchanged; a `--token`
+   attempt with no sitting unaffected. Rows. **Deploy Wednesday.**
+2. **Client** (Opus, one commit): poll field + 409 → return-home sheet +
+   `sitting_closed` event. `swift test`, both builds. Rows. **Sits on
+   `main` for v1.3.3 (held).**
+3. **Docs**: quick-start "Three clocks" rewritten (Close and expiry return
+   students to Your tests with answers saved; Hand in finalises; Resume in
+   a later session), time-limit note §Progress, roadmap row CS, this note.
 
 ## Timing
 
-- Server half can be live Wednesday morning with a day of soak.
-- Client half: v1.3.2 published 11:24 PT Tuesday had not reached James's
-  student Mac by 14:30 PT; IT's recipe runs "a few times a day" and never
-  over a running app. Cut v1.3.3 Tuesday evening or Wednesday first thing
-  and ask IT for an extra run; if it is not on the fleet by Thursday, D-6
-  applies.
+- Server half live Wednesday morning with a day of soak.
+- Client half: on `main`, released with v1.3.3 when James lifts the hold.
+  Until then D-7 applies on Thursday.
 
 ## Rows (to write in slice 1 / 2)
 
-Teacher: close with a student mid-essay → Monitor row Handed in within a
-poll, per-student page "Handed in by …", the essay text as it stood; close
-dialog names the count; results matrix final; a second Close is a no-op.
-Client (v1.3.3, real session): the student's Mac ends the session within
-~5 s of Close with the D-3 sheet; a student who was typing loses at most
-the unflushed sentence; an expired session's next keystroke ends the same
-way; a v1.3.2 client against the new server keeps its screen but every
-write is refused (D-6, observe the 409s on stderr).
+Teacher: close with a student mid-essay → the row stays In progress with
+Hand in enabled; the dialog named the count; Hand in then finalises the
+essay as it stood; open a NEW session for the same section → the student
+sees Resume and continues with their text intact; a second Close is a
+no-op. Client (v1.3.3, real session): the student's Mac ends the session
+within ~5 s of Close with the D-4 sheet and a `sitting_closed` event on
+the timeline; a student who was typing loses at most the unflushed field;
+an expired session's next keystroke ends the same way; a v1.3.2 client
+against the new server keeps its screen but every write is refused (D-7,
+the 409s on stderr).
 
 ## Open questions for James (fresh session)
 
-- D-1 reuse hand-in vs. new status — confirm reuse.
-- D-2 expiry ends attempts too — confirm.
-- Grace after Close: 30 s (matches the deadline) or 0?
-- Cut v1.3.3 tonight or Wednesday?
+- Should a closed session's Close dialog offer "Hand in everyone now" as a
+  second button (one click instead of a row at a time)? Not required for
+  Thursday.
+- The `sitting_closed` attempt event: client-written (recommended, matches
+  `lockdown_end`) or server-written at Close?
 
 ## Progress
 
-- 2026-09-15: scoped (this note). Nothing built.
+- 2026-09-15: scoped (this note). D-1…D-7 decided by James the same day: end the sitting, not the attempt (no hand-in, attempt stays in_progress and resumable); expiry counts; no grace; v1.3.3 held. Nothing built.
