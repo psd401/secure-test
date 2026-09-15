@@ -131,6 +131,13 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.3.1 — 2026-09-14** (built from `48afe60`, tag on `main`): deployment
+  target 26.4 (was 26.5; IT asked — see "Open" below for the evidence) and
+  the T-1 time-limit banner fix. Archive already Developer ID + hardened
+  runtime, six entitlements intact, profile embedded; app + pkg notarized
+  and stapled from the session (psd-sign 0.5.0), `gh release create` by
+  James. `/releases/latest` = 1.3.1, 302. Release notes flag that no real
+  session has run on 26.4; the v1.3.0 configuration profile works unchanged.
 - **v1.3.0 — 2026-09-11** (built from `c37921e`): managed-preference
   configuration (the section above), no localhost fallback, the not-set-up
   message; plus the time limit, math keypad, drawing tools and the
@@ -150,7 +157,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
   IT without incident); a Finder launch showed Sign in with Google, a real
   student sat two real sessions and handed in, no TCC prompt.
   `MANUAL-CHECKS.md` "Signed build" is the record.
-- Next release (v1.3.1, bumped 2026-09-14, not yet cut) carries the
+- ~~Next release~~ v1.3.1 (PUBLISHED 2026-09-14) carries the
   time-limit banner fix (the × froze the strip instead of hiding it —
   finding T-1, `docs/time-limit-and-unfinished-attempts-design.md`) and
   **drops the deployment target from 26.5 to 26.4** (IT asked, 2026-09-14).
