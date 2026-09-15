@@ -44,6 +44,17 @@ public struct InvalidConfigurationValue: Equatable, Sendable {
 ///    is how an MDM configuration profile reaches a sandboxed app: a `Forced`
 ///    payload surfaces through `UserDefaults.standard` like any other default.
 ///
+/// Security slice 2 (2026-09-15) added `managedPreferenceWins`, which INVERTS
+/// that order: with it, a managed preference outranks both the launch argument
+/// and the environment. A Release build passes `true`, so a student who opens
+/// Terminal cannot point a Jamf-managed Mac at a server of their own by running
+/// the app with `--server` or `SECURE_TEST_SERVER`; a Debug build passes
+/// `false` and behaves exactly as before, which is what keeps the dev launcher
+/// working. A dev Mac has no managed preferences either way, so on those
+/// machines the flag changes nothing. The environment and launch argument
+/// remain the fallback in Release when no profile is installed — that is how an
+/// unmanaged build is configured at all.
+///
 /// An empty string counts as unset at every level, so a profile that ships a
 /// blank key does not shadow the environment. A server URL string that is not
 /// an http(s) URL is treated as unset too, and reported (`invalidServerURL`) so
@@ -74,10 +85,15 @@ public struct ClientConfiguration: Equatable, Sendable {
     ///   - defaults: a lookup into the app's preference domain — in the app,
     ///     `UserDefaults.standard.string(forKey:)`. A closure so this type
     ///     stays pure and testable.
+    ///   - managedPreferenceWins: `true` (the Release posture) puts the managed
+    ///     preference ABOVE the launch argument and the environment, so a
+    ///     forced profile value cannot be overridden from a Terminal launch.
+    ///     `false` (Debug) keeps the historical order.
     public init(
         arguments: [String],
         environment: [String: String],
-        defaults: (String) -> String?
+        defaults: (String) -> String?,
+        managedPreferenceWins: Bool
     ) {
         let rawServer = Self.resolve(
             argument: "--server",
@@ -85,7 +101,8 @@ public struct ClientConfiguration: Equatable, Sendable {
             defaultsKey: Self.serverURLDefaultsKey,
             arguments: arguments,
             environment: environment,
-            defaults: defaults
+            defaults: defaults,
+            managedPreferenceWins: managedPreferenceWins
         )
         if let rawServer {
             if let url = Self.validURL(rawServer.value) {
@@ -112,7 +129,8 @@ public struct ClientConfiguration: Equatable, Sendable {
             defaultsKey: Self.googleClientIDDefaultsKey,
             arguments: arguments,
             environment: environment,
-            defaults: defaults
+            defaults: defaults,
+            managedPreferenceWins: managedPreferenceWins
         )
         self.googleClientID = rawClientID?.value
         self.googleClientIDSource = rawClientID?.source ?? .none
@@ -158,8 +176,13 @@ public struct ClientConfiguration: Equatable, Sendable {
         defaultsKey: String,
         arguments: [String],
         environment: [String: String],
-        defaults: (String) -> String?
+        defaults: (String) -> String?,
+        managedPreferenceWins: Bool
     ) -> RawValue? {
+        // Security slice 2: on the fleet the profile is the authority.
+        if managedPreferenceWins, let value = nonEmpty(defaults(defaultsKey)) {
+            return RawValue(value: value, source: .managedPreference)
+        }
         if let flag = arguments.firstIndex(of: argument),
            arguments.indices.contains(flag + 1),
            let value = nonEmpty(arguments[flag + 1]) {

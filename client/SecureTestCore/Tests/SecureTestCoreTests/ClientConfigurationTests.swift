@@ -11,12 +11,14 @@ final class ClientConfigurationTests: XCTestCase {
     private func config(
         arguments: [String] = ["SecureTest"],
         environment: [String: String] = [:],
-        defaults: [String: String] = [:]
+        defaults: [String: String] = [:],
+        managedPreferenceWins: Bool = false
     ) -> ClientConfiguration {
         ClientConfiguration(
             arguments: arguments,
             environment: environment,
-            defaults: { defaults[$0] }
+            defaults: { defaults[$0] },
+            managedPreferenceWins: managedPreferenceWins
         )
     }
 
@@ -193,5 +195,90 @@ final class ClientConfigurationTests: XCTestCase {
         let resolved = config(environment: ["SECURE_TEST_SERVER": "http://localhost:3000"])
         XCTAssertEqual(resolved.serverURL, URL(string: "http://localhost:3000"))
         XCTAssertEqual(resolved.serverURLSource, .environment)
+    }
+}
+
+/// Security slice 2 (2026-09-15): on a managed Mac the profile is the
+/// authority. A student who opens Terminal and relaunches the app with
+/// `--server` or `SECURE_TEST_SERVER` must still reach the district origin.
+final class ManagedPreferencePrecedenceTests: XCTestCase {
+    private func config(
+        arguments: [String] = ["SecureTest"],
+        environment: [String: String] = [:],
+        defaults: [String: String] = [:],
+        managedPreferenceWins: Bool
+    ) -> ClientConfiguration {
+        ClientConfiguration(
+            arguments: arguments,
+            environment: environment,
+            defaults: { defaults[$0] },
+            managedPreferenceWins: managedPreferenceWins
+        )
+    }
+
+    private let profile = [
+        "ServerURL": "https://managed.invalid",
+        "GoogleClientID": "managed-client",
+    ]
+
+    func testManagedPreferenceBeatsTheLaunchArgumentInRelease() {
+        let resolved = config(
+            arguments: ["SecureTest", "--server", "https://student.invalid", "--google-client-id", "student"],
+            defaults: profile,
+            managedPreferenceWins: true
+        )
+        XCTAssertEqual(resolved.serverURL, URL(string: "https://managed.invalid"))
+        XCTAssertEqual(resolved.serverURLSource, .managedPreference)
+        XCTAssertEqual(resolved.googleClientID, "managed-client")
+        XCTAssertEqual(resolved.googleClientIDSource, .managedPreference)
+    }
+
+    func testManagedPreferenceBeatsTheEnvironmentInRelease() {
+        let resolved = config(
+            environment: [
+                "SECURE_TEST_SERVER": "https://student.invalid",
+                "SECURE_TEST_GOOGLE_CLIENT_ID": "student",
+            ],
+            defaults: profile,
+            managedPreferenceWins: true
+        )
+        XCTAssertEqual(resolved.serverURL, URL(string: "https://managed.invalid"))
+        XCTAssertEqual(resolved.serverURLSource, .managedPreference)
+        XCTAssertEqual(resolved.googleClientIDSource, .managedPreference)
+    }
+
+    /// An unmanaged Release build has no profile, so the environment is still
+    /// how it is configured at all — the flag narrows nothing there.
+    func testWithoutAProfileTheEnvironmentStillConfiguresARelease() {
+        let resolved = config(
+            environment: ["SECURE_TEST_SERVER": "https://solo.invalid"],
+            managedPreferenceWins: true
+        )
+        XCTAssertEqual(resolved.serverURL, URL(string: "https://solo.invalid"))
+        XCTAssertEqual(resolved.serverURLSource, .environment)
+    }
+
+    /// A blank forced key does not shadow the environment even in Release —
+    /// the same "empty means unset" rule as everywhere else.
+    func testBlankManagedValueDoesNotShadowTheEnvironment() {
+        let resolved = config(
+            environment: ["SECURE_TEST_SERVER": "https://solo.invalid"],
+            defaults: ["ServerURL": "   "],
+            managedPreferenceWins: true
+        )
+        XCTAssertEqual(resolved.serverURL, URL(string: "https://solo.invalid"))
+        XCTAssertEqual(resolved.serverURLSource, .environment)
+    }
+
+    /// Debug is unchanged, which is what keeps the dev launcher working.
+    func testDebugKeepsTheHistoricalOrder() {
+        let resolved = config(
+            arguments: ["SecureTest", "--server", "https://dev.invalid"],
+            defaults: profile,
+            managedPreferenceWins: false
+        )
+        XCTAssertEqual(resolved.serverURL, URL(string: "https://dev.invalid"))
+        XCTAssertEqual(resolved.serverURLSource, .launchArgument)
+        XCTAssertEqual(resolved.googleClientIDSource, .managedPreference)
     }
 }

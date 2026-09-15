@@ -26,7 +26,7 @@ final class AssessmentLockdownTests: XCTestCase {
 
     private func lockdown(
         _ behaviour: SimulatedLockdownSession.Behaviour = .cooperative,
-        watchdog: TimeInterval = 30,
+        watchdog: TimeInterval? = 30,
         grace: TimeInterval = 5
     ) -> (AssessmentLockdown, SimulatedLockdownSession) {
         let session = SimulatedLockdownSession(behaviour: behaviour)
@@ -318,6 +318,78 @@ final class AssessmentLockdownTests: XCTestCase {
         XCTAssertEqual(expiries, 0)
     }
 
+    // MARK: No watchdog (security slice 2)
+
+    /// The Release posture: `Timings.watchdog` is nil, so nothing is armed and
+    /// the session ends only when it is asked to. This is the fleet finding of
+    /// 2026-09-15 — the watchdog counted from `begin()` and never reset, so
+    /// every real sitting ended itself at ten minutes.
+    func testNoWatchdogArmsNoTimerAtAll() {
+        let (subject, _) = lockdown(watchdog: nil)
+        subject.begin()
+        XCTAssertEqual(subject.state, .active)
+        XCTAssertEqual(clock.pendingCount, 0, "nothing should be scheduled without a watchdog")
+    }
+
+    func testNoWatchdogNeverEndsTheSessionHoweverLongItRuns() {
+        let (subject, session) = lockdown(watchdog: nil)
+        var expired = 0
+        subject.onWatchdogExpired = { expired += 1 }
+        subject.begin()
+
+        // Far past both the old default and any override that was ever set.
+        clock.advance(by: 7200)
+
+        XCTAssertEqual(subject.state, .active, "the session must still be up")
+        XCTAssertEqual(session.endCount, 0, "nothing should have ended it")
+        XCTAssertEqual(expired, 0)
+    }
+
+    func testNoWatchdogReportsNoCountdown() {
+        let (subject, _) = lockdown(watchdog: nil)
+        var seen: [TimeInterval] = []
+        subject.onCountdown = { seen.append($0) }
+        subject.begin()
+        clock.advance(by: 120)
+        XCTAssertTrue(seen.isEmpty, "a countdown implies an end that is not coming")
+    }
+
+    /// Everything that actually gets a student out is independent of the
+    /// watchdog and must still work without one.
+    func testEndStillWorksWithNoWatchdog() {
+        let (subject, session) = lockdown(watchdog: nil)
+        subject.begin()
+        subject.end()
+        XCTAssertEqual(subject.state, .idle)
+        XCTAssertEqual(session.endCount, 1)
+    }
+
+    func testTeardownBackstopStillFiresWithNoWatchdog() {
+        let (subject, _) = lockdown(.hangsOnEnd, watchdog: nil, grace: 5)
+        var completed = 0
+        var unrecoverable = 0
+        subject.onUnrecoverable = { unrecoverable += 1 }
+        subject.begin()
+
+        subject.endBeforeTeardown { completed += 1 }
+        XCTAssertEqual(completed, 0)
+
+        backstopClock.advance(by: 5)
+        XCTAssertEqual(completed, 1, "the grace backstop is not the watchdog and stays armed")
+        XCTAssertEqual(unrecoverable, 1)
+    }
+
+    func testNoWatchdogLogsThatNoneIsArmed() {
+        let (subject, _) = lockdown(watchdog: nil)
+        var logs: [String] = []
+        subject.onLog = { logs.append($0) }
+        subject.begin()
+        XCTAssertTrue(
+            logs.contains { $0.contains("no watchdog armed") },
+            "the launch log must say the session has no auto-end: \(logs)"
+        )
+    }
+
     // MARK: End requested while starting (finding 8.3)
 
     /// The shipping client, inside a REAL session (2026-08-28): an `end()`
@@ -515,7 +587,7 @@ private final class HeldBeginSession: AssessmentLockdown.Session {
 /// simulated session's rehearsable failure modes.
 final class LockdownEnvironmentTests: XCTestCase {
     func testWatchdogDefaultsShortForTheTestingPosture() {
-        let timings = AssessmentLockdown.Timings.fromEnvironment([:])
+        let timings = AssessmentLockdown.Timings.fromEnvironment([:], allowOverride: true)
         XCTAssertEqual(timings.watchdog, 600)
         XCTAssertEqual(timings.floor, 10)
         XCTAssertEqual(timings.grace, 5)
@@ -523,22 +595,36 @@ final class LockdownEnvironmentTests: XCTestCase {
 
     func testWatchdogOverrideParsesAndBadValuesKeepTheDefault() {
         XCTAssertEqual(
-            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "3600"]).watchdog,
+            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "3600"], allowOverride: true).watchdog,
             3600
         )
         XCTAssertEqual(
-            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "banana"]).watchdog,
+            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "banana"], allowOverride: true).watchdog,
             600
         )
         XCTAssertEqual(
-            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "0"]).watchdog,
+            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "0"], allowOverride: true).watchdog,
             600
         )
         // The floor still applies to a legal-but-tiny override.
         XCTAssertEqual(
-            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "3"]).effectiveWatchdog,
+            AssessmentLockdown.Timings.fromEnvironment(["SECURE_TEST_WATCHDOG_SECONDS": "3"], allowOverride: true).effectiveWatchdog,
             10
         )
+    }
+
+    /// Security slice 2, the Release posture: no watchdog, and the environment
+    /// is not consulted — a student with a Terminal cannot set one.
+    func testWatchdogIsDisabledWhenOverridesAreNotAllowed() {
+        XCTAssertNil(AssessmentLockdown.Timings.fromEnvironment([:], allowOverride: false).watchdog)
+        XCTAssertNil(AssessmentLockdown.Timings.fromEnvironment([:], allowOverride: false).effectiveWatchdog)
+        let forced = AssessmentLockdown.Timings.fromEnvironment(
+            ["SECURE_TEST_WATCHDOG_SECONDS": "30"],
+            allowOverride: false
+        )
+        XCTAssertNil(forced.watchdog, "the environment must be ignored entirely in Release")
+        // The teardown grace is not the watchdog and is never switched off.
+        XCTAssertEqual(forced.grace, 5)
     }
 
     func testSimulatedBehaviourSelection() {
@@ -557,5 +643,50 @@ final class LockdownEnvironmentTests: XCTestCase {
             SimulatedLockdownSession.behaviourFromEnvironment(["SECURE_TEST_SIMULATE_LOCKDOWN": "nonsense"]),
             .cooperative
         )
+    }
+}
+
+/// Security slice 2: the session a Release build with no AAC entitlement gets
+/// instead of a cooperative simulation. It must fail to begin — loudly, and in
+/// a way that leaves the machine idle so slice 1's refused-gate path runs.
+final class RefusedLockdownSessionTests: XCTestCase {
+    func testBeginFailsImmediatelyWithTheReason() {
+        let session = RefusedLockdownSession(reason: "no AAC entitlement in this build")
+        var seen: [AssessmentLockdown.SessionEvent] = []
+        session.onEvent = { seen.append($0) }
+
+        session.begin()
+
+        XCTAssertEqual(seen, [.failedToBegin("no AAC entitlement in this build")])
+        XCTAssertEqual(session.beginCount, 1)
+    }
+
+    func testEndIsASilentNoOp() {
+        let session = RefusedLockdownSession(reason: "no entitlement")
+        var seen: [AssessmentLockdown.SessionEvent] = []
+        session.onEvent = { seen.append($0) }
+        session.end()
+        XCTAssertTrue(seen.isEmpty, "there is nothing to end")
+    }
+
+    /// Driven through the state machine: the session never becomes active, so
+    /// the app's page-load gate is refused and no test page is ever built.
+    func testTheMachineNeverLeavesIdle() {
+        let clock = ManualLockdownScheduler()
+        let backstopClock = ManualLockdownScheduler()
+        let subject = AssessmentLockdown(
+            timings: .init(watchdog: nil),
+            scheduler: clock,
+            backstopScheduler: backstopClock,
+            makeSession: { RefusedLockdownSession(reason: "no entitlement") }
+        )
+        var states: [AssessmentLockdown.State] = []
+        subject.onState = { states.append($0) }
+
+        subject.begin()
+
+        XCTAssertEqual(subject.state, .idle)
+        XCTAssertEqual(states, [.starting, .idle], "starting, then straight back — never active")
+        XCTAssertEqual(clock.pendingCount, 0)
     }
 }

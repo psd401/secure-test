@@ -304,6 +304,45 @@ work. Rows: `client/MANUAL-CHECKS.md` "Content only while locked
 (2026-09-15)", NOT RUN; the four rows this contradicts are marked superseded
 in place.
 
-**Slice 2 (not built):** hardening the knobs themselves — the watchdog off in
-Release, and the simulation / debug environment variables gated so a shipped
-build cannot be talked out of a real session.
+**Slice 2 (BUILT 2026-09-15, client only):** nothing a student can set from
+Terminal weakens a Release build. The client had **no `#if DEBUG` anywhere**, so
+every development knob shipped live in the notarized app. A new `BuildPosture`
+enum in the app target (the only place `#if DEBUG` appears — `SecureTestCore`
+stays configuration-agnostic and takes explicit parameters, because SwiftPM
+builds it in debug for `swift test`) gates all of them:
+
+1. **The watchdog is off in Release** (James's decision). `Timings.watchdog` is
+   now optional and `fromEnvironment(_:allowOverride:)` returns nil for
+   Release, where `SECURE_TEST_WATCHDOG_SECONDS` is not read at all. It counted
+   600 s of wall clock from `begin()` with no reset, so **every fleet session
+   was ending itself at ten minutes**. Nothing is armed, nothing counts down,
+   and `end()`, the escalation and the teardown grace backstop are unchanged.
+2. **`SECURE_TEST_SIMULATE_LOCKDOWN` is Debug only** — and it was checked
+   BEFORE the entitlement, so a Terminal launch turned a real session into a
+   cooperative fake.
+3. **A Release build with no AAC entitlement refuses** rather than falling back
+   to a cooperative simulation: `RefusedLockdownSession` (Core) fails to begin
+   immediately, which takes slice 1's refused-gate path — "Couldn't start a
+   secure session", no test rendered. Debug keeps the fallback for unsigned dev
+   builds and CI.
+4. **`SECURE_TEST_NO_FULLSCREEN`**, **`SECURE_TEST_DEBUG_CRASH`** and
+   **`--token` / `SECURE_TEST_TOKEN`** are Debug only.
+5. **Managed preferences outrank the launch argument and the environment in
+   Release** (`ClientConfiguration(… managedPreferenceWins:)`), so a Jamf-forced
+   `ServerURL` / `GoogleClientID` cannot be overridden from Terminal. They stay
+   the fallback where no profile is installed, so an unmanaged Release build is
+   still configurable; Debug is unchanged.
+6. **The offline bundle path is Debug only** — `--bundle` ignored, no File menu
+   and no Cmd-O, because it renders assessment content with no attempt, no
+   session and no reporting.
+
+The app logs `build posture: RELEASE — development overrides ignored` at
+launch. `swift test` 626 (611 + the nil-watchdog, refused-session and
+managed-preference-precedence tests); `xcodebuild` green in **both** Debug and
+Release — the first build where the two configurations differ. Records:
+`client/MANUAL-CHECKS.md` "Release hardening (2026-09-15) — security slice 2"
+(14 rows, NOT RUN, including a 15-minute real session and an
+entitlement-stripped re-sign), a "Release vs Debug behaviour" list in
+`client/RELEASING.md`, and the env knobs marked Debug-only in
+`client/README.md`. Ships in the next client release (**v1.3.2**) — the
+watchdog fix does not reach the fleet until then.

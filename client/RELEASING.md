@@ -70,11 +70,45 @@ psd401/secure-test --title "Secure Test v<v>" --notes "<one line>"`
 stapling; `plutil -p Contents/Info.plist | grep PSDBuildCommit` matches the
 release commit.
 
+## Release vs Debug behaviour
+
+Security slice 2 (2026-09-15) put every development affordance behind
+`BuildPosture` (`#if DEBUG`, app target only — `SecureTestCore` stays
+configuration-agnostic and takes explicit parameters, because SwiftPM builds it
+in debug for `swift test`). **An exported Release build therefore has none of
+the following**, and a hand-run that expects one is testing the wrong binary:
+
+- **No watchdog.** `Timings.watchdog` is nil and `SECURE_TEST_WATCHDOG_SECONDS`
+  is not read. (Debug keeps the 600 s default. The watchdog counts from
+  `begin()` and never resets, which ended every fleet sitting at ten minutes —
+  the 2026-09-15 finding.) The teardown grace backstop is NOT the watchdog and
+  is unchanged.
+- **No `SECURE_TEST_SIMULATE_LOCKDOWN`.** A Release build always takes the real
+  path; the knob used to be read before the entitlement.
+- **No `--token` / `SECURE_TEST_TOKEN`.** Google sign-in only.
+- **No `SECURE_TEST_NO_FULLSCREEN`**, **no `SECURE_TEST_DEBUG_CRASH`** menu
+  item.
+- **No offline bundle path.** `--bundle` is ignored and there is no File menu,
+  so no File → Open Test Bundle… (Cmd-O).
+- **Managed preferences outrank everything.** A profile's `ServerURL` /
+  `GoogleClientID` beats `--server` and `SECURE_TEST_SERVER` (which remain the
+  fallback when no profile is installed, so an unmanaged Release build is still
+  configurable).
+- **No entitlement means no session.** A Release build whose AAC entitlement is
+  missing or stripped refuses to begin (`RefusedLockdownSession`) and shows
+  "Couldn't start a secure session" — it does NOT fall back to the cooperative
+  simulation a Debug build uses.
+
+At launch the app logs `build posture: RELEASE — development overrides ignored`
+on stderr. Check for it before running any Release row in `MANUAL-CHECKS.md`.
+
 ## Configuration profile
 
 **The app is unusable without one.** It reads its server origin and its
-Google client id from launch arguments, then the environment, then its own
-managed preferences — and a Finder or Jamf launch supplies neither argument
+Google client id from its own managed preferences first in a Release build
+(security slice 2: a forced profile value cannot be overridden from a Terminal
+launch), falling back to launch arguments and then the environment when no
+profile is installed — and a Finder or Jamf launch supplies neither argument
 nor environment. There is no longer a localhost fallback (v1.2.0 shipped one
 and district Macs came up with a blank card, 2026-09-11); an unconfigured Mac
 now shows "This Mac isn't set up for Secure Test yet."

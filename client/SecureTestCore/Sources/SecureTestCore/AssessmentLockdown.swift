@@ -24,8 +24,13 @@ import Foundation
 /// 1. **Arm before you begin.** The watchdog goes up before `begin()`, never
 ///    after. Any window in which a session is live and nothing is watching it
 ///    is the original bug in miniature.
-/// 2. **The timeout cannot be switched off.** It can be lengthened for a long
-///    assessment; it cannot be removed, and it has a floor.
+/// 2. **A watchdog that is armed has a floor and cannot be shortened below
+///    it.** It can be lengthened for a long assessment. Whether one is armed
+///    at all is the CALLER's decision (`Timings.watchdog`, optional since
+///    security slice 2): development arms the short one, a Release build arms
+///    none — see the note on that property for why the fleet finding forced
+///    the change. The teardown backstop (rule 4) is separate, always armed,
+///    and is what actually guarantees an exit.
 /// 3. **The last-resort backstop runs on its own scheduler**, never the one
 ///    driving the UI. See `DispatchLockdownScheduler`.
 /// 4. **Confirmation, not hope.** Tearing down waits for the session to report
@@ -67,28 +72,53 @@ public final class AssessmentLockdown {
     }
 
     public struct Timings {
-        /// Auto-end after this long. Clamped up to `floor`.
-        public var watchdog: TimeInterval
-        /// Shortest watchdog we will honour.
+        /// Auto-end after this long, clamped up to `floor` — or `nil` for no
+        /// watchdog at all.
+        ///
+        /// Security slice 2 (2026-09-15) made this optional. The watchdog is a
+        /// DEVELOPMENT backstop (rule 2 below was written for it): it ends a
+        /// session nobody is watching. On the fleet it was ending real ones —
+        /// every v1.3.x session self-terminated ten minutes after `begin()`,
+        /// because the countdown runs from `begin()` and nothing resets it.
+        /// James's decision: a Release build arms no watchdog. The exits that
+        /// matter to a trapped student are the ones a student can reach (the
+        /// titlebar button, Cmd-E, Cmd-Q, window close, SIGTERM) plus the
+        /// teardown backstop below, and none of those are the watchdog.
+        public var watchdog: TimeInterval?
+        /// Shortest watchdog we will honour. Only meaningful when one is set.
         public var floor: TimeInterval
         /// How long `end()` gets to report back before we stop being polite.
+        /// Independent of the watchdog and never disabled — it is what makes a
+        /// teardown confirmed rather than hoped for (rule 4).
         public var grace: TimeInterval
 
-        public init(watchdog: TimeInterval, floor: TimeInterval = 10, grace: TimeInterval = 5) {
+        public init(watchdog: TimeInterval?, floor: TimeInterval = 10, grace: TimeInterval = 5) {
             self.watchdog = watchdog
             self.floor = floor
             self.grace = grace
         }
 
-        public var effectiveWatchdog: TimeInterval { max(watchdog, floor) }
+        /// The watchdog actually armed: the requested value raised to `floor`,
+        /// or nil when there is none.
+        public var effectiveWatchdog: TimeInterval? { watchdog.map { max($0, floor) } }
 
-        /// AAC-1: the watchdog default is deliberately SHORT (ten minutes) —
-        /// the testing posture James chose 2026-08-27 — so a session left
-        /// behind during development ends itself while someone is still in the
-        /// room. `SECURE_TEST_WATCHDOG_SECONDS` overrides it for a longer
-        /// hand-run; anything unparseable or non-positive keeps the default,
-        /// and the floor still applies either way.
-        public static func fromEnvironment(_ environment: [String: String]) -> Timings {
+        /// AAC-1: in a DEVELOPMENT build the watchdog default is deliberately
+        /// SHORT (ten minutes) — the testing posture James chose 2026-08-27 —
+        /// so a session left behind during development ends itself while
+        /// someone is still in the room, and `SECURE_TEST_WATCHDOG_SECONDS`
+        /// lengthens it for a hand-run; anything unparseable or non-positive
+        /// keeps the default, and the floor still applies either way.
+        ///
+        /// With `allowOverride: false` — the Release posture, security slice 2
+        /// — there is no watchdog and the environment is not consulted at all,
+        /// so nothing a student can set from Terminal can make a session end
+        /// itself mid-test. Core stays configuration-agnostic: the caller in
+        /// the app target decides which posture this is (`BuildPosture`).
+        public static func fromEnvironment(
+            _ environment: [String: String],
+            allowOverride: Bool
+        ) -> Timings {
+            guard allowOverride else { return Timings(watchdog: nil) }
             let raw = environment["SECURE_TEST_WATCHDOG_SECONDS"].flatMap(TimeInterval.init)
             let watchdog = (raw.map { $0 > 0 } ?? false) ? raw! : 600
             return Timings(watchdog: watchdog)
@@ -106,8 +136,10 @@ public final class AssessmentLockdown {
     /// Slice 92: the watchdog expired and is about to force the end. Distinct
     /// from the `didEnd` that follows, because "ended by the watchdog" and
     /// "ended on purpose" read very differently on a teacher's monitor.
+    /// Never fires when `Timings.watchdog` is nil — there is nothing to expire.
     public var onWatchdogExpired: (() -> Void)?
     /// Seconds left before the watchdog ends the session, once per second.
+    /// Silent for the whole session when no watchdog is armed.
     public var onCountdown: ((TimeInterval) -> Void)?
     /// The session would not end within `grace`. Fires on the BACKSTOP
     /// scheduler, so it must assume the main thread is not coming back — the
@@ -168,7 +200,11 @@ public final class AssessmentLockdown {
         state = .starting
         armWatchdog()
         session.begin()
-        onLog?("lockdown begin() called; watchdog set to \(Int(timings.effectiveWatchdog))s")
+        if let seconds = timings.effectiveWatchdog {
+            onLog?("lockdown begin() called; watchdog set to \(Int(seconds))s")
+        } else {
+            onLog?("lockdown begin() called; no watchdog armed for this build")
+        }
     }
 
     // MARK: Leaving
@@ -234,7 +270,16 @@ public final class AssessmentLockdown {
 
     private func armWatchdog() {
         watchdog?.cancel()
-        remaining = timings.effectiveWatchdog
+        watchdog = nil
+        // Security slice 2: no watchdog configured — nothing ticks, nothing
+        // counts down, and only an explicit `end()` (or the session itself)
+        // ever leaves `.active`. Rule 1 is unaffected: there is simply nothing
+        // to arm, rather than a window in which arming is late.
+        guard let seconds = timings.effectiveWatchdog else {
+            remaining = 0
+            return
+        }
+        remaining = seconds
         watchdog = scheduler.schedule(after: 1, repeats: true) { [weak self] in
             self?.tick()
         }
@@ -250,7 +295,7 @@ public final class AssessmentLockdown {
         // in flight.
         watchdog?.cancel()
         watchdog = nil
-        onLog?("WATCHDOG: \(Int(timings.effectiveWatchdog))s elapsed — ending lockdown")
+        onLog?("WATCHDOG: \(Int(timings.effectiveWatchdog ?? 0))s elapsed — ending lockdown")
         onWatchdogExpired?()
         armEscalation()
         end()
@@ -405,4 +450,37 @@ public final class SimulatedLockdownSession: AssessmentLockdown.Session {
             break
         }
     }
+}
+
+// MARK: - Refused session
+
+/// A `Session` that cannot begin and says so immediately.
+///
+/// Security slice 2 (2026-09-15). The app picks the session backing each
+/// `begin()`, and until this existed a build with no AAC entitlement always
+/// fell back to `SimulatedLockdownSession(.cooperative)` — which reports
+/// `didBegin`, drives the machine to `.active`, opens the page-load gate and
+/// renders the whole test on a Mac that is NOT locked. That fallback is right
+/// for an unsigned development build and wrong for a shipped one: a Release app
+/// whose entitlement is missing or stripped must refuse, not pretend.
+///
+/// `begin()` therefore reports `.failedToBegin(reason)` synchronously, which
+/// lands the machine back on `.idle` and takes slice 1's refused-gate path —
+/// "Couldn't start a secure session", with the `[security]` line naming the
+/// reason. `end()` is a no-op; there is nothing to end.
+public final class RefusedLockdownSession: AssessmentLockdown.Session {
+    public var onEvent: ((AssessmentLockdown.SessionEvent) -> Void)?
+    private let reason: String
+    public private(set) var beginCount = 0
+
+    public init(reason: String) {
+        self.reason = reason
+    }
+
+    public func begin() {
+        beginCount += 1
+        onEvent?(.failedToBegin(reason))
+    }
+
+    public func end() {}
 }

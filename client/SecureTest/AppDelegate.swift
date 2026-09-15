@@ -134,6 +134,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the sink and the crash handlers are what make the rest of this
         // launch legible on a Mac nobody is watching.
         Self.installErrorSink()
+        // Security slice 2: which posture this binary was built in, before any
+        // of the gated paths below could confuse a reader of the log.
+        Self.log(BuildPosture.logLine)
         Self.purgeLegacyKeychainToken()
         Self.resolveConfiguration()
         installMainMenu()
@@ -210,15 +213,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (documented in `client/README.md`).
     private func enterFullScreenAtLaunchIfNeeded() {
         guard let window, !window.styleMask.contains(.fullScreen) else { return }
-        guard ProcessInfo.processInfo.environment["SECURE_TEST_NO_FULLSCREEN"] != "1" else {
+        // Security slice 2: Debug only. In Release the knob is not read at all,
+        // so a Terminal launch cannot keep the window small enough to leave the
+        // Finder reachable around it.
+        if BuildPosture.allowsDevelopmentOverrides,
+           ProcessInfo.processInfo.environment["SECURE_TEST_NO_FULLSCREEN"] == "1" {
             Self.log("SECURE_TEST_NO_FULLSCREEN=1 — staying windowed")
             return
         }
         window.toggleFullScreen(nil)
     }
 
+    /// Security slice 2: `--bundle` is Debug only. In Release the argument is
+    /// ignored entirely and the app starts on the entry screen as usual — the
+    /// offline path renders assessment content with no session behind it.
     private static var hasOfflineBundleArgument: Bool {
-        ProcessInfo.processInfo.arguments.contains("--bundle")
+        guard BuildPosture.allowsOfflineBundle else {
+            if ProcessInfo.processInfo.arguments.contains("--bundle") {
+                log("--bundle ignored: offline bundles are development-only")
+            }
+            return false
+        }
+        return ProcessInfo.processInfo.arguments.contains("--bundle")
     }
 
     /// `--bundle <path>`, or the embedded sample when the flag dangles — the
@@ -240,6 +256,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The pick lands on the same offline `.file` path as `--bundle`: no
     /// attempt, no reporter, no lockdown.
     @objc private func openTestBundle() {
+        // Security slice 2: the menu item does not exist in Release, so this
+        // can only be reached in Debug — belt and braces for a stray sender.
+        guard BuildPosture.allowsOfflineBundle else { return }
         guard OfflineBundle.canOpen(on: screen), let window else {
             Self.log("open test bundle refused: a server-delivered attempt is on screen")
             return
@@ -294,6 +313,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func seedTokenFromLaunchArgumentsIfPresent() {
+        // Security slice 2: a seeded bearer token is a dev/CI affordance — in
+        // Release the only way to a session is Google sign-in.
+        guard BuildPosture.allowsDevelopmentOverrides else { return }
         let args = ProcessInfo.processInfo.arguments
         var supplied: String?
         if let flag = args.firstIndex(of: "--token"), args.indices.contains(flag + 1) {
@@ -313,7 +335,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Where this Mac's server origin and Google client id come from
     /// (`ClientConfiguration`, 2026-09-11): launch arguments, then the
     /// environment, then the managed preferences an MDM configuration profile
-    /// writes into this app's preference domain. The Google client id is the
+    /// writes into this app's preference domain — in a RELEASE build that order
+    /// is inverted and the managed preference wins (security slice 2). The Google client id is the
     /// NATIVE client (an iOS/macOS-type client in Google Cloud — no secret,
     /// redirect is the reverse-client-id scheme), distinct from the design
     /// tool's web client; the server lists both in OIDC_AUDIENCE (slice 77).
@@ -338,7 +361,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // A `Forced` payload from a configuration profile surfaces through
             // the standard defaults like any other value, inside the sandbox
             // too — nothing else is needed to read one.
-            defaults: { UserDefaults.standard.string(forKey: $0) }
+            defaults: { UserDefaults.standard.string(forKey: $0) },
+            // Security slice 2: in Release a Jamf-forced ServerURL /
+            // GoogleClientID outranks `--server` and the environment, so a
+            // student cannot point a managed Mac at a server of their own.
+            // A dev Mac has no profile, so Debug's historical order (argument,
+            // environment, then preference) is unchanged.
+            managedPreferenceWins: BuildPosture.managedPreferenceWins
         )
         resolvedConfiguration = resolved
         for line in resolved.logLines { log(line) }
@@ -636,16 +665,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// idle after every end, so attempts can follow each other.
     ///
     /// AAC-2a: which session backs it is decided per begin(), in order:
-    ///   1. `SECURE_TEST_SIMULATE_LOCKDOWN` set → simulated, with that
-    ///      behaviour. Rehearsals stay possible on any build, entitled or not.
+    ///   1. **Debug only** — `SECURE_TEST_SIMULATE_LOCKDOWN` set → simulated,
+    ///      with that behaviour. Rehearsals stay possible on any dev build,
+    ///      entitled or not.
     ///   2. The binary carries the AAC entitlement → `RealLockdownSession`.
     ///      THE MAC ACTUALLY LOCKS. Every exit path this machine enforces is
     ///      now load-bearing.
-    ///   3. Otherwise → simulated, cooperative. A CI or unentitled dev build
-    ///      falls back by design rather than failing begin().
+    ///   3. Otherwise → Debug falls back to a simulated cooperative session (an
+    ///      unsigned dev build or CI); **Release refuses** with
+    ///      `RefusedLockdownSession`, so a shipped app whose entitlement is
+    ///      missing or stripped never renders a test on an unlocked Mac.
+    ///
+    /// Security slice 2 reordered 1 and 2 in substance: the simulate knob used
+    /// to be read BEFORE the entitlement in every build, so a student could
+    /// turn a real session into a cooperative fake from a Terminal launch.
     private func makeLockdown() -> AssessmentLockdown {
         let lockdown = AssessmentLockdown(
-            timings: .fromEnvironment(ProcessInfo.processInfo.environment),
+            // Security slice 2: the watchdog is a development backstop and is
+            // NOT armed in Release. It counted from begin() and never reset, so
+            // on the fleet it was ending real sittings at ten minutes.
+            timings: .fromEnvironment(
+                ProcessInfo.processInfo.environment,
+                allowOverride: BuildPosture.allowsDevelopmentOverrides
+            ),
             scheduler: DispatchLockdownScheduler.main,
             backstopScheduler: DispatchLockdownScheduler.backstop,
             makeSession: { [weak self] in
@@ -654,7 +696,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let plan = self?.lockdownPlan ?? .restrictive
                 Self.log("lockdown config plan: \(plan.logDescription)")
                 let env = ProcessInfo.processInfo.environment
-                if env["SECURE_TEST_SIMULATE_LOCKDOWN"] != nil {
+                if BuildPosture.allowsDevelopmentOverrides,
+                   env["SECURE_TEST_SIMULATE_LOCKDOWN"] != nil {
                     Self.log("lockdown session: SIMULATED (SECURE_TEST_SIMULATE_LOCKDOWN override)")
                     return SimulatedLockdownSession(
                         behaviour: SimulatedLockdownSession.behaviourFromEnvironment(env)
@@ -663,6 +706,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if RealLockdownSession.binaryHasEntitlement {
                     Self.log("lockdown session: REAL AEAssessmentSession (entitled binary) — the Mac will lock")
                     return RealLockdownSession(plan: plan)
+                }
+                guard BuildPosture.allowsUnentitledFallback else {
+                    // Security slice 2: a Release build with no entitlement
+                    // cannot lock this Mac, so it refuses to start a session at
+                    // all. begin() reports failedToBegin, the page-load gate
+                    // refuses, and slice 1 shows "Couldn't start a secure
+                    // session" instead of the whole test on an unlocked Mac.
+                    Self.log("lockdown session: REFUSED — no AAC entitlement in this RELEASE binary")
+                    return RefusedLockdownSession(
+                        reason: "no AAC entitlement in this build — a secure session cannot be started"
+                    )
                 }
                 Self.log("lockdown session: SIMULATED (no AAC entitlement in this binary)")
                 return SimulatedLockdownSession(behaviour: .cooperative)
@@ -1099,8 +1153,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The hand-run's crash trigger (`SECURE_TEST_DEBUG_CRASH=1`). Gated on
     /// the environment variable at menu-build time, so a shipped app has no
     /// menu item at all rather than a disabled one.
+    /// Security slice 2: and on the build posture besides — the item cannot
+    /// exist in a Release binary however the environment is set.
     private static var debugCrashEnabled: Bool {
-        ProcessInfo.processInfo.environment["SECURE_TEST_DEBUG_CRASH"] == "1"
+        BuildPosture.allowsDevelopmentOverrides
+            && ProcessInfo.processInfo.environment["SECURE_TEST_DEBUG_CRASH"] == "1"
     }
 
     @objc private func triggerDebugCrash() {
@@ -1169,19 +1226,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Autoenabling off and `isEnabled` pinned from `screen`, so AppKit
         // cannot re-enable it from the responder chain while a server attempt
         // is up (the same reason the clipboard items are pinned).
-        let fileMenuItem = NSMenuItem()
-        let fileMenu = NSMenu(title: "File")
-        fileMenu.autoenablesItems = false
-        let open = fileMenu.addItem(
-            withTitle: "Open Test Bundle…",
-            action: #selector(openTestBundle),
-            keyEquivalent: "o"
-        )
-        open.target = self
-        open.isEnabled = OfflineBundle.canOpen(on: screen)
-        openBundleItem = open
-        fileMenuItem.submenu = fileMenu
-        mainMenu.addItem(fileMenuItem)
+        //
+        // Security slice 2: the item — and with it the whole File menu, which
+        // holds nothing else — is absent in Release. Offline rendering has no
+        // attempt, no lockdown and no reporting behind it, so Cmd-O in a
+        // shipped app is a way to put assessment content on an unlocked Mac.
+        if BuildPosture.allowsOfflineBundle {
+            let fileMenuItem = NSMenuItem()
+            let fileMenu = NSMenu(title: "File")
+            fileMenu.autoenablesItems = false
+            let open = fileMenu.addItem(
+                withTitle: "Open Test Bundle…",
+                action: #selector(openTestBundle),
+                keyEquivalent: "o"
+            )
+            open.target = self
+            open.isEnabled = OfflineBundle.canOpen(on: screen)
+            openBundleItem = open
+            fileMenuItem.submenu = fileMenu
+            mainMenu.addItem(fileMenuItem)
+        }
 
         // Session → End Secure Session (Cmd-E): the keyboard path to the
         // same truthfully-labelled exit as the titlebar button (AAC-1

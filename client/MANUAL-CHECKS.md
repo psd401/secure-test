@@ -1616,3 +1616,45 @@ the `[security]` lines. Rebuild the client first.
 | **Real session.** Repeat the Cmd-E row inside a REAL `AEAssessmentSession` | Same landing as the simulated row, and the Mac unlocks (`DID END`) before the entry screen is on view — check the order in stderr | NOT RUN |
 | **Watchdog.** `SECURE_TEST_WATCHDOG_SECONDS=30`, join, wait it out | The watchdog end lands home like every other end: "Your tests" plus the one-button "Secure session ended" sheet. stderr: `WATCHDOG: 30s elapsed — ending lockdown` then the leaving-the-test-screen line | NOT RUN |
 | Type into the essay (do not leave the field), then Cmd-E; sign in again and Resume | The typed text is present in the field — the page blurred the focused field and flushed dirty drawings before the view came down (`__secureTestFlushInput`), so the last `change` reached the spool | NOT RUN |
+
+## Release hardening (2026-09-15) — security slice 2
+
+The same audit found the other half: the client had **no `#if DEBUG` anywhere**,
+so every knob written for development shipped live in the notarized app. A
+student with a Terminal window could set `SECURE_TEST_SIMULATE_LOCKDOWN=1` and
+get a cooperative fake instead of a real session (it was checked BEFORE the
+entitlement), seed a bearer token with `--token`, stay windowed with
+`SECURE_TEST_NO_FULLSCREEN=1`, point the app at their own server with
+`--server`, or open any delivery bundle with Cmd-O. And the **watchdog** — a
+development backstop that counts from `begin()` and never resets — was ending
+every fleet session at ten minutes.
+
+What changed (James, 2026-09-15): a `BuildPosture` flag in the app target
+(`#if DEBUG`) gates all of it. **Release**: no watchdog at all; the simulate,
+token, no-fullscreen and debug-crash knobs are not read; `--bundle` is ignored
+and the File menu is absent; a managed-preference `ServerURL` / `GoogleClientID`
+outranks the launch argument and the environment; and a Release build with no
+AAC entitlement REFUSES to start a session (`RefusedLockdownSession`) instead of
+falling back to a cooperative simulation. **Debug is unchanged** — the dev
+launcher's whole posture still works.
+
+Needs a Debug build via `client/scripts/launch-client.ts` for the first row and
+a **notarized Release build** for the rest (`client/RELEASING.md`), launched
+from Terminal so stderr is readable.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Debug, unchanged.** Launch through `scripts/launch-client.ts` with `SECURE_TEST_SIMULATE_LOCKDOWN=1`, `SECURE_TEST_TOKEN`, `SECURE_TEST_NO_FULLSCREEN=1` and `SECURE_TEST_DEBUG_CRASH=1` set, and try Cmd-O | All five still work exactly as before: simulated session, token seeded, windowed, the Trigger Debug Crash item present, the open panel opens. stderr: `build posture: DEBUG — development overrides honoured` | NOT RUN |
+| **Release ignores the simulate knob.** Launch the notarized Release app from Terminal with `SECURE_TEST_SIMULATE_LOCKDOWN=1` and join a sitting | A REAL session begins anyway — stderr says `lockdown session: REAL AEAssessmentSession (entitled binary) — the Mac will lock` and never mentions the override | NOT RUN |
+| **Release ignores `--token`.** Same app with `--token <jwt>` | The entry screen still asks for Google sign-in; no `session token seeded` line on stderr | NOT RUN |
+| **Release ignores `SECURE_TEST_NO_FULLSCREEN`.** Same app with it set to `1` | The window goes full screen anyway; no `staying windowed` line | NOT RUN |
+| **Managed preference wins.** On a Mac carrying the Jamf configuration profile, launch the Release app with `--server https://example.invalid` | The app talks to the managed origin — stderr `config: server URL from managed preference` — and signs in normally. Repeat with `SECURE_TEST_SERVER=https://example.invalid`: same line | NOT RUN |
+| **Unmanaged Release still configurable.** On a Mac with NO profile, launch the Release app with `SECURE_TEST_SERVER` + `SECURE_TEST_GOOGLE_CLIENT_ID` set | It comes up configured — `config: server URL from environment` — and can sign in. (This is how a Release build is tested off the fleet at all) | NOT RUN |
+| **Release has no Cmd-O.** Open the File menu on the Release app; then press Cmd-O | There is no File menu at all, and Cmd-O does nothing (a beep at most). Launching with `--bundle <path>` starts on the entry screen and logs `--bundle ignored: offline bundles are development-only` | NOT RUN |
+| **Release has no crash item.** Session menu on the Release app, with `SECURE_TEST_DEBUG_CRASH=1` set | No "Trigger Debug Crash (SIGABRT)" item | NOT RUN |
+| **The watchdog is off.** A real session on the Release app: join and sit in the test for **15 minutes** without touching anything | The session is still up at 15 minutes and the Mac is still locked. stderr at begin: `lockdown begin() called; no watchdog armed for this build`, and NO `WATCHDOG:` line ever. (Before this slice the session ended itself at 10:00) | NOT RUN |
+| **The watchdog knob is ignored.** Same, launched with `SECURE_TEST_WATCHDOG_SECONDS=30` | Identical — no watchdog, no countdown, nothing ends at 30 s | NOT RUN |
+| **Debug watchdog still there.** Debug build, `SECURE_TEST_WATCHDOG_SECONDS=30`, join and wait | `WATCHDOG: 30s elapsed — ending lockdown` and slice 1's trip home, as recorded in the section above | NOT RUN |
+| **Release with the entitlement stripped.** Take a Release build, ad-hoc re-sign it WITHOUT the AAC entitlement (`codesign -f -s -` with entitlements omitted), launch it and join a sitting | **No test is rendered at any point.** stderr: `lockdown session: REFUSED — no AAC entitlement in this RELEASE binary`, `lockdown FAILED TO BEGIN`, `SECURE START REFUSED`. The app lands on "Your tests" with "Couldn't start a secure session" / "Your test didn't open. Ask your teacher for help." | NOT RUN |
+| **Debug with no entitlement, unchanged.** A Debug build with no entitlement (the ordinary dev posture), join | The cooperative simulated fallback as always — `lockdown session: SIMULATED (no AAC entitlement in this binary)` — and the test renders. CI and unsigned dev builds must not become unusable | NOT RUN |
+| **Hand-in on the Release build.** One ordinary sitting end to end on the notarized Release app | Unchanged by this slice: join, answer, hand in, handed-in notice, back to your tests | NOT RUN |

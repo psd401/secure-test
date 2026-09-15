@@ -85,6 +85,17 @@ What works:
 
 ## Running it
 
+> **Everything in this section is a DEBUG build's posture.** Security slice 2
+> (2026-09-15) gated every development knob behind `#if DEBUG` (`BuildPosture`
+> in the app target). In a **Release** build `SECURE_TEST_SIMULATE_LOCKDOWN`,
+> `SECURE_TEST_TOKEN` / `--token`, `SECURE_TEST_NO_FULLSCREEN`,
+> `SECURE_TEST_DEBUG_CRASH` and `SECURE_TEST_WATCHDOG_SECONDS` are not read at
+> all; `--bundle` is ignored and there is no File → Open Test Bundle…; a
+> managed-preference `ServerURL` / `GoogleClientID` outranks `--server` /
+> `SECURE_TEST_SERVER`; there is no watchdog; and a Release build without the
+> AAC entitlement refuses to start a session rather than simulating one. See
+> "Lockdown posture" below and `RELEASING.md`.
+
 ```bash
 # Against a local design-tool, signing in with Google (needs the native
 # client id; the design tool's OIDC_AUDIENCE must list it too).
@@ -101,8 +112,9 @@ SECURE_TEST_SERVER=http://localhost:3000 \
 ./SecureTest.app/Contents/MacOS/SecureTest --bundle path/to/delivery-bundle.json
 ```
 
-The offline path (`--bundle`, or File → Open Test Bundle…) is how the renderer
-is exercised in this environment and is worth keeping: without it the item
+The offline path (`--bundle`, or File → Open Test Bundle…) is **Debug only**
+since security slice 2 — it renders assessment content with no attempt and no
+session behind it — and is how the renderer is exercised in this environment: without it the item
 renderers become unobservable the moment a server is required. It opens no
 attempt, reports no events and never locks down; the menu item is disabled for
 as long as a server-delivered attempt is on screen (`OfflineBundle.canOpen`).
@@ -112,7 +124,7 @@ screen as soon as it is on screen, and again as a backstop when a lockdown
 session becomes active if it somehow is not already full screen. This is
 independent of the AAC lockdown itself — it just removes the windowed chrome
 before and between attempts — and exiting full screen is never blocked by the
-app. Set `SECURE_TEST_NO_FULLSCREEN=1` to keep the window windowed, which is
+app. Set `SECURE_TEST_NO_FULLSCREEN=1` (Debug builds only) to keep the window windowed, which is
 usually what you want for `--bundle` / dev runs so repeated relaunches do not
 each fight the fullscreen animation:
 
@@ -172,9 +184,12 @@ One gap is external, one is now ours.
   (2026-08-27) put `AssessmentLockdown` behind the app: a server-delivered
   attempt begins a session on bundle load, hand-in and Cmd-Q end it (quit
   re-issued from the teardown confirmation, never `.terminateLater`), a
-  titlebar "End secure session" control is always visible, the watchdog
-  defaults short (600s; `SECURE_TEST_WATCHDOG_SECONDS` overrides), and an
-  unconfirmed end exits the process rather than hanging. What runs behind it
+  titlebar "End secure session" control is always visible, and an
+  unconfirmed end exits the process rather than hanging. The watchdog
+  defaults short (600s; `SECURE_TEST_WATCHDOG_SECONDS` overrides) in a **DEBUG
+  build only** — security slice 2 (2026-09-15) arms none in Release, because it
+  counts from `begin()` and never resets, so it was ending real fleet sittings
+  at ten minutes. What runs behind it
   is `SimulatedLockdownSession` — automatic whenever the entitlement is
   absent, with `SECURE_TEST_SIMULATE_LOCKDOWN=refuses|hangs|interrupts` to
   rehearse the failure modes — and forces the simulation even on an entitled
@@ -184,8 +199,10 @@ One gap is external, one is now ours.
   `SecureTest/SecureTest.entitlements` (AAC key only — sandbox keys stay
   synthesized from `ENABLE_*` build settings) with `CODE_SIGN_ENTITLEMENTS` set
   by hand in the pbxproj, never via Xcode's capability UI. Selection per
-  begin(): env override → simulated; entitled binary → real (THE MAC LOCKS);
-  else simulated. **App ID — the client signs as itself (2026-09-03):**
+  begin(): env override (**Debug only** since security slice 2) → simulated;
+  entitled binary → real (THE MAC LOCKS); else simulated in Debug, REFUSED in
+  Release (`RefusedLockdownSession` — a shipped build that cannot lock the Mac
+  does not render the test). **App ID — the client signs as itself (2026-09-03):**
   `PRODUCT_BUNDLE_IDENTIFIER = net.psd401.securetest.client`, an App ID an
   admin created with the restricted AAC capability enabled. The dev-only
   borrow of PoC-A's App ID (`net.psd401.securetest.PocA`) is over; PoC-A keeps
