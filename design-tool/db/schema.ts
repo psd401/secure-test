@@ -155,6 +155,12 @@ export type ItemConfig = {
   rows?: TableRow[];
   corner?: string;
   cell_keys?: TableCellKeys;
+  // Numeric equivalence (2026-09-15, docs/math-entry-design.md §Follow-ups):
+  // short_text only. Absent / false = a numeric answer is compared to a
+  // numeric key BY VALUE (`1/2` ≡ `0.5`); true = the old exact folded
+  // comparison, for tasks where the form IS the answer ("in lowest terms").
+  // Stored only when true, so every existing row and export stays byte-stable.
+  exact_form?: boolean;
   // Slice 36: how the item is scored. Absent = type default (MC/short_text
   // → auto, essay → human; see effectiveScoringMethod in lib/api/items.ts).
   // Stored only when the teacher picked explicitly, so older rows/bundles

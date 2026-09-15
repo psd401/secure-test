@@ -76,8 +76,9 @@ describe("shortTextMatches — the limits, pinned (4b slice 1a)", () => {
   test.each([
     // [label, student answer, teacher key] — each of these must NOT match.
     ["a mixed number is not a slash fraction (recorded limit)", "1\\frac{1}{2}", "1 1/2"],
-    ["notation, not value: 1/2 is not 0.5", "\\frac{1}{2}", "0.5"],
-    ["notation, not value: \\frac{1}{2} is not \\frac{2}{4}", "\\frac{1}{2}", "\\frac{2}{4}"],
+    // 2026-09-15: `1/2` ≡ `0.5` and `\\frac{1}{2}` ≡ `\\frac{2}{4}` moved OUT of
+    // this list — numeric equivalence scores them (see the describe below).
+    // The fold itself still equates notation only; these pass on value.
     ["the fold does not reorder: 2×3 is not 3×2", "2×3", "3×2"],
     ["degrees-the-word is not a synonym for °", "45°C", "45 degrees"],
     ["the plain path still rejects cellwall", "cellwall", "cell wall"],
@@ -141,8 +142,10 @@ describe("scoreResponse / tableCellMatches with the widened fold", () => {
       points: 1,
       max_points: 1,
     });
+    // 2026-09-15: `0.5` against a key of `1/2` is now CORRECT (numeric
+    // equivalence). The exact-form opt-out below restores the old 0.
     expect(scoreResponse(item, { type: "short_text", text: "0.5" })).toEqual({
-      points: 0,
+      points: 1,
       max_points: 1,
     });
   });

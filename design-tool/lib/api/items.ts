@@ -56,6 +56,9 @@ const ShortTextItem = z.object({
   choices: z.array(ChoiceShape).max(0).default([]),
   correct_choice_ids: z.array(z.string()).max(0).default([]),
   correct_answer: z.string().max(2000).nullable().optional(),
+  // Numeric equivalence (2026-09-15): the per-item opt-out. Absent = false
+  // = equivalent numeric forms score; true = exact form only.
+  exact_form: z.boolean().optional(),
 });
 
 // Slice 32: essay. No choices, no correct answer (authoring only). The two
@@ -434,6 +437,12 @@ export function itemConfigForWrite(
       ? undefined
       : (body.scoring_method ?? existing?.scoring_method);
   if (resolvedMethod) config.scoring_method = resolvedMethod;
+  if (body.type === "short_text") {
+    // Stored only when ON — absence is the default, like every other
+    // optional config key, so existing rows and exports stay byte-stable.
+    if (body.exact_form) config.exact_form = true;
+    return config;
+  }
   if (body.type === "match") {
     config.pairs = body.pairs;
     return config;

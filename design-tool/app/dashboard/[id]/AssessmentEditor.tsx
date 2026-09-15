@@ -132,6 +132,9 @@ interface ItemView {
   rows: TableRow[] | null;
   corner: string | null;
   cell_keys: TableCellKeys | null;
+  // Short-text only (numeric equivalence, 2026-09-15): true = compare the
+  // answer's exact form, false/null = equivalent numeric forms score.
+  exact_form: boolean | null;
   // Slice 36: null = type default (MC/short_text/match auto, essay human).
   scoring_method: ScoringMethod | null;
 }
@@ -237,6 +240,7 @@ interface ItemRow {
     rows?: TableRow[] | null;
     corner?: string | null;
     cell_keys?: TableCellKeys | null;
+    exact_form?: boolean | null;
     scoring_method?: ScoringMethod | null;
   } | null;
 }
@@ -268,6 +272,7 @@ function rowToView(r: ItemRow): ItemView {
     rows: r.config?.rows ?? null,
     corner: r.config?.corner ?? null,
     cell_keys: r.config?.cell_keys ?? null,
+    exact_form: r.config?.exact_form ?? null,
     scoring_method: r.config?.scoring_method ?? null,
   };
 }
@@ -389,6 +394,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -414,6 +420,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -442,6 +449,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -470,6 +478,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -495,6 +504,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -520,6 +530,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -552,6 +563,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       ],
       corner: null,
       cell_keys: null,
+      exact_form: null,
       scoring_method: null,
     };
   }
@@ -579,6 +591,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
     rows: null,
     corner: null,
     cell_keys: null,
+    exact_form: null,
     scoring_method: null,
   };
 }
@@ -1072,6 +1085,9 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
     if (body.rows == null) delete body.rows;
     if (body.corner == null) delete body.corner;
     if (body.cell_keys == null) delete body.cell_keys;
+    // short_text only, and only when ON: the other types' schemas don't
+    // know the key, and `null` would fail the optional boolean.
+    if (!body.exact_form) delete body.exact_form;
     // Draft spreads carry scoring_method: null; the item schema knows the
     // key now and optional-enum rejects null, so omit until picked.
     if (body.scoring_method == null) delete body.scoring_method;
@@ -1125,6 +1141,11 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
       body.image_asset_id = item.image_asset_id;
       body.regions = item.regions ?? [];
       body.correct_region_ids = item.correct_region_ids ?? [];
+    }
+    if (item.type === "short_text") {
+      // Numeric equivalence (2026-09-15): send it only when ON — the schema
+      // takes an optional boolean and absence IS the default.
+      if (item.exact_form) body.exact_form = true;
     }
     if (item.type === "table") {
       body.columns = item.columns ?? [];
@@ -2598,22 +2619,46 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                     />
                   </div>
                 ) : item.type === "short_text" ? (
-                  <label className="mt-3 block">
-                    <span className="block text-sm font-medium">
-                      Correct answer
-                    </span>
-                    <input
-                      value={item.correct_answer ?? ""}
-                      onChange={(e) =>
-                        updateItem(item.id, (i) => ({
-                          ...i,
-                          correct_answer: e.target.value,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                    />
-                    <MathPreview text={item.correct_answer ?? ""} />
-                  </label>
+                  <div className="mt-3 space-y-2">
+                    <label className="block">
+                      <span className="block text-sm font-medium">
+                        Correct answer
+                      </span>
+                      <input
+                        value={item.correct_answer ?? ""}
+                        onChange={(e) =>
+                          updateItem(item.id, (i) => ({
+                            ...i,
+                            correct_answer: e.target.value,
+                          }))
+                        }
+                        className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                      />
+                      <MathPreview text={item.correct_answer ?? ""} />
+                      {/* Numeric equivalence (2026-09-15): say what the
+                          default does, so the checkbox below reads as the
+                          exception it is. */}
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Equivalent numbers count: 1/2, 0.5 and 50/100 all
+                        match. Check this for tasks like &ldquo;in lowest
+                        terms&rdquo;.
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={item.exact_form === true}
+                        onChange={(e) =>
+                          updateItem(item.id, (i) => ({
+                            ...i,
+                            exact_form: e.target.checked,
+                          }))
+                        }
+                        disabled={isLocked}
+                      />
+                      <span>Answer form matters (exact match only)</span>
+                    </label>
+                  </div>
                 ) : item.type === "essay" ? (
                   <div className="mt-3 space-y-3">
                     <p className="text-xs text-muted-foreground">

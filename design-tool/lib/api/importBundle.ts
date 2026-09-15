@@ -343,7 +343,12 @@ export async function importBundleForOwner(
               choices: [],
               correct_choice_ids: [],
               correct_answer: it.correct_answer ?? null,
-              config: clampAndCount(it.type, it.scoring_method, false),
+              config: {
+                // Numeric equivalence (2026-09-15): kept only when ON, the
+                // same convention the export writes it with.
+                ...(it.exact_form ? { exact_form: true as const } : {}),
+                ...clampAndCount(it.type, it.scoring_method, false),
+              },
             };
           }
           if (it.type === "match") {

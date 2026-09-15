@@ -651,3 +651,51 @@ client half waits for the rebuild and the next release.
   and seen on the origin's packet: the only stored short-text answer there
   is `4^2^` (an unbalanced `^`), which falls back to escaped plain text as
   designed (S-4 posture); a parseable answer renders per the tests.
+
+### Numeric equivalence — BUILT 2026-09-15 (not deployed, not hand-run)
+
+Option (b) from the Follow-ups entry above, exactly as decided. One slice,
+design-tool + shared schema only; no migration (`items.config` is jsonb) and
+**no rescoring of existing scores**.
+
+- **`design-tool/lib/scoring/auto.ts`** — a narrow numeric parser
+  (`parseNumericAnswer`) sits between the plain comparison and the existing
+  fold in `shortTextMatches`. It runs on the output of `canonicalizeMath`, so
+  `\frac{}{}` has already become `A/B` and a lone `x` between digit groups has
+  already become `×`. Accepted: integers and decimals (`.5`, `0.50`, `-3`),
+  thousands separators (`1,000`), fractions `a/b`, mixed numbers `1 1/2`,
+  scientific `3.2×10^5` / `3.2 x 10^5` / `3.2e5`, and a trailing `%`.
+  Comparison is `numbersClose`: relative `1e-9`, absolute `1e-12` near zero.
+  The percent rule is both-sides-or-neither, so `50%` ≠ `0.5`.
+- **What does NOT parse, on purpose** — anything carrying a unit or a letter
+  (`5 cm`, `√2`, `π`), arithmetic (`2×3` is not 6), a bare power of ten (so
+  the recorded limit `104` ≠ `10^4` still holds), and a leading currency `$`
+  (a `$` is stripped only when it wraps the WHOLE string, the KaTeX-delimiter
+  case, so `$57,600` still falls through to the fold). A string that does not
+  parse on BOTH sides falls back to today's folded comparison unchanged, so
+  the pass can only ever add a match.
+- **Per-item opt-out** — `config.exact_form: boolean` (absent/false = numeric
+  equivalence on). `ShortTextItemSchema` gains `exact_form` on the TEACHER
+  bundle only (ADR 0016: it is a property of the answer key, and the delivery
+  bundle gains nothing); export emits it only when true and import brings it
+  back. The editor's short-text card gains the checkbox "Answer form matters
+  (exact match only)" plus the hint under the key field, and the checkbox is
+  disabled while the assessment is published — `isAnswerKeyOnlyPatch` compares
+  every config field but the key itself, so flipping it after publish would
+  409 anyway.
+- **Table cells** — `tableCellMatches` now simply delegates to
+  `shortTextMatches`. E3 D-3's own rule (`1.50` ≡ `1.5`) is preserved by the
+  same parser; the judgement call is that a cell therefore also accepts `1/2`
+  for a key of `0.5`, one rule for the whole product rather than two. A table
+  has no `exact_form` switch of its own.
+- **Two pinned limits moved** — `1/2` ≡ `0.5` and `\frac{1}{2}` ≡
+  `\frac{2}{4}` left the "limits, pinned" list in
+  `test/scoring-math-fold.test.ts`; the fold still equates notation only, but
+  those pairs now pass on value. `1\frac{1}{2}` ≠ `1 1/2` still holds (the
+  canonicalised `1(1/2)` is not a number to this parser).
+
+Tests: `design-tool/test/scoring-numeric-equivalence.test.ts` (parser, match
+rules, tolerance, `exact_form`, table delegation), the `short_text exact_form`
+block in `test/items-api.test.ts` (write boundary + export/import round trip),
+and a round-trip case in `packages/schema/test/items.test.ts`. Hand-run rows
+181–185 in `docs/design-tool-manual-checks.md`, **NOT RUN**.

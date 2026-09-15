@@ -644,3 +644,20 @@ as 190, above whatever the concurrent editor/scoring slice takes at
 | # | Check | Expected | Result |
 |---|---|---|---|
 | 190 | After the next 06:00 roster import, open the roster-sync Lambda's log group | One `retention_sweep` line per invocation with `retention_days: 90` and a count per table (`server_error_events`, `client_error_events`, `guardrail_events`); a `retention_sweep_failed` line never fails the import. The `feedback` row count is unchanged | NOT RUN |
+
+## Numeric equivalence for short text (2026-09-15)
+
+`docs/math-entry-design.md` §Progress "Numeric equivalence — BUILT
+2026-09-15". Short-text auto-scoring compares numbers BY VALUE when both the
+key and the answer parse as one; `config.exact_form` on the item restores the
+old exact comparison. Rows below need a Published short-text item with the key
+`1/2` and a sitting that can hand in (the one-day teacher-row script first);
+rows 184–185 are editor-only.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 181 | Key `1/2`, student answers `0.5`; hand in and open the results matrix | Scored CORRECT (1 / 1), no manual-review row | NOT RUN |
+| 182 | Same item, a second student answers `2/4`; a third answers `0.50` | Both scored CORRECT | NOT RUN |
+| 183 | Key `0.5`, a student answers `50%` | Scored INCORRECT (0 / 1) — the percent rule is both sides or neither | NOT RUN |
+| 184 | On the short-text card, tick "Answer form matters (exact match only)", save, run a sitting where the key is `1/2` and the student answers `0.5` | Scored INCORRECT; a student answering `1/2` is still correct | NOT RUN |
+| 185 | Open a short-text card in the editor; then Export JSON and re-import the file | The hint under the key field reads "Equivalent numbers count: 1/2, 0.5 and 50/100 all match. Check this for tasks like 'in lowest terms'."; the checkbox state survives export → import (only a ticked item carries `exact_form` in the JSON), and the checkbox is disabled on a Published assessment | NOT RUN |

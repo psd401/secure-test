@@ -82,7 +82,30 @@ describe("ItemSchema discriminated union", () => {
     expect(parsed.type).toBe("short_text");
     if (parsed.type === "short_text") {
       expect(parsed.correct_answer).toBe("Olympia");
+      // Numeric equivalence (2026-09-15): absent = equivalence ON, so every
+      // bundle written before the flag parses unchanged.
+      expect(parsed.exact_form).toBeUndefined();
     }
+  });
+
+  test("short_text carries exact_form both ways (numeric equivalence)", () => {
+    const on = ItemSchema.parse({
+      type: "short_text",
+      id: "qs",
+      stem: "Write 0.5 in lowest terms.",
+      correct_answer: "1/2",
+      exact_form: true,
+    });
+    expect(on.type).toBe("short_text");
+    if (on.type === "short_text") expect(on.exact_form).toBe(true);
+    expect(
+      ItemSchema.safeParse({
+        type: "short_text",
+        id: "qs",
+        stem: "s",
+        exact_form: "yes",
+      }).success,
+    ).toBe(false);
   });
 
   test("essay parses with stem only (metadata optional)", () => {

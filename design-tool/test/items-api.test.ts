@@ -2,8 +2,9 @@
 // Same harness as assessments-api.test.ts — direct route imports against
 // the local test DB with the session helper mocked.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { ItemBundleSchema } from "@secure-test/schema";
+import { items } from "../db/schema";
 import { effectiveScoringMethod } from "../lib/api/items";
 import { closeDb, getDb } from "../db/client";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
@@ -1424,5 +1425,82 @@ describe("items: table (E3)", () => {
       expect(exported.corner).toBe("Chamber positions");
       expect(exported.cell_keys).toEqual({ r2: { c1: "7" } });
     }
+  });
+});
+
+// Numeric equivalence (James, 2026-09-15, docs/math-entry-design.md
+// §Follow-ups): the per-item opt-out is a boolean in items.config that rides
+// the TEACHER bundle only. Scoring behaviour itself is covered by the pure
+// tests in test/scoring-numeric-equivalence.test.ts.
+describe("short_text exact_form", () => {
+  const SHORT_TEXT = {
+    type: "short_text",
+    stem: "Write one half in lowest terms.",
+    correct_answer: "1/2",
+  };
+
+  async function importBundleBody(body: unknown) {
+    const { POST } = await import("../app/api/assessments/import/route");
+    return POST(
+      new Request("http://localhost/api/assessments/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  test("absent by default; stored only when true; cleared when unchecked", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("exact form");
+    const created = (await (await createItem(aid, SHORT_TEXT)).json()) as {
+      item: { id: string; config: Record<string, unknown> };
+    };
+    expect(created.item.config.exact_form).toBeUndefined();
+
+    const on = await patchItem(aid, created.item.id, { ...SHORT_TEXT, exact_form: true });
+    expect(on.status).toBe(200);
+    expect(
+      ((await on.json()) as { item: { config: Record<string, unknown> } }).item.config
+        .exact_form,
+    ).toBe(true);
+
+    const off = await patchItem(aid, created.item.id, { ...SHORT_TEXT, exact_form: false });
+    expect(off.status).toBe(200);
+    expect(
+      ((await off.json()) as { item: { config: Record<string, unknown> } }).item.config
+        .exact_form,
+    ).toBeUndefined();
+  });
+
+  test("export emits it only when on, and import brings it back", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("exact form export");
+    expect((await createItem(aid, SHORT_TEXT)).status).toBe(201);
+    expect((await createItem(aid, { ...SHORT_TEXT, exact_form: true })).status).toBe(201);
+
+    const exp = await exportAssessment(aid);
+    expect(exp.status).toBe(200);
+    const bundle = ItemBundleSchema.parse(await exp.json());
+    const [plain, exact] = bundle.items;
+    if (plain?.type === "short_text") expect(plain.exact_form).toBeUndefined();
+    if (exact?.type === "short_text") expect(exact.exact_form).toBe(true);
+
+    const res = await importBundleBody(bundle);
+    expect(res.status).toBe(201);
+    const { assessment } = (await res.json()) as { assessment: { id: string } };
+    const rows = await getDb()
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, assessment.id))
+      .orderBy(asc(items.position));
+    expect(rows[0]?.config.exact_form).toBeUndefined();
+    expect(rows[1]?.config.exact_form).toBe(true);
+  });
+
+  test("a non-boolean is rejected at the write boundary", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("exact form validation");
+    expect((await createItem(aid, { ...SHORT_TEXT, exact_form: "yes" })).status).toBe(400);
   });
 });

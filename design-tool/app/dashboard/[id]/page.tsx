@@ -117,6 +117,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           rows: r.config?.rows ?? null,
           corner: r.config?.corner ?? null,
           cell_keys: r.config?.cell_keys ?? null,
+          exact_form: r.config?.exact_form ?? null,
           scoring_method: r.config?.scoring_method ?? null,
         }))}
       />

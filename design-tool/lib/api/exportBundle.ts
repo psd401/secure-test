@@ -139,6 +139,9 @@ export async function buildExportBundle(
           // 2026-09-01: a keyless short_text stores "" — emit no key rather
           // than an empty string the wire schema's min(1) would reject.
           correct_answer: row.correct_answer || undefined,
+          // Numeric equivalence (2026-09-15): emitted only when ON, so a
+          // bundle exported from an item that never touched it is unchanged.
+          ...(row.config?.exact_form ? { exact_form: true } : {}),
           ...scoring,
         };
       case "match":
