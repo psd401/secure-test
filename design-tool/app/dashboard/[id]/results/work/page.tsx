@@ -16,6 +16,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
+import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import {
   overallRationale,
   rubricScoreRows,
@@ -681,9 +682,21 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                       {view.kind === "none" ? (
                         <p className="meta muted">No answer.</p>
                       ) : isText && view.kind === "text" ? (
-                        <p className="answer-text">
-                          {view.text === "" ? "(blank)" : view.text}
-                        </p>
+                        // Roadmap 4b-f (2026-09-14): a short-text answer
+                        // prints as the math the student saw (the client's
+                        // formulaTex preview), essays as prose.
+                        item.type === "short_text" && view.text !== "" ? (
+                          <p
+                            className="answer-text"
+                            dangerouslySetInnerHTML={{
+                              __html: renderShortTextAnswer(view.text),
+                            }}
+                          />
+                        ) : (
+                          <p className="answer-text">
+                            {view.text === "" ? "(blank)" : view.text}
+                          </p>
+                        )
                       ) : boxes.length > 0 ? (
                         <ul className="choices">
                           {boxes.map((b) => (

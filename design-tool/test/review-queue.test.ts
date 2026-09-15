@@ -173,7 +173,9 @@ async function seedQueueScenario() {
       {
         attempt_id: at.id,
         item_id: itemRows[3]!.id,
-        response: { type: "short_text", text: "y" },
+        // Roadmap 4b-f (2026-09-14): typed as math, so the payload carries
+        // the rendered answer beside the raw text.
+        response: { type: "short_text", text: "4^2" },
       },
     ])
     .returning();
@@ -283,6 +285,29 @@ describe("GET review-queue", () => {
     await db.insert(responses).values({ attempt_id: attempt.id, item_id: outlineQ!.id, response: { type: "essay", text: "one two three four" } });
     body = (await (await getQueue(assessment.id)).json()) as typeof body;
     expect(human().outline).toEqual({ origin: "inline", words: 4 });
+  });
+
+  // Roadmap 4b-f (2026-09-14, docs/math-entry-design.md §Follow-ups): the
+  // queue is a client component, so a short-text answer is rendered through
+  // KaTeX HERE — the same place stem_html is — and rides the payload beside
+  // the raw text. An essay carries no answer_html.
+  test("a short-text entry carries answer_html; an essay does not", async () => {
+    const { assessment } = await seedQueueScenario();
+    const body = (await (await getQueue(assessment.id)).json()) as {
+      entries: Array<{
+        item: { stem: string };
+        response: { text?: string };
+        answer_html: string | null;
+      }>;
+    };
+    const short = body.entries.find((e) => e.item.stem === "Short human")!;
+    expect(short.answer_html).toContain('class="katex"');
+    expect(short.answer_html).not.toContain("4^2");
+    // The raw typed text is still there for anything that wants it.
+    expect(short.response.text).toBe("4^2");
+    expect(
+      body.entries.find((e) => e.item.stem === "Human essay")!.answer_html,
+    ).toBeNull();
   });
 
   test("403 for another teacher", async () => {

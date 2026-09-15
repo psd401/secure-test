@@ -55,6 +55,12 @@ interface QueueEntry {
     /** Slice 65: a drawing/upload answer — a reference, never the bytes. */
     upload_id?: string;
   };
+  /**
+   * Roadmap 4b-f (2026-09-14): a short-text answer, server-rendered through
+   * KaTeX the way the client previews it. Null for every other response type
+   * and for a blank answer; `response.text` still carries the raw typed text.
+   */
+  answer_html?: string | null;
   proposed: {
     score_id: string;
     points: number;
@@ -490,6 +496,15 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           />
         ) : entry.item.table ? (
           tableGrid(entry)
+        ) : entry.answer_html ? (
+          // Roadmap 4b-f: answer_html is server-rendered by
+          // renderShortTextAnswer — KaTeX HTML for math that parses, escaped
+          // plain text otherwise — so there is no injection vector here any
+          // more than in stem_html above.
+          <blockquote
+            className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm"
+            dangerouslySetInnerHTML={{ __html: entry.answer_html }}
+          />
         ) : (
           <blockquote className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm">
             {responseText(entry)}

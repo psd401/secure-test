@@ -18,6 +18,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
+import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import {
   overallRationale,
   rubricScoreRows,
@@ -431,13 +432,38 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   <p className="text-sm text-muted-foreground">No answer.</p>
                 ) : view.kind === "text" ? (
                   <>
-                    <blockquote className="whitespace-pre-wrap rounded bg-muted p-2 text-sm">
-                      {view.text === "" ? "(blank)" : view.text}
-                    </blockquote>
+                    {/* Roadmap 4b-f (2026-09-14): a short-text answer is math
+                        on the student's screen (the client's formulaTex
+                        preview), so it is math here too — same tex, KaTeX
+                        server-side, escaped plain text when it doesn't parse.
+                        Essays stay prose. */}
+                    {item.type === "short_text" && view.text !== "" ? (
+                      <blockquote
+                        className="whitespace-pre-wrap rounded bg-muted p-2 text-sm"
+                        dangerouslySetInnerHTML={{
+                          __html: renderShortTextAnswer(view.text),
+                        }}
+                      />
+                    ) : (
+                      <blockquote className="whitespace-pre-wrap rounded bg-muted p-2 text-sm">
+                        {view.text === "" ? "(blank)" : view.text}
+                      </blockquote>
+                    )}
                     {view.expected ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Expected: {view.expected}
-                      </p>
+                      item.type === "short_text" ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Expected:{" "}
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: renderShortTextAnswer(view.expected),
+                            }}
+                          />
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Expected: {view.expected}
+                        </p>
+                      )
                     ) : null}
                   </>
                 ) : view.kind === "drawing" && response ? (

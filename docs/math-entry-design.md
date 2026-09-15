@@ -574,6 +574,19 @@ changes before each, no push without James's go-ahead.
   naming the equivalence rules, and the **review queue / results / print**
   render a student's short-text answer through `\mathrm{…}` KaTeX the way
   the client does, so a hand-scorer sees `¾` rather than `\frac{3}{4}`.
+  **2026-09-14 BUILT (the teacher-side half):** `design-tool/lib/reporting/shortTextView.ts`
+  mirrors the client's `formulaTex` exactly (`shortTextTex`) and renders it
+  server-side (`renderShortTextAnswer`) — KaTeX when it parses, escaped
+  plain text when it does not, the same throw-and-fall-back posture as the
+  client's slice S-4. Used on the per-student results page, the student-work
+  packet, and the review queue (rendered in the queue's ROUTE as
+  `answer_html`, beside the raw text, the way `stem_html` already is —
+  the panel is a client component and KaTeX stays out of its bundle). The
+  teacher's expected answer on the per-student page rides the same renderer.
+  Essays stay plain prose everywhere; the print report prints marks only and
+  is untouched. The KaTeX stylesheet reaches all three surfaces through the
+  root layout's `globals.css`. The editor key field's symbol keys and the
+  equivalence hint are still open.
 - **Numeric equivalence for short text** (`1/2` ≡ `0.5`, tolerance) — the
   table item already compares plain decimals (E3 D-3); extending that to
   short text is a scoring policy for James, adjacent to E11.

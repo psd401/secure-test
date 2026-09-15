@@ -248,7 +248,9 @@ async function seedScene() {
       {
         attempt_id: aliceAttempt!.id,
         item_id: itemRows[2]!.id,
-        response: { type: "short_text", text: "Olympia" },
+        // Roadmap 4b-f (2026-09-14): typed as math, so the per-student page
+        // renders it through KaTeX the way the client previewed it.
+        response: { type: "short_text", text: "4^2" },
       },
       {
         attempt_id: aliceAttempt!.id,
@@ -541,12 +543,32 @@ describe("the per-student attempt page", () => {
     const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
     expect(html).toContain("Copper"); // MC choice text, not its id
     expect(html).toContain("Because the metal conducts."); // essay
-    expect(html).toContain("Olympia"); // short text
+    // Roadmap 4b-f: the short-text answer is KaTeX, not the raw `4^2`; its
+    // key (still plain "Olympia") rides the same renderer on the Expected line.
+    expect(html).toContain('class="katex"');
+    expect(html).toContain("Olympia"); // the short-text key, rendered
+    expect(html).not.toContain("4^2");
     expect(html).toContain("Water → H2O"); // match, resolved to pair text
     expect(html).toContain("1. Flower"); // order, in the order given
     expect(html).toContain("Region r1"); // hotspot
     expect(html).toContain("Fill the table"); // table stem
     expect(html).toContain(">12<"); // the table cell the student typed
+  });
+
+  // Roadmap 4b-f (2026-09-14, docs/math-entry-design.md §Follow-ups): the
+  // student saw their short-text answer as rendered math, so the teacher does
+  // too. An essay is prose and stays prose.
+  test("a short-text answer renders through KaTeX; an essay does not", async () => {
+    const scene = await seedScene();
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain('class="katex"');
+    // `\mathrm{4^2}` laid out: the base and the exponent, not the source.
+    expect(html).toContain("mord mathrm");
+    expect(html).not.toContain("4^2");
+    // The essay's prose is printed as text, with no math markup around it.
+    expect(html).toContain("Because the metal conducts.");
+    expect(html).not.toContain('class="katex">Because');
+    expect(html).not.toContain("short-text-plain");
   });
 
   test("a drawing is served full size from the owner-scoped upload route", async () => {

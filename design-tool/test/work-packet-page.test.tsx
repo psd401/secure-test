@@ -293,7 +293,9 @@ async function seedPacketScene() {
       {
         attempt_id: adaAttempt!.id,
         item_id: itemRows[2]!.id,
-        response: { type: "short_text", text: "Olympia" },
+        // Roadmap 4b-f (2026-09-14): typed as math, so the packet prints it
+        // the way the client previewed it.
+        response: { type: "short_text", text: "4^2" },
       },
       {
         attempt_id: adaAttempt!.id,
@@ -495,10 +497,27 @@ describe("work packet — one page per student, every item type", () => {
     // The table grid, with the key beside the student's cell.
     expect(html).toContain("Mass");
     expect(html).toContain("expected 12");
-    // The short-text key still reads as the teacher's expected answer.
-    expect(html).toContain("Olympia");
+    // Roadmap 4b-f: the short-text answer prints as KaTeX, not as `4^2`.
+    expect(packetBody(html)).toContain('class="katex"');
+    expect(packetBody(html)).not.toContain("4^2");
     // An item with no answer says so rather than printing an empty block.
     expect(html).toContain("No answer.");
+  });
+
+  // Roadmap 4b-f (2026-09-14, docs/math-entry-design.md §Follow-ups): the
+  // packet prints a short-text answer as the math the student saw. Essays are
+  // prose and stay prose.
+  test("a short-text answer prints through KaTeX; an essay prints as prose", async () => {
+    const { assessment } = await seedPacketScene();
+    const body = packetBody(
+      await render(assessment.id, { section: SECTION, scores: "teacher" }),
+    );
+    expect(body).toContain('class="katex"');
+    expect(body).toContain("mord mathrm");
+    expect(body).not.toContain("4^2");
+    // The essay is still printed as text, untouched by the math renderer.
+    expect(body).toContain("ADA-ESSAY-PROSE");
+    expect(body).not.toContain("short-text-plain");
   });
 
   // W-1 (hand-run 2026-09-14): a mark against the key IS the key. A packet

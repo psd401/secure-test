@@ -19,6 +19,7 @@ import {
 } from "@/lib/items/renderItemContent";
 import { requireStaff } from "@/lib/api/requireSession";
 import { resolveSourceText } from "@/lib/api/setSources";
+import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
@@ -224,6 +225,17 @@ export async function GET(_req: Request, ctx: RouteContext) {
             : null,
       },
       response: response.response,
+      // Roadmap 4b-f (2026-09-14, docs/math-entry-design.md): a short-text
+      // answer is rendered math on the student's screen, so the queue shows
+      // the same picture rather than the raw `4^2`. Rendered HERE for the same
+      // reason stem_html is — the panel is a client component and KaTeX has no
+      // business in its bundle. `response` still carries the raw text.
+      answer_html:
+        response.response.type === "short_text" &&
+        typeof (response.response as { text?: unknown }).text === "string" &&
+        (response.response as { text: string }).text !== ""
+          ? renderShortTextAnswer((response.response as { text: string }).text)
+          : null,
       proposed: proposed
         ? {
             score_id: proposed.id,
