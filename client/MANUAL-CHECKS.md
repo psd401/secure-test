@@ -213,7 +213,7 @@ sitting 82X6S4 on the 5-item seed assessment).
 | "End secure session" button | ✅ 2026-08-27 — session ended, attempt kept going unlocked, `emergency end control pressed` logged |
 | `SECURE_TEST_WATCHDOG_SECONDS=15`, join, wait | ✅ 2026-08-27 — countdown in the titlebar; `WATCHDOG: 15s elapsed — ending lockdown` exactly 15 s after begin (DB timestamps 20:09:50 → 20:10:05); session auto-ended, app stayed up unlocked |
 | `SECURE_TEST_SIMULATE_LOCKDOWN=hangs`, join, Cmd-Q | ✅ 2026-08-27 — `end() called`, 5 s of silence, `did not confirm within 5s — unrecoverable`, app EXITED rather than hanging. The row that mattered most |
-| `SECURE_TEST_SIMULATE_LOCKDOWN=refuses`, join | ✅ 2026-08-27 — `lockdown FAILED TO BEGIN — simulated refusal`; the test rendered and was answerable; no titlebar controls |
+| `SECURE_TEST_SIMULATE_LOCKDOWN=refuses`, join | ~~✅ 2026-08-27 — `lockdown FAILED TO BEGIN — simulated refusal`; the test rendered and was answerable; no titlebar controls~~ **SUPERSEDED 2026-09-15 by security slice 1** — that expectation was the defect: a failed begin must NOT render the test. Re-run as the `=refuses` row in "Content only while locked (2026-09-15)" below |
 | `SECURE_TEST_SIMULATE_LOCKDOWN=interrupts`, join | ✅ 2026-08-27 — began then dropped (`lockdown INTERRUPTED`); titlebar controls disappeared |
 
 ## Event reporting to the teacher monitor (slice 92) — needs the dev server + an open sitting
@@ -522,7 +522,7 @@ server and a demo student.
 | Check | Expected | Result |
 |---|---|---|
 | Hand a test in | The WebKit page still says "Handed in. You can close the app."; a **Back to your tests** button appears in the titlebar; clicking it lands on "Your tests" with the list refreshed and the attempt surface torn down (no peek polling in the log) | ⚠️ 2026-08-31 run 1 (James) — worked, but the titlebar button alone is too subtle; same-day refinement adds an in-page Back to your tests button beside the handed-in notice → re-check below |
-| End secure session (button), stay in the app | Same **Back to your tests** button appears once `DID END` lands; it returns to "Your tests"; answers stay spooled | ⚠️ 2026-08-31 run 1 (James, via Cmd-E) — session ended and the titlebar button appeared, but too subtle; refinement adds a centered "Secure session ended" sheet (Back to your tests / Stay here) → re-check below |
+| End secure session (button), stay in the app | Same **Back to your tests** button appears once `DID END` lands; it returns to "Your tests"; answers stay spooled | ⚠️ 2026-08-31 run 1 (James, via Cmd-E) — session ended and the titlebar button appeared, but too subtle; refinement adds a centered "Secure session ended" sheet (Back to your tests / Stay here) → re-check below. **SUPERSEDED 2026-09-15 by security slice 1**: there is no choice any more — the end lands on "Your tests" by itself |
 | Join a sitting whose attempt is already submitted | Status line reads "You already handed this test in. Ask your teacher if you need it reopened." and the app stays on the entry screen | ✅ 2026-08-31 (James) — exact copy confirmed |
 | Join with a code for a sitting you are not in | "That code is not open for you right now. Check it with your teacher." | ✅ 2026-08-31 (James, code AAAAAA) — exact copy confirmed |
 | Back to your tests, then join and hand in again on another sitting | The button re-appears for the new attempt; no stale peek/event traffic from the old one | ✅ 2026-08-31 (James) — flow completed on FAWXJ7 after the 2PZP7E hand-in |
@@ -541,7 +541,7 @@ the hand-run beep was an unbound key, not a regression.
 
 | Check | Expected | Result |
 |---|---|---|
-| End secure session (Cmd-E or button) | A centered "Secure session ended" sheet: Back to your tests / Stay here; Stay here keeps the unlocked attempt; Back lands on Your tests | ✅ 2026-08-31 (James) — sheet shown; Stay here and Back both behave |
+| End secure session (Cmd-E or button) | A centered "Secure session ended" sheet: Back to your tests / Stay here; Stay here keeps the unlocked attempt; Back lands on Your tests | ~~✅ 2026-08-31 (James) — sheet shown; Stay here and Back both behave~~ **SUPERSEDED 2026-09-15 by security slice 1**: "Stay here" is gone — it left the whole test rendered on an unlocked Mac. The end now lands on "Your tests" first and the sheet has one button. Re-run below |
 | Hand a test in | A "Back to your tests" button appears beside "Handed in. You can close the app." and lands on Your tests | ✅ 2026-08-31 (James) — in-page button beside the notice lands on Your tests |
 | Cmd-Q mid-session | No sheet flashes on the way out; the app quits cleanly | ✅ 2026-08-31 (James) — clean quit, no sheet flash |
 
@@ -1440,8 +1440,8 @@ it as usual. `SECURE_TEST_NO_FULLSCREEN=1` is now forwarded by the launcher
 | If the fixture has a second side-by-side set, set its toggle independently of the first | The two sets' toggle states do not affect each other | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 17, client from 09a0b65, fixture `Row S-f hand-run 2026-09-09`) (step 6: the C / D set's toggle independent) |
 | Type a few words into the essay box, then click the toggle | The typed text is untouched by toggling | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 17, client from 09a0b65, fixture `Row S-f hand-run 2026-09-09`) (step 3) |
 | **Narrow fallback:** join with `SECURE_TEST_NO_FULLSCREEN=1` and a window under ~1100 px | The set renders as a passage page + "Show the sources" disclosure, own_page style, with NO beside/above toggle | |
-| Force a failed begin: join with `SECURE_TEST_SIMULATE_LOCKDOWN=refuses` | The page still appears promptly once lockdown settles to `.idle` — the gate opens on `.idle`, not only `.active` | |
-| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=slow` (finding 8.3: begin lands after 2 s) | The page appears only after DID BEGIN (~2 s, log `page load gate: opened`), not before — the backstop line does NOT appear (2 s < 5 s); the 5 s backstop itself has no simulator value and stays a unit-tested path | |
+| Force a failed begin: join with `SECURE_TEST_SIMULATE_LOCKDOWN=refuses` | ~~The page still appears promptly once lockdown settles to `.idle` — the gate opens on `.idle`, not only `.active`~~ **SUPERSEDED 2026-09-15 by security slice 1**: the gate opens ONLY on `.active`, so a failed begin shows no test at all. Re-run below | |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=slow` (finding 8.3: begin lands after 2 s) | The page appears only after DID BEGIN (~2 s, log `page load gate: opened`), not before — the backstop line does NOT appear (2 s < 20 s; the backstop was raised from 5 s to 20 s in security slice 1 and still has no simulator value, so it stays a unit-tested path) | |
 | **Real session, C-4:** on the side-by-side page, pinch in on the trackpad | The page magnifies | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 17, client from 09a0b65, fixture `Row S-f hand-run 2026-09-09`) (step 4) |
 | Pinch further past 3× and let go | Magnification snaps back to 3× once the pinch settles (KVO clamp) — record whether KVO actually fires for a real pinch or only for the menu path | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession): the page snapped back after a pinch past 3× (James, 5.2). The log has NO `zoom: pinch clamped` line, so the snap-back is WebKit's own pinch bounds (rubber-band to 3×), not the KVO clamp — the KVO path stayed idle and is belt-and-braces only |
 | Press ⌘= three times from Actual Size | Magnification steps ×1.25 each press, capping at 3× (no further growth on a fourth press) | ✅ 2026-09-09 pass 1 (REAL AEAssessmentSession, fullscreen, origin rev 17, client from 09a0b65, fixture `Row S-f hand-run 2026-09-09`): log `zoom: 1.25x` → `1.56x` → `1.95x` → `2.44x` on four presses (the 3× cap itself not reached in this pass) |
@@ -1511,7 +1511,7 @@ anything ending a session ships a real exit. Rows marked **simulated** use
 | **Simulated.** On the paged layout, turn to the next page and back while the banner is visible | The banner is still there, still counting, after the page turn | |
 | **Simulated.** Under a dark / Reverse Contrast contrast set, look at the banner and a notice | Both render on the contrast set's tokens — readable, not hardcoded light-mode colours | |
 | **Real session.** Let the limited fixture's countdown reach zero | The secure session ends on its own (log shows `time limit reached — ending the secure session` → `endLockdown(reason: "time_expired")` → `DID END`); no beep, no stuck window | ✅ 2026-09-14 (REAL session, v1.3.0 from Jamf, a real student): the session ended on its own at zero and the Mac came back; the teacher timeline read "Time ran out 4:12 PM · Secure session ended 4:12 PM" (log lines not read — Finder launch) |
-| **Real session.** After the session ends at zero | The sheet reads "Time is up." / "Your answers are saved." with exactly one button, "Back to your tests" (no "Stay here") | ✅ 2026-09-14 (real session): "Time is up." with a single button back to the tests list (James) |
+| **Real session.** After the session ends at zero | The sheet reads "Time is up." / "Your answers are saved." with exactly one button, "Back to your tests" (no "Stay here") | ✅ 2026-09-14 (real session): "Time is up." with a single button back to the tests list (James). **Changed 2026-09-15 by security slice 1**: the app now goes back to "Your tests" BY ITSELF and the sheet appears there, with its one button relabelled "OK" — re-run as the time-limit row below |
 | **Real session.** Click "Back to your tests" on that sheet | Returns to the Your-tests list; the client does not attempt to hand in on the student's behalf | ✅ 2026-09-14 (real session): back on Your tests; the teacher's matrix still read "Not handed in — 3 of 3 answered" until James handed it in from the design tool |
 | **Simulated.** After zero (real or simulated), from the student's own machine try to save an answer (e.g. change an MC choice) | The POST is refused 409 `time_expired`; the log records the drop but nothing is shown to the student — no error banner, no interruption | |
 | **Simulated.** Cross-check the teacher's Monitor / results matrix for this attempt after it expires (no hand-in yet) | Still shows as in-progress ("Not handed in — k of N answered") — the client does not submit at zero (D-2) | ✅ 2026-09-14: "Not handed in — 3 of 3 answered" on the matrix after the session ended at zero; Hand in still disabled while the sitting was open (design-tool finding T-2, row 162) |
@@ -1543,3 +1543,76 @@ Clear the local state between rows with
 | (f) Dev launcher against local dev, unchanged: `bun --env-file=design-tool/.env.local client/scripts/launch-client.ts <app>` | Exactly as before this slice — sign-in button, sign in, join. stderr: `from environment` for both | NOT RUN |
 | (g) Dev `--token` posture with no client id: launch with `SECURE_TEST_SERVER=<origin>` and `SECURE_TEST_TOKEN=<jwt>`, no client id anywhere | NO not-set-up message (a token session suppresses it); the code box and Your tests are shown as before; stderr: `no SECURE_TEST_GOOGLE_CLIENT_ID — sign-in button hidden…` | NOT RUN |
 | (h) A typo'd origin: `defaults write net.psd401.securetest.client ServerURL example.invalid`, relaunch | stderr: `config: server URL from managed preference is not a usable http(s) URL — ignored` then `config: server URL not configured`; the not-set-up message is shown rather than a silent failure later | NOT RUN |
+
+
+## C-8 — Beside / Above on own_page sets (2026-09-15)
+
+Finding C-8 (`docs/multi-source-stimulus-design.md`), option (a): the
+"Sources: Beside | Above" group C-1 built for `side_by_side` pages now also
+appears on every QUESTION page of an `own_page` set — only where two columns
+fit (the same >= 1100 px rule, read once at build). **Above is the default and
+is exactly the old presentation**, so the first thing to confirm is that
+nothing changed for a student who never presses a button.
+
+What `swift test` already proves headlessly (`RendererLayoutToggleTests`):
+the group is on both question pages of a two-member set and on neither the
+passage page nor a non-member's page; Above is pressed at build; Beside
+splits the page and moves the one block into `.side-source` with the question
+in `.side-questions`; Above hides the split and puts the block back in the
+disclosure; a press on one member's group repaints the other's; the block is
+never in two places; a narrow build has no group at all. What it cannot
+prove is the layout itself, the real viewport threshold, and that nothing is
+disturbed while a student is mid-answer.
+
+Fixture: any Published **paged** assessment with an `own_page` set over **two
+or more** questions carrying sources (`Multi-source hand-run 2026-09-09`
+qualifies). Run fullscreen (the default) on a display wide enough for two
+columns.
+
+| Check | Expect | Result |
+|---|---|---|
+| (a) Join, page to the first question of the own_page set and look before touching anything | "Sources: Beside the question / Above the question" above the collapsed "Show the sources" disclosure, with **Above** pressed; the question below, exactly as it looked before this slice. The passage page "P" is still in the strip | NOT RUN |
+| (b) Type an answer (essay: a sentence; MC: pick a choice), then press **Beside** | The page becomes two columns — sources left, the question right; the disclosure is gone. **The answer typed is still there, the caret is still in the box** (nothing is rebuilt). Beside is pressed | NOT RUN |
+| (c) Press **Above** again | Back to the collapsed disclosure over the question, the answer untouched; Above pressed | NOT RUN |
+| (d) With Beside chosen, Next to the set's second question | It is already two columns, with Beside pressed — the choice belongs to the set, not the page — and the sources are in ITS left column | NOT RUN |
+| (e) With Beside chosen, go back to the passage page "P" | The sources are on the passage page as always (one element, it travels); Next returns to the question with them beside it | NOT RUN |
+| (f) With Beside chosen on a set with a drawing or a math-keypad question among its members, page away and back | No stroke, no keypad state and no saved answer is lost; the drawing's auto-save behaves as on any other page turn | NOT RUN |
+| (g) A narrow window (dev only: `SECURE_TEST_NO_FULLSCREEN=1`, drag under ~1100 px BEFORE joining), same fixture | NO group on the question pages — the disclosure presentation only, as before this slice | NOT RUN |
+
+## Content only while locked (2026-09-15) — security slice 1
+
+The 2026-09-15 end-state audit found that nothing but a screen change ever
+removed assessment content from the window: `lockdownStateChanged` only swapped
+titlebar accessories and put up a sheet. So an emergency end left the whole
+test rendered and still saving on an unlocked Mac behind a **"Stay here"**
+button, a failed `begin()` opened the page-load gate like any other settled
+state and delivered the test unlocked, and the gate's 5 s backstop built the
+page "anyway" when a session hung.
+
+What changed (James, 2026-09-15): **the test page is on screen only while the
+assessment session is active.** The gate opens on `.active` and nothing else;
+`.idle` reached before it ever opened REFUSES it; the backstop is 20 s and a
+refusal or a timeout builds no page at all. After any end that is not a
+hand-in the student is taken back to "Your tests" first and told there, with a
+one-button sheet. **Hand-in is unchanged** (the in-page handed-in notice and
+its own "Back to your tests" button), and so is Cmd-Q.
+
+Needs the dev server or the origin, a joined sitting and a look at stderr for
+the `[security]` lines. Rebuild the client first.
+
+| Check | Expect | Result |
+|---|---|---|
+| Join a sitting, answer an item, press **Cmd-E** | The session ends and the app lands on "Your tests" by itself — no test content anywhere on screen at any point — then a one-button sheet: "Secure session ended" / "Your answers are saved. You can rejoin from Your tests." / **OK**. No "Stay here". stderr: `emergency end control pressed`, `DID END`, `secure session ended without a hand-in — leaving the test screen` | NOT RUN |
+| Same again with the titlebar **End secure session** button | Identical to the Cmd-E row | NOT RUN |
+| Press **Escape** on that sheet instead of clicking OK | The sheet closes and nothing else happens — the student is still on "Your tests", no test is re-rendered, no second sheet | NOT RUN |
+| Rejoin the same sitting after an emergency end | The attempt resumes with every earlier answer prefilled (P-1 restore) — nothing spooled was lost by the trip home | NOT RUN |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=refuses` | **No test is rendered at any point.** The app returns to "Your tests" with a one-button sheet: "Couldn't start a secure session" / "Your test didn't open. Ask your teacher for help." / OK. stderr: `lockdown FAILED TO BEGIN — simulated refusal`, `page load gate: REFUSED …`, `SECURE START REFUSED (session_refused) …`, and a `secure_start_refused` line in `errors.log` | NOT RUN |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=interrupts` | Same as the `=refuses` row if the interruption lands before the page built; if it lands after, the ordinary "Secure session ended" landing. Record which happened | NOT RUN |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=slow` (begin lands after 2 s) | The test DOES open, about 2 s after the join, with `page load gate: opened` in stderr and no refusal or timeout line — the simulated path the launcher and every rehearsal depend on still works | NOT RUN |
+| Join with `SECURE_TEST_SIMULATE_LOCKDOWN=cooperative` (or no value — the default simulated session) | The test opens immediately; `page load gate: opened`. A cooperative session is active synchronously and must not wait on anything | NOT RUN |
+| **Time limit.** A sitting whose clock runs out mid-attempt | At zero the session ends and the app lands on "Your tests" by itself, then a one-button sheet "Time is up." / "Your answers are saved." / **OK**. The test is not left on screen behind it | NOT RUN |
+| **Hand-in, unchanged.** Answer and hand in normally | Exactly as before this slice: the in-page handed-in notice stays on screen with its own "Back to your tests" button and the titlebar one; NO "Secure session ended" sheet and no automatic trip home | NOT RUN |
+| **Cmd-Q mid-session, unchanged.** Join, then Cmd-Q with the session up | Exactly as before: `quit requested with lockdown active — ending the session first`, the session confirms, the app exits. No sheet flashes and no trip home on the way out | NOT RUN |
+| **Real session.** Repeat the Cmd-E row inside a REAL `AEAssessmentSession` | Same landing as the simulated row, and the Mac unlocks (`DID END`) before the entry screen is on view — check the order in stderr | NOT RUN |
+| **Watchdog.** `SECURE_TEST_WATCHDOG_SECONDS=30`, join, wait it out | The watchdog end lands home like every other end: "Your tests" plus the one-button "Secure session ended" sheet. stderr: `WATCHDOG: 30s elapsed — ending lockdown` then the leaving-the-test-screen line | NOT RUN |
+| Type into the essay (do not leave the field), then Cmd-E; sign in again and Resume | The typed text is present in the field — the page blurred the focused field and flushed dirty drawings before the view came down (`__secureTestFlushInput`), so the last `change` reached the spool | NOT RUN |

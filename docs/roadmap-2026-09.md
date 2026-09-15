@@ -262,3 +262,48 @@ its argument). **Findings (T-1 / T-2 / R-4 BUILT 2026-09-14 — `acf8eb4`
 Two design notes written (X and Y in the table): `docs/student-work-export-design.md`
 and `docs/scoring-corpus-design.md`. Nothing built at the time of writing;
 corpus slice 1 (migration 0035 + the reader sweep) starts next.
+
+### 2026-09-15 — client end-state audit, and security slice 1
+
+An audit of what actually removes the test from the screen when a session
+ends. The finding: nothing did. Only a screen change (`showEntry` /
+`showAssessment` replacing the window's content view) ever took assessment
+content down; the lockdown state handler swapped titlebar accessories and put
+up a sheet, and that was all. Five consequences, all verified in the code:
+
+1. **Emergency end (Cmd-E / the titlebar button) offered "Stay here."** The
+   session ended, the Mac unlocked, and the whole test stayed rendered and
+   still saving answers behind a second button that invited exactly that.
+   Escape on the sheet mapped to it too.
+2. **A failed `begin()` delivered the test unlocked.** The page-load gate
+   opened on every state except `.starting`, so `.idle` after a
+   `failedToBegin` or an interruption released the build — the test was handed
+   over precisely because the lockdown had refused to start. The oldest
+   hand-run row for `SECURE_TEST_SIMULATE_LOCKDOWN=refuses` recorded this as
+   the expected behaviour.
+3. **The gate's backstop built the page anyway.** Five seconds, then "building
+   anyway" — a hung session cost the test's protection rather than the
+   student's time.
+4. **Time-limit expiry** left the page loaded behind its one-button sheet.
+5. **Watchdog expiry** ended like (1), with the same aftermath.
+
+**Slice 1 (built 2026-09-15, client only):** the test page is on screen only
+while the session is active. The gate (Core, `PageLoadGate`) gained an
+outcome — opened / refused / timed out — and opens on `.active` alone; a
+`.idle` reached before it ever opened refuses it; the backstop is 20 s (a real
+`begin()` answers in about two) and neither a refusal nor a timeout builds
+anything. A refusal or timeout instead ends whatever is up, returns to "Your
+tests" and shows a one-button "Couldn't start a secure session" sheet. Every
+end that is not a hand-in — emergency exit, watchdog, interruption, the time
+limit — now calls `showEntry()` FIRST and presents its one-button sheet there
+("Time is up." or "Secure session ended"); "Stay here" and the copy inviting
+it are gone. Hand-in and the Cmd-Q path are untouched by design. Cooperative
+simulated sessions stay active-synchronously, so
+`SECURE_TEST_SIMULATE_LOCKDOWN`, the dev launcher and the whole suite still
+work. Rows: `client/MANUAL-CHECKS.md` "Content only while locked
+(2026-09-15)", NOT RUN; the four rows this contradicts are marked superseded
+in place.
+
+**Slice 2 (not built):** hardening the knobs themselves — the watchdog off in
+Release, and the simulation / debug environment variables gated so a shipped
+build cannot be talked out of a real session.

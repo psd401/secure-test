@@ -52,8 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tokens = InMemoryTokenStore()
     private var lockdown: AssessmentLockdown?
     /// C-1: this attempt's page-load gate, opened when the lockdown session
-    /// settles. One per `showAssessment`; nil on the offline path.
+    /// becomes active. One per `showAssessment`; nil on the offline path.
     private var pageLoadGate: PageLoadGate?
+    /// Security slice 1: did THIS attempt's session ever reach `.active`? Set
+    /// on the main actor, where the lockdown's states are ordered, so the
+    /// `.idle` that ends a legitimate session can never be mistaken for a
+    /// begin() that failed. Reset with the gate, per attempt.
+    private var lockdownBecameActive = false
     /// AAC-2b: set from each loaded bundle's accommodations before its
     /// beginLockdown(); read by makeSession per begin(). Restrictive until a
     /// bundle says otherwise.
@@ -353,6 +358,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // line should claim one.
         ClientErrorLog.shared?.attemptID = nil
         CrashReporter.prepare(stamp: Self.buildStamp, attemptID: nil)
+        // Security slice 1 (2026-09-15): the controller is told it is gone
+        // BEFORE the reference is dropped. `WKUserContentController` retains
+        // its message handlers, so dropping the reference does not deallocate
+        // it — without this a page-load gate that opens late (an emergency end
+        // raced against a slow begin()) would still build the test into the
+        // detached view. Answers already spooled are untouched: the spool is a
+        // SQLite file in Application Support, written before it is sent, and
+        // the next attempt's flush carries whatever is still queued.
+        controller?.retire()
         controller = nil
         attemptHandedIn = false
         // Time limit: the attempt is gone, and so is its clock.
@@ -454,6 +468,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // sees the "Loading your test…" notice while it is shut.
         let gate = isServerDelivered ? PageLoadGate() : nil
         pageLoadGate = gate
+        lockdownBecameActive = false
         controller.pageLoadGate = gate
         controller.onBundleLoaded = { [weak self] bundle in
             self?.setClipboardAllowed(bundle.allowClipboard)
@@ -479,6 +494,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onBackToTests = { [weak self] in
             Self.log("back to your tests pressed (in-page) — leaving the attempt screen")
             self?.showEntry()
+        }
+        // Security slice 1: the gate refused or never answered, so no test page
+        // was built. Whatever is up comes down and the student goes home told.
+        controller.onCouldNotStartSecurely = { [weak self] reason in
+            self?.couldNotStartSecurely(reason)
         }
         controller.onTimerDismissed = { [weak self] in
             // D-3: the banner is hidden for the rest of the attempt. The clock
@@ -591,9 +611,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wasActive = lockdown?.isActive == true
         endLockdown(reason: "time_expired")
         // A session that was never up (a failed begin, the cooperative
-        // fallback) produces no `.idle` transition, so nothing else would tell
-        // the student what happened.
-        if !wasActive { presentSessionEndedSheetIfNeeded() }
+        // fallback) produces no `.idle` transition, so nothing else would send
+        // the student home or tell them what happened.
+        if !wasActive { returnHomeAfterSessionEnd() }
     }
 
     // MARK: focus (slice 92)
@@ -689,18 +709,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginLockdown() {
         if lockdown == nil { lockdown = makeLockdown() }
         lockdown?.begin()
-        // C-1: begin() is a no-op while a session is already up, and a
-        // cooperative session can be `.active` by the time it returns — in both
-        // cases no further state change is coming, so nothing else would open
-        // the gate.
-        if lockdown?.state != .starting { openPageLoadGate() }
+        // C-1: a cooperative simulated session is `.active` by the time begin()
+        // returns (and begin() is a no-op while one is already up), so no
+        // further state change is coming and nothing else would open the gate —
+        // which is what keeps `SECURE_TEST_SIMULATE_LOCKDOWN`, the dev launcher
+        // and every rehearsal working.
+        //
+        // Security slice 1: `.active` is now the ONLY state that opens it. A
+        // synchronous failure to begin lands back on `.idle` and refuses.
+        switch lockdown?.state {
+        case .active: openPageLoadGate()
+        case .idle: refusePageLoadGate()
+        case .starting, nil: break
+        }
     }
 
-    /// C-1: releases the page build. Idempotent in the gate itself, so every
-    /// settled state can call it.
+    /// Security slice 1: releases the page build. Called only for `.active`.
+    /// Idempotent in the gate itself.
+    ///
+    /// The flag is what makes the ORDER safe. `open()` and `refuse()` each hop
+    /// onto the gate's actor in their own Task, and two Tasks have no order
+    /// between them — so a session that went `.active` and then straight back
+    /// to `.idle` (an emergency end seconds after begin) could otherwise have
+    /// its refusal land first and report a start that never failed. This is
+    /// decided here, on the main actor, where the states genuinely are ordered.
     private func openPageLoadGate() {
+        lockdownBecameActive = true
         guard let gate = pageLoadGate else { return }
         Task { await gate.open() }
+    }
+
+    /// Security slice 1: the session reached `.idle`. A no-op in the gate if it
+    /// is already open — every session ends eventually, and the end of a
+    /// legitimate one must not read as a failure to start — so this is only
+    /// consequential for a begin() that failed or was interrupted before it
+    /// ever became active, which is exactly the case that used to deliver the
+    /// whole test to an unlocked Mac.
+    private func refusePageLoadGate() {
+        guard !lockdownBecameActive else { return }
+        guard let gate = pageLoadGate else { return }
+        Task { await gate.refuse() }
     }
 
     private func endLockdown(reason: String) {
@@ -710,23 +758,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func lockdownStateChanged(_ state: AssessmentLockdown.State) {
-        // C-1: `.active` is the state the page build is waiting for, and
-        // `.idle` here is the settled aftermath of a begin that failed, was
-        // interrupted, or ended — every one of them means no resize is coming,
-        // so a failed begin must never hold the page for the full backstop.
-        // `.starting` is the one state that keeps it shut.
-        if state != .starting { openPageLoadGate() }
         switch state {
         case .idle:
             endSessionItem?.isEnabled = false
             lockdownAccessory?.removeFromParent()
             lockdownAccessory = nil
             lockdownStatusLabel = nil
-            // 10.3: the session is down; on a shared Mac the next student
-            // needs a way back without Cmd-Q + relaunch.
-            installBackToTestsAccessoryIfNeeded()
-            presentSessionEndedSheetIfNeeded()
+            // Security slice 1: if the page never built, this is a begin() that
+            // failed or was interrupted — refuse it rather than letting the
+            // backstop hand the test over. No-op once the page is legitimately
+            // up, which is every ordinary end.
+            refusePageLoadGate()
+            // 10.3: after a HAND-IN the session goes down with the attempt
+            // still on screen (the handed-in notice), so the titlebar route
+            // home stays. Every other end sends the student home itself, just
+            // below, and `showEntry` removes this accessory anyway.
+            if attemptHandedIn { installBackToTestsAccessoryIfNeeded() }
+            returnHomeAfterSessionEnd()
         case .starting, .active:
+            // Security slice 1: `.active` — and nothing else — releases the
+            // page build (C-1's reason for the gate is unchanged: the AAC
+            // begin() transition has finished resizing the window by now).
+            if state == .active { openPageLoadGate() }
             endSessionItem?.isEnabled = true
             installLockdownAccessoryIfNeeded()
             lockdownStatusLabel?.stringValue =
@@ -797,34 +850,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         backToTestsAccessory = accessory
     }
 
-    /// UX pass 2 (James, 2026-08-31 hand-run): after an emergency end the
-    /// titlebar button alone is too subtle — a centered sheet makes the
-    /// choice explicit. Hand-in does NOT get the sheet; its in-page button
-    /// beside the handed-in notice is the route there.
-    private func presentSessionEndedSheetIfNeeded() {
-        guard screen == .serverAttempt, !attemptHandedIn, !quitInProgress, let window else { return }
+    /// Security slice 1 (James, 2026-09-15): **the test is on screen only while
+    /// the assessment session is active.** After ANY end that is not a hand-in
+    /// — the Cmd-E / titlebar emergency exit, the watchdog, an interruption,
+    /// the time limit — the student goes back to "Your tests" and is told.
+    ///
+    /// This replaces the UX-pass-2 sheet, which offered "Stay here" beside
+    /// "Back to your tests". The 2026-09-15 end-state audit is why: nothing but
+    /// `showEntry()` ever removed assessment content from the window, so
+    /// "Stay here" left the whole test — stems, sources, the student's answers
+    /// — rendered on a Mac that was no longer locked, still saving. The copy
+    /// that invited it ("You can keep working here") is gone with it.
+    ///
+    /// Hand-in is untouched: its session ends with the handed-in notice on
+    /// screen and its own in-page "Back to your tests" button, and the
+    /// `attemptHandedIn` guard below is what keeps it that way.
+    ///
+    /// `showEntry()` comes FIRST — it is the call that tears the web view down
+    /// — and the sheet is then presented on the entry screen, so the student
+    /// can never read the alert over their own test paper.
+    private func returnHomeAfterSessionEnd() {
+        guard screen == .serverAttempt, !attemptHandedIn, !quitInProgress, window != nil else {
+            return
+        }
+        // Once per attempt screen: the time-limit path can arrive both through
+        // `.idle` and directly (a session that was never active), and two
+        // stacked sheets would be worse than either.
         guard !sessionEndedSheetShown else { return }
         sessionEndedSheetShown = true
-        let alert = NSAlert()
-        // Time limit (D-2): one button, because there is nothing to stay for —
-        // the server refuses this attempt's answers from here, so "Stay here"
-        // would offer a page that can no longer save anything.
-        if sessionEndedByTimeLimit {
-            alert.messageText = "Time is up."
-            alert.informativeText = "Your answers are saved."
-            alert.addButton(withTitle: "Back to your tests")
-        } else {
-            alert.messageText = "Secure session ended"
-            alert.informativeText =
-                "Your answers are saved. You can keep working here, or go back to your tests."
-            alert.addButton(withTitle: "Back to your tests")
-            alert.addButton(withTitle: "Stay here")
-        }
-        alert.beginSheetModal(for: window) { [weak self] response in
-            if response == .alertFirstButtonReturn {
-                self?.backToTests()
+        // Read before `showEntry()`, which resets it along with the rest of the
+        // attempt's state.
+        let byTimeLimit = sessionEndedByTimeLimit
+        Self.log("secure session ended without a hand-in — leaving the test screen")
+        let goHome: @MainActor () -> Void = { [weak self] in
+            guard let self else { return }
+            self.showEntry()
+            let alert = NSAlert()
+            if byTimeLimit {
+                alert.messageText = "Time is up."
+                alert.informativeText = "Your answers are saved."
+            } else {
+                alert.messageText = "Secure session ended"
+                alert.informativeText = "Your answers are saved. You can rejoin from Your tests."
             }
+            alert.addButton(withTitle: "OK")
+            self.presentOnEntryWindow(alert)
         }
+        // A field still holding focus has not posted yet (essay / short text
+        // post on blur); flush it and the dirty drawings, then go. The Mac is
+        // already unlocked for this beat — the page is modal-free but the
+        // student cannot type anything the spool would miss again.
+        if let controller {
+            controller.flushPendingInput(then: goHome)
+        } else {
+            goHome()
+        }
+    }
+
+    /// Security slice 1: the page-load gate refused or timed out, so the test
+    /// was never built and never will be on this controller. End whatever is
+    /// up, go home, say so — the same landing as every other end, because a
+    /// student staring at "Loading your test…" forever is the failure mode this
+    /// replaces.
+    private func couldNotStartSecurely(_ reason: String) {
+        Self.log("SECURE START REFUSED (\(reason)) — the test page was not built")
+        Self.logError(
+            kind: "secure_start_refused",
+            message: "the assessment session never became active",
+            context: ["reason": reason]
+        )
+        // A `.starting` session that never answered is still nominally up; the
+        // 8.3 rule defers the physical end() to DID BEGIN, and the watchdog and
+        // escalation stay armed either way.
+        endLockdown(reason: "secure start refused: \(reason)")
+        // Nothing is on screen worth keeping, and nothing about this attempt
+        // should stay half-built. `showEntry()` also flips `screen` to `.entry`,
+        // so the `.idle` that the end above produces arrives with the
+        // return-home path already guarded and cannot stack a second sheet.
+        showEntry()
+        let alert = NSAlert()
+        alert.messageText = "Couldn't start a secure session"
+        alert.informativeText = "Your test didn't open. Ask your teacher for help."
+        alert.addButton(withTitle: "OK")
+        presentOnEntryWindow(alert)
+    }
+
+    /// One button, so Escape and Return both land on the same harmless
+    /// dismissal. Presented on the window the entry screen now occupies.
+    private func presentOnEntryWindow(_ alert: NSAlert) {
+        guard let window else { return }
+        alert.beginSheetModal(for: window) { _ in }
     }
 
     @objc private func backToTests() {

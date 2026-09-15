@@ -118,7 +118,52 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// moment. Set by the host immediately after `init`, which is before the
     /// fetch Task gets to run; nil (the offline path, and any host that does not
     /// lock down) means no wait at all.
+    ///
+    /// Security slice 1 (2026-09-15): it is also the thing that decides whether
+    /// the test is built AT ALL — only `.opened` (the session is active) may.
     var pageLoadGate: PageLoadGate?
+
+    /// Security slice 1: the gate refused or timed out, so no test page was
+    /// built and none will be. The host ends whatever is up, goes back to
+    /// "Your tests" and tells the student. The string is a short stable token
+    /// for the log, never page content.
+    var onCouldNotStartSecurely: ((String) -> Void)?
+
+    /// Security slice 1: set by the host when this controller leaves the
+    /// screen (`showEntry`). The fetch Task below checks it after every
+    /// suspension, so a gate that opens late — after an emergency end has
+    /// already sent the student home — cannot load the test into a controller
+    /// nobody is looking at.
+    ///
+    /// A flag rather than cancelling the Task, and rather than relying on
+    /// deallocation: `WKUserContentController` retains its message handlers,
+    /// so this object outlives the window it was built for.
+    private(set) var isRetired = false
+
+    /// Security slice 1: before the host tears the attempt screen down after a
+    /// session end, give the page one chance to post what is still only in a
+    /// field — an essay or short text posts on `change`, which needs a blur —
+    /// and to flush dirty drawings. The message hop from the page to
+    /// `record()` is asynchronous, so `done` runs a beat later; the spool row
+    /// is written before anything is sent, so the trip home loses nothing
+    /// that reached it.
+    func flushPendingInput(then done: @escaping @MainActor () -> Void) {
+        webView.evaluateJavaScript(
+            "window.__secureTestFlushInput ? window.__secureTestFlushInput() : false;"
+        ) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                MainActor.assumeIsolated { done() }
+            }
+        }
+    }
+
+    /// Called by the host as it tears the attempt screen down.
+    func retire() {
+        guard !isRetired else { return }
+        isRetired = true
+        webView.stopLoading()
+        log("assessment controller retired — no further page loads")
+    }
 
     /// Where the assessment comes from. `.file` keeps the offline path that
     /// slice 53 established — it is the only way to look at the renderer in this
@@ -203,22 +248,49 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                 guard let self else { return }
                 do {
                     let (bundle, json) = try await client.fetchBundle(assessmentID: assessmentID)
+                    guard !self.isRetired else {
+                        self.log("bundle fetch completed after the attempt screen went away — discarded")
+                        return
+                    }
                     self.bundle = bundle
                     self.log("bundle fetched: \(bundle.items.count) items")
                     self.onBundleLoaded?(bundle)
                     // C-1: `onBundleLoaded` is what begins lockdown, and the
                     // AAC begin() transition resizes the window — so build the
-                    // page only once the session has settled, or the renderer's
+                    // page only once the session is ACTIVE, or the renderer's
                     // one-shot width read takes a `side_by_side` set to the
                     // own_page fallback. The student sees the "Loading your
-                    // test…" notice meanwhile. The backstop means a session
-                    // that never answers delays the test rather than swallowing
-                    // it; the offline path passes no gate and never waits.
+                    // test…" notice meanwhile; the offline path passes no gate
+                    // and never waits.
+                    //
+                    // Security slice 1 (2026-09-15 end-state audit): the other
+                    // two outcomes do NOT build the page. A begin() that failed
+                    // (`.refused`) used to open this gate like any other settled
+                    // state and hand the whole test to an unlocked Mac; a
+                    // session that never answers (`.timedOut`) used to be built
+                    // "anyway" after 5 s. A real begin() answers in about two
+                    // seconds, so the backstop is 20 s now — long enough that a
+                    // slow Mac is never mistaken for a hung one, and a hung one
+                    // costs the student a rejoin rather than the test's
+                    // protection.
                     if let gate = self.pageLoadGate {
-                        let opened = await gate.wait(timeout: .seconds(5))
-                        self.log(opened
-                            ? "page load gate: opened"
-                            : "page load gate: backstop after 5 s — building anyway")
+                        let outcome = await gate.wait(timeout: .seconds(20))
+                        guard !self.isRetired else {
+                            self.log("page load gate settled after the attempt screen went away — discarded")
+                            return
+                        }
+                        switch outcome {
+                        case .opened:
+                            self.log("page load gate: opened")
+                        case .refused:
+                            self.log("page load gate: REFUSED — the secure session never became active; the test is NOT being shown")
+                            self.onCouldNotStartSecurely?("session_refused")
+                            return
+                        case .timedOut:
+                            self.log("page load gate: TIMED OUT after 20 s — the secure session never answered; the test is NOT being shown")
+                            self.onCouldNotStartSecurely?("session_timeout")
+                            return
+                        }
                     }
                     self.loadHostPage(AssessmentPage.html(title: bundle.title, bundleJSON: json))
                 } catch {

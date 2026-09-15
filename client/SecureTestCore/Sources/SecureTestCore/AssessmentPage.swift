@@ -2601,6 +2601,16 @@ public enum AssessmentPage {
       // The host resolves an item id back to its rendered block so it can
       // report an upload result to the right one.
       var BLOCKS = {};
+      // Security slice 1 (2026-09-15): the host is about to take the page
+      // down after a session end that is not a hand-in. An essay or short
+      // text posts only on `change`, which fires on blur — so blur whatever
+      // has focus, and flush every dirty drawing, before the view goes away.
+      window.__secureTestFlushInput = function () {
+        var a = document.activeElement;
+        if (a && typeof a.blur === 'function') a.blur();
+        flushAllDrawings();
+        return true;
+      };
       window.__secureTestDrawingResult = function (itemId, ok) {
         var block = BLOCKS[itemId];
         if (block && block.__drawingSaved) block.__drawingSaved(ok);
