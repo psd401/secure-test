@@ -28,6 +28,14 @@ RUN cd design-tool && bun run build
 # self-contained ESM file that plain node runs. Lives next to db/migrations
 # because migrate.ts resolves the folder relative to its own location.
 RUN cd design-tool && bun build db/migrate.ts --target=node --format=esm --outfile db/migrate.mjs
+# Corpus runner + run comparison (slice 4 of docs/scoring-corpus-design.md),
+# bundled the same way and for the same reason. `bun build` inlines
+# @aws-sdk/client-bedrock-runtime along with drizzle/postgres, so the only
+# imports left in either output are node builtins — no @napi-rs-style copy
+# rule is needed. They sit in scripts/ next to the entrypoint, which imports
+# them as siblings.
+RUN cd design-tool && bun build scripts/score-corpus.ts --target=node --format=esm --outfile scripts/score-corpus.mjs \
+ && bun build scripts/compare-runs.ts --target=node --format=esm --outfile scripts/compare-runs.mjs
 
 FROM node:22.23.2-slim AS runner
 # Build stamp (docs/observability-design.md slice 3 follow-up): the git
@@ -57,10 +65,13 @@ COPY --from=builder /repo/design-tool/public ./design-tool/public
 # builder restores the resolution path; it points at the traced store.
 COPY --from=builder /repo/design-tool/node_modules/@napi-rs ./design-tool/node_modules/@napi-rs
 # Boot shim (slice 3): assembles DATABASE_URL from the ECS-injected DB_*
-# secret vars, then imports server.js — or, with `migrate` as its argument,
-# the bundled migrator (a one-off ECS run-task; infra/README.md "Migrating
+# secret vars, then imports server.js — or, with a mode as its argument, one
+# of the bundled operator scripts (`migrate`, `corpus`, `compare`; a one-off
+# ECS run-task, infra/README.md "Migrating Aurora" and "Corpus runs on
 # Aurora"). Local runs that set DATABASE_URL directly pass straight through.
 COPY --from=builder /repo/design-tool/scripts/docker-entrypoint.mjs ./design-tool/scripts/docker-entrypoint.mjs
+COPY --from=builder /repo/design-tool/scripts/score-corpus.mjs ./design-tool/scripts/score-corpus.mjs
+COPY --from=builder /repo/design-tool/scripts/compare-runs.mjs ./design-tool/scripts/compare-runs.mjs
 COPY --from=builder /repo/design-tool/db/migrate.mjs ./design-tool/db/migrate.mjs
 COPY --from=builder /repo/design-tool/db/migrations ./design-tool/db/migrations
 

@@ -133,10 +133,14 @@ tests; the script is the thin CLI.
 
 **Where it runs:** local dev and the test DB directly. Against Aurora the
 runner goes the migrate-aurora way — a one-off ECS task on the service
-image with the script as the command — as its own later slice, once a run
-on the local roster-shaped data has proven the shape. Until then a corpus
-question on production data is a copy of the relevant rows into the dev
-DB (an export script is out of scope here; the dump is operator work).
+image with the script as the command (**slice 4, built**: both scripts are
+bundled into the image, the entrypoint gains `corpus` and `compare` beside
+`migrate`, and `infra/scripts/oneoff-aurora.sh <mode> [args…]` is the
+generalized run-task with `migrate-aurora.sh` as a thin wrapper —
+`infra/README.md` "Corpus runs on Aurora"). The task role's Bedrock access
+and the service's guardrail are what such a run uses, so a corpus question
+on production data needs no new IAM and no longer needs a copy of the rows
+into the dev DB.
 
 ### What this deliberately does not do
 
@@ -264,3 +268,64 @@ excludes `research` from the start.
   `unscorable` line did not say why — **BUILT the same evening**: the
   outcome carries `reason: no_rubric | empty_response | not_essay_method`
   and the CLI prints it (`unscorable (no_rubric)` on the dev re-run).
+- 2026-09-14 — **slice 4 BUILT** (no migration; no design-tool code changed —
+  this is the image, the entrypoint and the infra script).
+  **Bundling:** the Dockerfile's builder stage now also runs
+  `bun build scripts/score-corpus.ts` and `scripts/compare-runs.ts`
+  (`--target=node --format=esm`) beside the existing `db/migrate.ts` build,
+  and the runner stage copies the two `.mjs` next to `db/migrate.mjs` —
+  1.46 MB and 405 KB. `bun build` inlines `@aws-sdk/client-bedrock-runtime`
+  along with drizzle/postgres, so the only imports left in either output are
+  node builtins (plus `node:module`'s `createRequire`, which the AWS SDK uses
+  for its own lazy `node:fs`/`node:http` reads); nothing needs an
+  `@napi-rs`-style copy rule. Both names are gitignored beside
+  `db/migrate.mjs`. **Entrypoint:** a `MODES` map (`migrate` →
+  `db/migrate.mjs`, `corpus` → `score-corpus.mjs`, `compare` →
+  `compare-runs.mjs`), an unknown mode still exits 64, and the mode is
+  removed from `process.argv` with `splice(2, 1)` before the import — so each
+  script's own `process.argv.slice(2)` sees exactly the pass-through
+  arguments and **neither script changed**. The DB_* → DATABASE_URL shim runs
+  for every mode as before. **Infra:** `infra/scripts/oneoff-aurora.sh <mode>
+  [args…]` carries the discovery + run-task the migrate script used to;
+  `migrate-aurora.sh` is now `exec oneoff-aurora.sh migrate "$@"`, so the
+  deploy recipe and the README command are unchanged. The container-command
+  JSON is built with `jq -nc … --args -- "$@"` (the `--` is load-bearing:
+  without it jq reads `--label` as its own option and dies) with a
+  hand-rolled JSON-string escaper as the no-jq fallback — both paths produce
+  byte-identical JSON for a label containing spaces, quotes and backslashes.
+  `aws ecs wait tasks-stopped` caps at 100 × 6 s = 10 min, too short for a
+  Bedrock run, so the wait is our own `describe-tasks` poll (every 10 s, a
+  dot per poll) with a `TIMEOUT_MINUTES` ceiling, default 30; hitting it
+  exits 3 and says the task is still running, because it is. The script exits
+  with the **container's own** code, so the runner's 1 (nothing matched /
+  label taken) and 2 (bad flag) survive to the terminal.
+  **Container proof** (colima; image built from the repo root;
+  `host.docker.internal` reaches local Postgres with no change to the runner
+  stage):
+  `corpus --label proof --dry-run` against the test DB → `0 essay response(s)
+  match the filter` / `nothing matched — check the filters (no run was
+  created)`, exit 1; `bogus` → `docker-entrypoint: unknown mode "bogus" — no
+  argument boots the server; modes: migrate, corpus, compare.`, exit 64;
+  `corpus --nope` → the parser's unknown-flag line + usage, exit 2;
+  `corpus --label "sonnet-4-6 prompt 2026-09-14 vs pilot finals"
+  --with-human-final --dry-run` → the same 0-match lines, exit 1 (the
+  multi-word label reached the parser intact); `migrate` against a scratch DB
+  → `migrations applied — 36 in drizzle.__drizzle_migrations (journal has
+  36)`, exit 0 (the wrapper refactor did not disturb the migrate path);
+  `compare --all` with one seeded run row → the readable table with every
+  rate `—`, exit 0, and `compare --all --csv` → the header plus one row, exit
+  0. (`compare --all` against a DB with **no** runs exits 1 with `no runs in
+  this database` — slice 2's behaviour, unchanged; the empty-table proof
+  needed a run row.) The scratch DB was dropped afterwards.
+  **Test:** `test/docker-entrypoint.test.ts` (7) copies the entrypoint into a
+  temp directory beside stub targets and runs it with plain node — every path
+  it imports is relative to its own location, so the temp copy is a faithful
+  stand-in for the image: each mode reaches its own file, no argument boots
+  `server.js`, a mode's arguments are never read as modes, the multi-word
+  label survives the splice, the DB_* shim's assembled URL is asserted
+  character for character (percent-encoding included), and both exit-64
+  paths. `bun run typecheck` clean.
+  **Not done here:** no `cdk deploy` and no Aurora run — the two scripts
+  reach the image only with the next deploy, and slice 3's Bedrock half is
+  still the first real run (it can now be that run, against production
+  essays, instead of a dump into dev).

@@ -207,7 +207,18 @@ Failure modes seen or expected: task fails to start (image pull, secrets)
 → `stoppedReason` on the FAILED line, exit code empty; migrator throws
 (bad SQL, connection) → node exit 1 and the stack trace in the log lines.
 A stray task cannot be left running: the entrypoint refuses any argument
-other than `migrate`, and the migrator exits when done.
+that is not one of its modes, and each one exits when done.
+
+Since slice 4 of `docs/scoring-corpus-design.md` the run-task machinery lives
+in **`scripts/oneoff-aurora.sh <mode> [args…]`**; `migrate-aurora.sh` is a
+one-line wrapper that execs it with `migrate`, so the command above and the
+deploy recipe are unchanged. The generalized script takes any entrypoint mode
+and passes every argument after it through to the bundled script (the
+container-command JSON is built with `jq` when present, by hand otherwise, so
+an argument with spaces survives), waits with its own poll loop —
+`aws ecs wait tasks-stopped` gives up after 10 minutes, too short for a
+Bedrock run, so the ceiling is `TIMEOUT_MINUTES` (default 30) — and exits
+with the container's own code.
 
 The importer Lambda and the app service are unaffected by any of this: they
 reach the cluster through their own SG→SG rules. Record: Aurora was brought
@@ -215,6 +226,48 @@ to 0020 on 2026-08-26 (laptop), 0023 on 2026-08-31 (laptop, count 24), 0024
 on 2026-09-01 16:35 PT (laptop, count 25); the first run-task migration was
 the no-op proof on 2026-09-01 evening (task `5062e5832a01…`, 45 s from
 start to stop, exit 0, `25 … (journal has 25)`).
+
+## Corpus runs on Aurora
+
+The essay-scoring corpus runner (`docs/scoring-corpus-design.md`) is an
+operator script, and Aurora is in-VPC, so it runs the same way migrations do
+— as a one-off task on the service's task definition, which also means it
+scores with the **task role's** Bedrock access and the same guardrail the
+service uses.
+
+```bash
+# From design-tool/infra/, AWS creds loaded.
+# 1. Count what matches, create nothing:
+scripts/oneoff-aurora.sh corpus --label "sonnet-4-6 prompt 2026-09-14 vs pilot finals" \
+  --with-human-final --dry-run
+# 2. The real run (same arguments, minus --dry-run):
+scripts/oneoff-aurora.sh corpus --label "sonnet-4-6 prompt 2026-09-14 vs pilot finals" \
+  --with-human-final
+# 3. Read the numbers:
+scripts/oneoff-aurora.sh compare --all --csv
+```
+
+- **Always `--dry-run` first.** A filter typo that matches nothing exits 1
+  without creating a run; a filter that matches more than you meant spends
+  Bedrock tokens on every essay it found.
+- The task's `ESSAY_SCORER_PROVIDER` is already `bedrock`, so **`--provider`
+  can be omitted** — the runner's default is that env var, then `mock`. Pass
+  `--provider mock` deliberately if what you want is a shape check against
+  production data with no Bedrock spend.
+- **`--model <bedrock model id>`** overrides `BEDROCK_ESSAY_SCORE_MODEL` for
+  that run only (the env var on the task definition is untouched); the model
+  lands in the run's `provider_id`, which is what tells two runs apart.
+- Exit codes come from the script: 0 scored something, 1 nothing matched or
+  the label is already used, 2 a bad flag, 64 a bad mode. Progress and the
+  final tally are in the printed CloudWatch lines; the tally is also written
+  to `scoring_runs.notes`.
+- The run writes `research` score rows only — invisible to teachers by
+  construction (slice 1) — so a corpus run against production is safe to do
+  during the school day. It is not free: it is Bedrock spend attributed to
+  the assessment owner in the `ai_usage` log lines, like any other scoring.
+- Raise `TIMEOUT_MINUTES` if a run is bigger than half an hour. Hitting the
+  ceiling exits 3 and does **not** stop the task — it keeps scoring, and the
+  run's rows and notes still land; re-read them with `compare`.
 
 ## Roster sync — local / manual run
 

@@ -13,21 +13,44 @@
 // execution role where ECS expects it, and there is no boot-time API call
 // to retry. A pre-set DATABASE_URL (local docker runs) wins untouched.
 //
-// Second mode (infra slice, 2026-09-01): `migrate` as the first argument
-// runs the bundled db/migrate.ts (db/migrate.mjs, built in the Dockerfile)
-// instead of the server and exits — a one-off ECS run-task on the service's
-// task definition is how Aurora is migrated now that the cluster SG has no
-// laptop CIDR (infra/README.md "Migrating Aurora",
-// infra/scripts/migrate-aurora.sh). Any other argument is refused rather
-// than silently booting a stray web server with no load balancer in front.
+// One-off modes (infra slice, 2026-09-01; extended by slice 4 of
+// docs/scoring-corpus-design.md, 2026-09-14): a first argument names a
+// bundled operator script to run INSTEAD of the server, then exits. Each is
+// bundled by `bun build` in the Dockerfile's builder stage because the
+// runtime image has no bun and the standalone trace does not carry
+// drizzle-orm/postgres as resolvable modules.
+//
+//   migrate  → db/migrate.mjs      (infra/README.md "Migrating Aurora")
+//   corpus   → score-corpus.mjs    (README "Corpus runs on Aurora")
+//   compare  → compare-runs.mjs
+//
+// A one-off ECS run-task on the service's own task definition is how any of
+// these reaches Aurora now that the cluster SG has no laptop CIDR
+// (infra/scripts/oneoff-aurora.sh; migrate-aurora.sh wraps it). Any other
+// argument is refused rather than silently booting a stray web server with
+// no load balancer in front.
+//
+// Everything after the mode is the script's own argv: process.argv is
+// spliced so the mode disappears and each script's `process.argv.slice(2)`
+// sees exactly the pass-through arguments. The scripts are unchanged and
+// still run byte-identically under bun locally.
+
+const MODES = {
+  migrate: "../db/migrate.mjs",
+  corpus: "./score-corpus.mjs",
+  compare: "./compare-runs.mjs",
+};
 
 const mode = process.argv[2];
-if (mode !== undefined && mode !== "migrate") {
+if (mode !== undefined && !Object.hasOwn(MODES, mode)) {
   console.error(
-    `docker-entrypoint: unknown mode "${mode}" — no argument boots the server, "migrate" runs migrations.`,
+    `docker-entrypoint: unknown mode "${mode}" — no argument boots the server; ` +
+      `modes: ${Object.keys(MODES).join(", ")}.`,
   );
   process.exit(64);
 }
+// Drop the mode so the target script's process.argv.slice(2) is its own args.
+if (mode !== undefined) process.argv.splice(2, 1);
 
 if (!process.env.DATABASE_URL) {
   const missing = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
@@ -46,5 +69,5 @@ if (!process.env.DATABASE_URL) {
 }
 
 await import(
-  new URL(mode === "migrate" ? "../db/migrate.mjs" : "../server.js", import.meta.url).href,
+  new URL(mode === undefined ? "../server.js" : MODES[mode], import.meta.url).href,
 );

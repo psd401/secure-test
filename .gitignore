@@ -14,8 +14,11 @@ DerivedData/
 # Teacher-provided sample assessments — never public
 design-tool/samples/
 
-# Built only inside the Fargate image (Dockerfile bundles db/migrate.ts)
+# Built only inside the Fargate image (the Dockerfile bundles db/migrate.ts
+# and the two corpus operator scripts)
 design-tool/db/migrate.mjs
+design-tool/scripts/score-corpus.mjs
+design-tool/scripts/compare-runs.mjs
 
 # Node / CDK / bun
 node_modules/
