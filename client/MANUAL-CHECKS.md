@@ -1617,6 +1617,8 @@ the `[security]` lines. Rebuild the client first.
 | **Watchdog.** `SECURE_TEST_WATCHDOG_SECONDS=30`, join, wait it out | The watchdog end lands home like every other end: "Your tests" plus the one-button "Secure session ended" sheet. stderr: `WATCHDOG: 30s elapsed — ending lockdown` then the leaving-the-test-screen line | NOT RUN |
 | Type into the essay (do not leave the field), then Cmd-E; sign in again and Resume | The typed text is present in the field — the page blurred the focused field and flushed dirty drawings before the view came down (`__secureTestFlushInput`), so the last `change` reached the spool | NOT RUN |
 
+| **Real session, hung begin() — recovery.** After a "Couldn't start a secure session" refusal (simulate with `SECURE_TEST_SIMULATE_LOCKDOWN=hang` if the simulator gains that value; otherwise only a real begin() that never answers), press Cmd-Q on the entry screen | The app quits at once — `applicationShouldTerminate` defers only on `.active`; a `.starting` session that never began holds nothing to release. stderr shows no `quit requested with lockdown active` | NOT RUN |
+| **Real session, hung begin() — relaunch.** Relaunch after that quit, sign in, Join the same sitting | A fresh lockdown object: `REAL AEAssessmentSession` → `DID BEGIN` → the test opens (`page load gate: opened`). Without the relaunch a second Join would be refused again after 20 s, because `begin()` is a no-op while the stale `.starting` session is up — the object is kept on purpose (a late DID BEGIN must still find its owner to end it) | NOT RUN |
 ## Release hardening (2026-09-15) — security slice 2
 
 The same audit found the other half: the client had **no `#if DEBUG` anywhere**,
