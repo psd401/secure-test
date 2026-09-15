@@ -9,6 +9,7 @@ import {
   items,
   responses,
   scores,
+  scoring_runs,
   students,
   type ItemRow,
 } from "../db/schema";
@@ -725,5 +726,46 @@ describe("tableMaxPoints (E3)", () => {
     expect(tableMaxPoints(grid)).toBe(6);
     expect(tableMaxPoints({})).toBe(0);
     expect(tableMaxPoints(null)).toBe(0);
+  });
+});
+
+// Slice 1 of docs/scoring-corpus-design.md: auto scoring asks "is this
+// response already final?". A research row is not a final, so it must not
+// make an auto-scorable response look done.
+describe("auto scoring ignores research rows", () => {
+  test("a response carrying only a research row is still auto-scored", async () => {
+    const { db, attempt } = await seedScoredScenario();
+    const [run] = await db
+      .insert(scoring_runs)
+      .values({
+        label: "auto-research-run",
+        provider_id: "mock",
+        prompt_version: "2026-09-14",
+        created_by: "cli:test",
+      })
+      .returning();
+    const responseRows = await db.select().from(responses);
+    await db.insert(scores).values(
+      responseRows.map((r) => ({
+        response_id: r.id,
+        method: "ai" as const,
+        points: 0,
+        max_points: 1,
+        scorer: "mock",
+        status: "research" as const,
+        run_id: run!.id,
+      })),
+    );
+
+    const body = (await (await postScore(attempt.id)).json()) as Record<string, unknown>;
+    // Unchanged from the baseline test above: two auto items scored, two
+    // skipped as not-auto, nothing counted as already scored.
+    expect(body.scored).toBe(2);
+    expect(body.already_scored).toBe(0);
+    expect(body.skipped_not_auto).toBe(2);
+    const finals = await db.select().from(scores).where(eq(scores.status, "final"));
+    expect(finals).toHaveLength(2);
+    expect(finals.every((f) => f.points === 1)).toBe(true);
+    await db.execute(sql`truncate table scoring_runs restart identity cascade`);
   });
 });

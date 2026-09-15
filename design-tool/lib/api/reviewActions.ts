@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, attempts, responses, items, scores } from "@/db/schema";
 
@@ -74,7 +74,10 @@ export async function loadResponseChain(
   const scoreRows = await db
     .select({ status: scores.status })
     .from(scores)
-    .where(eq(scores.response_id, response.id));
+    // A research row is neither a final nor a proposal to a teacher
+    // (docs/scoring-corpus-design.md slice 1), so the actions that ride
+    // this chain — manual score, approve, re-run AI — never see one.
+    .where(and(eq(scores.response_id, response.id), ne(scores.status, "research")));
   return {
     ok: true,
     response,

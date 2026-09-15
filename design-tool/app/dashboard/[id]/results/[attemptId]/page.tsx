@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DeleteAttemptAndReturn } from "./DeleteAttemptAndReturn";
 import { notFound, redirect } from "next/navigation";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -281,9 +281,14 @@ export default async function AttemptResultPage({ params }: PageProps) {
           .select()
           .from(scores)
           .where(
-            inArray(
-              scores.response_id,
-              responseRows.map((r) => r.id),
+            // This page lists every score row per response; research rows
+            // are excluded (docs/scoring-corpus-design.md slice 1).
+            and(
+              inArray(
+                scores.response_id,
+                responseRows.map((r) => r.id),
+              ),
+              ne(scores.status, "research"),
             ),
           )
       : [];

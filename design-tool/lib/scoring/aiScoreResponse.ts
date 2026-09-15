@@ -111,6 +111,10 @@ export async function aiScoreResponse(opts: {
         },
         scorer: provider.id,
         status,
+        // Slice 1 of docs/scoring-corpus-design.md: live proposals carry
+        // the prompt's version too (no run, no rubric snapshot), so they
+        // are comparable to a later corpus run without a join on dates.
+        prompt_version: provider.promptVersion,
       })
       .onConflictDoNothing()
       .returning({ id: scores.id });

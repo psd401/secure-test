@@ -32,6 +32,13 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (!proposal) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
+  // Research rows (docs/scoring-corpus-design.md slice 1) do not exist as
+  // far as a teacher is concerned, so approving one by id reads as a
+  // missing score rather than a wrong-status one — nothing promotes a
+  // research row to a proposal or a final.
+  if (proposal.status === "research") {
+    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+  }
   if (proposal.status !== "proposed") {
     return NextResponse.json(
       { ok: false, error: "not_a_proposal" },

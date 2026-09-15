@@ -427,7 +427,7 @@ describe("print report — D-6 rubric feedback on the single-attempt view", () =
 
   async function seedRubricEssayScenario(opts: {
     withFeedback: boolean;
-    status: "final" | "proposed";
+    status: "final" | "proposed" | "research";
   }) {
     const db = getDb();
     const [assessment] = await db
@@ -529,6 +529,22 @@ describe("print report — D-6 rubric feedback on the single-attempt view", () =
     expect(html).not.toContain("Scored with a rubric");
     expect(html).not.toContain("Clear, specific claim.");
     expect(html).not.toContain("Strong work overall.");
+  });
+
+  // Slice 1 of docs/scoring-corpus-design.md: a corpus run's row carries a
+  // rationale of exactly the shape this page prints. It must not reach a
+  // family — the page reads finals only.
+  test("a research-only score prints neither a mark nor feedback", async () => {
+    const { assessment, attempt } = await seedRubricEssayScenario({
+      withFeedback: true,
+      status: "research",
+    });
+    const html = await render(assessment.id, { attempt: attempt.id });
+
+    expect(html).not.toContain("Scored with a rubric");
+    expect(html).not.toContain("Clear, specific claim.");
+    expect(html).not.toContain("Strong work overall.");
+    expect(html).not.toContain("4/4");
   });
 
   test("the section (multi-student) view never shows feedback, even with the flag on", async () => {

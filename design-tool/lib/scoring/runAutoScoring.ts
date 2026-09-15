@@ -46,6 +46,8 @@ export async function runAutoScoringPass(
             scores.response_id,
             responseRows.map((r) => r.id),
           ),
+          // Finals only, so research rows (docs/scoring-corpus-design.md
+          // slice 1) never make an auto-scorable response look scored.
           eq(scores.status, "final"),
         ),
       );

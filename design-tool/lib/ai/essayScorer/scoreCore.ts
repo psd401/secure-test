@@ -11,6 +11,13 @@ export const HYBRID_AUTO_FINALIZE_CONFIDENCE = 0.85;
 
 export const ESSAY_SCORE_MAX_TOKENS = 2000;
 
+// Slice 1 of docs/scoring-corpus-design.md: the prompt's identity, stamped
+// on every AI score row so two runs a month apart are distinguishable.
+// BUMP IT BY HAND whenever the prompt text or the scoring view changes —
+// test/essay-prompt-version.test.ts hashes the prompt and fails until the
+// recorded hash and this date are both updated.
+export const ESSAY_SCORER_PROMPT_VERSION = "2026-09-14";
+
 // Every rubric style is AI-scorable (slice 4 of docs/rubric-upload-design.md,
 // D-5). analytic + holistic are level selection as authored; single_point
 // becomes level selection through the derived below/meets/exceeds ladder

@@ -42,6 +42,10 @@ export type ScoreEssayResult = z.infer<typeof ScoreEssayResult>;
 export interface EssayScorerProvider {
   /** Stable identifier persisted as scores.scorer for triage. */
   readonly id: string;
+  /** ESSAY_SCORER_PROMPT_VERSION — persisted as scores.prompt_version
+   * (docs/scoring-corpus-design.md slice 1) so a run's rows say which
+   * prompt produced them. */
+  readonly promptVersion: string;
   /** `ownerSub` (docs/rubric-upload-design.md D-7): the ai_usage log field. */
   scoreEssay(
     req: ScoreEssayRequest,

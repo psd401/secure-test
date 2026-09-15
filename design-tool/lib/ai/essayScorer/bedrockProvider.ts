@@ -1,5 +1,6 @@
 import { converseText } from "../bedrockConverse";
 import {
+  ESSAY_SCORER_PROMPT_VERSION,
   ESSAY_SCORE_MAX_TOKENS,
   ESSAY_SCORE_SYSTEM_PROMPT,
   buildEssayScoreUserPrompt,
@@ -28,6 +29,8 @@ export const bedrockEssayScorer: EssayScorerProvider = {
   get id() {
     return `bedrock-${process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL}`;
   },
+
+  promptVersion: ESSAY_SCORER_PROMPT_VERSION,
 
   async scoreEssay(
     req: ScoreEssayRequest,

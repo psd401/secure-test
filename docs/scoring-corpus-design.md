@@ -180,3 +180,32 @@ excludes `research` from the start.
 ## Progress
 
 - 2026-09-14 — note written; nothing built.
+- 2026-09-14 — **slice 1 BUILT** (not yet deployed). **Migration 0035**
+  (`0035_wise_the_phantom.sql`, applied to dev + test; Aurora needs
+  `migrate-aurora.sh` after the next deploy): `scoring_runs`, `scores` gains
+  `run_id` (cascade + index), `prompt_version` and `rubric_snapshot`, and the
+  status CHECK becomes `('proposed','final','research')` (Drizzle emits it as
+  drop + add). `ESSAY_SCORER_PROMPT_VERSION = "2026-09-14"` lives in
+  `lib/ai/essayScorer/scoreCore.ts`, both providers report it as
+  `promptVersion`, and `aiScoreResponse` stamps it on every live AI row
+  (proposals included) — `test/essay-prompt-version.test.ts` hashes the system
+  prompt plus the assembled user prompt (through `scoringView`, so the
+  single-point ladder is pinned) and fails with the exact bump instructions if
+  either changes. **Reader sweep:** `ne(scores.status,'research')` added where
+  a reader selects score rows without naming statuses — `lib/scoring/results.ts`
+  (so the matrix, the totals and the CSV), the review-queue route, the
+  per-student results page, `lib/api/reviewActions.ts` (so manual score,
+  approve and re-run AI), and the attempt-wide `score-ai` route, whose
+  "already has a score row" skip would otherwise treat a corpus row as the
+  teacher's work. `approve` now 404s a research score id. Needing no change,
+  and commented as audited rather than altered: `runAutoScoring`
+  (`status = 'final'`), the print page (`status = 'final'`),
+  `analyticsQuery` (left join on `status = 'final'`),
+  `rescore-ai` + the manual `score` route (both ride `reviewActions.hasFinal`).
+  Tests: a new `test/scoring-corpus-schema.test.ts` (research accepted, no
+  collision with the one-final index, run cascade, D-4 attempt-delete), plus
+  research rows seeded beside a proposal and a final in `results.test.ts`,
+  `scoring-auto.test.ts`, `review-queue.test.ts`, `reporting-print.test.tsx`
+  and `reporting-views.test.tsx` — the rendered matrix, per-student page and
+  print report are asserted **byte-identical** before and after the rows land.
+  `bun test` 1608 pass / 0 fail across 99 files; `bun run typecheck` clean.

@@ -813,7 +813,13 @@ export const responses = pgTable(
 export const SCORE_METHODS = ["auto", "ai", "human"] as const;
 export type ScoreMethod = (typeof SCORE_METHODS)[number];
 
-export const SCORE_STATUSES = ["proposed", "final"] as const;
+// Slice 1 of docs/scoring-corpus-design.md (migration 0035, D-3): a third
+// status, `research`. Rows written by the corpus runner against essays a
+// teacher has already settled, so a prompt or a model can be measured
+// against the human final. Research rows are INVISIBLE to every
+// teacher-facing reader (the sweep in that slice) and are never final, so
+// the one-final-per-response index is untouched.
+export const SCORE_STATUSES = ["proposed", "final", "research"] as const;
 export type ScoreStatus = (typeof SCORE_STATUSES)[number];
 
 // Slice 65: a registry row for a student file upload, created BEFORE the file
@@ -860,6 +866,29 @@ export const response_uploads = pgTable(
   }),
 );
 
+// Slice 1 of docs/scoring-corpus-design.md (migration 0035): one row per
+// corpus run. `provider_id` is the provider's own `id` (what scores.scorer
+// records), `prompt_version` the ESSAY_SCORER_PROMPT_VERSION the run used,
+// `filter` the selection the run was made with (for the record only — it is
+// never replayed), `created_by` the operator (`cli:<user>` for a script
+// run). The label is unique so re-running the same label refuses rather
+// than doubling a data set.
+export const scoring_runs = pgTable("scoring_runs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull().unique(),
+  provider_id: text("provider_id").notNull(),
+  prompt_version: text("prompt_version").notNull(),
+  filter: jsonb("filter"),
+  created_by: text("created_by").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  notes: text("notes"),
+});
+
+export type ScoringRunRow = typeof scoring_runs.$inferSelect;
+export type ScoringRunInsert = typeof scoring_runs.$inferInsert;
+
 export const scores = pgTable(
   "scores",
   {
@@ -876,12 +905,24 @@ export const scores = pgTable(
     scorer: text("scorer").notNull(),
     status: text("status").notNull(),
     reviewed_by_sub: text("reviewed_by_sub"),
+    // Migration 0035 (docs/scoring-corpus-design.md): corpus provenance.
+    // `run_id` is set only on `research` rows; `prompt_version` is stamped
+    // on every AI row, live proposals included, so a day-to-day proposal
+    // and a later research row are comparable without a join on dates;
+    // `rubric_snapshot` is the rubric the row was scored against (items'
+    // rubrics are edited in place, so a run must keep its own copy).
+    run_id: uuid("run_id").references(() => scoring_runs.id, {
+      onDelete: "cascade",
+    }),
+    prompt_version: text("prompt_version"),
+    rubric_snapshot: jsonb("rubric_snapshot").$type<Rubric>(),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => ({
     responseIdIdx: index("scores_response_id_idx").on(t.response_id),
+    runIdIdx: index("scores_run_id_idx").on(t.run_id),
     oneFinalPerResponse: uniqueIndex("scores_one_final_per_response_unq")
       .on(t.response_id)
       .where(sql`status = 'final'`),
@@ -891,7 +932,7 @@ export const scores = pgTable(
     ),
     statusCheck: check(
       "scores_status_check",
-      sql`status IN ('proposed', 'final')`,
+      sql`status IN ('proposed', 'final', 'research')`,
     ),
     pointsCheck: check(
       "scores_points_check",

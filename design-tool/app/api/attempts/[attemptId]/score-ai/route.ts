@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -81,9 +81,15 @@ export async function POST(_req: Request, ctx: RouteContext) {
       .select({ response_id: scores.response_id })
       .from(scores)
       .where(
-        inArray(
-          scores.response_id,
-          responseRows.map((r) => r.id),
+        // A response the corpus runner has scored has NOT been scored for
+        // the teacher (docs/scoring-corpus-design.md slice 1) — a research
+        // row must not make this run skip it.
+        and(
+          inArray(
+            scores.response_id,
+            responseRows.map((r) => r.id),
+          ),
+          ne(scores.status, "research"),
         ),
       );
     for (const row of existing) alreadyScoredIds.add(row.response_id);

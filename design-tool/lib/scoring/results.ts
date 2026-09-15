@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -300,9 +300,14 @@ export async function buildResults(
           .select()
           .from(scores)
           .where(
-            inArray(
-              scores.response_id,
-              responseRows.map((r) => r.id),
+            // Research rows (docs/scoring-corpus-design.md slice 1) are an
+            // operator's data set: never a point, never a pending mark.
+            and(
+              inArray(
+                scores.response_id,
+                responseRows.map((r) => r.id),
+              ),
+              ne(scores.status, "research"),
             ),
           )
       : [];

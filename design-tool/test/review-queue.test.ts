@@ -11,9 +11,11 @@ import {
   items,
   responses,
   scores,
+  scoring_runs,
   students, item_sets } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
+import { ESSAY_SCORER_PROMPT_VERSION } from "../lib/ai/essayScorer/scoreCore";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -54,6 +56,7 @@ afterEach(async () => {
   const db = getDb();
   await db.execute(sql`truncate table assessments restart identity cascade`);
   await db.execute(sql`truncate table students restart identity cascade`);
+  await db.execute(sql`truncate table scoring_runs restart identity cascade`);
 });
 
 afterAll(async () => {
@@ -753,5 +756,149 @@ describe("single-point scoring (D-5)", () => {
       "t.meets",
       "t2.meets",
     ]);
+  });
+});
+
+// Slice 1 of docs/scoring-corpus-design.md: a `research` score row belongs to
+// a corpus run, not to a teacher. Every route in this file must behave as if
+// it were not there — the queue, the attempt-wide AI run's "already scored"
+// skip, manual scoring, approve, and re-run AI.
+describe("research rows are invisible to the review surfaces", () => {
+  async function seedRun(db: ReturnType<typeof getDb>) {
+    const [run] = await db
+      .insert(scoring_runs)
+      .values({
+        label: `corpus ${crypto.randomUUID()}`,
+        provider_id: "mock",
+        prompt_version: "2026-09-14",
+        created_by: "cli:test",
+      })
+      .returning();
+    return run!;
+  }
+
+  async function addResearchRow(
+    db: ReturnType<typeof getDb>,
+    responseId: string,
+    runId: string,
+  ) {
+    await db.insert(scores).values({
+      response_id: responseId,
+      method: "ai",
+      points: 2,
+      max_points: 5,
+      scorer: "mock",
+      status: "research",
+      run_id: runId,
+      prompt_version: "2026-09-14",
+      rationale: { overall_rationale: "Research run — never shown." },
+    });
+  }
+
+  test("the queue entry is unchanged: no proposal appears, the entry stays open", async () => {
+    const { db, attempt, responseRows } = await seedQueueScenario();
+    const run = await seedRun(db);
+    // The AI essay carries ONLY a research row; the human essay one too.
+    await addResearchRow(db, responseRows[1]!.id, run.id);
+    await addResearchRow(db, responseRows[2]!.id, run.id);
+
+    const res = await getQueue(attempt.assessment_id);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as QueueBody;
+    expect(body.entries).toHaveLength(3);
+    // Every entry still needs a human: the research rows are neither a
+    // proposal to approve nor a final that drops the entry.
+    expect(body.entries.every((e) => e.proposed === null)).toBe(true);
+  });
+
+  test("a research row beside a proposal and a final changes neither", async () => {
+    const { db, attempt, responseRows } = await seedQueueScenario();
+    expect((await postAiScore(attempt.id)).status).toBe(200);
+    expect(
+      (await postManualScore(responseRows[1]!.id, { points: 3, max_points: 5,
+        criterion_scores: [
+          { criterion_id: "ideas", level_id: "i2", points: 2 },
+          { criterion_id: "org", level_id: "o1", points: 1 },
+        ] })).status,
+    ).toBe(201);
+    const run = await seedRun(db);
+    await addResearchRow(db, responseRows[1]!.id, run.id); // beside a final
+    await addResearchRow(db, responseRows[2]!.id, run.id); // beside a proposal
+
+    const body = (await (await getQueue(attempt.assessment_id)).json()) as QueueBody;
+    // The scored human essay drops out; the AI essay keeps its own proposal.
+    const stems = body.entries.map((e) => e.item.stem).sort();
+    expect(stems).toEqual(["AI essay", "Short human"]);
+    const aiEntry = body.entries.find((e) => e.item.stem === "AI essay")!;
+    expect(aiEntry.proposed).not.toBeNull();
+    expect(aiEntry.proposed!.points).toBe(4); // the mock's proposal, not the research 2
+  });
+
+  test("the attempt-wide AI run does NOT skip a response a corpus run scored", async () => {
+    const { db, attempt, responseRows } = await seedQueueScenario();
+    const run = await seedRun(db);
+    await addResearchRow(db, responseRows[2]!.id, run.id);
+
+    const res = await postAiScore(attempt.id);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      scored_proposed: number;
+      already_scored: number;
+    };
+    expect(body.scored_proposed).toBe(1);
+    expect(body.already_scored).toBe(0);
+    const rows = await db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, responseRows[2]!.id));
+    expect(rows.map((r) => r.status).sort()).toEqual(["proposed", "research"]);
+  });
+
+  test("a live proposal is stamped with the provider's prompt version", async () => {
+    const { db, attempt, responseRows } = await seedQueueScenario();
+    expect((await postAiScore(attempt.id)).status).toBe(200);
+    const [row] = await db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, responseRows[2]!.id));
+    expect(row!.prompt_version).toBe(ESSAY_SCORER_PROMPT_VERSION);
+    expect(row!.run_id).toBeNull();
+  });
+
+  test("manual scoring and re-run AI are unaffected by a research row", async () => {
+    const { db, responseRows } = await seedQueueScenario();
+    const run = await seedRun(db);
+    await addResearchRow(db, responseRows[1]!.id, run.id);
+    await addResearchRow(db, responseRows[2]!.id, run.id);
+
+    // No phantom final_exists from the research row.
+    expect(
+      (await postManualScore(responseRows[1]!.id, { points: 2, max_points: 5,
+        criterion_scores: [
+          { criterion_id: "ideas", level_id: "i1", points: 1 },
+          { criterion_id: "org", level_id: "o1", points: 1 },
+        ] })).status,
+    ).toBe(201);
+    expect((await postRescoreAi(responseRows[2]!.id)).status).toBe(201);
+  });
+
+  test("approving a research row by id is not found", async () => {
+    const { db, responseRows } = await seedQueueScenario();
+    const run = await seedRun(db);
+    await addResearchRow(db, responseRows[2]!.id, run.id);
+    const [research] = await db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, responseRows[2]!.id));
+    const res = await postApprove(research!.id);
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: string }).error).toBe("not_found");
+    // Nothing was promoted.
+    const rows = await db
+      .select()
+      .from(scores)
+      .where(eq(scores.response_id, responseRows[2]!.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("research");
   });
 });

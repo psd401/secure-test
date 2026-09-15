@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -131,9 +131,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
           .select()
           .from(scores)
           .where(
-            inArray(
-              scores.response_id,
-              responseRows.map((r) => r.id),
+            // The queue never offers a research row for review
+            // (docs/scoring-corpus-design.md slice 1).
+            and(
+              inArray(
+                scores.response_id,
+                responseRows.map((r) => r.id),
+              ),
+              ne(scores.status, "research"),
             ),
           )
       : [];

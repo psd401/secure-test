@@ -53,7 +53,8 @@ export async function loadItemAnalytics(assessmentId: string): Promise<{
   // One pass: every response of every submitted attempt, left-joined to its
   // FINAL score row (there is at most one, enforced by a partial unique
   // index). A proposed AI row never joins, so it arrives as points: null and
-  // is never counted — the same rule buildResults applies.
+  // is never counted — the same rule buildResults applies. A research row
+  // (docs/scoring-corpus-design.md slice 1) is excluded by the same join.
   const rows =
     itemRows.length > 0 && attemptIds.length > 0
       ? await db

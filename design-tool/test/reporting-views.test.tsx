@@ -16,6 +16,7 @@ import {
   items,
   responses,
   scores,
+  scoring_runs,
   students,
   test_sessions,
 } from "../db/schema";
@@ -66,6 +67,7 @@ afterEach(async () => {
   const db = getDb();
   await db.execute(sql`truncate table assessments restart identity cascade`);
   await db.execute(sql`truncate table students restart identity cascade`);
+  await db.execute(sql`truncate table scoring_runs restart identity cascade`);
 });
 
 afterAll(async () => {
@@ -773,5 +775,83 @@ describe("in-progress attempts on the teacher surfaces", () => {
 
     const printHtml = await renderPrint(scene.assessment.id);
     expect(printHtml).toContain("Handed in by teacher");
+  });
+});
+
+// Slice 1 of docs/scoring-corpus-design.md: a corpus run writes `research`
+// score rows against the same essays a teacher has settled. Nothing a teacher
+// opens may change — so the strongest assertion available is the one used
+// here: render the page, add the research rows, render again, compare.
+describe("research score rows reach no teacher surface", () => {
+  async function addResearchRows(attemptId: string) {
+    const db = getDb();
+    const [run] = await db
+      .insert(scoring_runs)
+      .values({
+        label: "views-research-run",
+        provider_id: "mock",
+        prompt_version: "2026-09-14",
+        created_by: "cli:test",
+      })
+      .returning();
+    const responseRows = await db
+      .select()
+      .from(responses)
+      .where(eq(responses.attempt_id, attemptId));
+    expect(responseRows.length).toBeGreaterThan(0);
+    // Deliberately wrong-looking numbers and a rationale a teacher would
+    // notice if it ever rendered.
+    await db.insert(scores).values(
+      responseRows.map((r) => ({
+        response_id: r.id,
+        method: "ai" as const,
+        points: 1,
+        max_points: 1,
+        scorer: "corpus-model-z",
+        status: "research" as const,
+        run_id: run!.id,
+        prompt_version: "2026-09-14",
+        rationale: { overall_rationale: "RESEARCH ONLY — must never render." },
+      })),
+    );
+    return responseRows.length;
+  }
+
+  test("the results matrix and its analytics footer are unchanged", async () => {
+    const scene = await seedScene();
+    const before = await renderResults(scene.assessment.id);
+    const count = await addResearchRows(scene.aliceAttempt.id);
+    const after = await renderResults(scene.assessment.id);
+    expect(after).toBe(before);
+    expect(after).not.toContain("corpus-model-z");
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test("the per-student attempt page is unchanged", async () => {
+    const scene = await seedScene();
+    const before = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    await addResearchRows(scene.aliceAttempt.id);
+    const after = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(after).toBe(before);
+    expect(after).not.toContain("RESEARCH ONLY");
+    // The AI PROPOSAL is still shown — the sweep excludes research, not
+    // proposals.
+    expect(after).toContain("AI proposal: 1 / 1 (not counted)");
+  });
+
+  test("the print report is unchanged", async () => {
+    const scene = await seedScene();
+    const before = await renderPrint(scene.assessment.id);
+    await addResearchRows(scene.aliceAttempt.id);
+    const after = await renderPrint(scene.assessment.id);
+    expect(after).toBe(before);
+    expect(after).not.toContain("RESEARCH ONLY");
+  });
+
+  test("buildResults totals are unchanged", async () => {
+    const scene = await seedScene();
+    const before = await buildResults(scene.assessment.id, OWNER);
+    await addResearchRows(scene.aliceAttempt.id);
+    expect(await buildResults(scene.assessment.id, OWNER)).toEqual(before);
   });
 });

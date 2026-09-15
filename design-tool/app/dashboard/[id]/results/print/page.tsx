@@ -199,6 +199,8 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
                   scores.response_id,
                   responseRows.map((r) => r.id),
                 ),
+                // Finals only — a research row never reaches a family
+                // (docs/scoring-corpus-design.md slice 1).
                 eq(scores.status, "final"),
               ),
             )

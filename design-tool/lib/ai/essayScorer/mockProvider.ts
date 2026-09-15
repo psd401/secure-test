@@ -1,4 +1,8 @@
-import { rubricMaxPoints, scoringView } from "./scoreCore";
+import {
+  ESSAY_SCORER_PROMPT_VERSION,
+  rubricMaxPoints,
+  scoringView,
+} from "./scoreCore";
 import type {
   EssayScorerProvider,
   ScoreEssayRequest,
@@ -16,6 +20,7 @@ import type {
 
 export const mockEssayScorer: EssayScorerProvider = {
   id: "mock",
+  promptVersion: ESSAY_SCORER_PROMPT_VERSION,
 
   async scoreEssay(req: ScoreEssayRequest): Promise<ScoreEssayResult> {
     const rubric = scoringView(req.rubric);

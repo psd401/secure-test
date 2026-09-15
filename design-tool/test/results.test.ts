@@ -10,6 +10,7 @@ import {
   items,
   responses,
   scores,
+  scoring_runs,
   students,
   test_sessions,
 } from "../db/schema";
@@ -474,6 +475,52 @@ describe("resultsToCsv", () => {
         ",Bob,,,2026-07-09T17:00:00.000Z,0,4,,4,6,67,0",
       ].join("\r\n") + "\r\n";
     expect(csv).toBe(expected);
+  });
+});
+
+// Slice 1 of docs/scoring-corpus-design.md: research rows are a corpus run's
+// data, never a point and never a pending mark. The matrix and the CSV must be
+// byte-for-byte what they were before the run happened.
+describe("buildResults + resultsToCsv ignore research rows", () => {
+  test("the matrix and the CSV are identical with research rows present", async () => {
+    const { db, assessment } = await seedResultsScenario();
+    const before = await buildResults(assessment.id, OWNER);
+    const csvBefore = resultsToCsv(before);
+
+    const [run] = await db
+      .insert(scoring_runs)
+      .values({
+        label: "results-research-run",
+        provider_id: "mock",
+        prompt_version: "2026-09-14",
+        created_by: "cli:test",
+      })
+      .returning();
+    // One research row on EVERY response: beside a final, beside a proposal,
+    // and on the unscored cells. Points deliberately differ from the finals.
+    const responseRows = await db.select().from(responses);
+    expect(responseRows.length).toBeGreaterThan(0);
+    await db.insert(scores).values(
+      responseRows.map((r) => ({
+        response_id: r.id,
+        method: "ai" as const,
+        points: 1,
+        max_points: 2,
+        scorer: "mock",
+        status: "research" as const,
+        run_id: run!.id,
+        prompt_version: "2026-09-14",
+      })),
+    );
+
+    const after = await buildResults(assessment.id, OWNER);
+    expect(after).toEqual(before);
+    expect(resultsToCsv(after)).toBe(csvBefore);
+    // Proof the rows really are there.
+    expect(
+      await db.select().from(scores).where(eq(scores.status, "research")),
+    ).toHaveLength(responseRows.length);
+    await db.execute(sql`truncate table scoring_runs restart identity cascade`);
   });
 });
 
