@@ -16,6 +16,7 @@
 
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import type { getDb } from "@/db/client";
+import { RETENTION_DAYS_DEFAULT, sweepEventTables, type SweepCounts } from "@/lib/retention/sweep";
 import { importSnapshot, type ImportCounts, type ImportResult } from "./importSnapshot";
 
 type Db = ReturnType<typeof getDb>;
@@ -264,7 +265,31 @@ export async function handleS3Event(
   if (outcome.ignored > 0) {
     log({ event: "roster_sync_ignored", records: outcome.ignored });
   }
+  await sweepBestEffort(db, log);
   return outcome;
+}
+
+/**
+ * D-11 (2026-09-15): the retention sweep, run once per invocation after the
+ * import. Best-effort — a sweep failure is logged and never fails the sync,
+ * the same rule the observability tables' write paths already follow (a
+ * database that is already unhappy must not turn a good roster import into
+ * a failed one).
+ */
+async function sweepBestEffort(db: Db, log: SyncLogger): Promise<void> {
+  try {
+    const counts: SweepCounts = await sweepEventTables(db, new Date(), RETENTION_DAYS_DEFAULT);
+    log({
+      event: "retention_sweep",
+      retention_days: RETENTION_DAYS_DEFAULT,
+      ...counts,
+    });
+  } catch (err) {
+    log({
+      event: "retention_sweep_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // --- Lambda environment ---

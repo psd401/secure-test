@@ -636,3 +636,11 @@ as 190, above whatever the concurrent editor/scoring slice takes at
 | # | Check | Expected | Result |
 |---|---|---|---|
 | 190 | After the next scheduled 06:00 roster-sync run, read the roster-sync Lambda's CloudWatch log for that invocation | A `retention_sweep` line appears after the `roster_sync` line, carrying `retention_days: 90` and a deleted count for `server_error_events`, `client_error_events` and `guardrail_events`; the `feedback` table's row count (checked separately, e.g. via a read-only query) is unchanged from before the run | NOT RUN |
+
+## D-11 — event-table retention sweep (2026-09-15)
+
+`docs/observability-design.md` D-11. `sweepEventTables` (`design-tool/lib/retention/sweep.ts`, 90 days) runs best-effort at the end of every roster-sync Lambda invocation; `feedback` is never touched. Rows 181–189 are reserved for the numeric-equivalence slice.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 190 | After the next 06:00 roster import, open the roster-sync Lambda's log group | One `retention_sweep` line per invocation with `retention_days: 90` and a count per table (`server_error_events`, `client_error_events`, `guardrail_events`); a `retention_sweep_failed` line never fails the import. The `feedback` row count is unchanged | NOT RUN |

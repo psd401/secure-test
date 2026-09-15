@@ -231,13 +231,19 @@ describe("handleS3Event with the mock source (DB)", () => {
     const active = await getDb().select().from(roster_students);
     expect(active.length).toBe(7);
 
-    expect(entries.length).toBe(1);
+    // D-11: the retention sweep runs after the import and appends its own
+    // log line — the import's own line stays first.
+    expect(entries.length).toBe(2);
     const line = JSON.stringify(entries[0]);
     expect(line).toContain('"status":"succeeded"');
     expect(line).toContain('"received":7');
     for (const pii of ["Fixture", "edtools", "Ada", "teacher.one"]) {
       expect(line).not.toContain(pii);
     }
+
+    const sweepLine = JSON.stringify(entries[1]);
+    expect(sweepLine).toContain('"event":"retention_sweep"');
+    expect(sweepLine).toContain('"retention_days":90');
   });
 
   test("CSV puts are ignored; only the manifest triggers an import", async () => {

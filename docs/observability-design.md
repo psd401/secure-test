@@ -492,3 +492,25 @@ nightly in-VPC roster-sync Lambda (already scheduled, already on the
 database) — no new infrastructure. Error rows carry metadata only, so the
 cost of 90 days is small and it covers a post-mortem the 30-day log group
 (D-8) has already lost. Slice queued 2026-09-15.
+
+**D-11 BUILT 2026-09-15.** `design-tool/lib/retention/sweep.ts` —
+`sweepEventTables(db, now, retentionDays = 90)`, a pure function over a
+Drizzle handle: deletes `server_error_events` and `guardrail_events` past
+`created_at`, and `client_error_events` past `received_at` (the
+server-stamped clock, not the client's `occurred_at` — the table's own
+schema comment already flags `received_at` as the one ordering/alerting
+should use). `feedback` is never referenced by the function. Wired into
+`design-tool/lib/roster/syncHandler.ts`'s `handleS3Event`, run once per
+invocation after the import loop, best-effort (`sweepBestEffort`): success
+logs one `retention_sweep` line with `retention_days` and the three
+tables' deleted counts; a failure logs `retention_sweep_failed` and never
+fails the sync. No migration, no infra change — runs inside the existing
+roster-sync Lambda's 10-minute timeout. Unit-tested against the test DB in
+`design-tool/test/retention-sweep.test.ts` (rows at 89 and 91 days,
+`feedback` untouched, the empty-table case, and the `received_at` vs
+`occurred_at` case) plus an updated assertion in
+`design-tool/test/roster-sync-handler.test.ts` for the extra log line.
+`design-tool/infra/README.md` has the confirm-in-the-log-group recipe.
+`bun run typecheck` and `bunx cdk synth` (in `design-tool/infra`) both
+pass. **NOT RUN** — row 190 in `docs/design-tool-manual-checks.md` waits
+for the next 06:00 roster-sync run.
