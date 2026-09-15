@@ -37,7 +37,7 @@ import { runGuarded } from "@/lib/safeguarding/guard";
 export type AiScoreOutcome =
   | { kind: "scored"; status: "proposed" | "final" }
   | { kind: "not_ai" }
-  | { kind: "unscorable" }
+  | { kind: "unscorable"; reason: UnscorableReason }
   | { kind: "blocked" }
   | { kind: "provider_error" }
   // Review fix (2026-08-14): a hybrid auto-finalize that loses the race to
@@ -53,6 +53,10 @@ export type AiScoreOutcome =
 // unchanged: it maps a bounds failure onto `provider_error` exactly as
 // before.
 
+/** Why an essay could not be sent to the scorer (2026-09-14, corpus slice 3
+ * reading): the runner's operator needs the word, not a query. */
+export type UnscorableReason = "no_rubric" | "empty_response";
+
 export type EssayScoreAttempt =
   | {
       kind: "ok";
@@ -65,7 +69,7 @@ export type EssayScoreAttempt =
       method: ScoringMethod;
     }
   | { kind: "not_ai"; method: ScoringMethod }
-  | { kind: "unscorable" }
+  | { kind: "unscorable"; reason: UnscorableReason }
   | { kind: "blocked" }
   | { kind: "provider_error" }
   | { kind: "bounds"; reason: string };
@@ -95,7 +99,7 @@ export async function runEssayScorer(opts: {
     // scorable since slice 4 (single_point through the derived ladder), so
     // in practice only a missing rubric lands here — the style question is
     // still asked through scoreCore rather than assumed here.
-    return { kind: "unscorable" };
+    return { kind: "unscorable", reason: "no_rubric" };
   }
   // D-5: the gate, the prompt and the bounds check all run against the
   // scoring view; the stored criterion_scores therefore carry the derived
@@ -103,7 +107,7 @@ export async function runEssayScorer(opts: {
   const view = scoringView(rubric);
   const parsed = ItemResponseSchema.safeParse(response.response);
   if (!parsed.success || parsed.data.type !== "essay" || !parsed.data.text.trim()) {
-    return { kind: "unscorable" };
+    return { kind: "unscorable", reason: "empty_response" };
   }
   const responseText = parsed.data.text;
   const provider = opts.provider ?? getEssayScorerProvider();

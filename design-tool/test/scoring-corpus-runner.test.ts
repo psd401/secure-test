@@ -374,6 +374,8 @@ describe("scoreForCorpus", () => {
     });
     const outcome = await scoreForCorpus({ db, run, row: row!, provider });
     expect(outcome.kind).toBe("unscorable");
+    // The reason rides the outcome so the CLI can print it (2026-09-14).
+    expect(outcome).toEqual({ kind: "unscorable", reason: "no_rubric" });
     expect(await db.select().from(scores)).toHaveLength(0);
     expect(summarizeOutcomes([outcome]).notes).toContain("0 scored, 1 unscorable");
   });

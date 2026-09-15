@@ -143,10 +143,13 @@ async function seedResultsScenario() {
   const attemptRows = await db
     .insert(attempts)
     .values(
-      studentRows.map((s) => ({
+      studentRows.map((s, i) => ({
         assessment_id: a.id,
         student_id: s.id,
         status: "submitted" as const,
+        // Distinct started_at per row (2026-09-14): a single multi-row insert
+        // gave both the same now(), and the golden CSV's row order flaked.
+        started_at: new Date(submittedAt.getTime() - (10 - i) * 60_000),
         submitted_at: submittedAt,
       })),
     )

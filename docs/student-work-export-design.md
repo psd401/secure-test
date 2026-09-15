@@ -261,11 +261,9 @@ slice 1 here can exclude it from the start.
   test is separately flaky, unrelated to this slice — see below), typecheck
   clean. Rows 168–184 added to `docs/design-tool-manual-checks.md`, all NOT
   RUN — slice 3 hand-runs them after the next deploy.
-- 2026-09-14 — **found, not caused, a pre-existing flake**: `test/results.test.ts`'s
-  `resultsToCsv > golden CSV` test fails intermittently (roughly 1 run in 2–5)
-  on `main` at `1301abb`, before any of this slice's changes — confirmed by
-  `git stash` and re-running it in isolation repeatedly on both the stashed
-  and unstashed tree. The failure never shows a diff (bun's output is
-  swallowed by the interleaved Postgres `NOTICE` lines from the surrounding
-  `afterEach` truncate), so the cause is unidentified; worth its own look,
-  not this slice's to fix.
+- 2026-09-14 — the pre-existing `golden CSV` flake in `test/results.test.ts`
+  was diagnosed and FIXED the same evening: the fixture inserted both
+  attempts in one statement, so they shared `started_at = now()` and
+  `buildResults` (ordered by `started_at` alone) returned them in either
+  order. The fixture now seeds distinct `started_at`, and `buildResults`
+  tie-breaks on attempt id. Three full-suite runs clean.

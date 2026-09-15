@@ -16,7 +16,10 @@ import {
 import { getEssayScorerProvider } from "@/lib/ai/essayScorer/provider";
 import type { EssayScorerProvider } from "@/lib/ai/essayScorer/types";
 import { effectiveScoringMethod } from "@/lib/api/items";
-import { runEssayScorer } from "@/lib/scoring/aiScoreResponse";
+import {
+  runEssayScorer,
+  type UnscorableReason,
+} from "@/lib/scoring/aiScoreResponse";
 import { UUID_RE } from "@/lib/uuid";
 
 // Slice 2 of docs/scoring-corpus-design.md: the corpus runner's logic.
@@ -380,7 +383,7 @@ export async function createRun(
 
 export type CorpusOutcome =
   | { kind: "scored"; score_id: string; points: number; max_points: number }
-  | { kind: "unscorable" }
+  | { kind: "unscorable"; reason: UnscorableReason | "not_essay_method" }
   | { kind: "blocked" }
   | { kind: "provider_error" }
   | { kind: "bounds"; reason: string };
@@ -409,7 +412,9 @@ export async function scoreForCorpus(opts: {
     allowedMethods: CORPUS_METHODS,
     provider,
   });
-  if (attempt.kind === "not_ai") return { kind: "unscorable" };
+  if (attempt.kind === "not_ai") {
+    return { kind: "unscorable", reason: "not_essay_method" };
+  }
   if (attempt.kind !== "ok") return attempt;
 
   const { result } = attempt;

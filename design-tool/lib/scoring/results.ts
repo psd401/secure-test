@@ -161,7 +161,10 @@ export async function buildResults(
     .select()
     .from(attempts)
     .where(eq(attempts.assessment_id, assessmentId))
-    .orderBy(asc(attempts.started_at));
+    // The id tiebreak (2026-09-14) makes the order deterministic when two
+    // attempts share a started_at — one multi-row insert gives them the same
+    // now(), and Postgres returns ties in whatever order it likes.
+    .orderBy(asc(attempts.started_at), asc(attempts.id));
   // Named `submitted` throughout because that is what it was and still is by
   // default; with the flag it is "the attempts this caller wants rows for".
   const submitted = attemptRows.filter(

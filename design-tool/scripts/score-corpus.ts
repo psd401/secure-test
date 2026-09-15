@@ -106,7 +106,7 @@ async function main(): Promise<number> {
       if (outcome.kind !== "scored") {
         console.log(
           `  response ${row.response.id}: ${outcome.kind}` +
-            (outcome.kind === "bounds" ? ` (${outcome.reason})` : ""),
+            ("reason" in outcome ? ` (${outcome.reason})` : ""),
         );
       }
       if (done % 10 === 0) console.log(`  ${done}/${rows.length}`);

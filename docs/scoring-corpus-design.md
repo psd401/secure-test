@@ -261,6 +261,6 @@ excludes `research` from the start.
   row fields, idempotency, `buildResults` unchanged). **Bedrock half
   OPEN:** needs pilot essays with teacher finals in a reachable DB —
   either slice 4's in-VPC task or a copy of the rows into dev. Reading: an
-  `unscorable` line does not say why (missing rubric vs. empty text) — a
-  one-word reason on the outcome would save an operator a query; small,
-  unbuilt.
+  `unscorable` line did not say why — **BUILT the same evening**: the
+  outcome carries `reason: no_rubric | empty_response | not_essay_method`
+  and the CLI prints it (`unscorable (no_rubric)` on the dev re-run).
