@@ -25,9 +25,9 @@ time) and its rubric is attached.
 3. Open the copy. It arrives as a **Draft**. Look it over (*Show preview*
    renders it as the student will see it, minus the lockdown), then press
    **Publish**. Only a Published assessment can start a test session.
-4. Leave **Settings → Time limit** blank unless you want the session to end
-   itself; if set, the student's session ends at zero and their answers are
-   kept.
+4. **Time limit** (Settings) is set to 55 minutes for the pilot. It is
+   counted per student from the moment they open the test. See "Three
+   clocks" below before you start a session.
 
 ## Teacher — building your own (after the pilot)
 
@@ -47,6 +47,29 @@ time) and its rubric is attached.
    a session keeps going on what they had.
 4. **Share** with a colleague by staff email. They get their own copy.
 
+## Three clocks — what actually ends a student's test
+
+Only the first one stops a student who is already working.
+
+1. **The test time limit** (Settings, 55 minutes). Per student, from the
+   moment that student opens the test. At zero the student's Mac ends the
+   secure session on its own ("Time is up."), their answers are kept, and
+   the server accepts nothing more after a 30-second grace. Leaving and
+   resuming does not restart it.
+2. **The session length** ("How long" when you start a session) and
+   **Close session**. These control who may **start or come back in**.
+   Once the session has expired or been closed, nobody new can join and a
+   student who left cannot resume — but a student already inside keeps
+   working until they hand in or their own time limit runs out. The
+   student's screen does not change when you close the session.
+3. **Hand in** on the Monitor. Your hand: it submits a student's work as it
+   stands. The button is enabled once the session is closed or that
+   student's time limit has passed.
+
+So with a 55-minute limit and a 55-minute session, a student who joins ten
+minutes late has until minute 65 unless you close the session and press
+Hand in on their row.
+
 ## Teacher — on the day
 
 1. Open the assessment → **Test sessions** tab.
@@ -55,7 +78,8 @@ time) and its rubric is attached.
    student who isn't enrolled in your section can't join.
 3. **How long:** *This period · 55 min* (default), *90 min*, *Rest of day*,
    or a number of minutes. This is how long the session stays **open for
-   joining**; it is not the student's time limit (that is Settings).
+   joining and resuming**; it is not the student's time limit (that is
+   Settings, clock 1 above).
 4. **Start session.** A six-character **Session code** appears. Students in
    the chosen sections see the test under **Your tests** without the code;
    the code is for a student whose list is empty.
@@ -65,7 +89,8 @@ time) and its rubric is attached.
    student who left without finishing — it is enabled once the session is
    closed or the time limit has passed.
 6. **Close session** when everyone is done. Students still in the test keep
-   working until they hand in or their time limit ends.
+   working until they hand in or their time limit ends (clock 2 above); use
+   **Hand in** on a row to end one by hand.
 
 ## Teacher — after
 
@@ -109,6 +134,9 @@ time) and its rubric is attached.
 - **"0 of 1 answered" while a student is typing an essay.** An essay
   saves when the student leaves the field (clicks elsewhere, turns the
   page, hands in). The Monitor catches up on the next poll.
+- **A student is still working after I closed the session.** Expected —
+  closing stops new joins and resumes, not students already inside (clock
+  2). Press **Hand in** on their row if they must stop.
 - **A student's session ended by itself.** Either the teacher's time limit
   ran out ("Time is up." on the student's screen, answers kept) or the Mac
   is still on client v1.3.1, which ends every session after ten minutes.
