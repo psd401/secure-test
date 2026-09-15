@@ -639,3 +639,7 @@ Slice 2 written 2026-09-08: 42 hand-run rows in `client/MANUAL-CHECKS.md`
 migration of its own** (the deploy also carried delete-attempt's 0029). The
 teacher-side auto-score rows in `client/MANUAL-CHECKS.md` can now pass; the
 client half waits for the rebuild and the next release.
+- 2026-09-14 — teacher-side KaTeX for short-text answers DEPLOYED (rev 29)
+  and seen on the origin's packet: the only stored short-text answer there
+  is `4^2^` (an unbalanced `^`), which falls back to escaped plain text as
+  designed (S-4 posture); a parseable answer renders per the tests.

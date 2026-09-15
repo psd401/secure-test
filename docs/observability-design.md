@@ -473,3 +473,13 @@ path's link scanner following the one-click Unsubscribe link every SNS email
 carries. Fix: `aws sns confirm-subscription … --authenticate-on-unsubscribe
 true` with the token from the confirmation URL (infra README has the
 recipe); the CLI-made subscription lives outside the stack.
+- 2026-09-14 — **Row 67 CLOSED** with a knob: `GET /api/debug/throw`
+  (staff-only, throws `DebugThrowError`) and `/dashboard/debug/throw`
+  (staff-only server component, throws) — the only reachable inputs that
+  exercise `onRequestError` on the origin. Pulled on rev 29: boundary Alert +
+  `ref`, route 500 with `x-request-id`, both `level:"error"` lines in
+  `/ecs/secure-test-design-tool-dev`. **The orphaned pre-slice-1 log group**
+  (`SecureTestDesignTool-AppServiceTaskDefwebLogGroup…`, 59 KB, no retention,
+  last event 2026-09-06) is confirmed idle; its delete is classifier-blocked
+  in-session — one command for James:
+  `aws logs delete-log-group --log-group-name SecureTestDesignTool-AppServiceTaskDefwebLogGroup10A490E5-Swlvzh5Mn1Vv`.

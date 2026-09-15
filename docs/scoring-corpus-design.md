@@ -329,3 +329,9 @@ excludes `research` from the start.
   reach the image only with the next deploy, and slice 3's Bedrock half is
   still the first real run (it can now be that run, against production
   essays, instead of a dump into dev).
+- 2026-09-14 — **slice 4 PROVEN on Aurora (rev 29):** `oneoff-aurora.sh
+  corpus --label … --with-human-final --dry-run` ran in-VPC and reported 0
+  (exit 1 by design); without the filter the origin holds 6 essay responses
+  (all `human` method, none with a teacher final) — the corpus is empty until
+  a pilot teacher scores essays. Nothing was created. The Bedrock run is one
+  command when finals exist (README "Corpus runs on Aurora").
