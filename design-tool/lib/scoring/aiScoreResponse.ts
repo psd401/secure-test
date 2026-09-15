@@ -1,4 +1,8 @@
-import { ItemResponseSchema } from "@secure-test/schema";
+import {
+  ItemResponseSchema,
+  type Rubric,
+  type ScoringMethod,
+} from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import {
   scores,
@@ -13,6 +17,10 @@ import {
   scoringView,
   validateAgainstRubric,
 } from "@/lib/ai/essayScorer/scoreCore";
+import type {
+  EssayScorerProvider,
+  ScoreEssayResult,
+} from "@/lib/ai/essayScorer/types";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
 
@@ -37,15 +45,49 @@ export type AiScoreOutcome =
   // violation landed in the catch and was miscounted as provider_error.
   | { kind: "already_final" };
 
-export async function aiScoreResponse(opts: {
+// Slice 2 of docs/scoring-corpus-design.md: the "run the provider and
+// validate its output" half, extracted so the corpus runner uses the SAME
+// guarded path as the live route (guardrail surface `essay-score`,
+// `ownerSub` = the assessment owner so the `ai_usage` line attributes spend
+// as today) and only the persistence differs. aiScoreResponse's behaviour is
+// unchanged: it maps a bounds failure onto `provider_error` exactly as
+// before.
+
+export type EssayScoreAttempt =
+  | {
+      kind: "ok";
+      result: ScoreEssayResult;
+      /** The rubric as authored — what a research row snapshots. */
+      rubric: Rubric;
+      /** D-5's scoring view: what the model saw and what bounds ran against. */
+      view: Rubric;
+      provider: EssayScorerProvider;
+      method: ScoringMethod;
+    }
+  | { kind: "not_ai"; method: ScoringMethod }
+  | { kind: "unscorable" }
+  | { kind: "blocked" }
+  | { kind: "provider_error" }
+  | { kind: "bounds"; reason: string };
+
+export async function runEssayScorer(opts: {
   item: ItemRow;
   response: ResponseRow;
   ownerSub: string;
-}): Promise<AiScoreOutcome> {
+  /**
+   * Which effective scoring methods this caller accepts. The live path takes
+   * ai/hybrid only; the corpus runner also re-scores `human` essays, which is
+   * the whole point of a run against teacher finals.
+   */
+  allowedMethods?: readonly ScoringMethod[];
+  /** Explicit provider (the runner's `--provider`/`--model`); env default otherwise. */
+  provider?: EssayScorerProvider;
+}): Promise<EssayScoreAttempt> {
   const { item, response, ownerSub } = opts;
+  const allowed = opts.allowedMethods ?? (["ai", "hybrid"] as const);
   const method = effectiveScoringMethod(item.type as ItemType, item.config);
-  if (item.type !== "essay" || (method !== "ai" && method !== "hybrid")) {
-    return { kind: "not_ai" };
+  if (item.type !== "essay" || !allowed.includes(method)) {
+    return { kind: "not_ai", method };
   }
   const rubric = item.config.rubric;
   if (!rubric || !isScorableRubricStyle(rubric)) {
@@ -64,7 +106,7 @@ export async function aiScoreResponse(opts: {
     return { kind: "unscorable" };
   }
   const responseText = parsed.data.text;
-  const provider = getEssayScorerProvider();
+  const provider = opts.provider ?? getEssayScorerProvider();
 
   try {
     const outcome = await runGuarded({
@@ -91,12 +133,34 @@ export async function aiScoreResponse(opts: {
     const result = outcome.result;
     const bounds = validateAgainstRubric(result, view);
     if (!bounds.valid) {
-      return { kind: "provider_error" };
+      return { kind: "bounds", reason: bounds.reason };
     }
-    const finalize =
-      method === "hybrid" && result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE;
-    const status = finalize ? ("final" as const) : ("proposed" as const);
-    const db = getDb();
+    return { kind: "ok", result, rubric, view, provider, method };
+  } catch (err) {
+    console.error(`essay scoring failed for response ${response.id}`, err);
+    return { kind: "provider_error" };
+  }
+}
+
+export async function aiScoreResponse(opts: {
+  item: ItemRow;
+  response: ResponseRow;
+  ownerSub: string;
+}): Promise<AiScoreOutcome> {
+  const { response } = opts;
+  const attempt = await runEssayScorer(opts);
+  if (attempt.kind !== "ok") {
+    // A bounds failure was and stays a provider_error to this caller.
+    return attempt.kind === "bounds" ? { kind: "provider_error" } : attempt;
+  }
+  const { result, provider, method } = attempt;
+  const finalize =
+    method === "hybrid" && result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE;
+  const status = finalize ? ("final" as const) : ("proposed" as const);
+  const db = getDb();
+  // The insert stays inside a catch, as it was before the slice-2 extraction:
+  // a failed write is this caller's provider_error, not a thrown route 500.
+  try {
     const inserted = await db
       .insert(scores)
       .values({
@@ -125,7 +189,7 @@ export async function aiScoreResponse(opts: {
     }
     return { kind: "scored", status };
   } catch (err) {
-    console.error(`essay scoring failed for response ${response.id}`, err);
+    console.error(`essay score insert failed for response ${response.id}`, err);
     return { kind: "provider_error" };
   }
 }

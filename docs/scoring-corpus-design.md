@@ -209,3 +209,44 @@ excludes `research` from the start.
   and `reporting-views.test.tsx` — the rendered matrix, per-student page and
   print report are asserted **byte-identical** before and after the rows land.
   `bun test` 1608 pass / 0 fail across 99 files; `bun run typecheck` clean.
+- 2026-09-14 — **slice 2 BUILT** (no migration, no deploy: two operator
+  scripts and two libs). `lib/scoring/corpus.ts` is the runner's logic —
+  `parseCorpusArgs` (unknown flags rejected, `--flag value` and `--flag=value`,
+  provider default `ESSAY_SCORER_PROVIDER` then `mock`, `--model` bedrock-only,
+  `--concurrency` 1-4), `selectCorpusResponses` (submitted attempts × essay
+  items in SQL, then `effectiveScoringMethod ∈ ai|hybrid|human`, the
+  `--with-human-final` test and the already-scored-in-this-run exclusion in JS,
+  `--limit` applied LAST so it means "score at most N of the matching essays"),
+  `createRun` (`DuplicateRunLabelError` on a used label, select + the unique
+  index), `scoreForCorpus` (a `research` row with `run_id`,
+  `prompt_version = provider.promptVersion`, `rubric_snapshot` = the rubric as
+  authored, `scorer = provider.id`), `summarizeOutcomes`. **The provider runs
+  through the live path**: `aiScoreResponse` was split into `runEssayScorer`
+  (guardrail surface `essay-score`, `ownerSub` = the assessment owner so
+  `ai_usage` attributes spend as today, `scoringView` + bounds) plus the
+  persistence it always had — its behaviour is unchanged (a bounds failure is
+  still `provider_error` to that caller; the insert is still inside a catch),
+  and the corpus caller gets `bounds` as its own outcome plus
+  `allowedMethods`/`provider` overrides. `scripts/score-corpus.ts` is the CLI:
+  `--dry-run` prints the count and up to five response/item ids and creates
+  nothing; otherwise run row → worker pool at `--concurrency` → progress every
+  10 → the tally into `scoring_runs.notes`; exit 1 when nothing matched or the
+  label is taken, 2 on a bad flag; `created_by = cli:<username>`; response,
+  item and attempt ids only. `lib/reporting/runComparison.ts` +
+  `scripts/compare-runs.ts` (`--run` repeatable / `--all`, `--csv`) report per
+  run: n, with_human_final, exact points agreement, mean |Δ points|, mean
+  |Δ|/max, per-criterion level agreement over the pairs where BOTH sides carry
+  `rationale.criterion_scores` (the AI writes
+  `{criterion_id, level_id, points, rationale}` and the human route writes the
+  same array from `ManualScoreBody`, both validated against the scoring view,
+  so the level ids are directly comparable; the human side may omit it for a
+  holistic override), and the hybrid auto-finalize rate the run would have
+  produced at `HYBRID_AUTO_FINALIZE_CONFIDENCE` from `rationale.confidence`.
+  Every rate is null rather than NaN on an empty population. Tests:
+  `test/corpus-args.test.ts` (21), `test/run-comparison.test.ts` (10),
+  `test/scoring-corpus-runner.test.ts` (9, mock provider on the test DB —
+  research-row provenance, the human-method-with-a-final population the live
+  routes refuse, unscorable without a rubric, per-run idempotency, duplicate
+  label, `--with-human-final`, and `buildResults` + its CSV byte-identical
+  before and after a run). Slice 3 is the operator recipe and the first real
+  runs.
