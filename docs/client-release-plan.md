@@ -232,7 +232,7 @@ reply to IT (profile worked, v1.0.0 published, no PPPC per D-R4, hold the
 dictation DDM for the scope), the Installomator `securetest` label fragment
 (with the blocking-process caveat: an update must never land on a locked
 Mac), and the Jamf policy ask. The fleet scope is James's to name. Decision
-(James, 2026-09-07): the v1.0.0 floor stays `LSMinimumSystemVersion 26.5`
+(James, 2026-09-07): the v1.0.0 floor stays `LSMinimumSystemVersion 26.5` — superseded 2026-09-14, lowered to 26.4 for v1.3.1, see below
 (IT's DDM floor is 26.4; Macs on 26.4 update first). Batch 2 is complete
 except the hand-install row on a district Mac.
 
@@ -292,3 +292,14 @@ to its time limit; no TCC prompt at any point. `client/MANUAL-CHECKS.md`
 "Signed build" (the last row) and "Time limit" are the record. The next
 release (v1.3.1) carries the time-limit banner fix found that afternoon
 (T-1, `docs/time-limit-and-unfinished-attempts-design.md` §Progress).
+
+**Floor lowered to 26.4 (James, 2026-09-14, for v1.3.1).** IT asked whether
+the app needs 26.5. It does not: the highest-gated API the client calls is
+`allowsAccessibilityLiveCaptions` (macOS 26.1); the rest of the
+`AEAssessmentConfiguration` / `AEAssessmentSession` surface it uses is
+macOS 15 or older, and there are no `#available` checks. The 2026-09-07
+"stays 26.5" decision above matched the measurement Mac, nothing more.
+`MACOSX_DEPLOYMENT_TARGET` is 26.4 in both configurations from v1.3.1;
+`MARKETING_VERSION` 1.3.1. Caveat recorded in `client/RELEASING.md`: no
+real session has run on 26.4 (no such Mac is available to James), so the
+release notes flag it and IT's first 26.4 session is the verification.

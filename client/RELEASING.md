@@ -150,6 +150,15 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
   IT without incident); a Finder launch showed Sign in with Google, a real
   student sat two real sessions and handed in, no TCC prompt.
   `MANUAL-CHECKS.md` "Signed build" is the record.
-- Next release (v1.3.1) carries the time-limit banner fix: the × froze the
-  strip instead of hiding it (finding T-1,
-  `docs/time-limit-and-unfinished-attempts-design.md`).
+- Next release (v1.3.1, bumped 2026-09-14, not yet cut) carries the
+  time-limit banner fix (the × froze the strip instead of hiding it —
+  finding T-1, `docs/time-limit-and-unfinished-attempts-design.md`) and
+  **drops the deployment target from 26.5 to 26.4** (IT asked, 2026-09-14).
+  Nothing in the client needs 26.5: the highest-gated API it calls is
+  `allowsAccessibilityLiveCaptions` at macOS 26.1, there are no
+  `#available` checks, and the compiler enforces the floor (a 26.5+ symbol
+  would fail the build). The 26.5 floor was a 2026-09-07 decision matching
+  the measurement Mac (26.6.2), not a requirement. **26.4 is unverified in a
+  real session** — every AAC / TCC / DNS measurement so far ran on 26.6.2
+  and James has no 26.4 Mac; the release notes must say so, and IT runs one
+  real session on a 26.4 district Mac before the fleet scope widens.
