@@ -187,6 +187,23 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.3.3 — 2026-09-15** (built from `f2cc2e5`, tag on `main`): row CS —
+  Close session / sitting expiry end the student's secure session and
+  return them to Your tests ("Your teacher ended the test session." — not a
+  hand-in; `docs/close-session-ends-attempts-design.md`), the client
+  hygiene slice (24 h stale-spool purge, non-persistent WebKit store,
+  `errors.log` cap), `LSApplicationCategoryType` education (archive
+  warning gone). First release through psd-sign **0.6.0**: pre-flight
+  (clean tree, HEAD = `origin/main`, 1.3.3 > v1.3.2), archive-only,
+  Developer ID + hardened runtime already on the archive, six entitlements
+  with all four of `expected-entitlements.txt` present, profile to
+  2044-08-30, `PSDBuildCommit` = HEAD; app + pkg notarized and stapled
+  from the session; `gh release create` by James. Requires the design tool
+  at rev 34 / migration 0036 (deployed the same day). Hand-run before
+  publishing: the CS path on the Debug build with simulated lockdown
+  against the origin (close → sheet in 0.4 s, expiry → sheet, Resume,
+  timeline); the real-session row and the hand-install row run on the
+  student device from this pkg.
 - **v1.3.2 — 2026-09-15** (built from `fa39945`, tag on `main`, published
   ~11:25 PT): the end-state audit's two security slices (`ebe20ab` the
   test page exists only while the session is active — no "Stay here", a

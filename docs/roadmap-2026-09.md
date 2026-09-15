@@ -263,6 +263,27 @@ Two design notes written (X and Y in the table): `docs/student-work-export-desig
 and `docs/scoring-corpus-design.md`. Nothing built at the time of writing;
 corpus slice 1 (migration 0035 + the reader sweep) starts next.
 
+### 2026-09-15 evening — row CS sitting + one finding
+
+Row CS proven on the Debug build with simulated lockdown against the origin
+(rev 34): Close → `sitting_closed {via: peek}` 0.4 s later and the D-4
+sheet; a 2-minute sitting expired → same; Resume restores everything; rows
+195 / 196 / 198 / 199 + 6 client rows ✅. Real-session row + hand-install:
+the student device (still v1.3.1) gets `SecureTest-1.3.3.pkg` by hand.
+
+- **M-1 (design-tool + client, usability trap):** a stem written
+  `$6 \times 7$` renders as raw text because rule C-2 (2026-09-09, James
+  1.2) makes a single `$` followed by a digit plain text so `$57,600`
+  stops opening math. Math that STARTS with a digit is common in teacher
+  authoring and the editor gives no warning; the escapes (`$ 6 \times 7$`,
+  `${6}\times 7$`) are undiscoverable. Options: (a) editor + importer
+  warning when a `$`+digit run has a matching `$` and contains a `\`
+  command, `^` or `_`; (b) refine the rule — `$`+digit opens math only when
+  a closing `$` exists AND the run contains a LaTeX command / `^` / `_`,
+  otherwise text (passes both `$57,600 to $30,000` and `$6 \times 7$`);
+  both renderers + the importer's `\$` writer. James's decision; (b) is S
+  in both renderers with the existing tokenizer tests.
+
 ### 2026-09-15 — client end-state audit, and security slice 1
 
 An audit of what actually removes the test from the screen when a session
