@@ -219,8 +219,9 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- No `LSApplicationCategoryType` yet (archive warning); add
-  `public.app-category.education` in a later slice.
+- ~~No `LSApplicationCategoryType` yet (archive warning).~~ DONE 2026-09-15
+  (v1.3.3): `INFOPLIST_KEY_LSApplicationCategoryType =
+  public.app-category.education` in both configurations.
 - ~~The packaged copy's hand-install on a district Mac (slice 4's last
   row).~~ DONE 2026-09-14 — v1.3.0 reached a district student Mac through
   Jamf (the pkg policy plus the configuration profile above, installed by
