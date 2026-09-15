@@ -4,6 +4,7 @@ import {
   type ScoringMethod,
 } from "@secure-test/schema";
 import { getDb } from "@/db/client";
+import { log, truncate } from "@/lib/log";
 import {
   scores,
   type ItemRow,
@@ -141,7 +142,13 @@ export async function runEssayScorer(opts: {
     }
     return { kind: "ok", result, rubric, view, provider, method };
   } catch (err) {
-    console.error(`essay scoring failed for response ${response.id}`, err);
+    // 2026-09-15 (R-5): a structured error line, so the ServerErrors metric
+    // filter ($.level = "error") sees a provider failure — the plain
+    // console.error it replaced left the teacher's 502 invisible to the alarm.
+    log.error("essay_score_failed", {
+      response_id: response.id,
+      message: truncate(err instanceof Error ? err.message : String(err)),
+    });
     return { kind: "provider_error" };
   }
 }
@@ -193,7 +200,10 @@ export async function aiScoreResponse(opts: {
     }
     return { kind: "scored", status };
   } catch (err) {
-    console.error(`essay score insert failed for response ${response.id}`, err);
+    log.error("essay_score_insert_failed", {
+      response_id: response.id,
+      message: truncate(err instanceof Error ? err.message : String(err)),
+    });
     return { kind: "provider_error" };
   }
 }

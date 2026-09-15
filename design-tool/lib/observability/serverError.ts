@@ -86,6 +86,21 @@ export function hashStack(stack: string | null | undefined): string | null {
   return createHash("sha256").update(normalised).digest("hex").slice(0, 16);
 }
 
+/**
+ * 2026-09-15 (ServerErrors alarm, twice in one afternoon): Next reports a
+ * page stream the BROWSER closed — a teacher navigating away while a
+ * dashboard page was still rendering — as a 500 with "The destination stream
+ * closed early". Nothing failed on the server, so it is a warning line and no
+ * row; otherwise every quick click-through trips the alarm and pages
+ * whoever is on call.
+ */
+const CLIENT_ABORT_RE =
+  /destination stream closed early|request aborted|ECONNRESET|socket hang up|premature close/i;
+
+export function isClientAbort(error: unknown): boolean {
+  return CLIENT_ABORT_RE.test(messageOf(error));
+}
+
 function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message || error.name;
   if (typeof error === "string") return error;
@@ -170,6 +185,18 @@ export async function recordServerError(
   const stackHash = hashStack(stack);
   const requestId = requestIdFrom(request.headers);
   const sub = await resolveSub(request).catch(() => null);
+
+  if (isClientAbort(error)) {
+    log.warn("request_aborted", {
+      route,
+      method,
+      message,
+      request_id: requestId ?? undefined,
+      sub: sub ?? undefined,
+      route_path: context.routePath,
+    });
+    return;
+  }
 
   log.error("request_error", {
     route,

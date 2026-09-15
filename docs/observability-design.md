@@ -514,3 +514,22 @@ roster-sync Lambda's 10-minute timeout. Unit-tested against the test DB in
 `bun run typecheck` and `bunx cdk synth` (in `design-tool/infra`) both
 pass. **NOT RUN** — row 190 in `docs/design-tool-manual-checks.md` waits
 for the next 06:00 roster-sync run.
+
+**Findings O-1 / O-2 / O-3 — 2026-09-15 afternoon (two ServerErrors alarms
+and one ALB-5xx alarm, read from the log group):**
+- **O-1** the ServerErrors alarms (11:39, 13:44 PT) were `request_error`
+  500s with "The destination stream closed early" on two dashboard pages —
+  the BROWSER closed a page stream mid-render (a click-through), which Next
+  reports through `onRequestError`. Not a server failure. Fix:
+  `isClientAbort` in `lib/observability/serverError.ts` → a `request_aborted`
+  WARN line and no row, so the `$.level = "error"` filter never sees it.
+- **O-2** `unhandledRejection: EACCES mkdir /app/design-tool/.next/cache`,
+  "Failed to write image to cache" — next/image's optimizer (the header
+  emblem, the login emblem) in the read-only runtime image. Fix:
+  `images: { unoptimized: true }` (two small static PNGs).
+- **O-3** the ALB-5xx alarm (13:20) was real: the three R-5 scorer 502s
+  (`docs/rubric-upload-design.md`). The scorer's failures were plain
+  `console.error` lines the metric filter could not see — now
+  `log.error("essay_score_failed" | "essay_score_insert_failed")` with
+  `response_id` + truncated message, so the next provider failure alarms
+  through the same path as everything else.

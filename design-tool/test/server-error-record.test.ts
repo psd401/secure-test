@@ -92,6 +92,27 @@ describe("recordServerError", () => {
     expect(JSON.stringify(rows[0])).not.toContain("token=abc");
   });
 
+  test("a browser-closed stream is a warning and no row (2026-09-15)", async () => {
+    const captured: string[] = [];
+    const previous = setLogSink((l) => captured.push(l));
+    const rows: unknown[] = [];
+    try {
+      await recordServerError(
+        new Error("The destination stream closed early."),
+        { path: "/dashboard/x", method: "GET", headers: {} },
+        {},
+        { writeRow: async (row) => rows.push(row), resolveSub: async () => null },
+      );
+    } finally {
+      setLogSink(previous);
+    }
+    expect(rows).toHaveLength(0);
+    expect(captured).toHaveLength(1);
+    const line = JSON.parse(captured[0]!);
+    expect(line.level).toBe("warn");
+    expect(line.event).toBe("request_aborted");
+  });
+
   test("a non-Error throw is described, never serialised", async () => {
     await recordServerError({ body: { answer: "42" } }, request(), {}, {
       writeRow,
