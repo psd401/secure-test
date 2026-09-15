@@ -66,7 +66,7 @@ page you were on.
   *Print student work* (each student's answers with the key on a last
   page, for scoring by hand or evidence).
 - **Scoring queue**: essays and hand-scored items wait here. A rubric can
-  be uploaded from a PDF or picture on the question; with a rubric, *Score
+  be uploaded on the question (PDF, Word, Markdown or plain text); with a rubric, *Score
   with AI* proposes a score and feedback you approve or change. Nothing
   reaches the student until you approve it.
 - A student's row can be **deleted** (per-student results page or the
