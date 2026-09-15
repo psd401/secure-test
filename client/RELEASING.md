@@ -1,6 +1,6 @@
 # Releasing the client
 
-The app-specific facts the `psd-sign` skill (PSD-wide, 0.4.0+) cannot know.
+The app-specific facts the `psd-sign` skill (PSD-wide, 0.6.0+) cannot know.
 `docs/client-release-plan.md` is the design record; this file is the
 checklist. First release: `v1.0.0`, 2026-09-07.
 
@@ -41,38 +41,51 @@ stamps the git sha into `PSDBuildCommit`, so About shows
 
 ## Steps
 
+The `psd-sign` skill (0.6.0+) runs the whole thing from the archive: its
+pre-flight (clean tree, HEAD = `origin/main`, version newer than
+`/releases/latest`), then
+
 ```
 cd client
 xcodebuild archive -project SecureTest.xcodeproj -scheme SecureTest \
   -configuration Release -destination 'generic/platform=macOS' \
   -archivePath <work>/SecureTest.xcarchive
-xcodebuild -exportArchive -archivePath <work>/SecureTest.xcarchive \
-  -exportOptionsPlist <work>/export.plist -exportPath <work>/export
 ```
 
-`export.plist`: `method` developer-id, `signingStyle` manual,
-`signingCertificate` "Developer ID Application", `teamID`, and
-`provisioningProfiles` mapping the bundle id to `SecureTest Developer ID`.
+**Archive-only is the canonical path (decided 2026-09-15).** The Release
+configuration's manual Developer ID signing produces the final signature,
+the hardened runtime and the embedded profile in the archive itself, so the
+app is taken straight from `Products/Applications/` — no `-exportArchive`,
+no `export.plist`. v1.3.0–1.3.2 shipped this way. The skill's step 2 gate
+(Authority = Developer ID, `flags=0x10000(runtime)`) must pass without a
+re-sign; if it ever does not, the pbxproj has drifted — fix the build
+settings rather than reaching for export.
 
-Then the psd-sign recipe from its step 2a onward (the archive is already
-signed; the skill must NOT re-sign with a bare `--deep --force` — that
-strips the AAC entitlement): entitlement check, `notarytool submit --wait`
+Then, in the skill's order: 2a entitlement check (nothing lost by signing
+AND every key in `expected-entitlements.txt` present), 2b profile embedded
++ expiry ≥ 90 days, 2c `PSDBuildCommit` = HEAD, `notarytool submit --wait`
 on a zip of the app, `stapler staple`, `pkgbuild --root <payload>
 --identifier net.psd401.securetest.client --version <v> --install-location /
 --sign "Developer ID Installer: …"`, notarize + staple the pkg,
-`pkgutil --check-signature`, `gh release create v<v> <pkg> --repo
-psd401/secure-test --title "Secure Test v<v>" --notes "<one line>"`
-(`--generate-notes` is fine here since the source lives in the same repo).
+`pkgutil --check-signature`. Step 9 prints the `gh release create v<v>
+<pkg> --repo psd401/secure-test --title "Secure Test v<v>" --notes-file …`
+command for the maintainer to run (the session's classifier denies it),
+then verifies `/releases/latest/download/` redirects to the NEW tag. Step
+10 appends the entry below.
 
 ## What to check on the exported app, every release
 
-`codesign -d --entitlements :- <app>` must list ALL of:
+`codesign -d --entitlements :- <app>` must list every key in
+**`client/expected-entitlements.txt`** (the machine-read contract — the
+skill's step 2a aborts on any absent key; edit the file, not this prose,
+when the app's needs change):
 
 - `com.apple.developer.automatic-assessment-configuration` = true
 - `com.apple.security.app-sandbox` = true
 - `com.apple.security.network.client` = true
 - `com.apple.security.files.user-selected.read-only` = true
-- plus the profile's `application-identifier` and `team-identifier`
+
+plus the profile's `application-identifier` and `team-identifier` (step 2b).
 
 `Contents/embedded.provisionprofile` present; `codesign -dvv` shows
 `flags=0x10000(runtime)`; `spctl -a -vv` says `Notarized Developer ID` after

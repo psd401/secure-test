@@ -1,0 +1,9 @@
+# Entitlements the released app MUST carry (psd-sign 0.6.0, step 2a).
+# One key per line, sorted. codesign -d --entitlements :- on the exported
+# app is compared against this list; any key absent aborts the release.
+# The profile-derived keys (application-identifier, team-identifier,
+# com.apple.developer.team-identifier) are checked by step 2b, not here.
+com.apple.developer.automatic-assessment-configuration
+com.apple.security.app-sandbox
+com.apple.security.files.user-selected.read-only
+com.apple.security.network.client
