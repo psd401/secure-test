@@ -627,3 +627,15 @@ wide enough); (b) make `side_by_side` the default layout for a set that
 carries sources (import and the editor); (c) both. Not built. The teacher
 half of the "hand in from the side-by-side page" row is closed by this
 sitting (the essay answer showed on the per-student page).
+
+**C-8 option (b) BUILT 2026-09-15** (James decided the editor half of (b);
+the import half was already done — `extractCore.ts:833` proposes
+`side_by_side` whenever a set carries sources). `defaultLayoutAfterAddingSource`
+(`design-tool/lib/itemSetLayout.ts`, unit-tested in
+`design-tool/test/itemSetLayout.test.ts`) flips a set's layout `inline` →
+`side_by_side` the moment the teacher adds its first source (`addSource` in
+`AssessmentEditor.tsx`), in the same state update; a set already on
+`own_page` or `side_by_side` is left alone, and removing sources never flips
+it back. Design-tool 1735 tests (with the test DB), typecheck clean. Hand-run
+row 180 (`docs/design-tool-manual-checks.md`) NOT RUN. Option (a) — the
+Beside/Above toggle on `own_page` sets — is the client slice of the same day.

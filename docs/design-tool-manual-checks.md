@@ -618,3 +618,11 @@ Bedrock-scored essay (`scores=ai`); row 179 needs a second staff account.
 | 177 | Toolbar: check Anonymous, Update | No student page shows a name or student number anywhere — only "Student NN" labels; a final page headed "Teacher key — do not distribute" maps every label to its student, states the print date and attempt count; printing again with no new hand-ins gives the SAME labels | ✅ 2026-09-14: student page reads `Student 01`, no name / number anywhere on it (footer `<title> · Student 01`); key page last with the print date, the attempt count and the shift caveat; a second load gives the same label |
 | 178 | On the results page (`/dashboard/<id>/results`), click "Print student work" | Lands on the section chooser (row 168), same styling as "Print report" | ✅ 2026-09-14: "Print student work" beside "Print report", same classes, lands on the chooser |
 | 179 | Sign in as a different staff account and open another teacher's `/dashboard/<id>/results/work?section=...` | 404, not a page that confirms the assessment exists | NOT RUN — needs a second staff account (as rows 78 / 120 / 143) |
+
+## C-8(b) — sourced sets default to side-by-side (2026-09-15)
+
+`docs/multi-source-stimulus-design.md` §Progress. `defaultLayoutAfterAddingSource` (`design-tool/lib/itemSetLayout.ts`) flips a set's layout `inline` → `side_by_side` in the same state update as adding its first source; a set already on `own_page` or `side_by_side`, or gaining a second+ source, is left alone. Unit-tested (`test/itemSetLayout.test.ts`); this row is the editor hand-run.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 180 | In the editor, add a source to a set with no sources; then change the layout to "On its own page" and add a second source | After the first source the layout select reads "Side by side (sources beside the question)"; after the second it stays on "On its own page" | NOT RUN |

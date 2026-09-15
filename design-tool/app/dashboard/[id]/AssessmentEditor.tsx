@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/app/EmptyState";
 import { ApiError, itemErrorCopy } from "@/lib/ui/errorCopy";
 import { plural } from "@/lib/ui/format";
+import { defaultLayoutAfterAddingSource } from "@/lib/itemSetLayout";
 import { NextStepCard } from "@/components/app/NextStepCard";
 import { PageHeader } from "@/components/app/PageHeader";
 import { PreviewFrame } from "@/components/app/PreviewFrame";
@@ -1259,7 +1260,14 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
   }
 
   function addSource(setId: string) {
-    updateSources(setId, (list) => [...list, { label: nextSourceLabel(list.length), text: "" }]);
+    // C-8(b): the first source on a set still at the schema default flips
+    // the layout to side-by-side in this same update; a set already on
+    // own_page/side_by_side, or gaining a second+ source, is left alone.
+    updateSet(setId, (sv) => ({
+      ...sv,
+      sources: [...sv.sources, { label: nextSourceLabel(sv.sources.length), text: "" }],
+      layout: defaultLayoutAfterAddingSource(sv.layout, sv.sources.length),
+    }));
   }
 
   function moveSource(setId: string, index: number, delta: -1 | 1) {
