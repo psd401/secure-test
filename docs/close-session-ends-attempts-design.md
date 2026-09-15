@@ -64,9 +64,16 @@ current behaviour as a "looks wrong but isn't"; this note replaces it.
 - **D-7 Interim without the client half.** Server half alone: a v1.3.2
   student's screen keeps going after Close but every write is refused
   (409 `sitting_closed`, spooled then dropped as `responses_dropped`); the
-  teacher's view is right and Hand in works. **v1.3.3 is HELD** (James) in
-  case this work or the pilot touches the client further; the client half
-  is built and ready to ride it.
+  teacher's view is right and Hand in works. **Superseded the same day:**
+  no server-side lever can end a v1.3.2 client's session (the time limit is
+  a client clock read once from the bundle; a write 409 is logged and the
+  page continues; the peek poll carries only the look flag), so James
+  decided to **ship the client half in v1.3.3 today** (2026-09-15, with
+  the hygiene slice) and ask IT for an AutoPkg run Wednesday afternoon and
+  one before first period Thursday. Fallbacks written into the quick-start
+  for any Mac still on 1.3.2: the 55-minute per-student limit ends the
+  client session on its own; teachers announce "Finish and hand in" before
+  Close.
 
 ## Mechanism
 
@@ -107,17 +114,19 @@ current behaviour as a "looks wrong but isn't"; this note replaces it.
    closed; time-limit rows unaffected; hand-in unchanged; a `--token`
    attempt with no sitting unaffected. Rows. **Deploy Wednesday.**
 2. **Client** (Opus, one commit): poll field + 409 → return-home sheet +
-   `sitting_closed` event. `swift test`, both builds. Rows. **Sits on
-   `main` for v1.3.3 (held).**
+   `sitting_closed` event. `swift test`, both builds. Rows. **Then cut
+   v1.3.3 (MARKETING_VERSION bump, psd-sign, `gh release create` James)
+   the same day and ask IT for the extra AutoPkg runs.**
 3. **Docs**: quick-start "Three clocks" rewritten (Close and expiry return
    students to Your tests with answers saved; Hand in finalises; Resume in
    a later session), time-limit note §Progress, roadmap row CS, this note.
 
 ## Timing
 
-- Server half live Wednesday morning with a day of soak.
-- Client half: on `main`, released with v1.3.3 when James lifts the hold.
-  Until then D-7 applies on Thursday.
+- Both halves built 2026-09-15 (fresh session, same day); server deployed
+  the same evening or Wednesday morning; v1.3.3 published 2026-09-15
+  evening; IT asked for AutoPkg runs Wednesday afternoon + Thursday before
+  first period. D-7's fallbacks cover any Mac the runs miss.
 
 ## Rows (to write in slice 1 / 2)
 
@@ -142,4 +151,4 @@ the 409s on stderr).
 
 ## Progress
 
-- 2026-09-15: scoped (this note). D-1…D-7 decided by James the same day: end the sitting, not the attempt (no hand-in, attempt stays in_progress and resumable); expiry counts; no grace; v1.3.3 held. Nothing built.
+- 2026-09-15: scoped (this note). D-1…D-7 decided by James the same day: end the sitting, not the attempt (no hand-in, attempt stays in_progress and resumable); expiry counts; no grace. Hold on v1.3.3 LIFTED: the client half ships in v1.3.3 today, since nothing server-side can end a v1.3.2 client's session. Nothing built yet.
