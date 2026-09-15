@@ -480,6 +480,7 @@ recipe); the CLI-made subscription lives outside the stack.
   `ref`, route 500 with `x-request-id`, both `level:"error"` lines in
   `/ecs/secure-test-design-tool-dev`. **The orphaned pre-slice-1 log group**
   (`SecureTestDesignTool-AppServiceTaskDefwebLogGroup…`, 59 KB, no retention,
-  last event 2026-09-06) is confirmed idle; its delete is classifier-blocked
-  in-session — one command for James:
-  `aws logs delete-log-group --log-group-name SecureTestDesignTool-AppServiceTaskDefwebLogGroup10A490E5-Swlvzh5Mn1Vv`.
+  last event 2026-09-06) was confirmed idle and **DELETED by James the same night** (the delete
+  is classifier-blocked in-session). Batch 3's remaining opens: the
+  retention sweep for the four event tables (period = James's decision),
+  the in-attempt `client_error` client row, T-3.
