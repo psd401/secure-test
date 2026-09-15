@@ -628,6 +628,39 @@ carries sources (import and the editor); (c) both. Not built. The teacher
 half of the "hand in from the side-by-side page" row is closed by this
 sitting (the essay answer showed on the per-student page).
 
+**Decision 2026-09-15 (James): (c) both — (a) built in this slice, (b) the
+editor default is a design-tool slice.**
+
+**C-8 (a) BUILT 2026-09-15 (client only).** The C-1 group is now built by
+every `own_page` QUESTION page as well, and only when `WIDE` (the same
+`LAYOUT_MIN_WIDE_PX` = 1100 read once at build; `__forceWide` in tests) — a
+narrow build has no two-column option to offer, so it keeps exactly the tree
+it had. **"Above" is the default on `own_page`** (`stackedSets[set.id]`
+seeded `true` the first time a member page is built), and Above *is* the old
+presentation: the collapsed `details.passage-ref` over the question, with the
+one travelling block in its `.passage-holder`. "Beside" hides the disclosure
+(`.passage-ref[hidden] { display: none; }` — a rule of our own, T-1's lesson)
+and the page's `.side-by-side` split carries the block in `.side-source` and
+the item block in `.side-questions`. The item block is the same node in both
+modes, so no answer, caret or stroke is disturbed; the passage page "P" stays
+in the pager, and the block travels to it as before. Because an `own_page`
+set owns SEVERAL question pages while a `side_by_side` set owns one,
+`layoutToggle` gained a `setToggles` registry (set id → its paint functions)
+and a `repaintSet(setId)` that repaints all of them and re-places the block
+on whichever page is open — so pressing a button on one member's page is
+already true on the next. `layoutOf()` is untouched, as are the review page
+and the strip. `layoutToggle(setId, apply)` now takes what to do with the
+choice rather than a split, which is the only change the `side_by_side`
+caller sees. Tests: client 606 (+4 in `RendererLayoutToggleTests`: the group
+on both member pages and on neither the passage page nor a non-member's;
+Beside splits and Above restores with the block counted at one throughout;
+the choice holding across a page turn and the passage page still taking the
+block; a narrow build with no group), plus the stylesheet rule. Hand-run
+rows: `client/MANUAL-CHECKS.md` "C-8 — Beside / Above on own_page sets
+(2026-09-15)", seven rows, NOT RUN — the layout itself, the real 1100 px
+threshold, and mid-answer safety are what the harness cannot prove. Client
+only: no deploy; it reaches the fleet with the next client release.
+
 **C-8 option (b) BUILT 2026-09-15** (James decided the editor half of (b);
 the import half was already done — `extractCore.ts:833` proposes
 `side_by_side` whenever a set carries sources). `defaultLayoutAfterAddingSource`

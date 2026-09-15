@@ -398,6 +398,10 @@ public enum AssessmentPage {
     }
     .page .item { border-bottom: none; }
     .passage-ref { margin: 0 0 16px; }
+    /* C-8: "Beside" hides the disclosure rather than leaving an empty one.
+       Spelled out because a rule of our own, not the UA sheet, is what the
+       T-1 finding taught us to rely on. */
+    .passage-ref[hidden] { display: none; }
     .passage-ref summary { cursor: pointer; font-size: 0.875rem; color: var(--accent); }
     .passage-ref .stimulus { margin-top: 8px; }
     .review-list { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2955,6 +2959,11 @@ public enum AssessmentPage {
         // DOM persists across page turns, so the choice survives without
         // anything being rebuilt, and a relaunch reasonably starts over.
         var stackedSets = {};
+        // C-8 (2026-09-15): set id → every paint function built for that set.
+        // A side_by_side set has exactly one (its members share one page); an
+        // own_page set has one per question page, and all of them have to agree
+        // when the student presses a button on any one of them.
+        var setToggles = {};
 
         function newPage(kind, label, short) {
           var el = document.createElement('section');
@@ -2987,7 +2996,23 @@ public enum AssessmentPage {
         // pressed one carries aria-pressed="true", which is also what the CSS
         // fills. Nothing is rebuilt — the class on the split is the whole
         // change, so no answer, no stroke and no caret is disturbed.
-        function layoutToggle(setId, split) {
+        //
+        // C-8 (2026-09-15): `apply` is what the caller does with the choice,
+        // so the same group serves a side_by_side page (swap the split's
+        // class) and an own_page question page (swap the class AND choose
+        // between the disclosure and the left column as the block's holder).
+        // A press repaints every group the set owns and re-places the block.
+        function repaintSet(setId) {
+          (setToggles[setId] || []).forEach(function (fn) { fn(); });
+          // The travelling block belongs wherever the page the student is
+          // looking at now wants it. `show` does the same thing on a turn.
+          var page = pages[at];
+          if (page && page.holder && page.set && page.set.__block) {
+            page.holder.appendChild(page.set.__block);
+          }
+        }
+
+        function layoutToggle(setId, apply) {
           var group = document.createElement('div');
           group.className = 'layout-toggle';
           group.setAttribute('role', 'group');
@@ -3000,18 +3025,20 @@ public enum AssessmentPage {
           var above = document.createElement('button');
           var paint = function () {
             var stacked = !!stackedSets[setId];
-            split.className = stacked ? 'side-by-side stacked' : 'side-by-side';
+            apply(stacked);
             beside.setAttribute('aria-pressed', stacked ? 'false' : 'true');
             above.setAttribute('aria-pressed', stacked ? 'true' : 'false');
           };
           beside.type = 'button';
           beside.textContent = 'Beside the question';
-          beside.onclick = function () { stackedSets[setId] = false; paint(); };
+          beside.onclick = function () { stackedSets[setId] = false; repaintSet(setId); };
           above.type = 'button';
           above.textContent = 'Above the question';
-          above.onclick = function () { stackedSets[setId] = true; paint(); };
+          above.onclick = function () { stackedSets[setId] = true; repaintSet(setId); };
           group.appendChild(beside);
           group.appendChild(above);
+          if (!setToggles[setId]) setToggles[setId] = [];
+          setToggles[setId].push(paint);
           paint();
           return group;
         }
@@ -3060,7 +3087,9 @@ public enum AssessmentPage {
                 // C-1: the student's own "beside / above" choice, above the
                 // split it governs. Only a real two-column page gets one — the
                 // narrow fallback is already the stacked presentation.
-                shared.el.appendChild(layoutToggle(opener.id, split));
+                shared.el.appendChild(layoutToggle(opener.id, function (stacked) {
+                  split.className = stacked ? 'side-by-side stacked' : 'side-by-side';
+                }));
                 shared.el.appendChild(split);
                 shared.body = right;
               } else {
@@ -3085,10 +3114,40 @@ public enum AssessmentPage {
               ? 'Show the sources'
               : 'Show the passage';
             ref.appendChild(summary);
-            page.holder = document.createElement('div');
-            page.holder.className = 'passage-holder';
+            var ownHolder = document.createElement('div');
+            ownHolder.className = 'passage-holder';
+            ref.appendChild(ownHolder);
+            page.holder = ownHolder;
             page.set = set;
-            ref.appendChild(page.holder);
+            // C-8 (2026-09-15, James): the Beside / Above choice belongs to
+            // the student on an own_page set too — but only where two columns
+            // fit, the same >= 1100 px rule C-1 uses. "Above" is the default
+            // and is exactly what this page built before the toggle existed:
+            // the collapsed disclosure over the question. "Beside" hides the
+            // disclosure and the travelling block lands in the left column of
+            // a `.side-by-side` split instead, the question in the right one.
+            // The passage page stays in the pager either way, and the item
+            // block is the same node in both — nothing is rebuilt.
+            if (WIDE) {
+              if (stackedSets[set.id] === undefined) stackedSets[set.id] = true;
+              var ownSplit = document.createElement('div');
+              var ownLeft = document.createElement('div');
+              ownLeft.className = 'side-source';
+              var ownRight = document.createElement('div');
+              ownRight.className = 'side-questions';
+              ownSplit.appendChild(ownLeft);
+              ownSplit.appendChild(ownRight);
+              page.el.appendChild(layoutToggle(set.id, function (stacked) {
+                ownSplit.className = stacked ? 'side-by-side stacked' : 'side-by-side';
+                if (stacked) ref.removeAttribute('hidden');
+                else ref.setAttribute('hidden', '');
+                page.holder = stacked ? ownHolder : ownLeft;
+              }));
+              page.el.appendChild(ref);
+              page.el.appendChild(ownSplit);
+              ownRight.appendChild(itemBlock(item));
+              return;
+            }
             page.el.appendChild(ref);
           }
           page.el.appendChild(itemBlock(item));
