@@ -191,3 +191,27 @@ slice 1 here can exclude it from the start.
 ## Progress
 
 - 2026-09-14 — note written; nothing built.
+- 2026-09-14 — **slice 1 BUILT** (not hand-run). `lib/reporting/workPacket.ts`
+  carries the rules — `parsePacketQuery` (defaults, unknown `scores` → `none`
+  rather than a throw, uuid-filtered `items`), `anonymousLabels` (lexical by
+  attempt id, width ≥ 2), `selectPacketScores` + `packetScoreHeading` (teacher
+  = the `human`-or-`auto` final, ai = the latest `ai` row whatever its status,
+  `research` never), `choiceCheckboxLines`, `packetOrdering` (last name, with
+  "Last, First" and "First Last" sorting together) — each tested in
+  `test/work-packet.test.ts` (26 tests).
+  `app/dashboard/[id]/results/work/page.tsx` is the page: the report's posture
+  (owner-only, `notFound()` everywhere, `force-dynamic`, one inline print
+  script), handed-in attempts only, one `.student-page` per attempt with an
+  identity footer, every item type through `describeAnswer` / the per-student
+  page's table grid, a set's stimulus and sources once above the first of its
+  included questions through `renderItemContent`, the hotspot picture, the
+  drawing via the owner-only upload route, the score blocks through
+  `rubricScoreRows` / `overallRationale`, the anonymous key page, and
+  `@page { size: letter; margin: 1in }`. `test/work-packet-page.test.tsx` (19
+  tests) renders it headless. Deviations from the note: `selectPacketScores`
+  takes (mode, rows) only — the auto ✓ / ✗ lines come from `answerView`'s
+  `AnswerLine.correct`, which the page already has, so no third argument was
+  needed; and with `section` absent the page renders a section chooser (links +
+  per-section handed-in counts) rather than nothing, which is the thing slice
+  2's toolbar replaces. Slice 2 still owns the toolbar form, the results-page
+  button and the hand-run rows; an HTML comment marks where the form goes.
