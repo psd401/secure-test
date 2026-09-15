@@ -250,3 +250,17 @@ excludes `research` from the start.
   label, `--with-human-final`, and `buildResults` + its CSV byte-identical
   before and after a run). Slice 3 is the operator recipe and the first real
   runs.
+- 2026-09-14 — **slice 3, mock half RUN on local dev.** `score-corpus.ts
+  --label "mock smoke 2026-09-14" --provider mock` (no filter) matched the
+  dev DB's two essays (one item, method `human`, no rubric): run row
+  created, both responses `unscorable`, tally written to `notes`;
+  `compare-runs.ts --all` and `--csv` print the run with every rate `—` /
+  blank on the empty population. `--with-human-final --dry-run` reported 0
+  (no teacher final exists locally) and exited 1. The scored path is
+  covered by `test/scoring-corpus-runner.test.ts` (mock provider, research
+  row fields, idempotency, `buildResults` unchanged). **Bedrock half
+  OPEN:** needs pilot essays with teacher finals in a reachable DB —
+  either slice 4's in-VPC task or a copy of the rows into dev. Reading: an
+  `unscorable` line does not say why (missing rubric vs. empty text) — a
+  one-word reason on the outcome would save an operator a query; small,
+  unbuilt.
