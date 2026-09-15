@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { peek_requests } from "@/db/schema";
 import { requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
+import { attemptSittingIsOver } from "@/lib/api/sittingOver";
 import { PEEK_PENDING_TTL_MS, sweepExpiredPeekImages } from "@/lib/api/peek";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -20,6 +21,12 @@ interface RouteContext {
  * PEEK_PENDING_TTL_MS comes back: an app that was offline when the teacher
  * clicked must not render a surprise minutes later — the banner shows at
  * pickup, and pickup has a deadline.
+ *
+ * D-5 (docs/close-session-ends-attempts-design.md): this poll is also how a
+ * working client learns its sitting was closed, hence `sitting`. Deliberately
+ * no new channel and no new timer — a Close reaches the client within the 5 s
+ * it already waits. An attempt with no sitting at all (the `--token` dev
+ * posture, the seeder) reports "open": nothing governs it.
  */
 export async function GET(_req: Request, ctx: RouteContext) {
   const auth = await requireStudent();
@@ -52,5 +59,11 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .orderBy(desc(peek_requests.requested_at))
     .limit(1);
 
-  return NextResponse.json({ ok: true, pending: pending ?? null });
+  const over = await attemptSittingIsOver(db, access.attempt);
+
+  return NextResponse.json({
+    ok: true,
+    pending: pending ?? null,
+    sitting: over ? "closed" : "open",
+  });
 }

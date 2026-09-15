@@ -5,6 +5,7 @@ import { attempts } from "@/db/schema";
 import { requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -37,6 +38,14 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (access.attempt.status === "submitted") {
     return NextResponse.json({ attempt: access.attempt, already_submitted: true });
   }
+
+  // D-1..D-3 (docs/close-session-ends-attempts-design.md): a hand-in that
+  // arrives after Close is refused for the same reason a late submit is — the
+  // attempt stays in progress and resumable, and finalising it is the
+  // teacher's hand-in route. Checked before the deadline so the client is told
+  // which clock stopped it.
+  const closed = await refuseIfSittingOver(db, access.attempt);
+  if (closed) return closed;
 
   // D-4: handing in after the deadline is the TEACHER's call, not the
   // student's — the client ends the secure session at zero and deliberately

@@ -685,6 +685,13 @@ export const ATTEMPT_EVENT_KINDS = [
   // secure session. The attempt deliberately stays in progress — this row is
   // how a teacher knows why the student stopped.
   "time_expired",
+  // Close session (docs/close-session-ends-attempts-design.md, D-1/D-5): the
+  // client learned its sitting had been closed or had expired — from the peek
+  // poll's `sitting` field or a 409 `sitting_closed` on a write — and ended
+  // the secure session. Like `time_expired` this is NOT a hand-in: the attempt
+  // stays in progress and resumable through a later sitting. Client-written,
+  // the way `lockdown_end` is; this row is how the timeline explains the exit.
+  "sitting_closed",
   // D-1/A: the teacher forced the submission through the hand-in route.
   // Server-written only; see CLIENT_ATTEMPT_EVENT_KINDS below.
   "teacher_hand_in",
@@ -735,7 +742,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'teacher_hand_in')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in')`,
     ),
   }),
 );

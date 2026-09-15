@@ -31,6 +31,8 @@ const PHRASES: Record<string, string> = {
   client_error: "The app hit a problem",
   // Time limit (docs/time-limit-and-unfinished-attempts-design.md).
   time_expired: "Time ran out",
+  // Close session (docs/close-session-ends-attempts-design.md).
+  sitting_closed: "Session closed by the teacher — returned to Your tests",
   teacher_hand_in: "Handed in by the teacher",
 };
 
@@ -51,6 +53,7 @@ const KIND_ORDER = [
   "quit",
   "lockdown_end",
   "time_expired",
+  "sitting_closed",
   "teacher_hand_in",
   "client_error",
 ];

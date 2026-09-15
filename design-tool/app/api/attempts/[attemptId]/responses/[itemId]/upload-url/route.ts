@@ -15,6 +15,7 @@ import {
   isAllowedUploadType,
   registerUpload,
 } from "@/lib/api/responseUploads";
+import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -66,6 +67,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-1..D-3 (docs/close-session-ends-attempts-design.md): no new upload slot
+  // once the sitting is closed or expired. The completion route refuses as
+  // well, but minting a presigned URL that can never be settled is worse than
+  // saying no here — the client learns from the first request it makes.
+  // (This route has no deadline guard of its own; the slot it mints is
+  // useless past the deadline because `upload` refuses to settle it.)
+  const closed = await refuseIfSittingOver(db, access.attempt);
+  if (closed) return closed;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();

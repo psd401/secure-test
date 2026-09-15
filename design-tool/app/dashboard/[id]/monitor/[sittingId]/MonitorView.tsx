@@ -59,6 +59,8 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  closeDialogCopy,
+  countInProgress,
   eventLabel,
   idleFor,
   studentState,
@@ -376,9 +378,11 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Close session {code}?</AlertDialogTitle>
+            {/* D-6 (docs/close-session-ends-attempts-design.md): when anyone is
+                still working, say so and say what happens to them. The count
+                comes from the rows on screen, read before the close. */}
             <AlertDialogDescription>
-              Nobody new can join. Students already in can finish and hand in. It
-              can&apos;t be reopened — start a new session instead.
+              {closeDialogCopy(countInProgress(data?.rows ?? []))}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

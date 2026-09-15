@@ -14,6 +14,7 @@ import {
   unsealResponseIds,
 } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import {
   loadUploadForItem,
   pruneSupersededUploads,
@@ -67,6 +68,12 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-1..D-3 (docs/close-session-ends-attempts-design.md): the teacher closed
+  // the sitting, or the period ran out. No grace — this is the refusal the
+  // client turns into "Your teacher ended the test session". Checked before
+  // the deadline so a closed sitting says so even when time also ran out.
+  const closed = await refuseIfSittingOver(db, access.attempt);
+  if (closed) return closed;
   // D-4: once the attempt's time limit has run out (plus the grace that
   // covers an autosave already in flight at the buzzer) the server stops
   // taking answers, whatever the client believes. Assessments with no limit
@@ -164,6 +171,10 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-1..D-3: withdrawing an answer is a write like any other — a closed or
+  // expired sitting refuses it too.
+  const closed = await refuseIfSittingOver(db, access.attempt);
+  if (closed) return closed;
   // D-4: once the attempt's time limit has run out (plus the grace that
   // covers an autosave already in flight at the buzzer) the server stops
   // taking answers, whatever the client believes. Assessments with no limit

@@ -681,3 +681,24 @@ row be re-run.
 | 192 | Open the assessment's Scoring queue | Five handed-in attempts, each with the essay item needing manual scoring and the essay text readable on the card (paragraph breaks intact) | ⚠️ 2026-09-15 (rev 31): 3 of 5 answered 502 `provider_error` — finding R-5 (level ids renumbered per criterion by the model; 2000-token cut). Fixed; **✅ rev 32 (`b5cc954`)**: the two re-runs answered 201 first try; all five proposals in the queue |
 | 193 | Press "Score with AI" on the `high`, `mid` and `low` attempts (the origin's `ESSAY_SCORER_PROVIDER` is `bedrock`) | Each proposes a score with per-criterion feedback against the uploaded rubric, and the three totals are visibly different — `high` well above `low` | ✅ 2026-09-15 rev 32: high 24/24 (6/6/6/6, confidence .93), mid 16/24 (4/4/4/4, .82), low 10/24 (4/2/2/2, .88) — ordered as intended, rationales cite sources and name the gaps |
 | 194 | Score the `brief` and `offtopic` attempts the same way | Both land near the bottom of the rubric, and the feedback says something a teacher would recognise as true — `brief` too short to show reasoning, `offtopic` not addressing the prompt or the sources | ✅ 2026-09-15 rev 32: brief 8/24 (4/2/0/2, .88, "far too brief to constitute a developed argument"); offtopic 6/24 (2/2/0/2, .92, "does not engage with the provided sources at all") |
+
+## Close session ends the sitting (2026-09-15)
+
+`docs/close-session-ends-attempts-design.md`, slice 1 (server, D-1…D-6).
+Close session — and a sitting running out of time — now stops the WRITING as
+well as the joining: `lib/api/sittingOver.ts` refuses the response write, the
+drawing upload slot and the student's own submit with 409 `sitting_closed`,
+and the peek poll reports `sitting: "closed"`. The attempt stays
+`in_progress` and resumable; finalising stays the teacher's **Hand in**.
+Needs a live sitting on a current roster day (the one-day teacher-row script
+first) and a student at the client. Row 199 is the D-7 interim and only
+applies while a Mac is still on client v1.3.2.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 195 | With a student mid-essay on an open sitting, press **Close session** from the Monitor and read the dialog before confirming | The dialog names the count — "1 student is still working — they will be returned to Your tests with their answers saved. Hand in their work from the Monitor when you are ready, or open another session for them to continue." | NOT RUN |
+| 196 | Confirm the close, then read the student's row | The row stays **In progress** (not Handed in) with **Hand in** enabled; the answers saved before the close are on the per-student page | NOT RUN |
+| 197 | Press **Hand in** on that row | The attempt flips to Handed in with the essay exactly as it stood at the close, credited to the teacher (`submitted_by_sub`) on the per-student page | NOT RUN |
+| 198 | Instead of handing in: open a NEW session for the same section and have the student join | Your tests shows the test with **Resume**; the essay text and every other saved field come back, and writing works again | NOT RUN |
+| 199 | Press **Close session** a second time on the closed sitting (from the Test sessions tab) | No error — the sitting stays closed and the dialog's count is unchanged; nothing about the attempt changes | NOT RUN |
+| 200 | (D-7, only while a Mac is still on client v1.3.2) Close the sitting under a v1.3.2 client and keep typing | The student's screen keeps going, but every write is refused — 409 `sitting_closed` on stderr / in the spool, dropped as `responses_dropped`; the teacher's view is right and Hand in works | NOT RUN |

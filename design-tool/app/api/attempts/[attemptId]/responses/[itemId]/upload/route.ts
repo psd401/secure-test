@@ -9,6 +9,7 @@ import {
   notFound,
 } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import {
   UPLOAD_MAX_BYTES,
   loadUploadForItem,
@@ -47,6 +48,10 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const access = await loadOwnAttempt(db, attemptId, auth.session);
   if (!access.ok) return access.response;
   if (!attemptAcceptsWrites(access.attempt)) return alreadySubmitted();
+  // D-1..D-3: a canvas whose bytes arrive after the teacher pressed Close
+  // does not land either. No grace (D-3).
+  const closed = await refuseIfSittingOver(db, access.attempt);
+  if (closed) return closed;
   // D-4: the drawing-slot completion is a write like any other — a canvas
   // finished after time is up does not land.
   const expired = await refuseIfPastDeadline(db, access.attempt);

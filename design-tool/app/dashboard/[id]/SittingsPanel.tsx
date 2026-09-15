@@ -54,6 +54,8 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  closeDialogCopy,
+  countInProgress,
   eventLabel,
   idleFor,
   studentState,
@@ -884,9 +886,18 @@ export function SittingsPanel({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Close session {pendingClose?.code}?</AlertDialogTitle>
+            {/* D-6 (docs/close-session-ends-attempts-design.md): the count is
+                available only for a sitting whose attendance this panel has
+                already fetched (the Attendance toggle) — the list itself does
+                not carry per-attempt statuses. With no rows in hand the copy
+                falls back to the wording this dialog has always had; the
+                Monitor, which always has rows, always names the count. */}
             <AlertDialogDescription>
-              Nobody new can join. Students already in can finish and hand in. It
-              can&apos;t be reopened — start a new session instead.
+              {closeDialogCopy(
+                pendingClose
+                  ? countInProgress(attendance[pendingClose.id]?.rows ?? [])
+                  : 0,
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

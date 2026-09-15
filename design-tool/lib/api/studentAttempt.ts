@@ -130,11 +130,16 @@ export async function loadJoinableSitting(db: Db, sessionId: string) {
 /**
  * Responses may only be written while the attempt is in progress.
  *
- * Note what is NOT checked: whether the sitting is still open. A sitting that
- * expires while a child is mid-sentence should not discard the sentence. The
- * sitting governs who may START, and `attempts.status` governs who may still
- * WRITE; conflating them would mean a teacher closing a period destroys work
- * that was already legitimately underway.
+ * Note what is NOT checked HERE: whether the sitting is still open. That used
+ * to be a deliberate omission on the reasoning that a sitting governs only who
+ * may START — superseded by D-1…D-3 of
+ * docs/close-session-ends-attempts-design.md, which teachers asked for: Close
+ * session (and expiry) now stops the writing too. It is a separate guard
+ * (`refuseIfSittingOver`, lib/api/sittingOver.ts) rather than part of this
+ * predicate because the two refusals are different answers — `attempt_submitted`
+ * is final, `sitting_closed` is "not here, not now"; the attempt stays in
+ * progress and resumes through a later sitting. The work is not destroyed:
+ * everything saved up to the close stands, and the teacher hands it in.
  */
 export function attemptAcceptsWrites(attempt: AttemptRow): boolean {
   return attempt.status === "in_progress";

@@ -109,11 +109,50 @@ export function eventLabel(kind: string): string {
     // hand-in — the attempt is still in progress and still the teacher's call.
     case "time_expired":
       return "Time ran out";
+    // Close session (docs/close-session-ends-attempts-design.md, D-1): the
+    // sitting closed under a working student and the client sent them home.
+    // Not a hand-in — the attempt is still in progress and resumable.
+    case "sitting_closed":
+      return "Session closed by the teacher — returned to Your tests";
     case "teacher_hand_in":
       return "Handed in by the teacher";
     default:
       return kind;
   }
+}
+
+/**
+ * Close session (docs/close-session-ends-attempts-design.md, D-6): what the
+ * confirm dialog says, given how many students are still working.
+ *
+ * A pure function of the count so the wording is testable — the repo has no
+ * DOM harness, so the click itself stays a hand-run row. The count comes from
+ * the attendance rows the caller already holds, read BEFORE confirming: after
+ * the close it is too late to tell the teacher what they are about to do.
+ *
+ * The zero case also serves the Test sessions tab when it has no attendance
+ * rows in hand, so it must stay TRUE for a sitting with students inside: the
+ * pre-row-CS "students already in can finish and hand in" no longer is.
+ */
+export function closeDialogCopy(inProgress: number): string {
+  if (inProgress <= 0) {
+    return (
+      "Nobody new can join or resume. Anyone still working is returned to " +
+      "Your tests with their answers saved. It can't be reopened — start a " +
+      "new session instead."
+    );
+  }
+  const who = inProgress === 1 ? "1 student is" : `${inProgress} students are`;
+  return (
+    `${who} still working — they will be returned to Your tests with their ` +
+    "answers saved. Hand in their work from the Monitor when you are ready, " +
+    "or open another session for them to continue."
+  );
+}
+
+/** How many of these attendance rows are attempts still in progress. */
+export function countInProgress(rows: ReadonlyArray<Pick<AttendanceRow, "status">>): number {
+  return rows.filter((r) => r.status === "in_progress").length;
 }
 
 /**
