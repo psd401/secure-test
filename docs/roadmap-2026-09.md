@@ -268,8 +268,17 @@ corpus slice 1 (migration 0035 + the reader sweep) starts next.
 Row CS proven on the Debug build with simulated lockdown against the origin
 (rev 34): Close → `sitting_closed {via: peek}` 0.4 s later and the D-4
 sheet; a 2-minute sitting expired → same; Resume restores everything; rows
-195 / 196 / 198 / 199 + 6 client rows ✅. Real-session row + hand-install:
-the student device (still v1.3.1) gets `SecureTest-1.3.3.pkg` by hand.
+195 / 196 / 198 / 199 + 6 client rows ✅. **Real session 2026-09-16 on the
+released v1.3.3 — it reached the student device through Jamf / AutoPkg
+overnight (no hand install needed):** Close → `sitting_closed` 0.4 s →
+`lockdown_end` 3 s (AAC teardown) → sheet; row 197 Hand in ✅. The words
+typed in the still-focused essay at the instant of Close were refused (D-3).
+
+- **CS-1 (design-tool, cosmetic):** on Resume the Monitor row read "Idle
+  1231 min · Last activity 21 h ago" while the student was inside the test
+  — `lockdown_begin` does not count as activity, only a response write
+  does. A resumed student who reads before answering looks idle for the
+  whole gap. Fix = treat the latest attempt event as activity too (S).
 
 - **M-1 (design-tool + client, usability trap):** a stem written
   `$6 \times 7$` renders as raw text because rule C-2 (2026-09-09, James
