@@ -283,7 +283,11 @@ typed in the still-focused essay at the instant of Close were refused (D-3).
   spool keeping a `sitting_closed` write for the next Resume. **Design
   note drafted 2026-09-16:** `docs/client-autosave-and-deferred-spool-design.md`
   (D-1…D-7 DECIDED 2026-09-16: table cells included, 30 s ceiling,
-  offline autosave posts; three slices → v1.3.4, post-pilot).
+  offline autosave posts; three slices → v1.3.4, post-pilot). **Slices 1–2
+  BUILT 2026-09-16** (`6cdcf42` autosave, `550836e` deferred spool; rows
+  written, NOT RUN; version bumped to 1.3.4); **release HELD until after
+  Thu 2026-09-17 14:00 PT at the earliest** (James — not during the
+  pilot's first day).
 - **CS-1 (design-tool, cosmetic):** on Resume the Monitor row read "Idle
   1231 min · Last activity 21 h ago" while the student was inside the test
   — `lockdown_begin` does not count as activity, only a response write

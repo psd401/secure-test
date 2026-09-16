@@ -1715,3 +1715,37 @@ cannot be exercised with `SECURE_TEST_SIMULATE_LOCKDOWN`.
 | **Cmd-Q after the sheet is clean.** Dismiss the sheet, then Cmd-Q | The app quits with no beep and no second sheet; stderr shows no crash line, and `errors.log` gains nothing | ✅ 2026-09-16 — real session on v1.3.3 (student device): quit cleanly after the sheet |
 | **A v1.3.2 client against the new server (D-7).** Same sitting from a Mac still on v1.3.2, closed mid-test | The student's screen KEEPS GOING — the old client has no sitting field and no 409 handling — and every write is refused: stderr `responses DROPPED: N refused permanently by the server`. The teacher's view is right and Hand in works. This is the fallback the quick-start documents, not a bug | NOT RUN — the student device is on v1.3.1 (AutoPkg has not moved it); the v1.3.3 pkg goes on it by hand instead |
 | **An open sitting is untouched.** One ordinary sitting end to end (join, answer every type, drawings, hand in) with nothing closed | Unchanged by this slice: no `sitting closed` line anywhere, peek still works (ask for a look mid-test), hand-in and the handed-in notice as always | NOT RUN (covered by the row CS sitting only up to the close) |
+
+## Text autosave + deferred spool (v1.3.4, 2026-09-16)
+
+`docs/client-autosave-and-deferred-spool-design.md` slices 1–2. Essay,
+short_text, table cells and the E12 inline outline now post 5 s after the
+last keystroke (30 s ceiling if the student never pauses), so the Monitor
+sees answers without waiting for a blur and a crash loses at most 30
+seconds of typing. Separately, the spool no longer drops a 409
+`sitting_closed` write outright — it holds the row and retries it once the
+same attempt resumes through a later sitting, so a Close that lands while
+the Mac is asleep or offline no longer costs the student their last words.
+
+Needs a Debug build via `client/scripts/launch-client.ts` (Terminal, so
+stderr is readable) for most rows; two rows need a **real AAC session**
+(marked below) — everything else runs under
+`SECURE_TEST_SIMULATE_LOCKDOWN`. Fixture: `Row S-f hand-run 2026-09-09` or
+`Client rows hand-run 2026-09-08` on the origin — re-run the one-day
+teacher-row script for the student first.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Idle autosave lands without a blur.** Join, click into an essay, type a sentence, then stop typing and do nothing else (don't click away) | Within ~5 s the teacher's Monitor / results page shows the answer and marks the item answered, with no `change` event on the client (no click-away) | NOT RUN |
+| **The 30 s ceiling saves a non-stop typist.** Type continuously into an essay for a full minute without pausing 5 s and without leaving the field | At least one save lands on the teacher's side partway through the minute (the ceiling firing), not just at the end | NOT RUN |
+| **Force-quit mid-essay loses at most the ceiling window (Debug).** Type into an essay, wait for at least one autosave to land, keep typing for under 30 s, then force-quit with `SECURE_TEST_DEBUG_CRASH=1` (Session menu "Trigger Debug Crash") | On the next launch, Resume shows the text up to the last autosave — at most ~30 s of the most recent typing is missing, nothing older | NOT RUN |
+| **Word counter and answered mark are unchanged.** Type into an essay and short-text field, letting autosave fire | The word counter updates on every keystroke as before; the answered mark behaves exactly as it does on a `change` post today (non-empty text marks answered, no new rule) | NOT RUN |
+| **An unchanged field posts nothing.** Click into an essay that already has saved text, then click out without typing anything (or type and delete back to the exact same text) and wait past 5 s | No new POST for that item — the teacher's "last activity" timestamp does not move and the server log shows nothing for it | NOT RUN |
+| **short_text autosaves and keeps its math preview.** Type a `$…$` short-text answer and pause 5 s without leaving the field | The formula preview renders as it does today, and the answer autosaves the same as essay | NOT RUN |
+| **A table cell autosaves independently.** Open a table item, type into one cell, pause 5 s without leaving the cell or the grid | That cell's value reaches the server (whole-grid post as `change` does); a second cell left untouched does not post | NOT RUN |
+| **The E12 inline outline autosaves.** On a per-student stimulus with the inline outline field, type a line and pause 5 s | The outline text autosaves the same as essay, and a later `change` (leaving the field) still posts once with no duplicate | NOT RUN |
+| **A Cmd-Tab-away field still saves on page turn.** Type into an essay on a paged assessment, Cmd-Tab to another app before the 5 s timer fires (leaving the field unblurred), then Cmd-Tab back and turn the page (Next) | The dirty text is flushed and saved when the page turns, even though the field never lost focus in the browser sense | NOT RUN |
+| **Close mid-essay while offline defers the write (real AAC session).** Turn the Mac's network OFF, then have the teacher press Close session while the student is mid-essay | The client's own "Your teacher ended the test session." sheet appears (from the poll once network returns, or the write's own 409); the student's most recent unsent words are NOT yet on the teacher's page | NOT RUN — needs a real session |
+| **A deferred write lands on the next Resume (real AAC session).** Continuing from the row above: open a new session for the same student and Resume | The essay shows the deferred text restored, and it now appears on the teacher's page (the deferred flush ran before the page rendered) | NOT RUN — needs a real session |
+| **A hand-in before Resume wins over the deferred row.** Repeat the offline-Close scenario (simulated lockdown is fine here), then have the teacher Hand in the attempt from the Monitor BEFORE the student resumes; then let the student resume | The resume drops the deferred row silently (no error, no sheet about lost text); the teacher's already-handed-in copy stands unchanged | NOT RUN |
+| **A v1.3.3 spool migrates cleanly.** Using a spool database left over from a v1.3.2/v1.3.3 install (no `deferred_at` column), launch the v1.3.4 client | No crash and no error line at launch (the migration is silent — a `PRAGMA table_info` check then one `ALTER TABLE`); the app behaves normally afterward and any rows already in the spool still flush | NOT RUN |

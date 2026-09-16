@@ -1,10 +1,12 @@
 # Text autosave + deferred spool — design note (drafted 2026-09-16, for client v1.3.4, post-pilot)
 
 **Status:** DECIDED 2026-09-16 (James: D-1 table cells in this slice,
-D-2 30 s ceiling, offline autosave posts), nothing built. Roadmap row CS-2's client follow-up
+D-2 30 s ceiling, offline autosave posts); **slices 1 + 2 BUILT 2026-09-16**,
+slice 3 rows written, NOT RUN. Roadmap row CS-2's client follow-up
 (`docs/roadmap-2026-09.md`). Ships as **v1.3.4** together with the M-1
-client half already on `main` (`dd8f32d`). Not before the pilot's first
-week has run on v1.3.3.
+client half already on `main` (`dd8f32d`). Version bumped to 1.3.4;
+**release HELD until after Thu 2026-09-17 14:00 PT at the earliest**, so
+it does not land during the pilot's first day (James).
 
 ## Problem
 
@@ -152,3 +154,32 @@ ceiling; offline autosave posts).
 - 2026-09-16: drafted and decided the same day (James). Nothing built.
   Build after the pilot's first week on v1.3.3; slices 1 + 2 can run in
   parallel (disjoint files: page JS vs spool + host).
+- 2026-09-16: **slices 1 + 2 BUILT** (`6cdcf42`, `550836e`), one commit
+  each, in parallel on disjoint files. Slice 1 — `textAutosave(el, send)`
+  in `AssessmentPage.swift`: `input` marks dirty and (re)arms a 5 s idle
+  timer plus a 30 s ceiling timer; either flushes only when dirty and the
+  text differs from the last posted value; `change` still cancels and
+  posts as before; wired to short_text, essay, every table cell and the
+  E12 inline outline; `__secureTestFlushInput` now flushes dirty text too.
+  Slice 2 — `ResponseSpool` gains `deferred_at` (additive migration on
+  open, idempotent against a v1.3.3 spool); a 409 `sitting_closed` holds
+  the row instead of dropping it; `flushDeferred` retries held rows once
+  at the top of the post-join fetch, before the bundle renders, so the
+  restored field shows the student's own last words; a later write or
+  withdrawal replaces a held row; `attempt_submitted` / `time_expired` on
+  retry still drops it; a second `sitting_closed` on retry keeps it held
+  without re-raising the client's own session-ended handling. Tests:
+  swift 658 → 671; both Debug and Release xcodebuilds green.
+  Three recorded readings (from the commit messages): a math-keypad
+  insertion bypasses `oninput`, so at most one redundant autosave can
+  follow a keypad tap plus typing; `FlushResult.remaining` excludes held
+  rows, so the submit guard ignores them (a submit in that state is
+  itself refused with `sitting_closed`, and a successful hand-in clears
+  them); the retry on a held row never raises `sittingClosed` again,
+  since on retry the row may belong to an older attempt than the one the
+  student just rejoined through.
+  Slice 3 — `client/MANUAL-CHECKS.md` "Text autosave + deferred spool
+  (v1.3.4, 2026-09-16)" rows written, NOT RUN; `MARKETING_VERSION` bumped
+  1.3.3 → 1.3.4 in `SecureTest.xcodeproj/project.pbxproj`. Release HELD
+  until after Thu 2026-09-17 14:00 PT at the earliest (James) so it does
+  not land during the pilot's first day.
