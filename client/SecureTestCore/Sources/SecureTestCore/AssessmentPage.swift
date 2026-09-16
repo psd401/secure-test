@@ -559,6 +559,114 @@ public enum AssessmentPage {
         markUnanswered(itemId);
       }
 
+      // Text autosave (docs/client-autosave-and-deferred-spool-design.md,
+      // D-1..D-4). Typed text used to reach the server only on `change` —
+      // blur, a page turn, Finish — so a student who wrote for forty minutes
+      // without clicking anywhere else had NOTHING saved. Every free-text
+      // field now also posts while they type: five seconds after the last
+      // keystroke, and in any case within thirty of the first unsaved one, so
+      // someone who never pauses is still saved twice a minute.
+      //
+      // The post path is unchanged (D-3): this calls the SAME send() the
+      // field's own `change` handler calls, so the enqueue -> flush -> spool
+      // path, the answered mark and the offline relabel are untouched. Offline
+      // it posts exactly as online does and the host relabels it, as it does
+      // the `change` post today.
+      var TEXT_AUTOSAVE_IDLE_MS = 5000;
+      var TEXT_AUTOSAVE_CEILING_MS = 30000;
+
+      // The flush hook of every text field on the page, so the host's
+      // pre-teardown flush can save a field that is dirty but NOT focused (a
+      // Cmd-Tab away mid-timer). A focused one is covered by the blur that
+      // fires its `change`. Each hook is a no-op unless that field is dirty.
+      var TEXT_FLUSHES = [];
+      function flushAllText() {
+        for (var t = 0; t < TEXT_FLUSHES.length; t++) {
+          try {
+            TEXT_FLUSHES[t]();
+          } catch (e) {
+            console.log('text flush failed: ' + (e && e.message));
+          }
+        }
+      }
+
+      // `el` is the input or textarea; `send` posts its current value exactly
+      // as that field's `change` handler does. Call it AFTER the field's own
+      // oninput / onchange are assigned (both are chained, not replaced) and
+      // AFTER any P-1 restore: the restored text is the baseline, so a field
+      // nobody touched never posts. Guarded on the timer API, as the drawing
+      // auto-save is — a runtime without timers simply keeps today's
+      // post-on-change behaviour.
+      function textAutosave(el, send) {
+        var idleTimer = null;
+        var ceilingTimer = null;
+        var dirty = false;
+
+        function current() {
+          return (el.value === undefined || el.value === null) ? '' : String(el.value);
+        }
+
+        // D-3: an autosave whose text equals the last posted text is skipped —
+        // a no-op save would move the student's "last activity" without a
+        // change behind it.
+        var lastPosted = current();
+
+        function cancelTimers() {
+          if (typeof clearTimeout === 'function') {
+            if (idleTimer !== null) window.clearTimeout(idleTimer);
+            if (ceilingTimer !== null) window.clearTimeout(ceilingTimer);
+          }
+          idleTimer = null;
+          ceilingTimer = null;
+        }
+
+        function flushNow() {
+          cancelTimers();
+          if (!dirty) return;
+          dirty = false;
+          if (current() === lastPosted) return;
+          lastPosted = current();
+          send();
+        }
+
+        var priorInput = el.oninput;
+        el.oninput = function (event) {
+          if (typeof priorInput === 'function') priorInput.call(el, event);
+          dirty = true;
+          if (typeof setTimeout !== 'function') return;
+          // The idle timer restarts from zero on every keystroke; the ceiling
+          // does not — it runs from the first unsaved one, and is restarted
+          // only after a flush.
+          if (idleTimer !== null && typeof clearTimeout === 'function') {
+            window.clearTimeout(idleTimer);
+          }
+          idleTimer = window.setTimeout(function () {
+            idleTimer = null;
+            flushNow();
+          }, TEXT_AUTOSAVE_IDLE_MS);
+          if (ceilingTimer === null) {
+            ceilingTimer = window.setTimeout(function () {
+              ceilingTimer = null;
+              flushNow();
+            }, TEXT_AUTOSAVE_CEILING_MS);
+          }
+        };
+
+        // `change` still posts at once — blur beats the timer — and takes the
+        // pending timers with it, since the value it posts is the one they
+        // would have sent.
+        var priorChange = el.onchange;
+        el.onchange = function (event) {
+          cancelTimers();
+          dirty = false;
+          lastPosted = current();
+          if (typeof priorChange === 'function') priorChange.call(el, event);
+        };
+
+        TEXT_FLUSHES.push(flushNow);
+        el.__flushText = flushNow;
+      }
+
       // E6 (decision James 2026-09-02): `**bold**` and `_italic_` in authored
       // text, by the same rules as the design tool's renderItemContent —
       // never inside `$…$` / `$$…$$` (a `$x_1$` subscript stays math), an
@@ -1163,9 +1271,10 @@ public enum AssessmentPage {
         // covers every field the student writes prose into, not just the
         // essay — same per-student gate as essayField below.
         input.spellcheck = !!ACCOMMODATIONS.spell_check;
-        input.onchange = function () {
+        function sendShortText() {
           post(item.id, { type: 'short_text', text: input.value });
-        };
+        }
+        input.onchange = sendShortText;
         wrap.appendChild(input);
         // The hint only where the question itself carries math or a formula.
         if (/\$/.test(item.stem || '')) {
@@ -1195,6 +1304,8 @@ public enum AssessmentPage {
           input.value = savedShort.text;
           renderFormulaPreview(preview, input.value);
         }
+        // After the restore, so the saved text is the baseline (D-3).
+        textAutosave(input, sendShortText);
         return wrap;
       }
 
@@ -1278,14 +1389,18 @@ public enum AssessmentPage {
         }
 
         area.oninput = refresh;
-        area.onchange = function () {
+        function sendEssay() {
           post(item.id, { type: 'essay', text: area.value });
-        };
+        }
+        area.onchange = sendEssay;
         // P-1: before the counter runs, so a restored response shows its own
         // word count rather than 0 / 400.
         var savedEssay = savedFor(item);
         if (savedEssay && typeof savedEssay.text === 'string') area.value = savedEssay.text;
         refresh();
+        // After the restore, so the saved text is the baseline (D-3). The
+        // word counter's own `oninput` is chained, not replaced.
+        textAutosave(area, sendEssay);
 
         if (item.rubric) wrap.appendChild(rubricNode(item.rubric));
         return wrap;
@@ -2575,6 +2690,9 @@ public enum AssessmentPage {
             var colName = stripEmphasis(c.label || '').trim() || ('Column ' + (ci + 1));
             input.setAttribute('aria-label', rowName + ', ' + colName);
             input.onchange = emit;
+            // Autosave per cell; the send is the whole grid, as `change` is.
+            // The cell's value was restored above, so it is the baseline.
+            textAutosave(input, emit);
             inputs.push({ rowId: r.id, colId: c.id, input: input });
             td.appendChild(input);
             tr.appendChild(td);
@@ -2618,6 +2736,9 @@ public enum AssessmentPage {
       window.__secureTestFlushInput = function () {
         var a = document.activeElement;
         if (a && typeof a.blur === 'function') a.blur();
+        // Autosave (D-3): the blur above posts the FOCUSED field through its
+        // `change`; this saves a field that is dirty with focus elsewhere.
+        flushAllText();
         flushAllDrawings();
         return true;
       };
@@ -2938,10 +3059,13 @@ public enum AssessmentPage {
           ta.value = typeof set.inline_text === 'string' ? set.inline_text : '';
           var status = document.createElement('p');
           status.className = 'outline-status';
-          ta.onchange = function () {
+          function sendOutline() {
             post(set.inline_item_id, { type: 'essay', text: ta.value });
             status.textContent = OFFLINE_MODE ? 'Kept on this Mac (offline mode).' : 'Saved.';
-          };
+          }
+          ta.onchange = sendOutline;
+          // After the prefill above, so the saved outline is the baseline.
+          textAutosave(ta, sendOutline);
           area.appendChild(ta);
           area.appendChild(status);
           block.appendChild(area);
