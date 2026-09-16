@@ -678,3 +678,15 @@ the import half was already done — `extractCore.ts:833` proposes
 it back. Design-tool 1735 tests (with the test DB), typecheck clean. Hand-run
 row 180 (`docs/design-tool-manual-checks.md`) NOT RUN. Option (a) — the
 Beside/Above toggle on `own_page` sets — is the client slice of the same day.
+
+**C-2 refined by M-1 2026-09-16** (`docs/roadmap-2026-09.md`, option (b),
+James): a single `$` followed by a digit now opens math when a matching single
+`$` exists AND the run between the delimiters carries a math marker — a LaTeX
+command (`\` plus a letter), `^`, or `_` — and stays a dollar sign otherwise.
+`$57,600 to $30,000` and `$5x$` are still prose; `$6 \times 7$`,
+`$3.5 \times 10^{4}$`, `$45\degree$` and `$2^3$` render as math again. One
+`digitOpenerHasMathMarker` helper in each of the three tokenizers
+(`lib/math/renderLatex.ts`, `lib/items/renderItemContent.ts`, the client's
+math pass in `AssessmentPage.swift`); `$$` openers, `\$` escapes and the
+`${…}$` / `$ …$` hatches are unchanged, and the importer prompt keeps the
+`\$57,600` money instruction. Tests: design-tool 1869, client 647.

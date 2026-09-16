@@ -112,9 +112,12 @@ describe("renderItemContent — emphasis (E6)", () => {
   });
 });
 
-// C-2 (docs/multi-source-stimulus-design.md): the parallel copy of the math
-// tokenizer takes the same rule — a single `$` before a digit is not math.
-describe("renderItemContent — C-2 dollar amounts are not math", () => {
+// C-2 (docs/multi-source-stimulus-design.md) as refined by M-1
+// (docs/roadmap-2026-09.md, 2026-09-16): the parallel copy of the math
+// tokenizer takes the same rule — a single `$` before a digit opens math only
+// when a matching single `$` exists AND the run carries a math marker
+// (`\` + letter, `^`, `_`).
+describe("renderItemContent — C-2 / M-1 dollar amounts are not math", () => {
   test("the pilot shape renders as literal text with every $ present", () => {
     const out = renderItemContent(
       "Costs rose from $57,600 to between $30,000–$120,000 a year.",
@@ -150,5 +153,32 @@ describe("renderItemContent — C-2 dollar amounts are not math", () => {
     const out = renderItemContent("\\$5 and $x$", new Map());
     expect(out).toContain("$5 and ");
     expect(out).toContain('class="katex"');
+  });
+
+  // M-1: a digit opener with a math marker in the run IS math — the same table
+  // as render-latex.test.ts, so the two renderers stay behaviourally identical.
+  test.each([
+    ["$6 \\times 7$", "a LaTeX command"],
+    ["$3.5 \\times 10^{4}$", "a command and a superscript"],
+    ["$45\\degree$", "a K-12 macro"],
+    ["$2^3$", "a bare superscript"],
+  ])("%s renders math (%s in the run)", (input) => {
+    const out = renderItemContent(input, new Map());
+    expect(out).toContain('class="katex"');
+    expect(out).not.toContain("#cc0000");
+  });
+
+  test("$5 dollars and $7 more — a close but no marker — stays text", () => {
+    const out = renderItemContent("$5 dollars and $7 more", new Map());
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe("$5 dollars and $7 more");
+  });
+
+  test("$ 5x+3$ (the leading-space escape hatch) still renders math", () => {
+    expect(renderItemContent("$ 5x+3$", new Map())).toContain('class="katex"');
+  });
+
+  test("a non-digit opener is untouched by the rule: $x_1$ is math", () => {
+    expect(renderItemContent("$x_1$", new Map())).toContain('class="katex"');
   });
 });

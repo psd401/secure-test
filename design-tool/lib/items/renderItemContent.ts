@@ -64,6 +64,24 @@ interface TextToken {
 
 type Token = MathToken | TextToken;
 
+// C-2 (docs/multi-source-stimulus-design.md) as refined by M-1
+// (docs/roadmap-2026-09.md, 2026-09-16) — the same rule as
+// lib/math/renderLatex.ts, kept behaviourally identical: a single `$` whose
+// next character is a digit opens math ONLY when a matching single `$` exists
+// AND the run between the delimiters carries a math marker — a LaTeX command
+// (`\` plus a letter), `^`, or `_`. Otherwise the `$` is a dollar sign and
+// stays text, so "$57,600 to $30,000" is prose while `$6 \times 7$` and
+// `$3.5 \times 10^{4}$` are math. `$$` and `\$` are unchanged.
+const MATH_MARKER_RE = /\\[a-zA-Z]|[\^_]/;
+
+function digitOpenerHasMathMarker(
+  input: string,
+  openAt: number,
+  closeAt: number,
+): boolean {
+  return MATH_MARKER_RE.test(input.slice(openAt + 1, closeAt));
+}
+
 // Math tokenizer (copied logic from renderLatex.ts) — pulled in here so
 // the whole content pipeline can be one pass without going through the
 // public renderLatex API.
@@ -88,15 +106,9 @@ function tokenizeMath(input: string): Token[] {
     }
     if (ch === "$") {
       const isDisplay = input[cursor + 1] === "$";
-      // C-2 (docs/multi-source-stimulus-design.md): a single `$` whose next
-      // character is a digit is a dollar amount, never a math opener — prose
-      // like "$57,600 to $30,000" was rendering the run between two amounts
-      // as math. `$$` display openers and `\$` are unchanged. An author who
-      // wants math starting with a digit writes `${5x+3}$` or `$ 5x+3$`.
-      if (!isDisplay && input[cursor + 1] !== undefined && input[cursor + 1]! >= "0" && input[cursor + 1]! <= "9") {
-        cursor += 1;
-        continue;
-      }
+      const next = input[cursor + 1];
+      const digitOpener =
+        !isDisplay && next !== undefined && next >= "0" && next <= "9";
       const openLen = isDisplay ? 2 : 1;
       let scan = cursor + openLen;
       let closeAt = -1;
@@ -120,6 +132,12 @@ function tokenizeMath(input: string): Token[] {
         scan += 1;
       }
       if (closeAt === -1) {
+        cursor += 1;
+        continue;
+      }
+      // C-2 / M-1: a digit opener needs a math marker inside the run, or the
+      // `$` is a dollar sign (see digitOpenerHasMathMarker above).
+      if (digitOpener && !digitOpenerHasMathMarker(input, cursor, closeAt)) {
         cursor += 1;
         continue;
       }

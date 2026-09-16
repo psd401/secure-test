@@ -283,6 +283,19 @@ the student device (still v1.3.1) gets `SecureTest-1.3.3.pkg` by hand.
   otherwise text (passes both `$57,600 to $30,000` and `$6 \times 7$`);
   both renderers + the importer's `\$` writer. James's decision; (b) is S
   in both renderers with the existing tokenizer tests.
+  **BUILT 2026-09-16 (option b):** in all three tokenizers
+  (`design-tool/lib/math/renderLatex.ts`,
+  `design-tool/lib/items/renderItemContent.ts`, the client's math pass in
+  `AssessmentPage.swift`) a single `$` followed by a digit now opens math only
+  when a matching single `$` exists AND the run between the delimiters carries
+  a math marker — a LaTeX command (`\` plus a letter), `^`, or `_` — via one
+  `digitOpenerHasMathMarker` helper per file, so `$57,600 to $30,000` and
+  `$5x$` stay text while `$6 \times 7$`, `$3.5 \times 10^{4}$`, `$45\degree$`
+  and `$2^3$` are math (`$$` openers, `\$` escapes and the `${…}$` / `$ …$`
+  hatches unchanged); the importer prompt's second money line was reworded to
+  keep `\$57,600` while allowing digit-opening math. Tests: design-tool 1869
+  (was 1855), client 647 (was 645), typecheck clean, Debug `xcodebuild` green.
+  The client half reaches the fleet with the next client release.
 
 ### 2026-09-15 — client end-state audit, and security slice 1
 

@@ -37,6 +37,24 @@ function renderMath(tex: string, displayMode: boolean): string {
   });
 }
 
+// C-2 (docs/multi-source-stimulus-design.md) as refined by M-1
+// (docs/roadmap-2026-09.md, 2026-09-16): a single `$` whose next character is
+// a digit opens math ONLY when a matching single `$` exists AND the run
+// between the delimiters carries a math marker — a LaTeX command (`\` plus a
+// letter), `^`, or `_`. Otherwise the `$` is a dollar sign and stays text, so
+// prose like "$57,600 to $30,000" never renders as math, while `$6 \times 7$`
+// and `$3.5 \times 10^{4}$` (the shape the importer prompt asks the model to
+// write) do. `$$` display openers and `\$` escapes are unchanged.
+const MATH_MARKER_RE = /\\[a-zA-Z]|[\^_]/;
+
+function digitOpenerHasMathMarker(
+  input: string,
+  openAt: number,
+  closeAt: number,
+): boolean {
+  return MATH_MARKER_RE.test(input.slice(openAt + 1, closeAt));
+}
+
 interface Token {
   kind: "text" | "math";
   value: string;
@@ -71,15 +89,9 @@ function tokenize(input: string): Token[] {
     }
     if (ch === "$") {
       const isDisplay = input[cursor + 1] === "$";
-      // C-2 (docs/multi-source-stimulus-design.md): a single `$` whose next
-      // character is a digit is a dollar amount, never a math opener — prose
-      // like "$57,600 to $30,000" was rendering the run between two amounts
-      // as math. `$$` display openers and `\$` are unchanged. An author who
-      // wants math starting with a digit writes `${5x+3}$` or `$ 5x+3$`.
-      if (!isDisplay && input[cursor + 1] !== undefined && input[cursor + 1]! >= "0" && input[cursor + 1]! <= "9") {
-        cursor += 1;
-        continue;
-      }
+      const next = input[cursor + 1];
+      const digitOpener =
+        !isDisplay && next !== undefined && next >= "0" && next <= "9";
       const openLen = isDisplay ? 2 : 1;
       // Find the matching close, skipping backslash-escaped dollars.
       let scan = cursor + openLen;
@@ -105,6 +117,12 @@ function tokenize(input: string): Token[] {
       }
       if (closeAt === -1) {
         // Unterminated delimiter — leave the rest as text.
+        cursor += 1;
+        continue;
+      }
+      // C-2 / M-1: a digit opener needs a math marker inside the run, or the
+      // `$` is a dollar sign (see digitOpenerHasMathMarker above).
+      if (digitOpener && !digitOpenerHasMathMarker(input, cursor, closeAt)) {
         cursor += 1;
         continue;
       }

@@ -55,9 +55,11 @@ describe("renderLatex — error handling", () => {
 
 describe("renderLatex — K-12 macros", () => {
   test("\\degree renders as the degree symbol", () => {
-    // C-2: `$45\degree$` opens with a digit, so it is now literal text; the
-    // escape hatch `${...}$` is how an author writes math starting with one.
-    const out = renderLatex("${45\\degree}$");
+    // C-2 / M-1: `$45\degree$` opens with a digit, but the run carries a LaTeX
+    // command, so it is math again (M-1, docs/roadmap-2026-09.md, 2026-09-16 —
+    // under the unrefined C-2 rule this was literal text and the test used the
+    // `${...}$` escape hatch).
+    const out = renderLatex("$45\\degree$");
     expect(out).toContain("class=\"katex\"");
     // The output HTML contains the circ glyph; we just check it doesn't
     // fall back to an error span.
@@ -119,9 +121,12 @@ describe("renderLatex — mixed content ordering", () => {
   });
 });
 
-// C-2 (docs/multi-source-stimulus-design.md): a single `$` immediately before
-// a digit is a dollar amount, never a math opener.
-describe("renderLatex — C-2 dollar amounts are not math", () => {
+// C-2 (docs/multi-source-stimulus-design.md) as refined by M-1
+// (docs/roadmap-2026-09.md, 2026-09-16): a single `$` immediately before a
+// digit opens math ONLY when a matching single `$` exists AND the run between
+// them carries a math marker (`\` + letter, `^`, `_`); otherwise it is a
+// dollar sign and stays text.
+describe("renderLatex — C-2 / M-1 dollar amounts are not math", () => {
   test("the pilot shape renders as literal text with every $ present", () => {
     const out = renderLatex(
       "Costs rose from $57,600 to between $30,000–$120,000 a year.",
@@ -156,5 +161,31 @@ describe("renderLatex — C-2 dollar amounts are not math", () => {
     const out = renderLatex("\\$5 and $x$");
     expect(out).toContain("$5 and ");
     expect(out).toContain('class="katex"');
+  });
+
+  // M-1: a digit opener with a math marker in the run IS math.
+  test.each([
+    ["$6 \\times 7$", "a LaTeX command"],
+    ["$3.5 \\times 10^{4}$", "a command and a superscript"],
+    ["$45\\degree$", "a K-12 macro"],
+    ["$2^3$", "a bare superscript"],
+  ])("%s renders math (%s in the run)", (input) => {
+    const out = renderLatex(input);
+    expect(out).toContain('class="katex"');
+    expect(out).not.toContain("#cc0000");
+  });
+
+  test("$5 dollars and $7 more — a close but no marker — stays text", () => {
+    const out = renderLatex("$5 dollars and $7 more");
+    expect(out).not.toContain('class="katex"');
+    expect(out).toBe("$5 dollars and $7 more");
+  });
+
+  test("$ 5x+3$ (the leading-space escape hatch) still renders math", () => {
+    expect(renderLatex("$ 5x+3$")).toContain('class="katex"');
+  });
+
+  test("a non-digit opener is untouched by the rule: $x_1$ is math", () => {
+    expect(renderLatex("$x_1$")).toContain('class="katex"');
   });
 });

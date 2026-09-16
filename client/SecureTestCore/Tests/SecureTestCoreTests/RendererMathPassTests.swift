@@ -7,6 +7,13 @@ import XCTest
 /// client's math pass is now the renderer's own walk over `mathSegments`
 /// rather than KaTeX's auto-render.
 ///
+/// M-1 (James, 2026-09-16, `docs/roadmap-2026-09.md`) refines that rule: a
+/// digit opener DOES open math when a matching single `$` exists AND the run
+/// between the delimiters carries a math marker — a LaTeX command (`\` plus a
+/// letter), `^`, or `_` — so `$6 \times 7$` and `$3.5 \times 10^{4}$` (the
+/// shape the importer prompt asks for) are math while the money prose above is
+/// still text. Same rule in all three implementations.
+///
 /// What the JavaScriptCore harness can prove and what it cannot: KaTeX is NOT
 /// loaded there, so the closing math pass (guarded on `typeof katex`) never
 /// runs and no `.katex` element can be observed either way. What IS observable
@@ -40,6 +47,24 @@ final class RendererMathPassTests: XCTestCase {
           "choices": [ { "id": "a", "text": "a" } ] },
         { "type": "multiple_choice_single", "id": "q7",
           "stem": "Fee \\\\$57,600 flat, no math.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q8",
+          "stem": "Solve $6 \\\\times **7**$ now.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q9",
+          "stem": "Use $3.5 \\\\times 10^{4}$ here.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q10",
+          "stem": "Angle $45\\\\degree$ here.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q11",
+          "stem": "Power $2^3$ here.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q12",
+          "stem": "$5 dollars and $7 more.",
+          "choices": [ { "id": "a", "text": "a" } ] },
+        { "type": "multiple_choice_single", "id": "q13",
+          "stem": "Fee $ 5x+3$ here.",
           "choices": [ { "id": "a", "text": "a" } ] }
       ],
       "item_sets": [], "assets": {}, "accommodations": {}
@@ -157,6 +182,33 @@ final class RendererMathPassTests: XCTestCase {
         let h = try withKatex()
         XCTAssertEqual(try h.int("__count('.katex', __item(6))"), 0)
         XCTAssertEqual(try h.string("\(stem(6)).textContent"), "Fee $57,600 flat, no math.")
+    }
+
+    // MARK: - M-1: a digit opener with a math marker in the run
+
+    /// The split itself, without the library: `$6 \times **7**$` is ONE math
+    /// segment, so the `**7**` inside it stays literal — the same evidence the
+    /// C-2 tests above use, now for a digit opener that DOES open math.
+    func testADigitOpenerWithALatexCommandIsOneMathSegment() throws {
+        let h = try harness()
+        XCTAssertEqual(try h.int("__count('strong', \(stem(7)))"), 0, "inside math, not folded")
+        XCTAssertEqual(try h.string("\(stem(7)).textContent"), "Solve $6 \\times **7**$ now.")
+    }
+
+    /// End to end with the real library: every shape of the M-1 table.
+    func testTheM1TableWithTheRealLibrary() throws {
+        let h = try withKatex()
+        // Math: a LaTeX command, a command plus a superscript, a K-12 macro,
+        // and a bare superscript — all opening on a digit.
+        XCTAssertEqual(try h.int("__count('.katex', __item(7))"), 1, "$6 \\times **7**$ is math")
+        XCTAssertEqual(try h.int("__count('.katex', __item(8))"), 1, "$3.5 \\times 10^{4}$ is math")
+        XCTAssertEqual(try h.int("__count('.katex', __item(9))"), 1, "$45\\degree$ is math")
+        XCTAssertEqual(try h.int("__count('.katex', __item(10))"), 1, "$2^3$ is math")
+        // Text: a matching close but no marker in the run.
+        XCTAssertEqual(try h.int("__count('.katex', __item(11))"), 0, "no marker, so no math")
+        XCTAssertEqual(try h.string("\(stem(11)).textContent"), "$5 dollars and $7 more.")
+        // The old escape hatch still works — a space means no digit opener.
+        XCTAssertEqual(try h.int("__count('.katex', __item(12))"), 1, "$ 5x+3$ is still math")
     }
 
     /// The pass is ours, not auto-render's, and it is guarded so a page without

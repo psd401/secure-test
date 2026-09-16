@@ -265,10 +265,17 @@ describe("extractor prompt (E1/E2/E4/E7a/E8)", () => {
       /KEEP each \[FIGURE n\] marker, on a line of its own, exactly where that figure is printed/,
     );
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("escape double quotes");
-    // C-2: a `$` directly before a digit is never a math opener, so a dollar
-    // amount is written with a backslash.
+    // C-2 as refined by M-1 (2026-09-16): a dollar amount still carries the
+    // backslash, but math starting with a digit is fine when the run holds a
+    // LaTeX command / `^` / `_`.
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("\\$57,600");
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(
+      "a dollar amount must carry the backslash",
+    );
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(
+      "Math that starts with a digit is fine inside $...$ as long as it contains a LaTeX command, ^ or _",
+    );
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).not.toContain(
       "a $ directly before a digit is never a math delimiter",
     );
   });

@@ -572,6 +572,20 @@ public enum AssessmentPage {
       var BOLD_RE = /\*\*([^*\s](?:[^*\n]*?[^*\s])?)\*\*/g;
       var ITALIC_RE = /(^|[\s(\[{"'\u201c\u2018])_([^_\s](?:[^_\n]*?[^_\s])?)_(?=$|[\s.,;:!?)\]}"'\u201d\u2019])/g;
 
+      // C-2 (2026-09-09) as refined by M-1 (docs/roadmap-2026-09.md,
+      // 2026-09-16), the same rule as the design tool's two renderers: a
+      // single `$` whose next character is a digit opens math ONLY when a
+      // matching single `$` exists AND the run between the delimiters carries
+      // a math marker — a LaTeX command (`\` plus a letter), `^`, or `_`.
+      // Otherwise the `$` is a dollar sign and stays text, so a pilot
+      // stimulus's `$57,600 … $30,000–$120,000` is prose while `$6 \times 7$`
+      // and `$3.5 \times 10^{4}$` are math. `$$` openers and `\$` unchanged.
+      var MATH_MARKER_RE = /\\[a-zA-Z]|[\^_]/;
+
+      function digitOpenerHasMathMarker(text, openAt, closeAt) {
+        return MATH_MARKER_RE.test(text.slice(openAt + 1, closeAt));
+      }
+
       // Math-aware split: [{ math: bool, text }] in order, `\$` kept literal.
       function mathSegments(text) {
         var segs = [], i = 0, start = 0, len = text.length;
@@ -580,16 +594,11 @@ public enum AssessmentPage {
           if (ch === '\\' && text.charAt(i + 1) === '$') { i += 2; continue; }
           if (ch === '$') {
             var display = text.charAt(i + 1) === '$';
-            // C-2 (James, 2026-09-09, docs/multi-source-stimulus-design.md): a
-            // single `$` whose next character is a digit is money, not an
-            // opener — `$57,600 … $30,000` in a pilot stimulus rendered as
-            // math. `$$` display openers and `\$` escapes are unchanged; an
-            // author who wants math starting with a digit writes `${5x+3}$`
-            // or `$ 5x+3$`.
-            if (!display && text.charAt(i + 1) >= '0' && text.charAt(i + 1) <= '9') {
-              i += 1;
-              continue;
-            }
+            var nextCh = text.charAt(i + 1);
+            // C-2 / M-1 (see digitOpenerHasMathMarker above): a digit opener
+            // is a dollar sign unless the run up to its matching `$` carries a
+            // LaTeX command, `^` or `_`.
+            var digitOpener = !display && nextCh >= '0' && nextCh <= '9';
             var open = display ? 2 : 1;
             var scan = i + open, close = -1;
             while (scan < len) {
@@ -604,6 +613,7 @@ public enum AssessmentPage {
               scan += 1;
             }
             if (close === -1) { i += 1; continue; }
+            if (digitOpener && !digitOpenerHasMathMarker(text, i, close)) { i += 1; continue; }
             if (i > start) segs.push({ math: false, text: text.slice(start, i) });
             segs.push({ math: true, text: text.slice(i, close + open) });
             i = close + open; start = i;
@@ -3305,8 +3315,10 @@ public enum AssessmentPage {
       //
       // C-2 (2026-09-09, docs/multi-source-stimulus-design.md): the walk below
       // is our own, not KaTeX's auto-render. Auto-render splits with a plain
-      // delimiter search — no hook for the "a `$` before a digit is money"
-      // rule, and it opens math on a backslash-escaped `\$` too — so it is no
+      // delimiter search — no hook for the digit-opener rule (C-2 as refined
+      // by M-1: a `$` before a digit opens math only when the run carries a
+      // LaTeX command, `^` or `_`), and it opens math on a
+      // backslash-escaped `\$` too — so it is no
       // longer inlined. This pass uses `mathSegments`, the one tokenizer the
       // client already shares with the design tool's renderers, and unescapes
       // `\$` to `$` in text exactly as `renderLatex`'s pushText does.
