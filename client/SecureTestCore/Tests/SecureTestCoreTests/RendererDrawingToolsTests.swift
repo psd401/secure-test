@@ -390,4 +390,70 @@ final class RendererDrawingToolsTests: XCTestCase {
             AssessmentPage.itemStyles.contains("background: var(--canvas-paper);")
         )
     }
+
+    // MARK: - roving tabindex (roadmap 4b-f, v1.3.4)
+
+    private func tabStops(_ h: RendererHarness) throws -> [String] {
+        let json = try XCTUnwrap(h.string("""
+        JSON.stringify(__all('button', \(tools)).map(function (b) { return b.getAttribute('tabindex'); }))
+        """))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String])
+    }
+
+    private func arrow(_ h: RendererHarness, _ key: String) throws {
+        try h.eval("\(tools).onkeydown({ key: '\(key)', preventDefault: function () { window.__prevented = true; } });")
+    }
+
+    private func focusedLabel(_ h: RendererHarness) throws -> String? {
+        try h.string("document.activeElement ? document.activeElement.textContent : null")
+    }
+
+    /// Like the math keypad (D-3.1): ONE Tab stop for the strip, arrows move
+    /// it. Ten Tab stops between the stem and the canvas would be a real cost
+    /// for a keyboard-only student.
+    func testTheToolbarIsOneTabStopAndArrowsMoveIt() throws {
+        let h = try axesHarness()
+        var expected = Array(repeating: "-1", count: 10)
+        expected[0] = "0"
+        XCTAssertEqual(try tabStops(h), expected, "Pen starts as the strip's one stop")
+
+        try h.eval("__focused = null; window.__prevented = false;")
+        try arrow(h, "ArrowRight")
+        expected[0] = "-1"; expected[1] = "0"
+        XCTAssertEqual(try tabStops(h), expected)
+        XCTAssertEqual(try focusedLabel(h), "Eraser")
+        XCTAssertTrue(try h.bool("window.__prevented === true"), "the arrow must not also scroll the page")
+
+        try arrow(h, "ArrowLeft"); try arrow(h, "ArrowLeft")
+        XCTAssertEqual(try focusedLabel(h), "Green", "Left from Pen wraps past the disabled Undo to the last enabled button")
+        try arrow(h, "Home")
+        XCTAssertEqual(try focusedLabel(h), "Pen")
+        try arrow(h, "End")
+        XCTAssertEqual(try focusedLabel(h), "Green", "End skips Undo while it is disabled")
+    }
+
+    /// A disabled button is never a stop: the colours under the eraser, Undo
+    /// before a stroke. A button that becomes disabled under the stop hands
+    /// it on.
+    func testDisabledButtonsAreSkippedAndUndoJoinsOnceEnabled() throws {
+        let h = try axesHarness()
+        try press(h, "Eraser")
+        var expected = Array(repeating: "-1", count: 10)
+        expected[1] = "0"
+        XCTAssertEqual(try tabStops(h), expected, "a click makes the button the stop")
+        try arrow(h, "ArrowRight"); try arrow(h, "ArrowRight"); try arrow(h, "ArrowRight")
+        XCTAssertEqual(try focusedLabel(h), "Thick")
+        try arrow(h, "ArrowRight")
+        XCTAssertEqual(try focusedLabel(h), "Pen", "the four disabled colours and the disabled Undo are skipped, wrapping to Pen")
+
+        try press(h, "Pen")
+        try draw(h)
+        XCTAssertFalse(try h.bool("__all('button', \(tools))[9].disabled"))
+        try arrow(h, "ArrowLeft")
+        XCTAssertEqual(try focusedLabel(h), "Undo", "Undo is a stop once a stroke exists")
+        try press(h, "Undo")
+        XCTAssertTrue(try h.bool("__all('button', \(tools))[9].disabled"))
+        XCTAssertEqual(try tabStops(h)[9], "-1", "the stop moves off Undo as it disables itself")
+        XCTAssertEqual(try tabStops(h)[0], "0")
+    }
 }

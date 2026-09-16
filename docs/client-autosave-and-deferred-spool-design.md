@@ -183,3 +183,13 @@ ceiling; offline autosave posts).
   1.3.3 → 1.3.4 in `SecureTest.xcodeproj/project.pbxproj`. Release HELD
   until after Thu 2026-09-17 14:00 PT at the earliest (James) so it does
   not land during the pilot's first day.
+- 2026-09-16 (later): three small adds rolled into v1.3.4 (James): the math
+  keypad tells the autosave what it posted (`el.__notePosted`), so a pending
+  idle timer from typing before a key tap no longer re-posts the same text
+  (the reading recorded above is closed); the drawing toolbar is on the
+  same roving tabindex as the keypad (roadmap 4b-f — one Tab stop, arrows
+  wrap, disabled colours / Undo skipped, a click makes the button the
+  stop); T-3 (1-minute notice after hiding the banner) gets a verify-only
+  row with a Terminal launch. Quick-start "looks wrong" bullets now say
+  autosave is v1.3.4+. Tests: swift 671 → 674, both xcodebuilds green.
+  Rows in `client/MANUAL-CHECKS.md` under the v1.3.4 section, NOT RUN.

@@ -479,4 +479,21 @@ final class RendererMathKeysTests: XCTestCase {
             XCTAssertEqual(result?.toString(), "ok", "\(tex) must render")
         }
     }
+
+    /// v1.3.4 (autosave, roadmap 4b-f): a key writes the field and posts on its
+    /// own, firing neither `input` nor `change` — so it tells the autosave
+    /// what it posted. Otherwise a pending idle timer from the typing before
+    /// the tap would post the same text a second time.
+    func testAKeyPressTakesOverTheAutosaveBaseline() throws {
+        let h = try harness()
+        try h.eval("__field(0).value = 'a'; __field(0).oninput();")
+        XCTAssertEqual(try h.postedMessages().count, 0, "typing alone waits for the idle timer")
+        try press(h, "times")
+        XCTAssertEqual(try h.postedMessages().count, 1, "the key posts at once")
+        try h.eval("__fireTimers();")
+        XCTAssertEqual(try h.postedMessages().count, 1, "no redundant autosave after the key")
+        // Typing on after the tap still autosaves the new text once.
+        try h.eval("__field(0).value = __field(0).value + 'b'; __field(0).oninput(); __fireTimers();")
+        XCTAssertEqual(try h.postedMessages().count, 2)
+    }
 }

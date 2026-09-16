@@ -665,6 +665,14 @@ public enum AssessmentPage {
 
         TEXT_FLUSHES.push(flushNow);
         el.__flushText = flushNow;
+        // Something else posted the field's current value (the math keypad
+        // writes `value` and posts directly, firing neither `input` nor
+        // `change`): take it as the baseline so no redundant autosave follows.
+        el.__notePosted = function () {
+          cancelTimers();
+          dirty = false;
+          lastPosted = current();
+        };
       }
 
       // E6 (decision James 2026-09-02): `**bold**` and `_italic_` in authored
@@ -1218,6 +1226,7 @@ public enum AssessmentPage {
             // `change` posts the OLD value) and pressed Next would hand in the
             // pre-keypad text.
             post(item.id, { type: 'short_text', text: input.value });
+            if (typeof input.__notePosted === 'function') input.__notePosted();
             // Refocus only after a POINTER activation. A student who Tabbed to
             // the pad and pressed Space wants to press the next key, not be
             // yanked back to the field; they return with Shift-Tab.
@@ -2265,6 +2274,53 @@ public enum AssessmentPage {
         undoButton.disabled = true;
         undoButton.onclick = function () { undo(); };
         tools.appendChild(undoButton);
+
+        // Roadmap 4b-f: the strip on the same roving tabindex as the math
+        // keypad (D-3.1) — ONE Tab stop for the toolbar, Left / Right / Home /
+        // End move between the enabled buttons and wrap. A disabled button
+        // (the colours under the eraser, Undo before a stroke) is skipped, and
+        // the roving stop moves off a button that becomes disabled under it.
+        var stripButtons = toolButtons.concat(sizeButtons, colorButtons, [undoButton]);
+        var stripIndex = 0;
+        function setStripRoving(index) {
+          stripIndex = index;
+          for (var i = 0; i < stripButtons.length; i++) {
+            stripButtons[i].setAttribute('tabindex', i === index ? '0' : '-1');
+          }
+        }
+        function stripStep(from, direction) {
+          var n = stripButtons.length;
+          for (var k = 1; k <= n; k++) {
+            var candidate = (from + direction * k + n) % n;
+            if (!stripButtons[candidate].disabled) return candidate;
+          }
+          return from;
+        }
+        setStripRoving(0);
+        tools.onkeydown = function (event) {
+          if (!event || !stripButtons.length) return;
+          var next = -1;
+          if (event.key === 'ArrowRight') next = stripStep(stripIndex, 1);
+          else if (event.key === 'ArrowLeft') next = stripStep(stripIndex, -1);
+          else if (event.key === 'Home') next = stripStep(stripButtons.length - 1, 1);
+          else if (event.key === 'End') next = stripStep(0, -1);
+          else return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          setStripRoving(next);
+          if (typeof stripButtons[next].focus === 'function') stripButtons[next].focus();
+        };
+        // A pointer click on any button makes it the stop, so Tab leaves from
+        // where the student is.
+        for (var sb = 0; sb < stripButtons.length; sb++) {
+          (function (index) {
+            var prior = stripButtons[index].onclick;
+            stripButtons[index].onclick = function (event) {
+              if (typeof prior === 'function') prior.call(stripButtons[index], event);
+              if (!stripButtons[index].disabled) setStripRoving(index);
+              else if (stripIndex === index) setStripRoving(stripStep(index, 1));
+            };
+          })(sb);
+        }
 
         wrap.appendChild(tools);
         wrap.appendChild(canvas);
