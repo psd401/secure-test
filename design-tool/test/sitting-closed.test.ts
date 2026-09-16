@@ -142,6 +142,8 @@ async function scenario(opts: {
         owner_email: TEACHER_EMAIL,
         code: `CL${(codeSeq++).toString().padStart(4, "0")}`,
         status: opts.sitting === "closed" ? "closed" : "open",
+        // A closed scenario closed a minute ago — past the 10 s write grace.
+        updated_at: opts.sitting === "closed" ? new Date(Date.now() - 60_000) : new Date(),
         expires_at:
           opts.sitting === "expired"
             ? new Date(Date.now() - 60_000)
@@ -352,16 +354,37 @@ describe("409 sitting_closed on the student plane", () => {
     });
   }
 
-  // D-3: no grace. The deadline's 30 seconds cover an autosave in flight at
-  // the buzzer; a Close is immediate, and an autosave in flight at that moment
-  // is accepted as lost.
-  test("a sitting that expired one second ago already refuses", async () => {
+  // D-3 as amended 2026-09-16: a 10 s grace on the WRITE guards for the flush
+  // the client sends on its way home; the poll says closed at once and the
+  // student's own submit gets no grace.
+  test("a sitting that expired one second ago still takes a write, not a submit, and the poll says closed", async () => {
     const s = await scenario({ sitting: "open" });
     await getDb()
       .update(test_sessions)
       .set({ expires_at: new Date(Date.now() - 1000) })
       .where(eq(test_sessions.id, s.sitting!.id));
+    expect((await put(s.attempt.id, s.mc.id)).status).toBe(200);
+    expect((await submit(s.attempt.id)).status).toBe(409);
+    const poll = (await (await peekPending(s.attempt.id)).json()) as { sitting: string };
+    expect(poll.sitting).toBe("closed");
+  });
+
+  test("a sitting that expired eleven seconds ago refuses the write", async () => {
+    const s = await scenario({ sitting: "open" });
+    await getDb()
+      .update(test_sessions)
+      .set({ expires_at: new Date(Date.now() - 11_000) })
+      .where(eq(test_sessions.id, s.sitting!.id));
     expect((await put(s.attempt.id, s.mc.id)).status).toBe(409);
+  });
+
+  test("a sitting closed through the route one moment ago still takes the flush", async () => {
+    const s = await scenario({ sitting: "open" });
+    expect((await closeSitting(s.sitting!.id)).status).toBe(200);
+    expect((await put(s.attempt.id, s.mc.id)).status).toBe(200);
+    expect((await submit(s.attempt.id)).status).toBe(409);
+    const poll = (await (await peekPending(s.attempt.id)).json()) as { sitting: string };
+    expect(poll.sitting).toBe("closed");
   });
 
   // The sitting check runs FIRST, so the client is told which clock stopped it
@@ -514,8 +537,9 @@ async function overSitting(sittingId: string, into: "closed" | "expired") {
   await getDb()
     .update(test_sessions)
     .set(
+      // A minute ago, so the 10 s write grace has passed in both states.
       into === "closed"
-        ? { status: "closed" }
+        ? { status: "closed", updated_at: new Date(Date.now() - 60_000) }
         : { expires_at: new Date(Date.now() - 60_000) },
     )
     .where(eq(test_sessions.id, sittingId));

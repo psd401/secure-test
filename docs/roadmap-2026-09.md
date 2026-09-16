@@ -274,6 +274,13 @@ overnight (no hand install needed):** Close → `sitting_closed` 0.4 s →
 `lockdown_end` 3 s (AAC teardown) → sheet; row 197 Hand in ✅. The words
 typed in the still-focused essay at the instant of Close were refused (D-3).
 
+- **CS-2 → BUILT 2026-09-16 (server only):** the essay flush the client
+  sends on its way home after Close was refused (D-3) — now a 10 s write
+  grace (`SITTING_CLOSE_GRACE_SECONDS`), poll and submit ungraced. Client
+  follow-up for **v1.3.4 (post-pilot)**: essay / short-text autosave while
+  typing (5 s idle, the drawings pattern — also bounds a crash or Wi-Fi
+  loss mid-essay, which today loses everything since the last blur) and the
+  spool keeping a `sitting_closed` write for the next Resume.
 - **CS-1 (design-tool, cosmetic):** on Resume the Monitor row read "Idle
   1231 min · Last activity 21 h ago" while the student was inside the test
   — `lockdown_begin` does not count as activity, only a response write

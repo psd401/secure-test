@@ -64,7 +64,8 @@ their work.
    work is NOT handed in: the attempt stays in progress, and they can press
    **Resume** with everything intact the next time you open a session for
    them. The Close dialog tells you how many students are still working.
-   The last field a student was typing in at that instant may be lost.
+   The field a student is typing in at that instant is saved too, as long
+   as their Mac is awake and online (a few seconds of grace).
 3. **Hand in** on the Monitor. Your hand: it submits a student's work as it
    stands. The button is enabled once the session is closed or that
    student's time limit has passed. Nothing is scored or reported until the

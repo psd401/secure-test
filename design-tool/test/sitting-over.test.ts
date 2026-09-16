@@ -3,7 +3,7 @@
 // and what the teacher's confirm dialog says about it (D-6). The DB-backed
 // refusals are in sitting-closed.test.ts.
 import { describe, expect, test } from "bun:test";
-import { sittingIsOver } from "../lib/api/sittingOver";
+import { SITTING_CLOSE_GRACE_SECONDS, sittingIsOver } from "../lib/api/sittingOver";
 import {
   closeDialogCopy,
   countInProgress,
@@ -75,5 +75,38 @@ describe("the sitting_closed event kind reads as words", () => {
     expect(eventLabel("sitting_closed")).toBe(
       "Session closed by the teacher — returned to Your tests",
     );
+  });
+});
+
+// D-3 as amended 2026-09-16: the write guards get a grace; the poll and submit
+// (grace 0) do not.
+describe("sittingIsOver with the write grace", () => {
+  const NOW2 = new Date("2026-09-16T20:00:00Z");
+  const ago = (s: number) => new Date(NOW2.getTime() - s * 1000);
+  const G = SITTING_CLOSE_GRACE_SECONDS;
+
+  test("the grace is ten seconds", () => {
+    expect(G).toBe(10);
+  });
+
+  test("a sitting closed inside the grace is not yet over for a write", () => {
+    const s = { status: "closed", expires_at: ago(-3600), updated_at: ago(G - 1) };
+    expect(sittingIsOver(s, NOW2, G)).toBe(false);
+    expect(sittingIsOver(s, NOW2)).toBe(true);
+  });
+
+  test("a sitting closed exactly at the grace, or before, is over", () => {
+    expect(sittingIsOver({ status: "closed", expires_at: ago(-3600), updated_at: ago(G) }, NOW2, G)).toBe(true);
+    expect(sittingIsOver({ status: "closed", expires_at: ago(-3600), updated_at: ago(G + 1) }, NOW2, G)).toBe(true);
+  });
+
+  test("a closed sitting with no close instant is over regardless of grace", () => {
+    expect(sittingIsOver({ status: "closed", expires_at: ago(-3600) }, NOW2, G)).toBe(true);
+  });
+
+  test("expiry gets the same grace", () => {
+    expect(sittingIsOver({ status: "open", expires_at: ago(G - 1) }, NOW2, G)).toBe(false);
+    expect(sittingIsOver({ status: "open", expires_at: ago(G) }, NOW2, G)).toBe(true);
+    expect(sittingIsOver({ status: "open", expires_at: ago(G - 1) }, NOW2)).toBe(true);
   });
 });

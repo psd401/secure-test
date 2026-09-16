@@ -41,10 +41,17 @@ current behaviour as a "looks wrong but isn't"; this note replaces it.
   period · 55 min" means the period. Enforced lazily — no timer fires at
   expiry; the next write, submit or peek poll from an attempt whose sitting
   is closed or expired is refused / answers `sitting_closed`.
-- **D-3 No grace.** A write that arrives after Close or expiry is refused
-  outright (the deadline's 30 s grace does not apply here). Consequence: an
-  autosave in flight at the moment of Close can be lost — the last field the
-  student was typing in. Accepted.
+- **D-3 No grace** — as scoped. **Amended 2026-09-16 (James):** the WRITE
+  guards (response PUT / DELETE, both upload halves) accept for **10 s**
+  after the close or expiry instant (`SITTING_CLOSE_GRACE_SECONDS`); the
+  peek poll reports `closed` at once and the student's own submit gets no
+  grace, so nothing about the close is delayed. Reason: the 2026-09-16
+  real-session run showed the client's own flush of the focused essay
+  (sent after the poll said closed, on the way home) refused — the last
+  words lost for no gain. Ten seconds covers the 5 s poll plus the post.
+  Outside that window, or with the Mac asleep, the words are still lost;
+  the client-side answer (essay autosave while typing + a deferred spool
+  entry retried on Resume) is queued for v1.3.4, post-pilot.
 - **D-4 Client behaviour.** Reuse security slice 1's return-home path
   (`ebe20ab`): flush (best-effort — it will be refused if it lands after the
   close), end the secure session, `showEntry()`, one-button sheet — "Your
@@ -155,3 +162,4 @@ the 409s on stderr).
 - 2026-09-15: **slice 2 (client) BUILT** — `PeekPoll` carries `sitting` (absent or unrecognised = open; `PeekResponder.onSittingClosed` fires once per attempt and stops the poll), `APIError.isSittingClosed`, `ResponseSpool.FlushResult.sittingClosed` (the 409 is dropped as permanent as before, now flagged), the new `sitting_closed` attempt-event kind in the retried set, `AssessmentViewController.onSittingClosed` from the flush / drawing-upload / submit paths with the `responses_dropped` error suppressed, and `AppDelegate.sittingClosedDuringAttempt(via:)` reusing security slice 1's return-home path with the D-4 sheet ("Your teacher ended the test session." / "Your answers are saved."), idempotent against the time-limit, hand-in and quit ends. `MARKETING_VERSION` 1.3.3. Core 645 tests (was 635), Debug + Release `xcodebuild` green. 11 rows in `client/MANUAL-CHECKS.md` "Close session ends the sitting (row CS, 2026-09-15)" — NOT RUN.
 - 2026-09-15: **slice 3 (docs) DONE.** `docs/pilot-quick-start.md` "Three clocks" rewritten (Close and expiry return students to Your tests with answers saved; the Close dialog names the count; Hand in finalises; Resume in a later session; a v1.3.2 fallback paragraph), the Teacher step 6 / Student step 7 / "looks wrong" bullets updated, page header now says v1.3.3; time-limit note §Progress and roadmap row CS point here. Reviewed in the main session: the zero-count / count-unknown Close dialog copy was corrected (it still said "students already in can finish and hand in", no longer true). Both halves re-checked in the main session before commit. Next: deploy + `migrate-aurora.sh` (0036), then psd-sign v1.3.3 + `gh release create` (James) + the IT AutoPkg ask; rows 195–200 + the 11 client rows on the day.
 - 2026-09-15 evening: **sitting on the origin (rev 34) with the Debug build under simulated lockdown** — James at the client, Claude in Chrome: Close → `sitting_closed {via: peek}` 0.4 s later → sheet → Your tests; 2-minute expiry → same via the next poll; Resume in a new session restored everything; timeline label renders. Rows 195 / 196 / 198 / 199 ✅, six client rows ✅; 197 / real-session / hand-in / Cmd-Q / D-7 rows open — the student device (v1.3.1) gets the v1.3.3 pkg by hand for the real-session pass. Finding M-1 (roadmap): `$6 \times 7$` renders raw under rule C-2.
+- 2026-09-16: **real session on the released v1.3.3** (student device, via Jamf): Close → `sitting_closed` 0.4 s → `lockdown_end` 3 s → sheet; row 197 ✅. The focused essay's flush was refused → **D-3 amended: 10 s write grace** built the same day (server only; `sittingIsOver(…, graceSeconds)`, submit passes 0, poll unchanged; `overSitting` / closed scenarios in the tests stamp `updated_at` a minute back). v1.3.4 (post-pilot): essay autosave while typing + spool keeps a `sitting_closed` write for the next Resume.

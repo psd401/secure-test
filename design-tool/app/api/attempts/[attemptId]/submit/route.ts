@@ -43,8 +43,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
   // arrives after Close is refused for the same reason a late submit is — the
   // attempt stays in progress and resumable, and finalising it is the
   // teacher's hand-in route. Checked before the deadline so the client is told
-  // which clock stopped it.
-  const closed = await refuseIfSittingOver(db, access.attempt);
+  // which clock stopped it. No grace here (the write guards get 10 s for the
+  // flush in flight; a hand-in is not a flush).
+  const closed = await refuseIfSittingOver(db, access.attempt, new Date(), 0);
   if (closed) return closed;
 
   // D-4: handing in after the deadline is the TEACHER's call, not the
