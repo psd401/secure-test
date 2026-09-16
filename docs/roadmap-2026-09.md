@@ -286,6 +286,11 @@ typed in the still-focused essay at the instant of Close were refused (D-3).
   — `lockdown_begin` does not count as activity, only a response write
   does. A resumed student who reads before answering looks idle for the
   whole gap. Fix = treat the latest attempt event as activity too (S).
+  **BUILT 2026-09-16:** the newest `lockdown_begin` is an activity
+  candidate in `sittingAttendance.ts` (server only). The related pilot
+  reading — a student writing an essay for > 10 min shows Idle because an
+  essay saves only on leaving the field — is documented in the quick-start;
+  the idle threshold stays at 10 min (James); v1.3.4's autosave fixes it.
 
 - **M-1 (design-tool + client, usability trap):** a stem written
   `$6 \times 7$` renders as raw text because rule C-2 (2026-09-09, James

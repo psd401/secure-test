@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempts, items, responses, students } from "../db/schema";
+import { assessments, attempt_events, attempts, items, responses, students } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import {
@@ -260,6 +260,18 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     expect(new Date(byId.get(STUDENT.ps_id)!.last_activity_at!).getTime()).toBe(lastSave.getTime());
     expect(byId.get(OTHER_STUDENT.ps_id)).toMatchObject({ answered: 0, total_items: 3, last_activity_at: null });
     expect(new Date(body.updated_at!).getTime()).toBe(lastSave.getTime());
+
+    // CS-1: a resume (a newer lockdown_begin) is activity too — the student
+    // is back inside the test even before their first answer lands.
+    const resumedAt = new Date(Date.now() - 10_000);
+    await db.insert(attempt_events).values({ attempt_id: attempt!.id, kind: "lockdown_begin", at: resumedAt });
+    const after = (await (await attendance(sitting.id)).json()) as {
+      rows: { ps_id: string; last_activity_at: string | null }[];
+      updated_at: string | null;
+    };
+    const adaAfter = after.rows.find((r) => r.ps_id === STUDENT.ps_id)!;
+    expect(new Date(adaAfter.last_activity_at!).getTime()).toBe(resumedAt.getTime());
+    expect(new Date(after.updated_at!).getTime()).toBe(resumedAt.getTime());
   });
 
   // T-2 (the 2026-09-14 hand-run): the monitor row carries the same deadline

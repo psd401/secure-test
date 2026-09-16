@@ -152,6 +152,10 @@ its own.
 - **"0 of 1 answered" while a student is typing an essay.** An essay
   saves when the student leaves the field (clicks elsewhere, turns the
   page, hands in). The Monitor catches up on the next poll.
+- **A row says Idle while the student is clearly writing.** Idle means no
+  answer has been saved for 10 minutes. A student writing an essay saves
+  only when they leave the box, so Idle is normal mid-essay; it clears at
+  their next save. View screen shows what they are doing.
 - **A student is still working after I closed the session.** Their Mac is
   on client v1.3.2 (About Secure Test). Nothing they type after Close is
   accepted; press **Hand in** on their row. On v1.3.3 the Mac returns them

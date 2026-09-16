@@ -230,9 +230,17 @@ export async function attendanceForSitting(
 
   const activity = (hit: (typeof joined)[number]) => {
     const p = progress.get(hit.attempt.id);
-    const candidates = [hit.attempt.started_at, hit.attempt.submitted_at, p?.last ?? null].filter(
-      (d): d is Date => d instanceof Date,
-    );
+    // CS-1 (docs/roadmap-2026-09.md, 2026-09-16): a resumed student's newest
+    // lockdown_begin counts as activity. Without it a student who rejoins
+    // through a later sitting and reads before answering shows "Idle" for the
+    // whole gap since their last save — the Monitor read "Idle 1231 min" on a
+    // student who had been inside the test for a minute.
+    const candidates = [
+      hit.attempt.started_at,
+      hit.attempt.submitted_at,
+      p?.last ?? null,
+      events(hit).last_lockdown_begin_at,
+    ].filter((d): d is Date => d instanceof Date);
     return {
       answered: p?.answered ?? 0,
       last_activity_at: candidates.length ? new Date(Math.max(...candidates.map((d) => d.getTime()))) : null,
