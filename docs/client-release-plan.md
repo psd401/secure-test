@@ -323,4 +323,10 @@ Installomator out for GitHub-hosted apps district-wide. It auto-updates
 every release past 1.3.0 (v1.3.1 reached the fleet without a request). The
 release rules in `client/RELEASING.md` (tag `v<version>`, one `.pkg`, no
 draft / prerelease, public repository) are what the recipe keys on and stay
-as they are.
+as they are. **Timing observed 2026-09-15/16:** v1.3.2 (published 11:25)
+had not reached the student device by 16:30 the same day; v1.3.3
+(published ~16:35) was on it the next morning. Plan on next-day delivery.
+A same-day need is an IT ask: run the recipe by hand, then force a Jamf
+check-in (or a one-off policy scoped to the Macs). The psd-sign skill is
+0.6.0 (2026-09-15): pre-flight, `expected-entitlements.txt`, profile
+expiry, build-stamp check, `gh release create` handed to the maintainer.

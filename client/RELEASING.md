@@ -202,8 +202,11 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
   at rev 34 / migration 0036 (deployed the same day). Hand-run before
   publishing: the CS path on the Debug build with simulated lockdown
   against the origin (close → sheet in 0.4 s, expiry → sheet, Resume,
-  timeline); the real-session row and the hand-install row run on the
-  student device from this pkg.
+  timeline). **Reached the student device through Jamf / AutoPkg
+  overnight** (published ~16:35 PT, on the Mac the next morning — the
+  realistic expectation is "next day", not "same afternoon"); the real
+  session on that build 2026-09-16 closed the row CS rows (Close → sheet
+  0.4 s, Hand in, Cmd-Q). No hand install was needed.
 - **v1.3.2 — 2026-09-15** (built from `fa39945`, tag on `main`, published
   ~11:25 PT): the end-state audit's two security slices (`ebe20ab` the
   test page exists only while the session is active — no "Stay here", a
