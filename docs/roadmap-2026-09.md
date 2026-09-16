@@ -280,7 +280,9 @@ typed in the still-focused essay at the instant of Close were refused (D-3).
   follow-up for **v1.3.4 (post-pilot)**: essay / short-text autosave while
   typing (5 s idle, the drawings pattern — also bounds a crash or Wi-Fi
   loss mid-essay, which today loses everything since the last blur) and the
-  spool keeping a `sitting_closed` write for the next Resume.
+  spool keeping a `sitting_closed` write for the next Resume. **Design
+  note drafted 2026-09-16:** `docs/client-autosave-and-deferred-spool-design.md`
+  (D-1…D-7 with recommendations, three slices → v1.3.4).
 - **CS-1 (design-tool, cosmetic):** on Resume the Monitor row read "Idle
   1231 min · Last activity 21 h ago" while the student was inside the test
   — `lockdown_begin` does not count as activity, only a response write
