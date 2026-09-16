@@ -1,7 +1,7 @@
 # Text autosave + deferred spool — design note (drafted 2026-09-16, for client v1.3.4, post-pilot)
 
-**Status:** DRAFT — decisions D-1…D-7 carry recommendations, nothing
-decided, nothing built. Roadmap row CS-2's client follow-up
+**Status:** DECIDED 2026-09-16 (James: D-1 table cells in this slice,
+D-2 30 s ceiling, offline autosave posts), nothing built. Roadmap row CS-2's client follow-up
 (`docs/roadmap-2026-09.md`). Ships as **v1.3.4** together with the M-1
 client half already on `main` (`dd8f32d`). Not before the pilot's first
 week has run on v1.3.3.
@@ -31,19 +31,18 @@ Two ways a student's typed words are lost today, both measured:
    is still dropped, even though the SAME attempt resumes through the next
    sitting and the write would then be accepted.
 
-## Decisions (recommendations; James to confirm)
+## Decisions (James, 2026-09-16 — every recommendation accepted)
 
 - **D-1 Which fields auto-save.** Essay and short-text (including the E12
   inline outline and a table's cells — every free-text input that today
-  posts on `change`). Choice-type items already post on click. **Recommend:
-  essay + short_text + inline outline; table cells too if the same helper
-  fits without a special case, else D-1 follow-up.**
+  posts on `change`). Choice-type items already post on click. **DECIDED:
+  essay + short_text + inline outline + table cells, all in this slice.**
 - **D-2 Cadence.** Idle-debounced like drawings, **but with a ceiling**: post
   5 s after the last keystroke, and in any case no later than 30 s after the
   first unsaved keystroke, so a student who never pauses is still saved
   twice a minute. A text post is one small JSON PUT (the drawing rule "every
   save is a full upload" does not apply), so the ceiling is cheap: 30
-  students × 2 posts/min is nothing next to the 5 s peek poll. **Recommend
+  students × 2 posts/min is nothing next to the 5 s peek poll. **DECIDED:
   5 s idle / 30 s ceiling.**
 - **D-3 Unchanged post path.** The autosave calls the same `post(item.id,
   …)` the `change` handler calls, so the host's enqueue → flush → spool
@@ -88,9 +87,8 @@ today). The helper registers a flush hook like the drawings' so
 `__secureTestFlushInput` (page turn / Finish / the CS return-home) flushes
 text as well as blurring — blur already triggers `change`, so this is
 belt-and-braces for a field that is dirty but not focused (a Cmd-Tab away
-mid-timer). Offline mode: the host relabels every post as ignored today;
-autosave posts anyway (cheap) — or is gated like drawings' if the offline
-log becomes noisy; D-2 follow-up.
+mid-timer). Offline mode (DECIDED): autosave posts as online; the host
+relabels each post as ignored, as it does the `change` post today.
 
 **Spool (`ResponseSpool.swift`).** `pending_responses` gains
 `deferred_at INTEGER NULL` (migration in `open()`, additive). `flush`:
@@ -144,13 +142,13 @@ later resume drops the deferred row silently and the teacher's copy stands.
 CS-1 / quick-start: the "Idle mid-essay" bullet can be retired once
 autosave is on the fleet.
 
-## Open questions for James
+## Open questions
 
-- D-1: table cells in this slice or the next?
-- D-2: 30 s ceiling, or idle-only like drawings?
-- Offline mode: autosave posts (relabelled) or gated off like drawings?
+None — all three resolved 2026-09-16 (table cells in this slice; 30 s
+ceiling; offline autosave posts).
 
 ## Progress
 
-- 2026-09-16: drafted (this note). Nothing decided, nothing built. Waits
-  for the pilot's first week on v1.3.3.
+- 2026-09-16: drafted and decided the same day (James). Nothing built.
+  Build after the pilot's first week on v1.3.3; slices 1 + 2 can run in
+  parallel (disjoint files: page JS vs spool + host).
