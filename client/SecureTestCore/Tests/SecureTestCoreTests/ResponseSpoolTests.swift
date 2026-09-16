@@ -1,3 +1,4 @@
+import SQLite3
 import XCTest
 @testable import SecureTestCore
 
@@ -205,13 +206,12 @@ final class ResponseSpoolFlushTests: XCTestCase {
         XCTAssertEqual(result.dropped, 1, "finding 10.1: the drop is counted so the host can say so")
     }
 
-    /// Row CS (D-5): the same drop, flagged. A 409 `sitting_closed` is
-    /// permanent — no later write from this attempt will be accepted while its
-    /// sitting is shut — so it is dropped like any other refusal; the flag is
-    /// how the host tells "the teacher ended the session" apart from "the
-    /// server threw your answers away" and sends the student home instead of
-    /// raising an error.
-    func testASittingClosedRefusalIsDroppedAndFlagged() async throws {
+    /// Row CS (D-5) as amended for v1.3.4: a 409 `sitting_closed` is the one
+    /// refusal that is NOT final. The row is held, not deleted — the same
+    /// attempt resumes through the next sitting and the write lands then — and
+    /// the flag is still how the host tells "the teacher ended the session"
+    /// apart from "the server threw your answers away".
+    func testASittingClosedRefusalIsDeferredAndFlagged() async throws {
         let spool = try ResponseSpool(path: path)
         try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
         try await spool.enqueue(attemptID: "at1", itemID: "i2", responseJSON: pick)
@@ -222,9 +222,245 @@ final class ResponseSpoolFlushTests: XCTestCase {
         ])
         let result = await spool.flush(using: client(transport))
 
-        XCTAssertEqual(result.dropped, 2)
-        XCTAssertEqual(result.remaining, 0, "not left to block the queue")
+        XCTAssertEqual(transport.sent.count, 2, "a held row must not stop the queue behind it")
+        XCTAssertEqual(result.deferred, 2)
+        XCTAssertEqual(result.dropped, 0, "nothing was thrown away")
         XCTAssertTrue(result.sittingClosed)
+
+        let stillHere = try await spool.deferredCount()
+        XCTAssertEqual(stillHere, 2, "the student's words are still on this Mac")
+        XCTAssertEqual(result.remaining, 0, "and out of the normal queue's way")
+    }
+
+    /// The normal queue must not see a held row: trying it every flush would
+    /// refuse it every flush, for as long as the sitting stays shut.
+    func testPendingHidesADeferredRowUnlessAskedForIt() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let normal = try await spool.pending()
+        XCTAssertTrue(normal.isEmpty)
+        let everything = try await spool.pending(includeDeferred: true)
+        XCTAssertEqual(everything.map(\.itemID), ["i1"])
+    }
+
+    /// A held row is out of the way, not in front: later answers still go.
+    func testALaterAnswerFlushesPastADeferredRow() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        try await spool.enqueue(attemptID: "at1", itemID: "i2", responseJSON: pick)
+        let transport = RecordingTransport(status: 200, body: "{}")
+        let result = await spool.flush(using: client(transport))
+
+        XCTAssertEqual(result.sent, 1)
+        XCTAssertEqual(transport.sent.count, 1, "only the new row was tried")
+        XCTAssertEqual(transport.sent[0].url?.path, "/api/attempts/at1/responses/i2")
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 1, "the held row is untouched")
+    }
+
+    /// The student typed again, so the held copy is stale. The upsert replaces
+    /// it AND clears the mark — the fresh words flush like anything else.
+    func testANewerAnswerReplacesADeferredRowAndClearsTheMark() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let second = #"{"type":"multiple_choice_single","choice_id":"c2"}"#
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: second)
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 0, "the newer write cleared the hold")
+
+        let transport = RecordingTransport(status: 200, body: "{}")
+        let result = await spool.flush(using: client(transport))
+        XCTAssertEqual(result.sent, 1)
+        let body = String(data: transport.sent[0].httpBody ?? Data(), encoding: .utf8)
+        XCTAssertEqual(body, #"{"response":{"type":"multiple_choice_single","choice_id":"c2"}}"#)
+    }
+
+    /// A withdrawal is a write like any other, so it clears the hold too.
+    func testAWithdrawalReplacesADeferredRow() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        try await spool.enqueueWithdrawal(attemptID: "at1", itemID: "i1")
+
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 0)
+        let queued = try await spool.pending()
+        XCTAssertEqual(queued.count, 1)
+        XCTAssertNil(queued[0].responseJSON)
+    }
+
+    /// The point of the whole slice: the next sitting takes the words.
+    func testFlushDeferredSendsTheHeldRowAndClearsIt() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let transport = RecordingTransport(status: 200, body: "{}")
+        let result = await spool.flushDeferred(using: client(transport))
+
+        XCTAssertEqual(result.sent, 1)
+        XCTAssertEqual(transport.sent[0].url?.path, "/api/attempts/at1/responses/i1")
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 0)
+        let left = try await spool.pending(includeDeferred: true)
+        XCTAssertTrue(left.isEmpty, "sent rows leave the spool")
+    }
+
+    /// The retry pass touches only held rows — a fresh answer waiting on the
+    /// network is the normal flush's business.
+    func testFlushDeferredLeavesTheNormalQueueAlone() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+        try await spool.enqueue(attemptID: "at1", itemID: "i2", responseJSON: pick)
+
+        let transport = RecordingTransport(status: 200, body: "{}")
+        let result = await spool.flushDeferred(using: client(transport))
+
+        XCTAssertEqual(result.sent, 1)
+        XCTAssertEqual(transport.sent.count, 1)
+        XCTAssertEqual(transport.sent[0].url?.path, "/api/attempts/at1/responses/i1")
+        XCTAssertEqual(result.remaining, 1, "i2 is still queued for the normal flush")
+    }
+
+    /// D-5: the teacher handed the attempt in while the words were held. Their
+    /// copy is the one that counts, so the held row is dropped rather than
+    /// resurrected.
+    func testADeferredRowIsDroppedIfTheAttemptWasHandedInMeanwhile() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let result = await spool.flushDeferred(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"attempt_submitted"}"#
+        )))
+
+        XCTAssertEqual(result.dropped, 1)
+        XCTAssertEqual(result.deferred, 0)
+        XCTAssertFalse(result.sittingClosed)
+        let left = try await spool.pending(includeDeferred: true)
+        XCTAssertTrue(left.isEmpty)
+    }
+
+    /// Still shut (a join into another closed sitting, an expiry between the
+    /// two): the row stays held for the sitting after that, and the retry does
+    /// NOT end the session the student has just joined.
+    func testASecondSittingClosedOnTheRetryKeepsTheRowDeferred() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let result = await spool.flushDeferred(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        XCTAssertEqual(result.deferred, 1)
+        XCTAssertEqual(result.dropped, 0)
+        XCTAssertFalse(result.sittingClosed, "the retry must not send the student home")
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 1)
+    }
+
+    /// D-6: no new lifetime. A held row is a row, and the 24-hour purge takes
+    /// it like any other — by then the teacher has handed the attempt in.
+    func testPurgeTakesADeferredRowLikeAnyOther() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "yesterday", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(25 * 3600)
+        )
+
+        XCTAssertEqual(removed, 1)
+        let left = try await spool.pending(includeDeferred: true)
+        XCTAssertTrue(left.isEmpty)
+    }
+
+    /// And not before then — it is still the only copy of the student's words.
+    func testPurgeKeepsAFreshDeferredRow() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "earlier-today", itemID: "i1", responseJSON: pick)
+        _ = await spool.flush(using: client(RecordingTransport(
+            status: 409, body: #"{"ok":false,"error":"sitting_closed"}"#
+        )))
+
+        let removed = try await spool.purge(
+            keeping: "current",
+            now: Date().addingTimeInterval(6 * 3600)
+        )
+
+        XCTAssertEqual(removed, 0)
+        let held = try await spool.deferredCount()
+        XCTAssertEqual(held, 1)
+    }
+
+    /// The additive migration: an existing spool file (created before the
+    /// column existed) opens, migrates and keeps its rows; a re-open is a
+    /// no-op.
+    func testTheDeferredColumnMigrationIsIdempotent() async throws {
+        // The v1.3.3 shape, written by hand: no `deferred_at`.
+        var handle: OpaquePointer?
+        XCTAssertEqual(
+            sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil),
+            SQLITE_OK
+        )
+        XCTAssertEqual(
+            sqlite3_exec(
+                handle,
+                """
+                CREATE TABLE pending_responses (
+                  attempt_id TEXT NOT NULL,
+                  item_id    TEXT NOT NULL,
+                  payload    TEXT,
+                  queued_at  REAL NOT NULL,
+                  PRIMARY KEY (attempt_id, item_id)
+                );
+                """,
+                nil, nil, nil
+            ),
+            SQLITE_OK
+        )
+        sqlite3_close_v2(handle)
+
+        do {
+            let spool = try ResponseSpool(path: path)
+            try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        }
+        do {
+            let reopened = try ResponseSpool(path: path)
+            let queued = try await reopened.pending()
+            XCTAssertEqual(queued.count, 1, "re-opening must not throw or lose rows")
+        }
+        let again = try ResponseSpool(path: path)
+        let held = try await again.deferredCount()
+        XCTAssertEqual(held, 0)
     }
 
     /// Any other permanent refusal must NOT read as a closed sitting — it is

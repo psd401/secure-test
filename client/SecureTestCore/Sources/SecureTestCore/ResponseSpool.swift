@@ -30,6 +30,13 @@ public actor ResponseSpool {
         public let responseJSON: String?
     }
 
+    /// v1.3.4 (`docs/client-autosave-and-deferred-spool-design.md` D-5): a row
+    /// the server refused with 409 `sitting_closed` is HELD rather than
+    /// dropped. The same attempt resumes through the next sitting — the join
+    /// rebinds it — and the write is accepted then, so throwing the words away
+    /// at the first refusal is the one loss this slice exists to stop.
+    private static let deferredColumn = "deferred_at"
+
     public enum SpoolError: Error, Equatable {
         case open(String)
         case statement(String)
@@ -70,6 +77,28 @@ public actor ResponseSpool {
             );
             """
         )
+        // v1.3.4: additive migration for an existing spool on a student's Mac.
+        // SQLite has no `ADD COLUMN IF NOT EXISTS`, so the column list is read
+        // first and the ALTER runs at most once; a re-open is a no-op.
+        if !Self.hasDeferredColumn(handle) {
+            try Self.exec(
+                handle,
+                "ALTER TABLE pending_responses ADD COLUMN \(Self.deferredColumn) INTEGER;"
+            )
+        }
+    }
+
+    private static func hasDeferredColumn(_ handle: OpaquePointer) -> Bool {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            handle, "PRAGMA table_info(pending_responses);", -1, &statement, nil
+        ) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(statement) }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let raw = sqlite3_column_text(statement, 1) else { continue }
+            if String(cString: raw) == deferredColumn { return true }
+        }
+        return false
     }
 
     private static func exec(_ handle: OpaquePointer, _ sql: String) throws {
@@ -97,11 +126,16 @@ public actor ResponseSpool {
     }
 
     private func upsert(attemptID: String, itemID: String, payload: String?) throws {
+        // v1.3.4 (D-5): a newer write REPLACES a deferred row and clears the
+        // mark with it — the student has typed since, so the held copy is stale
+        // and the fresh one flushes normally.
         let sql = """
-        INSERT INTO pending_responses (attempt_id, item_id, payload, queued_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO pending_responses (attempt_id, item_id, payload, queued_at, deferred_at)
+        VALUES (?, ?, ?, ?, NULL)
         ON CONFLICT(attempt_id, item_id)
-        DO UPDATE SET payload = excluded.payload, queued_at = excluded.queued_at;
+        DO UPDATE SET payload = excluded.payload,
+                      queued_at = excluded.queued_at,
+                      deferred_at = NULL;
         """
         let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
@@ -114,9 +148,16 @@ public actor ResponseSpool {
 
     /// Oldest first, so a student's answers reach the server in the order they
     /// were given.
-    public func pending() throws -> [Entry] {
+    ///
+    /// v1.3.4 (D-5): deferred rows are NOT part of the normal queue — they are
+    /// waiting on the next sitting, and a flush that tried them every time
+    /// would refuse them every time. `includeDeferred` is for the retry pass
+    /// and for tests.
+    public func pending(includeDeferred: Bool = false) throws -> [Entry] {
         let statement = try prepare(
-            "SELECT attempt_id, item_id, payload FROM pending_responses ORDER BY queued_at ASC;"
+            includeDeferred
+                ? "SELECT attempt_id, item_id, payload FROM pending_responses ORDER BY queued_at ASC;"
+                : "SELECT attempt_id, item_id, payload FROM pending_responses WHERE deferred_at IS NULL ORDER BY queued_at ASC;"
         )
         defer { sqlite3_finalize(statement) }
 
@@ -131,6 +172,42 @@ public actor ResponseSpool {
 
     public func count() throws -> Int {
         try pending().count
+    }
+
+    /// Rows held back by a closed sitting. For the host's log line and the
+    /// tests; the retry pass reads the rows themselves.
+    public func deferredCount() throws -> Int {
+        try deferredEntries().count
+    }
+
+    private func deferredEntries() throws -> [Entry] {
+        let statement = try prepare(
+            "SELECT attempt_id, item_id, payload FROM pending_responses WHERE deferred_at IS NOT NULL ORDER BY queued_at ASC;"
+        )
+        defer { sqlite3_finalize(statement) }
+        var out: [Entry] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            out.append(
+                Entry(
+                    attemptID: text(statement, 0) ?? "",
+                    itemID: text(statement, 1) ?? "",
+                    responseJSON: text(statement, 2)
+                )
+            )
+        }
+        return out
+    }
+
+    /// Hold a row until the next sitting instead of deleting it.
+    private func markDeferred(attemptID: String, itemID: String, now: Date = Date()) throws {
+        let statement = try prepare(
+            "UPDATE pending_responses SET deferred_at = ? WHERE attempt_id = ? AND item_id = ?;"
+        )
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int64(statement, 1, Int64(now.timeIntervalSince1970))
+        bindText(statement, 2, attemptID)
+        bindText(statement, 3, itemID)
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
     }
 
     public func remove(attemptID: String, itemID: String) throws {
@@ -218,17 +295,27 @@ public actor ResponseSpool {
         public let dropped: Int
         /// Row CS (D-5): at least one entry was refused with
         /// `sitting_closed` — the teacher closed the sitting, or it expired.
-        /// Dropped like any other permanent refusal (there is nothing to
-        /// retry: no later write from this attempt will be accepted while its
-        /// sitting is shut), but the host needs to tell these apart, because
-        /// this one ends the session rather than raising an error.
+        /// The host needs to tell these apart, because this one ends the
+        /// session rather than raising an error.
         public let sittingClosed: Bool
+        /// v1.3.4 (D-5): entries HELD for the next sitting rather than sent or
+        /// dropped. Not counted in `dropped` — nothing was thrown away — and
+        /// not counted in `remaining`, because the normal queue will not try
+        /// them again; `flushDeferred` will, after the next join.
+        public let deferred: Int
 
-        public init(sent: Int, remaining: Int, dropped: Int = 0, sittingClosed: Bool = false) {
+        public init(
+            sent: Int,
+            remaining: Int,
+            dropped: Int = 0,
+            sittingClosed: Bool = false,
+            deferred: Int = 0
+        ) {
             self.sent = sent
             self.remaining = remaining
             self.dropped = dropped
             self.sittingClosed = sittingClosed
+            self.deferred = deferred
         }
     }
 
@@ -245,10 +332,27 @@ public actor ResponseSpool {
     /// DROPPED rather than retried forever. A permanently-rejected entry at the
     /// head of the queue would otherwise block every answer behind it.
     public func flush(using client: APIClient) async -> FlushResult {
+        await send((try? pending()) ?? [], using: client, isRetry: false)
+    }
+
+    /// v1.3.4 (D-5): the retry pass, run once by the host after a join or a
+    /// resume has rebound this attempt to an open sitting.
+    ///
+    /// Only rows held by a closed sitting are tried. A row that goes is gone
+    /// from the spool like any other; a row the server now refuses for good —
+    /// the teacher handed the attempt in meanwhile (`attempt_submitted`), or
+    /// the clock ran out (`time_expired`) — is DROPPED, because the state the
+    /// teacher captured is the one that counts. A row refused with
+    /// `sitting_closed` a second time simply stays deferred.
+    public func flushDeferred(using client: APIClient) async -> FlushResult {
+        await send((try? deferredEntries()) ?? [], using: client, isRetry: true)
+    }
+
+    private func send(_ queued: [Entry], using client: APIClient, isRetry: Bool) async -> FlushResult {
         var sent = 0
         var dropped = 0
+        var deferred = 0
         var sittingClosed = false
-        let queued = (try? pending()) ?? []
 
         for entry in queued {
             do {
@@ -268,11 +372,22 @@ public actor ResponseSpool {
                 sent += 1
             } catch let error as APIError {
                 if case .refused(let status, _) = error, Self.isPermanent(status) {
+                    // v1.3.4 (D-5): a closed sitting is the one refusal that is
+                    // not final — the same attempt resumes through the next
+                    // sitting and the write is accepted then. Held, not
+                    // deleted, and the queue carries on past it.
+                    if error.isSittingClosed {
+                        try? markDeferred(attemptID: entry.attemptID, itemID: entry.itemID)
+                        deferred += 1
+                        // Only the normal pass raises the flag. On the retry a
+                        // held row may belong to an OLDER attempt whose sitting
+                        // is shut for good; ending the session the student has
+                        // just joined over that would be wrong.
+                        if !isRetry { sittingClosed = true }
+                        continue
+                    }
                     try? remove(attemptID: entry.attemptID, itemID: entry.itemID)
                     dropped += 1
-                    // Row CS: recorded, not acted on here — the spool's job is
-                    // still only to stop blocking the queue.
-                    if error.isSittingClosed { sittingClosed = true }
                     continue
                 }
                 break
@@ -284,7 +399,8 @@ public actor ResponseSpool {
             sent: sent,
             remaining: (try? count()) ?? 0,
             dropped: dropped,
-            sittingClosed: sittingClosed
+            sittingClosed: sittingClosed,
+            deferred: deferred
         )
     }
 

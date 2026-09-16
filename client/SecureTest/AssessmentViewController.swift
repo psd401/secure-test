@@ -271,6 +271,19 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
+                    // v1.3.4 (`docs/client-autosave-and-deferred-spool-design.md`
+                    // D-5): answers the server refused with 409 `sitting_closed`
+                    // are still on this Mac. The join that got us here rebound
+                    // the attempt to an open sitting, so they will be accepted
+                    // now — and they go BEFORE the bundle is fetched, because
+                    // the bundle carries the P-1 prefill: sent first, the
+                    // restored field shows the student's own last words instead
+                    // of the server's older copy.
+                    await self.flushDeferredResponses(using: client)
+                    guard !self.isRetired else {
+                        self.log("deferred flush completed after the attempt screen went away — bundle not fetched")
+                        return
+                    }
                     let (bundle, json) = try await client.fetchBundle(assessmentID: assessmentID)
                     guard !self.isRetired else {
                         self.log("bundle fetch completed after the attempt screen went away — discarded")
@@ -696,8 +709,30 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         onSittingClosed?()
     }
 
+    /// v1.3.4 (D-5): the one retry pass, run before the bundle is fetched.
+    /// Silent by design (D-7) — nothing is lost and the student is not waiting
+    /// on it — so a failure here is a log line and never a reported error.
+    private func flushDeferredResponses(using client: APIClient) async {
+        do {
+            let spool = try await spoolForSession()
+            let result = await spool.flushDeferred(using: client)
+            guard result.sent > 0 || result.dropped > 0 || result.deferred > 0 else { return }
+            log(
+                "deferred spool: \(result.sent) sent, \(result.dropped) dropped, "
+                    + "\(result.deferred) still deferred"
+            )
+        } catch {
+            log("deferred flush failed: \(error)")
+        }
+    }
+
     @discardableResult
     private func noteDropped(_ result: ResponseSpool.FlushResult) -> ResponseSpool.FlushResult {
+        // v1.3.4 (D-5): held for the next sitting, not thrown away. One line,
+        // and no `responses_dropped` event — nothing was lost.
+        if result.deferred > 0 {
+            log("\(result.deferred) answer(s) deferred until the next session")
+        }
         // Row CS: checked before the count, because a closed sitting is not an
         // error — it is the end of the session, and the host's landing for it
         // says so. Fired even if this flush happened to drop nothing else.
