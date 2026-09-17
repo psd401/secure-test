@@ -82,6 +82,28 @@ a question for the feedback round, not a backlog item.
 - **Gradebook CSV shape** (D-R3) — waits for sample PowerTeacher Pro /
   Schoology exports.
 
+## Unscoped — needs decisions (James, 2026-09-17)
+
+Six items James raised on 2026-09-17. None has a design page or a slot in
+the order; each row records what exists today, the constraint that shapes
+it, and the open questions. Answers James gave the same day are marked
+**decided**.
+
+**Cross-cutting:** U-1, U-2, U-3 and U-6 all want a third role or a grants
+table — today the role is two-valued (`staff` / `student` from the verified
+email domain, ADR 0017) and every assessment, sitting and attempt is
+owner-only. The first design page should be the **access model**, with
+those four as its cases, before any of them is built on its own.
+
+| Row | Item | What exists / shapes it | Open questions |
+|---|---|---|---|
+| U-1 | **Co-teachers on the same class** | Staff sharing is copy semantics (2026-09-01); roster sections carry one `teacher_email`; sittings and attempts are owner-only | **Decided: shared ownership is the goal** (one assessment + its sittings, both teachers see the section's attempts) — not a second copy. Open: does the roster extract carry co-teachers? (James: unknown — ask the data engineer) |
+| U-2 | **Substitute visibility + access** | No delegation; a sub's `psd401.net` email gets `staff` but owns nothing | Time-boxed grant by the teacher, or IT / admin-assigned? Monitor-only, or open / close sittings too? Source of "who is the sub today"? |
+| U-3 | **Principal visibility + access** | No hierarchy; nothing knows a building | Results only, or live Monitor? Scope = building from the warehouse? Read-only? |
+| U-4 | **Teacher self-assign for practice** | Attempts need a roster student in a section; the client refuses a staff sub; lockdown is always real in Release | **Decided: in the client app itself** (not a browser preview); **practice attempts excluded from results**; **lockdown on / off as an option** on the practice sitting is the likely shape. Open: how a staff sub joins (a practice sitting type with no roster check?), whether the Monitor shows it |
+| U-5 | **Placeholder account for not-yet-enrolled students** | Roster is the nightly extract; the `students` overlay is keyed on `roster_ps_id`; nothing creates a student | Placeholder = a real Google account IT provisions, or a staff-created local row merged on enrollment? Who merges, and how are attempts reattached? |
+| U-6 | **System admin: see in-progress attempts, impersonate staff** | No admin role; audit tables exist (`attempt_deletions`, the error-event tables) | Admin list = a context / env allowlist or a DB table? Impersonation = act-as with an audit row and a visible banner? Read-only view first? |
+
 ## Findings from the 2026-09-03 sitting (James: place them in the sequence — done above; nothing built)
 
 The client-fixes batch's student sitting (2026-09-03 afternoon, James at
