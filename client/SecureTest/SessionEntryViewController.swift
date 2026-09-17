@@ -544,17 +544,19 @@ final class SessionEntryViewController: NSObject {
         Task { @MainActor in
             do {
                 let attempt = try await client.startAttempt(testSessionID: row.testSessionID)
-                switch JoinOutcome(attempt) {
+                switch JoinOutcome(attempt, targetSittingID: row.testSessionID) {
                 case .open(let attemptID):
                     log("joined listed sitting \(row.testSessionID), attempt \(attemptID)\(attempt.resumed ? " (resumed)" : "")")
                     onJoined(row.assessmentID, attemptID)
-                case .alreadyHandedIn(let attemptID):
+                case .alreadyHandedIn(let attemptID, let earlierSittingID):
                     // Finding 10.1: nothing to answer, so nothing is rendered
                     // and no session begins. The list re-reads so the row
-                    // says "Done ✓" (finding 10.2).
-                    log("join declined: attempt \(attemptID) at sitting \(row.testSessionID) is already submitted — staying on the entry screen")
+                    // says "Done ✓" (finding 10.2). Finding H-1: a submitted
+                    // attempt from an EARLIER sitting gets its own message.
+                    let suffix = earlierSittingID.map { " (earlier sitting \($0))" } ?? ""
+                    log("join declined: attempt \(attemptID) at sitting \(row.testSessionID) is already submitted — staying on the entry screen\(suffix)")
                     for button in rowButtons { button.isEnabled = true }
-                    statusLabel.stringValue = JoinOutcome.handedInMessage
+                    statusLabel.stringValue = earlierSittingID != nil ? JoinOutcome.earlierSittingMessage : JoinOutcome.handedInMessage
                     await loadSittings()
                 }
             } catch {
@@ -628,15 +630,18 @@ final class SessionEntryViewController: NSObject {
             do {
                 let session = try await client.redeem(code: code)
                 let attempt = try await client.startAttempt(testSessionID: session.testSessionID)
-                switch JoinOutcome(attempt) {
+                switch JoinOutcome(attempt, targetSittingID: session.testSessionID) {
                 case .open(let attemptID):
                     log("joined sitting \(session.testSessionID), attempt \(attemptID)")
                     onJoined(session.assessmentID, attemptID)
-                case .alreadyHandedIn(let attemptID):
-                    // Finding 10.1, code path: same rule as the list.
-                    log("join declined: attempt \(attemptID) at sitting \(session.testSessionID) is already submitted — staying on the entry screen")
+                case .alreadyHandedIn(let attemptID, let earlierSittingID):
+                    // Finding 10.1, code path: same rule as the list. Finding
+                    // H-1: a submitted attempt from an EARLIER sitting gets
+                    // its own message.
+                    let suffix = earlierSittingID.map { " (earlier sitting \($0))" } ?? ""
+                    log("join declined: attempt \(attemptID) at sitting \(session.testSessionID) is already submitted — staying on the entry screen\(suffix)")
                     joinButton.isEnabled = true
-                    statusLabel.stringValue = JoinOutcome.handedInMessage
+                    statusLabel.stringValue = earlierSittingID != nil ? JoinOutcome.earlierSittingMessage : JoinOutcome.handedInMessage
                     await loadSittings()
                 }
             } catch {

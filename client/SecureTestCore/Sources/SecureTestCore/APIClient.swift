@@ -105,6 +105,17 @@ public struct StartedAttempt: Decodable, Equatable, Sendable {
     public struct Attempt: Decodable, Equatable, Sendable {
         public let id: String
         public let status: String
+        /// Which sitting this attempt was made under. Optional because it is
+        /// new (finding H-1, 2026-09-17): a build that talks to an older
+        /// server, or a response shaped before this field existed, decodes
+        /// fine with it absent — `JoinOutcome` treats a missing id as "this
+        /// sitting" so today's message stays the default.
+        public let testSessionID: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, status
+            case testSessionID = "test_session_id"
+        }
     }
     public let attempt: Attempt
     public let resumed: Bool
