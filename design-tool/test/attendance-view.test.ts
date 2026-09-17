@@ -3,7 +3,10 @@ import {
   IDLE_AFTER_MS,
   alertIsCurrent,
   canHandInAll,
+  countInProgress,
+  earlierSessionNote,
   eventLabel,
+  statusLabel,
   studentState,
   type AttendanceRow,
 } from "../app/dashboard/[id]/attendanceView";
@@ -108,6 +111,46 @@ describe("canHandInAll", () => {
   test("no rows in hand (Attendance collapsed) rests on the sitting alone", () => {
     expect(canHandInAll(false, [])).toBe(false);
     expect(canHandInAll(true, [])).toBe(true);
+  });
+});
+
+// Finding H-1 (2026-09-17): the student handed this assessment in through an
+// earlier sitting, so they cannot join today's — say so on the row.
+describe("submitted_earlier (H-1)", () => {
+  const earlier = () =>
+    row({
+      status: "submitted_earlier",
+      submitted_at: iso(-24 * 60 * 60_000),
+      last_activity_at: null,
+      deadline_passed: false,
+    });
+
+  test("says which session it was handed in to", () => {
+    expect(statusLabel("submitted_earlier")).toBe("Handed in (earlier session)");
+    expect(statusLabel("not_joined")).toBe("Not joined");
+    expect(statusLabel("submitted")).toBe("Submitted");
+  });
+
+  test("the detail line names when, and is null on every other status", () => {
+    expect(earlierSessionNote(earlier())).toContain("in an earlier session");
+    expect(earlierSessionNote({ status: "submitted_earlier", submitted_at: null })).toBe(
+      "Handed in in an earlier session",
+    );
+    expect(earlierSessionNote(row({ status: "submitted", submitted_at: iso(-1000) }))).toBeNull();
+    expect(earlierSessionNote(row({ status: "not_joined" }))).toBeNull();
+  });
+
+  // James, 2026-09-17: it counts under the Handed in tile, not Not joined.
+  test("counts as handed in for the summary tiles", () => {
+    expect(studentState(earlier(), T0)).toBe("handed_in");
+  });
+
+  test("is not in progress, so the hand-in controls ignore it", () => {
+    expect(countInProgress([earlier()])).toBe(0);
+    expect(canHandInAll(false, [earlier()])).toBe(false);
+    expect(canHandInAll(false, [earlier(), { status: "submitted_earlier", deadline_passed: true }])).toBe(
+      false,
+    );
   });
 });
 

@@ -3,7 +3,15 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempt_events, attempts, items, responses, students } from "../db/schema";
+import {
+  assessments,
+  attempt_events,
+  attempts,
+  items,
+  responses,
+  students,
+  test_sessions,
+} from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import {
@@ -188,13 +196,13 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     const body = (await res.json()) as {
       test_session: { code: string };
       rows: { ps_id: string; status: string; section_label: string | null; in_scope: boolean }[];
-      counts: { expected: number; joined: number; submitted: number };
+      counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
     };
     expect(body.test_session.code).toHaveLength(6);
     expect(body.rows.map((r) => r.ps_id).sort()).toEqual([STUDENT.ps_id, OTHER_STUDENT.ps_id]);
     expect(body.rows.every((r) => r.status === "not_joined" && r.in_scope)).toBe(true);
     expect(body.rows[0]!.section_label).toContain("Algebra");
-    expect(body.counts).toEqual({ expected: 2, joined: 0, submitted: 0 });
+    expect(body.counts).toEqual({ expected: 2, joined: 0, submitted: 0, submitted_earlier: 0 });
   });
 
   test("shows in-progress and submitted attempts against the expected list", async () => {
@@ -211,7 +219,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
         submitted_at: string | null;
         attempt_id: string | null;
       }[];
-      counts: { expected: number; joined: number; submitted: number };
+      counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
     };
     const byId = new Map(body.rows.map((r) => [r.ps_id, r]));
     expect(byId.get(STUDENT.ps_id)!.status).toBe("in_progress");
@@ -221,7 +229,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     expect(byId.get(STUDENT.ps_id)!.submitted_at).toBeNull();
     expect(byId.get(OTHER_STUDENT.ps_id)!.status).toBe("submitted");
     expect(byId.get(OTHER_STUDENT.ps_id)!.submitted_at).not.toBeNull();
-    expect(body.counts).toEqual({ expected: 2, joined: 2, submitted: 1 });
+    expect(body.counts).toEqual({ expected: 2, joined: 2, submitted: 1, submitted_earlier: 0 });
   });
 
   test("slice 85: progress — answered of total, last activity, and a change cursor", async () => {
@@ -341,6 +349,92 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     });
   });
 
+  // Finding H-1 (2026-09-17): a student whose only attempt was handed in
+  // through an EARLIER sitting cannot join today's — the join route gives
+  // them back the submitted attempt. Today's row said "Not joined" with no
+  // hint; it now says so.
+  test("H-1: a submitted attempt from an earlier sitting reads as submitted_earlier today", async () => {
+    principal = staffPrincipal(TEACHER);
+    const db = getDb();
+    const a = await seedAssessment();
+    const seeded = await db
+      .insert(items)
+      .values([1, 2].map((n) => ({ assessment_id: a.id, position: n, type: "mc", stem: `Q${n}` })))
+      .returning();
+
+    const yesterday = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+    // Ada handed in yesterday; Ben's attempt is still in progress there.
+    await joinAs(TEACHER, STUDENT.ps_id, a.id, yesterday.id, "submitted");
+    await joinAs(TEACHER, OTHER_STUDENT.ps_id, a.id, yesterday.id, "in_progress");
+    const [adaAttempt] = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.status, "submitted"));
+    await db.insert(responses).values({
+      attempt_id: adaAttempt!.id,
+      item_id: seeded[0]!.id,
+      response: { kind: "mc", choice_ids: ["a"] } as never,
+    });
+    await db
+      .update(test_sessions)
+      .set({ status: "closed" })
+      .where(eq(test_sessions.id, yesterday.id));
+
+    const today = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+    type Body = {
+      rows: {
+        ps_id: string;
+        status: string;
+        attempt_id: string | null;
+        submitted_at: string | null;
+        started_at: string | null;
+        answered: number;
+        last_activity_at: string | null;
+        deadline_passed: boolean;
+        alert: unknown;
+      }[];
+      counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
+    };
+    const body = (await (await attendance(today.id)).json()) as Body;
+    const byId = new Map(body.rows.map((r) => [r.ps_id, r]));
+
+    expect(byId.get(STUDENT.ps_id)).toMatchObject({
+      status: "submitted_earlier",
+      attempt_id: adaAttempt!.id,
+      answered: 1,
+      deadline_passed: false,
+      last_activity_at: null,
+      alert: null,
+    });
+    expect(byId.get(STUDENT.ps_id)!.submitted_at).not.toBeNull();
+    expect(byId.get(STUDENT.ps_id)!.started_at).not.toBeNull();
+
+    // Ben's attempt is in progress elsewhere: joining today WOULD rebind it,
+    // so he stays a plain not-joined row with nothing of the other sitting on it.
+    expect(byId.get(OTHER_STUDENT.ps_id)).toMatchObject({
+      status: "not_joined",
+      attempt_id: null,
+      answered: 0,
+      submitted_at: null,
+    });
+
+    // James, 2026-09-17: counted apart — "0 of 2 joined · 0 handed in · 1
+    // already handed in"; Ben's in-progress attempt elsewhere is not joined.
+    expect(body.counts).toEqual({ expected: 2, joined: 0, submitted: 0, submitted_earlier: 1 });
+
+    // Yesterday's own monitor is unchanged — a student with an attempt on THAT
+    // sitting is reported from it, not from the H-1 lookup.
+    const before = (await (await attendance(yesterday.id)).json()) as Body;
+    const yById = new Map(before.rows.map((r) => [r.ps_id, r]));
+    expect(yById.get(STUDENT.ps_id)).toMatchObject({
+      status: "submitted",
+      attempt_id: adaAttempt!.id,
+      answered: 1,
+    });
+    expect(yById.get(STUDENT.ps_id)!.last_activity_at).not.toBeNull();
+    expect(yById.get(OTHER_STUDENT.ps_id)!.status).toBe("in_progress");
+  });
+
   test("an explicit list is exactly that list; an attempt outside today's scope is kept and flagged", async () => {
     principal = staffPrincipal(TEACHER);
     const a = await seedAssessment();
@@ -350,12 +444,12 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     await joinAs(TEACHER, STUDENT.ps_id, a.id, sitting.id, "in_progress");
     const body = (await (await attendance(sitting.id)).json()) as {
       rows: { ps_id: string; status: string; in_scope: boolean }[];
-      counts: { expected: number; joined: number; submitted: number };
+      counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
     };
     const byId = new Map(body.rows.map((r) => [r.ps_id, r]));
     expect(byId.get(OTHER_STUDENT.ps_id)).toMatchObject({ status: "not_joined", in_scope: true });
     expect(byId.get(STUDENT.ps_id)).toMatchObject({ status: "in_progress", in_scope: false });
-    expect(body.counts).toEqual({ expected: 1, joined: 1, submitted: 0 });
+    expect(body.counts).toEqual({ expected: 1, joined: 1, submitted: 0, submitted_earlier: 0 });
   });
 
   // Finding 8.2 (2026-08-28): Ben rejoined through a second sitting and the
@@ -395,15 +489,15 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     principal = staffPrincipal(TEACHER);
     type Body = {
       rows: { ps_id: string; status: string; answered: number; attempt_id: string | null }[];
-      counts: { expected: number; joined: number; submitted: number };
+      counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
     };
     const onSecond = (await (await attendance(second.id)).json()) as Body;
     const adaOnSecond = onSecond.rows.find((r) => r.ps_id === STUDENT.ps_id)!;
     expect(adaOnSecond).toMatchObject({ status: "in_progress", answered: 1, attempt_id: attempt!.id });
-    expect(onSecond.counts).toEqual({ expected: 2, joined: 1, submitted: 0 });
+    expect(onSecond.counts).toEqual({ expected: 2, joined: 1, submitted: 0, submitted_earlier: 0 });
 
     const onFirst = (await (await attendance(first.id)).json()) as Body;
     expect(onFirst.rows.find((r) => r.ps_id === STUDENT.ps_id)).toMatchObject({ status: "not_joined", attempt_id: null });
-    expect(onFirst.counts).toEqual({ expected: 2, joined: 0, submitted: 0 });
+    expect(onFirst.counts).toEqual({ expected: 2, joined: 0, submitted: 0, submitted_earlier: 0 });
   });
 });

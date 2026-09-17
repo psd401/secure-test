@@ -99,7 +99,7 @@ interface Sitting {
 
 interface Attendance {
   rows: AttendanceRow[];
-  counts: { expected: number; joined: number; submitted: number };
+  counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
   updated_at: string | null;
   total_items: number;
   /** Client-side: when this snapshot was fetched. */
@@ -794,6 +794,9 @@ export function SittingsPanel({
                             <div className="flex flex-wrap items-center gap-4">
                               <span>
                                 {att.counts.joined} of {att.counts.expected} joined · {att.counts.submitted} handed in
+                                {att.counts.submitted_earlier > 0
+                                  ? ` · ${att.counts.submitted_earlier} already handed in`
+                                  : null}
                               </span>
                               <Button type="button" variant="outline" size="xs" onClick={() => loadAttendance(s.id)}>
                                 Refresh
@@ -842,9 +845,19 @@ export function SittingsPanel({
                                                 line rather than widening the column
                                                 (hand-run finding 2026-08-27). */}
                                             <span className="flex flex-wrap items-center gap-1">
+                                              {/* H-1 (2026-09-17): handed in through an
+                                                  EARLIER sitting — say so, rather than
+                                                  a bare "Handed in" on a row with no
+                                                  attempt in this sitting. */}
                                               <StudentStatusBadge
                                                 state={st}
-                                                detail={st === "idle" && idle !== null ? `${Math.round(idle / 60_000)} min` : undefined}
+                                                detail={
+                                                  r.status === "submitted_earlier"
+                                                    ? "(earlier session)"
+                                                    : st === "idle" && idle !== null
+                                                      ? `${Math.round(idle / 60_000)} min`
+                                                      : undefined
+                                                }
                                               />
                                               {r.alert && st === "needs_attention" ? (
                                                 <span className="text-xs text-danger-foreground">
@@ -861,10 +874,19 @@ export function SittingsPanel({
                                             {r.status === "not_joined" ? (
                                               "—"
                                             ) : (
-                                              <ProgressBar value={r.answered} max={r.total_items} done={r.status === "submitted"} />
+                                              <ProgressBar
+                                                value={r.answered}
+                                                max={r.total_items}
+                                                done={r.status === "submitted" || r.status === "submitted_earlier"}
+                                              />
                                             )}
                                           </TableCell>
-                                          <TableCell>{r.status === "not_joined" ? "—" : ago(r.last_activity_at, now)}</TableCell>
+                                          {/* H-1: no activity in THIS sitting. */}
+                                          <TableCell>
+                                            {r.status === "not_joined" || r.status === "submitted_earlier"
+                                              ? "—"
+                                              : ago(r.last_activity_at, now)}
+                                          </TableCell>
                                           <TableCell className="whitespace-nowrap">
                                             {r.started_at ? formatWhen(r.started_at, new Date(now)) : "—"}
                                           </TableCell>

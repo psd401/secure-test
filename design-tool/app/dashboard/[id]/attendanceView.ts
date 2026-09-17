@@ -17,7 +17,11 @@ export interface AttendanceRow {
   ps_id: string;
   name: string;
   section_label: string | null;
-  status: "not_joined" | "in_progress" | "submitted";
+  /** H-1 (2026-09-17): `submitted_earlier` = no attempt on THIS sitting, but
+   * this assessment was already handed in through an earlier one, so the
+   * student cannot join today. `attempt_id` / `submitted_at` / `started_at` /
+   * `answered` then describe that earlier attempt. */
+  status: "not_joined" | "in_progress" | "submitted" | "submitted_earlier";
   started_at: string | null;
   /** T-2: the attempt's own deadline (+ grace) has passed — the hand-in
    * route's relaxation of `session_open`, so the monitor's Hand in button can
@@ -46,7 +50,7 @@ export interface AttendancePayload {
     student_ps_ids: string[] | null;
   };
   rows: AttendanceRow[];
-  counts: { expected: number; joined: number; submitted: number };
+  counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
   updated_at: string | null;
   total_items: number;
 }
@@ -76,7 +80,22 @@ export function sittingIsOpen(s: { status: string; expires_at: string }, now = D
 }
 
 export function statusLabel(status: AttendanceRow["status"]): string {
-  return status === "submitted" ? "Submitted" : status === "in_progress" ? "In progress" : "Not joined";
+  if (status === "submitted") return "Submitted";
+  if (status === "in_progress") return "In progress";
+  // H-1: the whole point of the row — say why they are not in today's room.
+  if (status === "submitted_earlier") return "Handed in (earlier session)";
+  return "Not joined";
+}
+
+/** H-1: the monitor's detail line under the badge, or null when there is
+ * nothing extra to say. Pure so it can be tested without a DOM. */
+export function earlierSessionNote(
+  r: Pick<AttendanceRow, "status" | "submitted_at">,
+): string | null {
+  if (r.status !== "submitted_earlier") return null;
+  return r.submitted_at
+    ? `Handed in ${when(r.submitted_at)} in an earlier session`
+    : "Handed in in an earlier session";
 }
 
 /** Slice 91: teacher-facing words for a client event kind. Unknown kinds
@@ -205,7 +224,11 @@ export function alertIsCurrent(
 }
 
 export function studentState(r: AttendanceRow, now: number): StudentState {
-  if (r.status === "submitted") return "handed_in";
+  // H-1 (James, 2026-09-17): an earlier sitting's hand-in counts under the
+  // Handed in tile, not under Not joined — the work is in, it just did not
+  // happen in this room. `countInProgress` / `canHandInAll` are unaffected:
+  // the attempt is not in progress and is not this sitting's to act on.
+  if (r.status === "submitted" || r.status === "submitted_earlier") return "handed_in";
   if (alertIsCurrent(r)) return "needs_attention";
   if (idleFor(r, now) !== null) return "idle";
   if (r.status === "in_progress") return "in_progress";

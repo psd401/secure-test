@@ -64,6 +64,7 @@ import {
   closeDialogCopy,
   countInProgress,
   eventLabel,
+  earlierSessionNote,
   idleFor,
   studentState,
   type AttendancePayload,
@@ -273,6 +274,9 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
           {data ? (
             <div>
               {data.counts.joined} of {data.counts.expected} joined · {data.counts.submitted} handed in
+              {data.counts.submitted_earlier > 0
+                ? ` · ${data.counts.submitted_earlier} already handed in`
+                : null}
             </div>
           ) : null}
           <LiveIndicator
@@ -435,6 +439,10 @@ function StudentRow({
 }) {
   const idle = idleFor(r, now);
   const current = st === "needs_attention";
+  // H-1 (2026-09-17): handed in through an EARLIER sitting, so there is no
+  // attempt of this sitting's to progress, poll or act on.
+  const earlier = r.status === "submitted_earlier";
+  const earlierNote = earlierSessionNote(r);
   return (
     <TableRow className={cn(current && "shadow-[inset_4px_0_0_var(--danger-foreground)]")}>
       <TableCell>
@@ -448,7 +456,7 @@ function StudentRow({
         {r.status === "not_joined" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          <ProgressBar value={r.answered} max={r.total_items} done={r.status === "submitted"} />
+          <ProgressBar value={r.answered} max={r.total_items} done={r.status === "submitted" || earlier} />
         )}
       </TableCell>
       <TableCell>
@@ -457,8 +465,17 @@ function StudentRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <StudentStatusBadge
             state={st}
-            detail={st === "idle" && idle !== null ? `${Math.round(idle / 60_000)} min` : undefined}
+            detail={
+              earlier
+                ? "(earlier session)"
+                : st === "idle" && idle !== null
+                  ? `${Math.round(idle / 60_000)} min`
+                  : undefined
+            }
           />
+          {earlierNote ? (
+            <span className="text-xs text-muted-foreground">{earlierNote}</span>
+          ) : null}
           {r.alert && current ? (
             <span className="text-xs text-danger-foreground">
               {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
@@ -471,10 +488,12 @@ function StudentRow({
         </div>
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
-        {r.status === "not_joined" ? "—" : ago(r.last_activity_at, now)}
+        {r.status === "not_joined" || earlier ? "—" : ago(r.last_activity_at, now)}
       </TableCell>
       <TableCell className="text-right">
-        {r.attempt_id && r.status !== "not_joined" ? (
+        {/* H-1: a `submitted_earlier` row's attempt_id belongs to ANOTHER
+            sitting — no View screen, no Hand in, no Delete from here. */}
+        {r.attempt_id && r.status !== "not_joined" && !earlier ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
             {/* Time limit / unfinished attempts (D-1/A): a student who ran

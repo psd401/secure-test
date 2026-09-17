@@ -11,7 +11,7 @@
 // explicit list that no longer names them, still shows up — flagged as out of
 // scope rather than dropped, because a teacher looking at attendance wants
 // the whole room, not the subset that still matches.
-import { asc, count, eq, inArray, max } from "drizzle-orm";
+import { and, asc, count, eq, inArray, max } from "drizzle-orm";
 import {
   ALERT_EVENT_KINDS,
   assessments,
@@ -33,7 +33,15 @@ import { sectionLabel, studentDisplayName } from "@/lib/roster/teacherRoster";
 
 type Db = ReturnType<typeof getDb>;
 
-export type AttendanceStatus = "not_joined" | "in_progress" | "submitted";
+/**
+ * Finding H-1 (2026-09-17): `submitted_earlier` is not an attempt state — it
+ * is "this student has no attempt on THIS sitting, but they already handed
+ * this assessment in through an earlier one". The join route would give them
+ * back that submitted attempt rather than a fresh one (one attempt per
+ * student per assessment), so a teacher watching today's room needs to see
+ * why the student cannot join instead of an unexplained "Not joined".
+ */
+export type AttendanceStatus = "not_joined" | "in_progress" | "submitted" | "submitted_earlier";
 
 export interface AttendanceEvent {
   kind: AttemptEventKind;
@@ -46,25 +54,35 @@ export interface AttendanceRow {
   name: string;
   section_label: string | null;
   status: AttendanceStatus;
+  /** Start of the attempt behind `attempt_id` — including the earlier
+   * sitting's attempt on a `submitted_earlier` row (H-1). */
   started_at: Date | null;
   /** T-2 (docs/time-limit-and-unfinished-attempts-design.md, hand-run
    * 2026-09-14): true only for a joined, still-in-progress row whose own
    * deadline plus its grace has passed — the same `deadlineFor` /
    * `isPastDeadline` the hand-in route uses, so the monitor's Hand in button
    * enables on exactly what the route accepts. False for `not_joined`, for
-   * submitted rows, and for an assessment with no time limit. */
+   * submitted rows, and for an assessment with no time limit. Also false on a
+   * `submitted_earlier` row — that attempt is handed in, and it is not this
+   * sitting's to act on (H-1). */
   deadline_passed: boolean;
   submitted_at: Date | null;
-  /** Slice 85: items with a saved response, out of the assessment's items. */
+  /** Slice 85: items with a saved response, out of the assessment's items.
+   * On a `submitted_earlier` row this counts the earlier attempt's responses. */
   answered: number;
   total_items: number;
-  /** Slice 85: the latest of started, any response save, and submitted; null when not joined. */
+  /** Slice 85: the latest of started, any response save, and submitted; null
+   * when not joined — and null on a `submitted_earlier` row, which has had no
+   * activity in THIS sitting (H-1). */
   last_activity_at: Date | null;
   /** False for an attempt whose student is not in the sitting's scope today. */
   in_scope: boolean;
-  /** Peek P3: what the monitor's Peek button posts against; null until joined. */
+  /** Peek P3: what the monitor's Peek button posts against; null until joined.
+   * On a `submitted_earlier` row this is the EARLIER sitting's attempt — the
+   * monitor offers no per-attempt action on it (H-1). */
   attempt_id: string | null;
-  /** Slice 91: the newest client-reported event, whatever its kind. */
+  /** Slice 91: the newest client-reported event, whatever its kind. Null on a
+   * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
   /** UX pass 2 slice 4 (P2-7): the newest lockdown_begin, so the presentation
    * can demote an alert that a rejoin postdates even when focus flickered
@@ -77,7 +95,7 @@ export interface AttendanceRow {
 
 export interface Attendance {
   rows: AttendanceRow[];
-  counts: { expected: number; joined: number; submitted: number };
+  counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
   /** Slice 85: the newest last_activity_at across rows — a poller's change cursor. */
   updated_at: Date | null;
   total_items: number;
@@ -173,6 +191,35 @@ export async function attendanceForSitting(
     byKey.set(row.student.roster_ps_id ?? row.student.id, row);
   }
 
+  // H-1 (2026-09-17): the expected students with NO attempt on this sitting
+  // who nonetheless already handed this assessment in through an earlier one.
+  // One extra query over exactly that set, and only when it is non-empty.
+  // Deliberately `status = 'submitted'` only: a student whose other attempt is
+  // still in progress CAN join today (the join route rebinds an in-progress
+  // attempt to the new sitting), so they stay a plain `not_joined`.
+  const notJoinedPsIds = [...expected.keys()].filter((psId) => !byKey.has(psId));
+  const earlierByPsId = new Map<string, (typeof joined)[number]>();
+  if (notJoinedPsIds.length > 0) {
+    const rows = await db
+      .select({ attempt: attempts, student: students })
+      .from(attempts)
+      .innerJoin(students, eq(students.id, attempts.student_id))
+      .where(
+        and(
+          eq(attempts.assessment_id, sitting.assessment_id),
+          eq(attempts.status, "submitted"),
+          inArray(students.roster_ps_id, notJoinedPsIds),
+        ),
+      )
+      .orderBy(asc(attempts.submitted_at));
+    // One attempt per (student, assessment) is enforced by a unique index, so
+    // there can only be one; ordering oldest-first means the newest wins if
+    // that ever changes.
+    for (const row of rows) {
+      if (row.student.roster_ps_id) earlierByPsId.set(row.student.roster_ps_id, row);
+    }
+  }
+
   // Slice 85: progress. Every saved response is one answered item (the
   // responses route upserts per item, so count == distinct items), and its
   // updated_at is the student's last keystroke the server knows about.
@@ -195,7 +242,13 @@ export async function attendanceForSitting(
     hit.attempt.status === "in_progress" &&
     isPastDeadline(now, deadlineFor(hit.attempt, timeLimit));
   const progress = new Map<string, { answered: number; last: Date | null }>();
-  if (joined.length > 0) {
+  // H-1: the earlier-sitting attempts ride along in the same grouped count, so
+  // their `answered` costs nothing extra.
+  const progressIds = [
+    ...joined.map((j) => j.attempt.id),
+    ...[...earlierByPsId.values()].map((e) => e.attempt.id),
+  ];
+  if (progressIds.length > 0) {
     const rows = await db
       .select({
         attempt_id: responses.attempt_id,
@@ -203,7 +256,7 @@ export async function attendanceForSitting(
         last: max(responses.updated_at),
       })
       .from(responses)
-      .where(inArray(responses.attempt_id, joined.map((j) => j.attempt.id)))
+      .where(inArray(responses.attempt_id, progressIds))
       .groupBy(responses.attempt_id);
     for (const r of rows) progress.set(r.attempt_id, { answered: r.answered, last: r.last });
   }
@@ -267,19 +320,30 @@ export async function attendanceForSitting(
   for (const [psId, { student, sections }] of expected) {
     const hit = byKey.get(psId);
     byKey.delete(psId);
+    // H-1: only consulted when there is no attempt on this sitting.
+    const earlier = hit ? undefined : earlierByPsId.get(psId);
     rows.push({
       ps_id: psId,
       name: studentDisplayName(student),
       section_label: sections[0] ? sectionLabel(sections[0]) : null,
-      status: hit ? (hit.attempt.status as AttendanceStatus) : "not_joined",
-      started_at: hit?.attempt.started_at ?? null,
+      status: hit
+        ? (hit.attempt.status as AttendanceStatus)
+        : earlier
+          ? "submitted_earlier"
+          : "not_joined",
+      started_at: hit?.attempt.started_at ?? earlier?.attempt.started_at ?? null,
       deadline_passed: hit ? deadlinePassed(hit) : false,
-      submitted_at: hit?.attempt.submitted_at ?? null,
-      answered: hit ? activity(hit).answered : 0,
+      submitted_at: hit?.attempt.submitted_at ?? earlier?.attempt.submitted_at ?? null,
+      answered: hit
+        ? activity(hit).answered
+        : earlier
+          ? (progress.get(earlier.attempt.id)?.answered ?? 0)
+          : 0,
       total_items,
+      // No activity in THIS sitting, by construction.
       last_activity_at: hit ? activity(hit).last_activity_at : null,
       in_scope: true,
-      attempt_id: hit?.attempt.id ?? null,
+      attempt_id: hit?.attempt.id ?? earlier?.attempt.id ?? null,
       last_event: hit ? events(hit).last_event : null,
       alert: hit ? events(hit).alert : null,
       last_lockdown_begin_at: hit ? events(hit).last_lockdown_begin_at : null,
@@ -310,8 +374,13 @@ export async function attendanceForSitting(
     rows,
     counts: {
       expected: expected.size,
-      joined: rows.filter((r) => r.status !== "not_joined").length,
+      // H-1 (James, 2026-09-17): joined / submitted are THIS sitting's own;
+      // a student who handed the assessment in through an earlier sitting is
+      // counted apart, so the header can read "N of M joined · K handed in ·
+      // O already handed in" instead of an unexplained "Not joined".
+      joined: rows.filter((r) => r.status !== "not_joined" && r.status !== "submitted_earlier").length,
       submitted: rows.filter((r) => r.status === "submitted").length,
+      submitted_earlier: rows.filter((r) => r.status === "submitted_earlier").length,
     },
     updated_at: rows.reduce<Date | null>(
       (acc, r) => (r.last_activity_at && (!acc || r.last_activity_at > acc) ? r.last_activity_at : acc),
