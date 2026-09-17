@@ -46,6 +46,10 @@ time) and its rubric is attached.
    change). To edit, *Unpublish*, edit, *Publish* again — anyone already in
    a session keeps going on what they had.
 4. **Share** with a colleague by staff email. They get their own copy.
+5. **Duplicate** (on the home list row, or the Settings tab) makes your own
+   Draft copy — "(copy)" — with the questions, sources, accommodations and
+   settings; results and test sessions are not copied. Use it for a second
+   period's version or before a big edit.
 
 ## Three clocks — what actually ends a student's test
 
@@ -68,7 +72,9 @@ their work.
    as their Mac is awake and online (a few seconds of grace).
 3. **Hand in** on the Monitor. Your hand: it submits a student's work as it
    stands. The button is enabled once the session is closed or that
-   student's time limit has passed. Nothing is scored or reported until the
+   student's time limit has passed. **Hand in everyone** (beside Close
+   session) does the same for every student still working in one press —
+   the dialog names how many. Nothing is scored or reported until the
    attempt is handed in — by the student's own **Finish and hand in**, or by
    you.
 
@@ -103,8 +109,9 @@ its own.
    closed or the time limit has passed.
 6. **Close session** when everyone is done. Students still in the test are
    returned to Your tests with their answers saved (clock 2 above) — the
-   dialog says how many. Their rows stay *In progress*; press **Hand in**
-   on each row to finalise, or open another session for them to continue.
+   dialog says how many. Their rows stay *In progress*; press **Hand in
+   everyone** (or **Hand in** on a row) to finalise, or open another
+   session for them to continue.
 
 ## Teacher — after
 

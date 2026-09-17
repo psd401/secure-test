@@ -150,8 +150,10 @@ the 409s on stderr).
 
 ## Open questions (resolved at build time, 2026-09-15)
 
-- "Hand in everyone now" on the Close dialog — NOT built (not required for
-  Thursday; roadmap candidate after pilot feedback).
+- "Hand in everyone now" — BUILT 2026-09-16 as its own button beside Close
+  (not on the Close dialog), per sitting: `POST
+  /api/test-sessions/[sessionId]/hand-in-all` + `HandInAllControl`
+  (`4b05479`, `1562ae4`; rows 206–214 in `docs/design-tool-manual-checks.md`).
 - The `sitting_closed` attempt event is CLIENT-written (matches
   `lockdown_end`); the close route writes no event.
 

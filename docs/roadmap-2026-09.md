@@ -470,5 +470,10 @@ write 409 and returns to Your tests; Hand in stays the teacher's), three slices
 **BUILT 2026-09-15, all three slices** (the note's §Progress is the record:
 migration 0036, design-tool 1855 / client 645 tests, rows 195–200 + 11 client
 rows NOT RUN). Remaining: deploy + migrate 0036, cut v1.3.3, the IT AutoPkg
-ask, then the rows on the pilot day. "Hand in everyone now" on the Close
-dialog is a post-pilot candidate.
+ask, then the rows on the pilot day. "Hand in everyone now" — **BUILT
+2026-09-16** (James: per sitting, its own button beside Close on the Monitor
+and on Test sessions rows; `lib/api/handInAttempt.ts` shared with the
+per-attempt route; rows 206–214). **Duplicate assessment BUILT the same
+evening** (list row + Settings tab; export → import + the four settings the
+bundle drops; rows 201–205). Both DEPLOYED rev 37, no migration; no design
+note — the commit messages and the checks file are the record.
