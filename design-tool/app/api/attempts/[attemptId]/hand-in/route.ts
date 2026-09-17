@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { attempt_events, attempts } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
   loadOwnedAttempt,
@@ -9,7 +7,7 @@ import {
   sittingIsOpen,
 } from "@/lib/api/staffAttempt";
 import { isPastDeadline, loadDeadline } from "@/lib/api/attemptDeadline";
-import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
+import { handInAttempt } from "@/lib/api/handInAttempt";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -73,34 +71,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return sessionOpenResponse();
   }
 
-  const now = new Date();
-  const [row] = await db
-    .update(attempts)
-    .set({
-      status: "submitted",
-      submitted_at: now,
-      submitted_by_sub: auth.session.sub,
-      updated_at: now,
-    })
-    .where(eq(attempts.id, attempt.id))
-    .returning();
-
-  // The audit trail a family may ask about later: the integrity timeline says
-  // the teacher ended this attempt, next to the `time_expired` row that says
-  // why.
-  await db.insert(attempt_events).values({
-    attempt_id: attempt.id,
-    kind: "teacher_hand_in",
-    at: now,
-  });
-
-  let scored = 0;
-  try {
-    const summary = await runAutoScoringPass(db, row!);
-    scored = summary.scored;
-  } catch (err) {
-    console.error("hand-in: auto-scoring failed", err);
-  }
+  // The write itself lives in lib/api/handInAttempt.ts, shared with the
+  // sitting-wide "Hand in everyone now" route.
+  const { attempt: row, scored } = await handInAttempt(db, attempt, auth.session.sub);
 
   return NextResponse.json({ ok: true, attempt: row, scored });
 }
