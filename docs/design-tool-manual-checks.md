@@ -730,19 +730,24 @@ attempt is past its own deadline (`canHandInAll` in
 "End the test session first, then hand in." — the same note the per-attempt
 Hand in uses. Server half: `POST /api/test-sessions/[sessionId]/hand-in-all`.
 
-Rows 206–214 need a sitting with in-progress attempts: `seed-essays` writes
-submitted attempts only, and a student token for the origin needs its secret —
-so one sitting with the demo student on the Debug client (simulated lockdown
-is fine), the one-day teacher-row script first.
+Run 2026-09-17 morning with one demo student on the Debug client (simulated
+lockdown; teacher-row script first). **Finding H-1:** the student's attempt
+from the 2026-09-16 row-CS sitting (Handed in by teacher) still existed on
+the fixture, so the join was refused — the client said "already handed in"
+while the new sitting's Monitor showed **Not joined** with no hint (the
+attempt belongs to the earlier sitting). Attempts are unique per assessment +
+student by design; proposal for James: the Monitor row reads "Handed in
+(earlier session)" and / or the client's refusal names the earlier hand-in.
+Unblocked by deleting the old attempt from the per-student page.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 206 | With two students working on an OPEN sitting (no time limit), open the Monitor | **Hand in everyone** sits beside Close session, disabled, and hovering it reads "End the test session first, then hand in." | NOT RUN |
-| 207 | Press **Close session**, confirm, then press **Hand in everyone** and read the dialog before confirming | The dialog is titled "Hand in everyone?" and names the count — "Hand in 2 students still working? Their answers are saved as they are, and they can't continue. This can't be undone." | NOT RUN |
-| 208 | Confirm it | Both rows flip to **Handed in**, a one-line "Handed in 2." appears under the button, and the per-student pages show the work auto-scored and credited to the teacher (`submitted_by_sub`) | NOT RUN |
-| 209 | Open each student's integrity timeline on the per-student results page | Each carries one **Handed in by the teacher** (`teacher_hand_in`) event at the time of the press | NOT RUN |
-| 210 | Press **Hand in everyone** again on the same closed sitting | No error — the dialog uses the generic copy ("Hand in everyone still working?") and the status line reads "Handed in 0."; nothing about the two attempts changes | NOT RUN |
-| 211 | On an OPEN sitting of an assessment with a 3-minute time limit, let one of two students run past the deadline | **Hand in everyone** enables while the sitting is still open (the route's per-attempt relaxation); the dialog names the students still working | NOT RUN |
-| 212 | Confirm it | Only the past-deadline student is handed in ("Handed in 1."); the other row stays **In progress** and that student can keep writing | NOT RUN |
-| 213 | From the **Test sessions** tab with Attendance COLLAPSED, press **Hand in everyone** on a closed sitting | The button is enabled on the row; the dialog falls back to the generic copy — "Hand in everyone still working? Their answers are saved as they are, and they can't continue. This can't be undone." — and the hand-in works | NOT RUN |
-| 214 | From the **Test sessions** tab on an OPEN sitting with nobody past a deadline | The row's button is disabled with the same title, whether Attendance is expanded or collapsed | NOT RUN |
+| 206 | With two students working on an OPEN sitting (no time limit), open the Monitor | **Hand in everyone** sits beside Close session, disabled, and hovering it reads "End the test session first, then hand in." | ✅ 2026-09-17 (rev 38; sitting `TGJDM6` on `Client rows hand-run 2026-09-08 (copy)`, one demo student on the Debug client, simulated lockdown) — disabled beside Close session, title as specified |
+| 207 | Press **Close session**, confirm, then press **Hand in everyone** and read the dialog before confirming | The dialog is titled "Hand in everyone?" and names the count — "Hand in 2 students still working? Their answers are saved as they are, and they can't continue. This can't be undone." | ✅ 2026-09-17 — after Close: enabled; dialog titled "Hand in everyone?" naming "1 student still working" (one student in this sitting) |
+| 208 | Confirm it | Both rows flip to **Handed in**, a one-line "Handed in 2." appears under the button, and the per-student pages show the work auto-scored and credited to the teacher (`submitted_by_sub`) | ✅ 2026-09-17 — row flipped to Handed in, "Handed in 1." under the button, attempt `submitted` at 15:38:41Z, auto-scored, credited to the teacher |
+| 209 | Open each student's integrity timeline on the per-student results page | Each carries one **Handed in by the teacher** (`teacher_hand_in`) event at the time of the press | ✅ 2026-09-17 — events: lockdown_begin, focus_loss, sitting_closed, lockdown_end, **teacher_hand_in** |
+| 210 | Press **Hand in everyone** again on the same closed sitting | No error — the dialog uses the generic copy ("Hand in everyone still working?") and the status line reads "Handed in 0."; nothing about the two attempts changes | ✅ 2026-09-17 — generic copy ("Hand in everyone still working?"), "Handed in 0.", nothing changed |
+| 211 | On an OPEN sitting of an assessment with a 3-minute time limit, let one of two students run past the deadline | **Hand in everyone** enables while the sitting is still open (the route's per-attempt relaxation); the dialog names the students still working | ✅ 2026-09-17 (sitting `S7PBD6` on `Time limit hand-run 2026-09-11`, 3-minute limit, one student) — `deadline_passed` flipped ~30 s after the client's "Time is up" (the server's 30 s grace) and the button enabled while the sitting stayed Open; dialog named 1 student |
+| 212 | Confirm it | Only the past-deadline student is handed in ("Handed in 1."); the other row stays **In progress** and that student can keep writing | ✅ 2026-09-17 — "Handed in 1." with the sitting still open; events `time_expired` then `teacher_hand_in`. The "other student stays In progress" half NOT exercisable with one student |
+| 213 | From the **Test sessions** tab with Attendance COLLAPSED, press **Hand in everyone** on a closed sitting | The button is enabled on the row; the dialog falls back to the generic copy — "Hand in everyone still working? Their answers are saved as they are, and they can't continue. This can't be undone." — and the hand-in works | ✅ 2026-09-17 — collapsed `TGJDM6` row: enabled, generic copy, "Handed in 0." |
+| 214 | From the **Test sessions** tab on an OPEN sitting with nobody past a deadline | The row's button is disabled with the same title, whether Attendance is expanded or collapsed | ✅ 2026-09-17 — the open `S7PBD6` row disabled with the title (Attendance collapsed); the closed rows enabled |

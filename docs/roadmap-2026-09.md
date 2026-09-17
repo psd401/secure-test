@@ -479,5 +479,4 @@ bundle drops; rows 201–205). Both DEPLOYED rev 37, no migration; no design
 note — the commit messages and the checks file are the record. **Rows
 201–205 ✅ 2026-09-16** (Chrome on the origin; finding **D-1** cosmetic: the
 list row's inline duplicate error squeezes the name column — A-1's shape; BUILT the same night: the error is out of the flow under the button, Duplicate + Archive);
-rows 206–214 wait on a sitting with in-progress attempts (demo student on the
-Debug client).
+**rows 206–214 ✅ 2026-09-17** (one demo student, Debug client, simulated lockdown; 212's two-student half not exercisable). **Finding H-1:** a student whose earlier attempt on the same assessment was handed in cannot join a new sitting — the client says "already handed in", the Monitor says Not joined with no hint; **ACCEPTED by James 2026-09-17, not built:** the Monitor / attendance row for a student whose only attempt on the assessment belongs to an earlier sitting reads "Handed in (earlier session)" (design-tool, S — `attendanceForSitting` looks up the student's attempt on the assessment, not only on this sitting), and the client's join refusal names it ("You already handed this test in during an earlier session. Ask your teacher." — client, XS, rides the next release after v1.3.4 or v1.3.4 itself if it is not cut yet).
