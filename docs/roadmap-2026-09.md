@@ -476,4 +476,8 @@ and on Test sessions rows; `lib/api/handInAttempt.ts` shared with the
 per-attempt route; rows 206–214). **Duplicate assessment BUILT the same
 evening** (list row + Settings tab; export → import + the four settings the
 bundle drops; rows 201–205). Both DEPLOYED rev 37, no migration; no design
-note — the commit messages and the checks file are the record.
+note — the commit messages and the checks file are the record. **Rows
+201–205 ✅ 2026-09-16** (Chrome on the origin; finding **D-1** cosmetic: the
+list row's inline duplicate error squeezes the name column — A-1's shape);
+rows 206–214 wait on a sitting with in-progress attempts (demo student on the
+Debug client).

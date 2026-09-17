@@ -714,11 +714,11 @@ straight in the new copy's editor. Server half: `POST
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 201 | On the Assessments home, press **Duplicate** on a Published assessment that has items, a stimulus with sources, a time limit and a description | The button reads "Duplicating…" while it works, then the editor for a new **Draft** named "<name> (copy)" opens; the questions, the stimulus and its sources, the accommodations, the time limit and the description all match the source | NOT RUN |
-| 202 | Open the source assessment again | Still **Published**, still its original name, its results and test sessions untouched (the copy has none of them) | NOT RUN |
-| 203 | In the source's editor, Settings tab, press **Duplicate** under the note | Same result as row 201 — a Draft "(copy 2)" this time, since "(copy)" is taken — and the note above the button reads "Makes a Draft copy named …(copy)… Results and test sessions are not copied." | NOT RUN |
-| 204 | From the archived view (`Show archived` → `?archived=1`), press **Duplicate** on an archived assessment | The row offers Duplicate beside Unarchive; the copy opens as a live **Draft** (not archived), and the archived source stays archived | NOT RUN |
-| 205 | Duplicate a second time from the list and watch the failure path (e.g. sign out in another tab first, then press Duplicate) | The button re-enables and an inline red line reads "Couldn't duplicate this assessment. Try again." — no navigation, nothing created | NOT RUN |
+| 201 | On the Assessments home, press **Duplicate** on a Published assessment that has items, a stimulus with sources, a time limit and a description | The button reads "Duplicating…" while it works, then the editor for a new **Draft** named "<name> (copy)" opens; the questions, the stimulus and its sources, the accommodations, the time limit and the description all match the source | ✅ 2026-09-16 (rev 37, Chrome on the origin) — the pilot assessment (Published, 1 essay, side-by-side set with Sources A–D, 4 assets, 55-min limit) → Draft “… (copy)” with the same item / set / sources / asset count, `time_limit_seconds` 3300 and `student_layout` paged carried (export bundles compared by API). Description was empty on the source, so its carry is proven by the unit test only |
+| 202 | Open the source assessment again | Still **Published**, still its original name, its results and test sessions untouched (the copy has none of them) | ✅ 2026-09-16 — still Published, same name; it had no attempts to begin with (its 09-14 attempt was deleted), results page unchanged |
+| 203 | In the source's editor, Settings tab, press **Duplicate** under the note | Same result as row 201 — a Draft "(copy 2)" this time, since "(copy)" is taken — and the note above the button reads "Makes a Draft copy named …(copy)… Results and test sessions are not copied." | ✅ 2026-09-16 — Settings tab block reads as specified; landed in “… (copy 2)” |
+| 204 | From the archived view (`Show archived` → `?archived=1`), press **Duplicate** on an archived assessment | The row offers Duplicate beside Unarchive; the copy opens as a live **Draft** (not archived), and the archived source stays archived | ✅ 2026-09-16 — an archived Draft (`test`) → live Draft “test (copy)” (`archived_at` null); the source stayed in the archived list |
+| 205 | Duplicate a second time from the list and watch the failure path (e.g. sign out in another tab first, then press Duplicate) | The button re-enables and an inline red line reads "Couldn't duplicate this assessment. Try again." — no navigation, nothing created | ✅ 2026-09-16 — forced the POST to answer 404 (fetch stubbed in the tab): the red line appears, the button re-enables, no navigation, nothing created. Finding **D-1 (cosmetic):** the inline error sits in the actions cell and squeezes the name column while shown — same shape as A-1; fix = render it under the row or clamp with `w-full max-w-0` like A-1 |
 
 ## Hand in everyone now (2026-09-16)
 
@@ -729,6 +729,11 @@ attempt is past its own deadline (`canHandInAll` in
 `app/dashboard/[id]/attendanceView.ts`); otherwise disabled with the title
 "End the test session first, then hand in." — the same note the per-attempt
 Hand in uses. Server half: `POST /api/test-sessions/[sessionId]/hand-in-all`.
+
+Rows 206–214 need a sitting with in-progress attempts: `seed-essays` writes
+submitted attempts only, and a student token for the origin needs its secret —
+so one sitting with the demo student on the Debug client (simulated lockdown
+is fine), the one-day teacher-row script first.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
