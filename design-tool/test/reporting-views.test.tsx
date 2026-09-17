@@ -440,6 +440,9 @@ describe("the Assessments list", () => {
     );
     expect(defaultHtml).toContain(live!.name);
     expect(defaultHtml).not.toContain(archived!.name);
+    // Duplicate (2026-09-16): a row action in both views — the copy is a
+    // fresh Draft, so an archived source is duplicable too.
+    expect(defaultHtml).toContain(">Duplicate<");
     expect(defaultHtml).toContain("Show archived (1)");
     expect(defaultHtml).not.toContain("Hide archived");
 
@@ -449,6 +452,7 @@ describe("the Assessments list", () => {
     expect(archivedHtml).toContain(archived!.name);
     expect(archivedHtml).not.toContain(live!.name);
     expect(archivedHtml).toContain("Archived");
+    expect(archivedHtml).toContain(">Duplicate<");
     expect(archivedHtml).toContain("Hide archived");
     expect(archivedHtml).not.toContain("Show archived");
   });

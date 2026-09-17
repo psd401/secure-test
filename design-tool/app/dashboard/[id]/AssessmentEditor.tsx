@@ -31,6 +31,7 @@ import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
 import { questionGaps, readinessChecks } from "./readiness";
 import { ShareDialog } from "@/components/app/ShareDialog";
+import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
 import type {
   HotspotRegion,
   MatchPair,
@@ -1654,6 +1655,19 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
             Save settings
           </Button>
           <StatusLine state={settingsSave} />
+        </div>
+
+        {/* Duplicate (2026-09-16): beside the backup download in spirit — the
+            other "take a copy of this" action — but in the Settings tab's
+            bordered-block pattern. NOT gated by isLocked or by archived_at:
+            the copy is a fresh Draft, so nothing the publish lock protects is
+            touched. */}
+        <div className="border-t border-border pt-4">
+          <DuplicateAssessmentButton id={assessment.id} size="default" align="start" />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Makes a Draft copy named “{assessment.name} (copy)” with the same questions,
+            sources, accommodations and settings. Results and test sessions are not copied.
+          </p>
         </div>
 
         {/* D-2 / D-3: NOT gated by isLocked — archiving a Published

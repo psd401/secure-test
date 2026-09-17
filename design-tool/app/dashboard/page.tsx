@@ -9,6 +9,7 @@ import { listSharesForRecipient } from "@/lib/api/shares";
 import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
+import { DuplicateAssessmentButton } from "./DuplicateAssessmentButton";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { closesAt, formatDate } from "@/lib/ui/format";
 import { Badge } from "@/components/ui/badge";
@@ -273,6 +274,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             <Link href={`/dashboard/${a.id}/results`}>Results</Link>
                           </Button>
                         ) : null}
+                        {/* Duplicate (2026-09-16): allowed on Draft,
+                            Published and archived rows alike — the copy is a
+                            fresh Draft, so nothing the publish lock or the
+                            archived view protects is touched. */}
+                        <DuplicateAssessmentButton id={a.id} />
                         <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
                         {/* D-1 / D-4: a row action beside Results, same
                             disabled-and-noted posture as the editor's
