@@ -46,12 +46,17 @@ export function ArchiveAssessmentButton({ id, archived }: { id: string; archived
   }
 
   return (
-    <span className="inline-flex flex-col items-end gap-1">
+    // D-1 (2026-09-16): the error is out of the flow so it never widens the
+    // actions cell — same fix as DuplicateAssessmentButton.
+    <span className="relative inline-flex flex-col items-end gap-1">
       <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void toggle()}>
         {archived ? (busy ? "Unarchiving…" : "Unarchive") : busy ? "Archiving…" : "Archive"}
       </Button>
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p
+          role="alert"
+          className="absolute right-0 top-full z-10 mt-1 whitespace-nowrap text-xs text-destructive"
+        >
           {error}
         </p>
       ) : null}

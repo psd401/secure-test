@@ -46,8 +46,14 @@ export function DuplicateAssessmentButton({
   }
 
   return (
+    // D-1 (2026-09-16): in a list row (align "end") the error is taken out of
+    // the flow — absolutely positioned under the button, no wrap — so it never
+    // widens the actions cell and squeezes the name column (A-1's shape). In
+    // the Settings tab (align "start") it stays in the flow under the button.
     <span
-      className={`inline-flex flex-col gap-1 ${align === "end" ? "items-end" : "items-start"}`}
+      className={`inline-flex flex-col gap-1 ${
+        align === "end" ? "relative items-end" : "items-start"
+      }`}
     >
       <Button
         type="button"
@@ -59,7 +65,12 @@ export function DuplicateAssessmentButton({
         {busy ? "Duplicating…" : "Duplicate"}
       </Button>
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p
+          role="alert"
+          className={`text-xs text-destructive ${
+            align === "end" ? "absolute right-0 top-full z-10 mt-1 whitespace-nowrap" : ""
+          }`}
+        >
           {error}
         </p>
       ) : null}
