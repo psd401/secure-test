@@ -50,6 +50,7 @@ import {
   type StudentState,
 } from "@/components/app/StatusBadge";
 import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
+import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
@@ -59,6 +60,7 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  canHandInAll,
   closeDialogCopy,
   countInProgress,
   eventLabel,
@@ -246,6 +248,21 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
                 Close session
               </Button>
             ) : null}
+            {/* "Hand in everyone now" (James, 2026-09-16): the per-attempt
+                Hand in, applied to the whole sitting. Enabled on exactly what
+                the route accepts (canHandInAll) — otherwise disabled with the
+                same note the per-attempt control uses below. */}
+            <HandInAllControl
+              sessionId={sittingId}
+              inProgress={countInProgress(data?.rows ?? [])}
+              onHandedIn={() => void load()}
+              size="default"
+              disabledReason={
+                canHandInAll(!open, data?.rows ?? [])
+                  ? undefined
+                  : "End the test session first, then hand in."
+              }
+            />
           </>
         }
       />

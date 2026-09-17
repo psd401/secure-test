@@ -702,3 +702,42 @@ applies while a Mac is still on client v1.3.2.
 | 198 | Instead of handing in: open a NEW session for the same section and have the student join | Your tests shows the test with **Resume**; the essay text and every other saved field come back, and writing works again | ✅ 2026-09-15 — new session `XSXUS7`: Resume shown, answers back, writing worked (essay saved) |
 | 199 | Press **Close session** a second time on the closed sitting (from the Test sessions tab) | No error — the sitting stays closed and the dialog's count is unchanged; nothing about the attempt changes | ✅ 2026-09-15 — route POST on the closed sitting: 200 `in_progress: 1`, nothing changed (the UI offers no second Close) |
 | 200 | (D-7, only while a Mac is still on client v1.3.2) Close the sitting under a v1.3.2 client and keep typing | The student's screen keeps going, but every write is refused — 409 `sitting_closed` on stderr / in the spool, dropped as `responses_dropped`; the teacher's view is right and Hand in works | NOT RUN — the only v1.3.2-or-older Mac (student device, v1.3.1) gets the v1.3.3 pkg by hand |
+
+## Duplicate an assessment (2026-09-16)
+
+James's decisions, 2026-09-16: a **Duplicate** action on the Assessments home
+list row (beside Archive / Delete) and on the editor's Settings tab (beside
+the backup download's block). Allowed on Draft, Published and archived
+sources; non-destructive, so no confirm dialog; on success the browser lands
+straight in the new copy's editor. Server half: `POST
+/api/assessments/[id]/duplicate` (see `lib/api/duplicateAssessment.ts`).
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 201 | On the Assessments home, press **Duplicate** on a Published assessment that has items, a stimulus with sources, a time limit and a description | The button reads "Duplicating…" while it works, then the editor for a new **Draft** named "<name> (copy)" opens; the questions, the stimulus and its sources, the accommodations, the time limit and the description all match the source | NOT RUN |
+| 202 | Open the source assessment again | Still **Published**, still its original name, its results and test sessions untouched (the copy has none of them) | NOT RUN |
+| 203 | In the source's editor, Settings tab, press **Duplicate** under the note | Same result as row 201 — a Draft "(copy 2)" this time, since "(copy)" is taken — and the note above the button reads "Makes a Draft copy named …(copy)… Results and test sessions are not copied." | NOT RUN |
+| 204 | From the archived view (`Show archived` → `?archived=1`), press **Duplicate** on an archived assessment | The row offers Duplicate beside Unarchive; the copy opens as a live **Draft** (not archived), and the archived source stays archived | NOT RUN |
+| 205 | Duplicate a second time from the list and watch the failure path (e.g. sign out in another tab first, then press Duplicate) | The button re-enables and an inline red line reads "Couldn't duplicate this assessment. Try again." — no navigation, nothing created | NOT RUN |
+
+## Hand in everyone now (2026-09-16)
+
+James's decisions, 2026-09-16: a **Hand in everyone** button in the Monitor
+header beside Close session, and on each live row of the Test sessions tab.
+Enabled only when the sitting is closed / expired or at least one in-progress
+attempt is past its own deadline (`canHandInAll` in
+`app/dashboard/[id]/attendanceView.ts`); otherwise disabled with the title
+"End the test session first, then hand in." — the same note the per-attempt
+Hand in uses. Server half: `POST /api/test-sessions/[sessionId]/hand-in-all`.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 206 | With two students working on an OPEN sitting (no time limit), open the Monitor | **Hand in everyone** sits beside Close session, disabled, and hovering it reads "End the test session first, then hand in." | NOT RUN |
+| 207 | Press **Close session**, confirm, then press **Hand in everyone** and read the dialog before confirming | The dialog is titled "Hand in everyone?" and names the count — "Hand in 2 students still working? Their answers are saved as they are, and they can't continue. This can't be undone." | NOT RUN |
+| 208 | Confirm it | Both rows flip to **Handed in**, a one-line "Handed in 2." appears under the button, and the per-student pages show the work auto-scored and credited to the teacher (`submitted_by_sub`) | NOT RUN |
+| 209 | Open each student's integrity timeline on the per-student results page | Each carries one **Handed in by the teacher** (`teacher_hand_in`) event at the time of the press | NOT RUN |
+| 210 | Press **Hand in everyone** again on the same closed sitting | No error — the dialog uses the generic copy ("Hand in everyone still working?") and the status line reads "Handed in 0."; nothing about the two attempts changes | NOT RUN |
+| 211 | On an OPEN sitting of an assessment with a 3-minute time limit, let one of two students run past the deadline | **Hand in everyone** enables while the sitting is still open (the route's per-attempt relaxation); the dialog names the students still working | NOT RUN |
+| 212 | Confirm it | Only the past-deadline student is handed in ("Handed in 1."); the other row stays **In progress** and that student can keep writing | NOT RUN |
+| 213 | From the **Test sessions** tab with Attendance COLLAPSED, press **Hand in everyone** on a closed sitting | The button is enabled on the row; the dialog falls back to the generic copy — "Hand in everyone still working? Their answers are saved as they are, and they can't continue. This can't be undone." — and the hand-in works | NOT RUN |
+| 214 | From the **Test sessions** tab on an OPEN sitting with nobody past a deadline | The row's button is disabled with the same title, whether Attendance is expanded or collapsed | NOT RUN |

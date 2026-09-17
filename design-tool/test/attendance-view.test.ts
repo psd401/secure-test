@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   IDLE_AFTER_MS,
   alertIsCurrent,
+  canHandInAll,
   eventLabel,
   studentState,
   type AttendanceRow,
@@ -77,6 +78,36 @@ describe("studentState (UX pass 1 slices 6–7, SM-11)", () => {
     expect(studentState(row({ last_activity_at: iso(-IDLE_AFTER_MS - 1) }), T0)).toBe("idle");
     expect(studentState(row({}), T0)).toBe("in_progress");
     expect(studentState(row({ status: "not_joined", last_activity_at: null, started_at: null }), T0)).toBe("not_joined");
+  });
+});
+
+// "Hand in everyone now" (James, 2026-09-16): the button enables on exactly
+// what POST /api/test-sessions/[sessionId]/hand-in-all accepts — every
+// in-progress attempt once the sitting is over, and while it is still open
+// only the attempts whose own deadline has passed (409 `session_open`
+// otherwise).
+describe("canHandInAll", () => {
+  test("a sitting that is over enables it, whatever the rows say", () => {
+    expect(canHandInAll(true, [])).toBe(true);
+    expect(canHandInAll(true, [row({ status: "submitted" })])).toBe(true);
+    expect(canHandInAll(true, [row({})])).toBe(true);
+  });
+
+  test("an open sitting with everyone inside their deadline does not", () => {
+    expect(canHandInAll(false, [row({}), row({ status: "not_joined" })])).toBe(false);
+  });
+
+  test("one in-progress attempt past its own deadline is enough (T-2's relaxation)", () => {
+    expect(canHandInAll(false, [row({}), row({ deadline_passed: true })])).toBe(true);
+  });
+
+  test("a deadline that passed on an attempt already handed in is not enough", () => {
+    expect(canHandInAll(false, [row({ status: "submitted", deadline_passed: true })])).toBe(false);
+  });
+
+  test("no rows in hand (Attendance collapsed) rests on the sitting alone", () => {
+    expect(canHandInAll(false, [])).toBe(false);
+    expect(canHandInAll(true, [])).toBe(true);
   });
 });
 

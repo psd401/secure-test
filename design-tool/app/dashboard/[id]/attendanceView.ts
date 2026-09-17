@@ -156,6 +156,30 @@ export function countInProgress(rows: ReadonlyArray<Pick<AttendanceRow, "status"
 }
 
 /**
+ * "Hand in everyone now" (James, 2026-09-16): when the button may be pressed,
+ * stated exactly as POST /api/test-sessions/[sessionId]/hand-in-all decides
+ * it — so the teacher never clicks something the route will refuse.
+ *
+ * The route hands in every in-progress attempt once the sitting is over, and
+ * while the sitting is still open only those whose OWN deadline has passed
+ * (409 `session_open` when nothing qualifies). `deadline_passed` on the row is
+ * the same relaxation the per-attempt Hand in control uses.
+ *
+ * With no rows in hand (the Test sessions tab with Attendance collapsed) the
+ * answer rests on the sitting alone: over → enabled, open → disabled. That is
+ * the safe direction — an open sitting with a lapsed deadline reads as
+ * disabled until the teacher expands Attendance, rather than as an enabled
+ * button that 409s.
+ */
+export function canHandInAll(
+  sittingOver: boolean,
+  rows: ReadonlyArray<Pick<AttendanceRow, "status" | "deadline_passed">>,
+): boolean {
+  if (sittingOver) return true;
+  return rows.some((r) => r.status === "in_progress" && r.deadline_passed);
+}
+
+/**
  * UX pass 1, slices 6–7 (SM-11): the one student vocabulary for the
  * attendance table and the monitor. The server's alert stays sticky (decided
  * 2026-08-27); this is presentation only — an alert is CURRENT until the

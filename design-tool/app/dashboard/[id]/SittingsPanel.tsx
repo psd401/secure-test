@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/app/EmptyState";
+import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { LiveIndicator } from "@/components/app/LiveIndicator";
 import { ProgressBar } from "@/components/app/ProgressBar";
 import { SessionCode } from "@/components/app/SessionCode";
@@ -54,6 +55,7 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  canHandInAll,
   closeDialogCopy,
   countInProgress,
   eventLabel,
@@ -734,6 +736,28 @@ export function SittingsPanel({
                             >
                               Close session
                             </Button>
+                          ) : null}
+                          {/* "Hand in everyone now" (James, 2026-09-16): the
+                              same action the Monitor header carries, on the
+                              row. The count is known only for a sitting whose
+                              Attendance is expanded — with none in hand the
+                              dialog falls back to generic copy and the button
+                              rests on the sitting alone (canHandInAll). */}
+                          {!archived ? (
+                            <HandInAllControl
+                              sessionId={s.id}
+                              inProgress={countInProgress(att?.rows ?? [])}
+                              onHandedIn={() => {
+                                setNow(Date.now());
+                                void loadAttendance(s.id);
+                              }}
+                              variant="ghost"
+                              disabledReason={
+                                canHandInAll(!open, att?.rows ?? [])
+                                  ? undefined
+                                  : "End the test session first, then hand in."
+                              }
+                            />
                           ) : null}
                           {/* D-2: Archive on a closed/expired live row, in the
                               same slot Close session occupies while open;
