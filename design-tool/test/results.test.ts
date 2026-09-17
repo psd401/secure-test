@@ -433,6 +433,69 @@ describe("buildResults", () => {
       });
       expect(results.rows.every((r) => r.status === "submitted")).toBe(true);
       expect(results.rows.every((r) => r.deadline_passed === false)).toBe(true);
+      expect(results.rows.every((r) => r.deadline_at === null)).toBe(true);
+    });
+  });
+
+  // The teacher's extension, on the row the matrix and the per-student page
+  // read. `deadline_at` is the instant, so a teacher who has just given
+  // someone twenty more minutes can see what they gave.
+  describe("deadline_at and the teacher's override", () => {
+    async function seedInProgress(
+      assessmentId: string,
+      opts: { limitSeconds?: number | null; startedMinutesAgo?: number; override?: Date } = {},
+    ) {
+      const db = getDb();
+      const [erin] = await db
+        .insert(students)
+        .values({ owner_sub: OWNER, ssid: "555", name: "Erin" })
+        .returning();
+      if (opts.limitSeconds !== undefined) {
+        await db
+          .update(assessments)
+          .set({ time_limit_seconds: opts.limitSeconds })
+          .where(eq(assessments.id, assessmentId));
+      }
+      await db.insert(attempts).values({
+        assessment_id: assessmentId,
+        student_id: erin!.id,
+        status: "in_progress",
+        started_at: new Date(Date.now() - (opts.startedMinutesAgo ?? 5) * 60_000),
+        deadline_override_at: opts.override ?? null,
+      });
+      const results = await buildResults(assessmentId, OWNER, null, {
+        include_in_progress: true,
+      });
+      return results.rows.find((r) => r.student.ssid === "555")!;
+    }
+
+    test("is null with no limit and no extension", async () => {
+      const { assessment } = await seedResultsScenario();
+      expect((await seedInProgress(assessment.id)).deadline_at).toBeNull();
+    });
+
+    test("is started_at + the limit when there is one", async () => {
+      const { assessment } = await seedResultsScenario();
+      const row = await seedInProgress(assessment.id, {
+        limitSeconds: 60 * 60,
+        startedMinutesAgo: 5,
+      });
+      // 60 minutes allowed, started 5 ago → ~55 minutes out.
+      const minutesOut = (Date.parse(row.deadline_at!) - Date.now()) / 60_000;
+      expect(minutesOut).toBeGreaterThan(54);
+      expect(minutesOut).toBeLessThan(56);
+    });
+
+    test("an override wins, and un-passes a deadline that had passed", async () => {
+      const { assessment } = await seedResultsScenario();
+      const override = new Date(Date.now() + 20 * 60_000);
+      const row = await seedInProgress(assessment.id, {
+        limitSeconds: 10 * 60,
+        startedMinutesAgo: 30,
+        override,
+      });
+      expect(row.deadline_at).toBe(override.toISOString());
+      expect(row.deadline_passed).toBe(false);
     });
   });
 

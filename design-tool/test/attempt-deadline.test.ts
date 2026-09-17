@@ -201,17 +201,17 @@ describe("deadlineFor / isPastDeadline", () => {
   const started = new Date("2026-09-11T17:00:00.000Z");
 
   test("no limit means no deadline, and nothing is ever past it", () => {
-    expect(deadlineFor({ started_at: started }, { time_limit_seconds: null })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: null })).toBeNull();
     expect(isPastDeadline(new Date("2099-01-01T00:00:00Z"), null)).toBe(false);
   });
 
   test("a zero or negative limit is treated as no limit, not as already over", () => {
-    expect(deadlineFor({ started_at: started }, { time_limit_seconds: 0 })).toBeNull();
-    expect(deadlineFor({ started_at: started }, { time_limit_seconds: -5 })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: 0 })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: -5 })).toBeNull();
   });
 
   test("the deadline is started_at + the limit", () => {
-    const deadline = deadlineFor({ started_at: started }, { time_limit_seconds: 1800 });
+    const deadline = deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: 1800 });
     expect(deadline!.toISOString()).toBe("2026-09-11T17:30:00.000Z");
   });
 
@@ -222,6 +222,75 @@ describe("deadlineFor / isPastDeadline", () => {
     expect(isPastDeadline(at(0), deadline)).toBe(false);
     expect(isPastDeadline(at(DEADLINE_GRACE_SECONDS), deadline)).toBe(false);
     expect(isPastDeadline(at(DEADLINE_GRACE_SECONDS + 1), deadline)).toBe(true);
+  });
+});
+
+// The teacher's extension. The override is an ABSOLUTE instant and REPLACES
+// the computed deadline, which is what makes the three cases below different
+// from "add N seconds to the limit".
+describe("deadlineFor — the teacher's deadline_override_at", () => {
+  const started = new Date("2026-09-11T17:00:00.000Z");
+  const override = new Date("2026-09-11T18:15:00.000Z");
+
+  test("null override leaves the old behaviour untouched", () => {
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: null },
+        { time_limit_seconds: 1800 },
+      )!.toISOString(),
+    ).toBe("2026-09-11T17:30:00.000Z");
+  });
+
+  test("the override wins over the assessment's limit", () => {
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: override },
+        { time_limit_seconds: 1800 },
+      )!.toISOString(),
+    ).toBe(override.toISOString());
+  });
+
+  test("an override on an UNLIMITED assessment imposes a deadline", () => {
+    // Documented behaviour, not an accident: "you have until 6:15" to one
+    // student means exactly this, and it is the only shape that works when
+    // there is no limit to do arithmetic on.
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: override },
+        { time_limit_seconds: null },
+      )!.toISOString(),
+    ).toBe(override.toISOString());
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: override },
+        { time_limit_seconds: 0 },
+      )!.toISOString(),
+    ).toBe(override.toISOString());
+  });
+
+  test("an override EARLIER than the computed deadline also wins", () => {
+    // It replaces, it does not take the later of the two. Nothing should reach
+    // this through the extend route (which refuses a past instant), but the
+    // helper's rule has to be one rule, not "whichever is kinder".
+    const earlier = new Date("2026-09-11T17:10:00.000Z");
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: earlier },
+        { time_limit_seconds: 1800 },
+      )!.toISOString(),
+    ).toBe(earlier.toISOString());
+  });
+
+  test("an extended attempt is no longer past its original deadline", () => {
+    const now = new Date("2026-09-11T17:45:00.000Z"); // 15 min past 17:30
+    const attempt = { started_at: started, deadline_override_at: null };
+    expect(isPastDeadline(now, deadlineFor(attempt, { time_limit_seconds: 1800 }))).toBe(true);
+    expect(
+      isPastDeadline(
+        now,
+        deadlineFor({ ...attempt, deadline_override_at: override }, { time_limit_seconds: 1800 }),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -246,6 +315,63 @@ describe("409 time_expired on the student plane", () => {
       .from(responses)
       .where(eq(responses.attempt_id, s.attempt.id));
     expect(rows).toHaveLength(0);
+  });
+
+  // The teacher's extension, reaching the guard it exists to move. The route
+  // itself is covered in attempt-extend-api.test.ts; what matters here is that
+  // the STUDENT PLANE — which knows nothing about extensions — stops refusing,
+  // because `deadlineFor` is the single source both halves read.
+  test("a write refused as expired is accepted once the teacher extends", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
+    expect((await put(s.attempt.id, s.mc.id, PICK)).status).toBe(409);
+
+    const teacher: Principal = { sub: OWNER, role: "staff" };
+    const student = principal;
+    principal = teacher;
+    const { POST } = await import("../app/api/attempts/[attemptId]/extend/route");
+    const extended = await POST(
+      new Request("http://localhost/x", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ends_at: new Date(Date.now() + 20 * 60_000).toISOString() }),
+      }),
+      { params: Promise.resolve({ attemptId: s.attempt.id }) },
+    );
+    expect(extended.status).toBe(200);
+    principal = student;
+
+    expect((await put(s.attempt.id, s.mc.id, PICK)).status).toBe(200);
+    const rows = await getDb()
+      .select()
+      .from(responses)
+      .where(eq(responses.attempt_id, s.attempt.id));
+    expect(rows).toHaveLength(1);
+  });
+
+  // The override REPLACES rather than extends, and that cuts both ways: an
+  // override in the past makes an attempt expired even inside a generous limit.
+  test("an override in the past expires an attempt that the limit alone would not", async () => {
+    const s = await scenario({ timeLimitSeconds: 36_000, elapsedSeconds: 60 });
+    expect((await put(s.attempt.id, s.mc.id, PICK)).status).toBe(200);
+    await getDb()
+      .update(attempts)
+      .set({ deadline_override_at: new Date(Date.now() - 10 * 60_000) })
+      .where(eq(attempts.id, s.attempt.id));
+    const res = await put(s.attempt.id, s.mc.id, PICK);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("time_expired");
+  });
+
+  // An unlimited assessment is untouched by everything else in this file —
+  // until a teacher gives one student a deadline it never had.
+  test("an override imposes a deadline on an assessment with NO limit", async () => {
+    const s = await scenario({ timeLimitSeconds: null, elapsedSeconds: 60 });
+    expect((await put(s.attempt.id, s.mc.id, PICK)).status).toBe(200);
+    await getDb()
+      .update(attempts)
+      .set({ deadline_override_at: new Date(Date.now() - 10 * 60_000) })
+      .where(eq(attempts.id, s.attempt.id));
+    expect((await put(s.attempt.id, s.mc.id, PICK)).status).toBe(409);
   });
 
   test("withdrawing an answer after the grace is refused too", async () => {

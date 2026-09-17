@@ -11,10 +11,12 @@
  * `assessments.time_limit_seconds` has been authored on the Settings tab for
  * a long time and read by nothing; this is the file that starts reading it.
  *
- * The deadline is per ATTEMPT — `started_at + time_limit_seconds` — not per
- * sitting. A student who relaunches, or who resumes through a second sitting,
- * keeps the deadline their attempt began with; the sitting's `expires_at` is
- * a separate clock governing who may START.
+ * The deadline is per ATTEMPT — `started_at + time_limit_seconds`, or the
+ * teacher's `deadline_override_at` when one was granted — not per sitting. A
+ * student who relaunches, or who resumes through a second sitting, keeps the
+ * deadline their attempt began with (and keeps any extension, which is why the
+ * override lives on the attempt); the sitting's `expires_at` is a separate
+ * clock governing who may START.
  */
 
 import { NextResponse } from "next/server";
@@ -29,6 +31,15 @@ export const DEADLINE_GRACE_SECONDS = 30;
 
 export interface DeadlineAttempt {
   started_at: Date;
+  /**
+   * The teacher's extension, if one was granted (`POST …/extend`). REQUIRED on
+   * this interface rather than optional, deliberately: every consumer of
+   * `deadlineFor` narrows an attempt row to its own select list, and an
+   * optional field would let one of them quietly keep enforcing the old
+   * deadline against a student the teacher had already given more time. Making
+   * it required means the typechecker names the callers that need the column.
+   */
+  deadline_override_at: Date | null;
 }
 
 export interface DeadlineAssessment {
@@ -36,9 +47,18 @@ export interface DeadlineAssessment {
 }
 
 /**
- * The instant this attempt's time runs out, or null when the assessment has
- * no limit (the overwhelming majority — everything about this feature has to
- * leave those untouched).
+ * The instant this attempt's time runs out, or null when there is no limit at
+ * all (the overwhelming majority — everything about this feature has to leave
+ * those untouched).
+ *
+ * The override WINS, and it wins regardless of the assessment's own limit:
+ *   - a limited assessment with an override counts down to the override, not
+ *     to `started_at + limit`, whether the override is later or earlier;
+ *   - an UNLIMITED assessment with an override gains a deadline it did not
+ *     have. That is intentional and is what a teacher saying "you have until
+ *     10:45" to one student means; it is also the only shape that lets the
+ *     extension be an absolute instant rather than arithmetic on a limit that
+ *     may not exist.
  *
  * A non-positive limit is treated as no limit rather than as "already over":
  * a 0 stored by a form that wrote an empty field as a number should not lock
@@ -48,6 +68,7 @@ export function deadlineFor(
   attempt: DeadlineAttempt,
   assessment: DeadlineAssessment,
 ): Date | null {
+  if (attempt.deadline_override_at) return attempt.deadline_override_at;
   const limit = assessment.time_limit_seconds;
   if (limit == null || limit <= 0) return null;
   return new Date(attempt.started_at.getTime() + limit * 1000);

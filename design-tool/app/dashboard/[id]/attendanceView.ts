@@ -27,6 +27,11 @@ export interface AttendanceRow {
    * route's relaxation of `session_open`, so the monitor's Hand in button can
    * enable on exactly what the route accepts. */
   deadline_passed: boolean;
+  /** The attempt's EFFECTIVE deadline as an ISO instant — the teacher's
+   * `deadline_override_at` when one was granted, else `started_at +
+   * time_limit_seconds`. Null when there is no limit and no extension (the
+   * overwhelming majority), and null on a row with no attempt of its own. */
+  deadline_at: string | null;
   submitted_at: string | null;
   answered: number;
   total_items: number;
@@ -135,6 +140,11 @@ export function eventLabel(kind: string): string {
       return "Session closed by the teacher — returned to Your tests";
     case "teacher_hand_in":
       return "Handed in by the teacher";
+    // Teacher-granted extra time: the deadline was replaced with a later one.
+    // The new instant is on the row's detail (`ends_at`) — the timeline says
+    // it, the monitor's one-line label does not have room.
+    case "deadline_extended":
+      return "Time extended by teacher";
     default:
       return kind;
   }

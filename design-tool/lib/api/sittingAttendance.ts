@@ -66,6 +66,15 @@ export interface AttendanceRow {
    * `submitted_earlier` row — that attempt is handed in, and it is not this
    * sitting's to act on (H-1). */
   deadline_passed: boolean;
+  /** The EFFECTIVE deadline for a joined, still-in-progress attempt — the
+   * teacher's `deadline_override_at` when one was granted, else `started_at +
+   * time_limit_seconds`. A `Date` like every other instant on this row (the
+   * route serialises the payload, so the browser mirror in
+   * `app/dashboard/[id]/attendanceView.ts` types it as the ISO string). Null
+   * when there is no limit and no extension, on submitted rows, on
+   * `not_joined`, and on `submitted_earlier` — whose attempt is not this
+   * sitting's to act on. */
+  deadline_at: Date | null;
   submitted_at: Date | null;
   /** Slice 85: items with a saved response, out of the assessment's items.
    * On a `submitted_earlier` row this counts the earlier attempt's responses. */
@@ -238,9 +247,10 @@ export async function attendanceForSitting(
     .limit(1);
   const timeLimit = { time_limit_seconds: assessmentRow?.time_limit_seconds ?? null };
   const now = new Date();
+  const deadlineOf = (hit: (typeof joined)[number]) =>
+    hit.attempt.status === "in_progress" ? deadlineFor(hit.attempt, timeLimit) : null;
   const deadlinePassed = (hit: (typeof joined)[number]) =>
-    hit.attempt.status === "in_progress" &&
-    isPastDeadline(now, deadlineFor(hit.attempt, timeLimit));
+    isPastDeadline(now, deadlineOf(hit));
   const progress = new Map<string, { answered: number; last: Date | null }>();
   // H-1: the earlier-sitting attempts ride along in the same grouped count, so
   // their `answered` costs nothing extra.
@@ -333,6 +343,7 @@ export async function attendanceForSitting(
           : "not_joined",
       started_at: hit?.attempt.started_at ?? earlier?.attempt.started_at ?? null,
       deadline_passed: hit ? deadlinePassed(hit) : false,
+      deadline_at: hit ? deadlineOf(hit) : null,
       submitted_at: hit?.attempt.submitted_at ?? earlier?.attempt.submitted_at ?? null,
       answered: hit
         ? activity(hit).answered
@@ -357,6 +368,7 @@ export async function attendanceForSitting(
       status: hit.attempt.status as AttendanceStatus,
       started_at: hit.attempt.started_at,
       deadline_passed: deadlinePassed(hit),
+      deadline_at: deadlineOf(hit),
       submitted_at: hit.attempt.submitted_at,
       answered: activity(hit).answered,
       total_items,

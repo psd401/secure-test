@@ -86,6 +86,14 @@ export interface ResultsRow {
   // server would accept. False for every submitted row and for every
   // assessment with no time limit (the overwhelming majority).
   deadline_passed: boolean;
+  // The EFFECTIVE deadline as an ISO instant — the teacher's
+  // `deadline_override_at` when one was granted, else `started_at +
+  // time_limit_seconds`. Carried so the page can say what the student's
+  // deadline actually IS rather than only whether it has gone; without it a
+  // teacher who has just extended someone has no confirmation on the row.
+  // Null when there is no limit and no extension (the overwhelming majority)
+  // and on every submitted row, where the deadline no longer governs anything.
+  deadline_at: string | null;
   cells: ResultsCell[]; // aligned with items order
   // Null on an in-progress row: nothing has been scored, and printing a 0
   // where a total belongs reads as a mark of zero.
@@ -366,8 +374,8 @@ export async function buildResults(
       sessionStatusBySessionId.get(attempt.test_session_id) === "open";
     // T-2: the same question the hand-in route asks, asked here so the button
     // can stop refusing what the route accepts.
-    const deadlinePassed =
-      inProgress && isPastDeadline(now, deadlineFor(attempt, timeLimit));
+    const deadline = inProgress ? deadlineFor(attempt, timeLimit) : null;
+    const deadlinePassed = inProgress && isPastDeadline(now, deadline);
     const percent =
       !inProgress && unscored === 0 && assessmentMaxPoints > 0
         ? Math.round((100 * total) / assessmentMaxPoints)
@@ -395,6 +403,7 @@ export async function buildResults(
       answered_count: answered,
       sitting_open: sittingOpen,
       deadline_passed: deadlinePassed,
+      deadline_at: deadline?.toISOString() ?? null,
       cells,
       total_points: inProgress ? null : total,
       scored_max_points: inProgress ? null : scoredMax,

@@ -349,6 +349,63 @@ describe("GET /api/test-sessions/:id/attendance", () => {
     });
   });
 
+  // The teacher's extension, on the monitor row. `deadline_at` is the instant
+  // the student is actually counting down to — the override when one was
+  // granted, the computed deadline otherwise.
+  test("deadline_at is the effective deadline, and a teacher's override wins", async () => {
+    principal = staffPrincipal(TEACHER);
+    const db = getDb();
+    const a = await seedAssessment();
+    const sitting = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+
+    type Body = {
+      rows: { ps_id: string; status: string; deadline_passed: boolean; deadline_at: string | null }[];
+    };
+    const read = async () =>
+      new Map(
+        ((await (await attendance(sitting.id)).json()) as Body).rows.map((r) => [r.ps_id, r]),
+      );
+
+    const [ada] = await db
+      .insert(students)
+      .values({ owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" })
+      .returning();
+    const startedAt = new Date(Date.now() - 30 * 60_000);
+    await db.insert(attempts).values({
+      assessment_id: a.id,
+      student_id: ada!.id,
+      test_session_id: sitting.id,
+      status: "in_progress",
+      started_at: startedAt,
+    });
+
+    // No limit, no extension: nothing to show, on the joined row or the other.
+    let byId = await read();
+    expect(byId.get(STUDENT.ps_id)!.deadline_at).toBeNull();
+    expect(byId.get(OTHER_STUDENT.ps_id)!.deadline_at).toBeNull();
+
+    // Ten minutes allowed, thirty minutes in: past, and the instant says when.
+    await db
+      .update(assessments)
+      .set({ time_limit_seconds: 10 * 60 })
+      .where(eq(assessments.id, a.id));
+    byId = await read();
+    expect(byId.get(STUDENT.ps_id)!.deadline_at).toBe(
+      new Date(startedAt.getTime() + 10 * 60_000).toISOString(),
+    );
+    expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(true);
+
+    // The teacher gives them another twenty minutes.
+    const override = new Date(Date.now() + 20 * 60_000);
+    await db
+      .update(attempts)
+      .set({ deadline_override_at: override })
+      .where(eq(attempts.assessment_id, a.id));
+    byId = await read();
+    expect(byId.get(STUDENT.ps_id)!.deadline_at).toBe(override.toISOString());
+    expect(byId.get(STUDENT.ps_id)!.deadline_passed).toBe(false);
+  });
+
   // Finding H-1 (2026-09-17): a student whose only attempt was handed in
   // through an EARLIER sitting cannot join today's — the join route gives
   // them back the submitted attempt. Today's row said "Not joined" with no

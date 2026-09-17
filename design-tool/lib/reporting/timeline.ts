@@ -73,6 +73,23 @@ function lineText(event: TimelineEvent): string {
 }
 
 /**
+ * What follows the event's own time on the line, or "".
+ *
+ * Only `deadline_extended` has any: "Time extended by teacher 2:14 PM · new
+ * deadline 3:00 PM". The instant matters more than the fact here — a teacher
+ * reading this months later wants to know what the student was given, and a
+ * line that said only "extended" would send them to the events table for it.
+ * Tolerates a row written without the detail (or with a nonsense value) by
+ * falling back to the bare sentence rather than printing "Invalid Date".
+ */
+function lineSuffix(event: TimelineEvent): string {
+  if (event.kind !== "deadline_extended") return "";
+  const endsAt = event.detail?.ends_at;
+  if (typeof endsAt !== "string" || Number.isNaN(Date.parse(endsAt))) return "";
+  return ` · new deadline ${formatTime(endsAt)}`;
+}
+
+/**
  * Order-independent: events are sorted by `at` before pairing, so a caller
  * that hands over rows in any order still gets a chronological timeline.
  */
@@ -87,7 +104,11 @@ export function buildTimeline(events: TimelineEvent[]): TimelineLine[] {
     if (consumed.has(i)) continue;
     const event = sorted[i]!;
     if (event.kind !== "focus_loss") {
-      lines.push({ at: event.at, kind: event.kind, text: `${lineText(event)} ${formatTime(event.at)}` });
+      lines.push({
+        at: event.at,
+        kind: event.kind,
+        text: `${lineText(event)} ${formatTime(event.at)}${lineSuffix(event)}`,
+      });
       continue;
     }
     // Pair with the NEXT focus_regained, and only that one — a second loss

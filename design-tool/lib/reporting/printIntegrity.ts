@@ -34,6 +34,10 @@ const PHRASES: Record<string, string> = {
   // Close session (docs/close-session-ends-attempts-design.md).
   sitting_closed: "Session closed by the teacher — returned to Your tests",
   teacher_hand_in: "Handed in by the teacher",
+  // Teacher-granted extra time. The print line counts the extensions; the
+  // instant each one granted is on the per-student page's timeline, which has
+  // room for it.
+  deadline_extended: "Time extended by teacher",
 };
 
 /**
@@ -53,6 +57,7 @@ const KIND_ORDER = [
   "quit",
   "lockdown_end",
   "time_expired",
+  "deadline_extended",
   "sitting_closed",
   "teacher_hand_in",
   "client_error",

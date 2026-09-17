@@ -633,6 +633,28 @@ export const attempts = pgTable(
     // submission through POST /api/attempts/[attemptId]/hand-in, and the
     // results surfaces say so beside `submitted_at`.
     submitted_by_sub: text("submitted_by_sub"),
+    // Teacher-granted extra time (docs/time-limit-and-unfinished-attempts-design.md,
+    // the "add 10 minutes" the original note deliberately left out of scope).
+    //
+    // An ABSOLUTE instant, not a number of extra seconds, and it REPLACES
+    // `started_at + time_limit_seconds` rather than adding to it: a teacher
+    // deciding "this student finishes at 10:45" is making a statement about
+    // the clock on the wall, and storing the wall-clock answer means no
+    // consumer has to re-derive it from a limit that may itself change
+    // afterwards. `deadlineFor` reads it first and returns it whatever the
+    // assessment's limit says — so an override on an assessment with NO time
+    // limit imposes one, which is what a teacher telling one student "you
+    // have until 10:45" means.
+    //
+    // Null on every row that has not been extended (the overwhelming
+    // majority) = no override, the limit rules.
+    //
+    // Per ATTEMPT, not per sitting, for the same reason the deadline itself
+    // is: finding 8.2 rebinds an in-progress attempt to a new sitting when
+    // the student rejoins, and an extension a teacher granted yesterday must
+    // survive that rebind rather than evaporating with the sitting it was
+    // granted in.
+    deadline_override_at: timestamp("deadline_override_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -695,21 +717,33 @@ export const ATTEMPT_EVENT_KINDS = [
   // D-1/A: the teacher forced the submission through the hand-in route.
   // Server-written only; see CLIENT_ATTEMPT_EVENT_KINDS below.
   "teacher_hand_in",
+  // Teacher-granted extra time: the deadline was replaced with a later one.
+  // `detail.ends_at` carries the new instant. Server-written only, like
+  // `teacher_hand_in` — it is a record of a staff action.
+  "deadline_extended",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
 /**
  * The subset a CLIENT may post to /api/attempts/[attemptId]/events.
  *
- * `teacher_hand_in` is a record of a staff action and is written by the
- * hand-in route alone; a student client that could post it could plant a
- * timeline line claiming a teacher did something they did not. Nothing is
- * scored off these rows, so the damage is confusion rather than grades — but
- * the fix costs one list, so the list exists.
+ * `teacher_hand_in` and `deadline_extended` are records of STAFF actions and
+ * are written by their own routes alone; a student client that could post one
+ * could plant a timeline line claiming a teacher did something they did not —
+ * and in `deadline_extended`'s case one claiming a later deadline than the
+ * column actually holds. Nothing is scored off these rows, so the damage is
+ * confusion rather than grades — but the fix costs one list, so the list
+ * exists.
  */
-export type ClientAttemptEventKind = Exclude<AttemptEventKind, "teacher_hand_in">;
+export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
+  "teacher_hand_in",
+  "deadline_extended",
+] as const;
+export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
+export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
 export const CLIENT_ATTEMPT_EVENT_KINDS = ATTEMPT_EVENT_KINDS.filter(
-  (kind) => kind !== "teacher_hand_in",
+  (kind): kind is ClientAttemptEventKind =>
+    !(STAFF_ONLY_ATTEMPT_EVENT_KINDS as readonly string[]).includes(kind),
 ) as [ClientAttemptEventKind, ...ClientAttemptEventKind[]];
 
 // Kinds a teacher should be alerted about. `focus_loss` is the only one a
@@ -742,7 +776,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended')`,
     ),
   }),
 );

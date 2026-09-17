@@ -117,6 +117,28 @@ describe("buildTimeline — one line per kind", () => {
     expect(lines[0]!.text).toBe("The app hit a problem: unknown 2:07 PM");
   });
 
+  test("deadline_extended names the new deadline from its detail", () => {
+    const lines = buildTimeline([
+      {
+        kind: "deadline_extended",
+        at: at("21:07:00"),
+        detail: { ends_at: at("22:00:00"), by: "teacher-sub" },
+      },
+    ]);
+    expect(lines[0]!.text).toBe("Time extended by teacher 2:07 PM · new deadline 3:00 PM");
+    // The staff sub is an identifier, not a sentence — it stays on the row.
+    expect(lines[0]!.text).not.toContain("teacher-sub");
+  });
+
+  test("deadline_extended with no usable detail still reads as a sentence", () => {
+    for (const detail of [null, {}, { ends_at: "not a date" }]) {
+      const lines = buildTimeline([
+        { kind: "deadline_extended", at: at("21:07:00"), detail },
+      ]);
+      expect(lines[0]!.text).toBe("Time extended by teacher 2:07 PM");
+    }
+  });
+
   test("an unknown kind falls back to the raw kind rather than vanishing", () => {
     const lines = buildTimeline([{ kind: "teleported", at: at("21:07:00") }]);
     expect(lines[0]!.text).toBe("teleported 2:07 PM");

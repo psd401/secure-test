@@ -3,7 +3,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempt_events, attempts, students } from "../db/schema";
+import {
+  CLIENT_ATTEMPT_EVENT_KINDS,
+  STAFF_ONLY_ATTEMPT_EVENT_KINDS,
+  assessments,
+  attempt_events,
+  attempts,
+  students,
+} from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import {
@@ -174,6 +181,30 @@ describe("POST /api/attempts/:attemptId/events", () => {
 
     const res = await postEvent(attempt.id, { kind: "coffee_break" });
     expect(res.status).toBe(400);
+    const rows = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(rows).toHaveLength(0);
+  });
+
+  // The staff-only kinds: a student client that could post one could plant a
+  // timeline line claiming a teacher did something they did not — and, for
+  // `deadline_extended`, one claiming a later deadline than the column holds.
+  test("refuses the staff-only kinds and stores nothing", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+
+    for (const kind of STAFF_ONLY_ATTEMPT_EVENT_KINDS) {
+      expect((await postEvent(attempt.id, { kind })).status).toBe(400);
+    }
+    // The Zod enum is generated from the list, so the list is what proves it.
+    expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("deadline_extended");
+    expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("teacher_hand_in");
+    // …and it still carries the kinds the client genuinely sends.
+    expect(CLIENT_ATTEMPT_EVENT_KINDS).toContain("lockdown_begin");
+
     const rows = await getDb()
       .select()
       .from(attempt_events)

@@ -22,6 +22,7 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     status: "in_progress",
     started_at: iso(-30 * 60_000),
     deadline_passed: false,
+    deadline_at: null,
     submitted_at: null,
     answered: 3,
     total_items: 10,

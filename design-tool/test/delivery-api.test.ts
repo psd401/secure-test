@@ -708,6 +708,44 @@ describe("GET /api/assessments/:id/delivery — time_limit_ends_at / server_now"
     const body = await (await getDelivery(id)).json();
     expect(body).not.toHaveProperty("time_limit_ends_at");
   });
+
+  // The teacher's extension. Nothing in the delivery route knows about it —
+  // `deadlineFor` is the single source and the override is inside it — which
+  // is exactly what these two prove.
+  test("a teacher's deadline_override_at is what the bundle counts down to", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    await getDb()
+      .update(assessments)
+      .set({ time_limit_seconds: 600 })
+      .where(eq(assessments.id, id));
+    const override = new Date(Date.now() + 90 * 60_000);
+    await getDb()
+      .update(attempts)
+      .set({ deadline_override_at: override })
+      .where(eq(attempts.id, attempt.id));
+
+    const parsed = DeliveryBundleSchema.parse(await (await getDelivery(id)).json());
+    expect(parsed.time_limit_ends_at).toBe(override.toISOString());
+    expect(parsed.time_limit_ends_at).not.toBe(
+      new Date(attempt.started_at.getTime() + 600 * 1000).toISOString(),
+    );
+  });
+
+  test("an override on an assessment with NO limit gives the bundle a deadline", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    const override = new Date(Date.now() + 30 * 60_000);
+    await getDb()
+      .update(attempts)
+      .set({ deadline_override_at: override })
+      .where(eq(attempts.id, attempt.id));
+
+    const parsed = DeliveryBundleSchema.parse(await (await getDelivery(id)).json());
+    expect(parsed.time_limit_ends_at).toBe(override.toISOString());
+    // The pair rule holds: `server_now` never travels alone, in either direction.
+    expect(parsed.server_now).toBeDefined();
+  });
 });
 
 // Client paging follow-up (D-4): the bundle names the questions this attempt
