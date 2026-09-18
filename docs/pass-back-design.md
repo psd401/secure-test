@@ -205,3 +205,9 @@ the teacher tells them (D-3 says whether the entry row should).
   up from 2068; typecheck clean.
   Rows 231–238 in `docs/design-tool-manual-checks.md` ("Pass back
   (2026-09-18)") — NOT RUN. Slice 3 (deploy + hand-run) next.
+- **2026-09-18 — slices 1–2 PUSHED + DEPLOYED: LIVE at https://<origin> =
+  origin/main `5173bf5`, task def rev 42, rollout COMPLETED, health stamp
+  = HEAD, Aurora at 0039 (40 journal rows) via `deploy.sh`.** `ADMIN_EMAILS`
+  now carries the maintainer (context key `adminEmails` set the same
+  deploy). Rows 231–238 NOT RUN (need a demo-student sitting).
+
