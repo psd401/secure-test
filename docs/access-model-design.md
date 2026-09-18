@@ -452,3 +452,12 @@ check and adds the test that keeps it that way.
   before), typecheck clean. Rows 222–230 in
   `docs/design-tool-manual-checks.md` ("Co-teach") are NOT RUN — most need a
   SECOND staff account (a co-teacher pilot pair, or a minted second token).
+- **2026-09-17 evening — slices 1–3 PUSHED + DEPLOYED: LIVE at
+  https://<origin> = origin/main `365fb78`, task def rev 41, rollout
+  COMPLETED, health stamp = HEAD, Aurora at 0038 (39 journal rows) — the
+  first deploy run end to end by `design-tool/infra/scripts/deploy.sh`.**
+  `adminEmails` was UNSET in the context file, so nobody is admin on rev
+  41 (valid; add it before the next deploy). Rows 222–230 NOT RUN (second
+  staff account). Slices 4 (substitute) and 5 (admin + impersonation)
+  next; 6 deferred (D-7).
+
