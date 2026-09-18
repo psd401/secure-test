@@ -752,3 +752,27 @@ Unblocked by deleting the old attempt from the per-student page.
 | 213 | From the **Test sessions** tab with Attendance COLLAPSED, press **Hand in everyone** on a closed sitting | The button is enabled on the row; the dialog falls back to the generic copy — "Hand in everyone still working? Their answers are saved as they are, and they can't continue. This can't be undone." — and the hand-in works | ✅ 2026-09-17 — collapsed `TGJDM6` row: enabled, generic copy, "Handed in 0." |
 | 214 | From the **Test sessions** tab on an OPEN sitting with nobody past a deadline | The row's button is disabled with the same title, whether Attendance is expanded or collapsed | ✅ 2026-09-17 — the open `S7PBD6` row disabled with the title (Attendance collapsed); the closed rows enabled |
 | 215 | **H-1.** A student whose attempt on this assessment was handed in during an EARLIER sitting; open today's sitting's Monitor before they try to join | The row reads **Handed in (earlier session)** with a muted "Handed in <when> in an earlier session" line, counts under the **Handed in** tile, and the header reads "N of M joined · K handed in · 1 already handed in" (joined / handed in stay this sitting's own), offers no View screen / Hand in / Delete, and the Test sessions tab's Attendance shows the same badge | ✅ 2026-09-17 (rev 39, Chrome on the origin) — on the older closed sitting `HMR4KB` of `Client rows hand-run 2026-09-08 (copy)`, whose student's attempt lives on `TGJDM6`: header "0 of 32 joined · 0 handed in · 1 already handed in", Handed in tile 1, row badge "Handed in (earlier session)" + "Handed in 9/17/2026, 8:38:41 AM in an earlier session", progress 1/10, activity —, no actions; the attendance API answered `submitted_earlier` with counts { 32, 0, 0, 1 } while `TGJDM6` still reads `submitted` |
+
+## Extend time (2026-09-17)
+
+Teacher UI for the server-only "Extend time" built in `889cf38`: `POST
+/api/attempts/[attemptId]/extend` (one student) and `POST
+/api/test-sessions/[sessionId]/extend` (every in-progress attempt on a
+sitting). **Extend time** sits beside Hand in everyone on the Monitor header
+and each live Test sessions tab row (sitting mode), beside Hand in / Delete
+on the per-student results page and on each joined Monitor row's Actions
+cell (attempt mode, only while `in_progress`). No session-open gate —
+extending is additive, so it is enabled any time there is someone
+in-progress to extend, sitting open or closed. Clicking opens a small dialog
+(not a confirm) with a `datetime-local` input defaulting to tomorrow 23:59
+local time; on success a "Extended N student(s)." / "Extended." line shows
+briefly and the view refreshes.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 216 | On a CLOSED sitting from the **Test sessions** tab, press **Extend time**, accept the default (tomorrow 23:59) and confirm | The dialog closes, a brief "Extended N student(s)." line appears, and reopening the Monitor shows each in-progress student's row reading "Until <tomorrow's date>, 11:59 PM" | NOT RUN |
+| 217 | From the Monitor header on an OPEN sitting, press **Extend time** and pick a time later today, then confirm | Enabled even though the sitting is open (no "End the test session first" gate, unlike Hand in everyone); the extended rows' "Until …" line updates to the picked time without the date (today) | NOT RUN |
+| 218 | On the per-student results page for an in-progress attempt, press **Extend time** beside Hand in / Delete and confirm a time | The page reloads; the "Not handed in" line now carries "Until …" at the new time, and Extend time is still offered (the attempt is still in progress) | NOT RUN |
+| 219 | After extending, open that attempt's integrity timeline | One new line reads "Time extended by teacher … new deadline …" with the picked instant | NOT RUN |
+| 220 | Open **Extend time** and pick a time in the PAST, then confirm | Inline error "Pick a time in the future." — the dialog stays open, nothing is sent | NOT RUN |
+| 221 | On a row whose attempt is already **Handed in** (Monitor row, results page, or Test sessions tab with Attendance expanded) | No Extend time button is offered for that row/attempt | NOT RUN |

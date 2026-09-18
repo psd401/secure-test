@@ -1,6 +1,7 @@
 // Slices 86–87: what the Sittings tab and the monitor page share — the
 // attendance payload's shape as the browser sees it, the two cadence
 // constants, and the pure time helpers. No React here.
+import { formatWhen } from "@/lib/ui/format";
 
 /** Attendance re-fetch cadence while a sitting is open and on screen. */
 export const LIVE_INTERVAL_MS = 5_000;
@@ -206,6 +207,34 @@ export function canHandInAll(
 ): boolean {
   if (sittingOver) return true;
   return rows.some((r) => r.status === "in_progress" && r.deadline_passed);
+}
+
+/**
+ * "Extend time": whether an in-progress attempt/sitting may have its
+ * deadline extended. Deliberately NOT gated on the sitting being open or
+ * closed — the whole point (like "Hand in everyone now") is a class that
+ * needs longer after today's period ended — only on there being someone
+ * still working to give the extra time to.
+ */
+export function canExtend(status: AttendanceRow["status"]): boolean {
+  return status === "in_progress";
+}
+
+/**
+ * The effective deadline as a short teacher-facing line: "Until 3:00 PM" /
+ * "Until Sep 18, 11:59 PM" (today's date omitted, `formatWhen`) once
+ * `deadline_passed` flips to "Time expired" — the same two facts the hand-in
+ * route's own relaxation reads. Null when there is nothing to say: no limit,
+ * no extension, or a submitted row (`deadline_at` is always null there).
+ */
+export function deadlineNote(
+  deadline_at: string | null,
+  deadline_passed: boolean,
+  now: Date = new Date(),
+): string | null {
+  if (deadline_passed) return "Time expired";
+  if (!deadline_at) return null;
+  return `Until ${formatWhen(deadline_at, now)}`;
 }
 
 /**

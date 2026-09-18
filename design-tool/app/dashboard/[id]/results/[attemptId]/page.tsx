@@ -29,6 +29,8 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
+import { deadlineNote } from "../../attendanceView";
+import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
 
 export const dynamic = "force-dynamic";
@@ -335,6 +337,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
               <span className="font-medium text-warning-foreground">Not handed in</span>{" "}
               · Started {attempt.started_at ? formatWhen(attempt.started_at) : "—"} ·{" "}
               {row.answered_count} of {results.items.length} answered
+              {deadlineNote(row.deadline_at, row.deadline_passed) ? (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {deadlineNote(row.deadline_at, row.deadline_passed)}
+                </span>
+              ) : null}
             </p>
           ) : (
             <p className="text-sm">
@@ -368,6 +375,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     : undefined
                 }
               />
+            ) : null}
+            {row.status === "in_progress" ? (
+              <ExtendTimeAndReload attemptId={attemptId} />
             ) : null}
             <DeleteAttemptAndReturn
               attemptId={attemptId}

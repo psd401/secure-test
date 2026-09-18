@@ -211,6 +211,31 @@ export function attemptHandInErrorCopy(code: string): ErrorCopy {
   }
 }
 
+/**
+ * POST /api/attempts/[attemptId]/extend and
+ * POST /api/test-sessions/[sessionId]/extend — the teacher's "Extend time".
+ * Unlike the other copy functions here, an unrecognized code falls straight
+ * through as its own message rather than a generic "tell IT" sentence: the
+ * route's codes are all short and self-explanatory (see the two routes'
+ * doc comments), and extending is low-stakes enough that showing the code
+ * itself is more useful than a canned line.
+ */
+export function extendErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "ends_at_past":
+      return { message: "Pick a time in the future.", showCode: false };
+    case "not_in_progress":
+      return { message: "Already handed in.", showCode: false };
+    case "not_found":
+    case "forbidden":
+      return { message: "Not yours to extend.", showCode: false };
+    case "network":
+      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+    default:
+      return { message: code, showCode: false };
+  }
+}
+
 /** app/api/students/[id]/accommodations and the overrides routes. */
 export function accommodationErrorCopy(code: string): ErrorCopy {
   switch (code) {

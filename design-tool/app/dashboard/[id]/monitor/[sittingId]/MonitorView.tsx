@@ -50,6 +50,7 @@ import {
   type StudentState,
 } from "@/components/app/StatusBadge";
 import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
+import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
@@ -60,9 +61,11 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  canExtend,
   canHandInAll,
   closeDialogCopy,
   countInProgress,
+  deadlineNote,
   eventLabel,
   earlierSessionNote,
   idleFor,
@@ -262,6 +265,19 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
                 canHandInAll(!open, data?.rows ?? [])
                   ? undefined
                   : "End the test session first, then hand in."
+              }
+            />
+            {/* Extend time, whole sitting: additive, so — unlike Hand in
+                everyone — it is never gated on the sitting being open or
+                closed, only on someone in-progress to extend. */}
+            <ExtendTimeControl
+              target={{ kind: "sitting", sessionId: sittingId }}
+              onExtended={() => void load()}
+              size="default"
+              disabledReason={
+                (data?.rows ?? []).some((r) => canExtend(r.status))
+                  ? undefined
+                  : "No one is in progress on this session."
               }
             />
           </>
@@ -476,6 +492,13 @@ function StudentRow({
           {earlierNote ? (
             <span className="text-xs text-muted-foreground">{earlierNote}</span>
           ) : null}
+          {/* Time extension: the effective deadline, once there is one to
+              show — null on every row with no limit and no extension. */}
+          {!earlier && deadlineNote(r.deadline_at, r.deadline_passed, new Date(now)) ? (
+            <span className="text-xs text-muted-foreground">
+              {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now))}
+            </span>
+          ) : null}
           {r.alert && current ? (
             <span className="text-xs text-danger-foreground">
               {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
@@ -515,6 +538,14 @@ function StudentRow({
                     ? undefined
                     : "End the test session first, then hand in."
                 }
+              />
+            ) : null}
+            {/* Extend time, one student: additive, so enabled any time the
+                attempt is in progress — no session-closed gate. */}
+            {canExtend(r.status) ? (
+              <ExtendTimeControl
+                target={{ kind: "attempt", attemptId: r.attempt_id }}
+                onExtended={onDeleted}
               />
             ) : null}
             {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled

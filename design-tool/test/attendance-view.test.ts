@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   IDLE_AFTER_MS,
   alertIsCurrent,
+  canExtend,
   canHandInAll,
   countInProgress,
+  deadlineNote,
   earlierSessionNote,
   eventLabel,
   statusLabel,
@@ -181,5 +183,46 @@ describe("client_error in the attendance view", () => {
 
   test("reads as words, not as the client's error code", () => {
     expect(eventLabel("client_error")).toBe("The app hit a problem");
+  });
+});
+
+// Time extension, teacher UI half: "Extend time" is enabled on exactly the
+// same condition Hand in / Delete gate on being IN PROGRESS, minus their
+// session-open guard — extending is additive, never refused by an open or
+// closed sitting.
+describe("canExtend", () => {
+  test("in progress: yes", () => {
+    expect(canExtend("in_progress")).toBe(true);
+  });
+
+  test("submitted, not joined, or handed in through an earlier session: no", () => {
+    expect(canExtend("submitted")).toBe(false);
+    expect(canExtend("not_joined")).toBe(false);
+    expect(canExtend("submitted_earlier")).toBe(false);
+  });
+});
+
+describe("deadlineNote", () => {
+  test("no deadline and not passed: nothing to say", () => {
+    expect(deadlineNote(null, false, new Date(T0))).toBeNull();
+  });
+
+  test("a deadline today reads as a bare time", () => {
+    const at = iso(60_000); // one minute after T0, same Pacific calendar day
+    expect(deadlineNote(at, false, new Date(T0))).toStartWith("Until ");
+    expect(deadlineNote(at, false, new Date(T0))).not.toMatch(/\d{4}/);
+  });
+
+  test("a deadline on another day carries the date", () => {
+    const at = new Date(T0 + 30 * 24 * 60 * 60_000).toISOString();
+    expect(deadlineNote(at, false, new Date(T0))).toContain("Sep");
+  });
+
+  test("deadline_passed wins over a still-present deadline_at", () => {
+    expect(deadlineNote(iso(60_000), true, new Date(T0))).toBe("Time expired");
+  });
+
+  test("deadline_passed with no deadline_at (defensive): still 'Time expired'", () => {
+    expect(deadlineNote(null, true, new Date(T0))).toBe("Time expired");
   });
 });

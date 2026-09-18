@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/app/EmptyState";
+import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { LiveIndicator } from "@/components/app/LiveIndicator";
 import { ProgressBar } from "@/components/app/ProgressBar";
@@ -55,6 +56,7 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  canExtend,
   canHandInAll,
   closeDialogCopy,
   countInProgress,
@@ -756,6 +758,26 @@ export function SittingsPanel({
                                 canHandInAll(!open, att?.rows ?? [])
                                   ? undefined
                                   : "End the test session first, then hand in."
+                              }
+                            />
+                          ) : null}
+                          {/* Extend time, whole sitting — additive, so never
+                              gated on open/closed, only on Attendance having
+                              shown someone in progress (collapsed = unknown,
+                              so it stays enabled and the route is the final
+                              word, same posture canHandInAll takes). */}
+                          {!archived ? (
+                            <ExtendTimeControl
+                              target={{ kind: "sitting", sessionId: s.id }}
+                              onExtended={() => {
+                                setNow(Date.now());
+                                void loadAttendance(s.id);
+                              }}
+                              variant="ghost"
+                              disabledReason={
+                                att && !att.rows.some((r) => canExtend(r.status))
+                                  ? "No one is in progress on this session."
+                                  : undefined
                               }
                             />
                           ) : null}
