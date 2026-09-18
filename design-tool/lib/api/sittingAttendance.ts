@@ -41,7 +41,8 @@ type Db = ReturnType<typeof getDb>;
  * student per assessment), so a teacher watching today's room needs to see
  * why the student cannot join instead of an unexplained "Not joined".
  */
-export type AttendanceStatus = "not_joined" | "in_progress" | "submitted" | "submitted_earlier";
+export type AttendanceStatus =
+  "not_joined" | "in_progress" | "submitted" | "submitted_earlier";
 
 export interface AttendanceEvent {
   kind: AttemptEventKind;
@@ -90,6 +91,12 @@ export interface AttendanceRow {
    * On a `submitted_earlier` row this is the EARLIER sitting's attempt — the
    * monitor offers no per-attempt action on it (H-1). */
   attempt_id: string | null;
+  /** Pass back (docs/pass-back-design.md): whether THIS row's attempt needs a
+   * new deadline before it can be passed back — the same test the route
+   * applies (`(assessment.time_limit_seconds ?? 0) > 0 ||
+   * attempt.deadline_override_at !== null`). False on `not_joined`, where
+   * there is no attempt to pass back at all. */
+  timed: boolean;
   /** Slice 91: the newest client-reported event, whatever its kind. Null on a
    * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
@@ -104,7 +111,12 @@ export interface AttendanceRow {
 
 export interface Attendance {
   rows: AttendanceRow[];
-  counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
+  counts: {
+    expected: number;
+    joined: number;
+    submitted: number;
+    submitted_earlier: number;
+  };
   /** Slice 85: the newest last_activity_at across rows — a poller's change cursor. */
   updated_at: Date | null;
   total_items: number;
@@ -135,7 +147,11 @@ export async function expectedStudents(
   if (!ownerEmail && !sitting.student_ps_ids) return byPsId;
 
   if (ownerEmail) {
-    const rows = await studentsInTeachersSections(db, ownerEmail, sitting.section_ps_id);
+    const rows = await studentsInTeachersSections(
+      db,
+      ownerEmail,
+      sitting.section_ps_id,
+    );
     for (const { student, section } of rows) {
       const entry = byPsId.get(student.ps_id);
       if (entry) entry.sections.push(section);
@@ -154,7 +170,8 @@ export async function expectedStudents(
         .select()
         .from(roster_students)
         .where(inArray(roster_students.ps_id, missing));
-      for (const student of rows) byPsId.set(student.ps_id, { student, sections: [] });
+      for (const student of rows)
+        byPsId.set(student.ps_id, { student, sections: [] });
     }
   }
   return byPsId;
@@ -170,7 +187,9 @@ export async function expectedStudents(
  * away and came back shows history but no active alert.
  */
 export function activeAlert(events: AttendanceEvent[]): AttendanceEvent | null {
-  const sticky = new Set<string>(ALERT_EVENT_KINDS.filter((k) => k !== "focus_loss"));
+  const sticky = new Set<string>(
+    ALERT_EVENT_KINDS.filter((k) => k !== "focus_loss"),
+  );
   let regained = false;
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i]!;
@@ -206,7 +225,9 @@ export async function attendanceForSitting(
   // Deliberately `status = 'submitted'` only: a student whose other attempt is
   // still in progress CAN join today (the join route rebinds an in-progress
   // attempt to the new sitting), so they stay a plain `not_joined`.
-  const notJoinedPsIds = [...expected.keys()].filter((psId) => !byKey.has(psId));
+  const notJoinedPsIds = [...expected.keys()].filter(
+    (psId) => !byKey.has(psId),
+  );
   const earlierByPsId = new Map<string, (typeof joined)[number]>();
   if (notJoinedPsIds.length > 0) {
     const rows = await db
@@ -225,7 +246,8 @@ export async function attendanceForSitting(
     // there can only be one; ordering oldest-first means the newest wins if
     // that ever changes.
     for (const row of rows) {
-      if (row.student.roster_ps_id) earlierByPsId.set(row.student.roster_ps_id, row);
+      if (row.student.roster_ps_id)
+        earlierByPsId.set(row.student.roster_ps_id, row);
     }
   }
 
@@ -245,12 +267,22 @@ export async function attendanceForSitting(
     .from(assessments)
     .where(eq(assessments.id, sitting.assessment_id))
     .limit(1);
-  const timeLimit = { time_limit_seconds: assessmentRow?.time_limit_seconds ?? null };
+  const timeLimit = {
+    time_limit_seconds: assessmentRow?.time_limit_seconds ?? null,
+  };
   const now = new Date();
   const deadlineOf = (hit: (typeof joined)[number]) =>
-    hit.attempt.status === "in_progress" ? deadlineFor(hit.attempt, timeLimit) : null;
+    hit.attempt.status === "in_progress"
+      ? deadlineFor(hit.attempt, timeLimit)
+      : null;
   const deadlinePassed = (hit: (typeof joined)[number]) =>
     isPastDeadline(now, deadlineOf(hit));
+  // Pass back: the same "does a deadline exist at all" question the route
+  // asks directly, rather than through `deadlineFor` — a limit on the
+  // assessment OR an override already on the attempt, regardless of status.
+  const timedOf = (hit: (typeof joined)[number]) =>
+    (timeLimit.time_limit_seconds ?? 0) > 0 ||
+    hit.attempt.deadline_override_at !== null;
   const progress = new Map<string, { answered: number; last: Date | null }>();
   // H-1: the earlier-sitting attempts ride along in the same grouped count, so
   // their `answered` costs nothing extra.
@@ -268,7 +300,8 @@ export async function attendanceForSitting(
       .from(responses)
       .where(inArray(responses.attempt_id, progressIds))
       .groupBy(responses.attempt_id);
-    for (const r of rows) progress.set(r.attempt_id, { answered: r.answered, last: r.last });
+    for (const r of rows)
+      progress.set(r.attempt_id, { answered: r.answered, last: r.last });
   }
   // Slice 91: client-reported events, oldest first (id breaks same-timestamp
   // ties, since rows are only ever appended). Small by construction — one
@@ -282,7 +315,12 @@ export async function attendanceForSitting(
         at: attempt_events.at,
       })
       .from(attempt_events)
-      .where(inArray(attempt_events.attempt_id, joined.map((j) => j.attempt.id)))
+      .where(
+        inArray(
+          attempt_events.attempt_id,
+          joined.map((j) => j.attempt.id),
+        ),
+      )
       .orderBy(asc(attempt_events.at), asc(attempt_events.id));
     for (const r of rows) {
       const list = eventsByAttempt.get(r.attempt_id) ?? [];
@@ -306,7 +344,9 @@ export async function attendanceForSitting(
     ].filter((d): d is Date => d instanceof Date);
     return {
       answered: p?.answered ?? 0,
-      last_activity_at: candidates.length ? new Date(Math.max(...candidates.map((d) => d.getTime()))) : null,
+      last_activity_at: candidates.length
+        ? new Date(Math.max(...candidates.map((d) => d.getTime())))
+        : null,
     };
   };
 
@@ -341,10 +381,12 @@ export async function attendanceForSitting(
         : earlier
           ? "submitted_earlier"
           : "not_joined",
-      started_at: hit?.attempt.started_at ?? earlier?.attempt.started_at ?? null,
+      started_at:
+        hit?.attempt.started_at ?? earlier?.attempt.started_at ?? null,
       deadline_passed: hit ? deadlinePassed(hit) : false,
       deadline_at: hit ? deadlineOf(hit) : null,
-      submitted_at: hit?.attempt.submitted_at ?? earlier?.attempt.submitted_at ?? null,
+      submitted_at:
+        hit?.attempt.submitted_at ?? earlier?.attempt.submitted_at ?? null,
       answered: hit
         ? activity(hit).answered
         : earlier
@@ -358,6 +400,7 @@ export async function attendanceForSitting(
       last_event: hit ? events(hit).last_event : null,
       alert: hit ? events(hit).alert : null,
       last_lockdown_begin_at: hit ? events(hit).last_lockdown_begin_at : null,
+      timed: hit ? timedOf(hit) : earlier ? timedOf(earlier) : false,
     });
   }
   for (const [key, hit] of byKey) {
@@ -378,6 +421,7 @@ export async function attendanceForSitting(
       last_event: events(hit).last_event,
       alert: events(hit).alert,
       last_lockdown_begin_at: events(hit).last_lockdown_begin_at,
+      timed: timedOf(hit),
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -390,12 +434,18 @@ export async function attendanceForSitting(
       // a student who handed the assessment in through an earlier sitting is
       // counted apart, so the header can read "N of M joined · K handed in ·
       // O already handed in" instead of an unexplained "Not joined".
-      joined: rows.filter((r) => r.status !== "not_joined" && r.status !== "submitted_earlier").length,
+      joined: rows.filter(
+        (r) => r.status !== "not_joined" && r.status !== "submitted_earlier",
+      ).length,
       submitted: rows.filter((r) => r.status === "submitted").length,
-      submitted_earlier: rows.filter((r) => r.status === "submitted_earlier").length,
+      submitted_earlier: rows.filter((r) => r.status === "submitted_earlier")
+        .length,
     },
     updated_at: rows.reduce<Date | null>(
-      (acc, r) => (r.last_activity_at && (!acc || r.last_activity_at > acc) ? r.last_activity_at : acc),
+      (acc, r) =>
+        r.last_activity_at && (!acc || r.last_activity_at > acc)
+          ? r.last_activity_at
+          : acc,
       null,
     ),
     total_items,

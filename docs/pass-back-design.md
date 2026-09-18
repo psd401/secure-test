@@ -165,3 +165,43 @@ the teacher tells them (D-3 says whether the entry row should).
   enforcement sweeps (`test/access-enforcement.test.ts`,
   `test/auth-role-enforcement.test.ts`) enumerate routes from disk, so the new
   route is covered without a registration edit. Slice 2 (teacher UI) next.
+- 2026-09-18 — **slice 2 (teacher UI) BUILT, not deployed, not hand-run.**
+  `components/app/PassBackControl.tsx`: "Pass back" button + a dialog
+  ("Pass back to <student>?", the note's copy via `passBackCopy`, a
+  `datetime-local` deadline picker shown only when `timed` — reusing
+  `ExtendTimeControl`'s `defaultExtendValue` / `toIsoInstant` so "tomorrow
+  23:59" stays one definition) → `POST /api/attempts/[attemptId]/pass-back`.
+  `passBackErrorCopy` in `lib/ui/errorCopy.ts` covers the route's codes.
+  Two thin reload wrappers (`app/dashboard/[id]/results/PassBackAndReload.tsx`)
+  mirror `HandInAttemptAndReload` / `ExtendTimeAndReload`.
+  Placement (D-4): the per-student page beside Hand in / Delete, gated on
+  `row.status === "submitted"`, with `scoreCount` = the attempt's current
+  `final` score count and `timed` = `(assessment.time_limit_seconds ?? 0) > 0
+  || attempt.deadline_override_at !== null` — the same test the route applies.
+  Each Monitor row whose status is `submitted` or `submitted_earlier` also
+  gets the button (the route works on the attempt id directly, whichever
+  sitting it is bound to, so a `submitted_earlier` row can still be passed
+  back from a room it isn't in); the Monitor has no per-response score list in
+  hand, so it passes `scoreCount={0}` and lets the copy's zero-case cover it.
+  `AttendanceRow` gained a `timed: boolean` field (both
+  `lib/api/sittingAttendance.ts` and its browser mirror
+  `app/dashboard/[id]/attendanceView.ts`), computed the same way as the
+  per-student page's.
+  The per-student page's "Not handed in" status line now reads "· passed back
+  N time(s)" when `attempt.pass_back_count > 0`, and a collapsed `<details>`
+  "Earlier scores (before pass back)" section (via `listSupersededScores`)
+  lists item, points/max, method and scorer, out of the main answers list.
+  **One bug found and fixed in the same slice:** `splitScores`'s "newest
+  non-final row is the proposal" rule picked up a just-superseded score as an
+  unapproved AI proposal — fixed to require `status === "proposed"` explicitly
+  (proven by a new test that hand-inserts a `superseded` row on a submitted
+  attempt and checks no "AI proposal" text appears).
+  Tests: `test/pass-back-control.test.tsx` (11, pure copy/predicate + the
+  static-markup disabled posture), three new cases in
+  `test/reporting-views.test.tsx` (the button's presence, a full
+  `passBackAttempt` → re-render round trip checking the status line and the
+  earlier-scores section, and the splitScores-fix regression), one row updated
+  in `test/attendance-view.test.ts` for the new field. Design-tool test count
+  up from 2068; typecheck clean.
+  Rows 231–238 in `docs/design-tool-manual-checks.md` ("Pass back
+  (2026-09-18)") — NOT RUN. Slice 3 (deploy + hand-run) next.

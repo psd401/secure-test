@@ -13,7 +13,13 @@
 // (delete-on-read, discard-on-close) are unchanged.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownAZ, ListOrdered, Monitor, Presentation, ScanEye } from "lucide-react";
+import {
+  ArrowDownAZ,
+  ListOrdered,
+  Monitor,
+  Presentation,
+  ScanEye,
+} from "lucide-react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -53,6 +59,7 @@ import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
 import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
+import { PassBackControl } from "@/components/app/PassBackControl";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt } from "@/lib/ui/format";
@@ -109,7 +116,14 @@ const EMPTY_COUNTS: Record<StudentState, number> = {
   handed_in: 0,
 };
 
-export function MonitorView({ assessmentId, assessmentName, sittingId, code, status, expiresAt }: Props) {
+export function MonitorView({
+  assessmentId,
+  assessmentName,
+  sittingId,
+  code,
+  status,
+  expiresAt,
+}: Props) {
   const [data, setData] = useState<AttendancePayload | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -149,7 +163,9 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
   const open = state === "open";
   // UX pass 2 slice 4 (P2-8): a Closed session promises "students already in
   // can finish" — keep polling while any of them is still working.
-  const anyStillWorking = (data?.rows ?? []).some((r) => r.status === "in_progress");
+  const anyStillWorking = (data?.rows ?? []).some(
+    (r) => r.status === "in_progress",
+  );
   const polling = open || anyStillWorking;
 
   useEffect(() => {
@@ -186,7 +202,9 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
     setBusy(true);
     setActionError(null);
     try {
-      const res = await fetch(`/api/test-sessions/${sittingId}/close`, { method: "POST" });
+      const res = await fetch(`/api/test-sessions/${sittingId}/close`, {
+        method: "POST",
+      });
       if (!res.ok) throw await readError(res);
       await load();
     } catch (err) {
@@ -198,7 +216,10 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
   }
 
   const rows = useMemo(() => {
-    const list = (data?.rows ?? []).map((r) => ({ row: r, state: studentState(r, now) }));
+    const list = (data?.rows ?? []).map((r) => ({
+      row: r,
+      state: studentState(r, now),
+    }));
     const rank = (s: StudentState) => SUMMARY_ORDER.indexOf(s);
     list.sort((a, b) =>
       sort === "triage"
@@ -229,17 +250,26 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
       <PageHeader
         crumbs={[
           { label: "Assessments", href: "/dashboard" },
-          { label: assessmentName, href: `/dashboard/${assessmentId}?tab=sessions` },
+          {
+            label: assessmentName,
+            href: `/dashboard/${assessmentId}?tab=sessions`,
+          },
         ]}
         title={`Monitor ${code}`}
         status={<SessionStatusBadge state={state} />}
         description={
-          open ? `${assessmentName} · ${closesAt(session.expires_at, new Date(now))}` : assessmentName
+          open
+            ? `${assessmentName} · ${closesAt(session.expires_at, new Date(now))}`
+            : assessmentName
         }
         actions={
           <>
             {open ? (
-              <Button type="button" variant="outline" onClick={() => setShowCode(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCode(true)}
+              >
                 <Presentation aria-hidden />
                 Show code
               </Button>
@@ -248,7 +278,12 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
               Refresh
             </Button>
             {open ? (
-              <Button type="button" variant="outline" disabled={busy} onClick={() => setPendingClose(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setPendingClose(true)}
+              >
                 Close session
               </Button>
             ) : null}
@@ -289,7 +324,8 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
         <div className="space-y-1 text-sm">
           {data ? (
             <div>
-              {data.counts.joined} of {data.counts.expected} joined · {data.counts.submitted} handed in
+              {data.counts.joined} of {data.counts.expected} joined ·{" "}
+              {data.counts.submitted} handed in
               {data.counts.submitted_earlier > 0
                 ? ` · ${data.counts.submitted_earlier} already handed in`
                 : null}
@@ -297,7 +333,9 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
           ) : null}
           <LiveIndicator
             intervalMs={LIVE_INTERVAL_MS}
-            updatedAgo={fetchedAt ? ago(new Date(fetchedAt).toISOString(), now) : "—"}
+            updatedAgo={
+              fetchedAt ? ago(new Date(fetchedAt).toISOString(), now) : "—"
+            }
             failedAt={pollFailedAt}
             onRetry={() => load()}
             live={polling}
@@ -319,7 +357,11 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
       </p>
 
       {data === null ? (
-        <div className="space-y-3" aria-busy="true" aria-label="Loading attendance">
+        <div
+          className="space-y-3"
+          aria-busy="true"
+          aria-label="Loading attendance"
+        >
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {Array.from({ length: 5 }, (_, i) => (
               <Skeleton key={i} className="h-16" />
@@ -335,13 +377,21 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
           title="No one has joined yet"
           description={
             <>
-              Open to {scopeLabel}. Students open Secure Test, sign in, and enter code{" "}
-              <span className="font-mono font-semibold tracking-widest">{code}</span>.
+              Open to {scopeLabel}. Students open Secure Test, sign in, and
+              enter code{" "}
+              <span className="font-mono font-semibold tracking-widest">
+                {code}
+              </span>
+              .
             </>
           }
           action={
             open ? (
-              <Button type="button" variant="outline" onClick={() => setShowCode(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCode(true)}
+              >
                 <Presentation aria-hidden />
                 Show code
               </Button>
@@ -350,22 +400,36 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
         />
       ) : (
         <>
-          <MonitorSummary counts={counts} active={filter} onSelect={setFilter} />
+          <MonitorSummary
+            counts={counts}
+            active={filter}
+            onSelect={setFilter}
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>
               {filter ? `Showing ${visible.length} of ${rows.length}. ` : null}
-              <ScanEye className="mr-1 inline size-4 align-text-bottom" aria-hidden />
-              View screen takes one still of a student&apos;s screen; the student sees a notice.
+              <ScanEye
+                className="mr-1 inline size-4 align-text-bottom"
+                aria-hidden
+              />
+              View screen takes one still of a student&apos;s screen; the
+              student sees a notice.
             </span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setSort((s) => (s === "triage" ? "name" : "triage"))}
+              onClick={() =>
+                setSort((s) => (s === "triage" ? "name" : "triage"))
+              }
               aria-pressed={sort === "name"}
             >
-              {sort === "triage" ? <ArrowDownAZ aria-hidden /> : <ListOrdered aria-hidden />}
+              {sort === "triage" ? (
+                <ArrowDownAZ aria-hidden />
+              ) : (
+                <ListOrdered aria-hidden />
+              )}
               {sort === "triage" ? "Sort A–Z" : "Sort by status"}
             </Button>
           </div>
@@ -399,12 +463,20 @@ export function MonitorView({ assessmentId, assessmentName, sittingId, code, sta
       )}
 
       <p className="text-sm text-muted-foreground">
-        <Link href={`/dashboard/${assessmentId}?tab=sessions`} className="hover:underline">
+        <Link
+          href={`/dashboard/${assessmentId}?tab=sessions`}
+          className="hover:underline"
+        >
           Back to test sessions
         </Link>
       </p>
 
-      <ShowCodeDialog open={showCode} onOpenChange={setShowCode} code={code} assessmentName={assessmentName} />
+      <ShowCodeDialog
+        open={showCode}
+        onOpenChange={setShowCode}
+        code={code}
+        assessmentName={assessmentName}
+      />
 
       <AlertDialog
         open={pendingClose}
@@ -460,19 +532,33 @@ function StudentRow({
   const earlier = r.status === "submitted_earlier";
   const earlierNote = earlierSessionNote(r);
   return (
-    <TableRow className={cn(current && "shadow-[inset_4px_0_0_var(--danger-foreground)]")}>
+    <TableRow
+      className={cn(
+        current && "shadow-[inset_4px_0_0_var(--danger-foreground)]",
+      )}
+    >
       <TableCell>
         <div className="font-medium">
           {r.name}
-          {r.in_scope ? null : <span className="ml-2 text-xs text-muted-foreground">(not in scope)</span>}
+          {r.in_scope ? null : (
+            <span className="ml-2 text-xs text-muted-foreground">
+              (not in scope)
+            </span>
+          )}
         </div>
-        <div className="text-xs text-muted-foreground">{r.section_label ?? "—"}</div>
+        <div className="text-xs text-muted-foreground">
+          {r.section_label ?? "—"}
+        </div>
       </TableCell>
       <TableCell>
         {r.status === "not_joined" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          <ProgressBar value={r.answered} max={r.total_items} done={r.status === "submitted" || earlier} />
+          <ProgressBar
+            value={r.answered}
+            max={r.total_items}
+            done={r.status === "submitted" || earlier}
+          />
         )}
       </TableCell>
       <TableCell>
@@ -494,7 +580,8 @@ function StudentRow({
           ) : null}
           {/* Time extension: the effective deadline, once there is one to
               show — null on every row with no limit and no extension. */}
-          {!earlier && deadlineNote(r.deadline_at, r.deadline_passed, new Date(now)) ? (
+          {!earlier &&
+          deadlineNote(r.deadline_at, r.deadline_passed, new Date(now)) ? (
             <span className="text-xs text-muted-foreground">
               {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now))}
             </span>
@@ -504,22 +591,50 @@ function StudentRow({
               {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
             </span>
           ) : r.alert && !alertIsCurrent(r) ? (
-            <Badge variant="outline" className="font-normal text-muted-foreground">
+            <Badge
+              variant="outline"
+              className="font-normal text-muted-foreground"
+            >
               Earlier: {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
             </Badge>
           ) : null}
         </div>
       </TableCell>
       <TableCell className="whitespace-nowrap text-muted-foreground">
-        {r.status === "not_joined" || earlier ? "—" : ago(r.last_activity_at, now)}
+        {r.status === "not_joined" || earlier
+          ? "—"
+          : ago(r.last_activity_at, now)}
       </TableCell>
       <TableCell className="text-right">
         {/* H-1: a `submitted_earlier` row's attempt_id belongs to ANOTHER
-            sitting — no View screen, no Hand in, no Delete from here. */}
-        {r.attempt_id && r.status !== "not_joined" && !earlier ? (
+            sitting — no View screen, no Hand in, no Delete from here. Pass
+            back is the one exception (docs/pass-back-design.md): the route
+            works on the attempt directly, whichever sitting it is bound to,
+            so a teacher watching THIS room can still send a student's
+            already-submitted-elsewhere attempt back to them. */}
+        {r.attempt_id && r.status !== "not_joined" ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <ViewScreenControl attemptId={r.attempt_id} studentName={r.name} enabled={r.status === "in_progress"} />
-            {/* Time limit / unfinished attempts (D-1/A): a student who ran
+            {r.status === "submitted" || earlier ? (
+              <PassBackControl
+                attemptId={r.attempt_id}
+                studentName={r.name}
+                // The Monitor has no per-response score list in hand; the
+                // simpler "scored on the next hand-in" line covers it either
+                // way (docs/pass-back-design.md, slice 2 note).
+                scoreCount={0}
+                timed={r.timed}
+                onPassedBack={onDeleted}
+                size="sm"
+              />
+            ) : null}
+            {earlier ? null : (
+              <>
+                <ViewScreenControl
+                  attemptId={r.attempt_id}
+                  studentName={r.name}
+                  enabled={r.status === "in_progress"}
+                />
+                {/* Time limit / unfinished attempts (D-1/A): a student who ran
                 out of time or otherwise never handed in. Enabled once the
                 session is closed — or, T-2, once this attempt's own deadline
                 has passed, which is exactly when the hand-in route drops its
@@ -527,40 +642,42 @@ function StudentRow({
                 protect once the server is refusing their writes). Delete
                 beside it has no such relaxation in its route, so it keeps the
                 session-closed rule alone. */}
-            {r.status === "in_progress" ? (
-              <HandInAttemptControl
-                attemptId={r.attempt_id}
-                studentName={r.name}
-                answeredCount={r.answered}
-                onHandedIn={onDeleted}
-                disabledReason={
-                  sessionClosed || r.deadline_passed
-                    ? undefined
-                    : "End the test session first, then hand in."
-                }
-              />
-            ) : null}
-            {/* Extend time, one student: additive, so enabled any time the
+                {r.status === "in_progress" ? (
+                  <HandInAttemptControl
+                    attemptId={r.attempt_id}
+                    studentName={r.name}
+                    answeredCount={r.answered}
+                    onHandedIn={onDeleted}
+                    disabledReason={
+                      sessionClosed || r.deadline_passed
+                        ? undefined
+                        : "End the test session first, then hand in."
+                    }
+                  />
+                ) : null}
+                {/* Extend time, one student: additive, so enabled any time the
                 attempt is in progress — no session-closed gate. */}
-            {canExtend(r.status) ? (
-              <ExtendTimeControl
-                target={{ kind: "attempt", attemptId: r.attempt_id }}
-                onExtended={onDeleted}
-              />
-            ) : null}
-            {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
+                {canExtend(r.status) ? (
+                  <ExtendTimeControl
+                    target={{ kind: "attempt", attemptId: r.attempt_id }}
+                    onExtended={onDeleted}
+                  />
+                ) : null}
+                {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
                 while the student may still be locked in — the route 409s
                 for the same case (`session_open`). */}
-            <DeleteAttemptControl
-              attemptId={r.attempt_id}
-              studentName={r.name}
-              onDeleted={onDeleted}
-              disabledReason={
-                r.status === "submitted" || sessionClosed
-                  ? undefined
-                  : "End the test session first, then delete."
-              }
-            />
+                <DeleteAttemptControl
+                  attemptId={r.attempt_id}
+                  studentName={r.name}
+                  onDeleted={onDeleted}
+                  disabledReason={
+                    r.status === "submitted" || sessionClosed
+                      ? undefined
+                      : "End the test session first, then delete."
+                  }
+                />
+              </>
+            )}
           </div>
         ) : null}
       </TableCell>
@@ -611,7 +728,9 @@ function ViewScreenControl({
   async function requestPeek() {
     setNote(null);
     try {
-      const res = await fetch(`/api/attempts/${attemptId}/peek`, { method: "POST" });
+      const res = await fetch(`/api/attempts/${attemptId}/peek`, {
+        method: "POST",
+      });
       if (res.status === 429) {
         setNote("Just asked — give it a few seconds.");
         return;
@@ -633,7 +752,10 @@ function ViewScreenControl({
       try {
         const res = await fetch(`/api/attempts/${attemptId}/peek/image`);
         if (!res.ok) throw await readError(res);
-        const body = (await res.json()) as { status: string; image_base64?: string };
+        const body = (await res.json()) as {
+          status: string;
+          image_base64?: string;
+        };
         if (body.status === "ready" && body.image_base64) {
           stopPolling();
           setImage(body.image_base64);
@@ -672,7 +794,11 @@ function ViewScreenControl({
         variant="outline"
         size="sm"
         disabled={!enabled || phase === "waiting"}
-        title={enabled ? "Takes one still. The student sees a notice." : "Only while the student is in the test."}
+        title={
+          enabled
+            ? "Takes one still. The student sees a notice."
+            : "Only while the student is in the test."
+        }
         onClick={() => void requestPeek()}
       >
         <ScanEye aria-hidden />
@@ -688,7 +814,10 @@ function ViewScreenControl({
         </Badge>
       ) : null}
       {note ? (
-        <p className="max-w-48 text-right text-xs text-muted-foreground" role="status">
+        <p
+          className="max-w-48 text-right text-xs text-muted-foreground"
+          role="status"
+        >
           {note}
         </p>
       ) : null}

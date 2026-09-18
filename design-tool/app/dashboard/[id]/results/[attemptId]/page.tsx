@@ -11,11 +11,14 @@ import {
   responses,
   scores,
   type ItemRow,
-  type ScoreRow
+  type ScoreRow,
 } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
-import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
+import {
+  renderItemContent,
+  type ResolvedAsset,
+} from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import {
@@ -26,12 +29,14 @@ import {
 import { buildTimeline } from "@/lib/reporting/timeline";
 import { tableCellMatches } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
+import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
+import { PassBackAndReload } from "../PassBackAndReload";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +50,17 @@ const METHOD_WORD: Record<string, string> = {
   human: "scored by you",
 };
 
-/** The one final score per response, and the newest proposal, split out. */
+/**
+ * The one final score per response, and the newest proposal, split out.
+ *
+ * Pass back (docs/pass-back-design.md): a `superseded` row is deliberately
+ * NOT a candidate for `proposed` — before this fix, the "newest non-final
+ * row" test picked up a just-superseded score as if it were an unapproved AI
+ * proposal, which would have shown "AI proposal: … (not counted)" for a
+ * number that was in fact once the student's real final score. Superseded
+ * rows appear only in the "Earlier scores" section below, via
+ * `listSupersededScores`.
+ */
 function splitScores(rows: ScoreRow[]): {
   final: ScoreRow | null;
   proposed: ScoreRow | null;
@@ -54,7 +69,12 @@ function splitScores(rows: ScoreRow[]): {
   let proposed: ScoreRow | null = null;
   for (const row of rows) {
     if (row.status === "final") final = row;
-    else if (!proposed || row.created_at >= proposed.created_at) proposed = row;
+    else if (
+      row.status === "proposed" &&
+      (!proposed || row.created_at >= proposed.created_at)
+    ) {
+      proposed = row;
+    }
   }
   return { final, proposed };
 }
@@ -84,9 +104,15 @@ function RubricScoreDetail({
         <table className="min-w-max border-collapse">
           <thead>
             <tr>
-              <th className={`${cell} bg-muted text-left font-medium`}>Criterion</th>
-              <th className={`${cell} bg-muted text-left font-medium`}>Level</th>
-              <th className={`${cell} bg-muted text-left font-medium`}>Points</th>
+              <th className={`${cell} bg-muted text-left font-medium`}>
+                Criterion
+              </th>
+              <th className={`${cell} bg-muted text-left font-medium`}>
+                Level
+              </th>
+              <th className={`${cell} bg-muted text-left font-medium`}>
+                Points
+              </th>
               <th className={`${cell} bg-muted text-left font-medium`}>Why</th>
             </tr>
           </thead>
@@ -121,8 +147,12 @@ function AnswerLines({ lines }: { lines: AnswerLine[] }) {
         <li key={i} className="text-sm">
           {line.correct === null ? null : (
             <span
-              className={line.correct ? "text-success-foreground" : "text-destructive"}
-              title={line.correct ? "Matches the key" : "Does not match the key"}
+              className={
+                line.correct ? "text-success-foreground" : "text-destructive"
+              }
+              title={
+                line.correct ? "Matches the key" : "Does not match the key"
+              }
             >
               {line.correct ? "✓" : "✗"}{" "}
             </span>
@@ -146,13 +176,16 @@ function TableGrid({
   const rows = item.config.rows ?? [];
   const keys = item.config.cell_keys ?? {};
   const showLabels = rows.some((r) => r.label.trim().length > 0);
-  const th = "border border-border bg-muted px-2 py-1 text-left text-xs font-medium";
+  const th =
+    "border border-border bg-muted px-2 py-1 text-left text-xs font-medium";
   return (
     <div className="overflow-x-auto">
       <table className="min-w-max border-collapse text-sm">
         <thead>
           <tr>
-            {showLabels ? <th className={th}>{item.config.corner ?? ""}</th> : null}
+            {showLabels ? (
+              <th className={th}>{item.config.corner ?? ""}</th>
+            ) : null}
             {columns.map((c) => (
               <th key={c.id} className={th}>
                 {c.label}
@@ -167,9 +200,15 @@ function TableGrid({
               {columns.map((c) => {
                 const answer = cells[r.id]?.[c.id];
                 const key = keys[r.id]?.[c.id];
-                const ok = key !== undefined ? tableCellMatches(answer ?? "", key) : null;
+                const ok =
+                  key !== undefined
+                    ? tableCellMatches(answer ?? "", key)
+                    : null;
                 return (
-                  <td key={c.id} className="border border-border px-2 py-1 align-top">
+                  <td
+                    key={c.id}
+                    className="border border-border px-2 py-1 align-top"
+                  >
                     <div>
                       {answer !== undefined && answer !== "" ? (
                         answer
@@ -262,9 +301,14 @@ export default async function AttemptResultPage({ params }: PageProps) {
     const assetRows = await db
       .select({ id: assets.id, content_type: assets.content_type })
       .from(assets)
-      .where(and(eq(assets.owner_sub, session.sub), inArray(assets.id, stemRefs)));
+      .where(
+        and(eq(assets.owner_sub, session.sub), inArray(assets.id, stemRefs)),
+      );
     for (const a of assetRows) {
-      resolvedAssets.set(a.id.toLowerCase(), { id: a.id, content_type: a.content_type });
+      resolvedAssets.set(a.id.toLowerCase(), {
+        id: a.id,
+        content_type: a.content_type,
+      });
     }
   }
 
@@ -298,18 +342,40 @@ export default async function AttemptResultPage({ params }: PageProps) {
     else scoresByResponse.set(s.response_id, [s]);
   }
 
+  // Pass back (docs/pass-back-design.md): k in "Their k scores are kept as a
+  // record…" — the CURRENT final scores, i.e. the ones a pass back right now
+  // would supersede. `listSupersededScores` is a separate read of the same
+  // table, scoped to `status = 'superseded'` — the history of every earlier
+  // pass back, oldest first, for the collapsed section below.
+  const finalScoreCount = scoreRows.filter((s) => s.status === "final").length;
+  const supersededScores = await listSupersededScores(db, attemptId);
+  const itemLabelById = new Map(
+    itemRows.map((item) => [item.id, `Q${item.position + 1}`] as const),
+  );
+
   const eventRows = await db
     .select()
     .from(attempt_events)
     .where(eq(attempt_events.attempt_id, attemptId))
     .orderBy(asc(attempt_events.at));
   const timeline = buildTimeline(
-    eventRows.map((e) => ({ at: e.at.toISOString(), kind: e.kind, detail: e.detail })),
+    eventRows.map((e) => ({
+      at: e.at.toISOString(),
+      kind: e.kind,
+      detail: e.detail,
+    })),
   );
 
   const identity = [row.student.student_number, row.student.section]
     .filter(Boolean)
     .join(" · ");
+
+  // Pass back (docs/pass-back-design.md): the same "does a deadline exist at
+  // all" test the route applies, asked here so the dialog knows up front
+  // whether to ask for a new one.
+  const timed =
+    (assessment.time_limit_seconds ?? 0) > 0 ||
+    attempt.deadline_override_at !== null;
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
@@ -330,9 +396,23 @@ export default async function AttemptResultPage({ params }: PageProps) {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           {row.status === "in_progress" ? (
             <p className="text-sm">
-              <span className="font-medium text-warning-foreground">Not handed in</span>{" "}
-              · Started {attempt.started_at ? formatWhen(attempt.started_at) : "—"} ·{" "}
+              <span className="font-medium text-warning-foreground">
+                Not handed in
+              </span>{" "}
+              · Started{" "}
+              {attempt.started_at ? formatWhen(attempt.started_at) : "—"} ·{" "}
               {row.answered_count} of {results.items.length} answered
+              {/* Pass back (docs/pass-back-design.md): the header names how
+                  many times this attempt has been passed back, so the
+                  "in progress" status doesn't read as a plain, never-touched
+                  first sitting. */}
+              {attempt.pass_back_count > 0 ? (
+                <>
+                  {" "}
+                  · passed back {attempt.pass_back_count} time
+                  {attempt.pass_back_count === 1 ? "" : "s"}
+                </>
+              ) : null}
               {deadlineNote(row.deadline_at, row.deadline_passed) ? (
                 <span className="ml-2 text-xs text-muted-foreground">
                   {deadlineNote(row.deadline_at, row.deadline_passed)}
@@ -341,8 +421,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
             </p>
           ) : (
             <p className="text-sm">
-              Handed in{" "}
-              {row.submitted_at ? formatWhen(row.submitted_at) : "—"} ·{" "}
+              Handed in {row.submitted_at ? formatWhen(row.submitted_at) : "—"}{" "}
+              ·{" "}
               <strong>
                 {row.total_points} / {row.max_points}
               </strong>{" "}
@@ -363,7 +443,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
             {row.status === "in_progress" ? (
               <HandInAttemptAndReload
                 attemptId={attemptId}
-                studentName={row.student.name || row.student.ssid || "this student"}
+                studentName={
+                  row.student.name || row.student.ssid || "this student"
+                }
                 answeredCount={row.answered_count}
                 disabledReason={
                   row.sitting_open && !row.deadline_passed
@@ -375,10 +457,22 @@ export default async function AttemptResultPage({ params }: PageProps) {
             {row.status === "in_progress" ? (
               <ExtendTimeAndReload attemptId={attemptId} />
             ) : null}
+            {row.status === "submitted" ? (
+              <PassBackAndReload
+                attemptId={attemptId}
+                studentName={
+                  row.student.name || row.student.ssid || "this student"
+                }
+                scoreCount={finalScoreCount}
+                timed={timed}
+              />
+            ) : null}
             <DeleteAttemptAndReturn
               attemptId={attemptId}
               assessmentId={id}
-              studentName={row.student.name || row.student.ssid || "this student"}
+              studentName={
+                row.student.name || row.student.ssid || "this student"
+              }
               disabledReason={
                 row.status === "in_progress" && row.sitting_open
                   ? "End the test session first, then delete."
@@ -403,7 +497,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
               correct_answer: item.correct_answer,
               config: item.config,
             },
-            response ? (response.response as unknown as Record<string, unknown>) : null,
+            response
+              ? (response.response as unknown as Record<string, unknown>)
+              : null,
           );
           const { final, proposed } = splitScores(
             response ? (scoresByResponse.get(response.id) ?? []) : [],
@@ -418,10 +514,17 @@ export default async function AttemptResultPage({ params }: PageProps) {
             overall: overallRationale(proposed?.rationale),
           };
           return (
-            <article key={item.id} className="rounded-lg border border-border p-4">
+            <article
+              key={item.id}
+              className="rounded-lg border border-border p-4"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-sm font-medium">Q{item.position + 1}</span>
-                <span className="text-xs text-muted-foreground">{item.type}</span>
+                <span className="text-sm font-medium">
+                  Q{item.position + 1}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {item.type}
+                </span>
               </div>
               {/* stem_html is server-rendered by renderItemContent: text is
                   HTML-escaped, math is KaTeX, image refs resolve owner-scoped
@@ -485,9 +588,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   <TableGrid
                     item={item}
                     cells={
-                      (response.response as unknown as {
-                        cells?: Record<string, Record<string, string>>;
-                      }).cells ?? {}
+                      (
+                        response.response as unknown as {
+                          cells?: Record<string, Record<string, string>>;
+                        }
+                      ).cells ?? {}
                     }
                   />
                 ) : view.kind === "lines" ? (
@@ -516,13 +621,17 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     </p>
                   )}
                   {final ? (
-                    <RubricScoreDetail rows={finalDetail.rows} overall={finalDetail.overall} />
+                    <RubricScoreDetail
+                      rows={finalDetail.rows}
+                      overall={finalDetail.overall}
+                    />
                   ) : null}
                   {proposed && !final ? (
                     // Never counted, and the page says so in the same breath
                     // as the number so it cannot be read as a score.
                     <p className="mt-1 text-xs">
-                      AI proposal: {proposed.points} / {proposed.max_points} (not counted)
+                      AI proposal: {proposed.points} / {proposed.max_points}{" "}
+                      (not counted)
                     </p>
                   ) : null}
                   {proposed && !final ? (
@@ -537,6 +646,30 @@ export default async function AttemptResultPage({ params }: PageProps) {
           );
         })}
       </section>
+
+      {/* Pass back (docs/pass-back-design.md, D-2): the scores this attempt
+          was given before it was passed back — kept as a record, out of the
+          main answers list so they can never be mistaken for the current
+          score. Collapsed by default; only rendered once there is history. */}
+      {supersededScores.length > 0 ? (
+        <details className="rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Earlier scores (before pass back)
+          </summary>
+          <ul className="mt-3 space-y-1 text-sm">
+            {supersededScores.map((s, i) => (
+              <li key={i} className="text-muted-foreground">
+                {itemLabelById.get(s.item_id) ?? "—"}:{" "}
+                <span className="text-foreground">
+                  {s.points} / {s.max}
+                </span>{" "}
+                ({METHOD_WORD[s.method] ?? s.method} by {s.scorer}) ·{" "}
+                {formatWhen(s.created_at)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       <section aria-labelledby="timeline" className="space-y-2">
         <h2 id="timeline" className="text-lg font-semibold">

@@ -805,40 +805,18 @@ that a co-teacher must run themselves.
 | 229 | As the owner, in the Co-teach section's manual email field, enter an address outside `psd401.net` (or a student address) and press Co-teach | Inline error "Enter a psd401.net staff address." — nothing granted | NOT RUN |
 | 230 | Co-teach the same colleague a second time (their grant is still live) | Inline error "Already a co-teacher." | NOT RUN |
 
-## Substitutes — Coverage (2026-09-18)
+## Pass back (2026-09-18)
 
-Access slice 4 (`docs/access-model-design.md`, D-5 as refined 2026-09-18): a
-teacher names a substitute on the Assessments home's **Coverage** card, which
-writes a `run`-level, `teacher`-scoped `access_grants` row over the teacher's
-own email (`POST /api/coverage`, self-delegation only, `ends_at` required and
-capped at 31 days). The substitute then sees that teacher's assessments, may
-start / monitor / close / hand in / extend their sittings on the teacher's own
-sections, and sees **no results of any kind** — the editor collapses to the
-Test sessions tab and every results surface answers 404.
-
-Most rows below need a SECOND staff account (the substitute) and one needs a
-student sitting; the sub's sections also need a current roster day for the
-covered teacher, so run the one-day teacher-row script first if the roster's
-06:00 import has not put a live section on the teacher being covered.
+`docs/pass-back-design.md` — slice 2 (teacher UI) on top of slice 1's server
+route. All NOT RUN.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 231 | On the Assessments home with no coverage either way | No **Coverage** card at all | NOT RUN |
-| 232 | Add cover: a `psd401.net` colleague, first day today, last day today, note "sub for period 3" | The page reloads; a Coverage card shows "Covering for you: \<email\> until \<today\>" with the note and a **Revoke** button | NOT RUN |
-| 233 | Add cover with a last day 40 days out | Inline error "Cover can run for at most 31 days. Ask IT for anything longer." — nothing added | NOT RUN |
-| 234 | Add cover with the last day BEFORE the first | Inline error "The last day has to be on or after the first." | NOT RUN |
-| 235 | Add cover naming a student address, an outside address, or yourself | "Enter a psd401.net staff address." for the first two, "That's you." for the third | NOT RUN |
-| 236 | Add cover for the same colleague twice | "They already cover your classes. Remove that first." | NOT RUN |
-| 237 | Sign in as the SUBSTITUTE and open the Assessments home | A banner "Covering for \<teacher\> until \<date\>" above the card; the teacher's assessments are listed, each with a muted "Covering for \<teacher\> · until \<date\>" line and NO **Results** button on the row | NOT RUN (second staff account) |
-| 238 | As the substitute, click the covered assessment's name | The editor opens on **Test sessions** — that is the ONLY tab (no Questions / Settings / Accommodations / Student accommodations), the header carries a "Covering for \<teacher\>" badge, and there is no Share, no Publish, no Download backup / Scoring queue / Results line | NOT RUN (second staff account) |
-| 239 | As the substitute, edit the URL to `?tab=questions` and reload | Still lands on Test sessions; no questions are shown (the page never sends them) | NOT RUN (second staff account) |
-| 240 | As the substitute, open the **One section** picker in "Start a test session" | Their own sections are listed plain; the covered teacher's sections are listed and labelled "· covering for \<teacher\>" | NOT RUN (second staff account) |
-| 241 | As the substitute, start a session on one of the COVERED sections, and have one of the TEACHER's students join with the code | The sitting is created and the student joins normally (admission is by the sitting's owner, the teacher) | NOT RUN (second staff account + a student) |
-| 242 | As the substitute, on that sitting: Monitor, Attendance, View screen, Extend time, Hand in everyone, Close session | All work exactly as for the teacher | NOT RUN (second staff account) |
-| 243 | As the substitute, try the results URLs by hand: `/dashboard/<id>/results`, `/dashboard/<id>/results/<attemptId>`, `/dashboard/<id>/results/print`, `/dashboard/<id>/results/work`, `/dashboard/<id>/scoring` | Every one is a 404 page (not a Forbidden panel) | NOT RUN (second staff account) |
-| 244 | As the substitute, try the results APIs by hand: `…/results`, `…/results?format=csv`, `…/review-queue`, `…/export`, `/api/attempts/<id>/events` | Every one answers 404 `not_found` | NOT RUN (second staff account) |
-| 245 | Back as the TEACHER, open the Test sessions tab and the Monitor for the sitting the substitute started | The row and the Monitor header both read "Started by \<sub email\> (covering)"; the sitting is the teacher's (their students, their results) | NOT RUN |
-| 246 | As the TEACHER, open the results matrix and the per-student page for that sitting's attempts | Everything normal — a substitute-run sitting is indistinguishable from the teacher's own in results | NOT RUN |
-| 247 | As the TEACHER, press **Revoke** on the coverage row | The card's list empties; as the substitute, reloading the home shows no banner and none of the teacher's assessments | NOT RUN |
-| 248 | As the SUBSTITUTE, try to revoke your own coverage (`DELETE /api/coverage/<grantId>` by hand) | 404 — only the granter or an admin may end cover | NOT RUN (second staff account) |
-| 249 | Let a one-day grant expire (or set `ends_at` in the past by hand), then reload as the substitute | No banner, no covered assessments, and the covered sections are gone from the section picker | NOT RUN |
+| 231 | On the per-student results page for a SUBMITTED, UNTIMED attempt with at least one final score, press **Pass back** | A dialog "Pass back to \<student\>?" with the copy naming the current score count and no deadline picker; confirm | The page reloads: "Not handed in · passed back 1 time"; the earlier score(s) are listed under a collapsed **Earlier scores (before pass back)** section with item, points/max, method and scorer; the integrity timeline gains a "Passed back by teacher" line |
+| 232 | As the student on the Debug client, rejoin the same test | The attempt opens with every earlier answer prefilled (P-1); change one answer and hand in again | The per-student page shows a new final score beside the collapsed earlier one; results matrix reflects the new score |
+| 233 | Repeat 231 on a TIMED assessment (or an attempt already carrying an Extend-time override) | The dialog shows a **New deadline** `datetime-local` defaulted to tomorrow 23:59 with the hint "This test has a time limit — pick when it ends now."; submitting with the field cleared shows "Pick a time in the future." and does not submit | |
+| 234 | After the timed pass back completes, the student rejoins | The countdown reflects the new deadline | |
+| 235 | On the Monitor for an open sitting, find a row with status Submitted (or "Handed in (earlier session)"), press **Pass back** | Same dialog; on success the row updates to In progress / the earlier-session note clears as appropriate | |
+| 236 | On the per-student page or a Monitor row for an IN-PROGRESS attempt | No **Pass back** button is shown | |
+| 237 | As a CO-TEACHER (edit-level grant) on the assessment, pass back a submitted attempt | Succeeds, same as the owner | (second staff account) |
+| 238 | As a RUN-level grantee (a substitute), try `POST /api/attempts/<id>/pass-back` by hand | 404 `not_found` — `edit` is required and `run` does not satisfy it | (second staff account) |

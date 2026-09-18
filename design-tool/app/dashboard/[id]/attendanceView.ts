@@ -44,6 +44,9 @@ export interface AttendanceRow {
   alert: AttendanceEvent | null;
   /** Peek P3: what the monitor's Peek button posts against; null until joined. */
   attempt_id: string | null;
+  /** Pass back (docs/pass-back-design.md): whether this row's attempt needs a
+   * new deadline before it can be passed back. False on `not_joined`. */
+  timed: boolean;
 }
 
 export interface AttendancePayload {
@@ -56,7 +59,12 @@ export interface AttendancePayload {
     student_ps_ids: string[] | null;
   };
   rows: AttendanceRow[];
-  counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
+  counts: {
+    expected: number;
+    joined: number;
+    submitted: number;
+    submitted_earlier: number;
+  };
   updated_at: string | null;
   total_items: number;
 }
@@ -81,7 +89,10 @@ export function idleFor(r: AttendanceRow, now: number): number | null {
   return gap >= IDLE_AFTER_MS ? gap : null;
 }
 
-export function sittingIsOpen(s: { status: string; expires_at: string }, now = Date.now()): boolean {
+export function sittingIsOpen(
+  s: { status: string; expires_at: string },
+  now = Date.now(),
+): boolean {
   return s.status === "open" && new Date(s.expires_at).getTime() > now;
 }
 
@@ -186,7 +197,9 @@ export function closeDialogCopy(inProgress: number): string {
 }
 
 /** How many of these attendance rows are attempts still in progress. */
-export function countInProgress(rows: ReadonlyArray<Pick<AttendanceRow, "status">>): number {
+export function countInProgress(
+  rows: ReadonlyArray<Pick<AttendanceRow, "status">>,
+): number {
   return rows.filter((r) => r.status === "in_progress").length;
 }
 
@@ -249,10 +262,14 @@ export function deadlineNote(
  * student is back at work, i.e. a later lockdown_begin or answer activity
  * postdates it. After that it is history ("Earlier: …"), not a red row.
  */
-export type StudentState = "not_joined" | "in_progress" | "idle" | "handed_in" | "needs_attention";
+export type StudentState =
+  "not_joined" | "in_progress" | "idle" | "handed_in" | "needs_attention";
 
 export function alertIsCurrent(
-  r: Pick<AttendanceRow, "alert" | "last_lockdown_begin_at" | "last_activity_at">,
+  r: Pick<
+    AttendanceRow,
+    "alert" | "last_lockdown_begin_at" | "last_activity_at"
+  >,
 ): boolean {
   if (!r.alert) return false;
   const at = new Date(r.alert.at).getTime();
@@ -260,10 +277,14 @@ export function alertIsCurrent(
   // the comment's rule. The old check looked only at the single newest event,
   // so a rejoin whose focus flickered (lockdown_begin -> focus_loss ->
   // focus_regained) stayed red until answer activity.
-  if (r.last_lockdown_begin_at && new Date(r.last_lockdown_begin_at).getTime() > at) {
+  if (
+    r.last_lockdown_begin_at &&
+    new Date(r.last_lockdown_begin_at).getTime() > at
+  ) {
     return false;
   }
-  if (r.last_activity_at && new Date(r.last_activity_at).getTime() > at) return false;
+  if (r.last_activity_at && new Date(r.last_activity_at).getTime() > at)
+    return false;
   return true;
 }
 
@@ -272,7 +293,8 @@ export function studentState(r: AttendanceRow, now: number): StudentState {
   // Handed in tile, not under Not joined — the work is in, it just did not
   // happen in this room. `countInProgress` / `canHandInAll` are unaffected:
   // the attempt is not in progress and is not this sitting's to act on.
-  if (r.status === "submitted" || r.status === "submitted_earlier") return "handed_in";
+  if (r.status === "submitted" || r.status === "submitted_earlier")
+    return "handed_in";
   if (alertIsCurrent(r)) return "needs_attention";
   if (idleFor(r, now) !== null) return "idle";
   if (r.status === "in_progress") return "in_progress";

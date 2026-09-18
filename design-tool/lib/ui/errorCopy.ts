@@ -39,7 +39,8 @@ export function authErrorCopy(code: string): ErrorCopy {
       return { message: "You cancelled the Google sign-in.", showCode: false };
     case "account_not_allowed":
       return {
-        message: "That Google account is not a PSD staff account. Use your psd401.net account.",
+        message:
+          "That Google account is not a PSD staff account. Use your psd401.net account.",
         showCode: false,
       };
     case "student_account":
@@ -50,7 +51,10 @@ export function authErrorCopy(code: string): ErrorCopy {
       };
     default:
       if (AUTH_RETRY.has(base)) {
-        return { message: "That sign-in link expired. Try again.", showCode: false };
+        return {
+          message: "That sign-in link expired. Try again.",
+          showCode: false,
+        };
       }
       if (AUTH_TELL_IT.has(base)) {
         return {
@@ -58,7 +62,10 @@ export function authErrorCopy(code: string): ErrorCopy {
           showCode: true,
         };
       }
-      return { message: "Sign-in didn't complete. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "Sign-in didn't complete. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -71,9 +78,15 @@ export function importErrorCopy(code: string): ErrorCopy {
     case "file_too_large":
       return { message: "That file is over 50 MB.", showCode: false };
     case "read_failed":
-      return { message: "The file couldn't be read. Try again.", showCode: false };
+      return {
+        message: "The file couldn't be read. Try again.",
+        showCode: false,
+      };
     case "invalid_json":
-      return { message: "That isn't a Secure-Test assessment file (.json).", showCode: false };
+      return {
+        message: "That isn't a Secure-Test assessment file (.json).",
+        showCode: false,
+      };
     case "schema_invalid":
       return {
         message: "That file isn't in the Secure-Test assessment format.",
@@ -83,9 +96,15 @@ export function importErrorCopy(code: string): ErrorCopy {
     case "asset_base64_invalid":
     case "asset_storage_put_failed":
     case "asset_db_insert_failed":
-      return { message: "An image inside the file couldn't be imported.", showCode: true };
+      return {
+        message: "An image inside the file couldn't be imported.",
+        showCode: true,
+      };
     default:
-      return { message: "The import didn't finish. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "The import didn't finish. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -100,7 +119,10 @@ export function uploadErrorCopy(code: string): ErrorCopy {
     case "unsupported_content_type":
       return { message: "Use a PNG, JPG, GIF, WebP or SVG.", showCode: false };
     default:
-      return { message: "The upload didn't finish. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "The upload didn't finish. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -124,25 +146,43 @@ export function itemErrorCopy(code: string): ErrorCopy {
   switch (code) {
     case "invalid_body":
       return {
-        message: "This question isn't complete yet — check its text, choices and answer.",
+        message:
+          "This question isn't complete yet — check its text, choices and answer.",
         showCode: false,
       };
     case "assessment_published_editing_locked":
-      return { message: "This assessment is published. Unpublish to edit.", showCode: false };
+      return {
+        message: "This assessment is published. Unpublish to edit.",
+        showCode: false,
+      };
     case "has_responses":
       return {
-        message: "Students have already answered this question, so it can't be deleted.",
+        message:
+          "Students have already answered this question, so it can't be deleted.",
         showCode: false,
       };
     case "type_change_not_supported":
-      return { message: "A question's type can't change. Add a new question instead.", showCode: false };
+      return {
+        message: "A question's type can't change. Add a new question instead.",
+        showCode: false,
+      };
     case "not_found":
     case "forbidden":
-      return { message: "This assessment isn't available any more. Reload the page.", showCode: false };
+      return {
+        message: "This assessment isn't available any more. Reload the page.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't save. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't save. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -150,23 +190,53 @@ export function itemErrorCopy(code: string): ErrorCopy {
 export function sessionErrorCopy(code: string): ErrorCopy {
   switch (code) {
     case "not_published":
-      return { message: "Publish the assessment before starting a session.", showCode: false };
+      return {
+        message: "Publish the assessment before starting a session.",
+        showCode: false,
+      };
     case "invalid_body":
-      return { message: "Check the session's length and who it's for, then try again.", showCode: false };
+      return {
+        message: "Check the session's length and who it's for, then try again.",
+        showCode: false,
+      };
     case "scope_conflict":
-      return { message: "Choose either one section or picked students, not both.", showCode: false };
+      return {
+        message: "Choose either one section or picked students, not both.",
+        showCode: false,
+      };
     case "section_not_taught":
-      return { message: "That section isn't on your class list any more. Pick another.", showCode: false };
+      return {
+        message:
+          "That section isn't on your class list any more. Pick another.",
+        showCode: false,
+      };
     case "students_not_taught":
-      return { message: "One of those students isn't in your sections any more. Check the list.", showCode: false };
+      return {
+        message:
+          "One of those students isn't in your sections any more. Check the list.",
+        showCode: false,
+      };
     case "code_unavailable":
-      return { message: "Couldn't get a free session code. Try again.", showCode: false };
+      return {
+        message: "Couldn't get a free session code. Try again.",
+        showCode: false,
+      };
     case "not_found":
-      return { message: "That session isn't available any more. Refresh the list.", showCode: false };
+      return {
+        message: "That session isn't available any more. Refresh the list.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't work. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -175,17 +245,31 @@ export function attemptDeleteErrorCopy(code: string): ErrorCopy {
   switch (code) {
     case "session_open":
       return {
-        message: "The student may still be working. End the test session first, then delete.",
+        message:
+          "The student may still be working. End the test session first, then delete.",
         showCode: false,
       };
     case "forbidden":
-      return { message: "Only the assessment's owner can delete an attempt.", showCode: false };
+      return {
+        message: "Only the assessment's owner can delete an attempt.",
+        showCode: false,
+      };
     case "not_found":
-      return { message: "That attempt is already gone. Refresh the page.", showCode: false };
+      return {
+        message: "That attempt is already gone. Refresh the page.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't work. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -201,13 +285,26 @@ export function attemptHandInErrorCopy(code: string): ErrorCopy {
     case "already_submitted":
       return { message: "Already handed in.", showCode: false };
     case "forbidden":
-      return { message: "Only the assessment's owner can hand in an attempt.", showCode: false };
+      return {
+        message: "Only the assessment's owner can hand in an attempt.",
+        showCode: false,
+      };
     case "not_found":
-      return { message: "That attempt is already gone. Refresh the page.", showCode: false };
+      return {
+        message: "That attempt is already gone. Refresh the page.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't work. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -230,9 +327,41 @@ export function extendErrorCopy(code: string): ErrorCopy {
     case "forbidden":
       return { message: "Not yours to extend.", showCode: false };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
       return { message: code, showCode: false };
+  }
+}
+
+/**
+ * POST /api/attempts/[attemptId]/pass-back — the teacher's "Pass back"
+ * (docs/pass-back-design.md).
+ */
+export function passBackErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "not_submitted":
+      return { message: "Not handed in yet.", showCode: false };
+    case "ends_at_required":
+    case "ends_at_past":
+      return { message: "Pick a time in the future.", showCode: false };
+    case "not_found":
+    case "forbidden":
+      return { message: "Not yours to pass back.", showCode: false };
+    case "network":
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
+    default:
+      return {
+        message: "That didn't work. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -241,24 +370,39 @@ export function accommodationErrorCopy(code: string): ErrorCopy {
   switch (code) {
     case "already_exists":
       return {
-        message: "This student already has that support for that subject. Edit the existing row instead.",
+        message:
+          "This student already has that support for that subject. Edit the existing row instead.",
         showCode: false,
       };
     case "tide_row_not_deletable":
       return {
-        message: "Settings that came from TIDE can't be removed here — set the value to Off instead.",
+        message:
+          "Settings that came from TIDE can't be removed here — set the value to Off instead.",
         showCode: false,
       };
     case "invalid_body":
-      return { message: "Pick a subject, a tool and a value.", showCode: false };
+      return {
+        message: "Pick a subject, a tool and a value.",
+        showCode: false,
+      };
     case "not_found":
     case "forbidden":
     case "invalid_id":
-      return { message: "That record isn't available any more. Reload the page.", showCode: false };
+      return {
+        message: "That record isn't available any more. Reload the page.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't save. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't save. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -281,11 +425,21 @@ export function coTeachErrorCopy(code: string): ErrorCopy {
       return { message: "That level isn't available here.", showCode: false };
     case "not_found":
     case "invalid_id":
-      return { message: "That assessment isn't available. Reload the page.", showCode: false };
+      return {
+        message: "That assessment isn't available. Reload the page.",
+        showCode: false,
+      };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "That didn't work. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }
 
@@ -299,15 +453,27 @@ export function tideImportErrorCopy(code: string): ErrorCopy {
     case "unsupported_mime":
     case "expected_multipart":
     case "form_parse_failed":
-      return { message: "That isn't an Excel (.xlsx) file. Export Student Settings from TIDE and try again.", showCode: false };
+      return {
+        message:
+          "That isn't an Excel (.xlsx) file. Export Student Settings from TIDE and try again.",
+        showCode: false,
+      };
     case "import_failed":
       return {
-        message: "The file was read but couldn't be imported — it may not be the Student Settings export.",
+        message:
+          "The file was read but couldn't be imported — it may not be the Student Settings export.",
         showCode: true,
       };
     case "network":
-      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+      return {
+        message:
+          "Couldn't reach the server. Check your connection and try again.",
+        showCode: false,
+      };
     default:
-      return { message: "The import didn't finish. Try again, or tell IT this code:", showCode: true };
+      return {
+        message: "The import didn't finish. Try again, or tell IT this code:",
+        showCode: true,
+      };
   }
 }

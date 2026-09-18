@@ -646,6 +646,82 @@ describe("the per-student attempt page", () => {
   });
 });
 
+// Pass back (docs/pass-back-design.md), slice 2: the teacher UI on top of
+// slice 1's `passBackAttempt` write. `seedScene`'s assessment carries no time
+// limit, so a pass back here needs no `ends_at` — the timed variant is a
+// hand-run row (the dialog's own deadline picker is a client component the
+// headless render can't drive).
+describe("pass back on the per-student attempt page", () => {
+  test("a superseded score is never mistaken for the newest AI proposal (splitScores fix)", async () => {
+    // Bob's attempt stays submitted; a hand-inserted `superseded` row (as a
+    // real pass back would leave behind) is the newest non-final row on his
+    // response. Before this slice's fix, `splitScores` treated ANY
+    // non-final row as a proposal candidate, so this would have rendered
+    // as an unapproved AI proposal — a number that was in fact once his
+    // real final score.
+    const scene = await seedScene();
+    const db = getDb();
+    const [bobResponse] = await db
+      .select()
+      .from(responses)
+      .where(eq(responses.attempt_id, scene.bobAttempt.id))
+      .limit(1);
+    await db.insert(scores).values({
+      response_id: bobResponse!.id,
+      method: "auto",
+      points: 0,
+      max_points: 1,
+      scorer: "auto",
+      status: "superseded",
+    });
+    const html = await renderAttempt(scene.assessment.id, scene.bobAttempt.id);
+    expect(html).not.toContain("AI proposal");
+    expect(html).toContain("Earlier scores (before pass back)");
+  });
+
+
+  test("a submitted attempt offers Pass back; an in-progress one does not", async () => {
+    const scene = await seedScene();
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("Pass back");
+  });
+
+  test("after a pass back: in progress, the count, the earlier scores, no stray AI proposal", async () => {
+    const scene = await seedScene();
+    const { passBackAttempt } = await import("../lib/api/passBackAttempt");
+    const db = getDb();
+    const [before] = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.id, scene.aliceAttempt.id))
+      .limit(1);
+    const { superseded_scores } = await passBackAttempt(db, before!, "teacher-sub");
+    // Alice had two FINAL scores (the MC auto-score and the essay's rubric
+    // score) and one PROPOSED one (short_text) — only the finals supersede.
+    expect(superseded_scores).toBe(2);
+
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("Not handed in");
+    expect(html).toContain("passed back 1 time");
+    expect(html).not.toContain("passed back 1 times");
+    expect(html).toContain("Earlier scores (before pass back)");
+    // Q1 = the MC item (auto 1/1), Q2 = the essay (human 3/4) — both now
+    // superseded and listed, not counted anywhere on the page any more.
+    expect(html).toContain("Q1");
+    expect(html).toContain("Q2");
+    expect(html).toContain("1 / 1");
+    expect(html).toContain("3 / 4");
+    // An in-progress attempt shows no per-response score section at all
+    // (gated on `row.status !== "in_progress"`), so the `splitScores` fix —
+    // a superseded row is no longer mistaken for a proposal — is proven on
+    // the submitted attempt below instead; here it is simply absent.
+    expect(html).not.toContain("AI proposal");
+    expect(html).not.toContain("Pass back");
+    expect(html).toContain("Hand in");
+    expect(html).toContain("Extend time");
+  });
+});
+
 // Time limit / unfinished attempts
 // (docs/time-limit-and-unfinished-attempts-design.md, slice 3): the teacher
 // UI on top of slice 1's `include_in_progress` flag and `submitted_by_sub`.

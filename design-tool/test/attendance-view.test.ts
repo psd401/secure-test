@@ -34,16 +34,25 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     last_lockdown_begin_at: null,
     alert: null,
     attempt_id: "a",
+    timed: false,
     ...over,
   };
 }
 
 describe("studentState (UX pass 1 slices 6–7, SM-11)", () => {
   test("handed in wins over everything", () => {
-    expect(studentState(row({ status: "submitted", alert: { kind: "quit", at: iso(-5000) } }), T0)).toBe("handed_in");
+    expect(
+      studentState(
+        row({ status: "submitted", alert: { kind: "quit", at: iso(-5000) } }),
+        T0,
+      ),
+    ).toBe("handed_in");
   });
   test("a sticky alert with nothing after it needs attention", () => {
-    const r = row({ alert: { kind: "quit", at: iso(-2 * 60_000) }, last_activity_at: iso(-5 * 60_000) });
+    const r = row({
+      alert: { kind: "quit", at: iso(-2 * 60_000) },
+      last_activity_at: iso(-5 * 60_000),
+    });
     expect(alertIsCurrent(r)).toBe(true);
     expect(studentState(r, T0)).toBe("needs_attention");
   });
@@ -77,13 +86,23 @@ describe("studentState (UX pass 1 slices 6–7, SM-11)", () => {
     expect(alertIsCurrent(r)).toBe(true);
   });
   test("answer activity after the alert demotes it too", () => {
-    const r = row({ alert: { kind: "emergency_exit", at: iso(-10 * 60_000) }, last_activity_at: iso(-60_000) });
+    const r = row({
+      alert: { kind: "emergency_exit", at: iso(-10 * 60_000) },
+      last_activity_at: iso(-60_000),
+    });
     expect(alertIsCurrent(r)).toBe(false);
   });
   test("idle beats in progress; not joined otherwise", () => {
-    expect(studentState(row({ last_activity_at: iso(-IDLE_AFTER_MS - 1) }), T0)).toBe("idle");
+    expect(
+      studentState(row({ last_activity_at: iso(-IDLE_AFTER_MS - 1) }), T0),
+    ).toBe("idle");
     expect(studentState(row({}), T0)).toBe("in_progress");
-    expect(studentState(row({ status: "not_joined", last_activity_at: null, started_at: null }), T0)).toBe("not_joined");
+    expect(
+      studentState(
+        row({ status: "not_joined", last_activity_at: null, started_at: null }),
+        T0,
+      ),
+    ).toBe("not_joined");
   });
 });
 
@@ -100,15 +119,23 @@ describe("canHandInAll", () => {
   });
 
   test("an open sitting with everyone inside their deadline does not", () => {
-    expect(canHandInAll(false, [row({}), row({ status: "not_joined" })])).toBe(false);
+    expect(canHandInAll(false, [row({}), row({ status: "not_joined" })])).toBe(
+      false,
+    );
   });
 
   test("one in-progress attempt past its own deadline is enough (T-2's relaxation)", () => {
-    expect(canHandInAll(false, [row({}), row({ deadline_passed: true })])).toBe(true);
+    expect(canHandInAll(false, [row({}), row({ deadline_passed: true })])).toBe(
+      true,
+    );
   });
 
   test("a deadline that passed on an attempt already handed in is not enough", () => {
-    expect(canHandInAll(false, [row({ status: "submitted", deadline_passed: true })])).toBe(false);
+    expect(
+      canHandInAll(false, [
+        row({ status: "submitted", deadline_passed: true }),
+      ]),
+    ).toBe(false);
   });
 
   test("no rows in hand (Attendance collapsed) rests on the sitting alone", () => {
@@ -129,17 +156,23 @@ describe("submitted_earlier (H-1)", () => {
     });
 
   test("says which session it was handed in to", () => {
-    expect(statusLabel("submitted_earlier")).toBe("Handed in (earlier session)");
+    expect(statusLabel("submitted_earlier")).toBe(
+      "Handed in (earlier session)",
+    );
     expect(statusLabel("not_joined")).toBe("Not joined");
     expect(statusLabel("submitted")).toBe("Submitted");
   });
 
   test("the detail line names when, and is null on every other status", () => {
     expect(earlierSessionNote(earlier())).toContain("in an earlier session");
-    expect(earlierSessionNote({ status: "submitted_earlier", submitted_at: null })).toBe(
-      "Handed in in an earlier session",
-    );
-    expect(earlierSessionNote(row({ status: "submitted", submitted_at: iso(-1000) }))).toBeNull();
+    expect(
+      earlierSessionNote({ status: "submitted_earlier", submitted_at: null }),
+    ).toBe("Handed in in an earlier session");
+    expect(
+      earlierSessionNote(
+        row({ status: "submitted", submitted_at: iso(-1000) }),
+      ),
+    ).toBeNull();
     expect(earlierSessionNote(row({ status: "not_joined" }))).toBeNull();
   });
 
@@ -151,9 +184,12 @@ describe("submitted_earlier (H-1)", () => {
   test("is not in progress, so the hand-in controls ignore it", () => {
     expect(countInProgress([earlier()])).toBe(0);
     expect(canHandInAll(false, [earlier()])).toBe(false);
-    expect(canHandInAll(false, [earlier(), { status: "submitted_earlier", deadline_passed: true }])).toBe(
-      false,
-    );
+    expect(
+      canHandInAll(false, [
+        earlier(),
+        { status: "submitted_earlier", deadline_passed: true },
+      ]),
+    ).toBe(false);
   });
 });
 
