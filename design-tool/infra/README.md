@@ -50,6 +50,20 @@ bunx cdk deploy
 scripts/migrate-aurora.sh
 ```
 
+Or the whole recipe as one command — pre-flight (clean tree, HEAD =
+origin/main, AWS creds, colima, context file), the live commit from
+`/api/health`, `cdk diff`, `cdk deploy --require-approval never`,
+`migrate-aurora.sh` only when migration files changed between the live
+commit and HEAD, then the health stamp + rollout state:
+
+```bash
+scripts/deploy.sh            # everything
+scripts/deploy.sh --diff     # pre-flight + diff, no deploy
+scripts/deploy.sh --no-migrate
+```
+
+`aws sso login` stays a human step (it opens a browser).
+
 ### Context file (`cdk.context.json`)
 
 `cdk.context.json` is gitignored — it carries the account id (in CDK's own
