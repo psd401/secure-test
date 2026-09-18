@@ -111,6 +111,38 @@ have done so far?" — the answer was no. Decisions **D-1…D-4** are James's
   `attempt_events` kind CHECK widened with `time_expired` and
   `teacher_hand_in`.
 
+### Teacher: extend time (built 2026-09-17, pilot day 1)
+
+The "add 10 minutes" this note left out of scope, built the evening a pilot
+class needed to finish a timed test the next day (roadmap U-8 has the
+durable working-time model; this is the wall-clock lever that needed no
+client change).
+
+- **`attempts.deadline_override_at`** (migration 0037): an ABSOLUTE instant
+  set by the teacher. `deadlineFor` returns it first, so every consumer
+  (bundle, write guards, submit, hand-in, results, Monitor) follows; an
+  override on an unlimited assessment imposes a deadline. Per attempt, so
+  it survives the rebind to tomorrow's sitting. The 30 s grace is unchanged.
+- **Why the client needs nothing**: it takes `ends_at − server_now` from
+  the bundle at every join and counts that down; a later deadline on the
+  server is a longer countdown on the next join. A student MID-session when
+  the extension lands still ends at the old zero and continues on rejoin.
+- **Routes**: `POST /api/attempts/[attemptId]/extend` (owner-only via
+  `loadOwnedAttempt`, 400 `ends_at_past`, 409 `not_in_progress`) and
+  `POST /api/test-sessions/[sessionId]/extend` (owner-only 404; every
+  `in_progress` attempt on the sitting, open, closed or expired — the case
+  is "today's period ended, they finish tomorrow"). Body `{ ends_at }`.
+  Idempotent: the override replaces, never accumulates.
+- **Audit**: event kind `deadline_extended` with `detail.ends_at` / `by`,
+  staff-only (the client event schema refuses it); the timeline reads
+  "Time extended by teacher … new deadline …".
+- **UI**: `ExtendTimeControl` — Extend time beside Hand in everyone (Monitor
+  header, Test sessions rows) and beside Hand in / Delete (per-student page,
+  Monitor row Actions), enabled whenever someone is in progress, no
+  session-open gate. Dialog with a `datetime-local` defaulting to tomorrow
+  23:59 local. Rows carry `deadline_at`; "Until 3:00 PM" / "Time expired"
+  under the status. Rows 216–221 in `docs/design-tool-manual-checks.md`.
+
 ### Confirm dialog copy
 
 "Hand in for <student>? Their k answered questions become their final
@@ -268,3 +300,6 @@ Order 0 → 1 → (2 ∥ 3) → 4. Slice 2 depends on slice 1's bundle field
   `refuseIfPastDeadline` on the same routes, and the client lands on the
   same return-home path as `time_expired` with its own `sitting_closed`
   event. The deadline's 30 s grace and D-1…D-4 here are unchanged.
+- **2026-09-17 — Extend time BUILT** (`889cf38` server + migration 0037,
+  `621e1d8` teacher UI; §"Teacher: extend time" above). Design-tool 1970
+  tests. Deploy + `migrate-aurora.sh` 0037 pending; rows 216–221 NOT RUN.

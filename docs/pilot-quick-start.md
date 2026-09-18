@@ -60,7 +60,10 @@ their work.
    moment that student opens the test. At zero the student's Mac ends the
    secure session on its own ("Time is up."), their answers are kept, and
    the server accepts nothing more after a 30-second grace. Leaving and
-   resuming does not restart it.
+   resuming does not restart it. **Extend time** (beside Hand in everyone,
+   or on one student's row) moves the deadline to a time you pick — for a
+   class finishing tomorrow, the default is tomorrow at 11:59 PM; start a
+   new session tomorrow and close it when they are done.
 2. **The session length** ("How long" when you start a session) and
    **Close session**. When the session runs out or you close it, every
    student still inside is returned to **Your tests** within a few seconds
