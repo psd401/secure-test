@@ -38,6 +38,10 @@ const PHRASES: Record<string, string> = {
   // instant each one granted is on the per-student page's timeline, which has
   // room for it.
   deadline_extended: "Time extended by teacher",
+  // Pass back (docs/pass-back-design.md): a count here, the instant and the new
+  // deadline on the per-student page's timeline, which has room for them. A
+  // family reading this line wants to know the test was reopened, and how often.
+  passed_back: "Passed back by teacher",
 };
 
 /**
@@ -60,6 +64,9 @@ const KIND_ORDER = [
   "deadline_extended",
   "sitting_closed",
   "teacher_hand_in",
+  // After the hand-ins, because that is when it happens: a pass back always
+  // follows a submitted attempt.
+  "passed_back",
   "client_error",
 ];
 

@@ -139,6 +139,38 @@ describe("buildTimeline — one line per kind", () => {
     }
   });
 
+  // Pass back (docs/pass-back-design.md): the same shape as deadline_extended
+  // — the fact, then what the student was given — because a teacher reading
+  // this months later needs to know the test was reopened AND until when.
+  test("passed_back names the new deadline when the assessment is timed", () => {
+    const lines = buildTimeline([
+      {
+        kind: "passed_back",
+        at: at("21:07:00"),
+        detail: {
+          by: "teacher-sub",
+          previously_submitted_at: at("20:00:00"),
+          superseded_scores: 2,
+          ends_at: at("22:00:00"),
+        },
+      },
+    ]);
+    expect(lines[0]!.text).toBe("Passed back by teacher 2:07 PM · new deadline 3:00 PM");
+    expect(lines[0]!.text).not.toContain("teacher-sub");
+  });
+
+  test("passed_back on an untimed assessment (ends_at null) is the bare sentence", () => {
+    for (const detail of [
+      null,
+      {},
+      { ends_at: null, superseded_scores: 0 },
+      { ends_at: "not a date" },
+    ]) {
+      const lines = buildTimeline([{ kind: "passed_back", at: at("21:07:00"), detail }]);
+      expect(lines[0]!.text).toBe("Passed back by teacher 2:07 PM");
+    }
+  });
+
   test("an unknown kind falls back to the raw kind rather than vanishing", () => {
     const lines = buildTimeline([{ kind: "teleported", at: at("21:07:00") }]);
     expect(lines[0]!.text).toBe("teleported 2:07 PM");

@@ -678,6 +678,17 @@ export const attempts = pgTable(
     // survive that rebind rather than evaporating with the sitting it was
     // granted in.
     deadline_override_at: timestamp("deadline_override_at", { withTimezone: true }),
+    // Pass back (docs/pass-back-design.md, D-1): how many times a teacher has
+    // put this handed-in attempt back to `in_progress` so the student could
+    // keep working. 0 on every row that has never been passed back, which is
+    // almost all of them.
+    //
+    // A COUNT rather than a boolean or an instant, because the question a
+    // teacher or a family asks months later is "how many goes did this child
+    // get" — and the when/who of each one is already an `attempt_events` row
+    // (`passed_back`, with `detail.by`). The column exists so a reader does not
+    // have to aggregate the event table to answer the common case.
+    pass_back_count: integer("pass_back_count").notNull().default(0),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -744,14 +755,22 @@ export const ATTEMPT_EVENT_KINDS = [
   // `detail.ends_at` carries the new instant. Server-written only, like
   // `teacher_hand_in` — it is a record of a staff action.
   "deadline_extended",
+  // Pass back (docs/pass-back-design.md, D-1): the teacher put a handed-in
+  // attempt back to `in_progress` so the student could keep working.
+  // `detail` is { by, previously_submitted_at, superseded_scores, ends_at } —
+  // the count of scores kept as a record and the new deadline, if the
+  // assessment is timed. Server-written only, like the two above: a client that
+  // could post one could claim a teacher reopened a test that was never
+  // reopened.
+  "passed_back",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
 /**
  * The subset a CLIENT may post to /api/attempts/[attemptId]/events.
  *
- * `teacher_hand_in` and `deadline_extended` are records of STAFF actions and
- * are written by their own routes alone; a student client that could post one
+ * `teacher_hand_in`, `deadline_extended` and `passed_back` are records of STAFF
+ * actions and are written by their own routes alone; a client that could post one
  * could plant a timeline line claiming a teacher did something they did not —
  * and in `deadline_extended`'s case one claiming a later deadline than the
  * column actually holds. Nothing is scored off these rows, so the damage is
@@ -761,6 +780,7 @@ export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "teacher_hand_in",
   "deadline_extended",
+  "passed_back",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -799,7 +819,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back')`,
     ),
   }),
 );
@@ -889,7 +909,16 @@ export type ScoreMethod = (typeof SCORE_METHODS)[number];
 // against the human final. Research rows are INVISIBLE to every
 // teacher-facing reader (the sweep in that slice) and are never final, so
 // the one-final-per-response index is untouched.
-export const SCORE_STATUSES = ["proposed", "final", "research"] as const;
+// Pass back (docs/pass-back-design.md, D-2, migration 0039): a fourth status,
+// `superseded`. When a teacher passes a handed-in attempt back so the student
+// can keep working, every `final` on that attempt's responses becomes
+// `superseded`: the number is KEPT as a record (James, 2026-09-17) but stops
+// being the score. The partial unique index frees the one-final slot, so the
+// next hand-in's auto-scoring pass writes a new final beside it; nothing that
+// reads `final` — results, the CSV, the print report, the work packet, the
+// review queue — sees a superseded row. The per-student page's "Earlier scores"
+// section is the one surface that does.
+export const SCORE_STATUSES = ["proposed", "final", "research", "superseded"] as const;
 export type ScoreStatus = (typeof SCORE_STATUSES)[number];
 
 // Slice 65: a registry row for a student file upload, created BEFORE the file
@@ -1002,7 +1031,7 @@ export const scores = pgTable(
     ),
     statusCheck: check(
       "scores_status_check",
-      sql`status IN ('proposed', 'final', 'research')`,
+      sql`status IN ('proposed', 'final', 'research', 'superseded')`,
     ),
     pointsCheck: check(
       "scores_points_check",

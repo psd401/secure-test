@@ -75,15 +75,21 @@ function lineText(event: TimelineEvent): string {
 /**
  * What follows the event's own time on the line, or "".
  *
- * Only `deadline_extended` has any: "Time extended by teacher 2:14 PM · new
- * deadline 3:00 PM". The instant matters more than the fact here — a teacher
- * reading this months later wants to know what the student was given, and a
- * line that said only "extended" would send them to the events table for it.
- * Tolerates a row written without the detail (or with a nonsense value) by
- * falling back to the bare sentence rather than printing "Invalid Date".
+ * Only `deadline_extended` and `passed_back` have any: "Time extended by teacher
+ * 2:14 PM · new deadline 3:00 PM". The instant matters more than the fact here —
+ * a teacher reading this months later wants to know what the student was given,
+ * and a line that said only "extended" would send them to the events table for
+ * it. A pass back on an UNLIMITED assessment writes `ends_at: null`, so it gets
+ * the bare sentence; so does a row written without the detail (or with a
+ * nonsense value), rather than printing "Invalid Date".
  */
+const KINDS_WITH_DEADLINE: ReadonlySet<string> = new Set([
+  "deadline_extended",
+  "passed_back",
+]);
+
 function lineSuffix(event: TimelineEvent): string {
-  if (event.kind !== "deadline_extended") return "";
+  if (!KINDS_WITH_DEADLINE.has(event.kind)) return "";
   const endsAt = event.detail?.ends_at;
   if (typeof endsAt !== "string" || Number.isNaN(Date.parse(endsAt))) return "";
   return ` · new deadline ${formatTime(endsAt)}`;

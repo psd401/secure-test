@@ -120,7 +120,7 @@ the teacher tells them (D-3 says whether the entry row should).
 
 - **D-1** Pass back = the status flip + superseded scores + a required new
   deadline when timed, one route, `edit`-level (owner or co-teacher). —
-  recommendation
+  **DECIDED as recommended (James, 2026-09-18)**
 - **D-2** "Keep scores as a record" = a fourth score status `superseded`,
   shown on the per-student page, invisible to results / print / packet /
   CSV. — **DECIDED as recommended (James, 2026-09-18)** (James 2026-09-17: keep as a record)
@@ -131,4 +131,37 @@ the teacher tells them (D-3 says whether the entry row should).
 
 ## Progress
 
-- 2026-09-18 — note written; D-1…D-4 decided the same day; nothing built.
+- 2026-09-18 — note written; D-1…D-4 decided the same day.
+- 2026-09-18 — **slice 1 (server) BUILT, not deployed.** **Migration 0039**
+  (`db/migrations/0039_pass_back.sql`): `scores.status` CHECK +
+  `SCORE_STATUSES` gain `superseded`, `attempts.pass_back_count integer not
+  null default 0`, `attempt_events` kind CHECK + `ATTEMPT_EVENT_KINDS` +
+  `STAFF_ONLY_ATTEMPT_EVENT_KINDS` gain `passed_back`; applied to dev and test,
+  **Aurora needs `migrate-aurora.sh` after the deploy**.
+  `lib/api/passBackAttempt.ts` is the write (one transaction: finals →
+  `superseded` and counted, status flip, `submitted_at` / `submitted_by_sub`
+  nulled, `pass_back_count + 1`, the override only when an instant is given so
+  an earlier extension is never erased, the `passed_back` event with its
+  detail); `POST /api/attempts/[attemptId]/pass-back` owns the refusals —
+  `edit` through `authorizeAttempt` (404), 409 `not_submitted`, and on a timed
+  assessment (a limit OR an override already on the attempt) 400
+  `ends_at_required` / `ends_at_past`, with an unlimited assessment ignoring
+  `ends_at` rather than gaining a deadline. An open sitting is deliberately not
+  a refusal. Labels: `attendanceView`'s `eventLabel`, `timeline.ts` ("Passed
+  back by teacher 2:07 PM · new deadline 3:00 PM") and `printIntegrity.ts`
+  (phrase + a `KIND_ORDER` slot after the hand-ins).
+  `lib/scoring/supersededScores.ts` `listSupersededScores` is slice 2's reader
+  — **no supersession instant exists** (`scores` carries `created_at` only, no
+  `updated_at`), so the row's `created_at` is when the score was GIVEN; the
+  instant it was set aside is on the `passed_back` event.
+  **One reader was NOT blind and was fixed:** `selectPacketScores` skipped
+  `research` but would have picked a superseded AI final as its "latest `ai`
+  row, whatever its status" and headed it "AI proposal"; it now skips
+  `superseded` too. Results / CSV / print summary / review queue /
+  `runAutoScoringPass` needed no change (they key on `final`) and each now has
+  a test proving it. Tests: `test/attempt-pass-back-api.test.ts` (19) and
+  `test/superseded-scores.test.ts` (6), plus rows in the timeline, print-helper
+  and attempt-events suites; design-tool 2065 pass, typecheck clean. Both
+  enforcement sweeps (`test/access-enforcement.test.ts`,
+  `test/auth-role-enforcement.test.ts`) enumerate routes from disk, so the new
+  route is covered without a registration edit. Slice 2 (teacher UI) next.

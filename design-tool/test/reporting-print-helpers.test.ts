@@ -92,6 +92,24 @@ describe("formatIntegrityLine", () => {
     );
   });
 
+  // Pass back (docs/pass-back-design.md): plain words, the monitor's own label,
+  // and a slot AFTER the hand-ins — a pass back always follows a submitted
+  // attempt, so a family reading the line reads it in the order it happened.
+  test("passed_back reads in plain words, counts, and sorts after the hand-in", () => {
+    expect(formatIntegrityLine([{ kind: "passed_back" }])).toBe("Passed back by teacher");
+    expect(formatIntegrityLine([{ kind: "passed_back" }])).toBe(eventLabel("passed_back"));
+    expect(
+      formatIntegrityLine([{ kind: "passed_back" }, { kind: "passed_back" }]),
+    ).toBe("Passed back by teacher 2 times");
+    expect(
+      integrityPhrases([
+        { kind: "passed_back" },
+        { kind: "client_error" },
+        { kind: "teacher_hand_in" },
+      ]),
+    ).toEqual(["Handed in by the teacher", "Passed back by teacher", "The app hit a problem"]);
+  });
+
   test("an unknown kind still shows, last, under its own name", () => {
     const phrases = integrityPhrases([{ kind: "quit" }, { kind: "future_kind" }]);
     expect(phrases).toEqual(["Quit the app", "future_kind"]);

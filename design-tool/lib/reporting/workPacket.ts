@@ -178,6 +178,11 @@ export interface PacketScores<T> {
  * - `research` rows (docs/scoring-corpus-design.md) are an operator's data
  *   set and never print. The page's query excludes them too; this is the
  *   second lock, so a future caller cannot leak one by forgetting the filter.
+ * - `superseded` rows (docs/pass-back-design.md, D-2) never print either. They
+ *   are the scores from BEFORE a pass back, kept as a record on the per-student
+ *   page alone; a packet printed after a pass back is about the answers as they
+ *   stand. Without this the `ai` branch below would happily pick a superseded
+ *   AI final as the latest `ai` row and head it "AI proposal".
  */
 export function selectPacketScores<T extends PacketScoreRow>(
   mode: PacketScoresMode,
@@ -187,7 +192,7 @@ export function selectPacketScores<T extends PacketScoreRow>(
   let teacher: T | null = null;
   let ai: T | null = null;
   for (const row of rowsForResponse) {
-    if (row.status === "research") continue;
+    if (row.status === "research" || row.status === "superseded") continue;
     if (row.status === "final" && (row.method === "human" || row.method === "auto")) {
       teacher = row;
       continue;

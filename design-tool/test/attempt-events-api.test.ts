@@ -202,6 +202,9 @@ describe("POST /api/attempts/:attemptId/events", () => {
     // The Zod enum is generated from the list, so the list is what proves it.
     expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("deadline_extended");
     expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("teacher_hand_in");
+    // Pass back (docs/pass-back-design.md): a client that could post one could
+    // claim a teacher reopened a test that was never reopened.
+    expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("passed_back");
     // …and it still carries the kinds the client genuinely sends.
     expect(CLIENT_ATTEMPT_EVENT_KINDS).toContain("lockdown_begin");
 
