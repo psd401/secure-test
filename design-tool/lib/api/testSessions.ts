@@ -90,6 +90,8 @@ export async function createSessionWithCode(
     assessment_id: string;
     owner_sub: string;
     owner_email?: string | null;
+    /** Access slice 2 (D-5): the caller, when they are not the owner. Audit. */
+    created_by_sub?: string | null;
     section_ps_id?: string | null;
     student_ps_ids?: string[] | null;
     expires_at: Date;

@@ -62,7 +62,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "own");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "run");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
 

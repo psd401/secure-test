@@ -117,6 +117,11 @@ export function uniqueImportName(existing: readonly string[], title: string): st
 export async function importBundleForOwner(
   bundle: ItemBundle,
   owner_sub: string,
+  // Access slice 2 (migration 0038): the new owner's verified email, so a
+  // `teacher`-scoped grant resolves for the imported copy. Optional because the
+  // only caller that cannot supply one is a test; a copy created without it is
+  // simply invisible to teacher-scope grants until its owner touches it again.
+  owner_email?: string | null,
 ): Promise<ImportBundleResult | ImportBundleError> {
   const db = getDb();
   const remap = new Map<string, string>();
@@ -270,6 +275,7 @@ export async function importBundleForOwner(
       .insert(assessments)
       .values({
         owner_sub,
+        owner_email: owner_email ?? null,
         name,
         description: "",
         allowed_accommodations: allowedValid,

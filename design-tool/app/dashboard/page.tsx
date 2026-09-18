@@ -6,6 +6,7 @@ import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
 import { assessments, attempts, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
+import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
 import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
@@ -55,13 +56,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const db = getDb();
   const now = new Date();
+  // Access slice 2 (docs/access-model-design.md): every query on this page is
+  // scoped to "assessments I can see" = owned ∪ granted, through the one shared
+  // fragment — so the list, the counts and the Open-now strip cannot disagree
+  // about what the caller may see.
+  const visible = await visibleAssessmentScope(db, session);
   const [rows, archivedCount, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
       .from(assessments)
       .where(
         and(
-          eq(assessments.owner_sub, session.sub),
+          visible.condition,
           showArchived ? isNotNull(assessments.archived_at) : isNull(assessments.archived_at),
         ),
       )
@@ -69,10 +75,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     db
       .select({ n: count() })
       .from(assessments)
-      .where(and(eq(assessments.owner_sub, session.sub), isNotNull(assessments.archived_at)))
+      .where(and(visible.condition, isNotNull(assessments.archived_at)))
       .then((r) => r[0]?.n ?? 0),
-    // Same predicate as GET /api/test-sessions (owner) narrowed to sessions
-    // whose window is still running — the monitor's own definition of open.
+    // Same predicate as GET /api/test-sessions — sittings whose ASSESSMENT the
+    // caller can see — narrowed to sessions whose window is still running,
+    // which is the monitor's own definition of open.
     db
       .select({
         id: test_sessions.id,
@@ -85,7 +92,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
       .where(
         and(
-          eq(test_sessions.owner_sub, session.sub),
+          visible.condition,
           eq(test_sessions.status, "open"),
           gt(test_sessions.expires_at, now),
         ),
@@ -95,7 +102,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .select({ assessment_id: items.assessment_id, n: count() })
       .from(items)
       .innerJoin(assessments, eq(assessments.id, items.assessment_id))
-      .where(eq(assessments.owner_sub, session.sub))
+      .where(visible.condition)
       .groupBy(items.assessment_id),
     // D-1 / D-4 (docs/archive-and-delete-design.md): the row-level Delete
     // action needs this to disable itself and show "N attempts — archive
@@ -104,9 +111,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       .select({ assessment_id: attempts.assessment_id, n: count() })
       .from(attempts)
       .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
-      .where(eq(assessments.owner_sub, session.sub))
+      .where(visible.condition)
       .groupBy(attempts.assessment_id),
   ]);
+  // Slice 3 renders the label; slice 2 makes the fact available on every row.
+  const accessFor = new Map(rows.map((a) => [a.id, visible.annotate(a)]));
   const questionsFor = new Map(questionCounts.map((c) => [c.assessment_id, c.n]));
   const attemptsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c.n]));
   // Slice C: offers from colleagues that have not been added yet. Accepted
@@ -215,6 +224,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <TableBody>
               {rows.map((a) => {
                 const code = openCodeFor.get(a.id);
+                // Access slice 2: Duplicate / Archive / Delete all need `own`
+                // (the note's ladder), so a row reached through a grant does not
+                // offer a button whose route would 404. Slice 3 adds the
+                // "Shared with you as co-teacher" label from the same fact.
+                const ownsRow = accessFor.get(a.id)?.level === "own";
                 return (
                   <TableRow key={a.id}>
                     {/* A-1: the name is the elastic column. Auto table layout
@@ -278,18 +292,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             Published and archived rows alike — the copy is a
                             fresh Draft, so nothing the publish lock or the
                             archived view protects is touched. */}
-                        <DuplicateAssessmentButton id={a.id} />
-                        <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
-                        {/* D-1 / D-4: a row action beside Results, same
-                            disabled-and-noted posture as the editor's
-                            Settings-tab Delete draft. */}
-                        <DeleteDraftButton
-                          id={a.id}
-                          name={a.name}
-                          questionCount={questionsFor.get(a.id) ?? 0}
-                          attemptCount={attemptsFor.get(a.id) ?? 0}
-                          status={a.status}
-                        />
+                        {ownsRow ? (
+                          <>
+                            <DuplicateAssessmentButton id={a.id} />
+                            <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
+                            {/* D-1 / D-4: a row action beside Results, same
+                                disabled-and-noted posture as the editor's
+                                Settings-tab Delete draft. */}
+                            <DeleteDraftButton
+                              id={a.id}
+                              name={a.name}
+                              questionCount={questionsFor.get(a.id) ?? 0}
+                              attemptCount={attemptsFor.get(a.id) ?? 0}
+                              status={a.status}
+                            />
+                          </>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

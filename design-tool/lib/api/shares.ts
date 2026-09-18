@@ -159,7 +159,8 @@ export async function acceptShare(
       detail: built.detail ?? built.item_id,
     };
   }
-  const imported = await importBundleForOwner(built.bundle, recipient.sub);
+  // Access slice 2: the recipient's copy carries the recipient's email.
+  const imported = await importBundleForOwner(built.bundle, recipient.sub, email);
   if (isImportBundleError(imported)) {
     return { ok: false, status: 500, error: `copy_${imported.error}` };
   }

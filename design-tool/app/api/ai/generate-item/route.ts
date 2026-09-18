@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "own");
+  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "edit");
   if (!access.ok) return access.response;
   const assessmentRow = access.assessment;
   if (!assessmentRow.allow_llm_authoring) {

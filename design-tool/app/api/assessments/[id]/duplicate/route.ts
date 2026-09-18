@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { duplicateAssessment } from "@/lib/api/duplicateAssessment";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { normalizeEmail } from "@/lib/roster/queries";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -29,7 +30,14 @@ export async function POST(_req: Request, ctx: RouteContext) {
   const db = getDb();
   const access = await authorizeAssessment(db, auth.session, id, "own");
   if (!access.ok) return access.response;
-  const result = await duplicateAssessment(db, access.assessment, auth.session.sub);
+  const result = await duplicateAssessment(
+    db,
+    access.assessment,
+    auth.session.sub,
+    // Access slice 2: the copy is the caller's, so it carries the caller's
+    // email — not the source's.
+    normalizeEmail(auth.session.email),
+  );
   if (!result.ok) {
     const { ok, status, ...failure } = result;
     return NextResponse.json({ ok, ...failure }, { status });

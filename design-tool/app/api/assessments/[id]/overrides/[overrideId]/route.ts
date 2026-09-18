@@ -22,7 +22,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   // The parent assessment answers the access question (D-3); the override row
   // is then read scoped to it, which still defends against URL-tampering that
   // names an override belonging to a DIFFERENT assessment.
-  const access = await authorizeAssessment(db, auth.session, id, "own");
+  const access = await authorizeAssessment(db, auth.session, id, "edit");
   if (!access.ok) return access.response;
   const [override] = await db
     .select({ id: assessment_student_overrides.id })

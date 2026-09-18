@@ -25,7 +25,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "edit");
   if (!access.ok) return access.response;
   return NextResponse.json({ item_sets: await loadItemSetsInOrder(id) });
 }
@@ -50,7 +50,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "edit");
   if (!access.ok) return access.response;
   const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;

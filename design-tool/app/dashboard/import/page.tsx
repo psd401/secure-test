@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ItemBundleSchema } from "@secure-test/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
+import { normalizeEmail } from "@/lib/roster/queries";
 import {
   importBundleForOwner,
   isImportBundleError,
@@ -56,7 +57,13 @@ async function importAssessment(formData: FormData) {
     redirect(`/dashboard/import?error=${encodeURIComponent(msg)}`);
   }
   const bundle = result.data;
-  const imported = await importBundleForOwner(bundle, session!.sub);
+  // Access slice 2: the copy carries its new owner's email so a
+  // `teacher`-scoped grant resolves for it (migration 0038).
+  const imported = await importBundleForOwner(
+    bundle,
+    session!.sub,
+    normalizeEmail(session!.email),
+  );
   if (isImportBundleError(imported)) {
     redirect(`/dashboard/import?error=${encodeURIComponent(imported.error)}`);
   }

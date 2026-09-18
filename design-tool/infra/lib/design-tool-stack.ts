@@ -31,6 +31,10 @@ export interface DesignToolStackProps extends cdk.StackProps {
    * address subscribed to the alarm/feedback SNS topic. A personal
    * address, so it comes from cdk context, not source. */
   readonly notifyEmail?: string;
+  /** Access slice 2 (docs/access-model-design.md, D-1): comma-separated staff
+   * addresses that get system-admin access. Defaults to "" — nobody. Personal
+   * addresses, so it comes from cdk context, not source. */
+  readonly adminEmails?: string;
 }
 
 // Aurora Postgres Serverless v2 cluster for the design tool (Slice 24).
@@ -287,6 +291,7 @@ export class DesignToolStack extends cdk.Stack {
       oidcWebClientId: props.oidcWebClientId,
       oidcNativeClientId: props.oidcNativeClientId,
       domainName: props.domainName,
+      adminEmails: props.adminEmails ?? "",
       notifyTopic,
     });
   }

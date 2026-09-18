@@ -28,7 +28,10 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  // A read of the assessment and its items — `view`, the same level the results
+  // and export routes take (export carries the answer keys too, so `view` is
+  // already the level at which a key is readable).
+  const access = await authorizeAssessment(getDb(), auth.session, id, "view");
   if (!access.ok) return access.response;
   const db = getDb();
   const itemRows = await db
@@ -67,7 +70,17 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  // Access slice 2: this one route carries two different levels, because it
+  // carries two different acts. A settings / publish / unlock PATCH is `edit` —
+  // what a co-teacher does. Archiving is `own`: the note's ladder puts archive
+  // beside share and delete, and the archive PATCH is already required to be
+  // status-only, so the two never arrive together and the level is unambiguous.
+  const access = await authorizeAssessment(
+    getDb(),
+    auth.session,
+    id,
+    isArchivePatch ? "own" : "edit",
+  );
   if (!access.ok) return access.response;
 
   // Archive runs BEFORE the publish lock and is accepted on a published row:

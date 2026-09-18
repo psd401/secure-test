@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { test_sessions } from "@/db/schema";
+import { assessments, test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
   CodeExhaustionError,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/testSessions";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
 import {
   normalizeEmail,
   sectionsCurrentlyTaughtBy,
@@ -35,7 +36,17 @@ const CreateBody = z.object({
   student_ps_ids: z.array(PsId).min(1).max(500).optional(),
 });
 
-/** A teacher's own sittings, newest first. Optionally narrowed to one assessment. */
+/**
+ * The sittings the caller can see, newest first. Optionally narrowed to one
+ * assessment.
+ *
+ * Access slice 2: the predicate is "sittings whose ASSESSMENT I can see", not
+ * `test_sessions.owner_sub`. That is the same authority `authorizeSitting` uses
+ * (the assessment, not the sitting's own owner), so a sitting the lead teacher
+ * started appears in the co-teacher's list and opens in their monitor instead of
+ * listing and then 404ing. A substitute's sitting stays the teacher's and shows
+ * in both lists for the same reason.
+ */
 export async function GET(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
@@ -51,8 +62,9 @@ export async function GET(req: Request) {
     new URL(req.url).searchParams.get("archived") === "1";
 
   const db = getDb();
+  const visible = await visibleAssessmentScope(db, auth.session);
   const scope = and(
-    eq(test_sessions.owner_sub, auth.session.sub),
+    visible.condition,
     assessmentId ? eq(test_sessions.assessment_id, assessmentId) : undefined,
     wantArchived
       ? isNotNull(test_sessions.archived_at)
@@ -60,11 +72,12 @@ export async function GET(req: Request) {
   );
 
   const rows = await db
-    .select()
+    .select({ sitting: test_sessions })
     .from(test_sessions)
+    .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
     .where(scope)
     .orderBy(desc(test_sessions.created_at));
-  return NextResponse.json({ test_sessions: rows });
+  return NextResponse.json({ test_sessions: rows.map((r) => r.sitting) });
 }
 
 export async function POST(req: Request) {
@@ -98,6 +111,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "archived" }, { status: 409 });
   }
 
+  // Access slice 2 (D-5): whose sitting is this?
+  //
+  //   owner / admin / an ASSESSMENT-scoped grant (a co-teacher) → the caller's.
+  //     A co-teacher runs their OWN section, so the sitting must carry their
+  //     sub and email or redemption would scope the roster to the wrong
+  //     teacher and admit nobody.
+  //   a TEACHER-scoped grant (a substitute) → the granting teacher's. D-5: the
+  //     sitting stays the teacher's after the sub leaves, so `owner_sub` /
+  //     `owner_email` come from the assessment and only `created_by_sub`
+  //     records the sub. That also means the sitting admits the TEACHER's
+  //     students, which is the point of covering a class.
+  //
+  // `created_by_sub` is always the caller either way — audit, never authority.
+  const coveringForTeacher = access.via === "grant" && access.scope === "teacher";
+  const sittingOwnerSub = coveringForTeacher
+    ? assessment.owner_sub
+    : auth.session.sub;
+  const sittingOwnerEmail = coveringForTeacher
+    ? assessment.owner_email
+    : normalizeEmail(auth.session.email);
+
   // Slice 79: a scope narrows "all my sections"; it never widens it. A
   // named section must be one the owner currently teaches, and every listed
   // student must be in one of those sections — so a sitting can be run for a
@@ -127,7 +161,9 @@ export async function POST(req: Request) {
   // Release codes held by this teacher's expired-but-unclosed sittings before
   // allocating a new one. See sweepExpired for why this cannot be an index
   // predicate.
-  await sweepExpired(db, auth.session.sub);
+  // Swept for the sitting's OWNER, which is whose code-holding rows could
+  // block the new one.
+  await sweepExpired(db, sittingOwnerSub);
 
   const minutes = body.duration_minutes ?? DEFAULT_DURATION_MINUTES;
   const expiresAt = new Date(Date.now() + minutes * 60_000);
@@ -135,11 +171,12 @@ export async function POST(req: Request) {
   try {
     const row = await createSessionWithCode(db, {
       assessment_id: assessment.id,
-      owner_sub: auth.session.sub,
+      owner_sub: sittingOwnerSub,
       // Slice 78: the join to roster_section_teachers that scopes who may
       // join. Sessions minted before slice 77 carry no email; such a sitting
       // admits nobody until the teacher signs in again.
-      owner_email: ownerEmail,
+      owner_email: sittingOwnerEmail,
+      created_by_sub: auth.session.sub,
       section_ps_id: body.section_ps_id ?? null,
       student_ps_ids: body.student_ps_ids
         ? [...new Set(body.student_ps_ids)]

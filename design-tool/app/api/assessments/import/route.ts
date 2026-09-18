@@ -4,6 +4,7 @@ import { ItemBundleSchema } from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import { assessments } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
+import { normalizeEmail } from "@/lib/roster/queries";
 import {
   importBundleForOwner,
   isImportBundleError,
@@ -85,7 +86,13 @@ export async function POST(req: Request) {
     "asset_base64_invalid",
   ]);
 
-  const result = await importBundleForOwner(bundleResult.data, auth.session.sub);
+  // Access slice 2: the new row carries the importer's email so a
+  // `teacher`-scoped grant resolves for it (migration 0038).
+  const result = await importBundleForOwner(
+    bundleResult.data,
+    auth.session.sub,
+    normalizeEmail(auth.session.email),
+  );
   if (isImportBundleError(result)) {
     const serverFault =
       result.error.startsWith("asset_") &&

@@ -39,7 +39,20 @@ import {
 } from "../lib/api/access";
 import type { SessionPayload } from "../lib/auth/session";
 
-const APP_API = resolve(import.meta.dir, "../app/api");
+const APP_ROOT = resolve(import.meta.dir, "../app");
+
+/**
+ * Where a route file can live. `app/api` is the bulk; `app/preview` is the one
+ * teacher route outside it — and slice 1's sweep, which read `app/api` only,
+ * consequently left that route's inline owner check and its 403 in place until
+ * access slice 2. Sweeping both roots is what stops the next non-api route
+ * repeating it. Paths are reported without the `api/` prefix, so the
+ * classifications below read the same as the URL.
+ */
+const ROUTE_ROOTS = [
+  { dir: join(APP_ROOT, "api"), prefix: "" },
+  { dir: join(APP_ROOT, "preview"), prefix: "preview" },
+];
 
 /**
  * Student-plane routes. A student's access is the sitting's scope plus roster
@@ -105,6 +118,14 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("accommodations", "import"),
     "TIDE import into the caller's own overlay rows",
   ],
+  // Access slice 2 (D-1 / D-6): the admin grant surface. It addresses a SCOPE
+  // (a teacher's email, a school id) rather than an owned row, and its own gate
+  // is `isAdmin` — which refuses with 404, not 403, for the same
+  // no-existence-leak reason as the helper.
+  [
+    join("grants"),
+    "admin surface: scope-addressed, gated by isAdmin with a 404 refusal",
+  ],
 ]);
 
 /**
@@ -160,6 +181,13 @@ const OWNER_SUB_ALLOWED = new Map<string, string>([
     join("assessments", "[id]", "review-queue"),
     "asset and overlay-student lookups scoped to the caller (not the queue's own gate)",
   ],
+  // Access slice 2: the preview's asset lookup is scoped to the ASSESSMENT's
+  // owner, not the caller, so a co-teacher's preview shows the lead teacher's
+  // images. A read scope, not a refusal.
+  [
+    join("preview", "[id]"),
+    "asset lookup scoped to the assessment's owner so a grantee sees its images",
+  ],
 ]);
 
 function findRouteFiles(dir: string): string[] {
@@ -172,13 +200,13 @@ function findRouteFiles(dir: string): string[] {
   return out;
 }
 
-const allRoutes = findRouteFiles(APP_API)
-  .map((file) => ({
+const allRoutes = ROUTE_ROOTS.flatMap(({ dir, prefix }) =>
+  findRouteFiles(dir).map((file) => ({
     file,
-    path: file.slice(APP_API.length + 1).replace(/\/route\.ts$/, ""),
+    path: join(prefix, file.slice(dir.length + 1).replace(/\/route\.ts$/, "")),
     source: readFileSync(file, "utf8"),
-  }))
-  .sort((a, b) => a.path.localeCompare(b.path));
+  })),
+).sort((a, b) => a.path.localeCompare(b.path));
 
 const staffRoutes = allRoutes.filter((r) => !STUDENT_ROUTES.has(r.path));
 

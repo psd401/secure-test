@@ -64,4 +64,10 @@ new DesignToolStack(app, "SecureTestDesignTool", {
   // context rather than tracked source; the stack refuses to synth without
   // it — see cdk.context.json.example.
   notifyEmail: app.node.tryGetContext("notifyEmail") as string | undefined,
+  // Access slice 2 (docs/access-model-design.md, D-1): the system-admin list,
+  // comma-separated. Personal addresses, so context rather than tracked source
+  // — but UNLIKE domainName / guardrailId / notifyEmail the stack does NOT
+  // require it: an empty list is the correct default (nobody is an admin), and
+  // a deploy that forgets it is degraded, not broken.
+  adminEmails: (app.node.tryGetContext("adminEmails") as string | undefined) ?? "",
 });

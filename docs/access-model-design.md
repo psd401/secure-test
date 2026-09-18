@@ -102,6 +102,9 @@ access_grants
   — "everything this teacher owns", resolved through the owner's email.
   `school` scope = principal (level `view`) — "every teacher whose current
   sections sit in this `school_id`", resolved through the roster.
+- The `teacher` arm resolves through **`assessments.owner_email`**, added by
+  migration 0038 because the assessment row carried only `owner_sub` and there
+  is no staff table to map a sub to an address (slice 2, §Progress deviation 1).
 - Keyed on **email**, not sub, on purpose: a substitute may never have
   signed in when the grant is made, and the roster's own key is email.
   The session carries both.
@@ -217,10 +220,10 @@ authorizeAttempt(db, session, attemptId, need)     // through its assessment
 |---|---|---|
 | 0 | This note; D-1…D-8 | — |
 | 1 | `lib/api/access.ts` + the refactor of every inline owner check to `authorize*` with `need: "own"`; the enumerating test; no behaviour change, no migration | L — Opus 5 / medium, one commit per route group (assessments, sittings, attempts, students/rubrics/assets) |
-| 2 | Migration: `access_grants`, `test_sessions.created_by_sub`, `impersonation_sessions`; `ADMIN_EMAILS` + `isAdmin`; grant resolution inside the helper; list-query widening; `GET/POST/DELETE /api/grants` (owner or admin) | M — Opus 5 / medium |
+| 2 | Migration: `access_grants`, `test_sessions.created_by_sub` (+ `assessments.owner_email` — see §Progress deviation 1; `impersonation_sessions` moved to slice 5); `ADMIN_EMAILS` + `isAdmin`; grant resolution inside the helper; per-route levels; list-query widening; the grants API | M — Opus 5 / medium |
 | 3 | Co-teach: the Share dialog's second mode, the "Shared with you as co-teacher" row label, sittings visible to both; rows | S — Sonnet 5 / medium |
 | 4 | Substitute: Coverage card (teacher) + admin grant, the sub's home, read-only editor / results refusal, `created_by_sub` on sittings; rows | M — Opus 5 / medium |
-| 5 | Admin: `/admin` page (open sittings, grants, impersonate / stop, banner), `impersonation_sessions`; rows | M — Opus 5 / medium |
+| 5 | Admin: `/admin` page (open sittings, grants, impersonate / stop, banner), `impersonation_sessions` (its migration lands here, with the code that uses it); rows | M — Opus 5 / medium |
 | 6 | Principal: `school` scope resolution, read-only Monitor + results; rows | **DEFERRED to a later release (D-7)** |
 
 Slice 1 alone is worth shipping: it removes 36 copies of the ownership
@@ -285,3 +288,107 @@ check and adds the test that keeps it that way.
   response score / rescore-ai / approve, assets `[id]`, and the two dashboard
   pages that rendered a "Forbidden" panel (results, scoring) which now
   `notFound()`.
+- 2026-09-17 — **slice 2 BUILT** (migration **0038**, `0038_access_grants.sql`,
+  applied to dev + test). What landed:
+  - **`access_grants`** exactly as §"The grant" specifies, plus the partial
+    unique index `access_grants_live_unq` on `(grantee_email, scope_kind,
+    scope_id) where revoked_at is null` and an index on `grantee_email`. Revoke
+    is soft, so the partial index is what makes re-granting after a revoke a new
+    row rather than a conflict, and a 23505 from it is the expected outcome of a
+    race → 409 `already_granted`.
+  - **`test_sessions.created_by_sub`** (D-5, audit only — nothing authorizes on
+    it), written by the sitting-creation route from this slice on.
+  - **`ADMIN_EMAILS`** (D-1): `lib/auth/admin.ts` — `adminEmails()` /
+    `isAdmin(session)`, memoised on the raw value, empty when unset. Added to
+    `.env.local.example` (commented) and to the task environment from the NEW cdk
+    context key **`adminEmails`** (string, default `""`, the stack does NOT throw
+    without it — an empty list is a correct deployment). `cdk.context.json.example`
+    and the infra README's new context table carry it.
+  - **Resolution** (D-2/D-6) in `lib/api/grants.ts`, called by
+    `lib/api/access.ts`: owner → `own`/`owner`; admin → `own`/`admin`; else the
+    highest live grant covering the row. `loadActiveGrants(db, email)` is ONE
+    query carrying the whole liveness rule (`revoked_at is null`, `starts_at <=
+    now()`, `ends_at is null or > now()`) and `grantedLevel(grants, row)` is
+    pure, so a fifty-row list resolves with one query. `effectiveLevel` is the
+    single-row door. Every `ok: true` access result now also carries `scope` —
+    the grant scope it came through, or null for an owner/admin.
+    `lib/api/accessLevels.ts` is a new four-export module holding the ladder,
+    because access.ts ↔ grants.ts would otherwise be an import cycle whose
+    module-level arrays are read during the other's initialisation; access.ts
+    re-exports it, so routes still import levels from `@/lib/api/access`.
+  - **`school` scope is stored and never resolved** (D-7). `RESOLVED_SCOPES` in
+    grants.ts lists `assessment` and `teacher` only, and two tests assert a
+    school grant confers nothing — through the helper and through the list.
+  - **Per-route levels**: slice 1's uniform `"own"` replaced by the level each
+    route actually needs (table in the slice's report; the note's ladder is the
+    authority). Two notes on the edges: `PATCH /api/assessments/[id]` asks for
+    `own` when it is the status-only ARCHIVE patch and `edit` otherwise — archive
+    sits beside share and delete on the ladder, and the two shapes can never
+    arrive together because the archive patch is already required to be
+    status-only. `GET /api/assessments/[id]`, `export`, `results`,
+    `review-queue` and the preview are all `view`, which means `view` is the
+    level at which an answer KEY is readable — already true of export, and stated
+    here rather than left implicit. The per-teacher tables (`students`,
+    `rubrics`, `assets`) stay owner-only: no assessment grant reaches them, an
+    admin does.
+  - **`app/preview/[id]/route.ts` was the last inline owner check in the tree** —
+    slice 1 swept `app/api/**` only, so that route kept its select-then-compare
+    403. It now goes through `authorizeAssessment(…, "view")`, and
+    `test/access-enforcement.test.ts` sweeps `app/preview` as a second root so
+    the next non-api route cannot repeat it. Its asset lookup is now scoped to
+    the ASSESSMENT's owner rather than the caller, or a co-teacher's preview
+    would render `[image not found]` for every one of the lead's images.
+  - **List widening**: `lib/api/visibleAssessments.ts` —
+    `visibleAssessmentScope(db, session)` hands out one SQL fragment plus a pure
+    annotator, and `visibleAssessments(...)` is the rows themselves with
+    `access: { level, via, owner_email? }` on each. Used by the home page (list,
+    archived count, Open-now strip, question and attempt counts — all five
+    queries, so they cannot disagree), `GET /api/assessments`, and
+    `GET /api/test-sessions`, whose predicate is now "sittings whose ASSESSMENT
+    I can see" — the same authority `authorizeSitting` uses, so a sitting can no
+    longer list and then 404. Archived / `?archived=1` semantics unchanged. The
+    home page's Duplicate / Archive / Delete buttons now render only on a row the
+    caller owns, since all three are `own` routes.
+  - **Grants API**: `GET/POST /api/assessments/[id]/grants` and
+    `DELETE …/grants/[grantId]` (all `own`; scope fixed to `assessment` and this
+    id, so a teacher can never write a teacher- or school-scoped grant), and
+    admin-only `GET/POST /api/grants` for the other scopes — **404 for a
+    non-admin, not 403** (D-3: a 403 would tell any teacher that an admin API
+    exists and that they are not on the list). Grantee rules, shared by both:
+    must be staff by `roleForEmail(email, true)`, never self, and `own` is
+    admin-only to grant — an `edit` co-teacher can change the assessment but
+    cannot hand it to a third person.
+  - **Sitting creation under a grant** (D-5): `POST /api/test-sessions` needs
+    `run`, not ownership. An owner, an admin or an ASSESSMENT-scoped grant
+    (co-teacher) creates a sitting that is the CALLER's — they run their own
+    section, so `owner_sub` / `owner_email` must be theirs or redemption scopes
+    the roster to the wrong teacher and admits nobody. A TEACHER-scoped grant (a
+    substitute) creates a sitting that stays the granting teacher's
+    (`owner_sub` / `owner_email` from the assessment) with `created_by_sub` = the
+    sub, so it admits the teacher's students and survives the sub leaving.
+    `sectionsCurrentlyTaughtBy(session.email)` is unchanged, which means a
+    substitute cannot yet NAME a section they do not themselves teach — slice 4's
+    problem, recorded here rather than half-solved.
+
+  **Deviations from the note, both deliberate:**
+  1. **`assessments.owner_email` was added in the same migration** (backfilled
+     from the newest `test_sessions.owner_email` per assessment, and written on
+     create / import / duplicate / share-accept from the session's email).
+     `access_grants` is keyed on grantee EMAIL by design, and a `teacher`-scoped
+     grant has to resolve through the OWNER's email — but an assessment carried
+     only `owner_sub`, and there is no staff table to map one to the other.
+     Consequence, stated because it is visible: **a teacher-scope grant does not
+     resolve for an assessment whose `owner_email` is still NULL** — one nobody
+     has ever sat and whose owner has not touched it since the backfill. It
+     starts resolving the next time that owner creates, imports or duplicates;
+     an `assessment`-scoped grant is unaffected.
+  2. **`impersonation_sessions` was NOT created.** The slices table listed it
+     under slice 2, but nothing in this slice writes or reads it and D-8's
+     act-as flow is slice 5's whole subject; an unused table shipped early is a
+     migration to get wrong twice. Slice 5 adds it with the code that uses it.
+
+  Tests: `test/access-grants.test.ts` (resolution, the ladder per level, expired
+  / future / revoked, teacher scope through `owner_email`, school-scope inertness,
+  admin, list widening, the sitting branches) and `test/grants-api.test.ts` (both
+  surfaces, the grantee rules, 409, scoped revoke, the admin 404). Design-tool
+  **2017** tests (1985 before), typecheck clean.

@@ -57,6 +57,9 @@ export async function duplicateAssessment(
   db: ReturnType<typeof getDb>,
   source: AssessmentRow,
   ownerSub: string,
+  /** Access slice 2: the new owner's verified email, stored on the copy so a
+   * `teacher`-scoped grant resolves for it (migration 0038). */
+  ownerEmail?: string | null,
 ): Promise<DuplicateAssessmentResult> {
   // Hidden rubrics included: this is the teacher's own copy of their own
   // assessment, so dropping them would lose authoring data and re-clamp
@@ -72,7 +75,7 @@ export async function duplicateAssessment(
     };
   }
 
-  const imported = await importBundleForOwner(built.bundle, ownerSub);
+  const imported = await importBundleForOwner(built.bundle, ownerSub, ownerEmail);
   if (isImportBundleError(imported)) {
     return { ok: false, status: 500, error: `copy_${imported.error}` };
   }

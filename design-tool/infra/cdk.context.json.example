@@ -12,5 +12,6 @@
   "mwaaProducerRoleArn": "arn:aws:iam::111111111111:role/service-role/example-mwaa-execution-role",
   "domainName": "example.invalid",
   "guardrailId": "abcdefghijkl",
-  "notifyEmail": "<your-email>"
+  "notifyEmail": "<your-email>",
+  "adminEmails": ""
 }

@@ -76,6 +76,19 @@ example's placeholder values as long as no AWS lookup needs to resolve
 clear error at synth/deploy time if `domainName` or `guardrailId` is
 missing — there is no hardcoded fallback for either.
 
+Context keys:
+
+| Key | Required | What it is |
+|---|---|---|
+| `availability-zones:account=…` | CDK's own | Lookup cache; carries the account id |
+| `oidcWebClientId` | yes in practice | Google OAuth web client id → `OIDC_CLIENT_ID` |
+| `oidcNativeClientId` | yes in practice | The macOS client's id → second `OIDC_AUDIENCE` entry |
+| `mwaaProducerRoleArn` | for the roster feed | The warehouse DAG's role, allowed to put snapshots |
+| `domainName` | **yes, throws** | Public origin host → cert, `OIDC_REDIRECT_URI` |
+| `guardrailId` | **yes, throws** | Bedrock guardrail id (ADR 0011) |
+| `notifyEmail` | **yes, throws** | Address subscribed to the alarm/feedback topic |
+| `adminEmails` | no, defaults `""` | Access slice 2 (docs/access-model-design.md, D-1): comma-separated staff addresses that get system-admin access → `ADMIN_EMAILS`. Empty = nobody, which is a correct deployment, so the stack does NOT throw without it |
+
 Outputs printed:
 
 - `ClusterEndpoint` — hostname:port of the writer.

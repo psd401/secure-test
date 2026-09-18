@@ -29,7 +29,9 @@ export default async function StudentDetailPage({ params }: PageProps) {
   const db = getDb();
   // UX pass 1, slice 3's posture: someone else's record is a 404 — the rule
   // access slice 1 (D-3) made universal.
-  const student = await pageStudent(db, session, studentId, "edit");
+  // The accommodations overlay is per-TEACHER, not per-assessment, so it stays
+  // owner-only: no assessment grant reaches it (access slice 2).
+  const student = await pageStudent(db, session, studentId, "own");
   if (!student) notFound();
   const accs = await db
     .select()

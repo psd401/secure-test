@@ -55,6 +55,8 @@ export interface AppServiceProps {
    * origin — a rename costs cert, one GCP redirect URI,
    * OIDC_REDIRECT_URI, SECURE_TEST_SERVER and one re-sign-in). */
   readonly domainName: string;
+  /** Access slice 2 (D-1): ADMIN_EMAILS for the task env. "" = nobody. */
+  readonly adminEmails: string;
   /** Observability slice 1 (docs/observability-design.md): the shared
    * alarm/feedback topic. Granted sns:Publish on the task role, exposed as
    * NOTIFY_TOPIC_ARN, and the target for every alarm this construct
@@ -218,6 +220,11 @@ export class AppService extends Construct {
       // Slice 3: the feedback route publishes through the sns provider
       // (mock is the default everywhere else — tests, dev).
       NOTIFY_PROVIDER: "sns",
+      // Access slice 2 (docs/access-model-design.md, D-1): the system-admin
+      // list. Set ALWAYS, even empty, so the variable's value is the
+      // deployment's statement about who is an admin rather than something
+      // inherited from whatever the last task definition happened to carry.
+      ADMIN_EMAILS: props.adminEmails,
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;

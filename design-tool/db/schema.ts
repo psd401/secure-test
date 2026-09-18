@@ -32,6 +32,18 @@ export const assessments = pgTable(
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     owner_sub: text("owner_sub").notNull(),
+    // Access slice 2 (docs/access-model-design.md, D-2): the owner's verified
+    // email, lowercased — the key a `teacher`-scoped grant resolves through.
+    // `access_grants` is keyed on EMAIL on purpose (a substitute may never have
+    // signed in when the grant is made, and the roster's own key is email), but
+    // an assessment carried only `owner_sub`, and there is no staff table to
+    // map one to the other. So the owner's email is denormalised here, exactly
+    // as `test_sessions.owner_email` already denormalises it for the roster
+    // join. Written on create / import / duplicate / share-accept from the
+    // session; backfilled from `test_sessions.owner_email` where a sitting
+    // existed. NULL on a row whose owner has not touched it since, which means
+    // a teacher-scope grant does not resolve for it — stated in the note.
+    owner_email: text("owner_email"),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     time_limit_seconds: integer("time_limit_seconds"),
@@ -88,6 +100,9 @@ export const assessments = pgTable(
   },
   (t) => ({
     ownerSubIdx: index("assessments_owner_sub_idx").on(t.owner_sub),
+    // Access slice 2: the list query's teacher-scope arm is
+    // `owner_email IN (<granting teachers>)`.
+    ownerEmailIdx: index("assessments_owner_email_idx").on(t.owner_email),
     assignedScopeCheck: check(
       "assessments_assigned_scope_check",
       sql`assigned_scope IN ('teacher', 'school', 'district')`,
@@ -567,6 +582,14 @@ export const test_sessions = pgTable(
     // student_ps_ids = exactly these roster students, no section check.
     section_ps_id: text("section_ps_id"),
     student_ps_ids: jsonb("student_ps_ids").$type<string[]>(),
+    // Access slice 2 (docs/access-model-design.md, D-5): who pressed the
+    // button, as distinct from whose sitting it is. For a substitute running a
+    // `teacher`-scoped grant the two differ — `owner_sub` stays the teacher's
+    // so the sitting is still theirs after the sub leaves, and this records the
+    // sub. Audit only; nothing authorizes on it. Null on every sitting created
+    // before the column, and on a sitting whose owner created it themselves is
+    // simply equal to `owner_sub`.
+    created_by_sub: text("created_by_sub"),
     code: text("code").notNull(),
     status: text("status").notNull().default("open"),
     expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -1433,3 +1456,81 @@ export const rubrics = pgTable(
 
 export type RubricRow = typeof rubrics.$inferSelect;
 export type RubricInsert = typeof rubrics.$inferInsert;
+
+// --- Access grants (docs/access-model-design.md, D-2), access slice 2 -------
+//
+// ONE table for all four cases the note designs — co-teacher, substitute,
+// principal, and (through ADMIN_EMAILS rather than a row) system admin. A
+// grant is (who, what scope, what level, from, until, granted by), and
+// `lib/api/access.ts` is the only reader: every route asks for the level it
+// needs and the helper answers 404 below it.
+//
+// Keyed on grantee EMAIL, not sub: a substitute may never have signed in when
+// the grant is made, and the roster's own key is email. The session carries
+// both, so resolution costs nothing extra.
+//
+// Soft revoke: `revoked_at` stamps the row instead of deleting it, so the
+// audit record of "who could see this, when" survives. The unique index is
+// partial on that column, which is what makes re-granting after a revoke a new
+// row rather than a conflict.
+
+/** `assessment` = co-teacher; `teacher` = substitute / principal-on-a-teacher;
+ * `school` = principal. `school` is STORED but never resolved — D-7 deferred
+ * principals out of this release, and the scope stays in the vocabulary so
+ * slice 6 lands without a migration. */
+export const ACCESS_GRANT_SCOPES = ["assessment", "teacher", "school"] as const;
+export type AccessGrantScope = (typeof ACCESS_GRANT_SCOPES)[number];
+
+/** The ladder, lowest first: `view` < `run` < `edit` < `own`. Mirrored in
+ * `lib/api/accessLevels.ts`, which is what the application code imports (a
+ * route must not have to reach into the schema to name a level). */
+export const ACCESS_GRANT_LEVELS = ["view", "run", "edit", "own"] as const;
+export type AccessGrantLevel = (typeof ACCESS_GRANT_LEVELS)[number];
+
+export const access_grants = pgTable(
+  "access_grants",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    /** Staff email, lowercased at the write boundary (lib/api/grants.ts). */
+    grantee_email: text("grantee_email").notNull(),
+    scope_kind: text("scope_kind").notNull(),
+    /** assessment uuid | teacher email | school_id, per `scope_kind`. Text
+     * rather than three nullable typed columns: one scope per row, and a uuid
+     * column could not hold the other two shapes. */
+    scope_id: text("scope_id").notNull(),
+    level: text("level").notNull(),
+    starts_at: timestamp("starts_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** null = standing. A substitute's grant expires on its own. */
+    ends_at: timestamp("ends_at", { withTimezone: true }),
+    granted_by_sub: text("granted_by_sub").notNull(),
+    granted_by_email: text("granted_by_email").notNull(),
+    /** "sub for 9/18", "co-teacher" — shown back to the granter. */
+    note: text("note"),
+    revoked_at: timestamp("revoked_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // One LIVE grant per (grantee, scope). Partial on revoked_at so a revoked
+    // row keeps its place in the audit trail without blocking a re-grant.
+    liveGrantUnq: uniqueIndex("access_grants_live_unq")
+      .on(t.grantee_email, t.scope_kind, t.scope_id)
+      .where(sql`revoked_at is null`),
+    // Resolution starts from the session's email on every authorize* call.
+    granteeEmailIdx: index("access_grants_grantee_email_idx").on(t.grantee_email),
+    scopeKindCheck: check(
+      "access_grants_scope_kind_check",
+      sql`scope_kind IN ('assessment', 'teacher', 'school')`,
+    ),
+    levelCheck: check(
+      "access_grants_level_check",
+      sql`level IN ('view', 'run', 'edit', 'own')`,
+    ),
+  }),
+);
+
+export type AccessGrantRow = typeof access_grants.$inferSelect;
+export type AccessGrantInsert = typeof access_grants.$inferInsert;

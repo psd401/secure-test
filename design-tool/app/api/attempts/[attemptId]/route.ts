@@ -53,7 +53,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   // Owner check and the open-sitting guard both live in lib/api/staffAttempt.ts
   // now — the hand-in route (docs/time-limit-and-unfinished-attempts-design.md)
   // applies the identical rules, and they must not be able to drift apart.
-  const access = await authorizeAttempt(db, auth.session, attemptId, "own");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "run");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
 

@@ -25,7 +25,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeSitting(db, auth.session, sessionId, "view");
+  const access = await authorizeSitting(db, auth.session, sessionId, "run");
   if (!access.ok) return access.response;
   const sitting = access.sitting;
 

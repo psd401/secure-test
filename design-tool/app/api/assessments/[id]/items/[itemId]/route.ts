@@ -28,7 +28,7 @@ async function loadItemInAssessment(
   session: SessionPayload,
 ) {
   const db = getDb();
-  const access = await authorizeAssessment(db, session, assessmentId, "own");
+  const access = await authorizeAssessment(db, session, assessmentId, "edit");
   if (!access.ok) return { ok: false as const, response: access.response };
   const [item] = await db
     .select()

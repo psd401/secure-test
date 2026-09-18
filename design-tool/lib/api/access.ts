@@ -13,10 +13,18 @@ import {
   type RubricRow,
   type StudentRow,
   type TestSessionRow,
+  type AccessGrantScope,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { isAdmin } from "@/lib/auth/admin";
 import type { SessionPayload } from "@/lib/auth/session";
 import { UUID_RE } from "@/lib/uuid";
+import { effectiveLevel } from "@/lib/api/grants";
+import {
+  levelSatisfies,
+  type AccessLevel,
+  type AccessVia,
+} from "@/lib/api/accessLevels";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -25,65 +33,55 @@ type Db = ReturnType<typeof getDb>;
  *
  * `view` (results and monitor, read-only) < `run` (sittings, monitor actions,
  * hand in, extend) < `edit` (items, settings, publish, scoring) < `own`
- * (share, archive, delete, grant). Slice 1 only ever resolves `own` — the
- * owner is the only principal with any access at all until the grants table
- * lands in slice 2 — but every caller already names the level it needs, so
- * slice 2 widens resolution without touching a single route.
+ * (share, archive, delete, grant). Every caller names the level it needs; slice
+ * 1 resolved only the owner, and slice 2 widened resolution here — to admins
+ * (D-1) and to `access_grants` (D-2) — without a route changing shape.
+ *
+ * Re-exported from `lib/api/accessLevels.ts`, which exists only to keep this
+ * module and `lib/api/grants.ts` out of an import cycle. Routes import from
+ * here, as they always have.
  */
-export type AccessLevel = "view" | "run" | "edit" | "own";
-
-/** How the level was reached. `"grant"` / `"admin"` arrive in slice 2. */
-export type AccessVia = "owner";
-
-export const ACCESS_LEVELS: readonly AccessLevel[] = [
-  "view",
-  "run",
-  "edit",
-  "own",
-] as const;
-
-/** Does `have` reach `need` on the ladder? */
-export function levelSatisfies(have: AccessLevel, need: AccessLevel): boolean {
-  return ACCESS_LEVELS.indexOf(have) >= ACCESS_LEVELS.indexOf(need);
-}
+export {
+  ACCESS_LEVELS,
+  levelSatisfies,
+  isAccessLevel,
+  maxLevel,
+} from "@/lib/api/accessLevels";
+export type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
 
 type Denied = { ok: false; response: NextResponse };
 
+/**
+ * What every `ok: true` result carries beside its row.
+ *
+ * `scope` is the grant scope the level came through, or null for an owner or an
+ * admin. Sitting creation is the one caller that must know (D-5): a
+ * `teacher`-scoped grant means a substitute, and the sitting it creates stays
+ * the granting teacher's.
+ */
+interface Resolved {
+  level: AccessLevel;
+  via: AccessVia;
+  scope: AccessGrantScope | null;
+}
+
 export type AssessmentAccess =
-  | { ok: true; assessment: AssessmentRow; level: AccessLevel; via: AccessVia }
+  | ({ ok: true; assessment: AssessmentRow } & Resolved)
   | Denied;
 
 export type SittingAccess =
-  | {
-      ok: true;
-      sitting: TestSessionRow;
-      assessment: AssessmentRow;
-      level: AccessLevel;
-      via: AccessVia;
-    }
+  | ({ ok: true; sitting: TestSessionRow; assessment: AssessmentRow } & Resolved)
   | Denied;
 
 export type AttemptAccess =
-  | {
-      ok: true;
-      attempt: AttemptRow;
-      assessment: AssessmentRow;
-      level: AccessLevel;
-      via: AccessVia;
-    }
+  | ({ ok: true; attempt: AttemptRow; assessment: AssessmentRow } & Resolved)
   | Denied;
 
-export type StudentAccess =
-  | { ok: true; student: StudentRow; level: AccessLevel; via: AccessVia }
-  | Denied;
+export type StudentAccess = ({ ok: true; student: StudentRow } & Resolved) | Denied;
 
-export type RubricAccess =
-  | { ok: true; rubric: RubricRow; level: AccessLevel; via: AccessVia }
-  | Denied;
+export type RubricAccess = ({ ok: true; rubric: RubricRow } & Resolved) | Denied;
 
-export type AssetAccess =
-  | { ok: true; asset: AssetRow; level: AccessLevel; via: AccessVia }
-  | Denied;
+export type AssetAccess = ({ ok: true; asset: AssetRow } & Resolved) | Denied;
 
 /**
  * The single refusal (D-3).
@@ -122,22 +120,32 @@ function denyInvalidId(): Denied {
 /**
  * Resolve the level a session has on an assessment row.
  *
- * Slice 1: owner → `own`, everyone else → nothing. Slice 2 adds admin and the
- * highest covering grant here, and nothing above this function changes.
+ * Owner → `own`; admin → `own` via `"admin"` (D-1/D-6); else the highest
+ * unexpired, unrevoked grant covering the row (D-2), by assessment id or
+ * through the owner's email. `lib/api/grants.ts` owns that order so the list
+ * queries resolve identically; this function is the single-row door to it.
  */
-function resolveAssessmentLevel(
+async function resolveAssessmentLevel(
+  db: Db,
   session: SessionPayload,
   assessment: AssessmentRow,
-): { level: AccessLevel; via: AccessVia } | null {
-  if (assessment.owner_sub === session.sub) return { level: "own", via: "owner" };
-  return null;
+): Promise<Resolved | null> {
+  return effectiveLevel(db, session, assessment);
 }
 
+/**
+ * The per-teacher tables — the accommodations overlay (`students`), the rubric
+ * library, uploaded assets. These are NOT per-assessment, so no assessment
+ * grant reaches them: a co-teacher edits the shared assessment, not the other
+ * teacher's whole rubric shelf. An admin still resolves, because D-6 says an
+ * admin reads everything.
+ */
 function resolveOwnerSubLevel(
   session: SessionPayload,
   ownerSub: string,
-): { level: AccessLevel; via: AccessVia } | null {
-  if (ownerSub === session.sub) return { level: "own", via: "owner" };
+): Resolved | null {
+  if (ownerSub === session.sub) return { level: "own", via: "owner", scope: null };
+  if (isAdmin(session)) return { level: "own", via: "admin", scope: null };
   return null;
 }
 
@@ -168,9 +176,9 @@ export async function authorizeAssessment(
   if (!UUID_RE.test(assessmentId)) return denyInvalidId();
   const assessment = await loadAssessment(db, assessmentId);
   if (!assessment) return denyNotFound();
-  const resolved = resolveAssessmentLevel(session, assessment);
+  const resolved = await resolveAssessmentLevel(db, session, assessment);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return { ok: true, assessment, level: resolved.level, via: resolved.via };
+  return { ok: true, assessment, ...resolved };
 }
 
 /**
@@ -197,15 +205,9 @@ export async function authorizeSitting(
   if (!sitting) return denyNotFound();
   const assessment = await loadAssessment(db, sitting.assessment_id);
   if (!assessment) return denyNotFound();
-  const resolved = resolveAssessmentLevel(session, assessment);
+  const resolved = await resolveAssessmentLevel(db, session, assessment);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return {
-    ok: true,
-    sitting,
-    assessment,
-    level: resolved.level,
-    via: resolved.via,
-  };
+  return { ok: true, sitting, assessment, ...resolved };
 }
 
 /** Authorize a session against one attempt, through its assessment. */
@@ -224,15 +226,9 @@ export async function authorizeAttempt(
   if (!attempt) return denyNotFound();
   const assessment = await loadAssessment(db, attempt.assessment_id);
   if (!assessment) return denyNotFound();
-  const resolved = resolveAssessmentLevel(session, assessment);
+  const resolved = await resolveAssessmentLevel(db, session, assessment);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return {
-    ok: true,
-    attempt,
-    assessment,
-    level: resolved.level,
-    via: resolved.via,
-  };
+  return { ok: true, attempt, assessment, ...resolved };
 }
 
 /**
@@ -256,7 +252,7 @@ export async function authorizeStudent(
   if (!student) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, student.owner_sub);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return { ok: true, student, level: resolved.level, via: resolved.via };
+  return { ok: true, student, ...resolved };
 }
 
 /** Authorize a session against one rubric (`rubrics.owner_sub`). */
@@ -275,7 +271,7 @@ export async function authorizeRubric(
   if (!rubric) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, rubric.owner_sub);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return { ok: true, rubric, level: resolved.level, via: resolved.via };
+  return { ok: true, rubric, ...resolved };
 }
 
 /** Authorize a session against one asset (`assets.owner_sub`). */
@@ -294,7 +290,7 @@ export async function authorizeAsset(
   if (!asset) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, asset.owner_sub);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
-  return { ok: true, asset, level: resolved.level, via: resolved.via };
+  return { ok: true, asset, ...resolved };
 }
 
 /**

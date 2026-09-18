@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, assets, items, type ItemType } from "@/db/schema";
+import { assets, items, type ItemType } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
+import { authorizeAssessment } from "@/lib/api/access";
 import {
   assetIdsFromItemConfig,
   extractAssetRefsFromMany,
@@ -36,17 +37,15 @@ export async function GET(req: Request, ctx: RouteContext) {
   // from their own browser.
   const printMode = new URL(req.url).searchParams.get("print") === "1";
   const db = getDb();
-  const [assessmentRow] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessmentRow) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessmentRow.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  // Access slice 2: the LAST inline owner check in the tree. Slice 1 swept
+  // `app/api/**` and this route lives at `app/preview/[id]` — so it kept its
+  // select-then-compare 403 (the existence leak D-3 removed everywhere else)
+  // until the level table was written out route by route. `view`, like the other
+  // read surfaces; `test/access-enforcement.test.ts` now sweeps this directory
+  // too, so the next non-api route cannot repeat it.
+  const access = await authorizeAssessment(db, auth.session, id, "view");
+  if (!access.ok) return access.response;
+  const assessmentRow = access.assessment;
   const itemRows = await db
     .select()
     .from(items)
@@ -94,7 +93,11 @@ export async function GET(req: Request, ctx: RouteContext) {
       .from(assets)
       .where(
         and(
-          eq(assets.owner_sub, auth.session.sub),
+          // Scoped to the assessment's OWNER, not the caller: a co-teacher
+          // previewing through an `edit` grant (access slice 2) must see the
+          // lead teacher's images, and every other bundle path already reads
+          // them under `assessment.owner_sub` for the same reason.
+          eq(assets.owner_sub, assessmentRow.owner_sub),
           inArray(assets.id, refIds),
         ),
       );
