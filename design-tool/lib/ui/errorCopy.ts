@@ -262,6 +262,33 @@ export function accommodationErrorCopy(code: string): ErrorCopy {
   }
 }
 
+/**
+ * POST/DELETE /api/assessments/[id]/grants — the Share dialog's Co-teach mode
+ * (docs/access-model-design.md, D-4 (b)). `validateGrantRequest`
+ * (lib/api/grants.ts) is the one place that decides these codes; this is the
+ * one place that turns them into a sentence.
+ */
+export function coTeachErrorCopy(code: string): ErrorCopy {
+  switch (code) {
+    case "already_granted":
+      return { message: "Already a co-teacher.", showCode: false };
+    case "invalid_email":
+    case "grantee_not_staff":
+      return { message: "Enter a psd401.net staff address.", showCode: false };
+    case "self_grant":
+      return { message: "That's you.", showCode: false };
+    case "level_not_allowed":
+      return { message: "That level isn't available here.", showCode: false };
+    case "not_found":
+    case "invalid_id":
+      return { message: "That assessment isn't available. Reload the page.", showCode: false };
+    case "network":
+      return { message: "Couldn't reach the server. Check your connection and try again.", showCode: false };
+    default:
+      return { message: "That didn't work. Try again, or tell IT this code:", showCode: true };
+  }
+}
+
 /** app/api/accommodations/import — the TIDE xlsx upload. */
 export function tideImportErrorCopy(code: string): ErrorCopy {
   switch (code) {

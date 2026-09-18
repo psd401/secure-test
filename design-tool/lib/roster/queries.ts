@@ -14,7 +14,8 @@
 // Both use Postgres' current_date, so the answer is the database's calendar,
 // not the app server's.
 
-import { and, asc, eq, gt, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, lte, sql, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import {
   roster_enrollments,
   roster_section_teachers,
@@ -29,11 +30,27 @@ type Db = ReturnType<typeof getDb>;
 
 const today = sql`current_date`;
 
-export const teacherAssignmentIsCurrent = and(
-  eq(roster_section_teachers.is_active, true),
-  lte(roster_section_teachers.start_date, today),
-  gte(roster_section_teachers.end_date, today),
-);
+/**
+ * `is_active` and `start_date <= today <= end_date`, against WHATEVER
+ * `roster_section_teachers`-shaped table is passed — the bare table for
+ * every existing caller, an ALIAS of it for `lib/roster/coTeachers.ts`'s
+ * self-join, so the liveness rule is written once and applies identically
+ * on both sides of it. Generic (rather than `typeof roster_section_teachers`)
+ * because `alias()` gives each side a distinct, non-assignable table type —
+ * only the three columns this rule touches need to line up.
+ */
+export function teacherAssignmentIsCurrentOn<
+  T extends { is_active: PgColumn; start_date: PgColumn; end_date: PgColumn },
+>(table: T): SQL {
+  return and(
+    eq(table.is_active, true),
+    lte(table.start_date, today),
+    gte(table.end_date, today),
+  )!;
+}
+
+export const teacherAssignmentIsCurrent =
+  teacherAssignmentIsCurrentOn(roster_section_teachers);
 
 export const enrollmentIsCurrent = and(
   eq(roster_enrollments.is_active, true),

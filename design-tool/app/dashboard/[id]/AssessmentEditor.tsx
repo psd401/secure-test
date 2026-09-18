@@ -31,6 +31,7 @@ import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
 import { questionGaps, readinessChecks } from "./readiness";
 import { ShareDialog } from "@/components/app/ShareDialog";
+import type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
 import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
 import type {
   HotspotRegion,
@@ -183,8 +184,38 @@ interface ItemSetView {
   } | null;
 }
 
+/**
+ * Access slice 3 (docs/access-model-design.md, D-4 (b)): what the caller may
+ * do here. `via === "owner"` gates Share and the Settings tab's Duplicate /
+ * Archive / Delete draft — all `own`-level routes (an admin also resolves to
+ * `own`, via `"admin"`, but D-6 keeps admin WRITES to the admin surface, so
+ * the gate is the narrower `via`, not `level`). `via === "grant"` is a
+ * co-teacher — the editor shows "Co-teaching (owner: …)" instead.
+ */
+interface EditorAccess {
+  level: AccessLevel;
+  via: AccessVia;
+  owner_email: string | null;
+}
+
+/** Pure: does this access carry the owner-only actions (Share, Duplicate,
+ * Archive, Delete draft)? Exported so the gate is testable without a DOM. */
+export function isOwnerAccess(access: Pick<EditorAccess, "via">): boolean {
+  return access.via === "owner";
+}
+
+/** Pure: the header's co-teaching reminder, or null when there is none to
+ * show — an owner's or an admin's own view carries no such badge. */
+export function coTeachingBadgeText(
+  access: Pick<EditorAccess, "via" | "owner_email">,
+): string | null {
+  if (access.via !== "grant") return null;
+  return access.owner_email ? `Co-teaching (owner: ${access.owner_email})` : "Co-teaching";
+}
+
 interface Props {
   assessment: AssessmentView;
+  access: EditorAccess;
   initialItems: ItemView[];
   initialItemSets: ItemSetView[];
 }
@@ -597,7 +628,9 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
   };
 }
 
-export function AssessmentEditor({ assessment, initialItems, initialItemSets }: Props) {
+export function AssessmentEditor({ assessment, access, initialItems, initialItemSets }: Props) {
+  const isOwner = isOwnerAccess(access);
+  const coTeachingBadge = coTeachingBadgeText(access);
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   // E5 slice 1: stimulus sets, same authoritative-list posture as items —
@@ -1497,6 +1530,10 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
               {/* D-2 / D-3: a status change never happens on archive — this
                   badge is the only thing that says so at a glance. */}
               {archivedAt ? <Badge variant="neutral">Archived</Badge> : null}
+              {/* Access slice 3: a co-teacher's own reminder that they are
+                  not the owner — Share, Duplicate, Archive and Delete draft
+                  are all missing from this same view for the same reason. */}
+              {coTeachingBadge ? <Badge variant="info">{coTeachingBadge}</Badge> : null}
             </>
           }
           description={assessment.description || undefined}
@@ -1517,9 +1554,11 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
                   Print
                 </a>
               </Button>
-              <Button type="button" variant="outline" onClick={() => setShareOpen(true)}>
-                Share
-              </Button>
+              {isOwner ? (
+                <Button type="button" variant="outline" onClick={() => setShareOpen(true)}>
+                  Share
+                </Button>
+              ) : null}
               {isLocked ? (
                 <Button type="button" variant="outline" onClick={() => setPublishOpen("unpublish")}>
                   Unpublish
@@ -1657,65 +1696,74 @@ export function AssessmentEditor({ assessment, initialItems, initialItemSets }: 
           <StatusLine state={settingsSave} />
         </div>
 
-        {/* Duplicate (2026-09-16): beside the backup download in spirit — the
-            other "take a copy of this" action — but in the Settings tab's
-            bordered-block pattern. NOT gated by isLocked or by archived_at:
-            the copy is a fresh Draft, so nothing the publish lock protects is
-            touched. */}
-        <div className="border-t border-border pt-4">
-          <DuplicateAssessmentButton id={assessment.id} size="default" align="start" />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Makes a Draft copy named “{assessment.name} (copy)” with the same questions,
-            sources, accommodations and settings. Results and test sessions are not copied.
-          </p>
-        </div>
+        {/* Access slice 3: Duplicate, Archive and Delete draft are all
+            `own`-level routes (docs/access-model-design.md) — a co-teacher's
+            `edit` grant does not reach them, so the three blocks below are
+            the owner's alone. Publish / Unpublish stays unconditional above:
+            that PATCH is `edit`, which a co-teacher does have. */}
+        {isOwner ? (
+          <>
+            {/* Duplicate (2026-09-16): beside the backup download in spirit — the
+                other "take a copy of this" action — but in the Settings tab's
+                bordered-block pattern. NOT gated by isLocked or by archived_at:
+                the copy is a fresh Draft, so nothing the publish lock protects is
+                touched. */}
+            <div className="border-t border-border pt-4">
+              <DuplicateAssessmentButton id={assessment.id} size="default" align="start" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Makes a Draft copy named “{assessment.name} (copy)” with the same questions,
+                sources, accommodations and settings. Results and test sessions are not copied.
+              </p>
+            </div>
 
-        {/* D-2 / D-3: NOT gated by isLocked — archiving a Published
-            assessment is allowed, since it changes no content the publish
-            lock protects. */}
-        <div className="border-t border-border pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void toggleArchive()}
-            disabled={archiveBusy}
-          >
-            {archiveBusy ? (archivedAt ? "Unarchiving…" : "Archiving…") : archivedAt ? "Unarchive" : "Archive"}
-          </Button>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Archived assessments leave the list; sessions, attempts and results are kept.
-          </p>
-          {archiveError ? (
-            <p role="alert" className="mt-1 text-xs text-destructive">
-              {archiveError}
-            </p>
-          ) : null}
-        </div>
+            {/* D-2 / D-3: NOT gated by isLocked — archiving a Published
+                assessment is allowed, since it changes no content the publish
+                lock protects. */}
+            <div className="border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void toggleArchive()}
+                disabled={archiveBusy}
+              >
+                {archiveBusy ? (archivedAt ? "Unarchiving…" : "Archiving…") : archivedAt ? "Unarchive" : "Archive"}
+              </Button>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Archived assessments leave the list; sessions, attempts and results are kept.
+              </p>
+              {archiveError ? (
+                <p role="alert" className="mt-1 text-xs text-destructive">
+                  {archiveError}
+                </p>
+              ) : null}
+            </div>
 
-        {/* D-1 (docs/archive-and-delete-design.md): a draft with attempts on it
-            can't be deleted here either — the confirm dialog reads that back
-            from the DELETE route, this disables the button up front so the
-            teacher isn't invited to try. */}
-        <div className="border-t border-border pt-4">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => {
-              setDeleteDraftError(null);
-              setDeleteDraftOpen(true);
-            }}
-            disabled={isLocked || assessment.attempt_count > 0}
-          >
-            Delete draft
-          </Button>
-          {isLocked ? (
-            <p className="mt-1 text-xs text-muted-foreground">Unpublish to delete.</p>
-          ) : assessment.attempt_count > 0 ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {plural(assessment.attempt_count, "attempt")} — archive instead.
-            </p>
-          ) : null}
-        </div>
+            {/* D-1 (docs/archive-and-delete-design.md): a draft with attempts on it
+                can't be deleted here either — the confirm dialog reads that back
+                from the DELETE route, this disables the button up front so the
+                teacher isn't invited to try. */}
+            <div className="border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  setDeleteDraftError(null);
+                  setDeleteDraftOpen(true);
+                }}
+                disabled={isLocked || assessment.attempt_count > 0}
+              >
+                Delete draft
+              </Button>
+              {isLocked ? (
+                <p className="mt-1 text-xs text-muted-foreground">Unpublish to delete.</p>
+              ) : assessment.attempt_count > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {plural(assessment.attempt_count, "attempt")} — archive instead.
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </section>
       </TabsContent>
 

@@ -776,3 +776,31 @@ briefly and the view refreshes.
 | 219 | After extending, open that attempt's integrity timeline | One new line reads "Time extended by teacher … new deadline …" with the picked instant | NOT RUN |
 | 220 | Open **Extend time** and pick a time in the PAST, then confirm | Inline error "Pick a time in the future." — the dialog stays open, nothing is sent | ✅ 2026-09-17 on the origin (rev with `6433ade`, Aurora 0037): Test sessions tab → a closed sitting row → Extend time → typed 09/01/2026 08:00 AM → Extend → "Pick a time in the future." in red under the input, dialog stayed open (the server's 400 `ends_at_past`; the client-side check only catches an empty value) |
 | 221 | On a row whose attempt is already **Handed in** (Monitor row, results page, or Test sessions tab with Attendance expanded) | No Extend time button is offered for that row/attempt | NOT RUN 2026-09-17: every fixture carrying a handed-in attempt is archived (archived rows have no Results button) and the only live assessment with attempts is the pilot's — run on the next demo-student sitting |
+
+## Co-teach (2026-09-17)
+
+Access slice 3 (`docs/access-model-design.md`, D-4 (b)): the Share dialog's
+second mode. **Co-teach** writes an `edit`-level `access_grants` row on the
+assessment (`POST /api/assessments/[id]/grants`); the co-teacher edits it in
+place, runs sittings on their own sections, and sees every result. Roster
+co-teachers (`role_name = Co-Teacher` on a section the owner currently
+teaches, symmetric) are suggested one-click from
+`GET /api/assessments/[id]/grants/suggestions`. Only the owner sees the
+Share button at all (`access.via === "owner"`); a co-teacher's own view of
+the editor carries a "Co-teaching (owner: …)" badge instead, and neither
+Share nor the Settings tab's Duplicate / Archive / Delete draft render for
+them (all four are `own`-level routes their `edit` grant does not reach).
+Needs a SECOND staff account (or a co-teacher pilot pair) for the rows below
+that a co-teacher must run themselves.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 222 | As the owner of an assessment, on a section a roster co-teacher currently shares, open **Share** | Two sections: "Send a copy" (unchanged) and "Co-teach" with the explanatory line; "From your roster" lists the co-teacher's email with their shared section(s) and a **Co-teach** button | NOT RUN |
+| 223 | Press **Co-teach** on the suggested row | The row moves out of "From your roster" (already added) and appears under "Current co-teachers" with a **Remove** button | NOT RUN |
+| 224 | Sign in as the co-teacher (second staff account) and open the Assessments list | The assessment appears with a muted "Shared with you as co-teacher · by \<owner email\>" line under the name; the same label shows on any open sitting for it in the "Open now" strip | NOT RUN |
+| 225 | As the co-teacher, open the assessment | The editor opens (no 404); the header carries a "Co-teaching (owner: …)" badge; there is no **Share** button, and the Settings tab has no Duplicate / Archive / Delete draft block | NOT RUN |
+| 226 | As the co-teacher, edit a question's stem and Save; start a test session on one of their OWN sections | The edit saves; the sitting is created under the co-teacher's own `owner_sub` / `owner_email` (D-5's "assessment scope" branch) and their students can join it | NOT RUN |
+| 227 | As the co-teacher, open the Monitor for that sitting and, separately, the results matrix | Monitor actions (View screen, Hand in, Extend) work; the results matrix shows every response, including on sittings the OWNER started | NOT RUN |
+| 228 | Back as the owner, open **Share** → **Co-teach** and press **Remove** on the co-teacher | The row disappears from "Current co-teachers"; as the co-teacher, reloading the Assessments list no longer shows the assessment at all | NOT RUN |
+| 229 | As the owner, in the Co-teach section's manual email field, enter an address outside `psd401.net` (or a student address) and press Co-teach | Inline error "Enter a psd401.net staff address." — nothing granted | NOT RUN |
+| 230 | Co-teach the same colleague a second time (their grant is still live) | Inline error "Already a co-teacher." | NOT RUN |

@@ -152,20 +152,33 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <h2 id="open-now" className="text-xs font-semibold uppercase tracking-wider text-success-foreground">
             Open now
           </h2>
-          {openSessions.map((s) => (
-            <Card key={s.id}>
-              <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                <SessionCode code={s.code} size="row" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{s.assessment_name}</div>
-                  <div className="text-sm text-muted-foreground">{closesAt(s.expires_at, now)}</div>
-                </div>
-                <Button asChild>
-                  <Link href={`/dashboard/${s.assessment_id}/monitor/${s.id}`}>Monitor</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+          {openSessions.map((s) => {
+            // Access slice 3: a sitting on a co-teacher's assessment shows up
+            // here too (the query is "sittings whose assessment I can see" —
+            // slice 2) — the same label as the list row, so it reads the
+            // same wherever it shows up.
+            const sessionAccess = accessFor.get(s.assessment_id);
+            return (
+              <Card key={s.id}>
+                <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <SessionCode code={s.code} size="row" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{s.assessment_name}</div>
+                    <div className="text-sm text-muted-foreground">{closesAt(s.expires_at, now)}</div>
+                    {sessionAccess?.via === "grant" ? (
+                      <div className="truncate text-xs text-muted-foreground">
+                        Shared with you as co-teacher
+                        {sessionAccess.owner_email ? ` · by ${sessionAccess.owner_email}` : ""}
+                      </div>
+                    ) : null}
+                  </div>
+                  <Button asChild>
+                    <Link href={`/dashboard/${s.assessment_id}/monitor/${s.id}`}>Monitor</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </section>
       ) : null}
 
@@ -229,6 +242,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 // offer a button whose route would 404. Slice 3 adds the
                 // "Shared with you as co-teacher" label from the same fact.
                 const ownsRow = accessFor.get(a.id)?.level === "own";
+                const rowAccess = accessFor.get(a.id);
                 return (
                   <TableRow key={a.id}>
                     {/* A-1: the name is the elastic column. Auto table layout
@@ -247,6 +261,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       </Link>
                       {a.description ? (
                         <div className="truncate text-sm text-muted-foreground">{a.description}</div>
+                      ) : null}
+                      {/* Access slice 3 (docs/access-model-design.md, D-4 (b)):
+                          `via: "grant"` is a co-teacher's own row — the ONLY
+                          grant kind with UI so far, so the label doesn't need
+                          to say which level. */}
+                      {rowAccess?.via === "grant" ? (
+                        <div className="truncate text-xs text-muted-foreground">
+                          Shared with you as co-teacher
+                          {rowAccess.owner_email ? ` · by ${rowAccess.owner_email}` : ""}
+                        </div>
                       ) : null}
                     </TableCell>
                     <TableCell>

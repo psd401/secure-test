@@ -392,3 +392,63 @@ check and adds the test that keeps it that way.
   admin, list widening, the sitting branches) and `test/grants-api.test.ts` (both
   surfaces, the grantee rules, 409, scoped revoke, the admin 404). Design-tool
   **2017** tests (1985 before), typecheck clean.
+- 2026-09-17 — **slice 3 BUILT** (Share dialog's Co-teach mode, D-4 (b)):
+  - `lib/roster/coTeachers.ts` — `coTeachersOf(db, teacherEmail)`, a pure
+    roster READ (writes nothing; the caller decides whether to grant). A
+    current co-teacher of `teacherEmail` on a section they currently share:
+    the OTHER teacher's row is `Co-Teacher` regardless of the caller's own
+    role, OR the caller's own row is `Co-Teacher` and the other's is `Lead
+    Teacher` (co-teaching is symmetric — a lead sees their co-teacher back,
+    from the co-teacher's own query). `Student Teacher` never counts, either
+    side. Matched case-insensitively (`lower(trim(role_name))`) because the
+    fixture spells it `Co-Teacher` and the note's own warehouse measurement
+    spells it `Co-teacher`. `lib/roster/queries.ts` grew
+    `teacherAssignmentIsCurrentOn(table)`, a generic version of the existing
+    `teacherAssignmentIsCurrent` so the self-join's two `alias()`d sides
+    share the one liveness rule instead of a second copy of it.
+  - `GET /api/assessments/[id]/grants/suggestions` — `own` (an owner
+    deciding who to co-teach with is the same act as granting), 404 for
+    anyone else including a non-admin co-teacher. Resolves suggestions
+    through the ASSESSMENT's `owner_email`, not the caller's, so an admin
+    calling it sees the real owner's roster.
+  - `components/app/ShareDialog.tsx` grew a second section, Co-teach, beside
+    the unchanged "Send a copy": a roster suggestions list with one-click
+    Co-teach, a manual staff-email field, and the current co-teachers
+    (`edit`/`own`-level live grants on this assessment) with Remove.
+    `lib/ui/errorCopy.ts` grew `coTeachErrorCopy` for the codes
+    `validateGrantRequest` returns. The dialog itself gates nothing new —
+    it is reachable only from the Share button, which the caller already
+    hides for a non-owner.
+  - `app/dashboard/[id]/page.tsx` now calls `authorizeAssessment` directly
+    (was `pageAssessment`) so the editor gets `via` and `owner_email`
+    alongside the row. `app/dashboard/[id]/AssessmentEditor.tsx` gates
+    Share and the Settings tab's Duplicate / Archive / Delete draft on
+    `access.via === "owner"` (exported as the pure `isOwnerAccess`) —
+    narrower than `level === "own"` on purpose, so an admin's `own` (D-6)
+    does not light up owner-only WRITE buttons outside the admin surface
+    ahead of slice 5's impersonation. Publish/Unpublish is UNCHANGED
+    (unconditional): that PATCH is `edit`, which a co-teacher's grant
+    already reaches. A co-teacher's own view carries a "Co-teaching
+    (owner: …)" badge (`coTeachingBadgeText`, pure, falls back to the bare
+    label when `owner_email` is still NULL — the migration 0038 deviation).
+  - **Row labels**: the home list (`app/dashboard/page.tsx`) and the "Open
+    now" sittings strip both read `access.via === "grant"` off the same
+    `visibleAssessmentScope` annotation slice 2 already computes, and print
+    "Shared with you as co-teacher · by \<owner_email\>" — one fact, shown
+    everywhere it applies, never recomputed per view.
+  - Preview needed no change (`app/preview/[id]/route.ts` already resolves
+    through `authorizeAssessment(..., "view")` as of slice 2).
+  Tests: `test/co-teachers.test.ts` (the roster query — symmetric, multi-section,
+  Student Teacher excluded either side, an expired co-teach row excluded,
+  two Lead Teachers are not co-teachers, unknown/blank email), 
+  `test/grants-suggestions-route.test.ts` (own-only 404, admin resolves
+  through the OWNER's roster, a malformed id, an assessment with no
+  `owner_email` yet), and `test/co-teach-ui.test.tsx` (the pure gates —
+  `isOwnerAccess`, `coTeachingBadgeText`, `sectionLabel`, `coTeachErrorCopy`
+  — `<ShareDialog>`'s Radix `Dialog` renders nothing through
+  `renderToStaticMarkup` while open, confirmed by probe, so the UI logic is
+  tested as pure functions rather than markup, the same posture as
+  `test/extend-time-control.test.tsx`). Design-tool **2040** tests (2017
+  before), typecheck clean. Rows 222–230 in
+  `docs/design-tool-manual-checks.md` ("Co-teach") are NOT RUN — most need a
+  SECOND staff account (a co-teacher pilot pair, or a minted second token).

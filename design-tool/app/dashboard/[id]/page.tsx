@@ -7,7 +7,7 @@ import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { UUID_RE } from "@/lib/uuid";
-import { pageAssessment } from "@/lib/api/access";
+import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +38,15 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
   const db = getDb();
   // UX pass 1, slice 3: someone else's assessment is a 404, the same posture
   // as the API routes — a guessed id learns nothing. Access slice 1 (D-3) put
-  // that decision in one place for pages and routes alike.
-  const assessment = await pageAssessment(db, session, id, "edit");
-  if (!assessment) {
+  // that decision in one place for pages and routes alike. Access slice 3
+  // needs `via` and `level` too, to gate the owner-only actions in the
+  // header and Settings tab and to label a co-teacher's editor — so this
+  // calls `authorizeAssessment` directly rather than the page wrapper.
+  const access = await authorizeAssessment(db, session, id, "edit");
+  if (!access.ok) {
     notFound();
   }
+  const assessment = access.assessment;
 
   const itemRows = await db
     .select()
@@ -83,6 +87,11 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           construct_altering: (assessment.construct_altering ?? []) as string[],
           attempt_count: attemptCountRow?.n ?? 0,
           archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
+        }}
+        access={{
+          level: access.level,
+          via: access.via,
+          owner_email: assessment.owner_email,
         }}
         initialItems={itemRows.map((r) => ({
           id: r.id,
