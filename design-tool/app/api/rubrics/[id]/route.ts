@@ -5,29 +5,16 @@ import { assessments, items, rubrics } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UpdateRubricBody } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeRubric } from "@/lib/api/access";
 
-// Rubric library slice 3 (D-4). Ownership is part of the WHERE clause here,
-// so another teacher's rubric is 404 rather than 403 — a rubric library is a
-// private shelf and its row ids are not addresses anyone else should be able
-// to confirm. (Assessments and students keep their historical 403; this is a
-// new surface, so it starts where it should.)
+// Rubric library slice 3 (D-4). Another teacher's rubric is 404 rather than
+// 403 — a rubric library is a private shelf and its row ids are not addresses
+// anyone else should be able to confirm. Access slice 1 made that posture the
+// rule everywhere (`authorizeRubric`, D-3); this surface had it first.
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
-
-async function loadOwnedRubric(id: string, ownerSub: string) {
-  const db = getDb();
-  const [row] = await db
-    .select()
-    .from(rubrics)
-    .where(and(eq(rubrics.id, id), eq(rubrics.owner_sub, ownerSub)))
-    .limit(1);
-  return row ?? null;
-}
-
-const notFound = () =>
-  NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
 export async function GET(_req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -36,8 +23,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const row = await loadOwnedRubric(id, auth.session.sub);
-  if (!row) return notFound();
+  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const row = access.rubric;
   return NextResponse.json({ rubric: row });
 }
 
@@ -58,8 +46,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const row = await loadOwnedRubric(id, auth.session.sub);
-  if (!row) return notFound();
+  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   // Editing the library row deliberately does NOT touch any item that was
   // copied from it (copy-on-apply, D-4): the items keep their own copies and
@@ -83,8 +71,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const row = await loadOwnedRubric(id, auth.session.sub);
-  if (!row) return notFound();
+  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   await db.transaction(async (tx) => {
     // Detach, never edit: an item that was copied from this rubric keeps its
@@ -98,6 +86,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
       .where(
         and(
           sql`${items.config} ->> 'rubric_id' = ${id}`,
+          // A list scope, not an ownership check: the detach touches only the
+          // caller's own items. Access slice 2 widens the visible set here.
           sql`${items.assessment_id} in (select ${assessments.id} from ${assessments} where ${assessments.owner_sub} = ${auth.session.sub})`,
         ),
       );

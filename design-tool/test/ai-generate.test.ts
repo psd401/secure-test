@@ -161,7 +161,9 @@ describe("POST /api/ai/generate-item", () => {
       item_type: "multiple_choice_single",
       prompt: "x",
     });
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 
   // E18: essay used to pass the enum, reach the provider, and come back as a

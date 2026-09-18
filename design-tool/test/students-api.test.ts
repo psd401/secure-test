@@ -220,13 +220,15 @@ describe("GET /api/students/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  test("403 for another teacher's student", async () => {
+  test("404 for another teacher's student", async () => {
     asUser("teacher-A");
     const c = await createStudent({ ssid: "X" });
     const id = ((await c.json()) as { student: { id: string } }).student.id;
     asUser("teacher-B");
     const res = await getStudent(id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });
 

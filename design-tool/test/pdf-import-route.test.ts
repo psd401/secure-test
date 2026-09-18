@@ -496,11 +496,13 @@ describe("POST items/import-pdf", () => {
     expect(res.status).toBe(409);
   });
 
-  test("403 for another teacher", async () => {
+  test("404 for another teacher", async () => {
     const id = await createAssessment("Owned");
     mockSub = "someone-else";
     const res = await postPdf(id, makeTextPdf(GOOD_LINES));
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });
 

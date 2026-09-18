@@ -7,6 +7,7 @@ import { requireDraft } from "@/lib/api/requireDraft";
 import { ReorderBody } from "@/lib/api/items";
 import { splitSetInOrder } from "@/lib/api/itemSets";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,18 +33,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
   const db = getDb();
-  const [assessmentRow] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessmentRow) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessmentRow.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
-  const draftGuard = requireDraft(assessmentRow);
+  const access = await authorizeAssessment(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
 
   // Validate that ordered_ids matches the assessment's items exactly (same

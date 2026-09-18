@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempt_events, items, responses, scores } from "@/db/schema";
+import { attempt_events, items, responses, scores } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { formatMean } from "@/lib/reporting/analytics";
 import { formatIntegrityLine } from "@/lib/reporting/printIntegrity";
@@ -10,6 +10,7 @@ import { itemTypeLabel, summarizeCohort } from "@/lib/reporting/printSummary";
 import { buildResults, type ResultsCell, type ResultsRow } from "@/lib/scoring/results";
 import { formatDate, formatDateTime } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
+import { pageAssessment } from "@/lib/api/access";
 import { loadItemAnalytics } from "../analyticsQuery";
 
 /**
@@ -135,14 +136,10 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
   const attemptFilter = firstParam(sp.attempt);
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
   // Owner-only, and a non-owner gets the SAME answer as a missing row: this
   // URL must not tell a stranger that an assessment exists.
-  if (!assessment || assessment.owner_sub !== session.sub) {
+  const assessment = await pageAssessment(db, session, id, "view");
+  if (!assessment) {
     notFound();
   }
 

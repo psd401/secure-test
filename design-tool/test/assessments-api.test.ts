@@ -199,13 +199,14 @@ describe("GET /api/assessments/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  test("403 when another user tries to read", async () => {
+  test("404 when another user tries to read", async () => {
     asUser("teacher-1");
     const createRes = await callCreate({ name: "private" });
     const created = (await createRes.json()) as { assessment: { id: string } };
     asUser("teacher-2");
     const res = await callGetById(created.assessment.id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): not-yours reads as not-found on every route.
+    expect(res.status).toBe(404);
   });
 
   test("400 for malformed id", async () => {
@@ -253,13 +254,13 @@ describe("DELETE /api/assessments/[id]", () => {
     expect(fetch.status).toBe(404);
   });
 
-  test("403 when another user tries to delete", async () => {
+  test("404 when another user tries to delete", async () => {
     asUser("teacher-1");
     const createRes = await callCreate({ name: "private-delete" });
     const created = (await createRes.json()) as { assessment: { id: string } };
     asUser("teacher-2");
     const res = await callDelete(created.assessment.id);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -399,8 +400,8 @@ describe("PATCH /api/assessments/[id] — archive", () => {
     asUser("teacher-1");
     const id = await createPublished("not-yours");
     asUser("teacher-2");
-    // 403, the posture loadOwnedAssessment takes on every assessment route.
-    expect((await callPatch(id, { archived: true })).status).toBe(403);
+    // 404, the posture `authorizeAssessment` takes on every route (D-3).
+    expect((await callPatch(id, { archived: true })).status).toBe(404);
   });
 
   test("the list hides archived rows by default and ?archived=1 returns only them", async () => {

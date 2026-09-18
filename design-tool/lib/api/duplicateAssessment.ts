@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
+import { assessments, type AssessmentRow } from "@/db/schema";
 import { buildExportBundle } from "@/lib/api/exportBundle";
 import { importBundleForOwner, isImportBundleError } from "@/lib/api/importBundle";
 
@@ -46,21 +46,18 @@ export type DuplicateAssessmentResult =
       detail?: string;
     };
 
+/**
+ * Copy one assessment into a new Draft owned by `ownerSub`.
+ *
+ * The caller has already proved it may read `source` — access slice 1 moved
+ * every ownership decision into `authorizeAssessment` (D-3), so this function
+ * takes the row rather than re-fetching it under an owner predicate.
+ */
 export async function duplicateAssessment(
   db: ReturnType<typeof getDb>,
-  assessmentId: string,
+  source: AssessmentRow,
   ownerSub: string,
 ): Promise<DuplicateAssessmentResult> {
-  // Owner-scoped in the WHERE rather than loaded-then-checked: a row owned by
-  // somebody else is indistinguishable from one that does not exist, which is
-  // what the route reports.
-  const [source] = await db
-    .select()
-    .from(assessments)
-    .where(and(eq(assessments.id, assessmentId), eq(assessments.owner_sub, ownerSub)))
-    .limit(1);
-  if (!source) return { ok: false, status: 404, error: "not_found" };
-
   // Hidden rubrics included: this is the teacher's own copy of their own
   // assessment, so dropping them would lose authoring data and re-clamp
   // ai/hybrid scoring on the copy (see the export route's comment).

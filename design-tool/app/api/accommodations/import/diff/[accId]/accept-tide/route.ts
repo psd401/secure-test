@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students, student_accommodations } from "@/db/schema";
+import { student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { mapCatalogIdToTide } from "@/lib/accommodations/tideCatalog";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeStudent } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ accId: string }>;
@@ -25,14 +26,12 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  // Load row + student to verify ownership.
-  const [joined] = await db
-    .select({
-      acc: student_accommodations,
-      owner_sub: students.owner_sub,
-    })
+  // The row is addressed by its own id, so its student is loaded first and the
+  // access question asked about THAT student (access slice 1, D-3) — another
+  // teacher's row is a 404 now rather than the old 403.
+  const [acc] = await db
+    .select()
     .from(student_accommodations)
-    .innerJoin(students, eq(student_accommodations.student_id, students.id))
     .where(
       and(
         eq(student_accommodations.id, accId),
@@ -40,17 +39,16 @@ export async function POST(_req: Request, ctx: RouteContext) {
       ),
     )
     .limit(1);
-  if (!joined) {
+  if (!acc) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  if (joined.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeStudent(db, auth.session, acc.student_id, "own");
+  if (!access.ok) return access.response;
 
   // Only meaningful on tide_then_edited rows.
-  if (joined.acc.source !== "tide_then_edited") {
+  if (acc.source !== "tide_then_edited") {
     return NextResponse.json(
-      { ok: false, error: "not_a_pending_diff", source: joined.acc.source },
+      { ok: false, error: "not_a_pending_diff", source: acc.source },
       { status: 409 },
     );
   }
@@ -88,8 +86,8 @@ export async function POST(_req: Request, ctx: RouteContext) {
   // forward lookup could not be used. `mapCatalogIdToTide` is the inverse index
   // over the same catalog and closes that gap.
   const mapped = mapCatalogIdToTide(
-    joined.acc.subject,
-    joined.acc.tool_id,
+    acc.subject,
+    acc.tool_id,
     body.tide_value,
   );
   if (!mapped) {
@@ -97,8 +95,8 @@ export async function POST(_req: Request, ctx: RouteContext) {
       {
         ok: false,
         error: "tide_value_not_in_catalog",
-        subject: joined.acc.subject,
-        tool_id: joined.acc.tool_id,
+        subject: acc.subject,
+        tool_id: acc.tool_id,
         tide_value: body.tide_value,
         hint: "The value must be one this (subject, tool) actually offers in the TIDE catalog.",
       },
@@ -119,7 +117,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
       kept_against_tide_code: null,
       last_imported_at: now,
     })
-    .where(eq(student_accommodations.id, joined.acc.id))
+    .where(eq(student_accommodations.id, acc.id))
     .returning();
   return NextResponse.json({ accommodation: updated });
 }

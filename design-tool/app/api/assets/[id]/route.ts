@@ -5,6 +5,7 @@ import { assets } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { getStorageProviderById } from "@/lib/storage/provider";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAsset } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -19,17 +20,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [row] = await db
-    .select()
-    .from(assets)
-    .where(eq(assets.id, id))
-    .limit(1);
-  if (!row) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (row.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAsset(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const row = access.asset;
 
   const provider = getStorageProviderById(row.storage_provider);
   let bytes: Uint8Array;
@@ -72,17 +65,9 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [row] = await db
-    .select()
-    .from(assets)
-    .where(eq(assets.id, id))
-    .limit(1);
-  if (!row) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (row.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAsset(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const row = access.asset;
 
   const provider = getStorageProviderById(row.storage_provider);
   await db.delete(assets).where(eq(assets.id, id));

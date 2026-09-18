@@ -310,11 +310,13 @@ describe("GET review-queue", () => {
     ).toBeNull();
   });
 
-  test("403 for another teacher", async () => {
+  test("404 for another teacher", async () => {
+    // Access slice 1 (D-3): another teacher's assessment is indistinguishable
+    // from one that does not exist.
     await seedQueueScenario();
     mockSub = "someone-else";
     const res = await getQueue((await seededAssessmentId()) ?? "");
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   test("stem_html renders math; plain stems are escaped text", async () => {
@@ -495,11 +497,13 @@ describe("manual scoring + approve + re-run", () => {
     const { attempt, responseRows } = await seedQueueScenario();
     expect((await postAiScore(attempt.id)).status).toBe(200);
     mockSub = "someone-else";
+    // Access slice 1 (D-3): 404, not 403 — a response id another teacher can
+    // name must not be confirmed by the refusal.
     expect(
       (await postManualScore(responseRows[1]!.id, { points: 1, max_points: 1 }))
         .status,
-    ).toBe(403);
-    expect((await postRescoreAi(responseRows[2]!.id)).status).toBe(403);
+    ).toBe(404);
+    expect((await postRescoreAi(responseRows[2]!.id)).status).toBe(404);
   });
 });
 

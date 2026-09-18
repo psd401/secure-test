@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { attempts, test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeSitting } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -36,19 +37,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [row] = await db
-    .select()
-    .from(test_sessions)
-    .where(
-      and(
-        eq(test_sessions.id, sessionId),
-        eq(test_sessions.owner_sub, auth.session.sub),
-      ),
-    )
-    .limit(1);
-  if (!row) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  const access = await authorizeSitting(db, auth.session, sessionId, "run");
+  if (!access.ok) return access.response;
+  const row = access.sitting;
   if (row.status === "closed") {
     return NextResponse.json({
       test_session: row,

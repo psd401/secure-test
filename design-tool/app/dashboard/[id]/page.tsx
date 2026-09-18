@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { and, asc, count, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempts, items, type ItemType } from "@/db/schema";
+import { attempts, items, type ItemType } from "@/db/schema";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { UUID_RE } from "@/lib/uuid";
+import { pageAssessment } from "@/lib/api/access";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const session = await readStaffSessionFromCookies();
   const { id } = await params;
   if (!session || !UUID_RE.test(id)) return { title: "Assessment" };
-  const [row] = await getDb()
-    .select({ name: assessments.name })
-    .from(assessments)
-    .where(and(eq(assessments.id, id), eq(assessments.owner_sub, session.sub)))
-    .limit(1);
+  const row = await pageAssessment(getDb(), session, id, "view");
   return { title: row?.name ?? "Assessment" };
 }
 
@@ -39,17 +36,11 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
   }
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessment) {
-    notFound();
-  }
   // UX pass 1, slice 3: someone else's assessment is a 404, the same posture
-  // as the API routes — a guessed id learns nothing.
-  if (assessment.owner_sub !== session.sub) {
+  // as the API routes — a guessed id learns nothing. Access slice 1 (D-3) put
+  // that decision in one place for pages and routes alike.
+  const assessment = await pageAssessment(db, session, id, "edit");
+  if (!assessment) {
     notFound();
   }
 

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessment_shares } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
-import { loadOwnedAssessment } from "@/lib/api/loadOwned";
+import { authorizeAssessment } from "@/lib/api/access";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -19,13 +19,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(shareId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   const deleted = await db
     .delete(assessment_shares)

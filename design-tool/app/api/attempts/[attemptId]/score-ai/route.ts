@@ -2,18 +2,17 @@ import { NextResponse } from "next/server";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assessments,
-  attempts,
   items,
   responses,
   scores,
   type ItemRow,
-  type ItemType,
+  type ItemType
 } from "@/db/schema";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAttempt } from "@/lib/api/access";
 
 // Is this item one the AI scorer targets at all? (essay + ai/hybrid)
 function isAiEligible(item: ItemRow): boolean {
@@ -41,22 +40,10 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [attempt] = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.id, attemptId))
-    .limit(1);
-  if (!attempt) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, attempt.assessment_id))
-    .limit(1);
-  if (!assessment || assessment.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAttempt(db, auth.session, attemptId, "edit");
+  if (!access.ok) return access.response;
+  const attempt = access.attempt;
+  const assessment = access.assessment;
   if (attempt.status !== "submitted") {
     return NextResponse.json(
       { ok: false, error: "attempt_not_submitted" },

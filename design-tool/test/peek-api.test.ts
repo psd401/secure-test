@@ -155,12 +155,13 @@ describe("POST /api/attempts/:id/peek", () => {
     expect(pending?.id).toBe(body.peek.id);
   });
 
-  test("another teacher is forbidden; unknown attempt is 404", async () => {
+  test("another teacher's attempt and an unknown attempt are the same 404", async () => {
+    // Access slice 1 (D-3).
     const a = await seedAssessment();
     const attempt = await seedAttempt(a.id, STUDENT.ps_id);
 
     principal = staffPrincipal("someone-else", "other@psd401.net");
-    expect((await postPeek(attempt.id)).status).toBe(403);
+    expect((await postPeek(attempt.id)).status).toBe(404);
 
     principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
     expect((await postPeek("00000000-0000-0000-0000-000000000000")).status).toBe(404);
@@ -343,11 +344,11 @@ describe("GET /api/attempts/:id/peek/image (teacher collect)", () => {
     expect(row!.viewed_at).toBeNull();
   });
 
-  test("another teacher is forbidden", async () => {
+  test("another teacher gets the same 404 as an unknown attempt", async () => {
     const a = await seedAssessment();
     const attempt = await seedAttempt(a.id, STUDENT.ps_id);
     await deliverOne(attempt.id);
     principal = staffPrincipal("someone-else", "other@psd401.net");
-    expect((await getImage(attempt.id)).status).toBe(403);
+    expect((await getImage(attempt.id)).status).toBe(404);
   });
 });

@@ -180,13 +180,15 @@ describe("POST /api/uploads/image", () => {
 });
 
 describe("GET /api/assets/[id]", () => {
-  test("403 when fetching another user's asset", async () => {
+  test("404 when fetching another user's asset", async () => {
     asUser("teacher-1");
     const created = await postUpload(PNG_1X1);
     const body = (await created.json()) as { asset: { id: string } };
     asUser("teacher-2");
     const res = await getAsset(body.asset.id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 
   test("404 for unknown id", async () => {
@@ -213,12 +215,14 @@ describe("DELETE /api/assets/[id]", () => {
     expect(getRes.status).toBe(404);
   });
 
-  test("403 cross-tenant", async () => {
+  test("404 cross-tenant", async () => {
     asUser("teacher-1");
     const created = await postUpload(PNG_1X1);
     const id = ((await created.json()) as { asset: { id: string } }).asset.id;
     asUser("teacher-2");
     const res = await deleteAsset(id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });

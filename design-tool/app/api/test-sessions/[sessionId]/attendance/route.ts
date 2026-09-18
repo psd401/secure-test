@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { attendanceForSitting } from "@/lib/api/sittingAttendance";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeSitting } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -26,14 +25,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [sitting] = await db
-    .select()
-    .from(test_sessions)
-    .where(and(eq(test_sessions.id, sessionId), eq(test_sessions.owner_sub, auth.session.sub)))
-    .limit(1);
-  if (!sitting) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  const access = await authorizeSitting(db, auth.session, sessionId, "view");
+  if (!access.ok) return access.response;
+  const sitting = access.sitting;
 
   const attendance = await attendanceForSitting(db, sitting);
   return NextResponse.json({

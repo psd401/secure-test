@@ -1,7 +1,20 @@
 import { z } from "zod";
+import type { NextResponse } from "next/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { ITEM_SET_LAYOUTS, assessments, item_sets, items } from "@/db/schema";
+import {
+  ITEM_SET_LAYOUTS,
+  assessments,
+  item_sets,
+  items,
+  type ItemSetRow,
+} from "@/db/schema";
+import type { SessionPayload } from "@/lib/auth/session";
+import {
+  authorizeAssessment,
+  notFoundResponse,
+  type AccessLevel,
+} from "@/lib/api/access";
 
 // E5 slice 1 (docs/stimulus-design.md): item sets — one stimulus shared by
 // one or more contiguous items. Write shapes, the contiguity rules, and the
@@ -67,16 +80,20 @@ export type SourceItemCheck =
 export async function checkSourceItem(
   db: ReturnType<typeof getDb>,
   sourceItemId: string,
-  ownerSub: string,
+  session: SessionPayload,
   assessmentId: string,
 ): Promise<SourceItemCheck> {
   const [row] = await db
-    .select({ type: items.type, assessment_id: items.assessment_id, owner_sub: assessments.owner_sub })
+    .select({ type: items.type, assessment_id: items.assessment_id })
     .from(items)
-    .innerJoin(assessments, eq(assessments.id, items.assessment_id))
     .where(eq(items.id, sourceItemId))
     .limit(1);
-  if (!row || row.owner_sub !== ownerSub) return { ok: false, status: 404, error: "source_not_found" };
+  if (!row) return { ok: false, status: 404, error: "source_not_found" };
+  // The item's own assessment answers the access question (access slice 1,
+  // D-3) — a source question in an assessment the caller cannot reach is
+  // reported as missing, exactly as the old inline owner comparison did.
+  const access = await authorizeAssessment(db, session, row.assessment_id, "edit");
+  if (!access.ok) return { ok: false, status: 404, error: "source_not_found" };
   if (!SOURCE_ITEM_TYPES.has(row.type)) return { ok: false, status: 400, error: "source_type_not_allowed" };
   if (row.assessment_id === assessmentId) return { ok: false, status: 400, error: "source_in_this_assessment" };
   return { ok: true };
@@ -128,25 +145,32 @@ export async function loadSetMembers(assessmentId: string) {
 }
 
 /** Load a set and confirm the session owns its assessment (404 / 403 / 200). */
-export async function loadOwnedItemSet(
+/**
+ * Load one item set inside an assessment the caller may edit.
+ *
+ * The join used to carry the owner comparison; `authorizeAssessment` owns that
+ * question now (access slice 1, D-3), so a set in someone else's assessment is
+ * a 404 rather than the old 403.
+ */
+export async function loadItemSetForSession(
   assessmentId: string,
   setId: string,
-  ownerSub: string,
-) {
+  session: SessionPayload,
+  need: AccessLevel = "own",
+): Promise<
+  | { ok: true; set: ItemSetRow; parentStatus: string }
+  | { ok: false; response: NextResponse }
+> {
   const db = getDb();
-  const [row] = await db
-    .select({
-      set: item_sets,
-      owner: assessments.owner_sub,
-      parentStatus: assessments.status,
-    })
+  const access = await authorizeAssessment(db, session, assessmentId, need);
+  if (!access.ok) return { ok: false, response: access.response };
+  const [set] = await db
+    .select()
     .from(item_sets)
-    .innerJoin(assessments, eq(assessments.id, item_sets.assessment_id))
     .where(and(eq(item_sets.id, setId), eq(item_sets.assessment_id, assessmentId)))
     .limit(1);
-  if (!row) return { status: 404 as const };
-  if (row.owner !== ownerSub) return { status: 403 as const };
-  return { status: 200 as const, set: row.set, parentStatus: row.parentStatus };
+  if (!set) return { ok: false, response: notFoundResponse() };
+  return { ok: true, set, parentStatus: access.assessment.status };
 }
 
 /** The sets of one assessment ordered by where their first item sits. */

@@ -5,13 +5,12 @@ import { getDb } from "@/db/client";
 import {
   CLIENT_ATTEMPT_EVENT_KINDS,
   OBSERVABILITY_TEXT_MAX,
-  assessments,
-  attempt_events,
-  attempts,
+  attempt_events
 } from "@/db/schema";
 import { truncate } from "@/lib/log";
 import { requireStaff, requireStudent } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
+import { authorizeAttempt } from "@/lib/api/access";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -123,19 +122,12 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(attemptId)) return notFound();
 
   const db = getDb();
-  const [attempt] = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.id, attemptId))
-    .limit(1);
-  if (!attempt) return notFound();
-
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, attempt.assessment_id))
-    .limit(1);
-  if (!assessment || assessment.owner_sub !== auth.session.sub) return notFound();
+  // The 404-on-everything posture this route already had is the helper's own
+  // rule now (access slice 1, D-3); the only thing kept locally is the
+  // no-store header on the refusal, which the helper's plain 404 would drop.
+  const access = await authorizeAttempt(db, auth.session, attemptId, "view");
+  if (!access.ok) return notFound();
+  const attempt = access.attempt;
 
   const rows = await db
     .select()

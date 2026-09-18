@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
 import { extractPdfText, looksScanned } from "@/lib/pdfImport/extractText";
 import { extractPdfLayout, type PdfFigure } from "@/lib/pdfImport/extractFigures";
 import { getPdfExtractorProvider } from "@/lib/pdfImport/provider";
@@ -23,6 +21,7 @@ import { runGuarded, type GuardedOutcome } from "@/lib/safeguarding/guard";
 import { requireDraft } from "@/lib/api/requireDraft";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -101,17 +100,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessment) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessment.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const assessment = access.assessment;
   const draftGuard = requireDraft(assessment);
   if (draftGuard) return draftGuard;
 

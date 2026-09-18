@@ -208,12 +208,14 @@ describe("items POST /api/assessments/:id/items", () => {
     expect(res.status).toBe(401);
   });
 
-  test("403 when creating against another user's assessment", async () => {
+  test("404 when creating against another user's assessment", async () => {
     asUser("teacher-1");
     const aid = await createAssessment("x");
     asUser("teacher-2");
     const res = await createItem(aid, SAMPLE_MC);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });
 

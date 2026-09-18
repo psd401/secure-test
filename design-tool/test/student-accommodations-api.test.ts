@@ -183,7 +183,7 @@ describe("POST /api/students/[id]/accommodations (manual create)", () => {
     expect(dup.status).toBe(409);
   });
 
-  test("403 when student belongs to another teacher", async () => {
+  test("404 when student belongs to another teacher", async () => {
     asUser("teacher-A");
     const sid = await createStudent("T001");
     asUser("teacher-B");
@@ -192,7 +192,9 @@ describe("POST /api/students/[id]/accommodations (manual create)", () => {
       tool_id: "highlighter",
       value: "On",
     });
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });
 

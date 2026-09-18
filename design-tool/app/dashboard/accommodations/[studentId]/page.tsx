@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students, student_accommodations } from "@/db/schema";
+import { student_accommodations } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { studentHeading } from "@/lib/ui/format";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StudentEditor } from "./StudentEditor";
 import { UUID_RE } from "@/lib/uuid";
+import { pageStudent } from "@/lib/api/access";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Student" };
@@ -26,14 +27,10 @@ export default async function StudentDetailPage({ params }: PageProps) {
     notFound();
   }
   const db = getDb();
-  const [student] = await db
-    .select()
-    .from(students)
-    .where(eq(students.id, studentId))
-    .limit(1);
+  // UX pass 1, slice 3's posture: someone else's record is a 404 — the rule
+  // access slice 1 (D-3) made universal.
+  const student = await pageStudent(db, session, studentId, "edit");
   if (!student) notFound();
-  // UX pass 1, slice 3's posture: someone else's record is a 404.
-  if (student.owner_sub !== session.sub) notFound();
   const accs = await db
     .select()
     .from(student_accommodations)

@@ -484,10 +484,12 @@ describe("POST /api/attempts/:id/score-ai", () => {
     expect(body.scored_final).toBe(1);
   });
 
-  test("403 for another teacher's attempt", async () => {
+  test("404 for another teacher's attempt", async () => {
     const { attempt } = await seedAiScenario();
     mockSub = "someone-else";
     const res = await postScoreAi(attempt.id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });

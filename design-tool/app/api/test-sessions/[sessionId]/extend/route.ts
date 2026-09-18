@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { attempts, test_sessions } from "@/db/schema";
+import { attempts } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { extendAttempt } from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeSitting } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -27,9 +28,9 @@ const Body = z.object({
  * with no `test_session_id` (the `--token` dev posture, the seeder) are
  * therefore never touched.
  *
- * Owner-only, decided by the sitting's own `owner_sub` — the same check and the
- * same 404 as Close and Hand in everyone, so a caller cannot learn that someone
- * else's sitting exists.
+ * Owner-only through `authorizeSitting` — the same check and the same 404 as
+ * Close and Hand in everyone, so a caller cannot learn that someone else's
+ * sitting exists.
  *
  * The sitting's state is deliberately NOT a condition. Open, closed or expired,
  * every `in_progress` attempt on it is extended: the case this exists for is
@@ -55,16 +56,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [sitting] = await db
-    .select()
-    .from(test_sessions)
-    .where(
-      and(eq(test_sessions.id, sessionId), eq(test_sessions.owner_sub, auth.session.sub)),
-    )
-    .limit(1);
-  if (!sitting) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  const access = await authorizeSitting(db, auth.session, sessionId, "run");
+  if (!access.ok) return access.response;
+  const sitting = access.sitting;
 
   let endsAt: Date;
   try {

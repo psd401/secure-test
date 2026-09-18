@@ -21,7 +21,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
 
-  const chain = await loadResponseChain(responseId, auth.session.sub);
+  const chain = await loadResponseChain(responseId, auth.session);
   if (!chain.ok) {
     return NextResponse.json(
       { ok: false, error: chain.error },

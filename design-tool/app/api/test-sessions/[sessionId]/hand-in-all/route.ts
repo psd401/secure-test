@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { attempts, test_sessions } from "@/db/schema";
+import { attempts } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isPastDeadline, loadDeadline } from "@/lib/api/attemptDeadline";
 import { handInAttempt } from "@/lib/api/handInAttempt";
 import { sessionOpenResponse } from "@/lib/api/staffAttempt";
 import { sittingIsOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeSitting } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -23,9 +24,8 @@ interface RouteContext {
  * on the same assessment with no `test_session_id` (the `--token` dev posture,
  * the seeder) are therefore never touched.
  *
- * Owner-only, and the sitting's own `owner_sub` decides it — the same check
- * and the same 404 as Close, so a caller cannot learn that someone else's
- * sitting exists.
+ * Owner-only through `authorizeSitting` — the same check and the same 404 as
+ * Close, so a caller cannot learn that someone else's sitting exists.
  *
  * The open-sitting rule, per row rather than per request:
  *   - sitting closed or expired → hand in every `in_progress` attempt.
@@ -54,19 +54,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [sitting] = await db
-    .select()
-    .from(test_sessions)
-    .where(
-      and(
-        eq(test_sessions.id, sessionId),
-        eq(test_sessions.owner_sub, auth.session.sub),
-      ),
-    )
-    .limit(1);
-  if (!sitting) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  const access = await authorizeSitting(db, auth.session, sessionId, "run");
+  if (!access.ok) return access.response;
+  const sitting = access.sitting;
 
   const now = new Date();
   const stillOpen = !sittingIsOver(sitting, now);

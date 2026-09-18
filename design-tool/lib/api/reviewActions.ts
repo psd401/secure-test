@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempts, responses, items, scores } from "@/db/schema";
+import { responses, items, scores } from "@/db/schema";
+import type { SessionPayload } from "@/lib/auth/session";
+import { authorizeAttempt } from "@/lib/api/access";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
 // re-run AI). Loads the response → attempt → assessment chain and enforces
@@ -39,7 +41,7 @@ export type ResponseChain =
 
 export async function loadResponseChain(
   responseId: string,
-  ownerSub: string,
+  session: SessionPayload,
 ): Promise<ResponseChain> {
   const db = getDb();
   const [response] = await db
@@ -48,20 +50,12 @@ export async function loadResponseChain(
     .where(eq(responses.id, responseId))
     .limit(1);
   if (!response) return { ok: false, status: 404, error: "not_found" };
-  const [attempt] = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.id, response.attempt_id))
-    .limit(1);
-  if (!attempt) return { ok: false, status: 404, error: "not_found" };
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, attempt.assessment_id))
-    .limit(1);
-  if (!assessment || assessment.owner_sub !== ownerSub) {
-    return { ok: false, status: 403, error: "forbidden" };
-  }
+  // Access slice 1 (D-3): the attempt's assessment answers who may score this
+  // response, and the old 403 for another teacher's response is now the same
+  // 404 the missing cases give.
+  const access = await authorizeAttempt(db, session, response.attempt_id, "edit");
+  if (!access.ok) return { ok: false, status: 404, error: "not_found" };
+  const attempt = access.attempt;
   if (attempt.status !== "submitted") {
     return { ok: false, status: 400, error: "attempt_not_submitted" };
   }

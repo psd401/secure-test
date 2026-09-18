@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { RubricSchema, type Rubric } from "@secure-test/schema";
 import { getDb } from "@/db/client";
-import { RUBRIC_SOURCES, rubrics, type RubricRow } from "@/db/schema";
+import { RUBRIC_SOURCES, type RubricRow } from "@/db/schema";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
+import type { SessionPayload } from "@/lib/auth/session";
+import { authorizeRubric } from "@/lib/api/access";
 
 // Rubric library slice 3 (docs/rubric-upload-design.md §"Rubric library and
 // reuse", D-4). Write boundary for the `rubrics` table, mirroring
@@ -67,16 +68,15 @@ export function rubricSummary(row: RubricRow): RubricSummary {
  */
 export async function rejectUnownedRubricId(
   rubricId: string | null | undefined,
-  ownerSub: string,
+  session: SessionPayload,
 ): Promise<NextResponse | null> {
   if (!rubricId) return null;
   const db = getDb();
-  const [row] = await db
-    .select({ id: rubrics.id })
-    .from(rubrics)
-    .where(and(eq(rubrics.id, rubricId), eq(rubrics.owner_sub, ownerSub)))
-    .limit(1);
-  if (row) return null;
+  // One ownership path (access slice 1, D-3): the scoped read this used to do
+  // inline is now `authorizeRubric`. The 400 below is unchanged — the id came
+  // in a body, so the failure is about the body, not about the addressed row.
+  const access = await authorizeRubric(db, session, rubricId, "own");
+  if (access.ok) return null;
   return NextResponse.json(
     {
       ok: false,

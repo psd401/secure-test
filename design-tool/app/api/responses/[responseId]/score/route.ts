@@ -40,7 +40,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
 
-  const chain = await loadResponseChain(responseId, auth.session.sub);
+  const chain = await loadResponseChain(responseId, auth.session);
   if (!chain.ok) {
     return NextResponse.json(
       { ok: false, error: chain.error },

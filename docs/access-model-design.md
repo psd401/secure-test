@@ -8,7 +8,7 @@ once and treats the four as its cases. Design tool only; nothing in the
 client or the shared schema moves (a student's plane is untouched: the
 client authorizes by sitting + roster membership, not by who owns the
 assessment). Decisions marked **D-n** are James's and are listed at the
-end; **§Progress says what is built** (nothing yet).
+end; **§Progress says what is built** (slice 1 as of 2026-09-17).
 
 ## What exists that this stands on
 
@@ -258,4 +258,30 @@ check and adds the test that keeps it that way.
 ## Progress
 
 - 2026-09-17 — note written; D-1…D-8 decided the same day (D-4 = (b),
-  D-7 deferred); nothing built.
+  D-7 deferred).
+- 2026-09-17 — **slice 1 BUILT** (pure refactor, no migration, no grants):
+  `design-tool/lib/api/access.ts` holds the ladder, the six
+  `authorize*(db, session, id, need)` entry points (assessment, sitting,
+  attempt, overlay student, rubric, asset) and the three `page*` wrappers the
+  dashboard pages use. Every inline owner check in `app/api/**/route.ts` and
+  every by-id load in `app/dashboard/**` now goes through it; `lib/api/loadOwned.ts`
+  is deleted and `loadOwnedAttempt` is gone from `lib/api/staffAttempt.ts`
+  (`sittingIsOpen` / `sessionOpenResponse` stay). The shared loaders that used
+  to carry their own comparison — `loadItemSetForSession` (was
+  `loadOwnedItemSet`), `checkSourceItem`, `loadResponseChain`,
+  `rejectUnownedRubricId`, `duplicateAssessment` — take a session (or an
+  already-authorized row) and defer to the helper. List queries are untouched:
+  slice 2 widens them. `test/access-enforcement.test.ts` enumerates the routes
+  from disk and holds each to one of four classifications (student plane, no
+  owned row, via a named shared loader, or imports `@/lib/api/access`), refuses
+  an inline `owner_sub` comparison, and unit-tests the helper itself.
+  **The one accepted behaviour change (D-3): every select-then-compare 403
+  became a 404** — assessments GET/PATCH/DELETE, export, items (collection +
+  one + reorder + both imports), item sets (4 routes), overrides (GET/POST/
+  DELETE, incl. `student_forbidden` → 404 `student_not_found`), results,
+  review-queue, rubric extract, shares (2), generate-item, students `[id]`,
+  student accommodations (POST + the two TIDE-diff routes), attempts
+  (DELETE / extend / hand-in / score / score-ai / peek / peek-image),
+  response score / rescore-ai / approve, assets `[id]`, and the two dashboard
+  pages that rendered a "Forbidden" panel (results, scoring) which now
+  `notFound()`.

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, test_sessions } from "@/db/schema";
+import { test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
   CodeExhaustionError,
@@ -12,6 +12,7 @@ import {
   sweepExpired,
 } from "@/lib/api/testSessions";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 import {
   normalizeEmail,
   sectionsCurrentlyTaughtBy,
@@ -78,22 +79,11 @@ export async function POST(req: Request) {
   }
 
   const db = getDb();
-  // Ownership, not existence: a teacher may only run a sitting of their own
-  // assessment. Same 404-for-not-yours posture the rest of the API uses, so an
-  // id probe cannot distinguish "does not exist" from "not yours".
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(
-      and(
-        eq(assessments.id, body.assessment_id),
-        eq(assessments.owner_sub, auth.session.sub),
-      ),
-    )
-    .limit(1);
-  if (!assessment) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  // A sitting may only be started on an assessment the caller may run; the
+  // 404-for-not-yours posture is the helper's (access slice 1, D-3).
+  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "run");
+  if (!access.ok) return access.response;
+  const assessment = access.assessment;
   // Slice 82: only a published assessment can be sat. A draft is still being
   // edited — items can change under a student mid-test — and publishing is
   // the act that freezes it (slice 41's lock). 409, not 400: the body is fine,

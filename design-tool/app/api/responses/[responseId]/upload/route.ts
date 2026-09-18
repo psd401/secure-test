@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempts, responses } from "@/db/schema";
+import { responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { loadUploadForItemIds } from "@/lib/api/responseUploads";
 import { getStorageProviderById } from "@/lib/storage/provider";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAttempt } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ responseId: string }>;
@@ -40,22 +41,11 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!response) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  const [attempt] = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.id, response.attempt_id))
-    .limit(1);
-  if (!attempt) {
+  const access = await authorizeAttempt(db, auth.session, response.attempt_id, "view");
+  if (!access.ok) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, attempt.assessment_id))
-    .limit(1);
-  if (!assessment || assessment.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
+  const attempt = access.attempt;
 
   const stored = response.response as { type?: unknown; upload_id?: unknown } | null;
   if (

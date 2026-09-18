@@ -238,9 +238,11 @@ describe("POST /api/assessments/[id]/overrides (slice 23b)", () => {
       tool_id: "color_contrast",
       value: "On",
     });
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3) collapsed the old `student_forbidden` 403 into the
+    // not-found answer; the code still says WHICH id was the problem.
+    expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("student_forbidden");
+    expect(body.error).toBe("student_not_found");
   });
 
   test("rejects when assessment belongs to another teacher", async () => {
@@ -255,7 +257,7 @@ describe("POST /api/assessments/[id]/overrides (slice 23b)", () => {
       tool_id: "color_contrast",
       value: "On",
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -295,7 +297,7 @@ describe("GET /api/assessments/[id]/overrides", () => {
     });
     asUser("teacher-B");
     const res = await listOverrides(aid);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -353,7 +355,7 @@ describe("DELETE /api/assessments/[id]/overrides/[overrideId]", () => {
     const oid = ((await c.json()) as { override: { id: string } }).override.id;
     asUser("teacher-B");
     const res = await deleteOverride(aid, oid);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });
 

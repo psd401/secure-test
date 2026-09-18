@@ -7,7 +7,7 @@ import { requireDraft } from "@/lib/api/requireDraft";
 import { CreateItemBody, itemConfigForWrite } from "@/lib/api/items";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
-import { loadOwnedAssessment } from "@/lib/api/loadOwned";
+import { authorizeAssessment } from "@/lib/api/access";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 
 interface RouteContext {
@@ -21,13 +21,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   const rows = await db
     .select()
@@ -56,20 +51,15 @@ export async function POST(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
-  const draftGuard = requireDraft(owned.row);
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
   // Rubric library slice 3: an item may point at a rubric in the caller's
   // OWN library only.
   const rubricGuard = await rejectUnownedRubricId(
     body.type === "essay" ? body.rubric_id : null,
-    auth.session.sub,
+    auth.session,
   );
   if (rubricGuard) return rubricGuard;
 

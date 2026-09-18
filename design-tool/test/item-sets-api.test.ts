@@ -445,15 +445,17 @@ describe("item sets — locks and ownership", () => {
     expect((await listItems(id)).item_sets).toHaveLength(1);
   });
 
-  test("another teacher gets 403 on the set routes", async () => {
+  test("another teacher gets 404 on the set routes", async () => {
     const { id, q } = await seed();
     const { item_set } = (await (await createSet(id, { item_ids: [q[0]] })).json()) as { item_set: { id: string } };
     mockSub = "someone-else";
-    expect((await createSet(id, { item_ids: [q[1]] })).status).toBe(403);
-    expect((await patchSet(id, item_set.id, { stimulus_text: "x" })).status).toBe(403);
-    expect((await deleteSet(id, item_set.id)).status).toBe(403);
-    expect((await attach(id, item_set.id, q[1]!)).status).toBe(403);
-    expect((await detach(id, item_set.id, q[0]!)).status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect((await createSet(id, { item_ids: [q[1]] })).status).toBe(404);
+    expect((await patchSet(id, item_set.id, { stimulus_text: "x" })).status).toBe(404);
+    expect((await deleteSet(id, item_set.id)).status).toBe(404);
+    expect((await attach(id, item_set.id, q[1]!)).status).toBe(404);
+    expect((await detach(id, item_set.id, q[0]!)).status).toBe(404);
     mockSub = OWNER;
     const db = getDb();
     expect(await db.select().from(items).where(eq(items.item_set_id, item_set.id))).toHaveLength(1);

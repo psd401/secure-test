@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
-import { loadOwnedAttempt } from "@/lib/api/staffAttempt";
+import { authorizeAttempt } from "@/lib/api/access";
 import { extendAttempt } from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -28,7 +28,7 @@ const Body = z.object({
  * when a student needs longer are editing the assessment's limit — which moves
  * every student in every sitting — or forcing a hand-in.
  *
- * Owner-only through the same `loadOwnedAttempt` the hand-in and delete routes
+ * Owner-only through the same `authorizeAttempt` the hand-in and delete routes
  * use, with the same statuses (404 unknown, 403 someone else's): deciding how
  * long a child gets is the owner's call, not a shared colleague's, and the two
  * statuses have to match hand-in exactly or a caller can tell the actions apart.
@@ -62,9 +62,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const owned = await loadOwnedAttempt(db, attemptId, auth.session.sub);
-  if (!owned.ok) return owned.response;
-  const attempt = owned.attempt;
+  const access = await authorizeAttempt(db, auth.session, attemptId, "own");
+  if (!access.ok) return access.response;
+  const attempt = access.attempt;
 
   let endsAt: Date;
   try {

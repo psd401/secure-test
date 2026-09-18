@@ -845,11 +845,13 @@ describe("GET /api/assessments/:id/results", () => {
     ).toBe(true);
   });
 
-  test("403 for another teacher", async () => {
+  test("404 for another teacher", async () => {
     const { assessment } = await seedResultsScenario();
     mockSub = "someone-else";
     const res = await getResults(assessment.id);
-    expect(res.status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect(res.status).toBe(404);
   });
 });
 

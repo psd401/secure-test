@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
-import {
-  loadOwnedAttempt,
-  sessionOpenResponse,
-  sittingIsOpen,
-} from "@/lib/api/staffAttempt";
+import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
+import { authorizeAttempt } from "@/lib/api/access";
 import { isPastDeadline, loadDeadline } from "@/lib/api/attemptDeadline";
 import { handInAttempt } from "@/lib/api/handInAttempt";
 import { UUID_RE } from "@/lib/uuid";
@@ -54,9 +51,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const owned = await loadOwnedAttempt(db, attemptId, auth.session.sub);
-  if (!owned.ok) return owned.response;
-  const attempt = owned.attempt;
+  const access = await authorizeAttempt(db, auth.session, attemptId, "own");
+  if (!access.ok) return access.response;
+  const attempt = access.attempt;
 
   if (attempt.status !== "in_progress") {
     return NextResponse.json(

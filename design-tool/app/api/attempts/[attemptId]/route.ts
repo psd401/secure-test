@@ -9,11 +9,8 @@ import {
   responses,
 } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
-import {
-  loadOwnedAttempt,
-  sessionOpenResponse,
-  sittingIsOpen,
-} from "@/lib/api/staffAttempt";
+import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
+import { authorizeAttempt } from "@/lib/api/access";
 import { log } from "@/lib/log";
 import { getStorageProviderById } from "@/lib/storage/provider";
 import { UUID_RE } from "@/lib/uuid";
@@ -56,9 +53,9 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   // Owner check and the open-sitting guard both live in lib/api/staffAttempt.ts
   // now — the hand-in route (docs/time-limit-and-unfinished-attempts-design.md)
   // applies the identical rules, and they must not be able to drift apart.
-  const owned = await loadOwnedAttempt(db, attemptId, auth.session.sub);
-  if (!owned.ok) return owned.response;
-  const attempt = owned.attempt;
+  const access = await authorizeAttempt(db, auth.session, attemptId, "own");
+  if (!access.ok) return access.response;
+  const attempt = access.attempt;
 
   if (await sittingIsOpen(db, attempt)) return sessionOpenResponse();
 

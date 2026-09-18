@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -7,33 +7,39 @@ import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft
 import { UpdateItemBody, itemConfigForWrite } from "@/lib/api/items";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment, notFoundResponse } from "@/lib/api/access";
+import type { SessionPayload } from "@/lib/auth/session";
 
 interface RouteContext {
   params: Promise<{ id: string; itemId: string }>;
 }
 
-async function loadOwnedItem(
+/**
+ * Authorize the parent assessment, then load the item inside it.
+ *
+ * The join this used to do carried the owner check in its select; `authorize*`
+ * (docs/access-model-design.md, D-3) owns that question now, so what is left is
+ * a plain scoped read plus the parent's status for the publish lock. An item id
+ * that does not sit in this assessment is a 404, exactly as before.
+ */
+async function loadItemInAssessment(
   assessmentId: string,
   itemId: string,
-  ownerSub: string,
+  session: SessionPayload,
 ) {
   const db = getDb();
-  const [row] = await db
-    .select({
-      item: items,
-      owner: assessments.owner_sub,
-      parentStatus: assessments.status,
-    })
+  const access = await authorizeAssessment(db, session, assessmentId, "own");
+  if (!access.ok) return { ok: false as const, response: access.response };
+  const [item] = await db
+    .select()
     .from(items)
-    .innerJoin(assessments, eq(assessments.id, items.assessment_id))
     .where(and(eq(items.id, itemId), eq(items.assessment_id, assessmentId)))
     .limit(1);
-  if (!row) return { status: 404 as const };
-  if (row.owner !== ownerSub) return { status: 403 as const };
+  if (!item) return { ok: false as const, response: notFoundResponse() };
   return {
-    status: 200 as const,
-    item: row.item,
-    parentStatus: row.parentStatus,
+    ok: true as const,
+    item,
+    parentStatus: access.assessment.status,
   };
 }
 
@@ -44,13 +50,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(itemId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedItem(id, itemId, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  if (!owned.ok) return owned.response;
   return NextResponse.json({ item: owned.item });
 }
 
@@ -71,13 +72,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const owned = await loadOwnedItem(id, itemId, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  if (!owned.ok) return owned.response;
   if (body.type !== owned.item.type) {
     return NextResponse.json(
       { ok: false, error: "type_change_not_supported" },
@@ -104,7 +100,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // OWN library only.
   const rubricGuard = await rejectUnownedRubricId(
     body.type === "essay" ? body.rubric_id : null,
-    auth.session.sub,
+    auth.session,
   );
   if (rubricGuard) return rubricGuard;
 
@@ -135,13 +131,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(itemId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedItem(id, itemId, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;
   const db = getDb();

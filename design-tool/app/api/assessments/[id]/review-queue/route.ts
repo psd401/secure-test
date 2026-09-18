@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assessments,
   assets,
   attempts,
   items,
@@ -23,6 +22,7 @@ import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -43,17 +43,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessment) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessment.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
 
   const attemptRows = await db
     .select()

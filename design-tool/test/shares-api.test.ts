@@ -171,8 +171,9 @@ describe("POST /api/assessments/[id]/shares (owner offers)", () => {
     asUser(OWNER.sub, OWNER.email);
     const aid = await createAssessment("x");
     asUser(PEER.sub, PEER.email);
-    expect((await share(aid, "third@psd401.net")).status).toBe(403);
-    expect((await listOwnerShares(aid)).status).toBe(403);
+    // Access slice 1 (D-3): 404 on both, so an id probe learns nothing.
+    expect((await share(aid, "third@psd401.net")).status).toBe(404);
+    expect((await listOwnerShares(aid)).status).toBe(404);
   });
 });
 

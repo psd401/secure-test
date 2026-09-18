@@ -1,10 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { ScoringQueue } from "./ScoringQueue";
 import { UUID_RE } from "@/lib/uuid";
+import { pageAssessment } from "@/lib/api/access";
 
 export const dynamic = "force-dynamic";
 
@@ -25,23 +24,12 @@ export default async function ScoringPage({ params }: PageProps) {
   }
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
+  // Access slice 1 (D-3): the Forbidden panel this used to render told a
+  // stranger the assessment exists. A row the caller cannot reach is a 404,
+  // the posture every other surface already had.
+  const assessment = await pageAssessment(db, session, id, "edit");
   if (!assessment) {
     notFound();
-  }
-  if (assessment.owner_sub !== session.sub) {
-    return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <h1 className="text-2xl font-semibold">Forbidden</h1>
-        <p className="mt-4 text-sm text-muted-foreground">
-          You don&rsquo;t own this assessment.
-        </p>
-      </main>
-    );
   }
 
   return (

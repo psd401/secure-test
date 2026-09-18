@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { buildExportBundle } from "@/lib/api/exportBundle";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -38,17 +37,9 @@ export async function GET(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   const db = getDb();
-  const [assessmentRow] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessmentRow) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessmentRow.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const assessmentRow = access.assessment;
 
   // Slice C: the bundle assembly lives in lib/api/exportBundle so sharing
   // can reuse it; the failure shapes below are byte-identical to before.

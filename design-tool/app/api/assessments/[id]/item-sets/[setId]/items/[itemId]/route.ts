@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { assessments, item_sets, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraftStatus } from "@/lib/api/requireDraft";
-import { loadOwnedItemSet, loadSetMembers } from "@/lib/api/itemSets";
+import { loadItemSetForSession, loadSetMembers } from "@/lib/api/itemSets";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -21,13 +21,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(setId) || !UUID_RE.test(itemId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedItemSet(id, setId, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const owned = await loadItemSetForSession(id, setId, auth.session, "own");
+  if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;
 

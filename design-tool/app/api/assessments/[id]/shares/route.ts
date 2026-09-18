@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
-import { loadOwnedAssessment } from "@/lib/api/loadOwned";
+import { authorizeAssessment } from "@/lib/api/access";
 import { CreateShareBody, createShare, listSharesForAssessment } from "@/lib/api/shares";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -16,13 +17,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   return NextResponse.json({ shares: await listSharesForAssessment(id) });
 }
 
@@ -43,13 +39,8 @@ export async function POST(req: Request, ctx: RouteContext) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json({ ok: false, error: "invalid_body", detail: message }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const result = await createShare(id, auth.session, body.email);
   if (!result.ok) {
     const { status, ...failure } = result;

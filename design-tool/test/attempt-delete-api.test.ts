@@ -262,10 +262,12 @@ describe("DELETE /api/attempts/[attemptId]", () => {
     expect((await deleteAttempt(s.attempt.id)).status).toBe(204);
   });
 
-  test("another teacher gets 403 and nothing changes", async () => {
+  test("another teacher gets 404 and nothing changes", async () => {
     const s = await seedAttempt({ status: "submitted" });
     mockSession = { sub: OTHER_OWNER, role: "staff" };
-    expect((await deleteAttempt(s.attempt.id)).status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect((await deleteAttempt(s.attempt.id)).status).toBe(404);
     expect((await countRows(s.attempt.id)).attempt).toBeDefined();
     expect(existsSync(join("./storage-test", s.storageKey))).toBe(true);
   });

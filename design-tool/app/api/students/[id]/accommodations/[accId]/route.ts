@@ -1,36 +1,45 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students, student_accommodations } from "@/db/schema";
+import { student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { EditAccommodationValueBody } from "@/lib/api/students";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeStudent, notFoundResponse } from "@/lib/api/access";
+import type { SessionPayload } from "@/lib/auth/session";
 
 interface RouteContext {
   params: Promise<{ id: string; accId: string }>;
 }
 
-async function loadOwnedAcc(studentId: string, accId: string, ownerSub: string) {
+/**
+ * Load one live accommodation row on a student the caller may edit.
+ *
+ * The join used to carry the owner comparison; `authorizeStudent` owns that
+ * question now (access slice 1, D-3), so a row on someone else's student is a
+ * 404 rather than the old 403.
+ */
+async function loadAccForSession(
+  studentId: string,
+  accId: string,
+  session: SessionPayload,
+) {
   const db = getDb();
-  const [joined] = await db
-    .select({
-      acc: student_accommodations,
-      owner_sub: students.owner_sub,
-      student_id: students.id,
-    })
+  const access = await authorizeStudent(db, session, studentId, "own");
+  if (!access.ok) return { ok: false as const, response: access.response };
+  const [row] = await db
+    .select()
     .from(student_accommodations)
-    .innerJoin(students, eq(student_accommodations.student_id, students.id))
     .where(
       and(
         eq(student_accommodations.id, accId),
-        eq(students.id, studentId),
+        eq(student_accommodations.student_id, studentId),
         isNull(student_accommodations.removed_at),
       ),
     )
     .limit(1);
-  if (!joined) return { status: 404 as const };
-  if (joined.owner_sub !== ownerSub) return { status: 403 as const };
-  return { status: 200 as const, row: joined.acc };
+  if (!row) return { ok: false as const, response: notFoundResponse() };
+  return { ok: true as const, row };
 }
 
 export async function PATCH(req: Request, ctx: RouteContext) {
@@ -46,13 +55,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
-  const owned = await loadOwnedAcc(id, accId, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const owned = await loadAccForSession(id, accId, auth.session);
+  if (!owned.ok) return owned.response;
 
   // No-op when value is unchanged — keeps edited_at stable so the next
   // TIDE import doesn't see a phantom edit.
@@ -89,13 +93,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(accId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAcc(id, accId, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const owned = await loadAccForSession(id, accId, auth.session);
+  if (!owned.ok) return owned.response;
   // Tide-origin rows can't be hard-deleted directly. Re-import is the
   // only path that removes them (via soft-delete). Manual rows can be
   // hard-deleted since they have no audit-trail value attached to TIDE.

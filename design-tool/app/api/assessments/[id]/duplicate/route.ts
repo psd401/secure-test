@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
 import { duplicateAssessment } from "@/lib/api/duplicateAssessment";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -25,7 +26,10 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const result = await duplicateAssessment(getDb(), id, auth.session.sub);
+  const db = getDb();
+  const access = await authorizeAssessment(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
+  const result = await duplicateAssessment(db, access.assessment, auth.session.sub);
   if (!result.ok) {
     const { ok, status, ...failure } = result;
     return NextResponse.json({ ok, ...failure }, { status });

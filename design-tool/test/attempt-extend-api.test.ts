@@ -253,10 +253,12 @@ describe("POST /api/attempts/[attemptId]/extend", () => {
     expect((await extend(s.attempt.id, undefined, '{"ends_at":123}')).status).toBe(400);
   });
 
-  test("another teacher gets 403 and nothing changes", async () => {
+  test("another teacher gets 404 and nothing changes", async () => {
     const s = await seedAttempt({ timeLimitSeconds: 600 });
     mockSession = { sub: OTHER_OWNER, role: "staff" };
-    expect((await extend(s.attempt.id, inMinutes(30))).status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect((await extend(s.attempt.id, inMinutes(30))).status).toBe(404);
     const db = getDb();
     const [row] = await db.select().from(attempts).where(eq(attempts.id, s.attempt.id));
     expect(row!.deadline_override_at).toBeNull();

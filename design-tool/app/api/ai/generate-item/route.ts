@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
+import { authorizeAssessment } from "@/lib/api/access";
 import { getProvider } from "@/lib/ai/provider";
 import { GenerateItemRequest } from "@/lib/ai/types";
 import { CreateItemBody } from "@/lib/api/items";
@@ -25,17 +24,9 @@ export async function POST(req: Request) {
   }
 
   const db = getDb();
-  const [assessmentRow] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, body.assessment_id))
-    .limit(1);
-  if (!assessmentRow) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (assessmentRow.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "own");
+  if (!access.ok) return access.response;
+  const assessmentRow = access.assessment;
   if (!assessmentRow.allow_llm_authoring) {
     return NextResponse.json(
       { ok: false, error: "llm_authoring_disabled" },

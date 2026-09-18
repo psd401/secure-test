@@ -256,7 +256,11 @@ describe("duplicateAssessment", () => {
   test("the copy reuses the owner's existing asset row rather than making a second", async () => {
     const { aid } = await buildSource();
     const { duplicateAssessment } = await import("../lib/api/duplicateAssessment");
-    const result = await duplicateAssessment(getDb(), aid, OWNER);
+    // Access slice 1: the lib takes the already-authorized row; the route
+    // ahead of it is what decides whether the caller may read it.
+    const db0 = getDb();
+    const [source] = await db0.select().from(assessments).where(eq(assessments.id, aid));
+    const result = await duplicateAssessment(db0, source!, OWNER);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.assets_reused).toBe(1);

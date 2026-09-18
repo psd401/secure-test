@@ -255,10 +255,11 @@ describe("POST assessments/[id]/rubrics/extract", () => {
     expect((await postFile(id, PDF_BYTES)).status).toBe(409);
   });
 
-  test("another teacher → 403; a missing assessment → 404", async () => {
+  test("another teacher and a missing assessment are the same 404", async () => {
+    // Access slice 1 (D-3): the two cases are deliberately indistinguishable.
     const id = await createAssessment("Owned");
     mockSub = "someone-else";
-    expect((await postFile(id, PDF_BYTES)).status).toBe(403);
+    expect((await postFile(id, PDF_BYTES)).status).toBe(404);
     mockSub = OWNER;
     const missing = await postFile("11111111-1111-4111-8111-111111111111", PDF_BYTES);
     expect(missing.status).toBe(404);

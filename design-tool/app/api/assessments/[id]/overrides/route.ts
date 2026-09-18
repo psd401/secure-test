@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessment_student_overrides, students } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
 import { UpsertOverrideBody } from "@/lib/api/overrides";
 import { UUID_RE } from "@/lib/uuid";
-import { loadOwnedAssessment } from "@/lib/api/loadOwned";
+import { authorizeAssessment, authorizeStudent } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -19,13 +19,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   const rows = await db
     .select({
@@ -63,25 +58,20 @@ export async function POST(req: Request, ctx: RouteContext) {
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
 
   // C11: the overrides panel disables its controls when published, but that is
   // a client-side affordance only — this route had no server guard, so a
   // direct call mutated a published assessment's per-student tools with no
   // 409. Per-student accommodations are part of the published artifact.
-  const draftGuard = requireDraft(owned.row);
+  const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
 
   // Slice 21 invariant lifted: override.tool_id must be present in the
   // assessment's allowed_accommodations. Otherwise an override could
   // grant a tool the assessment doesn't allow.
-  const allowed = (owned.row.allowed_accommodations ?? []) as string[];
+  const allowed = (access.assessment.allowed_accommodations ?? []) as string[];
   if (!allowed.includes(body.tool_id)) {
     return NextResponse.json(
       {
@@ -94,22 +84,17 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  // Student must belong to the same teacher.
-  const [stu] = await db
-    .select({ id: students.id, owner_sub: students.owner_sub })
-    .from(students)
-    .where(eq(students.id, body.student_id))
-    .limit(1);
-  if (!stu) {
+  // The overlay row must be one the caller may read. Access slice 1 (D-3)
+  // collapsed the old `student_forbidden` 403 into this 404: a student row
+  // belonging to another teacher is now indistinguishable from one that is not
+  // there, the same rule every other row follows. The error code stays
+  // `student_not_found` rather than a bare `not_found` so the client can still
+  // tell WHICH of the two ids in the body was the problem.
+  const studentAccess = await authorizeStudent(db, auth.session, body.student_id, "own");
+  if (!studentAccess.ok) {
     return NextResponse.json(
       { ok: false, error: "student_not_found" },
       { status: 404 },
-    );
-  }
-  if (stu.owner_sub !== auth.session.sub) {
-    return NextResponse.json(
-      { ok: false, error: "student_forbidden" },
-      { status: 403 },
     );
   }
 

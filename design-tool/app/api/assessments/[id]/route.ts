@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/assessments";
 import { isUnlockOnlyPatch, requireDraft } from "@/lib/api/requireDraft";
 import { UUID_RE } from "@/lib/uuid";
-import { loadOwnedAssessment } from "@/lib/api/loadOwned";
+import { authorizeAssessment } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -28,20 +28,15 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
   const db = getDb();
   const itemRows = await db
     .select()
     .from(items)
     .where(eq(items.assessment_id, id))
     .orderBy(asc(items.position));
-  return NextResponse.json({ assessment: owned.row, items: itemRows });
+  return NextResponse.json({ assessment: access.assessment, items: itemRows });
 }
 
 export async function PATCH(req: Request, ctx: RouteContext) {
@@ -72,13 +67,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
 
   // Archive runs BEFORE the publish lock and is accepted on a published row:
   // the lock exists so a delivered bundle cannot change under a student, and
@@ -90,8 +80,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     // Idempotent, and deliberately not a re-stamp: archiving an already
     // archived row keeps its original date (the list shows it) and skips the
     // open-sitting guard, since the state asked for is already the state.
-    if (archived === (owned.row.archived_at !== null)) {
-      return NextResponse.json({ assessment: owned.row });
+    if (archived === (access.assessment.archived_at !== null)) {
+      return NextResponse.json({ assessment: access.assessment });
     }
     if (archived) {
       // The same rule the delete-attempt route applies: close the sittings
@@ -118,9 +108,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     const [updated] = await db
       .update(assessments)
       .set({ archived_at: archived ? new Date() : null, updated_at: new Date() })
-      .where(
-        and(eq(assessments.id, id), eq(assessments.owner_sub, auth.session.sub)),
-      )
+      // Keyed on the id alone: `authorizeAssessment` above already proved the
+      // caller may write this row, and repeating the owner predicate here would
+      // silently update nothing once a grant (slice 2) is the reason they may.
+      .where(eq(assessments.id, id))
       .returning();
     return NextResponse.json({ assessment: updated });
   }
@@ -133,8 +124,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // saveMetadata always sends all six metadata fields, so the unlock the lock
   // banner told the teacher to perform 409'd every single time. It now keys on
   // changed fields rather than present fields — see isUnlockOnlyPatch.
-  if (owned.row.status === "published") {
-    if (!isUnlockOnlyPatch(body, owned.row)) {
+  if (access.assessment.status === "published") {
+    if (!isUnlockOnlyPatch(body, access.assessment)) {
       return NextResponse.json(
         {
           ok: false,
@@ -157,7 +148,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     body.construct_altering !== undefined &&
     body.allowed_accommodations === undefined
   ) {
-    const currentAllowed = (owned.row.allowed_accommodations ?? []) as string[];
+    const currentAllowed = (access.assessment.allowed_accommodations ?? []) as string[];
     const violation = findConstructAlteringSubsetViolation(
       currentAllowed,
       body.construct_altering,
@@ -176,7 +167,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     body.allowed_accommodations !== undefined &&
     body.construct_altering === undefined
   ) {
-    const currentCA = (owned.row.construct_altering ?? []) as string[];
+    const currentCA = (access.assessment.construct_altering ?? []) as string[];
     if (currentCA.length > 0) {
       const newAllowed = new Set(body.allowed_accommodations);
       patch.construct_altering = currentCA.filter((id) => newAllowed.has(id));
@@ -201,9 +192,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     const rows = await tx
       .update(assessments)
       .set({ ...patch, updated_at: new Date() })
-      .where(
-        and(eq(assessments.id, id), eq(assessments.owner_sub, auth.session.sub)),
-      )
+      // Keyed on the id alone: `authorizeAssessment` above already proved the
+      // caller may write this row, and repeating the owner predicate here would
+      // silently update nothing once a grant (slice 2) is the reason they may.
+      .where(eq(assessments.id, id))
       .returning();
     if (nextAllowed !== null) {
       const keep = nextAllowed;
@@ -230,20 +222,15 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedAssessment(id, auth.session.sub);
-  if (owned.status === 404) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (owned.status === 403) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  if (!access.ok) return access.response;
 
   // C10: every edit path on a published assessment 409s, but DELETE had no
   // publish guard at all — the published assessment and all its items
   // hard-deleted with a 204. Deleting is a bigger change than editing, so it
   // gets the same lock. With C9 fixed, "unlock to draft, then delete" is a
   // reachable path.
-  const draftGuard = requireDraft(owned.row);
+  const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
 
   const db = getDb();

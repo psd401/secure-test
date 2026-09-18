@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraftStatus } from "@/lib/api/requireDraft";
-import { AttachItemBody, loadOwnedItemSet, loadSetMembers } from "@/lib/api/itemSets";
+import { AttachItemBody, loadItemSetForSession, loadSetMembers } from "@/lib/api/itemSets";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -30,13 +30,8 @@ export async function POST(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const owned = await loadOwnedItemSet(id, setId, auth.session.sub);
-  if (owned.status !== 200) {
-    return NextResponse.json(
-      { ok: false, error: owned.status === 404 ? "not_found" : "forbidden" },
-      { status: owned.status },
-    );
-  }
+  const owned = await loadItemSetForSession(id, setId, auth.session, "own");
+  if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;
 

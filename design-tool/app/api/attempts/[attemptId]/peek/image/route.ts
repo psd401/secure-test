@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, attempts, peek_requests } from "@/db/schema";
+import { peek_requests } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
   PEEK_IMAGE_TTL_MS,
@@ -9,6 +9,7 @@ import {
   sweepExpiredPeekImages,
 } from "@/lib/api/peek";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeAttempt } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ attemptId: string }>;
@@ -34,18 +35,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [row] = await db
-    .select({ ownerSub: assessments.owner_sub })
-    .from(attempts)
-    .innerJoin(assessments, eq(attempts.assessment_id, assessments.id))
-    .where(eq(attempts.id, attemptId))
-    .limit(1);
-  if (!row) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (row.ownerSub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeAttempt(db, auth.session, attemptId, "run");
+  if (!access.ok) return access.response;
 
   await sweepExpiredPeekImages(db);
 

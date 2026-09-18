@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students, student_accommodations } from "@/db/schema";
+import { student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UpsertManualAccommodationBody } from "@/lib/api/students";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeStudent } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -28,18 +29,8 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
   const db = getDb();
 
-  // Ownership: student must belong to this teacher.
-  const [stu] = await db
-    .select({ id: students.id, owner_sub: students.owner_sub })
-    .from(students)
-    .where(eq(students.id, id))
-    .limit(1);
-  if (!stu) {
-    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
-  }
-  if (stu.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeStudent(db, auth.session, id, "own");
+  if (!access.ok) return access.response;
 
   // Conflict: a LIVE row already exists for this (student, subject, tool).
   // Soft-removed rows are intentionally NOT blocking — the partial

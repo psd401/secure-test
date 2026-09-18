@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assessments,
   assets,
   attempt_events,
   attempts,
@@ -12,7 +11,7 @@ import {
   responses,
   scores,
   type ItemRow,
-  type ScoreRow,
+  type ScoreRow
 } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
@@ -29,6 +28,7 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
+import { pageAssessment } from "@/lib/api/access";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
@@ -225,12 +225,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
   }
 
   const db = getDb();
-  const [assessment] = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, id))
-    .limit(1);
-  if (!assessment || assessment.owner_sub !== session.sub) {
+  const assessment = await pageAssessment(db, session, id, "view");
+  if (!assessment) {
     notFound();
   }
 

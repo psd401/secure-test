@@ -242,10 +242,12 @@ describe("POST /api/attempts/[attemptId]/hand-in", () => {
     expect((await handIn(s.attempt.id)).status).toBe(200);
   });
 
-  test("another teacher gets 403 and nothing changes", async () => {
+  test("another teacher gets 404 and nothing changes", async () => {
     const s = await seedAttempt({ sittingStatus: "closed" });
     mockSession = { sub: OTHER_OWNER, role: "staff" };
-    expect((await handIn(s.attempt.id)).status).toBe(403);
+    // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
+    // from not-there.
+    expect((await handIn(s.attempt.id)).status).toBe(404);
     const db = getDb();
     const [row] = await db.select().from(attempts).where(eq(attempts.id, s.attempt.id));
     expect(row!.status).toBe("in_progress");

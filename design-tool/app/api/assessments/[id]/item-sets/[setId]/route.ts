@@ -4,18 +4,15 @@ import { getDb } from "@/db/client";
 import { assessments, item_sets } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraftStatus } from "@/lib/api/requireDraft";
-import { UpdateItemSetBody, checkSourceItem, loadOwnedItemSet } from "@/lib/api/itemSets";
+import {
+  UpdateItemSetBody,
+  checkSourceItem,
+  loadItemSetForSession,
+} from "@/lib/api/itemSets";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
   params: Promise<{ id: string; setId: string }>;
-}
-
-function bad(status: 404 | 403) {
-  return NextResponse.json(
-    { ok: false, error: status === 404 ? "not_found" : "forbidden" },
-    { status },
-  );
 }
 
 // E5 slice 1: stimulus text + layout. Locked after publish like a stem.
@@ -36,8 +33,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const owned = await loadOwnedItemSet(id, setId, auth.session.sub);
-  if (owned.status !== 200) return bad(owned.status);
+  const owned = await loadItemSetForSession(id, setId, auth.session, "own");
+  if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;
 
@@ -45,7 +42,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // E12 slice 1: a source question must be the owner's, an essay or
   // short-text question, and in another assessment.
   if (typeof body.source_item_id === "string") {
-    const check = await checkSourceItem(db, body.source_item_id, auth.session.sub, id);
+    const check = await checkSourceItem(db, body.source_item_id, auth.session, id);
     if (!check.ok) return NextResponse.json({ ok: false, error: check.error }, { status: check.status });
   }
   const updated = await db.transaction(async (tx) => {
@@ -80,8 +77,8 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(setId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadOwnedItemSet(id, setId, auth.session.sub);
-  if (owned.status !== 200) return bad(owned.status);
+  const owned = await loadItemSetForSession(id, setId, auth.session, "own");
+  if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;
 

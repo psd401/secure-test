@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students, student_accommodations } from "@/db/schema";
+import { student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { authorizeStudent } from "@/lib/api/access";
 
 interface RouteContext {
   params: Promise<{ accId: string }>;
@@ -24,10 +25,12 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const [joined] = await db
-    .select({ acc: student_accommodations, owner_sub: students.owner_sub })
+  // The row is addressed by its own id, so its student is loaded first and the
+  // access question asked about THAT student (access slice 1, D-3) — another
+  // teacher's row is a 404 now rather than the old 403.
+  const [acc] = await db
+    .select()
     .from(student_accommodations)
-    .innerJoin(students, eq(student_accommodations.student_id, students.id))
     .where(
       and(
         eq(student_accommodations.id, accId),
@@ -35,24 +38,23 @@ export async function POST(_req: Request, ctx: RouteContext) {
       ),
     )
     .limit(1);
-  if (!joined) {
+  if (!acc) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  if (joined.owner_sub !== auth.session.sub) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
+  const access = await authorizeStudent(db, auth.session, acc.student_id, "own");
+  if (!access.ok) return access.response;
   // Only meaningful on a preserved-with-diff row that still knows TIDE's code.
-  if (joined.acc.source !== "tide_then_edited" || !joined.acc.tide_code) {
+  if (acc.source !== "tide_then_edited" || !acc.tide_code) {
     return NextResponse.json(
-      { ok: false, error: "not_a_pending_diff", source: joined.acc.source },
+      { ok: false, error: "not_a_pending_diff", source: acc.source },
       { status: 409 },
     );
   }
 
   const [updated] = await db
     .update(student_accommodations)
-    .set({ kept_against_tide_code: joined.acc.tide_code })
-    .where(eq(student_accommodations.id, joined.acc.id))
+    .set({ kept_against_tide_code: acc.tide_code })
+    .where(eq(student_accommodations.id, acc.id))
     .returning();
   return NextResponse.json({ accommodation: updated });
 }
