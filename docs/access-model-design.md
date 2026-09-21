@@ -538,4 +538,11 @@ check and adds the test that keeps it that way.
 - **2026-09-21 — slice 5a PUSHED + DEPLOYED: LIVE at https://<origin> =
   origin/main `03fa3b6`, task def rev 43, rollout COMPLETED, health stamp
   = HEAD, no migration (Aurora stays at 0039).** Rows 239–244 NOT RUN.
+- **Rows 239–242 ✅ 2026-09-21** (Chrome on the origin, rev 43). Two
+  findings, proposals only: **A5-1** the Owner column reads "—" on the
+  admin's own older rows (`owner_email` is backfilled from sittings only;
+  fix = fall back to "you" for `via === "owner"`, or backfill from the
+  session at next PATCH); **A5-2** the all view's extra column pushes
+  Delete behind a horizontal scroll — the A-1 fix (`w-full max-w-0` on the
+  name cell) needs the same treatment with the Owner column present.
 
