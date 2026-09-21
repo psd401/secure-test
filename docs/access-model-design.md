@@ -545,4 +545,25 @@ check and adds the test that keeps it that way.
   session at next PATCH); **A5-2** the all view's extra column pushes
   Delete behind a horizontal scroll — the A-1 fix (`w-full max-w-0` on the
   name cell) needs the same treatment with the Owner column present.
+- **2026-09-21 — A5-1 + A5-2 fixed; isUniqueViolation cause-walk.**
+  `app/dashboard/page.tsx` gains an exported pure `ownerCell(access,
+  owner_email)`: "you" when `via === "owner"` (regardless of
+  `owner_email`), else `owner_email ?? "—"` — the admin's own row no
+  longer reads as ownerless. The Owner `TableCell` takes the same
+  `w-full max-w-0 truncate` treatment A-1 gave the name cell (auto table
+  layout otherwise ignores a cell's max-width), with the full address on
+  `title`. Tested in `test/all-teachers-ui.test.ts`. Separately,
+  `lib/api/testSessions.ts`'s `isUniqueViolation` read `err.code` off the
+  top-level error only, so a real sitting-code collision wrapped in
+  Drizzle's `DrizzleQueryError` (SQLSTATE on `.cause`) rethrew as a 500
+  instead of retrying with a new code — the same bug `lib/api/grants.ts`
+  had already fixed for its own copy. Extracted the cause-walking version
+  to `lib/db/isUniqueViolation.ts` and pointed both call sites plus
+  `app/api/attempts/route.ts`'s (same top-level-only bug, found by the
+  same grep) at it. New `test/isUniqueViolation.test.ts` (the helper) and
+  `test/create-session-with-code.test.ts` (a mocked `DrizzleQueryError`
+  collision proves the retry path is actually taken, plus the exhaustion
+  and non-collision cases). Design-tool **2106** tests (2093 before),
+  typecheck clean; no migration. Row 240's findings marked FIXED in
+  `docs/design-tool-manual-checks.md` — re-check on the next deploy.
 

@@ -41,6 +41,7 @@ import { normalizeEmail } from "@/lib/roster/queries";
 import { isAdmin } from "@/lib/auth/admin";
 import { roleForEmail } from "@/lib/auth/roles";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import {
   isAccessLevel,
   maxLevel,
@@ -300,23 +301,6 @@ export async function revokeGrant(
     )
     .returning();
   return row ?? null;
-}
-
-/**
- * Walks the `cause` chain rather than reading `err.code` off the top.
- *
- * Drizzle wraps a driver error in `DrizzleQueryError`, which carries no
- * SQLSTATE of its own — the postgres.js error with `code: "23505"` is the cause.
- * A top-level-only check reads as "not a unique violation" and rethrows, which
- * turns an expected 409 into a 500.
- */
-function isUniqueViolation(err: unknown): boolean {
-  for (let cur: unknown = err, depth = 0; cur && depth < 5; depth++) {
-    if (typeof cur !== "object") break;
-    if ((cur as { code?: unknown }).code === "23505") return true;
-    cur = (cur as { cause?: unknown }).cause;
-  }
-  return false;
 }
 
 // ── Request validation shared by the two grant surfaces ─────────────────────

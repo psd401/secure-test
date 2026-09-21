@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import { test_sessions } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -110,16 +111,6 @@ export async function createSessionWithCode(
     }
   }
   throw new CodeExhaustionError();
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  // postgres.js surfaces the SQLSTATE on the error object.
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "23505"
-  );
 }
 
 // --- request bodies ---

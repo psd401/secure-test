@@ -55,6 +55,23 @@ export function showAllTeachersToggle(session: Pick<SessionPayload, "email">): b
 }
 
 /**
+ * A5-1 (docs/design-tool-manual-checks.md row 240): the Owner column read
+ * "—" for a row the admin themselves owns, because `owner_email` is only
+ * populated by `visibleAssessmentScope.annotate` for a row that is NOT the
+ * caller's own (see RowAccess's doc comment) — so an admin's own row has a
+ * null `owner_email` and looked foreign. `via === "owner"` is the actual
+ * signal; "—" stays for a genuinely foreign row with no owner_email. Pure
+ * so it is testable without a DOM.
+ */
+export function ownerCell(
+  access: { via: string } | undefined,
+  owner_email: string | null,
+): string {
+  if (access?.via === "owner") return "you";
+  return owner_email ?? "—";
+}
+
+/**
  * "mine" is the default and the only mode a non-admin ever gets, even if
  * `?all=1` is in the URL by hand. Pure so it is testable without a DOM.
  */
@@ -312,10 +329,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         </div>
                       ) : null}
                     </TableCell>
-                    {/* Slice 5a: only in the "All teachers" view. */}
+                    {/* Slice 5a: only in the "All teachers" view. A5-2: the
+                        extra column pushed the table past the card, hiding
+                        Delete behind a horizontal scroll — same fix as A-1's
+                        name cell (max-w-0 + truncate; auto table layout
+                        otherwise ignores max-width on a cell), full address
+                        in the title since the cell can now clip it. */}
                     {showAll ? (
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {a.owner_email ?? "—"}
+                      <TableCell
+                        className="w-full max-w-0 truncate text-muted-foreground"
+                        title={rowAccess?.via === "owner" ? undefined : (a.owner_email ?? undefined)}
+                      >
+                        {ownerCell(rowAccess, a.owner_email)}
                       </TableCell>
                     ) : null}
                     <TableCell>

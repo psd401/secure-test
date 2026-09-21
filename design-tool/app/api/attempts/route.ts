@@ -9,6 +9,7 @@ import {
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
 import { loadJoinableSitting } from "@/lib/api/studentAttempt";
+import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { UUID_RE } from "@/lib/uuid";
 
 const StartBody = z.object({
@@ -144,13 +145,4 @@ async function rebindIfMoved(
     .where(and(eq(attempts.id, attempt.id), eq(attempts.status, "in_progress")))
     .returning();
   return rebound ?? attempt;
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "23505"
-  );
 }

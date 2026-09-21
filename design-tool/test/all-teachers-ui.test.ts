@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import {
   dashboardHref,
   homeListMode,
+  ownerCell,
   showAllTeachersToggle,
 } from "../app/dashboard/page";
 
@@ -36,6 +37,31 @@ describe("homeListMode", () => {
     expect(homeListMode({}, true)).toBe("mine");
     expect(homeListMode({ all: "0" }, true)).toBe("mine");
     expect(homeListMode({ all: "1" }, true)).toBe("all");
+  });
+});
+
+describe("ownerCell", () => {
+  // A5-1 (docs/design-tool-manual-checks.md row 240): the admin's own row
+  // has `via: "owner"` but a null `owner_email` (RowAccess only populates it
+  // for a row that isn't the caller's own) — that used to render "—" as if
+  // the row were foreign with no owner on record.
+  test("the caller's own row reads 'you', even with owner_email null", () => {
+    expect(ownerCell({ via: "owner" }, null)).toBe("you");
+    expect(ownerCell({ via: "owner" }, "someone@psd401.net")).toBe("you");
+  });
+
+  test("a foreign row shows its owner_email", () => {
+    expect(ownerCell({ via: "admin" }, "teacher@psd401.net")).toBe("teacher@psd401.net");
+    expect(ownerCell({ via: "grant" }, "teacher@psd401.net")).toBe("teacher@psd401.net");
+  });
+
+  test("a foreign row with no owner_email on record stays '—'", () => {
+    expect(ownerCell({ via: "admin" }, null)).toBe("—");
+  });
+
+  test("no access record at all stays '—' unless owner_email is set", () => {
+    expect(ownerCell(undefined, null)).toBe("—");
+    expect(ownerCell(undefined, "teacher@psd401.net")).toBe("teacher@psd401.net");
   });
 });
 
