@@ -334,10 +334,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         Delete behind a horizontal scroll — same fix as A-1's
                         name cell (max-w-0 + truncate; auto table layout
                         otherwise ignores max-width on a cell), full address
-                        in the title since the cell can now clip it. */}
+                        in the title since the cell can now clip it. A5-3
+                        (rev 44 re-check): two `w-full max-w-0` cells split
+                        the flexible width and the address clipped to four
+                        characters — the owner cell gets a fixed width and
+                        the name cell keeps the flex. */}
                     {showAll ? (
                       <TableCell
-                        className="w-full max-w-0 truncate text-muted-foreground"
+                        className="w-56 max-w-56 truncate text-muted-foreground"
                         title={rowAccess?.via === "owner" ? undefined : (a.owner_email ?? undefined)}
                       >
                         {ownerCell(rowAccess, a.owner_email)}
