@@ -66,13 +66,32 @@ export interface VisibleAssessmentScope {
   }) => RowAccess;
 }
 
+export interface VisibleAssessmentScopeOpts {
+  /**
+   * Slice 5a (docs/access-model-design.md, D-6 clarified 2026-09-21): an
+   * admin's OWN list — the home page, `GET /api/assessments`, the sittings
+   * list — defaults to the same owned ∪ granted scope as anyone else,
+   * exactly like a teacher who happens to be on `ADMIN_EMAILS` and owns
+   * nothing extra. `all: true` is the explicit widening: every non-owned
+   * row too, `via: "admin"`. Ignored for a non-admin — never a 403/404,
+   * the request just gets the normal scope. `authorizeAssessment` and every
+   * downstream per-row page are UNCHANGED by this: an admin still resolves
+   * to `own` there regardless of this flag, which is what lets "Results"
+   * open for a row the admin does not own even from the default ("My
+   * assessments") list.
+   */
+  all?: boolean;
+}
+
 export async function visibleAssessmentScope(
   db: Db,
   session: SessionPayload,
+  opts: VisibleAssessmentScopeOpts = {},
 ): Promise<VisibleAssessmentScope> {
-  // D-6: an admin sees everything. No predicate at all rather than a giant
-  // disjunction — and `via: "admin"` on every row that is not their own.
-  if (isAdmin(session)) {
+  // D-6 / slice 5a: an admin sees everything ONLY when asked (`all: true`).
+  // No predicate at all rather than a giant disjunction — and `via: "admin"`
+  // on every row that is not their own.
+  if (isAdmin(session) && opts.all) {
     return {
       condition: undefined,
       ownedOnly: false,
@@ -139,9 +158,9 @@ function annotateWithGrants(
 export async function visibleAssessments(
   db: Db,
   session: SessionPayload,
-  opts: { archived?: boolean; orderBy?: SQL[] } = {},
+  opts: { archived?: boolean; orderBy?: SQL[]; all?: boolean } = {},
 ): Promise<VisibleAssessment[]> {
-  const scope = await visibleAssessmentScope(db, session);
+  const scope = await visibleAssessmentScope(db, session, { all: opts.all });
   const archivedFilter = opts.archived
     ? isNotNull(assessments.archived_at)
     : isNull(assessments.archived_at);

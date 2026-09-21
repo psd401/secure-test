@@ -57,6 +57,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
   principal = null;
+  delete process.env.ADMIN_EMAILS;
   const db = getDb();
   await db.execute(sql`truncate table assessments restart identity cascade`);
   await db.execute(sql`truncate table students restart identity cascade`);
@@ -218,6 +219,43 @@ describe("GET /api/test-sessions", () => {
     const narrowed = await (await list(`?assessment_id=${mine.id}`)).json();
     expect(narrowed.test_sessions.length).toBe(1);
     expect(narrowed.test_sessions[0].assessment_id).toBe(mine.id);
+  });
+
+  // Slice 5a (docs/access-model-design.md): `?all=1` widens an admin's list
+  // the same way `GET /api/assessments` does.
+  test("admin: default list is own only; ?all=1 lists every teacher's sittings", async () => {
+    const ADMIN_EMAIL = "sysadmin@psd401.net";
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    const mine = await seedAssessment("sessions-admin");
+    const theirs = await seedAssessment(TEACHER);
+
+    principal = { sub: "sessions-admin", role: "staff", email: ADMIN_EMAIL };
+    await post({ assessment_id: mine.id });
+    principal = { sub: TEACHER, role: "staff" };
+    await post({ assessment_id: theirs.id });
+
+    principal = { sub: "sessions-admin", role: "staff", email: ADMIN_EMAIL };
+    const own = await (await list()).json();
+    expect(own.test_sessions.map((s: { assessment_id: string }) => s.assessment_id)).toEqual([
+      mine.id,
+    ]);
+
+    const all = await (await list("?all=1")).json();
+    expect(
+      new Set(all.test_sessions.map((s: { assessment_id: string }) => s.assessment_id)),
+    ).toEqual(new Set([mine.id, theirs.id]));
+  });
+
+  test("?all=1 is ignored for a non-admin", async () => {
+    const mine = await seedAssessment();
+    await seedAssessment(OTHER_TEACHER);
+    principal = { sub: TEACHER, role: "staff" };
+    await post({ assessment_id: mine.id });
+
+    const res = await (await list("?all=1")).json();
+    expect(res.test_sessions.map((s: { assessment_id: string }) => s.assessment_id)).toEqual([
+      mine.id,
+    ]);
   });
 });
 

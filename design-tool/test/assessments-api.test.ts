@@ -25,6 +25,7 @@ beforeAll(() => {
 });
 
 afterEach(async () => {
+  delete process.env.ADMIN_EMAILS;
   const db = getDb();
   await db.execute(sql`truncate table assessments restart identity cascade`);
 });
@@ -103,6 +104,9 @@ import { mock } from "bun:test";
 import * as sessionMod from "../lib/auth/session";
 
 let mockSub: string | null = null;
+// Slice 5a (docs/access-model-design.md): admin-only tests need an email on
+// the session (`isAdmin` checks it), which plain `asUser(sub)` never sets.
+let mockEmail: string | undefined;
 
 mock.module("next/headers", () => ({
   // Slice 58: requireSession now reads an Authorization bearer header as
@@ -122,12 +126,13 @@ mock.module("../lib/auth/session", () => ({
   ...sessionMod,
   readSessionFromCookies: async () =>
     mockSub
-      ? { sub: mockSub, role: "staff" }
+      ? { sub: mockSub, role: "staff", email: mockEmail }
       : null,
 }));
 
-function asUser(sub: string | null) {
+function asUser(sub: string | null, email?: string) {
   mockSub = sub;
+  mockEmail = email;
 }
 
 describe("POST /api/assessments", () => {
@@ -177,6 +182,41 @@ describe("GET /api/assessments (list)", () => {
     asUser(null);
     const res = await callList();
     expect(res.status).toBe(401);
+  });
+
+  // Slice 5a (docs/access-model-design.md, D-6 clarified 2026-09-21): the
+  // admin's default list is the normal owned ∪ granted set; `?all=1` widens
+  // it to every teacher's rows, admin-only.
+  test("admin: ?all=1 widens the list; default stays own-only", async () => {
+    process.env.ADMIN_EMAILS = "sysadmin@psd401.net";
+    asUser("teacher-1");
+    await callCreate({ name: "theirs" });
+    asUser("admin-1", "sysadmin@psd401.net");
+    await callCreate({ name: "admin's own" });
+
+    const own = await callList();
+    const ownBody = (await own.json()) as { assessments: { name: string }[] };
+    expect(ownBody.assessments.map((a) => a.name)).toEqual(["admin's own"]);
+
+    const all = await callList("?all=1");
+    const allBody = (await all.json()) as {
+      assessments: { name: string; access: { via: string; owner_email?: string | null } }[];
+    };
+    expect(allBody.assessments.map((a) => a.name).sort()).toEqual(["admin's own", "theirs"]);
+    const theirs = allBody.assessments.find((a) => a.name === "theirs")!;
+    expect(theirs.access.via).toBe("admin");
+  });
+
+  test("?all=1 is ignored for a non-admin", async () => {
+    asUser("teacher-1");
+    await callCreate({ name: "mine" });
+    asUser("teacher-2");
+    await callCreate({ name: "theirs" });
+
+    asUser("teacher-1");
+    const res = await callList("?all=1");
+    const body = (await res.json()) as { assessments: { name: string }[] };
+    expect(body.assessments.map((a) => a.name)).toEqual(["mine"]);
   });
 });
 

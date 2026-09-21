@@ -485,3 +485,53 @@ check and adds the test that keeps it that way.
   mid-build when James deferred it; the partial work is parked on branch
   `claude/access-slice-4-deferred`, its migration 0039 rolled back locally
   (0039 now belongs to pass back). Nothing of it is on `main`.
+
+- **2026-09-21 — slice 5a BUILT** (D-6 clarified the same day: the SYSTEM
+  admin's "All teachers" view is wanted now; impersonation + the BUILDING
+  admin stay deferred with slice 6). No migration. What changed:
+  - `lib/api/visibleAssessments.ts`: `visibleAssessmentScope` /
+    `visibleAssessments` gained an `{ all?: boolean }` option. An admin's
+    DEFAULT list is now the same owned ∪ granted scope as anyone else —
+    "My assessments," which is empty for a pure admin who owns and is
+    granted nothing — and `{ all: true }` is the explicit widening to
+    every non-archived (or, with `archived`, every archived) row,
+    `via: "admin"`. Ignored for a non-admin either way, never a 403/404.
+    This is a **behaviour change from slice 2**, which had the admin
+    branch return everything unconditionally; `authorizeAssessment` and
+    every per-row page are untouched — an admin still resolves to `own`
+    on any row regardless of this flag, which is what lets Results open
+    for a row the admin does not own even from the default list.
+  - `GET /api/assessments` and `GET /api/test-sessions` both gained the
+    same admin-only `?all=1`, one pattern for both (the home page, the
+    list route and the sittings route all go through
+    `visibleAssessmentScope`, so they cannot disagree).
+  - `app/dashboard/page.tsx`: an admin-only "All teachers" / "My
+    assessments" link beside "Show archived," composable with it
+    (`dashboardHref`, pure); `showAllTeachersToggle` (pure, `isAdmin`) and
+    `homeListMode` (pure) gate it. The all view's header reads "All
+    teachers' assessments (N)"; the table gains an Owner column
+    (`a.owner_email ?? "—"`); the Open-now strip names the owner on a
+    `via: "admin"` card the same way it already named a co-teacher's
+    owner on a `via: "grant"` card. **Found + fixed in the same slice**:
+    the row actions (Duplicate / Archive / Delete) were gated on
+    `accessFor.get(a.id)?.level === "own"`, which is true for an admin on
+    EVERY row it can see (D-6 resolves admin to `own` via `"admin"`) — so
+    an admin viewing the all list would have seen those buttons on rows
+    it does not own. Changed to `via === "owner"`, the same narrower gate
+    slice 3's `isOwnerAccess` already uses on the editor, with the same
+    rationale recorded there.
+  - `test/access-grants.test.ts`: the slice-2 test asserting
+    `visibleAssessments(db, ADMIN)` (no options) returns everything was
+    the behaviour being changed here — replaced with one test for the new
+    default (own-only) and one for `{ all: true }`, plus a non-admin
+    ignores-the-flag test. New admin `?all=1` tests in
+    `test/assessments-api.test.ts` and `test/test-sessions-api.test.ts`.
+    New `test/all-teachers-ui.test.ts` for the three pure page exports
+    (`showAllTeachersToggle`, `homeListMode`, `dashboardHref`), same
+    posture as `test/co-teach-ui.test.tsx` (no DOM harness here).
+    `test/reporting-views.test.tsx`'s `DashboardPage` tests are
+    unaffected (no `ADMIN_EMAILS` in their session). Design-tool **2093**
+    tests (2082 before), typecheck clean.
+  - Rows 239–244 in `docs/design-tool-manual-checks.md` ("System admin —
+    All teachers") are NOT RUN — needs an `ADMIN_EMAILS` address plus a
+    second, non-admin staff account.

@@ -60,9 +60,12 @@ export async function GET(req: Request) {
   // hidden by default; `?archived=1` shows ONLY them.
   const wantArchived =
     new URL(req.url).searchParams.get("archived") === "1";
+  // Slice 5a: `?all=1` widens an admin's list the same way
+  // `GET /api/assessments` does — ignored for a non-admin.
+  const wantAll = new URL(req.url).searchParams.get("all") === "1";
 
   const db = getDb();
-  const visible = await visibleAssessmentScope(db, auth.session);
+  const visible = await visibleAssessmentScope(db, auth.session, { all: wantAll });
   const scope = and(
     visible.condition,
     assessmentId ? eq(test_sessions.assessment_id, assessmentId) : undefined,

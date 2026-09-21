@@ -417,15 +417,36 @@ describe("assessments I can see = owned ∪ granted", () => {
     ).toEqual([archived.id]);
   });
 
-  test("an admin sees every assessment, own rows still marked owner", async () => {
+  // Slice 5a (docs/access-model-design.md, D-6 clarified 2026-09-21): the
+  // admin's default LIST is the same owned ∪ granted scope as anyone else —
+  // "My assessments" — and `{ all: true }` is the explicit widening to
+  // every teacher's rows. `authorizeAssessment`'s admin-always-`own`
+  // resolution (tested above) is unchanged; this is the list only.
+  test("by default an admin's list is just their own, like anyone else", async () => {
     process.env.ADMIN_EMAILS = ADMIN.email!;
     await makeAssessment();
     const adminOwn = await makeAssessment(ADMIN);
     const rows = await visibleAssessments(db, ADMIN);
+    expect(rows.map((r) => r.id)).toEqual([adminOwn.id]);
+    expect(rows[0]!.access).toEqual({ level: "own", via: "owner" });
+  });
+
+  test("with { all: true } an admin sees every assessment, own rows still marked owner", async () => {
+    process.env.ADMIN_EMAILS = ADMIN.email!;
+    await makeAssessment();
+    const adminOwn = await makeAssessment(ADMIN);
+    const rows = await visibleAssessments(db, ADMIN, { all: true });
     expect(rows).toHaveLength(2);
     const own = rows.find((r) => r.id === adminOwn.id)!;
     expect(own.access.via).toBe("owner");
     expect(rows.find((r) => r.id !== adminOwn.id)!.access.via).toBe("admin");
+  });
+
+  test("{ all: true } is ignored for a non-admin — the normal owned ∪ granted set", async () => {
+    const mine = await makeAssessment();
+    await makeAssessment(OUTSIDER);
+    const rows = await visibleAssessments(db, OWNER, { all: true });
+    expect(rows.map((r) => r.id)).toEqual([mine.id]);
   });
 });
 

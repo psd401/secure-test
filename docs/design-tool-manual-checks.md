@@ -820,3 +820,23 @@ route. All NOT RUN.
 | 236 | On the per-student page or a Monitor row for an IN-PROGRESS attempt | No **Pass back** button is shown | |
 | 237 | As a CO-TEACHER (edit-level grant) on the assessment, pass back a submitted attempt | Succeeds, same as the owner | (second staff account) |
 | 238 | As a RUN-level grantee (a substitute), try `POST /api/attempts/<id>/pass-back` by hand | 404 `not_found` — `edit` is required and `run` does not satisfy it | (second staff account) |
+
+## System admin — All teachers (2026-09-21)
+
+Access slice 5a (`docs/access-model-design.md`, D-6 clarified 2026-09-21): a
+system-admin (`ADMIN_EMAILS`) home-page toggle. By default the admin's list
+is the normal owned ∪ granted set ("My assessments" — empty for a pure admin
+who owns and is granted nothing); `?all=1` ("All teachers") widens it to
+every non-archived assessment with an Owner column, and to the Open-now
+strip. Every downstream page (Results, Monitor, preview) already resolves
+the admin to `own` regardless of this toggle (built in slice 2) — only the
+LIST is new here. All NOT RUN.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 239 | Sign in as a system admin (an `ADMIN_EMAILS` address) and open the Assessments home | The list shows only the admin's own assessments (likely none); a small "All teachers" link appears beside "Show archived" | NOT RUN |
+| 240 | Press **All teachers** | The URL gains `?all=1`; the header reads "All teachers' assessments (N)"; the table gains an **Owner** column showing each row's owner email; the link now reads "My assessments" | NOT RUN |
+| 241 | In the all view, press **Results** on a row the admin does not own (one of the pilot teachers' Published assessments) | The results matrix opens (no 404) | NOT RUN |
+| 242 | In the all view, inspect a row the admin does not own | No Duplicate / Archive / Delete buttons render on that row (owner-only, gated on `via === "owner"`, not just `level === "own"`) | NOT RUN |
+| 243 | With another teacher's sitting open, check the **Open now** strip in the all view | The sitting appears with that teacher's email shown and a working **Monitor** link | NOT RUN |
+| 244 | Sign in as a SECOND, non-admin staff account and open the home page | No "All teachers" link appears; navigating directly to `/dashboard?all=1` shows only that teacher's own assessments, unchanged | NOT RUN |

@@ -11,7 +11,8 @@ import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
 import { DuplicateAssessmentButton } from "./DuplicateAssessmentButton";
-import { readStaffSessionFromCookies } from "@/lib/auth/session";
+import { isAdmin } from "@/lib/auth/admin";
+import { readStaffSessionFromCookies, type SessionPayload } from "@/lib/auth/session";
 import { closesAt, formatDate } from "@/lib/ui/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,29 @@ export const metadata: Metadata = { title: "Assessments" };
  * neither sessions nor the monitor were reachable from here at all.
  */
 interface PageProps {
-  searchParams: Promise<{ archived?: string }>;
+  searchParams: Promise<{ archived?: string; all?: string }>;
+}
+
+/**
+ * Slice 5a (docs/access-model-design.md, D-6 clarified 2026-09-21): only an
+ * admin gets the "All teachers" toggle at all — a non-admin's `?all=1` is
+ * silently ignored by `visibleAssessmentScope` itself, but the LINK should
+ * never render for someone it does nothing for. Pure so it is testable
+ * without a DOM.
+ */
+export function showAllTeachersToggle(session: Pick<SessionPayload, "email">): boolean {
+  return isAdmin(session);
+}
+
+/**
+ * "mine" is the default and the only mode a non-admin ever gets, even if
+ * `?all=1` is in the URL by hand. Pure so it is testable without a DOM.
+ */
+export function homeListMode(
+  searchParams: { all?: string },
+  admin: boolean,
+): "mine" | "all" {
+  return admin && searchParams.all === "1" ? "all" : "mine";
 }
 
 export default async function DashboardPage({ searchParams }: PageProps) {
@@ -51,16 +74,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // D-4 (docs/archive-and-delete-design.md): a server component, so the
   // archived/live views are two page loads (`?archived=1`) rather than
   // client state — the same split as GET /api/assessments.
-  const { archived: archivedParam } = await searchParams;
+  const { archived: archivedParam, all: allParam } = await searchParams;
   const showArchived = archivedParam === "1";
+  const admin = showAllTeachersToggle(session);
+  const listMode = homeListMode({ all: allParam }, admin);
+  const showAll = listMode === "all";
 
   const db = getDb();
   const now = new Date();
   // Access slice 2 (docs/access-model-design.md): every query on this page is
   // scoped to "assessments I can see" = owned ∪ granted, through the one shared
   // fragment — so the list, the counts and the Open-now strip cannot disagree
-  // about what the caller may see.
-  const visible = await visibleAssessmentScope(db, session);
+  // about what the caller may see. Slice 5a: `showAll` widens that scope to
+  // every teacher's rows, admin-only (ignored otherwise by the scope itself).
+  const visible = await visibleAssessmentScope(db, session, { all: showAll });
   const [rows, archivedCount, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
@@ -131,7 +158,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   return (
     <main className="mx-auto max-w-4xl space-y-8 px-6 py-12">
       <PageHeader
-        title="Assessments"
+        title={showAll ? `All teachers' assessments (${rows.length})` : "Assessments"}
         actions={
           <>
             <Button asChild variant="outline">
@@ -169,6 +196,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       <div className="truncate text-xs text-muted-foreground">
                         Shared with you as co-teacher
                         {sessionAccess.owner_email ? ` · by ${sessionAccess.owner_email}` : ""}
+                      </div>
+                    ) : null}
+                    {/* Slice 5a: the "All teachers" view's Open-now strip
+                        names whose sitting this is — there is no other owner
+                        cue on a card, unlike the list rows' Owner column. */}
+                    {sessionAccess?.via === "admin" && sessionAccess.owner_email ? (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {sessionAccess.owner_email}
                       </div>
                     ) : null}
                   </div>
@@ -226,6 +261,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Assessment</TableHead>
+                {showAll ? <TableHead>Owner</TableHead> : null}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Questions</TableHead>
                 <TableHead>Updated</TableHead>
@@ -237,11 +273,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <TableBody>
               {rows.map((a) => {
                 const code = openCodeFor.get(a.id);
-                // Access slice 2: Duplicate / Archive / Delete all need `own`
-                // (the note's ladder), so a row reached through a grant does not
-                // offer a button whose route would 404. Slice 3 adds the
-                // "Shared with you as co-teacher" label from the same fact.
-                const ownsRow = accessFor.get(a.id)?.level === "own";
+                // Access slice 2/5a: Duplicate / Archive / Delete all need
+                // `own` (the note's ladder), but the gate here is the
+                // NARROWER `via`, not `level` — an admin also resolves to
+                // `own` (via "admin") on rows it does not own, and D-6 keeps
+                // admin writes to the admin surface (same rule the editor's
+                // `isOwnerAccess` applies). A row reached through a co-teach
+                // grant does not offer a button whose route would 404 either.
+                const ownsRow = accessFor.get(a.id)?.via === "owner";
                 const rowAccess = accessFor.get(a.id);
                 return (
                   <TableRow key={a.id}>
@@ -273,6 +312,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         </div>
                       ) : null}
                     </TableCell>
+                    {/* Slice 5a: only in the "All teachers" view. */}
+                    {showAll ? (
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {a.owner_email ?? "—"}
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <AssessmentStatusBadge status={a.status} />
@@ -343,20 +388,54 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       )}
 
       {/* D-4: the two lists partition the teacher's assessments; the count
-          hides the link once there is nothing archived to switch to. */}
-      {showArchived ? (
-        <p className="text-sm">
-          <Link href="/dashboard" className="text-muted-foreground hover:underline">
-            Hide archived
-          </Link>
-        </p>
-      ) : archivedCount > 0 ? (
-        <p className="text-sm">
-          <Link href="/dashboard?archived=1" className="text-muted-foreground hover:underline">
-            Show archived ({archivedCount})
-          </Link>
-        </p>
-      ) : null}
+          hides the link once there is nothing archived to switch to. Slice
+          5a: the admin-only "All teachers" toggle sits beside it and is
+          composable with `?archived=1` — flipping one param keeps the
+          other. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {showArchived ? (
+          <p className="text-sm">
+            <Link
+              href={dashboardHref({ archived: false, all: showAll })}
+              className="text-muted-foreground hover:underline"
+            >
+              Hide archived
+            </Link>
+          </p>
+        ) : archivedCount > 0 ? (
+          <p className="text-sm">
+            <Link
+              href={dashboardHref({ archived: true, all: showAll })}
+              className="text-muted-foreground hover:underline"
+            >
+              Show archived ({archivedCount})
+            </Link>
+          </p>
+        ) : null}
+        {admin ? (
+          <p className="text-sm">
+            <Link
+              href={dashboardHref({ archived: showArchived, all: !showAll })}
+              className="text-muted-foreground hover:underline"
+            >
+              {showAll ? "My assessments" : "All teachers"}
+            </Link>
+          </p>
+        ) : null}
+      </div>
     </main>
   );
+}
+
+/**
+ * `/dashboard` with `?archived=1` / `?all=1` set from booleans, composable —
+ * flipping one param (the archived toggle, the slice 5a admin toggle) never
+ * drops the other. Pure so it is testable without a DOM.
+ */
+export function dashboardHref(params: { archived: boolean; all: boolean }): string {
+  const qs = new URLSearchParams();
+  if (params.archived) qs.set("archived", "1");
+  if (params.all) qs.set("all", "1");
+  const s = qs.toString();
+  return s ? `/dashboard?${s}` : "/dashboard";
 }

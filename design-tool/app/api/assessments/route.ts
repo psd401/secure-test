@@ -16,10 +16,16 @@ export async function GET(req?: Request) {
   // what the caller can see rather than overlapping.
   const wantArchived =
     req !== undefined && new URL(req.url).searchParams.get("archived") === "1";
+  // Slice 5a: `?all=1` widens an admin's list to every teacher's rows.
+  // Ignored for a non-admin (`visibleAssessments` itself gates it on
+  // `isAdmin`), so a non-admin's `?all=1` is silently the normal list.
+  const wantAll =
+    req !== undefined && new URL(req.url).searchParams.get("all") === "1";
   // Access slice 2: owned ∪ granted, not `owner_sub` alone. Each row carries
   // `access` so a client can label a row it does not own.
   const rows = await visibleAssessments(db, auth.session, {
     archived: wantArchived,
+    all: wantAll,
     orderBy: [desc(assessments.updated_at)],
   });
   return NextResponse.json({ assessments: rows });
