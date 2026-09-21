@@ -566,4 +566,9 @@ check and adds the test that keeps it that way.
   and non-collision cases). Design-tool **2106** tests (2093 before),
   typecheck clean; no migration. Row 240's findings marked FIXED in
   `docs/design-tool-manual-checks.md` — re-check on the next deploy.
+- **2026-09-21 — A5-1 / A5-2 / A5-3 + the isUniqueViolation cause-walk
+  DEPLOYED: LIVE = origin/main `d4e59bc`, task def rev 46 (44 and 45 were
+  the two intermediate fixes the same hour), health stamp = HEAD, no
+  migration.** Row 240 re-checked ✅ on rev 46. The all view is the 6xl
+  container; the normal list stays 4xl.
 
