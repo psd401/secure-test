@@ -535,3 +535,7 @@ check and adds the test that keeps it that way.
   - Rows 239–244 in `docs/design-tool-manual-checks.md` ("System admin —
     All teachers") are NOT RUN — needs an `ADMIN_EMAILS` address plus a
     second, non-admin staff account.
+- **2026-09-21 — slice 5a PUSHED + DEPLOYED: LIVE at https://<origin> =
+  origin/main `03fa3b6`, task def rev 43, rollout COMPLETED, health stamp
+  = HEAD, no migration (Aurora stays at 0039).** Rows 239–244 NOT RUN.
+
