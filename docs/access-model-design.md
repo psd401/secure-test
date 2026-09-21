@@ -224,6 +224,7 @@ authorizeAttempt(db, session, attemptId, need)     // through its assessment
 | 3 | Co-teach: the Share dialog's second mode, the "Shared with you as co-teacher" row label, sittings visible to both; rows | S — Sonnet 5 / medium |
 | 4 | Substitute: Coverage card (teacher) + admin grant, the sub's home, read-only editor / results refusal, `created_by_sub` on sittings; rows | **DEFERRED 2026-09-18 with slices 5 + 6** — revisit substitute, admin and principal accounts together |
 | 5 | Admin: `/admin` page (open sittings, grants, impersonate / stop, banner), `impersonation_sessions` (its migration lands here, with the code that uses it); rows | **DEFERRED 2026-09-18 with slice 6** — revisit admin + principal accounts together |
+| 5a | **System-admin "All teachers" view** (2026-09-21): home `?all=1` toggle for `isAdmin` — every non-archived assessment with owner email, status, attempt count, Results / Monitor links; the sittings strip likewise; owner-only actions hidden on rows the admin does not own (D-6); non-admins see no toggle and `?all=1` changes nothing; rows | S — Sonnet 5 / medium |
 | 6 | Principal: `school` scope resolution, read-only Monitor + results; rows | **DEFERRED to a later release (D-7)** |
 
 Slice 1 alone is worth shipping: it removes 36 copies of the ownership
@@ -265,6 +266,13 @@ check and adds the test that keeps it that way.
 - **D-8** Impersonation = a second session JWT carrying `actor_*`, a
   persistent banner, `impersonation_sessions` audit; the target's sub is
   what the feature tables record. — **DECIDED as recommended (James, 2026-09-17)**;
+  **Clarified 2026-09-21 (James): two different "admins".** The SYSTEM
+  admin (the maintainer, `ADMIN_EMAILS`) is wanted NOW — the first need is
+  reading the pilot's results across teachers; the BUILDING admin
+  (principal, D-7) is the one deferred. Slice 5a below = an "All teachers"
+  view on the home for `isAdmin` sessions (read-only listing; every
+  downstream page already resolves the admin to `own`). Impersonation and
+  the grants console (5b) stay deferred with slice 6.
   **slice 5 DEFERRED 2026-09-18 (James)** with slices 4 and 6: admin and principal
   accounts are wanted but too early to commit to a design direction;
   revisit together. `ADMIN_EMAILS` + admin resolution from slice 2 stay
