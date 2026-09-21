@@ -172,8 +172,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     if (!openCodeFor.has(s.assessment_id)) openCodeFor.set(s.assessment_id, s.code);
   }
 
+  // A5-3: the all view carries an Owner column the 4xl card cannot fit
+  // beside the actions, so it gets the wider container.
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-6 py-12">
+    <main className={`mx-auto ${showAll ? "max-w-6xl" : "max-w-4xl"} space-y-8 px-6 py-12`}>
       <PageHeader
         title={showAll ? `All teachers' assessments (${rows.length})` : "Assessments"}
         actions={
