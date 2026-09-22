@@ -223,7 +223,8 @@ authorizeAttempt(db, session, attemptId, need)     // through its assessment
 | 2 | Migration: `access_grants`, `test_sessions.created_by_sub` (+ `assessments.owner_email` — see §Progress deviation 1; `impersonation_sessions` moved to slice 5); `ADMIN_EMAILS` + `isAdmin`; grant resolution inside the helper; per-route levels; list-query widening; the grants API | M — Opus 5 / medium |
 | 3 | Co-teach: the Share dialog's second mode, the "Shared with you as co-teacher" row label, sittings visible to both; rows | S — Sonnet 5 / medium |
 | 4 | Substitute: Coverage card (teacher) + admin grant, the sub's home, read-only editor / results refusal, `created_by_sub` on sittings; rows | **DEFERRED 2026-09-18 with slices 5 + 6** — revisit substitute, admin and principal accounts together |
-| 5 | Admin: `/admin` page (open sittings, grants, impersonate / stop, banner), `impersonation_sessions` (its migration lands here, with the code that uses it); rows | **DEFERRED 2026-09-18 with slice 6** — revisit admin + principal accounts together |
+| 5 | Admin: impersonation (`POST /api/admin/impersonate` + `/stop`, the act-as banner, `impersonation_sessions` = **migration 0040**), the `/admin` page (open sittings district-wide, Act as, Monitor), the admin-only Admin nav link, Act as on the all view's foreign rows; rows 246–252 | **BUILT 2026-09-21** (M — Opus 5). The grants console moved out to 5b |
+| 5b | Admin: the grants console (create / revoke at `teacher` and `school` scope over `/api/grants`, which exists and has no UI), the error / feedback tables | **DEFERRED with slice 6** — no grantee exists until substitutes (4) or principals (6) do |
 | 5a | **System-admin "All teachers" view** (2026-09-21): home `?all=1` toggle for `isAdmin` — every non-archived assessment with owner email, status, attempt count, Results / Monitor links; the sittings strip likewise; owner-only actions hidden on rows the admin does not own (D-6); non-admins see no toggle and `?all=1` changes nothing; rows | S — Sonnet 5 / medium |
 | 6 | Principal: `school` scope resolution, read-only Monitor + results; rows | **DEFERRED to a later release (D-7)** |
 
@@ -598,3 +599,90 @@ check and adds the test that keeps it that way.
   dropped their owner args. Design-tool **2108** tests, typecheck clean,
   no migration. Row 245 unrun. Slice 5 (impersonation, D-8) is next,
   James 2026-09-21 ("both").
+
+- **2026-09-21 — slice 5 BUILT: impersonation (D-8).** Migration **0040**
+  (`0040_impersonation_sessions.sql`, applied to dev + test) and no other
+  schema change. What landed, file by file:
+  - **`db/schema.ts`** — `impersonation_sessions` (actor sub + email, target
+    sub + email, `started_at`, `stopped_at`, `request_id`). It is the ONLY
+    place an act-as is distinguishable from the teacher themselves, because
+    D-8 deliberately leaves every feature table recording the TARGET's sub;
+    `request_id` is the START's, not the stop's, so the row lines up with the
+    log line that opened it. Best-effort by construction: an 8 h cookie can
+    outlive a browser, so an open row is an audit record, not a session store.
+  - **`lib/auth/session.ts`** — `actor_sub` / `actor_email` on
+    `SessionPayload`, documented as present together or not at all.
+  - **`lib/auth/admin.ts`** — new `isImpersonating(session)`, and **`isAdmin`
+    now returns false whenever `actor_sub` is set**. This is the load-bearing
+    line of the slice: it makes act-as a strict NARROWING, so one predicate
+    already owned by twenty call sites closes the admin surface, the
+    all-teachers toggle, `own`-on-every-row resolution and chained
+    impersonation at once, with no second gate to forget. The impersonate
+    route's own refusal of an already-impersonated session is this predicate
+    and nothing else.
+  - **`lib/api/impersonation.ts`** — the decisions. `checkImpersonationTarget`
+    (staff by `roleForEmail`, never yourself), `resolveTargetSub`, and the two
+    audit writes. **Target resolution is the slice's one real design problem**
+    (decision 2.1): a session JWT needs a Google `sub` and the app stores no
+    staff directory — D-1 made admin a config list precisely to avoid a staff
+    table — so the only places an address and a sub appear together are the
+    rows a teacher owns. The target's sub is therefore `assessments.owner_sub`
+    of their newest `owner_email` match, falling back to their newest sitting
+    (the migration-0038 backfill gap). A teacher with neither cannot be acted
+    as, and the refusal says so out loud — `404 no_account_rows`, which the
+    button turns into "This teacher has no assessments or sittings yet, so
+    there is nothing to act on" rather than a blank dashboard.
+  - **`POST /api/admin/impersonate`** — admin-only with the grants route's
+    **404, not 403** (D-3). Mints a session whose `sub` / `email` / `role` are
+    the target's and whose `actor_*` are the admin's, same 8 h TTL (a shorter
+    one would expire mid-task into a login screen rather than back into the
+    admin's own account), writes the audit row, logs `impersonation_start`.
+    Every refusal but a malformed body is a 404: `not_staff`, `self`,
+    `no_account_rows` are all statements about a principal the caller named.
+  - **`POST /api/admin/impersonate/stop`** — gated on the session's own
+    `actor_*`, NOT on `isAdmin` (by then the principal is the teacher and
+    `isAdmin` is false for them by design); 404 with no actor. Closes the
+    newest open row for the pair, mints the admin's own session back from the
+    actor claims — the signed cookie is the only record of who the admin is,
+    and re-issuing from it is exactly as trustworthy as the cookie — and
+    **303-redirects** to `/dashboard`. It answers a plain form POST rather
+    than JSON because Stop is the way out of a session that is not yours and
+    must work on a page whose JavaScript has failed.
+  - **`components/app/AppHeader.tsx`** — the persistent "Acting as \<target\> ·
+    signed in as \<admin\>" strip above the band with a Stop form, and an
+    admin-only **Admin** nav noun. `NAV[0].isActive` had to stop meaning
+    "anything that is not Students" now that a second top-level route exists.
+  - **`components/app/AppChrome.tsx`** (new) — the header resolved from the
+    session, shared by `app/dashboard/layout.tsx` and the new
+    `app/admin/layout.tsx`. A second copy in the admin layout is exactly where
+    the banner would go missing.
+  - **`app/dashboard/ActAsButton.tsx`** + `app/dashboard/page.tsx` — Act as
+    beside Results on all-view rows the admin does NOT own (`via === "admin"`
+    and an `owner_email`), reload-the-page posture like
+    `DuplicateAssessmentButton` (and honest: the response changes who every
+    later request is). `showAllTeachersToggle`'s parameter widened to carry
+    `actor_sub` so the type says what `isAdmin` now reads.
+  - **`app/admin/page.tsx`** (new) — admin-only else `notFound()`; open
+    sittings district-wide (code, assessment, teacher, section, started) with
+    Monitor and Act as per row, and no Act as on the admin's own sitting since
+    the route refuses `self`. Deliberately NOT the grants console (5b).
+  - **`proxy.ts`** — `/admin` joins `/dashboard` in `PROTECTED_PREFIXES`, so a
+    signed-out visitor gets the login redirect instead of the page's 404.
+  - **`lib/observability/serverError.ts`** — the one request-scoped place the
+    server logs a `sub` now also logs `actor_sub` when the session carries
+    one. The `resolveSub` test seam is kept (it returns no actor); the default
+    resolver reads both from the verified JWT. The `server_error_events` ROW
+    is unchanged — the table has no actor column, and D-8's rule is that the
+    feature tables record the target.
+  Tests: `test/impersonation-api.test.ts` (both routes end to end against the
+  test DB — the cookie payload, the audit row, the sitting fallback, every
+  404, the newest-open-row rule, and an act-as session resolving `owner` on
+  the target's assessment but 404 on a third teacher's), `test/admin.test.ts`
+  (the two predicates, including the pathological "admin's own address with an
+  actor_sub"), two new cases in `test/server-error-record.test.ts`, and the
+  two routes classified in `test/access-enforcement.test.ts`. Design-tool
+  **2131** tests (2108 before), typecheck clean. Rows 246–252 in
+  `docs/design-tool-manual-checks.md` ("System admin — impersonation") are
+  NOT RUN — they need an `ADMIN_EMAILS` address and, for row 252, a second
+  staff account. **Deferred, unchanged: the grants console (now slice 5b),
+  substitutes (4) and principals (6).**

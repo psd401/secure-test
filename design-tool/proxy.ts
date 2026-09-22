@@ -4,7 +4,11 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { isStaff } from "@/lib/auth/roles";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/observability/requestId";
 
-const PROTECTED_PREFIXES = ["/dashboard"];
+// Access slice 5: `/admin` joins the dashboard at the edge so a signed-out
+// visitor gets the login redirect rather than the page's own 404. The page
+// still refuses a non-admin itself — this prefix only decides who has a
+// session at all, which is the same job it does for /dashboard.
+const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

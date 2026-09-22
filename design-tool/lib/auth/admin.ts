@@ -49,13 +49,39 @@ export function adminEmails(): readonly string[] {
 }
 
 /**
+ * Is this session ACTING AS somebody else? (Access slice 5, D-8.)
+ *
+ * `actor_sub` is written only by `POST /api/admin/impersonate`, into a session
+ * whose `sub` / `email` / `role` are the target teacher's. It is the one
+ * signal that the principal on this request is not who the rest of the payload
+ * says, so it is read in exactly two places: `isAdmin` below, and the header
+ * banner.
+ */
+export function isImpersonating(
+  session: { actor_sub?: string } | null | undefined,
+): boolean {
+  return typeof session?.actor_sub === "string" && session.actor_sub.length > 0;
+}
+
+/**
  * Is this session's verified address on the admin list?
  *
  * Compares the SESSION's email, which was written at login from Google's
  * verified `email` claim — not a header, not a body field. A session with no
  * email (a `--token` dev session minted before slice 77) is never an admin.
+ *
+ * **An impersonated session is never an admin** (slice 5, D-8). Its `email` is
+ * the TARGET's, so the list comparison would already fail for any target who
+ * is not themselves an admin — but the check is explicit rather than
+ * incidental, because it is what makes act-as a strict narrowing: an admin
+ * acting as a teacher sees exactly what that teacher sees, cannot reach
+ * `/admin` or the grants API, and cannot chain a second impersonation (the
+ * impersonate route's own gate is this predicate). Stop first, then act.
  */
-export function isAdmin(session: { email?: string } | null | undefined): boolean {
+export function isAdmin(
+  session: { email?: string; actor_sub?: string } | null | undefined,
+): boolean {
+  if (isImpersonating(session)) return false;
   const email = (session?.email ?? "").trim().toLowerCase();
   if (!email) return false;
   return adminEmails().includes(email);

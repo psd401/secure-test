@@ -123,18 +123,32 @@ function stackOf(error: unknown): string | null {
     : null;
 }
 
-/** Reads `sub` from the cookie or bearer session, or null. Never throws. */
-async function defaultResolveSub(req: ServerErrorRequest): Promise<string | null> {
+/**
+ * Reads the principal from the cookie or bearer session. Never throws.
+ *
+ * Two fields, not one: on an act-as session (access slice 5, D-8) `sub` is the
+ * TARGET teacher — which is what every feature table records and therefore
+ * what a log line must agree with — and `actor_sub` is the admin who is really
+ * at the keyboard. This is the one request-scoped place the server logs a
+ * `sub`, so it is the one place the distinction has to be drawn.
+ */
+async function defaultResolvePrincipal(
+  req: ServerErrorRequest,
+): Promise<{ sub: string | null; actor_sub: string | null }> {
   try {
     const bearer = headerValue(req.headers, "authorization");
     const bearerMatch = bearer ? /^Bearer\s+(.+)$/i.exec(bearer.trim()) : null;
     const token = bearerMatch?.[1]?.trim() ?? cookieToken(req.headers);
-    if (!token) return null;
+    if (!token) return { sub: null, actor_sub: null };
     const session = await verifySessionJWT(token);
-    return typeof session.sub === "string" ? session.sub : null;
+    return {
+      sub: typeof session.sub === "string" ? session.sub : null,
+      actor_sub:
+        typeof session.actor_sub === "string" ? session.actor_sub : null,
+    };
   } catch {
     // An expired or malformed session is not worth failing the error path for.
-    return null;
+    return { sub: null, actor_sub: null };
   }
 }
 
@@ -171,7 +185,12 @@ export async function recordServerError(
   context: ServerErrorContext = {},
   deps: RecordServerErrorDeps = {},
 ): Promise<void> {
-  const resolveSub = deps.resolveSub ?? defaultResolveSub;
+  const resolvePrincipal = deps.resolveSub
+    ? async (req: ServerErrorRequest) => ({
+        sub: await deps.resolveSub!(req),
+        actor_sub: null,
+      })
+    : defaultResolvePrincipal;
   const writeRow = deps.writeRow ?? defaultWriteRow;
 
   const route = routeOf(request.path || context.routePath || "/");
@@ -184,7 +203,10 @@ export async function recordServerError(
   const stack = stackOf(error);
   const stackHash = hashStack(stack);
   const requestId = requestIdFrom(request.headers);
-  const sub = await resolveSub(request).catch(() => null);
+  const { sub, actor_sub } = await resolvePrincipal(request).catch(() => ({
+    sub: null,
+    actor_sub: null,
+  }));
 
   if (isClientAbort(error)) {
     log.warn("request_aborted", {
@@ -193,6 +215,7 @@ export async function recordServerError(
       message,
       request_id: requestId ?? undefined,
       sub: sub ?? undefined,
+      actor_sub: actor_sub ?? undefined,
       route_path: context.routePath,
     });
     return;
@@ -207,6 +230,7 @@ export async function recordServerError(
     stack_hash: stackHash ?? undefined,
     request_id: requestId ?? undefined,
     sub: sub ?? undefined,
+    actor_sub: actor_sub ?? undefined,
     route_path: context.routePath,
     route_type: context.routeType,
   });

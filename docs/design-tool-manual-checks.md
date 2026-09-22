@@ -841,3 +841,24 @@ LIST is new here. All NOT RUN.
 | 243 | With another teacher's sitting open, check the **Open now** strip in the all view | The sitting appears with that teacher's email shown and a working **Monitor** link | NOT RUN |
 | 244 | Sign in as a SECOND, non-admin staff account and open the home page | No "All teachers" link appears; navigating directly to `/dashboard?all=1` shows only that teacher's own assessments, unchanged | NOT RUN |
 | 245 | In the all view, open **Results** on a pilot teacher's assessment with handed-in work; then the per-student page, the scoring queue, Print report and Print student work | Every row shows the student's name, number and section (no "(unknown)"); the section `<select>` lists that teacher's sections and filters; the queue names students; the packet's section chooser lists sections (A5-4, `docs/access-model-design.md` §Progress 2026-09-21) | NOT RUN |
+
+## System admin — impersonation (2026-09-21)
+
+Access slice 5 (`docs/access-model-design.md`, D-8): act-as. An admin starts
+one from the all view's **Act as** button or from `/admin`; the session
+becomes the target teacher's (with the admin recorded as the actor), a
+persistent banner says so on every page, and **Stop** restores the admin.
+An impersonated session is NOT an admin — no Admin link, no All-teachers
+toggle, no second act-as — which is the property most of these rows check.
+Needs an `ADMIN_EMAILS` address plus a second staff account (the pilot
+teachers' rows work for the read-only half). All NOT RUN.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 246 | As a system admin, open `/dashboard?all=1` and press **Act as** on a pilot teacher's row | The page reloads on the teacher's own home: their assessments, not the admin's; no error | NOT RUN |
+| 247 | Navigate around while acting (home, an assessment editor, Results, Students) | A banner sits above the header on EVERY page: "Acting as \<teacher email\> · signed in as \<admin email\>" with a **Stop** button | NOT RUN |
+| 248 | While acting, look at the header nav and the bottom of the home list | No **Admin** link in the nav and no "All teachers" link beside "Show archived" — the act-as session is not an admin | NOT RUN |
+| 249 | While acting, browse to `/dashboard?all=1` and to `/admin` by hand | `?all=1` shows only the teacher's own assessments (the flag is ignored for a non-admin); `/admin` is a 404 page | NOT RUN |
+| 250 | Press **Stop** in the banner | Lands back on `/dashboard` as the admin: the banner is gone, the identity in the header is the admin's address, the Admin link and the All-teachers toggle are back | NOT RUN |
+| 251 | As the admin, open **Admin** in the nav while at least one sitting is open district-wide | The page lists every open sitting — session code, assessment, teacher email, section, started — each with a working **Monitor** link and an **Act as** button (none on the admin's own sitting) | NOT RUN |
+| 252 | Sign in as a SECOND, non-admin staff account and browse to `/admin` | A 404 page, not a "Forbidden" one (D-3: a status code never says the admin surface exists); the nav shows no Admin link | NOT RUN |

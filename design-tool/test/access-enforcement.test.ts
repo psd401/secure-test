@@ -126,6 +126,19 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("grants"),
     "admin surface: scope-addressed, gated by isAdmin with a 404 refusal",
   ],
+  // Access slice 5 (D-8): act-as. Addresses a PRINCIPAL (a staff email), not
+  // an owned row — there is nothing for authorize* to decide — and carries the
+  // same isAdmin-with-a-404 gate as the grants surface. Stop is gated on the
+  // session's own actor_* instead, because by then the principal IS the target
+  // teacher and isAdmin is deliberately false for them.
+  [
+    join("admin", "impersonate"),
+    "admin surface: principal-addressed, gated by isAdmin with a 404 refusal",
+  ],
+  [
+    join("admin", "impersonate", "stop"),
+    "gated on the session's own actor_* with a 404 refusal; addresses no row",
+  ],
 ]);
 
 /**

@@ -178,3 +178,53 @@ describe("hashStack", () => {
     expect(hashStack(null)).toBeNull();
   });
 });
+
+// Access slice 5 (docs/access-model-design.md, D-8): the request log line is
+// the ONE place the server records who a request was, and on an act-as
+// session that is two people — `sub` is the target teacher (what every
+// feature table records) and `actor_sub` is the admin at the keyboard. This
+// uses the REAL cookie resolver rather than the injected seam, because the
+// thing being checked is that the claim survives the verify.
+describe("the principal on an act-as session", () => {
+  test("logs the target as sub and the admin as actor_sub", async () => {
+    const previous = process.env.DESIGN_TOOL_SESSION_SECRET;
+    process.env.DESIGN_TOOL_SESSION_SECRET = "test-session-secret-do-not-use";
+    try {
+      const { mintSessionJWT, SESSION_COOKIE_NAME } = await import(
+        "../lib/auth/session"
+      );
+      const token = await mintSessionJWT({
+        sub: "target-teacher-sub",
+        role: "staff",
+        email: "lead@psd401.net",
+        actor_sub: "admin-sub",
+        actor_email: "sysadmin@psd401.net",
+      });
+      await recordServerError(
+        new Error("boom"),
+        request({ headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` } }),
+        {},
+        { writeRow },
+      );
+      expect(lines[0]).toMatchObject({
+        sub: "target-teacher-sub",
+        actor_sub: "admin-sub",
+      });
+      // The row keeps only `sub`: the table has no actor column, and D-8's
+      // rule is that the feature tables record the target.
+      expect(rows[0]!.sub).toBe("target-teacher-sub");
+    } finally {
+      if (previous === undefined) delete process.env.DESIGN_TOOL_SESSION_SECRET;
+      else process.env.DESIGN_TOOL_SESSION_SECRET = previous;
+    }
+  });
+
+  test("an ordinary session logs no actor_sub at all", async () => {
+    await recordServerError(new Error("boom"), request(), {}, {
+      writeRow,
+      resolveSub: async () => "google-sub-1",
+    });
+    expect(lines[0]).toMatchObject({ sub: "google-sub-1" });
+    expect("actor_sub" in lines[0]!).toBe(false);
+  });
+});

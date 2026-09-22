@@ -11,6 +11,7 @@ import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
 import { DeleteDraftButton } from "./DeleteDraftButton";
 import { DuplicateAssessmentButton } from "./DuplicateAssessmentButton";
+import { ActAsButton } from "./ActAsButton";
 import { isAdmin } from "@/lib/auth/admin";
 import { readStaffSessionFromCookies, type SessionPayload } from "@/lib/auth/session";
 import { closesAt, formatDate } from "@/lib/ui/format";
@@ -50,7 +51,9 @@ interface PageProps {
  * never render for someone it does nothing for. Pure so it is testable
  * without a DOM.
  */
-export function showAllTeachersToggle(session: Pick<SessionPayload, "email">): boolean {
+export function showAllTeachersToggle(
+  session: Pick<SessionPayload, "email" | "actor_sub">,
+): boolean {
   return isAdmin(session);
 }
 
@@ -392,6 +395,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             Published and archived rows alike — the copy is a
                             fresh Draft, so nothing the publish lock or the
                             archived view protects is touched. */}
+                        {/* Slice 5 (D-8): act-as, only in the all view and
+                            only on a row the admin does NOT own — the entry
+                            point to the one write path D-6 allows an admin
+                            outside the admin surface. `via === "admin"` is
+                            exactly "this row resolved because I am an admin",
+                            and `owner_email` is the address to act as; a row
+                            with none cannot be resolved to a sub anyway. */}
+                        {rowAccess?.via === "admin" && a.owner_email ? (
+                          <ActAsButton email={a.owner_email} />
+                        ) : null}
                         {ownsRow ? (
                           <>
                             <DuplicateAssessmentButton id={a.id} />

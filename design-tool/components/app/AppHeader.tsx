@@ -19,7 +19,11 @@ const NAV = [
   {
     label: "Assessments",
     href: "/dashboard",
-    isActive: (pathname: string) => !pathname.startsWith("/dashboard/accommodations"),
+    // Slice 5 added a second top-level route (/admin), so "everything that is
+    // not Students" is no longer the same thing as "the assessments area".
+    isActive: (pathname: string) =>
+      pathname.startsWith("/dashboard") &&
+      !pathname.startsWith("/dashboard/accommodations"),
   },
   {
     // Route unchanged (slice 8 owns the rename inside); the nav noun is the
@@ -30,11 +34,54 @@ const NAV = [
   },
 ] as const;
 
-export function AppHeader({ identity }: { identity: string }) {
+/**
+ * Access slice 5 (docs/access-model-design.md, D-8): the act-as banner and the
+ * admin-only nav noun.
+ *
+ * `actorEmail` is set only while the session carries `actor_*` — the admin who
+ * is really at the keyboard. The strip is deliberately unmissable and on EVERY
+ * dashboard page rather than only the home: the whole hazard of act-as is
+ * forgetting you are in it and reading a colleague's screen as your own.
+ *
+ * `admin` is `isAdmin(session)`, which is FALSE while impersonating, so the
+ * Admin link disappears for the duration — the two never show together.
+ */
+export function AppHeader({
+  identity,
+  actorEmail = null,
+  admin = false,
+}: {
+  identity: string;
+  actorEmail?: string | null;
+  admin?: boolean;
+}) {
   const pathname = usePathname();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
     <header className="bg-band text-band-foreground">
+      {actorEmail ? (
+        <div className="bg-warning text-warning-foreground">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-6 py-1.5 text-sm">
+            <span>
+              Acting as <strong className="font-semibold">{identity}</strong> ·
+              signed in as {actorEmail}
+            </span>
+            {/* A plain form POST, not a fetch: this is the way out of a
+                session that is not yours, so it must work on a page whose
+                JavaScript has failed. */}
+            <form action="/api/admin/impersonate/stop" method="post" className="ml-auto">
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="border-warning-foreground/40 bg-transparent text-warning-foreground hover:bg-warning-foreground/10"
+              >
+                Stop
+              </Button>
+            </form>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-1 px-6">
         <Link
           href="/dashboard"
@@ -51,7 +98,20 @@ export function AppHeader({ identity }: { identity: string }) {
         </Link>
         <nav aria-label="Primary">
           <ul className="flex gap-6">
-            {NAV.map((item) => {
+            {[
+              ...NAV,
+              // Slice 5: admin-only, and appended rather than woven in so a
+              // non-admin's header is byte-for-byte what it was.
+              ...(admin
+                ? [
+                    {
+                      label: "Admin",
+                      href: "/admin",
+                      isActive: (p: string) => p.startsWith("/admin"),
+                    },
+                  ]
+                : []),
+            ].map((item) => {
               const active = item.isActive(pathname);
               return (
                 <li key={item.href}>

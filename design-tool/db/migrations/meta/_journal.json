@@ -281,6 +281,13 @@
       "when": 1789766723264,
       "tag": "0039_pass_back",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790048273410,
+      "tag": "0040_impersonation_sessions",
+      "breakpoints": true
     }
   ]
 }

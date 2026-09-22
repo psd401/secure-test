@@ -1563,3 +1563,38 @@ export const access_grants = pgTable(
 
 export type AccessGrantRow = typeof access_grants.$inferSelect;
 export type AccessGrantInsert = typeof access_grants.$inferInsert;
+
+// Access slice 5 (docs/access-model-design.md, D-8): the impersonation audit.
+//
+// Every act-as is one row: who started it, as whom, when, and when it stopped.
+// It is the ONLY record that distinguishes an admin acting as a teacher from
+// the teacher themselves, because D-8 deliberately leaves every feature table
+// recording the TARGET's sub — that is what the teacher would see, and a
+// second "actually it was the admin" column on twenty tables would be twenty
+// places to get it wrong. The correlation handle is `request_id`, the same id
+// `proxy.ts` puts on the request and the server error rows carry, so a log
+// line and a row can be lined up after the fact.
+//
+// `stopped_at` NULL means the session is still live as far as this table
+// knows. It is best-effort: the cookie expires on its own after 8 h and a
+// browser can simply be closed, so an open row is not proof that anyone is
+// still acting — the row is the audit trail, not the session store.
+export const impersonation_sessions = pgTable("impersonation_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  /** The admin who started it — their real `sub`, from the session's actor_*. */
+  actor_sub: text("actor_sub").notNull(),
+  actor_email: text("actor_email").notNull(),
+  /** The teacher being acted as. `target_sub` is resolved from their newest
+   * assessment or sitting (there is no staff directory to look it up in). */
+  target_sub: text("target_sub").notNull(),
+  target_email: text("target_email").notNull(),
+  started_at: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  stopped_at: timestamp("stopped_at", { withTimezone: true }),
+  /** `x-request-id` of the POST that started or stopped it. */
+  request_id: text("request_id"),
+});
+
+export type ImpersonationSessionRow = typeof impersonation_sessions.$inferSelect;
+export type ImpersonationSessionInsert = typeof impersonation_sessions.$inferInsert;

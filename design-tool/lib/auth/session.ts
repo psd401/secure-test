@@ -14,6 +14,23 @@ export interface SessionPayload extends JWTPayload {
   email?: string;
   /** Google's hosted-domain claim, kept for the first-sign-in diagnostics. */
   hd?: string;
+  /**
+   * Access slice 5 (docs/access-model-design.md, D-8): impersonation.
+   *
+   * On an ACT-AS session `sub` / `email` / `role` are the TARGET teacher's —
+   * so every query, every write and every "who did this" column records the
+   * teacher, which is what they would see — and these two carry the admin who
+   * is really at the keyboard. Present together or not at all; absent on every
+   * ordinary session.
+   *
+   * They are not merely informational: `isAdmin()` returns FALSE while
+   * `actor_sub` is set (lib/auth/admin.ts), so an act-as session cannot reach
+   * the admin surface or chain a second impersonation.
+   */
+  actor_sub?: string;
+  /** The admin's own verified address, shown in the "Acting as" banner's Stop
+   * affordance and restored by POST /api/admin/impersonate/stop. */
+  actor_email?: string;
 }
 
 function getSecret(): Uint8Array {
