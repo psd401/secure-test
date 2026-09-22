@@ -39,6 +39,7 @@ export default async function MonitorPage({ params }: PageProps) {
       code={row.sitting.code}
       status={row.sitting.status}
       expiresAt={row.sitting.expires_at.toISOString()}
+      kind={row.sitting.kind}
     />
   );
 }

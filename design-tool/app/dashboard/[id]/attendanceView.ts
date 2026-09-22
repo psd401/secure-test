@@ -306,3 +306,36 @@ export function studentState(r: AttendanceRow, now: number): StudentState {
   if (r.status === "in_progress") return "in_progress";
   return "not_joined";
 }
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-5): the Test sessions
+ * tab has no Attendance expander for a practice row, so this is the whole
+ * status line — "Not started yet" / "In progress · 3 of 10 answered" /
+ * "Handed in 9:41 AM · 7 / 10", exactly the note's wording. `undefined` means
+ * the attendance snapshot has not loaded yet (the panel fetches it once the
+ * practice row appears). Pure so it is testable without a DOM.
+ */
+export function practiceStatusLine(
+  row: AttendanceRow | undefined,
+  now: Date = new Date(),
+): string {
+  if (!row || row.status === "not_joined") return "Not started yet";
+  if (row.status === "in_progress") {
+    return `In progress · ${row.answered} of ${row.total_items} answered`;
+  }
+  // "submitted" and the (practically unreachable, for a one-row practice
+  // sitting) "submitted_earlier" both mean the teacher's own attempt is in.
+  const when = row.submitted_at ? formatWhen(row.submitted_at, now) : "—";
+  return `Handed in ${when} · ${row.answered} / ${row.total_items}`;
+}
+
+/**
+ * Practice sittings: "See my answers" and "Practice again" both need an
+ * attempt to act on — before the teacher joins from the client there is
+ * nothing to read back or delete. Pure so it is testable without a DOM.
+ */
+export function practiceHasAttempt(
+  row: Pick<AttendanceRow, "status" | "attempt_id"> | undefined,
+): boolean {
+  return !!row && row.status !== "not_joined" && row.attempt_id !== null;
+}

@@ -7,6 +7,7 @@ import { assessments, test_sessions } from "@/db/schema";
 import { isAdmin } from "@/lib/auth/admin";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { closesAt, formatDate } from "@/lib/ui/format";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -63,6 +64,9 @@ export default async function AdminPage() {
       expires_at: test_sessions.expires_at,
       assessment_id: test_sessions.assessment_id,
       assessment_name: assessments.name,
+      // Practice sittings (docs/practice-sitting-design.md, D-5): labelled
+      // district-wide too — an admin should see every open lock.
+      kind: test_sessions.kind,
     })
     .from(test_sessions)
     .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
@@ -102,8 +106,13 @@ export default async function AdminPage() {
                   {/* A-1's shape: the name is the elastic column, everything
                       else is fixed, or the actions get pushed past the card. */}
                   <TableCell className="w-full max-w-0">
-                    <div className="truncate font-medium" title={s.assessment_name}>
-                      {s.assessment_name}
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium" title={s.assessment_name}>
+                        {s.assessment_name}
+                      </span>
+                      {/* D-5: same badge idiom as the home page's Open now
+                          strip. */}
+                      {s.kind === "practice" ? <Badge variant="neutral">Practice</Badge> : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {closesAt(s.expires_at, now)}
@@ -116,7 +125,9 @@ export default async function AdminPage() {
                     {s.owner_email ?? "—"}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {s.section_ps_id ?? "—"}
+                    {/* D-5: a practice sitting has no section — say what it is
+                        instead of a bare dash. */}
+                    {s.kind === "practice" ? "Practice" : (s.section_ps_id ?? "—")}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatDate(s.created_at)}

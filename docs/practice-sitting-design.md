@@ -317,3 +317,95 @@ co-teacher's sub (`POST /api/attempts` resolves against
 `sitting.owner_sub`) while every per-attempt route resolves against the
 assessment owner — likely the students' saves 404 there; rows 223 / 228 /
 230 would show it.
+
+**Slice 2 (teacher UI) BUILT 2026-09-22, not committed.** Files changed:
+`app/dashboard/[id]/SittingsPanel.tsx`, `app/dashboard/[id]/attendanceView.ts`
+(two new pure helpers, `practiceStatusLine` and `practiceHasAttempt`, plus
+their tests folded into `test/attendance-view.test.ts` — no new test file, the
+existing one already holds every other pure helper this panel and the Monitor
+share), `app/dashboard/[id]/monitor/[sittingId]/MonitorView.tsx` +
+`.../page.tsx` (the one server-adjacent addition: `kind` passed through
+`pageSitting`'s already-full row, no new query), `app/dashboard/page.tsx`,
+`app/admin/page.tsx`.
+
+"Practice on my Mac" sits beside Start session, gated only on
+`isPublished && !archived` (not `sections.length`), and sends
+`{ assessment_id, kind: "practice", duration_minutes: restOfDayMinutes(...) }`
+— the same "rest of day" computation the class preset button uses. **Open
+choice (no-existing-practice-sitting gate):** rather than a disabled button or
+a warning dialog, the button is simply hidden while an open, unarchived
+practice sitting already exists for the assessment (`sittings.some(kind ===
+"practice" && isOpen)`) — its row's own actions (See my answers / Practice
+again) take over, so there is never a moment offering to start a second one.
+A practice row shows "Practice" in place of `scopeLabel`, the note's exact
+three-state status line (`practiceStatusLine`, driven by the attendance
+snapshot for that one row), and drops the Attendance expander, Hand in
+everyone and Extend time (D-5) while keeping Show code / Monitor / Close
+session / Archive-Unarchive, which still make sense on a practice row. Since
+there is no Attendance expander to trigger the fetch, a small effect fetches
+attendance for every open practice sitting the panel is showing, once per
+sitting id (a `useRef` set, not re-fetched on every render) — fired when a
+practice sitting first appears in `sittings`/`archivedSittings`, which covers
+a fresh create, a Practice-again reset, and the panel's own Refresh button
+(which reloads `sittings`, clearing nothing from the ref but re-running the
+effect against the same still-open id only if it were ever removed and
+re-added — in practice the ref just prevents a duplicate fetch on every
+poll-unrelated re-render). **Open choice (no-confirm Practice-again):** a
+single click, no `AlertDialog` — `DELETE /api/attempts/[attemptId]` directly,
+a per-row busy flag (`practiceAgainBusyId`) disables just that row's button
+while in flight, and failures use `attemptDeleteErrorCopy` (the same copy
+table `DeleteAttemptControl` uses) in the panel's existing `actionError`
+channel.
+
+Monitor: `kind` rides down from `pageSitting`'s row (already a full
+`TestSessionRow`, no new column needed) through `MonitorPage` to
+`MonitorView`, typed as an optional plain `string` (Drizzle's `text()` column
+has no literal type to narrow, and optional so the pre-existing
+`hand-in-all-control.test.tsx` instantiations of `MonitorView` — which predate
+practice sittings — still type-check as an ordinary class sitting). **Open
+choice (Monitor suppression approach):** conservative — the per-row actions
+(View screen, Hand in, Extend time, Delete attempt) already degrade correctly
+for one row and needed no change; only the header-level "Hand in everyone"
+and "Extend time" controls (the same components SittingsPanel's row carries,
+per D-5) are suppressed for `kind === "practice"`, plus the scope line
+("Open to all your sections" → "Open to you") so the empty state doesn't read
+as a class assumption. `MonitorSummary`'s five tiles and the table already
+work unchanged with one row.
+
+Open-now (`app/dashboard/page.tsx`) and `/admin` (`app/admin/page.tsx`) both
+gained `kind: test_sessions.kind` in their `.select()`. **Open choice (badge
+placement):** a `<Badge variant="neutral">Practice</Badge>` beside the
+assessment name on both surfaces (the same idiom the list rows already use
+for the Archived badge); `/admin`'s Section column additionally reads
+"Practice" instead of a bare "—" for a practice row, since it has no section
+either way.
+
+Tests: 8 new cases in `test/attendance-view.test.ts` (`practiceStatusLine` ×4,
+`practiceHasAttempt` ×4) — pure functions, no DOM harness needed. The
+fetch/effect wiring (the button click, the attendance auto-fetch, the Monitor
+header suppression, the badges rendering) is hand-run-only; rows added to
+`docs/design-tool-manual-checks.md` and `client/MANUAL-CHECKS.md`.
+`bun run typecheck` clean; full suite 2175 pass (2159 baseline + 16 — 8 from
+this slice, 8 already present in the working tree from other uncommitted
+practice-sitting-adjacent commits since the design doc's baseline was taken).
+
+**Finding (not fixed, flagged only):** the "Practice on my Mac" gate is a
+client-side race — two tabs (or a very fast double-click before the first
+`loadSittings()` resolves) could both see `hasOpenPractice === false` and each
+POST a practice sitting. The server has no unique constraint preventing two
+open practice sittings for the same `(assessment, practice_for_sub)` pair
+(only `students.practice_for_sub` is unique per `(owner_sub,
+practice_for_sub)` — the overlay, not the sitting), so this is a real,
+if low-stakes and self-correcting (the older stays and the newer sits
+orphaned until the sweep), gap. Not fixed here — out of scope for a client-side
+button and a server constraint change was explicitly excluded from this
+slice's server-adjacent allowance.
+
+Slice 2 review fix (main session, 2026-09-22): `GET /api/test-sessions` and
+the home's Open now listed every sitting on a visible assessment, so an owner
+would have seen a co-teacher's practice sitting as "You (practice)" with a
+Practice again that deletes the colleague's attempt. Both now add
+`sittingVisibleToCaller(sub)` (`lib/api/testSessions.ts`: class sittings, or
+practice sittings whose `practice_for_sub` is the caller); `/admin` still
+lists every open sitting, labelled. Test: `test/practice-sitting.test.ts`
+"sitting lists" (fails without the filter). Design-tool 2176 tests.

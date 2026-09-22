@@ -89,6 +89,12 @@ interface Props {
   code: string;
   status: string;
   expiresAt: string;
+  /** Practice sittings (docs/practice-sitting-design.md, D-5): "class" for
+   * every sitting a teacher runs for students. The db column has no literal
+   * type, so this stays `string` rather than narrowing something Drizzle
+   * doesn't; optional so existing callers (and tests) that predate practice
+   * sittings still type-check as an ordinary class sitting. */
+  kind?: string;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -123,7 +129,14 @@ export function MonitorView({
   code,
   status,
   expiresAt,
+  kind,
 }: Props) {
+  // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
+  // or "Extend time" at the header level, same exclusions the Test sessions
+  // tab's row applies (SittingsPanel.tsx). The per-row actions (View screen,
+  // Hand in, Extend time, Delete attempt) already work generically off the
+  // row's own status and need no change.
+  const isPractice = kind === "practice";
   const [data, setData] = useState<AttendancePayload | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -237,13 +250,17 @@ export function MonitorView({
 
   const visible = filter ? rows.filter((r) => r.state === filter) : rows;
 
-  const scopeLabel = data
-    ? data.test_session.student_ps_ids
-      ? `${data.test_session.student_ps_ids.length} picked students`
-      : data.test_session.section_ps_id
-        ? "one section"
-        : "all your sections"
-    : null;
+  // D-5: a practice sitting has no roster scope — "all your sections" would
+  // be a class-shaped assumption for a sitting that admits only the teacher.
+  const scopeLabel = isPractice
+    ? "you"
+    : data
+      ? data.test_session.student_ps_ids
+        ? `${data.test_session.student_ps_ids.length} picked students`
+        : data.test_session.section_ps_id
+          ? "one section"
+          : "all your sections"
+      : null;
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -290,31 +307,37 @@ export function MonitorView({
             {/* "Hand in everyone now" (James, 2026-09-16): the per-attempt
                 Hand in, applied to the whole sitting. Enabled on exactly what
                 the route accepts (canHandInAll) — otherwise disabled with the
-                same note the per-attempt control uses below. */}
-            <HandInAllControl
-              sessionId={sittingId}
-              inProgress={countInProgress(data?.rows ?? [])}
-              onHandedIn={() => void load()}
-              size="default"
-              disabledReason={
-                canHandInAll(!open, data?.rows ?? [])
-                  ? undefined
-                  : "End the test session first, then hand in."
-              }
-            />
+                same note the per-attempt control uses below. D-5: not on a
+                practice sitting — one attempt, the teacher's own. */}
+            {!isPractice ? (
+              <HandInAllControl
+                sessionId={sittingId}
+                inProgress={countInProgress(data?.rows ?? [])}
+                onHandedIn={() => void load()}
+                size="default"
+                disabledReason={
+                  canHandInAll(!open, data?.rows ?? [])
+                    ? undefined
+                    : "End the test session first, then hand in."
+                }
+              />
+            ) : null}
             {/* Extend time, whole sitting: additive, so — unlike Hand in
                 everyone — it is never gated on the sitting being open or
-                closed, only on someone in-progress to extend. */}
-            <ExtendTimeControl
-              target={{ kind: "sitting", sessionId: sittingId }}
-              onExtended={() => void load()}
-              size="default"
-              disabledReason={
-                (data?.rows ?? []).some((r) => canExtend(r.status))
-                  ? undefined
-                  : "No one is in progress on this session."
-              }
-            />
+                closed, only on someone in-progress to extend. D-5: not on a
+                practice sitting either; the per-row Extend time still works. */}
+            {!isPractice ? (
+              <ExtendTimeControl
+                target={{ kind: "sitting", sessionId: sittingId }}
+                onExtended={() => void load()}
+                size="default"
+                disabledReason={
+                  (data?.rows ?? []).some((r) => canExtend(r.status))
+                    ? undefined
+                    : "No one is in progress on this session."
+                }
+              />
+            ) : null}
           </>
         }
       />

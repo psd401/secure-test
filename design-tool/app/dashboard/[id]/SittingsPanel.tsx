@@ -11,7 +11,7 @@
 // and live-poll failures have separate channels; Close asks first; the code is
 // the hero of each row with Copy and a projector view.
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Monitor, PlayCircle, Presentation } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -50,7 +50,7 @@ import {
   StudentStatusBadge,
   sessionState,
 } from "@/components/app/StatusBadge";
-import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
+import { ApiError, attemptDeleteErrorCopy, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt, formatDate, formatWhen } from "@/lib/ui/format";
 import {
   LIVE_INTERVAL_MS,
@@ -62,6 +62,8 @@ import {
   countInProgress,
   eventLabel,
   idleFor,
+  practiceHasAttempt,
+  practiceStatusLine,
   studentState,
   type AttendancePayload,
   type AttendanceRow,
@@ -97,6 +99,9 @@ interface Sitting {
   student_ps_ids: string[] | null;
   /** D-2 (docs/archive-and-delete-design.md): null = live. */
   archived_at: string | null;
+  /** Practice sittings (docs/practice-sitting-design.md): optional because an
+   * older cached row may lack it — the server always sets it now. */
+  kind?: "class" | "practice";
 }
 
 interface Attendance {
@@ -165,6 +170,14 @@ function describe(e: unknown): string {
   return copy.showCode ? `${copy.message} ${code}` : copy.message;
 }
 
+// D-6 (docs/practice-sitting-design.md): "Practice again" deletes the
+// teacher's own attempt through the same route DeleteAttemptControl uses.
+function describeDelete(e: unknown): string {
+  const code = e instanceof ApiError ? e.code : "network";
+  const copy = attemptDeleteErrorCopy(code);
+  return copy.showCode ? `${copy.message} ${code}` : copy.message;
+}
+
 export function SittingsPanel({
   assessmentId,
   assessmentName,
@@ -194,6 +207,11 @@ export function SittingsPanel({
   const [pollFailedAt, setPollFailedAt] = useState<Date | null>(null);
   const [showCode, setShowCode] = useState<Sitting | null>(null);
   const [pendingClose, setPendingClose] = useState<Sitting | null>(null);
+  // D-6: "Practice again" is a single click, no confirm dialog (low stakes,
+  // explicitly reversible via rejoin) — this just tracks which row's button
+  // is mid-request so only that one shows a busy state.
+  const [practiceAgainBusyId, setPracticeAgainBusyId] = useState<string | null>(null);
+  const [practiceBusy, setPracticeBusy] = useState(false);
 
   const [now, setNow] = useState(() => Date.now());
   const [scope, setScope] = useState<Scope>("all");
@@ -310,7 +328,31 @@ export function SittingsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveId]);
 
+  // Practice sittings (docs/practice-sitting-design.md, D-5): there is no
+  // Attendance expander to trigger the fetch, so the panel fetches attendance
+  // itself for every open practice sitting it is showing — once when the
+  // sitting first appears (a fresh "Practice on my Mac", a "Practice again",
+  // or the panel's own Refresh), not on the 5 s live poll (practice status
+  // only changes from the teacher's own actions in this tab, or slowly from
+  // another device — the manual Refresh button already covers that).
+  const fetchedPracticeIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const s of [...sittings, ...archivedSittings]) {
+      if (s.kind !== "practice" || !isOpen(s)) continue;
+      if (fetchedPracticeIds.current.has(s.id)) continue;
+      fetchedPracticeIds.current.add(s.id);
+      void loadAttendance(s.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sittings, archivedSittings]);
+
   const displayedSittings = showArchived ? archivedSittings : sittings;
+
+  // D-6: only one practice sitting is offered at a time per assessment — an
+  // open, unarchived one already exists, so "Practice on my Mac" is hidden
+  // (its row's own actions take over) rather than letting the teacher clutter
+  // the list with several. Simpler than a warning dialog.
+  const hasOpenPractice = sittings.some((s) => s.kind === "practice" && isOpen(s));
 
   const sectionById = useMemo(() => {
     const m = new Map<string, Section>();
@@ -358,6 +400,50 @@ export function SittingsPanel({
       setActionError(describe(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  // D-1/D-2 (docs/practice-sitting-design.md): "Practice on my Mac" — the
+  // server defaults a sitting's length to 120 min, but this button sends
+  // "rest of the day", same as the class "Rest of day" preset, so a teacher
+  // practising mid-morning does not watch it expire over lunch.
+  async function createPracticeSitting() {
+    setPracticeBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/test-sessions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          assessment_id: assessmentId,
+          kind: "practice",
+          duration_minutes: restOfDayMinutes(new Date(Date.now())),
+        }),
+      });
+      if (!res.ok) throw await readError(res);
+      setNow(Date.now());
+      await loadSittings();
+    } catch (err) {
+      setActionError(describe(err));
+    } finally {
+      setPracticeBusy(false);
+    }
+  }
+
+  // D-6: delete the teacher's own practice attempt (the existing DELETE
+  // route, `session_open` already relaxed for a practice attempt server-side)
+  // — the row returns to "Not started yet" and the next join starts fresh.
+  async function practiceAgain(s: Sitting, attemptId: string) {
+    setPracticeAgainBusyId(s.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/attempts/${attemptId}`, { method: "DELETE" });
+      if (!res.ok) throw await readError(res);
+      await loadAttendance(s.id);
+    } catch (err) {
+      setActionError(describeDelete(err));
+    } finally {
+      setPracticeAgainBusyId(null);
     }
   }
 
@@ -619,10 +705,27 @@ export function SittingsPanel({
             </Alert>
           ) : null}
 
-          <Button type="button" disabled={!canStart} onClick={createSitting}>
-            <PlayCircle aria-hidden />
-            {busy ? "Starting…" : "Start session"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" disabled={!canStart} onClick={createSitting}>
+              <PlayCircle aria-hidden />
+              {busy ? "Starting…" : "Start session"}
+            </Button>
+            {/* D-1/D-2/D-6 (docs/practice-sitting-design.md): no roster scope
+                needed, so this isn't gated on sections.length like Start
+                session is — only on the assessment being publishable at all.
+                Hidden while an open practice sitting already exists; its row
+                below carries the actions instead. */}
+            {!hasOpenPractice ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!isPublished || practiceBusy}
+                onClick={() => void createPracticeSitting()}
+              >
+                {practiceBusy ? "Starting…" : "Practice on my Mac"}
+              </Button>
+            ) : null}
+          </div>
           </>
           )}
         </CardContent>
@@ -679,6 +782,10 @@ export function SittingsPanel({
               const open = state === "open";
               const archived = s.archived_at !== null;
               const att = attendance[s.id];
+              // D-5 (docs/practice-sitting-design.md): the practice sitting's
+              // one expected row, once its attendance has loaded.
+              const isPractice = s.kind === "practice";
+              const practiceRow = isPractice ? att?.rows[0] : undefined;
               return (
                 <li key={s.id}>
                   <Card>
@@ -687,11 +794,16 @@ export function SittingsPanel({
                         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
                           <SessionCode code={s.code} size="row" />
                           <SessionStatusBadge state={state} />
-                          <span className="text-sm">{scopeLabel(s)}</span>
+                          <span className="text-sm">{isPractice ? "Practice" : scopeLabel(s)}</span>
+                          {/* D-5: the status line IS the attendance for a
+                              practice row — there's no expander to show it
+                              otherwise. */}
                           <span className="text-sm text-muted-foreground">
-                            {open
-                              ? closesAt(s.expires_at, new Date(now))
-                              : `Started ${formatWhen(s.created_at, new Date(now))}`}
+                            {isPractice
+                              ? practiceStatusLine(practiceRow, new Date(now))
+                              : open
+                                ? closesAt(s.expires_at, new Date(now))
+                                : `Started ${formatWhen(s.created_at, new Date(now))}`}
                           </span>
                           {/* D-2 / D-4: a timestamp, not a status change —
                               unarchiving restores the row exactly. */}
@@ -719,15 +831,46 @@ export function SittingsPanel({
                               </Link>
                             </Button>
                           ) : null}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            aria-expanded={expanded === s.id}
-                            onClick={() => toggleAttendance(s.id)}
-                          >
-                            {expanded === s.id ? "Hide attendance" : "Attendance"}
-                          </Button>
+                          {/* D-5: no Attendance expander on a practice row —
+                              the status line above is the whole of it. */}
+                          {!isPractice ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-expanded={expanded === s.id}
+                              onClick={() => toggleAttendance(s.id)}
+                            >
+                              {expanded === s.id ? "Hide attendance" : "Attendance"}
+                            </Button>
+                          ) : null}
+                          {/* D-5/D-6: "See my answers" and "Practice again"
+                              both need an attempt to act on — before the
+                              teacher joins from the client there is nothing
+                              to read back or delete, so both are simply
+                              hidden rather than shown disabled. */}
+                          {isPractice && practiceHasAttempt(practiceRow) ? (
+                            <>
+                              <Button asChild variant="outline" size="sm">
+                                <Link
+                                  href={`/dashboard/${assessmentId}/results/${practiceRow!.attempt_id}`}
+                                >
+                                  See my answers
+                                </Link>
+                              </Button>
+                              {/* D-6: a single click, no confirm dialog — low
+                                  stakes, explicitly reversible via rejoin. */}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={practiceAgainBusyId === s.id}
+                                onClick={() => void practiceAgain(s, practiceRow!.attempt_id!)}
+                              >
+                                {practiceAgainBusyId === s.id ? "Resetting…" : "Practice again"}
+                              </Button>
+                            </>
+                          ) : null}
                           {!archived && open ? (
                             <Button
                               type="button"
@@ -745,7 +888,9 @@ export function SittingsPanel({
                               Attendance is expanded — with none in hand the
                               dialog falls back to generic copy and the button
                               rests on the sitting alone (canHandInAll). */}
-                          {!archived ? (
+                          {/* D-5: no Hand in everyone on a practice row —
+                              one attempt, the teacher's own. */}
+                          {!archived && !isPractice ? (
                             <HandInAllControl
                               sessionId={s.id}
                               inProgress={countInProgress(att?.rows ?? [])}
@@ -766,7 +911,8 @@ export function SittingsPanel({
                               shown someone in progress (collapsed = unknown,
                               so it stays enabled and the route is the final
                               word, same posture canHandInAll takes). */}
-                          {!archived ? (
+                          {/* D-5: no Extend time on a practice row either. */}
+                          {!archived && !isPractice ? (
                             <ExtendTimeControl
                               target={{ kind: "sitting", sessionId: s.id }}
                               onExtended={() => {

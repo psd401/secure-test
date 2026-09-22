@@ -8,10 +8,13 @@ import {
   deadlineNote,
   earlierSessionNote,
   eventLabel,
+  practiceHasAttempt,
+  practiceStatusLine,
   statusLabel,
   studentState,
   type AttendanceRow,
 } from "../app/dashboard/[id]/attendanceView";
+import { formatWhen } from "../lib/ui/format";
 
 const T0 = Date.parse("2026-08-30T17:00:00Z");
 const iso = (offsetMs: number) => new Date(T0 + offsetMs).toISOString();
@@ -268,5 +271,56 @@ describe("deadlineNote", () => {
 
   test("deadline_passed with no deadline_at (defensive): still 'Time expired'", () => {
     expect(deadlineNote(null, true, new Date(T0))).toBe("Time expired");
+  });
+});
+
+describe("practiceStatusLine (docs/practice-sitting-design.md, D-5)", () => {
+  test("no row yet (attendance still loading): not started", () => {
+    expect(practiceStatusLine(undefined, new Date(T0))).toBe("Not started yet");
+  });
+
+  test("not_joined: not started", () => {
+    expect(practiceStatusLine(row({ status: "not_joined" }), new Date(T0))).toBe(
+      "Not started yet",
+    );
+  });
+
+  test("in_progress: the note's exact wording", () => {
+    expect(
+      practiceStatusLine(row({ status: "in_progress", answered: 3, total_items: 10 }), new Date(T0)),
+    ).toBe("In progress · 3 of 10 answered");
+  });
+
+  test("submitted: the note's exact wording, with the hand-in time", () => {
+    const submittedAt = iso(0); // same instant as "now" -> a bare time
+    expect(
+      practiceStatusLine(
+        row({
+          status: "submitted",
+          answered: 7,
+          total_items: 10,
+          submitted_at: submittedAt,
+        }),
+        new Date(T0),
+      ),
+    ).toBe(`Handed in ${formatWhen(submittedAt, new Date(T0))} · 7 / 10`);
+  });
+});
+
+describe("practiceHasAttempt (docs/practice-sitting-design.md, D-5/D-6)", () => {
+  test("no row yet: nothing to act on", () => {
+    expect(practiceHasAttempt(undefined)).toBe(false);
+  });
+
+  test("not_joined: nothing to act on even with a stray attempt_id", () => {
+    expect(practiceHasAttempt(row({ status: "not_joined", attempt_id: "a" }))).toBe(false);
+  });
+
+  test("in_progress with an attempt: See my answers / Practice again enabled", () => {
+    expect(practiceHasAttempt(row({ status: "in_progress", attempt_id: "a" }))).toBe(true);
+  });
+
+  test("submitted with an attempt: enabled", () => {
+    expect(practiceHasAttempt(row({ status: "submitted", attempt_id: "a" }))).toBe(true);
   });
 });

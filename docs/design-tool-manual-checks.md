@@ -881,3 +881,26 @@ teachers' rows work for the read-only half). All NOT RUN.
 | 250 | Press **Stop** in the banner | Lands back on `/dashboard` as the admin: the banner is gone, the identity in the header is the admin's address, the Admin link and the All-teachers toggle are back | ✅ 2026-09-21: Stop lands on `/dashboard` as the admin — strip gone, header shows the admin's address, Admin link and All teachers toggle back |
 | 251 | As the admin, open **Admin** in the nav while at least one sitting is open district-wide | The page lists every open sitting — session code, assessment, teacher email, section, started — each with a working **Monitor** link and an **Act as** button (none on the admin's own sitting) | HALF 2026-09-21: `/admin` renders as the admin ("Test sessions open across the district (0)", empty state) — no sitting was open district-wide that evening; the table half re-runs during a pilot period |
 | 252 | Sign in as a SECOND, non-admin staff account and browse to `/admin` | A 404 page, not a "Forbidden" one (D-3: a status code never says the admin surface exists); the nav shows no Admin link | NOT RUN |
+
+## Practice sittings — teacher UI (2026-09-22)
+
+`docs/practice-sitting-design.md` slice 2 (teacher UI): "Practice on my Mac"
+on the Test sessions tab, a practice row's status line and actions, the
+Monitor's single row, and the Practice label on Open-now / `/admin`. All NOT
+RUN. Row 258 needs the client + a Jamf-scoped OR off-fleet-launched Mac
+(`client/RELEASING.md`) — IT was asked for the teacher-Mac Jamf scope
+2026-09-22 and may not have landed yet; every other row is teacher-side only
+(Chrome), reachable once a practice attempt exists from a prior client join.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 253 | On a Published assessment's Test sessions tab, press **Practice on my Mac** | A new practice row appears in the list: labelled "Practice", status "Not started yet", rest-of-day duration (matches the "Rest of day" preset's own minutes); the button itself disappears while this row is open | NOT RUN |
+| 254 | With that row's "Not started yet" status showing | No Attendance, "Hand in everyone" or Extend time controls on the row; Show code, Monitor, Close session are present as usual | NOT RUN |
+| 255 | Read the code and join it from the client (needs a Jamf-scoped or off-fleet-launched teacher Mac, `client/RELEASING.md`) — see row 258 | The client joins like any student sitting, real lockdown | NOT RUN — needs the client |
+| 256 | Back on the Test sessions tab while answering on the client | Status line reads "In progress · N of M answered", updated after a Refresh (no live poll — practice has none); **See my answers** and **Practice again** are now enabled | NOT RUN — needs an in-progress practice attempt |
+| 257 | Hand in from the client, then Refresh the Test sessions tab | Status line reads "Handed in \<time\> · N / M" | NOT RUN — needs a handed-in practice attempt |
+| 258 | Press **See my answers** on a practice row with an attempt | Opens the per-student results page (`/dashboard/<id>/results/<attemptId>`) showing the teacher's own answers and the integrity timeline | NOT RUN — needs the client (see row 255) |
+| 259 | Press **Practice again** on a practice row with an attempt | Single click, no confirm dialog; the row's status returns to "Not started yet", See my answers / Practice again disappear until the next join | NOT RUN |
+| 260 | Open the Monitor on a practice sitting | One row named "You (practice)"; no "Hand in everyone" or Extend time buttons in the header; the per-row View screen / Hand in / Extend time / Delete attempt controls work exactly as they would for a student row | NOT RUN |
+| 261 | With a practice sitting open, look at the Assessments home's **Open now** strip | The card shows a "Practice" badge beside the assessment name | NOT RUN |
+| 262 | As a system admin, open `/admin` while a practice sitting is open (any teacher's) | The row shows a "Practice" badge beside the assessment name and "Practice" in the Section column | NOT RUN |

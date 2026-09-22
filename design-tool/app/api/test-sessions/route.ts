@@ -9,6 +9,7 @@ import {
   DEFAULT_DURATION_MINUTES,
   MAX_DURATION_MINUTES,
   createSessionWithCode,
+  sittingVisibleToCaller,
   sweepExpired,
 } from "@/lib/api/testSessions";
 import { UUID_RE } from "@/lib/uuid";
@@ -71,6 +72,7 @@ export async function GET(req: Request) {
   const visible = await visibleAssessmentScope(db, auth.session, { all: wantAll });
   const scope = and(
     visible.condition,
+    sittingVisibleToCaller(auth.session.sub),
     assessmentId ? eq(test_sessions.assessment_id, assessmentId) : undefined,
     wantArchived
       ? isNotNull(test_sessions.archived_at)

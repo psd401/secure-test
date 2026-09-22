@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import {
+  access_grants,
   assessments,
   attempt_deletions,
   attempts,
@@ -183,6 +184,42 @@ describe("creating a practice sitting (D-1, D-2)", () => {
     asColleague();
     const res = await createSitting({ kind: "practice" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("sitting lists (D-5, slice 2 review)", () => {
+  test("a practice sitting is listed only for its own teacher, never for a co-teacher or the owner", async () => {
+    await seedAssessment();
+    const db = getDb();
+    await db.insert(access_grants).values({
+      grantee_email: "colleague@psd401.net",
+      scope_kind: "assessment",
+      scope_id: assessmentId,
+      level: "edit",
+      note: "co-teacher",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+    });
+    try {
+      asColleague();
+      const created = await createSitting({ kind: "practice" });
+      expect(created.status).toBe(201);
+      const theirs = ((await created.json()) as { test_session: TestSessionRow }).test_session;
+
+      const list = async () =>
+        (
+          (await (
+            await call("../app/api/test-sessions/route", "GET", `/api/test-sessions?assessment_id=${assessmentId}`)
+          ).json()) as { test_sessions: TestSessionRow[] }
+        ).test_sessions.map((r) => r.id);
+
+      expect(await list()).toEqual([theirs.id]);
+      asOwner();
+      const mine = await practiceSitting();
+      expect(await list()).toEqual([mine.id]);
+    } finally {
+      await db.execute(sql`truncate table access_grants restart identity cascade`);
+    }
   });
 });
 

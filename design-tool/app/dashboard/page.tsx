@@ -14,6 +14,7 @@ import { DuplicateAssessmentButton } from "./DuplicateAssessmentButton";
 import { ActAsButton } from "./ActAsButton";
 import { isAdmin } from "@/lib/auth/admin";
 import { readStaffSessionFromCookies, type SessionPayload } from "@/lib/auth/session";
+import { sittingVisibleToCaller } from "@/lib/api/testSessions";
 import { closesAt, formatDate } from "@/lib/ui/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,12 +135,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         expires_at: test_sessions.expires_at,
         assessment_id: test_sessions.assessment_id,
         assessment_name: assessments.name,
+        // Practice sittings (docs/practice-sitting-design.md, D-5): label a
+        // practice row on the strip too — an admin's "Open now" should show
+        // every open lock, not just class ones.
+        kind: test_sessions.kind,
       })
       .from(test_sessions)
       .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
       .where(
         and(
           visible.condition,
+          // D-5: another teacher's practice sitting is theirs alone.
+          sittingVisibleToCaller(session.sub),
           eq(test_sessions.status, "open"),
           gt(test_sessions.expires_at, now),
         ),
@@ -212,7 +219,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3">
                   <SessionCode code={s.code} size="row" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{s.assessment_name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium">{s.assessment_name}</span>
+                      {/* D-5: same badge idiom as the list row's Open session
+                          chip below. */}
+                      {s.kind === "practice" ? <Badge variant="neutral">Practice</Badge> : null}
+                    </div>
                     <div className="text-sm text-muted-foreground">{closesAt(s.expires_at, now)}</div>
                     {sessionAccess?.via === "grant" ? (
                       <div className="truncate text-xs text-muted-foreground">

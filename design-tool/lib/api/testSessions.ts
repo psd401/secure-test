@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, or } from "drizzle-orm";
 import { test_sessions } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
@@ -120,3 +120,15 @@ export async function createSessionWithCode(
 
 export const DEFAULT_DURATION_MINUTES = 120;
 export const MAX_DURATION_MINUTES = 60 * 12;
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-1/D-5): a practice
+ * sitting is its teacher's alone. Every staff LIST of sittings (the Test
+ * sessions tab, Open now) adds this, so an owner never sees a co-teacher's
+ * practice row as "You (practice)" with a Practice again that would delete the
+ * colleague's attempt. The /admin list is the one exception — it shows every
+ * open sitting, labelled.
+ */
+export function sittingVisibleToCaller(sub: string) {
+  return or(eq(test_sessions.kind, "class"), eq(test_sessions.practice_for_sub, sub));
+}
