@@ -507,8 +507,15 @@ radio). The pilot week's logs: 26 client-error drain batches, no server
 the feedback text came from an Aurora read the same day: zero feedback
 rows, twelve sign-in cancels on pilot day 1, three `session_unavailable`
 joins, and ONE `lockdown_unrecoverable` exit(70) on a pilot Mac on
-2026-09-18 11:27 PT (readings L-1…L-4 in the research note; **L-2 is the
-one to understand first**). Sequencing: practice
+2026-09-18 11:27 PT (readings L-1…L-4 in the research note). **L-2
+resolved the same day:** the exit happened on pilot day 1 at ~13:02 — the
+sitting closed, `end()` was called, `DID END` did not confirm within the
+5 s teardown grace, the backstop exited the process (the drain stamped the
+line at the student's next sign-in a day later; the line carries no time
+of its own). Nothing lost — the teacher had handed the attempt in a minute
+earlier. v1.3.5 candidates: a longer teardown grace (measure the fleet's
+`lockdown_end` latencies first), a real `occurred_at` + macOS version on
+the unrecoverable line. Sequencing: practice
 note now → UX pass 3 decisions after two weeks of pilot feedback → the
 client side as an accessibility audit.
 

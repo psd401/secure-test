@@ -139,13 +139,30 @@ Readings for the friction list (proposals only):
   what students saw; consider "Sign-in cancelled — press Sign in with
   Google to try again" under the button, and count cancels per attempt
   in the client log so a loop is visible.
-- **L-2 One unrecoverable lockdown on a pilot Mac (2026-09-18 11:27 PT).**
-  The escalation path worked as designed (the process exited, which ends
-  the AAC session), but why `end()` never confirmed is unknown. Pull that
-  row's `context` and `sub`, find the attempt's timeline and whether the
-  student rejoined and lost anything; the grace value and the preceding
-  stderr lines (`errors.log` drain) are the evidence. High priority to
-  understand before the fleet grows.
+- **L-2 One unrecoverable lockdown on a pilot Mac — resolved to a
+  timeline (second pull, 2026-09-22).** The row's context names an attempt
+  on the pilot assessment's 2026-09-17 sitting (opened 12:06 PT, expiry
+  13:01). That attempt's events: `lockdown_begin` 12:21:09 → one answer
+  saved, last write 12:52 → `focus_loss` 12:57 → `teacher_hand_in`
+  13:01:01 → `sitting_closed {via: peek}` 13:01:54 → **no `lockdown_end`,
+  ever.** The `lockdown_unrecoverable` line carries no `occurred_at` by
+  design (`CrashReporter.line`: the drain stamps its own time), so the
+  "2026-09-18 11:27" is the moment the student next signed in, not the
+  exit. Reading: at ~13:02 on pilot day 1 the client saw the sitting
+  closed, called `end()`, and `DID END` did not arrive within the
+  teardown grace — **5 seconds** (`Timings.grace`) — so the backstop
+  fired `exit(70)`. The process exit ended the AAC session (the Mac
+  unlocked), the student's answer was already handed in by the teacher
+  a minute earlier, nothing was lost, and nobody saw more than the app
+  quitting. The 2026-09-16 real-session close measured `lockdown_end`
+  3 s after `sitting_closed` on the test device; a slower pilot Mac
+  plausibly needs more than 5. Proposals (client, v1.3.5 candidates):
+  raise the teardown grace toward the page-load gate's 20 s (an extra
+  wait on a locked screen is cheaper than a vanished app); stamp
+  `occurred_at` on the unrecoverable line (it is written from the
+  backstop queue, not a signal handler, so a clock read is safe) and add
+  the macOS version to the context; count the fleet's `lockdown_end`
+  latencies from `attempt_events` before choosing the number.
 - **L-3 Three `session_unavailable` joins on day 1.** Students typing a
   code before the teacher opened the sitting, or a wrong code. The client
   copy for that code is deliberately vague (oracle-proofing); "Your tests"
