@@ -490,6 +490,25 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-22 — verification rows, Chrome half
+
+Teacher rows run on the origin (rev 47, Aurora 0040) without a student:
+216 / 218 / 219 / 221 / 229 / 231 / 233 / 236 ✅, 222 half (no roster
+co-teacher on a current section that day). Still open and what each needs:
+217 / 235 an open sitting with the demo student in scope (teacher-row
+script); 232 / 234 the student on the client (the Row S-f attempt is left
+passed back with a Sep 23 23:59 override for them); 223 / 228 / 230 a live
+co-teach grant (a real colleague or a second account — James's call); 224–227
+/ 237 / 238 / 252 a second staff account; 251's table half an open sitting
+district-wide (`/admin` showed 0 at 08:35 PT). Readings, proposals only, in
+`docs/design-tool-manual-checks.md`: E-1 (extension timeline prints time-only
+for a next-day deadline), CT-1 ("Or enter a staff email" with no suggestions
+above it), PB-1 ("Their 1 score are kept"), PB-2 ("auto-scored by auto"),
+PB-3 ("This test has a time limit" hint on an untimed test with an override).
+Fixtures `Client rows hand-run 2026-09-08 (copy)` and `Row S-f hand-run
+2026-09-09` are unarchived on the origin for the student rows; re-archive
+after.
+
 ### 2026-09-21 — v1.3.4 client sitting before the release
 
 14 of 17 v1.3.4 rows ✅ (real AAC sessions for the deferred-spool pair;
