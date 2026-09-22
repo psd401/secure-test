@@ -156,7 +156,12 @@ Readings for the friction list (proposals only):
   a minute earlier, nothing was lost, and nobody saw more than the app
   quitting. The 2026-09-16 real-session close measured `lockdown_end`
   3 s after `sitting_closed` on the test device; a slower pilot Mac
-  plausibly needs more than 5. Proposals (client, v1.3.5 candidates):
+  plausibly needs more than 5. **The D-1 measurement the same day
+  (`docs/client-v1-3-5-design.md`) found it is not one Mac: 5 of 48
+  session ends since 2026-09-14 never got a `lockdown_end`, all pilot
+  Macs, all `sitting_closed`; L-2 is the only one whose exit line has
+  drained. The confirmed ends run p50 3.4 s, p90 3.8 s, max 5.4 s — the
+  grace sits on the tail.** Proposals (client, v1.3.5 candidates):
   raise the teardown grace toward the page-load gate's 20 s (an extra
   wait on a locked screen is cheaper than a vanished app); stamp
   `occurred_at` on the unrecoverable line (it is written from the

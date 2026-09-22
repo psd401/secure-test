@@ -513,9 +513,12 @@ sitting closed, `end()` was called, `DID END` did not confirm within the
 5 s teardown grace, the backstop exited the process (the drain stamped the
 line at the student's next sign-in a day later; the line carries no time
 of its own). Nothing lost — the teacher had handed the attempt in a minute
-earlier. v1.3.5 candidates: a longer teardown grace (measure the fleet's
-`lockdown_end` latencies first), a real `occurred_at` + macOS version on
-the unrecoverable line. Sequencing: practice
+earlier. v1.3.5 candidates, now in `docs/client-v1-3-5-design.md` (D-1…D-4 with
+SI-1 and AS-1): a longer teardown grace — **measured 2026-09-22 with the
+new read-only `query-aurora.sh`: 5 of 48 pilot session ends never
+confirmed, the rest p50 3.4 s / p90 3.8 s / max 5.4 s against a 5 s
+grace; recommend 20 s** — and a real `occurred_at` + macOS version on the
+unrecoverable line. Sequencing: practice
 note now → UX pass 3 decisions after two weeks of pilot feedback → the
 client side as an accessibility audit.
 

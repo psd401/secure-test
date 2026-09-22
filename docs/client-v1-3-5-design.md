@@ -57,11 +57,24 @@ AutoPkg recipe moves the fleet the next day).
 Raise `Timings.grace` from 5 s. The candidate is **20 s**, matching the
 page-load gate's backstop, on the argument that a locked screen that
 waits a few extra seconds is cheaper than an app that vanishes — but the
-number should come from the fleet, not from symmetry: **measure
-`lockdown_end − (sitting_closed | time_expired | emergency exit)` across
-every real attempt since 2026-09-14 first** (the read-only pull in the
-session scratchpad, `d1-teardown-latency.sql`; the note records the
-distribution when it exists). Keep the exit(70) escalation as the last
+number should come from the fleet, not from symmetry.
+
+**Measured 2026-09-22** (`query-aurora.sh`, read-only, every
+`sitting_closed` / `time_expired` / `emergency_exit` since 2026-09-14 and
+the `lockdown_end` that followed it on the same attempt):
+
+| | |
+|---|---|
+| End events | 48 (40 sitting closes, 8 emergency exits; 0 time-expired) |
+| Confirmed with a `lockdown_end` | 43 — p50 **3.4 s**, p90 **3.8 s**, max **5.4 s** (measured from the end event's server stamp, so from `end()` itself each is a few hundred ms less) |
+| **Never confirmed** | **5, all `sitting_closed`, all pilot Macs on v1.3.3, 2026-09-17 / 18** — one of them is L-2 (the only one whose exit(70) line has drained); the other four have no later event on the attempt (the student never came back to it — three are still in progress) and no client line naming them yet, so they are either exits whose lines wait for the student's next sign-in, or ends that never reached `end()` |
+| Pattern | four of the five were a lone student still inside when the sitting closed; the fifth was one of 21 attempts closed in the same minute, of which 20 confirmed in 3.2–5.4 s — so not load, something per Mac |
+
+Reading: the healthy fleet confirms in 3–4 s and the 5 s grace already
+sits on the tail (one confirmed end took 5.4 s by the event clock). Between
+2 % and 10 % of pilot session ends did not confirm in time. **Recommend
+20 s** — a student on a slow Mac waits on a locked screen a few seconds
+longer; the app no longer disappears. Keep the exit(70) escalation as the last
 resort; add one stderr line at half the grace ("still waiting for DID
 END") so a slow teardown is visible in `errors.log`'s neighbours. The
 env knob `SECURE_TEST_WATCHDOG_SECONDS` is unrelated and unchanged; the
@@ -99,11 +112,11 @@ In the autosave module's `onchange` handler: post only when
 `current() !== lastPosted`. One line and a JSC harness test (the
 existing autosave tests cover the baseline).
 
-## Decisions (James)
+## Decisions (James, 2026-09-22 — all four accepted as recommended)
 
-| # | Decision | Recommendation |
+| # | Decision | Decided |
 |---|---|---|
-| D-1 | Teardown grace | measure first; expect 20 s unless the fleet's tail says otherwise |
+| D-1 | Teardown grace | **20 s** ("the right target"), after the measurement above |
 | D-2 | Unrecoverable line fields | `occurred_at` + `os_version`, written at exit time |
 | D-3 | Sign-in | ignore -999 in the presenter; keep the status line and verify it survives the refresh; no retry, no cancel counter |
 | D-4 | AS-1 | the guard, as proposed |
