@@ -494,20 +494,46 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 
 Teacher rows run on the origin (rev 47, Aurora 0040) without a student:
 216 / 218 / 219 / 221 / 229 / 231 / 233 / 236 ✅, 222 half (no roster
-co-teacher on a current section that day). Still open and what each needs:
-217 / 235 an open sitting with the demo student in scope (teacher-row
-script); 232 / 234 the student on the client (the Row S-f attempt is left
-passed back with a Sep 23 23:59 override for them); 223 / 228 / 230 a live
-co-teach grant (a real colleague or a second account — James's call); 224–227
-/ 237 / 238 / 252 a second staff account; 251's table half an open sitting
-district-wide (`/admin` showed 0 at 08:35 PT). Readings, proposals only, in
+co-teacher on a current section that day); then, after James ran the
+teacher-row script, **235 ✅** on a fresh sitting. Still open and what each
+needs: 217 an in-progress student on an open sitting; 232 / 234 the student
+on the client (the Row S-f attempt is left passed back with a Sep 23 23:59
+override for them); 223 / 228 / 230 a live co-teach grant (a real colleague
+or a second account — James: HOLD); 224–227 / 237 / 238 / 252 a second staff
+account; 251's table half an open sitting district-wide (`/admin` showed 0
+at 08:35 and 08:50 PT). Readings, proposals only, in
 `docs/design-tool-manual-checks.md`: E-1 (extension timeline prints time-only
 for a next-day deadline), CT-1 ("Or enter a staff email" with no suggestions
 above it), PB-1 ("Their 1 score are kept"), PB-2 ("auto-scored by auto"),
-PB-3 ("This test has a time limit" hint on an untimed test with an override).
-Fixtures `Client rows hand-run 2026-09-08 (copy)` and `Row S-f hand-run
-2026-09-09` are unarchived on the origin for the student rows; re-archive
-after.
+PB-3 ("This test has a time limit" hint on an untimed test with an override),
+PB-4 (after a Monitor pass back the row reads plain "Not joined" — no
+"waiting to rejoin" hint).
+
+**Client sitting prepared, NOT run** — the student device sits on v1.3.3
+waiting for the AutoPkg move to v1.3.4 (James: the district Mac is the
+better test environment; this Mac cannot host a real session while Claude
+drives Chrome on it). On the origin, unarchived and Published: `Client rows
+hand-run 2026-09-08 (copy)` (attempt passed back, override Sep 23 23:59 — rows
+217 / 232 / 234 + batch 0b) and the new **`Math entry + drawing tools
+hand-run 2026-09-22`** (13 items, paged; imported from a file built by the
+gitignored `design-tool/samples/_build-math-drawing-fixture.ts` — eight
+`$`-stem short-text items with the plain keys the math-entry rows list, one
+prose short text, blank / grid / axes drawings, one essay). Rest-of-day
+sittings `8V5EBF` and `V8GCYB` were opened on the demo student's section on
+2026-09-22 and expire at 16:01 PT; a later day needs the teacher-row script
+and new sittings. Order for the sitting (Release build from Terminal so
+stderr is readable): pass A on the (copy) fixture — prefilled answers + the
+countdown (232 half, 234), batch 0b rows, one changed answer + hand-in; pass
+B on the math fixture — the math-entry rows, the drawing-tools rows, security
+slice 1 (Cmd-E / Escape / rejoin / Cmd-Q / real-session Cmd-E) and slice 2
+(the Release knobs, the 15-minute watchdog row, hand-in), then a pass back
+and rejoin for the restored-picture rows. Out of that sitting: client
+hygiene and every Debug-only / simulator row, the entitlement-stripped
+re-sign, C-8 (needs `Multi-source hand-run 2026-09-09` passed back).
+Off-fleet Release launches take the two values on the command line
+(`SECURE_TEST_SERVER` + `SECURE_TEST_GOOGLE_CLIENT_ID`, the "Unmanaged
+Release still configurable" row) or a locally installed copy of
+`client/config-profile.example.mobileconfig` with the real values.
 
 ### 2026-09-21 — v1.3.4 client sitting before the release
 
