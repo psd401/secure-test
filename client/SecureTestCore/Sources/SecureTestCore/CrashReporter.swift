@@ -139,6 +139,64 @@ public enum CrashReporter {
         // declared Never.
         exit(134)
     }
+
+    // MARK: - the timed unrecoverable line (D-2)
+
+    /// D-2 (`docs/client-v1-3-5-design.md`): `lockdown.onUnrecoverable` fires
+    /// on the backstop's own dispatch queue, not a signal handler — an
+    /// ordinary queue where `Date()` and normal Swift string building are
+    /// safe. So unlike the pre-formatted lines above, this one is built fresh
+    /// at the moment it fires: `occurred_at` (ISO 8601, UTC) and `os_version`
+    /// join the fields the install-time buffer already carried. The server
+    /// already accepts `occurred_at` on every entry; `context` gains
+    /// `os_version`.
+    public static func timedUnrecoverableLine(
+        stamp: AppBuildStamp,
+        attemptID: String?,
+        occurredAt: Date = Date(),
+        osVersion: String = ProcessInfo.processInfo.operatingSystemVersionString
+    ) -> String {
+        var object: [String: Any] = [
+            "kind": unrecoverableKind,
+            "message": "lockdown unrecoverable — exit(70)",
+            "app_version": stamp.version,
+            "app_commit": stamp.commit,
+            "occurred_at": iso8601UTC(occurredAt),
+            "context": ["os_version": osVersion],
+        ]
+        if let attemptID { object["attempt_id"] = attemptID }
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+            let text = String(data: data, encoding: .utf8)
+        else {
+            return "{\"kind\":\"\(unrecoverableKind)\",\"message\":\"line could not be encoded\"}\n"
+        }
+        return text + "\n"
+    }
+
+    private static func iso8601UTC(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
+    }
+
+    /// The exit(70) path, rewritten for D-2. Same synchronous `write(2)` to
+    /// the descriptor the sink already holds open as the signal path uses —
+    /// the process could still die mid-write — but the line itself is built
+    /// as an ordinary Swift string first rather than parked ahead of time.
+    /// A no-op if the sink was never installed (`crashDescriptor` unset).
+    public static func writeTimedUnrecoverableLine(stamp: AppBuildStamp, attemptID: String?) {
+        guard crashDescriptor >= 0 else { return }
+        let bytes = Array(timedUnrecoverableLine(stamp: stamp, attemptID: attemptID).utf8)
+        var offset = 0
+        while offset < bytes.count {
+            let written = bytes.withUnsafeBufferPointer { buffer in
+                Darwin.write(crashDescriptor, buffer.baseAddress! + offset, bytes.count - offset)
+            }
+            if written <= 0 { return }
+            offset += written
+        }
+    }
 }
 
 // MARK: - the async-signal-safe half

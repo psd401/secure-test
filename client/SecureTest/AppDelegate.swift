@@ -846,11 +846,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // process exit is the only safe reach (PoC-A finding #11's lesson).
         lockdown.onUnrecoverable = {
             Self.log("lockdown UNRECOVERABLE — exiting")
-            // Slice 4: the ONE line this exit can leave behind. Same
-            // mechanism as the signal handlers — a pre-formatted buffer
-            // written to an already-open descriptor — because the main
-            // thread is presumed gone and nothing else would survive.
-            CrashReporter.writeUnrecoverableLine()
+            // D-2 (docs/client-v1-3-5-design.md): unlike the signal handlers,
+            // this fires on the backstop's own dispatch queue — an ordinary
+            // one, not a signal context — so `Date()` and normal string
+            // building are safe here. The line is built fresh at this moment
+            // (occurred_at, os_version) instead of reused from the
+            // install-time buffer; `ClientErrorLog.shared?.attemptID` is the
+            // same value `CrashReporter.prepare` was last given.
+            CrashReporter.writeTimedUnrecoverableLine(
+                stamp: Self.buildStamp,
+                attemptID: ClientErrorLog.shared?.attemptID
+            )
             exit(70)
         }
         return lockdown

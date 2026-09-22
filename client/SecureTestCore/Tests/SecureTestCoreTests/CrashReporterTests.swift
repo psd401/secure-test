@@ -91,4 +91,71 @@ final class CrashReporterTests: XCTestCase {
         XCTAssertTrue(line.contains("attempt-9"))
         XCTAssertEqual(crashSlotCount, CrashReporter.watchedSignals.count + 1)
     }
+
+    // MARK: D-2 — the timed unrecoverable line
+
+    /// D-2 (`docs/client-v1-3-5-design.md`): unlike the signal handlers,
+    /// `onUnrecoverable` fires on the backstop's own dispatch queue — an
+    /// ordinary one, not a signal context — so this line is built fresh at
+    /// the moment it fires rather than reused from the install-time buffer:
+    /// `occurred_at` and `os_version` join the fields the buffer already had.
+    func testTimedUnrecoverableLineCarriesOccurredAtAndOSVersion() throws {
+        let when = Date(timeIntervalSince1970: 1_735_000_000)
+        let line = CrashReporter.timedUnrecoverableLine(
+            stamp: stamp,
+            attemptID: "attempt-7",
+            occurredAt: when,
+            osVersion: "Version 26.4 (Build 25E214)"
+        )
+        XCTAssertTrue(line.hasSuffix("\n"))
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(object["kind"] as? String, CrashReporter.unrecoverableKind)
+        XCTAssertEqual(object["app_version"] as? String, "1.0.0")
+        XCTAssertEqual(object["app_commit"] as? String, "abc1234")
+        XCTAssertEqual(object["attempt_id"] as? String, "attempt-7")
+        XCTAssertEqual(object["occurred_at"] as? String, "2024-12-24T00:26:40Z")
+        let context = try XCTUnwrap(object["context"] as? [String: String])
+        XCTAssertEqual(context["os_version"], "Version 26.4 (Build 25E214)")
+    }
+
+    func testTimedUnrecoverableLineOmitsAttemptIDWhenNoneIsOpen() throws {
+        let line = CrashReporter.timedUnrecoverableLine(stamp: stamp, attemptID: nil)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+        )
+        XCTAssertNil(object["attempt_id"])
+    }
+
+    /// The write side, exercised the same way `testWriteUnrecoverableLineLandsInTheLogFile`
+    /// exercises the install-time buffer: a real descriptor, no signal involved.
+    func testWriteTimedUnrecoverableLineLandsInTheLogFile() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("crash-reporter-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let log = try ClientErrorLog(
+            fileURL: directory.appendingPathComponent("errors.log"),
+            stamp: stamp
+        )
+        crashDescriptor = log.rawDescriptor
+        defer { crashDescriptor = -1 }
+
+        CrashReporter.writeTimedUnrecoverableLine(stamp: stamp, attemptID: "attempt-7")
+
+        let entries = log.readEntries()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].kind, CrashReporter.unrecoverableKind)
+        XCTAssertEqual(entries[0].attemptID, "attempt-7")
+        XCTAssertNotNil(entries[0].occurredAt, "built at write time, unlike the pre-formatted buffer")
+        XCTAssertEqual(entries[0].context["os_version"], ProcessInfo.processInfo.operatingSystemVersionString)
+    }
+
+    /// No sink installed — `crashDescriptor` still at its default — must not
+    /// crash the write path.
+    func testWriteTimedUnrecoverableLineIsANoOpWithNoDescriptor() {
+        crashDescriptor = -1
+        CrashReporter.writeTimedUnrecoverableLine(stamp: stamp, attemptID: nil)
+    }
 }

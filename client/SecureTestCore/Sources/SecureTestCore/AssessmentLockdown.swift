@@ -90,9 +90,17 @@ public final class AssessmentLockdown {
         /// How long `end()` gets to report back before we stop being polite.
         /// Independent of the watchdog and never disabled — it is what makes a
         /// teardown confirmed rather than hoped for (rule 4).
+        ///
+        /// D-1 (`docs/client-v1-3-5-design.md`): 20s, raised from 5s after the
+        /// 2026-09-22 fleet measurement — the healthy fleet confirms in 3–4s,
+        /// one confirmed end took 5.4s by the event clock, and between 2% and
+        /// 10% of pilot session ends did not confirm inside the old 5s. A
+        /// locked screen that waits a few extra seconds is cheaper than an app
+        /// that vanishes. Not exposed as a knob (Release reads no knobs); the
+        /// unrelated `SECURE_TEST_WATCHDOG_SECONDS` is unchanged.
         public var grace: TimeInterval
 
-        public init(watchdog: TimeInterval?, floor: TimeInterval = 10, grace: TimeInterval = 5) {
+        public init(watchdog: TimeInterval?, floor: TimeInterval = 10, grace: TimeInterval = 20) {
             self.watchdog = watchdog
             self.floor = floor
             self.grace = grace
@@ -166,6 +174,11 @@ public final class AssessmentLockdown {
     private var watchdog: LockdownTimer?
     private var escalation: LockdownTimer?
     private var backstop: LockdownTimer?
+    /// D-1: fires at half of `grace`, on the same backstop scheduler, so a
+    /// teardown that is slow but still healthy shows up in `errors.log`'s
+    /// neighbours before the backstop's own line — rather than looking
+    /// identical to a hang until the last second.
+    private var halfGraceTimer: LockdownTimer?
     private var remaining: TimeInterval = 0
     private var teardownCompletion: (() -> Void)?
     /// Finding 8.3: an end was requested while `.starting`; the physical
@@ -248,6 +261,12 @@ public final class AssessmentLockdown {
         teardownCompletion = completion
         onLog?("tearing down with lockdown active — ending it and waiting for confirmation")
 
+        let halfGrace = timings.grace / 2
+        halfGraceTimer = backstopScheduler.schedule(after: halfGrace, repeats: false) { [weak self] in
+            guard let self else { return }
+            self.onLog?("still waiting for DID END after \(Int(halfGrace))s (grace \(Int(self.timings.grace))s)")
+        }
+
         backstop = backstopScheduler.schedule(after: timings.grace, repeats: false) { [weak self] in
             guard let self else { return }
             self.onLog?("lockdown did not confirm within \(Int(self.timings.grace))s — unrecoverable")
@@ -261,6 +280,8 @@ public final class AssessmentLockdown {
     private func finishTeardown() {
         backstop?.cancel()
         backstop = nil
+        halfGraceTimer?.cancel()
+        halfGraceTimer = nil
         let completion = teardownCompletion
         teardownCompletion = nil
         completion?()

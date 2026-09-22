@@ -211,6 +211,46 @@ final class AssessmentLockdownTests: XCTestCase {
         XCTAssertEqual(unrecoverable, 1)
     }
 
+    /// D-1 (`docs/client-v1-3-5-design.md`): a stderr line at half of `grace`,
+    /// so a slow-but-still-healthy teardown is visible in `errors.log`'s
+    /// neighbours before the backstop's own line, rather than reading
+    /// identical to a hang until the last second.
+    func testHalfGraceStderrLineFiresBeforeTheBackstop() {
+        let (subject, _) = lockdown(.hangsOnEnd, watchdog: 300, grace: 20)
+        var logs: [String] = []
+        subject.onLog = { logs.append($0) }
+        var unrecoverable = 0
+        subject.onUnrecoverable = { unrecoverable += 1 }
+
+        subject.begin()
+        subject.endBeforeTeardown {}
+
+        backstopClock.advance(by: 9)
+        XCTAssertFalse(logs.contains { $0.contains("still waiting for DID END") }, "not yet — half grace is 10s")
+
+        backstopClock.advance(by: 1)
+        XCTAssertTrue(logs.contains { $0.contains("still waiting for DID END") })
+        XCTAssertEqual(unrecoverable, 0, "the half-grace line is a warning, not the backstop itself")
+
+        backstopClock.advance(by: 10)
+        XCTAssertEqual(unrecoverable, 1, "the backstop still fires at the full grace")
+    }
+
+    /// A teardown that confirms before half grace must not leave the warning
+    /// timer armed to fire against a session that is already gone.
+    func testHalfGraceTimerIsCancelledWhenTeardownConfirmsEarly() {
+        let (subject, _) = lockdown(grace: 20)
+        var logs: [String] = []
+        subject.onLog = { logs.append($0) }
+
+        subject.begin()
+        subject.endBeforeTeardown {}
+        XCTAssertEqual(backstopClock.pendingCount, 0, "a cooperative session confirms synchronously — nothing left armed")
+
+        backstopClock.advance(by: 60)
+        XCTAssertFalse(logs.contains { $0.contains("still waiting for DID END") })
+    }
+
     /// Exactly once, whichever way it resolves — a completion that ran twice
     /// would re-issue a quit that is already underway.
     func testTeardownCompletionRunsExactlyOnce() {
@@ -590,7 +630,8 @@ final class LockdownEnvironmentTests: XCTestCase {
         let timings = AssessmentLockdown.Timings.fromEnvironment([:], allowOverride: true)
         XCTAssertEqual(timings.watchdog, 600)
         XCTAssertEqual(timings.floor, 10)
-        XCTAssertEqual(timings.grace, 5)
+        // D-1 (docs/client-v1-3-5-design.md): 20s, raised from 5s.
+        XCTAssertEqual(timings.grace, 20)
     }
 
     func testWatchdogOverrideParsesAndBadValuesKeepTheDefault() {
@@ -624,7 +665,8 @@ final class LockdownEnvironmentTests: XCTestCase {
         )
         XCTAssertNil(forced.watchdog, "the environment must be ignored entirely in Release")
         // The teardown grace is not the watchdog and is never switched off.
-        XCTAssertEqual(forced.grace, 5)
+        // D-1: the default is 20s in every posture, Debug or Release.
+        XCTAssertEqual(forced.grace, 20)
     }
 
     func testSimulatedBehaviourSelection() {
