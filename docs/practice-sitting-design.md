@@ -299,12 +299,19 @@ is "Practice — <address local part>" (the session carries no display name);
 the server's default duration stays 120 min — slice 2's button sends "rest
 of the day"; the assessment-delete `has_attempts` guard and the dashboard's
 attempt counts still count practice attempts (they gate deletion, and the
-sweep clears practice within 7 days). **Deviation:** the sweep deletes the
-rows and the `response_uploads` rows but NOT the stored bytes in the
-Lambda — it cannot import the storage provider without pulling
-`@aws-sdk/s3-request-presigner` into the roster-sync bundle, and the Lambda
-has no grant on the asset bucket; it reports `practice_uploads` and takes an
-optional `deleteStored` for when it does. **Finding (not fixed):** a
+sweep clears practice within 7 days). **Known gap CLOSED (2026-09-22):** the
+sweep now deletes the stored upload bytes too, not just the rows. The
+Lambda still cannot import `lib/storage` (it would pull
+`@aws-sdk/s3-request-presigner` into the roster-sync bundle for a client-PUT
+flow this Lambda never uses), so the delete step is a small, dedicated
+`infra/lambda/deleteStoredUpload.ts` — a bare `DeleteObjectCommand` from
+`@aws-sdk/client-s3`, scoped to `storage_provider: "s3"` refs under
+`responses/*` (anything else rejects rather than silently no-opping, so it
+is never miscounted as deleted). The stack now passes the design-tool asset
+bucket into `RosterSync` and grants the importer `s3:DeleteObject` on
+`responses/*` of that bucket only (no Put, no Get, no List); the Lambda
+wires `deleteStored` in only when `ASSET_BUCKET` is set, so a local/test run
+keeps the DB-only sweep. **Finding (not fixed):** a
 co-teacher's CLASS sitting creates the student's overlay under the
 co-teacher's sub (`POST /api/attempts` resolves against
 `sitting.owner_sub`) while every per-attempt route resolves against the

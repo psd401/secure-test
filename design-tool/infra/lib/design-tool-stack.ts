@@ -252,6 +252,7 @@ export class DesignToolStack extends cdk.Stack {
       databaseSecurityGroup: securityGroup,
       producerRoleArns: props.producerRoleArns,
       notifyTopic,
+      assetBucket,
     });
 
     // --- App compute (ECS deploy slices 2-4, docs/ecs-deploy-plan.md):

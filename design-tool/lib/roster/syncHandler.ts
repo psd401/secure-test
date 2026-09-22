@@ -23,6 +23,7 @@ import {
   sweepPracticeSittings,
   type SweepCounts,
 } from "@/lib/retention/sweep";
+import type { StoredUploadRef } from "@/lib/api/deleteAttempt";
 import { importSnapshot, type ImportCounts, type ImportResult } from "./importSnapshot";
 
 type Db = ReturnType<typeof getDb>;
@@ -256,6 +257,7 @@ export async function handleS3Event(
   event: S3EventLike,
   prefix: string = DEFAULT_PREFIX,
   log: SyncLogger = consoleJsonLogger,
+  deleteStored?: (upload: StoredUploadRef) => Promise<void>,
 ): Promise<S3EventOutcome> {
   const outcome: S3EventOutcome = { imported: [], refused: [], ignored: 0 };
   for (const record of event.Records ?? []) {
@@ -272,7 +274,7 @@ export async function handleS3Event(
     log({ event: "roster_sync_ignored", records: outcome.ignored });
   }
   await sweepBestEffort(db, log);
-  await sweepPracticeBestEffort(db, log);
+  await sweepPracticeBestEffort(db, log, deleteStored);
   return outcome;
 }
 
@@ -302,10 +304,22 @@ async function sweepBestEffort(db: Db, log: SyncLogger): Promise<void> {
 /**
  * Practice sittings (docs/practice-sitting-design.md, D-7): the second sweep,
  * same best-effort rule and its own try so one failing never skips the other.
+ * `deleteStored` is undefined unless the caller wired an asset-bucket delete
+ * in (the Lambda entry, only when ASSET_BUCKET is set) — tests and any run
+ * without it keep the DB-only sweep from before.
  */
-async function sweepPracticeBestEffort(db: Db, log: SyncLogger): Promise<void> {
+async function sweepPracticeBestEffort(
+  db: Db,
+  log: SyncLogger,
+  deleteStored?: (upload: StoredUploadRef) => Promise<void>,
+): Promise<void> {
   try {
-    const counts = await sweepPracticeSittings(db, new Date(), PRACTICE_RETENTION_DAYS);
+    const counts = await sweepPracticeSittings(
+      db,
+      new Date(),
+      PRACTICE_RETENTION_DAYS,
+      deleteStored,
+    );
     log({
       event: "practice_sweep",
       retention_days: PRACTICE_RETENTION_DAYS,

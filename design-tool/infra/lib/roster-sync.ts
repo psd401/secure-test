@@ -32,6 +32,12 @@ export interface RosterSyncProps {
   /** Observability slice 1 (docs/observability-design.md): the shared
    * alarm/feedback topic — the importer's Errors alarm publishes here. */
   readonly notifyTopic: sns.ITopic;
+  /** Practice-sitting sweep (docs/practice-sitting-design.md, D-7 "known
+   * gap"): the design-tool asset bucket, so the nightly sweep can delete a
+   * swept practice attempt's stored drawing/upload bytes, not just its DB
+   * rows. The grant below is scoped to `responses/*` only — the importer
+   * gets nothing else on this bucket (it never reads or writes an asset). */
+  readonly assetBucket: s3.IBucket;
 }
 
 // Slice 76 (ADR 0017): the roster extract bucket and the importer it triggers.
@@ -146,6 +152,10 @@ export class RosterSync extends Construct {
         ROSTER_BUCKET: this.bucket.bucketName,
         ROSTER_PREFIX: prefix,
         DB_SECRET_ARN: props.databaseSecret.secretArn,
+        // Practice-sitting sweep (D-7): the handler builds a scoped S3
+        // delete only when this is set, so a stack that hasn't wired the
+        // asset bucket in (or a local/test run) keeps today's DB-only sweep.
+        ASSET_BUCKET: props.assetBucket.bucketName,
         NODE_OPTIONS: "--enable-source-maps",
       },
       bundling: {
@@ -167,6 +177,14 @@ export class RosterSync extends Construct {
 
     this.bucket.grantRead(this.fn, `${prefix}*`);
     props.databaseSecret.grantRead(this.fn);
+
+    // Practice-sitting sweep (D-7): DeleteObject on the asset bucket, scoped
+    // to the upload key shape only (`responses/<attempt>/<item>/<uuid>`,
+    // design-tool/lib/api/responseUploads.ts) — no PutObject, no GetObject,
+    // no ListBucket, and nothing outside that prefix. The sweep's own delete
+    // step (infra/lambda/deleteStoredUpload.ts) refuses any other key as
+    // defence in depth even though this grant would already deny it.
+    props.assetBucket.grantDelete(this.fn, "responses/*");
 
     this.bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,

@@ -7,6 +7,10 @@
 // Environment:
 //   ROSTER_BUCKET     the extract bucket (set by the stack)
 //   ROSTER_PREFIX     key prefix, default "roster/"
+//   ASSET_BUCKET      the design-tool asset bucket (set by the stack, D-7);
+//                     when present, the practice sweep also deletes a swept
+//                     attempt's stored upload bytes under `responses/*` —
+//                     the only key shape the importer's grant allows.
 //   DATABASE_URL      used directly when present (local runs), else
 //   DB_SECRET_ARN     the cluster's Secrets Manager secret, read once per
 //                     cold start. Never both in a deployed function.
@@ -25,6 +29,7 @@ import {
   handleS3Event,
   waitForDatabase,
 } from "@/lib/roster/syncHandler";
+import { createS3UploadDeleter } from "./deleteStoredUpload";
 
 let databaseUrlReady: Promise<void> | null = null;
 
@@ -46,10 +51,18 @@ export async function handler(event: S3Event) {
   databaseUrlReady ??= ensureDatabaseUrl();
   await databaseUrlReady;
 
-  const source = new S3SnapshotSource(new S3Client({}), bucket, prefix);
+  const s3 = new S3Client({});
+  const source = new S3SnapshotSource(s3, bucket, prefix);
   const db = getDb();
   // 9.1: the paused (0 ACU) cluster resumes on this first connection and
   // may not answer inside one connect window — wait for it, then import.
   await waitForDatabase(() => db.execute(sql`select 1`));
-  return handleS3Event(db, source, event, prefix);
+
+  // D-7: only wired when the stack granted this function DeleteObject on the
+  // asset bucket (ASSET_BUCKET set) — a stack without that grant, or a local
+  // run, keeps the DB-only practice sweep.
+  const assetBucket = process.env.ASSET_BUCKET;
+  const deleteStored = assetBucket ? createS3UploadDeleter(s3, assetBucket) : undefined;
+
+  return handleS3Event(db, source, event, prefix, undefined, deleteStored);
 }
