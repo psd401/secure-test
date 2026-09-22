@@ -169,7 +169,44 @@ AGS; assessment-first tools mostly stop at the LMS or at CSV.
 3. **Keep the CSV** (D-R3) as the no-integration fallback.
 4. **LTI 1.3 AGS later**, if a second LMS (Canvas) or a launch-from-LMS
    workflow shows up.
+   *(Superseded for step 1 by the 2026-09-22 evening update above: Path A
+   is the `/ws/xte/` plugin API, not OneRoster.)*
 5. **No MCP for this.** Revisit only for an assistant feature.
+
+## Update 2026-09-22 evening — IT's reply changes Path A
+
+IT (internal — see the ops repository) examined PowerSchool's developer
+portal and PSD's schema and proposes a different, lighter PowerSchool
+mechanism than OneRoster:
+
+- **PowerTeacher Pro's own `/ws/xte/` gradebook API**, reachable by a
+  district-written plugin (`plugin.xml` with `<oauth/>` + a field-level
+  `<access_request>`). No Universal Rostering add-on, no PowerSchool
+  quote, no partner program. IT writes and installs the plugin and hands
+  us the OAuth client-credentials pair. The write set is
+  `POST /ws/xte/section/assignment/` (assignment + per-section rows +
+  category association) and `PUT /ws/xte/score` (bulk scores keyed by
+  `assignmentsectionid` + `studentsdcid`).
+- **Every call keys on PowerSchool DCIDs** (`STUDENTS.DCID`,
+  `SECTIONS.DCID`, the teacher's `USERS.DCID`) — none of which the roster
+  extract carries. IT will add them to the nightly extract.
+- **The credential is district-wide and PowerSchool applies no per-user
+  restriction** to plugin calls; our server must enforce that a teacher
+  only writes to sections they currently teach.
+- **Schoology's `section_school_code` is `SECTIONS.DCID`**, so the same
+  DCID matches a sitting's section to its Schoology section with no
+  teacher mapping.
+- **About 40 % of PSD sections with gradebook assignments this year use
+  Schoology → PTP passback** (46 % last year); it is per teacher / section.
+  One destination per send (D-1) is therefore the rule, remembered per
+  section.
+- Categories: four district categories are copied to every teacher
+  (Classwork, Test, Project, Quiz) plus many teacher-created ones; default
+  to the teacher's "Test", allow override, check `ISACTIVE`.
+
+OneRoster 1.1 push (the vendor pattern above) remains the portable route
+for a district that lacks the plugin option; at PSD it is not needed.
+The build design is `docs/gradebook-push-design.md`.
 
 ## Decisions (James, 2026-09-22)
 
@@ -177,8 +214,10 @@ AGS; assessment-first tools mostly stop at the LMS or at CSV.
   Schoology; no "both" option (avoids double posting through the
   Schoology → PTP sync). A teacher without that sync may press the button
   twice, once per target.
-- **D-2** Schoology auth (two-legged district key vs per-teacher consent):
-  open, either acceptable; decide with the IT answer.
+- **D-2** Schoology auth = **three-legged OAuth per teacher** ("Connect
+  Schoology" once); the connection is scoped to that teacher's own
+  courses by Schoology itself (decided 2026-09-22 evening after IT's
+  reply).
 - **D-3** Whether Universal Rostering write-back is already on at PSD is
   the anchor question of the IT ask (internal — see the ops repository).
 
