@@ -92,8 +92,11 @@ export async function listMySittings(db: Db, session: SessionPayload): Promise<M
   for (const { attempt, owner_sub } of existing) {
     attemptByOwnerAndAssessment.set(`${owner_sub}\u0000${attempt.assessment_id}`, attempt);
   }
-  const attemptFor = (sitting: (typeof admitted)[number]["sitting"]) => {
-    const attempt = attemptByOwnerAndAssessment.get(`${sitting.owner_sub}\u0000${sitting.assessment_id}`);
+  // Keyed by the ASSESSMENT's owner, the tenant a join files the overlay
+  // under — not the sitting's, which is the co-teacher's on a co-teach
+  // sitting (co-teacher tenant fix, 2026-09-22).
+  const attemptFor = ({ sitting, assessment }: (typeof admitted)[number]) => {
+    const attempt = attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${sitting.assessment_id}`);
     if (!attempt) return undefined;
     if (attempt.status === "submitted") return attempt;
     return attempt.test_session_id === sitting.id ? attempt : undefined;
@@ -109,7 +112,7 @@ export async function listMySittings(db: Db, session: SessionPayload): Promise<M
   return {
     ok: true,
     sittings: admitted.map(({ sitting, assessment }) => {
-      const attempt = attemptFor(sitting);
+      const attempt = attemptFor({ sitting, assessment });
       return {
         test_session_id: sitting.id,
         code: sitting.code,

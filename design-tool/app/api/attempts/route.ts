@@ -6,6 +6,7 @@ import { attempts, type AttemptRow } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   resolveStudentForOwner,
+  sittingTenantSub,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
 import { loadJoinableSitting } from "@/lib/api/studentAttempt";
@@ -52,7 +53,17 @@ export async function POST(req: Request) {
 
   // Slice 78: scoped to the sitting, exactly as redemption was — a student
   // who was refused the code cannot start the attempt by naming the sitting.
-  const resolved = await resolveStudentForOwner(db, sitting.owner_sub, auth.session, sitting);
+  // Admission reads the sitting; the overlay (and so the attempt) is the
+  // ASSESSMENT owner's, where delivery and `loadOwnAttempt` look for it
+  // (co-teacher tenant fix, 2026-09-22).
+  const tenantSub = await sittingTenantSub(db, sitting);
+  if (!tenantSub) {
+    return NextResponse.json(
+      { ok: false, error: "session_unavailable" },
+      { status: 404 },
+    );
+  }
+  const resolved = await resolveStudentForOwner(db, tenantSub, auth.session, sitting);
   if (!resolved.ok) {
     return NextResponse.json(
       { ok: false, error: resolved.reason },

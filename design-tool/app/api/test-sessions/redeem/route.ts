@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/testSessions";
 import {
   resolveStudentForOwner,
+  sittingTenantSub,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
 
@@ -71,8 +72,15 @@ export async function POST(req: Request) {
   }
 
   // Slice 78: the sitting's scope (owner's sections, one section, or an
-  // explicit list) is part of the resolution.
-  const resolved = await resolveStudentForOwner(db, session.owner_sub, auth.session, session);
+  // explicit list) is part of the resolution. The overlay row is filed under
+  // the ASSESSMENT's owner, not the sitting's — they differ on a co-teacher's
+  // sitting (access D-5), and every later student route resolves under the
+  // assessment owner (co-teacher tenant fix, 2026-09-22).
+  const tenantSub = await sittingTenantSub(db, session);
+  if (!tenantSub) {
+    return NextResponse.json({ ok: false, error: "session_unavailable" }, { status: 404 });
+  }
+  const resolved = await resolveStudentForOwner(db, tenantSub, auth.session, session);
   if (!resolved.ok) {
     // A roster miss — or, since slice 78, an on-roster student outside this
     // sitting's scope — is answered as `session_unavailable`, identically to

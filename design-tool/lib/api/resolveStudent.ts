@@ -41,6 +41,9 @@ type Db = ReturnType<typeof getDb>;
  *      before that, by SSID (so a row TIDE imported gets its accommodations
  *      matched up) and bound; and, ONLY on an admitted join, created. A
  *      student who merely probes a route never leaves a row behind.
+ *      `ownerSub` names that overlay's tenant and nothing else — admission
+ *      reads only the sitting — and callers pass the ASSESSMENT's owner
+ *      (`sittingTenantSub`, co-teacher tenant fix 2026-09-22).
  *
  * This is an IDENTITY BINDING and refuses rather than guesses (slice 59's
  * rule, unchanged): binding the wrong row would score one child's answers
@@ -109,6 +112,30 @@ export async function resolveStudentForOwner(
   const overlay = await findOrBindOverlay(db, ownerSub, roster, sitting !== undefined);
   if (!overlay.ok) return overlay;
   return { ok: true, student: overlay.student, roster, newlyBound: overlay.newlyBound };
+}
+
+/**
+ * The overlay TENANT for a join through a sitting: the ASSESSMENT's owner,
+ * never the sitting's (co-teacher tenant fix, 2026-09-22,
+ * docs/access-model-design.md §Progress). Under a co-teach grant (D-5) a
+ * sitting's `owner_sub` / `owner_email` are the CO-TEACHER's — right for
+ * ADMISSION, which reads the sitting's scope — but the delivery route and
+ * every per-attempt route (`loadOwnAttempt`) resolve the student under
+ * `assessments.owner_sub`, and results (A5-4) read that owner's overlay. So
+ * the row a join finds or creates must be the assessment owner's too, or the
+ * student joins and then 404s on the bundle. The same rule practice already
+ * keeps (`resolvePracticePrincipal`). Null when the assessment is gone.
+ */
+export async function sittingTenantSub(
+  db: Db,
+  sitting: Pick<TestSessionRow, "assessment_id">,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ owner_sub: assessments.owner_sub })
+    .from(assessments)
+    .where(eq(assessments.id, sitting.assessment_id))
+    .limit(1);
+  return row?.owner_sub ?? null;
 }
 
 /** Step 2: the sitting's scope, as documented on `test_sessions`. */

@@ -698,3 +698,34 @@ check and adds the test that keeps it that way.
   acting (e.g. `/admin`) carries the "Acting as" strip like every other page;
   a signed-out 404 is unchanged (`AppChrome` renders nothing without a
   session). Re-check row 247 on the next deploy.
+- **2026-09-22 — co-teacher tenant fix (BUILT, not deployed).** Bug, found
+  by reading: a student joining a CO-TEACHER's class sitting (D-5 — the
+  sitting's `owner_sub` / `owner_email` are the co-teacher's) had the overlay
+  row and attempt filed under the CO-TEACHER's sub, because redeem and
+  `POST /api/attempts` passed `sitting.owner_sub` as the tenant. Delivery and
+  every per-attempt route (`loadOwnAttempt`) resolve under
+  `assessments.owner_sub`, and results (A5-4) read the owner's overlay — so
+  the student joined, then 404'd on the bundle, saves and submit, and would
+  have read "(unknown)" in results. Fix (James: "file join-created rows under
+  the assessment owner"): new `sittingTenantSub(db, sitting)` in
+  `lib/api/resolveStudent.ts` returns the assessment's `owner_sub`; redeem and
+  the attempts route pass it as the tenant while still passing the sitting for
+  ADMISSION (which reads only `owner_email` / `section_ps_id` /
+  `student_ps_ids` — `ownerSub` was never used for anything but the overlay),
+  and "Your tests" (`lib/api/mySittings.ts`) keys its attempt lookup by the
+  assessment owner instead of the sitting owner. D-5 unchanged. The Monitor
+  (`sittingAttendance.ts`) needed nothing: it joins attempts by sitting id and
+  bridges by `roster_ps_id`, with no overlay-owner filter; its expected list
+  reads the sitting's `owner_email`, which is admission. For an owner's own
+  sitting nothing changes. **Consequence, recorded not solved:** a
+  co-teacher's accommodations for their own students live on the co-teacher's
+  Students page (their overlay), and the delivery bundle of a co-taught
+  assessment reads the OWNER's overlay row — so those accommodations do not
+  reach the student on that assessment, and the owner's Students page lists
+  the joined student under "unlinked" (not in the owner's sections). Tests:
+  `test/co-teacher-tenant.test.ts` (owner grants edit, co-teacher opens a
+  sitting on their section, the student redeems → joins → delivery → saves →
+  "Your tests" → submits; the overlay is the owner's, the co-teacher's
+  Monitor shows in progress then submitted, `buildResults` names the
+  student) — fails on the pre-fix code at the overlay-owner assertion.
+  Design-tool **2160** tests, typecheck clean, no migration.
