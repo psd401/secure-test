@@ -12,6 +12,7 @@ import {
   access_grants,
   assessments,
   items,
+  student_accommodations,
   students,
   type AttemptRow,
   type TestSessionRow,
@@ -206,5 +207,93 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
     expect(results.rows).toHaveLength(1);
     expect(results.rows[0]!.student.name).not.toBe("(unknown)");
     expect(results.rows[0]!.student.student_number).toBe(BIOLOGY_STUDENT.ps_id);
+  });
+
+  // Follow-up (6.2, 2026-09-22): the co-teacher recorded this child's
+  // accommodations on THEIR overlay row; the owner's row the join creates has
+  // none. Delivery falls back to the co-teacher's row — unless the owner's row
+  // carries any live row at all, which is then the decision.
+  test("delivery falls back to the co-teacher's accommodations when the owner's row has none", async () => {
+    const db = getDb();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({
+        owner_sub: OWNER,
+        owner_email: TEACHER_EMAIL,
+        name: "Co-taught, accommodated",
+        status: "published",
+        allowed_accommodations: ["spell_check"],
+      })
+      .returning();
+    await db.insert(items).values({
+      assessment_id: assessment!.id,
+      position: 0,
+      type: "multiple_choice_single",
+      stem: "Pick",
+      choices: [
+        { id: "a", text: "A" },
+        { id: "b", text: "B" },
+      ],
+      correct_choice_ids: ["a"],
+    });
+    await db.insert(access_grants).values({
+      grantee_email: OTHER_TEACHER_EMAIL,
+      scope_kind: "assessment",
+      scope_id: assessment!.id,
+      level: "edit",
+      note: "co-teacher",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+    });
+    const [coRow] = await db
+      .insert(students)
+      .values({ owner_sub: CO_TEACHER, roster_ps_id: BIOLOGY_STUDENT.ps_id, name: "Co-teacher's row" })
+      .returning();
+    await db.insert(student_accommodations).values({
+      student_id: coRow!.id,
+      subject: "Science",
+      tool_id: "spell_check",
+      value: "On",
+      source: "manual",
+    });
+
+    principal = staffPrincipal(CO_TEACHER, OTHER_TEACHER_EMAIL);
+    const created = await call("../app/api/test-sessions/route", "POST", "/api/test-sessions", {}, {
+      assessment_id: assessment!.id,
+      section_ps_id: "5002",
+    });
+    const sitting = ((await created.json()) as { test_session: TestSessionRow }).test_session;
+
+    principal = studentPrincipal(BIOLOGY_STUDENT.email);
+    await call("../app/api/test-sessions/redeem/route", "POST", "/api/test-sessions/redeem", {}, {
+      code: sitting.code,
+    });
+    const joined = await call("../app/api/attempts/route", "POST", "/api/attempts", {}, {
+      test_session_id: sitting.id,
+    });
+    const { attempt } = (await joined.json()) as { attempt: AttemptRow };
+    expect(attempt.student_id).not.toBe(coRow!.id);
+
+    const deliver = async () =>
+      (await (
+        await call(
+          "../app/api/assessments/[id]/delivery/route",
+          "GET",
+          `/api/assessments/${assessment!.id}/delivery`,
+          { id: assessment!.id },
+        )
+      ).json()) as { accommodations?: Record<string, string> };
+
+    expect((await deliver()).accommodations).toEqual({ spell_check: "On" });
+
+    // The owner records a decision (Off) on their own row: that wins.
+    await db.insert(student_accommodations).values({
+      student_id: attempt.student_id,
+      subject: "Science",
+      tool_id: "spell_check",
+      value: "Off",
+      source: "manual",
+    });
+    expect((await deliver()).accommodations).toBeUndefined();
   });
 });

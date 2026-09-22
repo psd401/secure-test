@@ -729,3 +729,19 @@ check and adds the test that keeps it that way.
   Monitor shows in progress then submitted, `buildResults` names the
   student) — fails on the pre-fix code at the overlay-owner assertion.
   Design-tool **2160** tests, typecheck clean, no migration.
+  **Aurora check the same afternoon** (read-only `query-aurora.sh`, counts
+  only): 0 sittings created by anyone but the assessment owner, 0 attempts
+  whose overlay owner differs from the assessment owner — no live rows to
+  repair. **Accommodations follow-up BUILT the same day** (James, 6.2):
+  delivery falls back to the co-teacher's overlay row for the same roster
+  student (`coTeacherEntitlementStudentId` in
+  `lib/accommodations/effective.ts`: the attempt's sitting owner ≠ the
+  assessment owner, their row with the same `roster_ps_id`) when the owner's
+  row has NO live accommodation rows at all — any row on the owner's side,
+  an Off included, is the decision and wins. Overrides stay the owner's
+  (per assessment, on the owner's row). Test: the second case in
+  `test/co-teacher-tenant.test.ts` (fallback reaches the bundle; an owner Off
+  row then removes it) — fails without the fix. Still open, not built: the
+  owner's Students page lists such a student under "unlinked"; the results
+  section label / work-packet enrolment count use only the owner's sections.
+  Design-tool **2167** tests.

@@ -7,7 +7,10 @@ import {
   resolveStudentForOwner,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
-import { resolveEffectiveAccommodations } from "@/lib/accommodations/effective";
+import {
+  coTeacherEntitlementStudentId,
+  resolveEffectiveAccommodations,
+} from "@/lib/accommodations/effective";
 import {
   UnknownItemTypeError,
   buildDeliveryBundle,
@@ -83,6 +86,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
     db,
     assessment,
     resolved.student.id,
+    // A co-teacher's sitting: their row for this child is the fallback
+    // entitlement source (co-teacher tenant fix follow-up, 2026-09-22).
+    await coTeacherEntitlementStudentId(db, assessment, attempt, resolved.student),
   );
 
   try {
