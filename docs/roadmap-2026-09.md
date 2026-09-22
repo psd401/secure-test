@@ -504,7 +504,11 @@ clicks per extra choice, per-card Save vs autosave, the Add control above a
 growing list, toolbar buttons in the Tab order; keep the inline correct
 radio). The pilot week's logs: 26 client-error drain batches, no server
 500 since 2026-09-15, no feedback publish failure; the per-row kinds and
-the feedback text wait on an Aurora read (James). Sequencing: practice
+the feedback text came from an Aurora read the same day: zero feedback
+rows, twelve sign-in cancels on pilot day 1, three `session_unavailable`
+joins, and ONE `lockdown_unrecoverable` exit(70) on a pilot Mac on
+2026-09-18 11:27 PT (readings L-1…L-4 in the research note; **L-2 is the
+one to understand first**). Sequencing: practice
 note now → UX pass 3 decisions after two weeks of pilot feedback → the
 client side as an accessibility audit.
 

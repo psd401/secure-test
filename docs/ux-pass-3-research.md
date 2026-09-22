@@ -110,12 +110,51 @@ CloudWatch Logs Insights on the app log group, read-only:
 | `feedback_publish_failed` | 0 | every teacher feedback that was sent reached SNS |
 | `essay_score_failed` | 0 since the R-5 fix | — |
 
-**Pending (needs an Aurora read — James runs the laptop psql recipe or the
-scratchpad script):** the `feedback` rows (text, page, who) and the
-`client_error_events` kinds and messages since 2026-09-15, to fold into the
-friction list beside what James gathers in person. The one-off runner has
-no read-only SQL mode; adding one is a small slice if this pull becomes
-routine.
+**The Aurora rows (James ran the read-only pull, 2026-09-22):**
+
+- **`feedback`: 0 rows since 2026-09-15.** Nobody has pressed Send
+  feedback during the pilot. Either nothing was worth reporting or the
+  header button is not where a teacher looks when something goes wrong —
+  ask in person (reading **L-4**).
+- **`client_error_events` since 2026-09-15**, by kind (v1.3.3 rows are the
+  pilot's; the 2026-09-21 v1.3.4 rows are our own hand-run day):
+
+| Day (PT) | Version | Kind | n | What it is |
+|---|---|---|---|---|
+| 09-15 | 1.3.1 | `join_failed` | 1 | `session_unavailable` (404) |
+| 09-16 | 1.3.3 | `signin_failed` | 1 | `cancelled` |
+| **09-17 (pilot day 1)** | 1.3.3 | `signin_failed` | **12** | `cancelled` — the sheet's Cancel button, Cmd-Q mid-sign-in, or a second Join while a sheet is up (`WebViewAuthPresenter`); NOT the silent -999 failure |
+| 09-17 | 1.3.3 | `join_failed` | 4 | 3 × `session_unavailable` (a code for a sitting that is closed, expired or not theirs — the oracle-proof answer) + 1 × `malformed_code` |
+| 09-17 | 1.3.3 | `event_not_delivered` | 1 | one attempt event exhausted its retries |
+| 09-17, 09-21 | 1.3.3 / 1.3.4 | `signin_failed` | 2 | `NSURLErrorDomain -999` on the SSO ACS post — SI-1 |
+| **09-18** | 1.3.3 | **`lockdown_unrecoverable`** | **1** | `exit(70)` at 11:27 PT: the teardown backstop fired — `end()` was called with the lockdown active and no confirmation came within the grace period, so the process exited (AppDelegate `onUnrecoverable`). Two `signin_failed cancelled` follow at 11:29 on the same day |
+| 09-18 | 1.3.3 | `signin_failed` | 2 | `cancelled` |
+| 09-21 | 1.3.4 | `event_not_delivered` / `sittings_failed` / `crash` | 4 / 1 / 1 | our hand-run (offline rows; the SIGABRT at 16:30 PT was deliberate — James, 2026-09-22) |
+
+Readings for the friction list (proposals only):
+
+- **L-1 Twelve sign-in cancels on pilot day 1.** Students back out of the
+  Google / ClassLink / MFA sheet. The entry card gives no hint afterwards
+  (the SI-1 proposal covers only the -999 case). Ask the pilot teachers
+  what students saw; consider "Sign-in cancelled — press Sign in with
+  Google to try again" under the button, and count cancels per attempt
+  in the client log so a loop is visible.
+- **L-2 One unrecoverable lockdown on a pilot Mac (2026-09-18 11:27 PT).**
+  The escalation path worked as designed (the process exited, which ends
+  the AAC session), but why `end()` never confirmed is unknown. Pull that
+  row's `context` and `sub`, find the attempt's timeline and whether the
+  student rejoined and lost anything; the grace value and the preceding
+  stderr lines (`errors.log` drain) are the evidence. High priority to
+  understand before the fleet grows.
+- **L-3 Three `session_unavailable` joins on day 1.** Students typing a
+  code before the teacher opened the sitting, or a wrong code. The client
+  copy for that code is deliberately vague (oracle-proofing); "Your tests"
+  lists open sittings without a code — ask whether teachers had students
+  type codes at all.
+- **L-4 Feedback unused** — above.
+
+The one-off runner has no read-only SQL mode; adding one is a small slice
+if this pull becomes routine.
 
 ## Proposed next steps (not decided)
 
