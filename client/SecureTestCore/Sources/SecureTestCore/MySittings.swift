@@ -20,7 +20,12 @@ public struct MySittings: Decodable, Equatable, Sendable {
         public let assessmentID: String
         public let assessmentName: String
         public let teacherEmail: String?
-        /// "sections" | "section" | "students"
+        /// "sections" | "section" | "students" | "practice" (D-3,
+        /// `docs/practice-sitting-design.md`) — a staff member's own row,
+        /// running on the same student-side routes. An older client reads an
+        /// unknown scope as "sections" (`SittingRowModel`), so a v1.3.4
+        /// client shows a practice row with the wrong label rather than
+        /// choking on it — the server half can deploy ahead of the release.
         public let scope: String
         public let sectionLabel: String?
         /// Kept as the wire string — it carries fractional seconds, which
@@ -87,6 +92,11 @@ public struct SittingRowModel: Equatable, Sendable {
     public let testSessionID: String
     public let assessmentID: String
     public let title: String
+    /// D-8 (`docs/practice-sitting-design.md`): a staff member's own row —
+    /// used to pick the right words when joining it fails
+    /// (`JoinErrorCopy.message(forCode:isPractice:)`), since the wire code
+    /// `not_in_sitting` is shared with the class-sitting case.
+    public let isPractice: Bool
     /// The sitting code first (finding 10.5: it is what the teacher reads out,
     /// so it leads and survives tail truncation), then where this sitting
     /// comes from — the section label when the scope names one, otherwise
@@ -99,9 +109,16 @@ public struct SittingRowModel: Equatable, Sendable {
         testSessionID = sitting.testSessionID
         assessmentID = sitting.assessmentID
         title = sitting.assessmentName
+        isPractice = sitting.scope == "practice"
 
         let where_: String
-        if let label = sitting.sectionLabel, !label.isEmpty {
+        // Practice ignores the section label — a practice sitting never has
+        // one (D-1, `docs/practice-sitting-design.md`) — but checking scope
+        // first is what an older client that already reads a label would
+        // want anyway.
+        if sitting.scope == "practice" {
+            where_ = "Practice — only you"
+        } else if let label = sitting.sectionLabel, !label.isEmpty {
             where_ = label
         } else {
             switch sitting.scope {

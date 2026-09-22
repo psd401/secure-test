@@ -415,3 +415,45 @@ practise on your own Mac" (before "Three clocks"): the teacher-Mac
 prerequisite, the three steps, invisibility + the 7-day cleanup, and the
 v1.3.4 label caveat (D-8's "older client"). The hand-run rows were written in
 slice 2 (253–262); the client rows ride slice 3 / v1.3.5.
+
+**Slice 3 (client copy) BUILT 2026-09-22, not committed, not deployed, not
+released** — built together with `docs/client-v1-3-5-design.md` slices 1 + 2
+in the same session, since both ride the same v1.3.5 release.
+
+- `MySittings.swift`: `Sitting.scope` doc-comment notes `"practice"` as a
+  valid value (unknown-scope handling was already the general `default:`
+  case, so an older client keeps working as designed); `SittingRowModel`
+  gained `isPractice` (`scope == "practice"`) and, in the `where_` derivation,
+  a practice sitting is labelled "Practice — only you" ahead of the
+  section-label check (a practice sitting never carries one, per D-1, but
+  checking scope first costs nothing for a client that already reads a
+  label). The teacher line is untouched — `detail` still appends
+  `teacherEmail` the same way for every scope.
+- `JoinErrorCopy.swift`: `no_practice_sitting` → "No practice tests right
+  now. Start one from your assessment's Test sessions tab." (the staff
+  empty-list reason, parallel to the student `not_on_roster` reason —
+  distinct wire code, no ambiguity). `not_in_sitting` is genuinely ambiguous
+  on the wire — `resolveStudent.ts`'s `resolvePracticePrincipal` returns the
+  same `not_in_sitting` string for a staff member on someone else's practice
+  sitting as `resolveStudentForOwner` does for a student outside a class
+  sitting — so `message(for:isPractice:)` / `message(forCode:isPractice:)`
+  gained an `isPractice` parameter (default `false`, so every existing call
+  site is unaffected); `not_in_sitting` reads as "This practice test is for
+  the teacher who started it." only when the caller says the row it tried
+  was practice.
+- `SessionEntryViewController.swift`: `joinListedSitting`'s error handler
+  passes `isPractice: row.isPractice` into `Self.message(for:isPractice:)`
+  (now the plumbing point — the row the student/staff caller tried to join
+  is the only place this client can tell the two `not_in_sitting` cases
+  apart). The join-by-code path (`join()`) is untouched — a practice sitting
+  is never joined by code, only listed, so it keeps the default `false`.
+- Tests (`MySittingsTests.swift`): `testPracticeScopeIsFlaggedAndLabelledOnlyYou`,
+  `testPracticeScopeStillShowsTheTeacher`, `testNonPracticeScopesAreNotFlagged`,
+  `testDecodesTheNoPracticeSittingReason`,
+  `testNotInSittingReadsDifferentlyForAPracticeRow`.
+
+`swift test` 690 (677 baseline, +13 across both this slice and
+`client-v1-3-5-design.md` slices 1–2 built the same session — see that
+note's Progress for the per-slice split). `xcodebuild` green, Debug and
+Release. No `client/MANUAL-CHECKS.md` rows, no `MARKETING_VERSION` bump, no
+release yet — those are v1.3.5 slice 3/4 in the OTHER note.

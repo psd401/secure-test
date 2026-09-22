@@ -567,7 +567,10 @@ final class SessionEntryViewController: NSObject {
                 }
             } catch {
                 for button in rowButtons { button.isEnabled = true }
-                statusLabel.stringValue = Self.message(for: error)
+                // D-3 (docs/practice-sitting-design.md): `not_in_sitting` is
+                // ambiguous on the wire — this row is what tells apart the
+                // practice case from the ordinary class-sitting one.
+                statusLabel.stringValue = Self.message(for: error, isPractice: row.isPractice)
                 log("join failed: \(error)")
                 AppDelegate.logError(
                     kind: "join_failed",
@@ -666,8 +669,8 @@ final class SessionEntryViewController: NSObject {
         }
     }
 
-    static func message(for error: Error) -> String {
-        JoinErrorCopy.message(for: error)
+    static func message(for error: Error, isPractice: Bool = false) -> String {
+        JoinErrorCopy.message(for: error, isPractice: isPractice)
     }
 
     /// Sign-in failures, in a student's words. The one they can act on alone

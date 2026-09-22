@@ -8,7 +8,7 @@ import Foundation
 /// versus fetch the teacher — and a student who reads the same sentence for
 /// both will do the wrong one.
 public enum JoinErrorCopy {
-    public static func message(for error: Error) -> String {
+    public static func message(for error: Error, isPractice: Bool = false) -> String {
         guard let apiError = error as? APIError else {
             return "Something went wrong. Tell your teacher."
         }
@@ -16,13 +16,20 @@ public enum JoinErrorCopy {
         case .notAuthenticated:
             return "You are not signed in. Tell your teacher."
         case .refused(_, let code):
-            return message(forCode: code)
+            return message(forCode: code, isPractice: isPractice)
         case .decoding, .notHTTP:
             return "Could not read the reply from the server. Tell your teacher."
         }
     }
 
-    public static func message(forCode code: String?) -> String {
+    /// `isPractice` disambiguates `not_in_sitting` (`docs/practice-sitting-design.md`,
+    /// D-3): the wire code is the SAME string for a student outside a class
+    /// sitting and for a staff member on someone else's practice sitting —
+    /// the resolver returns one reason for both (`resolveStudent.ts`,
+    /// `resolvePracticePrincipal`). The caller knows which row it tried to
+    /// join (`SittingRowModel.isPractice`), so that is what tells the two
+    /// apart here rather than the code alone.
+    public static func message(forCode code: String?, isPractice: Bool = false) -> String {
         switch code {
         case "malformed_code":
             // The only failure the student can act on alone.
@@ -35,6 +42,15 @@ public enum JoinErrorCopy {
             return "That code is not open for you right now. Check it with your teacher."
         case "not_on_roster":
             return "You are not on the list for this test. Tell your teacher."
+        case "not_in_sitting" where isPractice:
+            return "This practice test is for the teacher who started it."
+        case "no_practice_sitting":
+            // The staff empty-list reason (D-3): no open practice sitting
+            // names this account. Today a staff sign-in with nothing to
+            // practise reads the student copy for `not_on_roster`; this is
+            // its own line because "tell your teacher" is nonsense advice
+            // for a teacher.
+            return "No practice tests right now. Start one from your assessment's Test sessions tab."
         case "no_email", "no_sourced_id":
             // no_sourced_id is the pre-slice-78 name; a server still sending
             // it deserves the same words.

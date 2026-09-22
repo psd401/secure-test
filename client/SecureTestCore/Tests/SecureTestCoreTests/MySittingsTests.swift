@@ -113,6 +113,58 @@ final class MySittingsTests: XCTestCase {
         )
     }
 
+    // MARK: - practice sittings (D-3/D-8, docs/practice-sitting-design.md)
+
+    func testPracticeScopeIsFlaggedAndLabelledOnlyYou() throws {
+        let row = SittingRowModel(try sitting(scope: "practice", sectionLabel: nil, teacher: nil))
+        XCTAssertTrue(row.isPractice)
+        XCTAssertEqual(row.detail, "Practice — only you")
+    }
+
+    /// D-8: the teacher line still shows through when the wire sends one —
+    /// the assessment owner, as for any other sitting.
+    func testPracticeScopeStillShowsTheTeacher() throws {
+        let row = SittingRowModel(try sitting(scope: "practice", sectionLabel: nil, teacher: "owner@psd401.net"))
+        XCTAssertTrue(row.isPractice)
+        XCTAssertEqual(row.detail, "Practice — only you — owner@psd401.net")
+    }
+
+    func testNonPracticeScopesAreNotFlagged() throws {
+        XCTAssertFalse(SittingRowModel(try sitting(scope: "sections")).isPractice)
+        XCTAssertFalse(SittingRowModel(try sitting(scope: "section")).isPractice)
+        XCTAssertFalse(SittingRowModel(try sitting(scope: "students")).isPractice)
+    }
+
+    /// The staff empty-list reason: no open practice sitting names this
+    /// account. Distinct code from the student `not_on_roster` reason, so no
+    /// ambiguity here — it needs no `isPractice` flag to read correctly.
+    func testDecodesTheNoPracticeSittingReason() throws {
+        let mine = try JSONDecoder().decode(
+            MySittings.self,
+            from: Data(#"{ "sittings": [], "reason": "no_practice_sitting" }"#.utf8),
+        )
+        XCTAssertEqual(mine.reason, "no_practice_sitting")
+        XCTAssertEqual(
+            JoinErrorCopy.message(forCode: mine.reason),
+            "No practice tests right now. Start one from your assessment's Test sessions tab.",
+        )
+    }
+
+    /// D-3: `not_in_sitting` is the same wire code for a student outside a
+    /// class sitting and for a staff member on the wrong practice sitting —
+    /// the row's `isPractice` is what the client uses to tell them apart,
+    /// not the code alone.
+    func testNotInSittingReadsDifferentlyForAPracticeRow() {
+        XCTAssertEqual(
+            JoinErrorCopy.message(forCode: "not_in_sitting", isPractice: false),
+            "Could not join. Tell your teacher.",
+        )
+        XCTAssertEqual(
+            JoinErrorCopy.message(forCode: "not_in_sitting", isPractice: true),
+            "This practice test is for the teacher who started it.",
+        )
+    }
+
     func testExpiryLabelIsTimeOnlyOnTheSameDayAndDatedOtherwise() throws {
         let row = SittingRowModel(try sitting())
         let locale = Locale(identifier: "en_US_POSIX")
