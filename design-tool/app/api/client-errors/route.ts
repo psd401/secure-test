@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { OBSERVABILITY_TEXT_MAX, client_error_events } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { log, truncate } from "@/lib/log";
 
 /**
@@ -64,7 +64,7 @@ function capContext(
 }
 
 export async function POST(req: Request) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   let raw: unknown;

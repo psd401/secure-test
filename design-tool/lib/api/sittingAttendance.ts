@@ -130,7 +130,12 @@ export interface Attendance {
 export type SittingScopeRow = Pick<
   TestSessionRow,
   "id" | "assessment_id" | "owner_email" | "section_ps_id" | "student_ps_ids"
->;
+> &
+  // Practice sittings (docs/practice-sitting-design.md, D-5). Absent = class.
+  Partial<Pick<TestSessionRow, "kind" | "practice_for_sub">>;
+
+/** D-5: the Monitor's one row on a practice sitting. */
+export const PRACTICE_ROW_NAME = "You (practice)";
 
 interface Expected {
   student: RosterStudentRow;
@@ -209,13 +214,19 @@ export async function attendanceForSitting(
   db: Db,
   sitting: SittingScopeRow,
 ): Promise<Attendance> {
-  const expected = await expectedStudents(db, sitting);
+  // Practice (docs/practice-sitting-design.md, D-4/D-5): a practice sitting
+  // expects no roster student — its owner's sections are not its scope — and
+  // shows only its own practice attempt; a class sitting never shows one.
+  const practice = sitting.kind === "practice";
+  const expected = practice
+    ? new Map<string, Expected>()
+    : await expectedStudents(db, sitting);
 
   const joined = await db
     .select({ attempt: attempts, student: students })
     .from(attempts)
     .innerJoin(students, eq(students.id, attempts.student_id))
-    .where(eq(attempts.test_session_id, sitting.id));
+    .where(and(eq(attempts.test_session_id, sitting.id), eq(attempts.practice, practice)));
 
   const byKey = new Map<string, (typeof joined)[number]>();
   for (const row of joined) {
@@ -245,6 +256,9 @@ export async function attendanceForSitting(
         and(
           eq(attempts.assessment_id, sitting.assessment_id),
           inArray(attempts.status, ["submitted", "in_progress"]),
+          // D-4: never a practice attempt (its overlay has no roster_ps_id,
+          // so this holds by construction as well).
+          eq(attempts.practice, false),
           inArray(students.roster_ps_id, notJoinedPsIds),
         ),
       )
@@ -437,10 +451,41 @@ export async function attendanceForSitting(
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
 
+  // D-5: a practice sitting's Monitor has exactly one expected row — the
+  // practising staff member — joined or not.
+  if (practice) {
+    for (const row of rows) {
+      row.name = PRACTICE_ROW_NAME;
+      row.in_scope = true;
+    }
+    if (rows.length === 0) {
+      rows.push({
+        ps_id: sitting.practice_for_sub ?? sitting.id,
+        name: PRACTICE_ROW_NAME,
+        section_label: null,
+        status: "not_joined",
+        started_at: null,
+        deadline_passed: false,
+        deadline_at: null,
+        submitted_at: null,
+        answered: 0,
+        total_items,
+        last_activity_at: null,
+        in_scope: true,
+        attempt_id: null,
+        last_event: null,
+        alert: null,
+        last_lockdown_begin_at: null,
+        timed: false,
+        passed_back_waiting: false,
+      });
+    }
+  }
+
   return {
     rows,
     counts: {
-      expected: expected.size,
+      expected: practice ? 1 : expected.size,
       // H-1 (James, 2026-09-17): joined / submitted are THIS sitting's own;
       // a student who handed the assessment in through an earlier sitting is
       // counted apart, so the header can read "N of M joined · K handed in ·

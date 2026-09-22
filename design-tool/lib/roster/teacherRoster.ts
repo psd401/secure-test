@@ -16,7 +16,7 @@
 // manually-entered student may be a legitimate exception — under their own
 // heading, so the page never hides an accommodation the teacher entered.
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   student_accommodations,
   students,
@@ -83,7 +83,9 @@ export async function loadOverlay(db: Db, ownerSub: string): Promise<OverlayInfo
     })
     .from(students)
     .leftJoin(student_accommodations, eq(student_accommodations.student_id, students.id))
-    .where(eq(students.owner_sub, ownerSub))
+    // Practice (docs/practice-sitting-design.md, D-4): the practice overlay
+    // row is a staff member, never a student on the Students page.
+    .where(and(eq(students.owner_sub, ownerSub), isNull(students.practice_for_sub)))
     .orderBy(asc(students.ssid), asc(students.id));
   const byId = new Map<string, OverlayInfo>();
   for (const r of rows) {

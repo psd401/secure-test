@@ -351,6 +351,13 @@ export const students = pgTable(
     name: text("name").notNull().default(""),
     grade: text("grade"),
     school: text("school"),
+    // Practice sittings (docs/practice-sitting-design.md, D-1/D-3): set only
+    // on the overlay row a STAFF member sits a practice attempt under — the
+    // practising teacher's sub. No roster binding, no SSID: the row exists so
+    // `attempts.student_id` has something to point at. Null on every real
+    // student's row. Every class reader of the overlay (the Students page,
+    // `GET /api/students`) filters these out (D-4).
+    practice_for_sub: text("practice_for_sub"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -372,6 +379,12 @@ export const students = pgTable(
     ownerRosterUnq: unique("students_owner_sub_roster_ps_id_unq").on(
       t.owner_sub,
       t.roster_ps_id,
+    ),
+    // Practice (D-3): one practice row per (assessment owner, practising
+    // teacher). NULLs are distinct, so every real student's row coexists.
+    ownerPracticeUnq: unique("students_owner_sub_practice_for_sub_unq").on(
+      t.owner_sub,
+      t.practice_for_sub,
     ),
   }),
 );
@@ -561,6 +574,12 @@ export type AttemptStatus = (typeof ATTEMPT_STATUSES)[number];
 export const TEST_SESSION_STATUSES = ["open", "closed"] as const;
 export type TestSessionStatus = (typeof TEST_SESSION_STATUSES)[number];
 
+// Practice sittings (docs/practice-sitting-design.md, D-1): a `practice`
+// sitting admits exactly one principal — the staff member named by
+// `practice_for_sub` — and never a student. Every existing row is `class`.
+export const TEST_SESSION_KINDS = ["class", "practice"] as const;
+export type TestSessionKind = (typeof TEST_SESSION_KINDS)[number];
+
 export const test_sessions = pgTable(
   "test_sessions",
   {
@@ -590,6 +609,14 @@ export const test_sessions = pgTable(
     // before the column, and on a sitting whose owner created it themselves is
     // simply equal to `owner_sub`.
     created_by_sub: text("created_by_sub"),
+    // Practice sittings (docs/practice-sitting-design.md, D-1/D-2): `class`
+    // for every sitting a teacher runs for students; `practice` for one a
+    // staff member starts for themselves ("Practice on my Mac"). A practice
+    // sitting carries the practising staff member's (effective) sub in
+    // `practice_for_sub` and no section or student list — the CHECK below
+    // holds the three together.
+    kind: text("kind").notNull().default("class"),
+    practice_for_sub: text("practice_for_sub"),
     code: text("code").notNull(),
     status: text("status").notNull().default("open"),
     expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -619,6 +646,16 @@ export const test_sessions = pgTable(
     statusCheck: check(
       "test_sessions_status_check",
       sql`status IN ('open', 'closed')`,
+    ),
+    kindCheck: check(
+      "test_sessions_kind_check",
+      sql`kind IN ('class', 'practice')`,
+    ),
+    // D-1: a practice sitting names its one principal and nothing else; a
+    // class sitting never names one.
+    practiceCheck: check(
+      "test_sessions_practice_check",
+      sql`(kind = 'practice') = (practice_for_sub IS NOT NULL) AND (kind = 'class' OR (section_ps_id IS NULL AND student_ps_ids IS NULL))`,
     ),
   }),
 );
@@ -689,6 +726,14 @@ export const attempts = pgTable(
     // (`passed_back`, with `detail.by`). The column exists so a reader does not
     // have to aggregate the event table to answer the common case.
     pass_back_count: integer("pass_back_count").notNull().default(0),
+    // Practice sittings (docs/practice-sitting-design.md, D-1/D-4): true when
+    // the attempt was started through a `practice` sitting — a staff member
+    // sitting their own test. On the attempt rather than read through the
+    // sitting because `test_session_id` is nullable and rebinds; every class
+    // reader (results, CSV, print, work packet, review queue, analytics,
+    // hand-in-all, the corpus, class attendance) filters on it without
+    // reaching the sitting. False on every other row.
+    practice: boolean("practice").notNull().default(false),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

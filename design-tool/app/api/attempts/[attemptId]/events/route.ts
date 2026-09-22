@@ -8,7 +8,7 @@ import {
   attempt_events
 } from "@/db/schema";
 import { truncate } from "@/lib/log";
-import { requireStaff, requireStudent } from "@/lib/api/requireSession";
+import { requireStaff, requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { authorizeAttempt } from "@/lib/api/access";
 import { UUID_RE } from "@/lib/uuid";
@@ -60,7 +60,7 @@ function normaliseDetail(
  * the hand-in route alone.
  */
 export async function POST(req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId } = await ctx.params;

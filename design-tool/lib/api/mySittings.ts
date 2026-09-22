@@ -28,6 +28,7 @@ import {
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isStaff } from "@/lib/auth/roles";
 import { isAdmittedToSitting } from "@/lib/api/resolveStudent";
 import { findActiveRosterStudentsByEmail, normalizeEmail } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
@@ -41,7 +42,9 @@ export interface MySitting {
   assessment_id: string;
   assessment_name: string;
   teacher_email: string | null;
-  scope: "sections" | "section" | "students";
+  /** `practice` (docs/practice-sitting-design.md, D-3): a staff member's own
+   * practice sitting. An older client reads an unknown scope as `sections`. */
+  scope: "sections" | "section" | "students" | "practice";
   section_label: string | null;
   expires_at: Date;
   created_at: Date;
@@ -51,9 +54,11 @@ export interface MySitting {
 export type MySittingsResult =
   | { ok: true; sittings: MySitting[] }
   /** Account-level facts the student can act on; the list is empty. */
-  | { ok: false; reason: "no_email" | "not_on_roster" | "identity_conflict" };
+  | { ok: false; reason: "no_email" | "not_on_roster" | "identity_conflict" | "no_practice_sitting" };
 
 export async function listMySittings(db: Db, session: SessionPayload): Promise<MySittingsResult> {
+  if (isStaff(session.role)) return listMyPracticeSittings(db, session);
+
   const email = normalizeEmail(session.email);
   if (!email) return { ok: false, reason: "no_email" };
 
@@ -113,6 +118,78 @@ export async function listMySittings(db: Db, session: SessionPayload): Promise<M
         teacher_email: sitting.owner_email,
         scope: sitting.student_ps_ids ? "students" : sitting.section_ps_id ? "section" : "sections",
         section_label: sitting.section_ps_id ? (labelByPsId.get(sitting.section_ps_id) ?? null) : null,
+        expires_at: sitting.expires_at,
+        created_at: sitting.created_at,
+        attempt: attempt
+          ? { id: attempt.id, status: attempt.status, submitted_at: attempt.submitted_at }
+          : null,
+      };
+    }),
+  };
+}
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-3): "Your tests" for a
+ * staff sign-in — the open, unexpired practice sittings that name this
+ * caller's sub, and nothing else (a staff member is never admitted to a class
+ * sitting). None is an empty list with `no_practice_sitting`, which the client
+ * can put into words.
+ *
+ * The attempt a row carries follows the same rule as the student list: the
+ * practice overlay row (under the ASSESSMENT owner — see
+ * `resolvePracticePrincipal`) and the assessment are the join's key; a
+ * submitted attempt shows on every listed sitting of that assessment, an
+ * in-progress one only on the sitting it is bound to.
+ */
+async function listMyPracticeSittings(db: Db, session: SessionPayload): Promise<MySittingsResult> {
+  const rows = await db
+    .select({ sitting: test_sessions, assessment: assessments })
+    .from(test_sessions)
+    .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
+    .where(
+      and(
+        eq(test_sessions.kind, "practice"),
+        eq(test_sessions.practice_for_sub, session.sub),
+        eq(test_sessions.status, "open"),
+        gt(test_sessions.expires_at, new Date()),
+      ),
+    )
+    .orderBy(desc(test_sessions.created_at));
+  if (rows.length === 0) return { ok: false, reason: "no_practice_sitting" };
+
+  const assessmentIds = [...new Set(rows.map((r) => r.assessment.id))];
+  const existing = await db
+    .select({ attempt: attempts, owner_sub: students.owner_sub })
+    .from(attempts)
+    .innerJoin(students, eq(students.id, attempts.student_id))
+    .where(
+      and(
+        eq(students.practice_for_sub, session.sub),
+        eq(attempts.practice, true),
+        inArray(attempts.assessment_id, assessmentIds),
+      ),
+    );
+  const attemptByOwnerAndAssessment = new Map<string, (typeof existing)[number]["attempt"]>();
+  for (const { attempt, owner_sub } of existing) {
+    attemptByOwnerAndAssessment.set(`${owner_sub}\u0000${attempt.assessment_id}`, attempt);
+  }
+
+  return {
+    ok: true,
+    sittings: rows.map(({ sitting, assessment }) => {
+      const found = attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${assessment.id}`);
+      const attempt =
+        found && (found.status === "submitted" || found.test_session_id === sitting.id)
+          ? found
+          : undefined;
+      return {
+        test_session_id: sitting.id,
+        code: sitting.code,
+        assessment_id: assessment.id,
+        assessment_name: assessment.name,
+        teacher_email: sitting.owner_email,
+        scope: "practice" as const,
+        section_label: null,
         expires_at: sitting.expires_at,
         created_at: sitting.created_at,
         attempt: attempt

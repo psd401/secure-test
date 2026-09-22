@@ -207,6 +207,8 @@ server half can deploy ahead of the release.
 
 ## Decisions (James, 2026-09-22)
 
+All eight APPROVED as recommended (James, 2026-09-22 afternoon).
+
 | # | Decision | Recommendation |
 |---|---|---|
 | D-1 | Where practice lives: a `kind` on `test_sessions` (not a separate table or a preview mode) | `kind = 'practice'` + `practice_for_sub`; `attempts.practice`; `students.practice_for_sub` |
@@ -256,3 +258,55 @@ Slice 1 then 2 in this checkout (2 reads 1's types); 3 in parallel with 2
 ## Progress
 
 2026-09-22: this note. Nothing built.
+
+**Slice 1 (server) BUILT 2026-09-22, not committed, not deployed.**
+**Migration 0041** (`practice_sittings`, applied to dev + test):
+`test_sessions.kind` (`class` default, CHECK) + `practice_for_sub`, with a
+CHECK that practice ⇔ `practice_for_sub` set and a practice sitting has no
+section or student list; `attempts.practice` (default false);
+`students.practice_for_sub` + `unique(owner_sub, practice_for_sub)`.
+`requireStudentOrPractice` on all twelve student routes; the staff branch in
+`resolveStudentForOwner` + `findOrCreatePracticeOverlay`;
+`isAdmittedToSitting` refuses any student on a practice sitting;
+`loadOwnAttempt` also refuses a staff caller on a non-practice attempt;
+`POST /api/attempts` sets `practice`; `POST /api/test-sessions` takes `kind`
+(a scope with practice → 400 `scope_conflict`); `listMySittings` staff branch
+(scope `practice`, else `no_practice_sitting`). Readers excluded on
+`attempts.practice`: `buildResults` (matrix, CSV, print report + summary,
+work packet; new `include_practice` option, set ONLY by the per-student
+page), review queue, `loadItemAnalytics`, hand-in-all (matches the sitting's
+kind), `selectCorpusResponses`, `attendanceForSitting` (class: practice
+excluded; practice: one row "You (practice)", `expected` = 1); on
+`students.practice_for_sub IS NULL`: `loadOverlay` (Students page) and
+`GET /api/students`. D-6's `session_open` relaxation for a practice attempt
+is in the DELETE route. The sweep: `sweepPracticeSittings` in
+`lib/retention/sweep.ts`, run after the D-11 sweep in the roster-sync
+handler (own best-effort try + `practice_sweep` log line); the delete's DB
+half was extracted to `lib/api/deleteAttempt.ts` (`deleteAttemptRecord`,
+shared with the route). Tests: `test/practice-invisibility.test.ts` (12),
+`test/practice-sitting.test.ts` (8), four resolver cases + a structural
+gate check in `test/access-enforcement.test.ts`. Six existing tests changed
+because D-3 changed their behaviour (staff was 403 on the student plane):
+`auth-role-enforcement` (staff now passes the student-route gate; a guardian
+is still 403), `my-sittings-api`, `delivery-api` (403 → 404),
+`attempt-events-api` (403 → 404), `client-errors-api` (staff accepted; a
+guardian 403 case added), `roster-sync-handler` (a third log line);
+`resolve-student` got a type-only `?.`. Design-tool **2159** tests (2133
+before), typecheck clean.
+Decided here, left open by the note: the practice overlay row always lives
+under the ASSESSMENT owner (the per-attempt routes resolve there); its name
+is "Practice — <address local part>" (the session carries no display name);
+the server's default duration stays 120 min — slice 2's button sends "rest
+of the day"; the assessment-delete `has_attempts` guard and the dashboard's
+attempt counts still count practice attempts (they gate deletion, and the
+sweep clears practice within 7 days). **Deviation:** the sweep deletes the
+rows and the `response_uploads` rows but NOT the stored bytes in the
+Lambda — it cannot import the storage provider without pulling
+`@aws-sdk/s3-request-presigner` into the roster-sync bundle, and the Lambda
+has no grant on the asset bucket; it reports `practice_uploads` and takes an
+optional `deleteStored` for when it does. **Finding (not fixed):** a
+co-teacher's CLASS sitting creates the student's overlay under the
+co-teacher's sub (`POST /api/attempts` resolves against
+`sitting.owner_sub`) while every per-attempt route resolves against the
+assessment owner — likely the students' saves 404 there; rows 223 / 228 /
+230 would show it.

@@ -161,7 +161,13 @@ describe("role enforcement across every teacher route", () => {
     expect(studentRoutes.length).toBe(STUDENT_ROUTES.size);
   });
 
-  test("student routes accept a student and refuse staff", async () => {
+  // Practice sittings (docs/practice-sitting-design.md, D-3) changed this
+  // test's staff half: the student routes now admit a STAFF principal past the
+  // role gate (`requireStudentOrPractice`), who can then reach only a practice
+  // sitting naming their own sub — the resolver decides that, not the gate
+  // (test/practice-sitting.test.ts). Before D-3 staff was 403 here. Every
+  // other role is still refused.
+  test("student routes accept a student and a practising staff member, refuse the rest", async () => {
     for (const { file, path } of studentRoutes) {
       const staffMethods = staffMethodsFor(path);
       mockSession = { sub: "student-sub", role: "student" };
@@ -171,6 +177,11 @@ describe("role enforcement across every teacher route", () => {
         expect(`${method} ${path} ${status}`).toBeTruthy();
       }
       mockSession = { sub: "teacher-sub", role: "staff" };
+      for (const [method, status] of await statusesFor(file, path)) {
+        if (staffMethods.has(method)) continue;
+        expect([401, 403]).not.toContain(status);
+      }
+      mockSession = { sub: "guardian-sub", role: "guardian" };
       for (const [method, status] of await statusesFor(file, path)) {
         if (staffMethods.has(method)) continue;
         expect(status).toBe(403);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { attempts } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
@@ -23,7 +23,7 @@ interface RouteContext {
  * the timestamp a teacher may be reading as "when did they finish".
  */
 export async function POST(_req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId } = await ctx.params;

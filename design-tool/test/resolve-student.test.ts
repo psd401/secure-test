@@ -85,7 +85,7 @@ describe("resolveStudentForOwner — who", () => {
       anySection(),
     );
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.roster.ps_id).toBe(STUDENT.ps_id);
+    if (result.ok) expect(result.roster?.ps_id).toBe(STUDENT.ps_id);
   });
 
   test("a deactivated roster row does not resolve", async () => {

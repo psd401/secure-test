@@ -288,6 +288,13 @@
       "when": 1790048273410,
       "tag": "0040_impersonation_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790112027545,
+      "tag": "0041_practice_sittings",
+      "breakpoints": true
     }
   ]
 }

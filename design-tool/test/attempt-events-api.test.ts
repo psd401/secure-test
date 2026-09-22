@@ -224,13 +224,17 @@ describe("POST /api/attempts/:attemptId/events", () => {
     expect(res.status).toBe(404);
   });
 
-  test("a staff session answers 403", async () => {
+  // Practice sittings (docs/practice-sitting-design.md, D-3) changed this
+  // from 403: staff passes the role gate now, and a STUDENT's attempt is
+  // simply not theirs — the same 404 as any other attempt that is not the
+  // caller's.
+  test("a staff session cannot post to a student's attempt (404)", async () => {
     const assessment = await seedAssessment();
     const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
     principal = staffPrincipal(TEACHER, TEACHER_EMAIL);
 
     const res = await postEvent(attempt.id, { kind: "quit" });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   test("a submitted attempt still accepts events (teardown races submit)", async () => {

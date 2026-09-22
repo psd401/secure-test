@@ -12,9 +12,16 @@
 // Pure function over a Drizzle db handle so it is unit-testable against the
 // test database without a Lambda or a schedule.
 
-import { lt } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import type { getDb } from "@/db/client";
-import { client_error_events, guardrail_events, server_error_events } from "@/db/schema";
+import {
+  attempts,
+  client_error_events,
+  guardrail_events,
+  server_error_events,
+  test_sessions,
+} from "@/db/schema";
+import { deleteAttemptRecord, type StoredUploadRef } from "@/lib/api/deleteAttempt";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -61,5 +68,99 @@ export async function sweepEventTables(
     server_error_events: deletedServerErrors.length,
     client_error_events: deletedClientErrors.length,
     guardrail_events: deletedGuardrailEvents.length,
+  };
+}
+
+// --- Practice sittings (docs/practice-sitting-design.md, D-7) ---
+
+/** D-7: how long a finished practice sitting's attempt is kept. */
+export const PRACTICE_RETENTION_DAYS = 7;
+
+/** The `attempt_deletions.deleted_by_sub` of a sweep delete. */
+export const PRACTICE_SWEEP_ACTOR = "system:practice-sweep";
+
+export interface PracticeSweepCounts {
+  practice_attempts_deleted: number;
+  practice_sittings_archived: number;
+  /** Stored drawing / upload objects of the deleted attempts. Their rows are
+   * gone with the attempt; the bytes are deleted only when the caller passes
+   * `deleteStored` (see `deleteAttemptRecord` for why the sweep cannot import
+   * the storage provider itself). */
+  practice_uploads: number;
+  practice_uploads_deleted: number;
+}
+
+/**
+ * D-7: practice never accumulates. For every un-archived practice sitting that
+ * closed or expired more than `retentionDays` ago, delete the practice
+ * attempts bound to it — through `deleteAttemptRecord`, the same path
+ * "Practice again" and the Delete button take, so upload rows, cascades and
+ * the audit row all match — and archive the sitting. The stored bytes go
+ * through `deleteStored` when given, best-effort, after each commit.
+ *
+ * "Closed" has no timestamp of its own: a closed sitting's `updated_at` is
+ * when it was closed (the close route and `sweepExpired` both set it), and an
+ * expired one's `expires_at` is when it ended — whichever came first counts.
+ * An in-progress practice attempt resumed through a LATER practice sitting has
+ * been rebound there (finding 8.2) and waits for that sitting's turn.
+ *
+ * Only `kind = 'practice'` rows and `practice = true` attempts are ever read
+ * here; a class sitting or a student's attempt cannot reach the delete.
+ */
+export async function sweepPracticeSittings(
+  db: Db,
+  now: Date = new Date(),
+  retentionDays: number = PRACTICE_RETENTION_DAYS,
+  deleteStored?: (upload: StoredUploadRef) => Promise<void>,
+): Promise<PracticeSweepCounts> {
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+  const due = await db
+    .select({ id: test_sessions.id })
+    .from(test_sessions)
+    .where(
+      and(
+        eq(test_sessions.kind, "practice"),
+        isNull(test_sessions.archived_at),
+        or(
+          lt(test_sessions.expires_at, cutoff),
+          and(eq(test_sessions.status, "closed"), lt(test_sessions.updated_at, cutoff)),
+        ),
+      ),
+    );
+
+  let deleted = 0;
+  let uploadCount = 0;
+  let uploadsDeleted = 0;
+  for (const sitting of due) {
+    const bound = await db
+      .select()
+      .from(attempts)
+      .where(and(eq(attempts.test_session_id, sitting.id), eq(attempts.practice, true)));
+    for (const attempt of bound) {
+      const uploads = await deleteAttemptRecord(db, attempt, PRACTICE_SWEEP_ACTOR);
+      deleted++;
+      uploadCount += uploads.length;
+      if (!deleteStored) continue;
+      for (const upload of uploads) {
+        try {
+          await deleteStored(upload);
+          uploadsDeleted++;
+        } catch {
+          // Best-effort, as in the route: an orphaned object is harmless.
+        }
+      }
+    }
+    await db
+      .update(test_sessions)
+      .set({ status: "closed", archived_at: now, updated_at: now })
+      .where(eq(test_sessions.id, sitting.id));
+  }
+
+  return {
+    practice_attempts_deleted: deleted,
+    practice_sittings_archived: due.length,
+    practice_uploads: uploadCount,
+    practice_uploads_deleted: uploadsDeleted,
   };
 }

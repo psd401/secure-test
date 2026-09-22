@@ -165,10 +165,15 @@ export async function assessmentOwner(
  *   handed in, as rows with no totals (D-1/B). Default false, so every caller
  *   that predates it — the CSV, the print report, the review queue — keeps
  *   the submitted-only results it has always had.
+ * @param options `include_practice` (docs/practice-sitting-design.md, D-4)
+ *   adds a staff member's practice attempts. Default false: every class
+ *   reader — the matrix, the CSV, the print report and summary, the work
+ *   packet — never sees one. The per-student page is the one caller that
+ *   sets it, so a teacher can read back their own practice answers.
  */
 export async function buildResults(
   assessmentId: string,
-  options: { include_in_progress?: boolean } = {},
+  options: { include_in_progress?: boolean; include_practice?: boolean } = {},
 ): Promise<AssessmentResults> {
   const db = getDb();
   const { ownerSub, ownerEmail } = await assessmentOwner(db, assessmentId);
@@ -193,7 +198,13 @@ export async function buildResults(
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.assessment_id, assessmentId))
+    .where(
+      and(
+        eq(attempts.assessment_id, assessmentId),
+        // D-4: practice attempts are invisible to every class reader.
+        options.include_practice === true ? undefined : eq(attempts.practice, false),
+      ),
+    )
     // The id tiebreak (2026-09-14) makes the order deterministic when two
     // attempts share a started_at — one multi-row insert gives them the same
     // now(), and Postgres returns ties in whatever order it likes.

@@ -10,6 +10,7 @@ import {
 import type { getDb } from "@/db/client";
 import type { ItemResponse } from "@secure-test/schema";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isStaff } from "@/lib/auth/roles";
 import {
   MATCH_LEFT,
   MATCH_RIGHT,
@@ -70,6 +71,13 @@ export async function loadOwnAttempt(
     };
   }
   if (resolved.student.id !== row.attempt.student_id) {
+    return { ok: false, response: notFound() };
+  }
+  // Practice (docs/practice-sitting-design.md, D-3): a staff principal
+  // resolves only to its practice overlay, which only ever carries practice
+  // attempts — checked anyway, so a staff session can never write into a
+  // class attempt whatever a future change does to the overlay.
+  if (isStaff(session.role) && !row.attempt.practice) {
     return { ok: false, response: notFound() };
   }
   return { ok: true, attempt: row.attempt, studentId: resolved.student.id };

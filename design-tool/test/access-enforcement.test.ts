@@ -38,6 +38,8 @@ import {
   levelSatisfies,
 } from "../lib/api/access";
 import type { SessionPayload } from "../lib/auth/session";
+import { resolveStudentForOwner } from "../lib/api/resolveStudent";
+import { STUDENT, TEACHER_EMAIL, clearRoster, seedRoster, studentPrincipal } from "./helpers/roster";
 
 const APP_ROOT = resolve(import.meta.dir, "../app");
 
@@ -235,6 +237,20 @@ describe("ownership enforcement across every teacher route", () => {
     const onDisk = new Set(allRoutes.map((r) => r.path));
     const missing = [...STUDENT_ROUTES].filter((p) => !onDisk.has(p));
     expect(missing).toEqual([]);
+  });
+
+  // Practice sittings (docs/practice-sitting-design.md, D-3): the twelve
+  // student-plane routes admit a practice principal through ONE gate helper.
+  // A student route that kept the bare `requireStudent()` would silently
+  // refuse practice; one that reached for `requireSession()` would admit any
+  // role. Both fail here on the day they land.
+  test("every student route gates through requireStudentOrPractice", () => {
+    const wrong: string[] = [];
+    for (const r of allRoutes.filter((x) => STUDENT_ROUTES.has(x.path))) {
+      if (!r.source.includes("requireStudentOrPractice()")) wrong.push(`/${r.path} lacks it`);
+      if (/requireStudent\(\)/.test(r.source)) wrong.push(`/${r.path} still calls requireStudent()`);
+    }
+    expect(wrong).toEqual([]);
   });
 
   test("every classification names a route that exists", () => {
@@ -557,5 +573,102 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
     expect(levelSatisfies("view", "run")).toBe(false);
     expect(levelSatisfies("run", "edit")).toBe(false);
     expect(levelSatisfies("edit", "own")).toBe(false);
+  });
+});
+
+// ── Practice sittings (docs/practice-sitting-design.md, security notes) ─────
+//
+// The practice resolver in the three shapes the note names, plus the one that
+// must succeed. `resolveStudentForOwner` is the seam every student-plane
+// route resolves through (join, redeem, and — without a sitting — the
+// per-attempt routes and delivery), so these are the access decisions.
+
+describe("the practice principal reaches only its own practice sitting", () => {
+  const db = getDb();
+  const PRACTICE_OWNER = "practice-access-owner";
+  const TEACHER_A = { sub: "practice-access-a", role: "staff", email: TEACHER_EMAIL } as SessionPayload;
+  const TEACHER_B = { sub: "practice-access-b", role: "staff", email: "b@psd401.net" } as SessionPayload;
+
+  async function seedSittings() {
+    await seedRoster();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({ owner_sub: PRACTICE_OWNER, owner_email: TEACHER_EMAIL, name: "Practice access", status: "published" })
+      .returning();
+    const expires = new Date(Date.now() + 3_600_000);
+    const [classSitting] = await db
+      .insert(test_sessions)
+      .values({
+        assessment_id: assessment!.id,
+        owner_sub: PRACTICE_OWNER,
+        owner_email: TEACHER_EMAIL,
+        code: "PRACL1",
+        expires_at: expires,
+      })
+      .returning();
+    const [practiceForA] = await db
+      .insert(test_sessions)
+      .values({
+        assessment_id: assessment!.id,
+        owner_sub: TEACHER_A.sub,
+        owner_email: TEACHER_EMAIL,
+        kind: "practice",
+        practice_for_sub: TEACHER_A.sub,
+        code: "PRACA1",
+        expires_at: expires,
+      })
+      .returning();
+    return { assessment: assessment!, classSitting: classSitting!, practiceForA: practiceForA! };
+  }
+
+  afterEach(async () => {
+    await clearRoster();
+  });
+
+  test("(staff, class sitting) → not_in_sitting", async () => {
+    const { classSitting } = await seedSittings();
+    const r = await resolveStudentForOwner(db, PRACTICE_OWNER, TEACHER_A, classSitting);
+    expect(r).toEqual({ ok: false, reason: "not_in_sitting" });
+  });
+
+  test("(student, practice sitting) → not_in_sitting, even a student the owner teaches", async () => {
+    const { classSitting, practiceForA } = await seedSittings();
+    // The control: the same student IS admitted to the owner's class sitting.
+    expect((await resolveStudentForOwner(db, PRACTICE_OWNER, studentPrincipal(STUDENT.email), classSitting)).ok).toBe(true);
+    const r = await resolveStudentForOwner(db, TEACHER_A.sub, studentPrincipal(STUDENT.email), practiceForA);
+    expect(r).toEqual({ ok: false, reason: "not_in_sitting" });
+  });
+
+  test("(staff A, practice sitting for B) → not_in_sitting", async () => {
+    const { practiceForA } = await seedSittings();
+    const r = await resolveStudentForOwner(db, TEACHER_A.sub, TEACHER_B, practiceForA);
+    expect(r).toEqual({ ok: false, reason: "not_in_sitting" });
+  });
+
+  test("(staff A, own practice sitting) → the practice overlay, under the ASSESSMENT owner", async () => {
+    const { practiceForA } = await seedSittings();
+    const r = await resolveStudentForOwner(db, practiceForA.owner_sub, TEACHER_A, practiceForA);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.roster).toBeNull();
+    expect(r.student.owner_sub).toBe(PRACTICE_OWNER);
+    expect(r.student.practice_for_sub).toBe(TEACHER_A.sub);
+    expect(r.student.roster_ps_id).toBeNull();
+    expect(r.student.ssid).toBeNull();
+
+    // Idempotent: a second join finds the same row.
+    const again = await resolveStudentForOwner(db, practiceForA.owner_sub, TEACHER_A, practiceForA);
+    expect(again.ok && again.student.id).toBe(r.student.id);
+
+    // Without a sitting (the per-attempt routes): found for A, never for B,
+    // and B's probe leaves no row behind.
+    const noSitting = await resolveStudentForOwner(db, PRACTICE_OWNER, TEACHER_A);
+    expect(noSitting.ok && noSitting.student.id).toBe(r.student.id);
+    expect(await resolveStudentForOwner(db, PRACTICE_OWNER, TEACHER_B)).toEqual({
+      ok: false,
+      reason: "not_on_roster",
+    });
+    const rows = await db.select().from(students).where(eq(students.owner_sub, PRACTICE_OWNER));
+    expect(rows.filter((x) => x.practice_for_sub !== null).length).toBe(1);
   });
 });

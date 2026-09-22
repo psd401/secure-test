@@ -46,7 +46,12 @@ export async function loadItemAnalytics(assessmentId: string): Promise<{
     .select({ id: attempts.id })
     .from(attempts)
     .where(
-      and(eq(attempts.assessment_id, assessmentId), eq(attempts.status, "submitted")),
+      and(
+        eq(attempts.assessment_id, assessmentId),
+        eq(attempts.status, "submitted"),
+        // Practice (docs/practice-sitting-design.md, D-4): never counted.
+        eq(attempts.practice, false),
+      ),
     );
   const attemptIds = attemptRows.map((a) => a.id);
 

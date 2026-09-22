@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   alreadySubmitted,
   attemptAcceptsWrites,
@@ -39,7 +39,7 @@ const Body = z.object({
  * response says `direct` rather than making it guess from the URL.
  */
 export async function POST(req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId, itemId } = await ctx.params;

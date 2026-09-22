@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
-import { count, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import {
-  attempt_deletions,
-  attempt_events,
-  attempts,
-  response_uploads,
-  responses,
-} from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
 import { authorizeAttempt } from "@/lib/api/access";
+import { deleteAttemptRecord } from "@/lib/api/deleteAttempt";
 import { log } from "@/lib/log";
 import { getStorageProviderById } from "@/lib/storage/provider";
 import { UUID_RE } from "@/lib/uuid";
@@ -28,13 +21,11 @@ interface RouteContext {
  * attempt.
  *
  * Owner-only (D-R5): staff the assessment is shared with can score but not
- * erase a student's record. The DB cascades take responses, scores, uploads,
- * events and peek requests with the attempt; the stored upload bytes do not
- * cascade, so their keys are read first and deleted best-effort after the
- * commit (the assets route's pattern — an orphaned object is harmless, a
- * half-deleted attempt is not). The audit row is written in the same
- * transaction, into `attempt_deletions` because `attempt_events` goes with
- * the attempt.
+ * erase a student's record. The row delete — cascades plus the
+ * `attempt_deletions` audit row — is `deleteAttemptRecord`
+ * (lib/api/deleteAttempt.ts), shared with the practice-sitting sweep; the
+ * stored upload bytes it hands back are deleted best-effort here, after the
+ * commit (an orphaned object is harmless, a half-deleted attempt is not).
  *
  * An in-progress attempt whose test session is still open is refused with
  * 409 `session_open`: the student may be locked in and mid-answer, and their
@@ -57,39 +48,13 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const attempt = access.attempt;
 
-  if (await sittingIsOpen(db, attempt)) return sessionOpenResponse();
+  // Practice again (docs/practice-sitting-design.md, D-6): a practice
+  // attempt is the caller's own, so the open-sitting refusal is relaxed —
+  // deleting it is how the practice row returns to "Not started yet" while
+  // the practice sitting stays open for the next join.
+  if (!attempt.practice && (await sittingIsOpen(db, attempt))) return sessionOpenResponse();
 
-  const uploads = await db
-    .select({
-      storage_provider: response_uploads.storage_provider,
-      storage_key: response_uploads.storage_key,
-    })
-    .from(response_uploads)
-    .where(eq(response_uploads.attempt_id, attemptId));
-
-  await db.transaction(async (tx) => {
-    const [r] = await tx
-      .select({ n: count() })
-      .from(responses)
-      .where(eq(responses.attempt_id, attemptId));
-    const [e] = await tx
-      .select({ n: count() })
-      .from(attempt_events)
-      .where(eq(attempt_events.attempt_id, attemptId));
-    await tx.insert(attempt_deletions).values({
-      attempt_id: attempt.id,
-      assessment_id: attempt.assessment_id,
-      student_id: attempt.student_id,
-      deleted_by_sub: auth.session.sub,
-      attempt_status: attempt.status,
-      attempt_started_at: attempt.started_at,
-      attempt_submitted_at: attempt.submitted_at,
-      response_count: r?.n ?? 0,
-      upload_count: uploads.length,
-      event_count: e?.n ?? 0,
-    });
-    await tx.delete(attempts).where(eq(attempts.id, attemptId));
-  });
+  const uploads = await deleteAttemptRecord(db, attempt, auth.session.sub);
 
   for (const upload of uploads) {
     try {

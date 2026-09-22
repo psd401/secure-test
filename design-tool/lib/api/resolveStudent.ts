@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import {
+  assessments,
   students,
   type RosterStudentRow,
   type StudentRow,
@@ -7,6 +8,7 @@ import {
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isStaff } from "@/lib/auth/roles";
 import {
   findActiveRosterStudentsByEmail,
   normalizeEmail,
@@ -45,7 +47,10 @@ type Db = ReturnType<typeof getDb>;
  * under another's name. Every ambiguous case returns a reason, not a row.
  */
 export type StudentResolution =
-  | { ok: true; student: StudentRow; roster: RosterStudentRow; newlyBound: boolean }
+  /** `roster` is null only for a practice principal (a staff member sitting
+   * their own practice test, docs/practice-sitting-design.md D-3) — the one
+   * resolution that never consults the roster. */
+  | { ok: true; student: StudentRow; roster: RosterStudentRow | null; newlyBound: boolean }
   | { ok: false; reason: StudentResolutionFailure };
 
 export type StudentResolutionFailure =
@@ -64,7 +69,11 @@ export type StudentResolutionFailure =
 export type SittingScope = Pick<
   TestSessionRow,
   "owner_email" | "section_ps_id" | "student_ps_ids"
->;
+> &
+  // Practice sittings (D-1): optional so a scope built by hand stays a CLASS
+  // scope. Absent `kind` is `class`; the practice branch below requires it to
+  // say `practice` explicitly, so a missing field fails closed.
+  Partial<Pick<TestSessionRow, "kind" | "practice_for_sub" | "assessment_id">>;
 
 export async function resolveStudentForOwner(
   db: Db,
@@ -72,6 +81,11 @@ export async function resolveStudentForOwner(
   session: SessionPayload,
   sitting?: SittingScope,
 ): Promise<StudentResolution> {
+  // Practice (D-3): a staff principal never touches the roster. It resolves
+  // only to its own practice overlay, and only through a practice sitting
+  // that names it.
+  if (isStaff(session.role)) return resolvePracticePrincipal(db, ownerSub, session, sitting);
+
   const email = normalizeEmail(session.email);
   if (!email) return { ok: false, reason: "no_email" };
 
@@ -103,6 +117,9 @@ export async function isAdmittedToSitting(
   roster: RosterStudentRow,
   sitting: SittingScope,
 ): Promise<boolean> {
+  // D-1: a practice sitting admits exactly one principal — the staff member
+  // it names — and never a student.
+  if (sitting.kind === "practice") return false;
   if (sitting.student_ps_ids !== null && sitting.student_ps_ids !== undefined) {
     return sitting.student_ps_ids.includes(roster.ps_id);
   }
@@ -191,6 +208,97 @@ export async function findOrBindOverlay(
     .limit(1);
   if (winner) return { ok: true, student: winner, newlyBound: false };
   return { ok: false, reason: "identity_conflict" };
+}
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-3): the staff branch
+ * of `resolveStudentForOwner`.
+ *
+ * With a sitting in hand (join, redeem) the sitting must be `practice` AND
+ * name this caller's sub, else `not_in_sitting` — a class sitting, or a
+ * colleague's practice sitting, is never theirs. Without one (`loadOwnAttempt`,
+ * delivery) the practice overlay is only FOUND, never created — the same
+ * "a probe leaves no row behind" rule the student path keeps — and the
+ * caller's attempt comparison decides the rest.
+ *
+ * The overlay lives under the ASSESSMENT's owner, whoever started the sitting:
+ * with a sitting, the owner is read off its assessment; without one every
+ * caller already passes `assessments.owner_sub`. So a co-teacher practising
+ * (D-2, `run` level) gets one row under the owner — "one practice row per
+ * (assessment owner, practising teacher)" — and the per-attempt routes, which
+ * resolve against the assessment owner, find the same row the join created.
+ */
+async function resolvePracticePrincipal(
+  db: Db,
+  ownerSub: string,
+  session: SessionPayload,
+  sitting?: SittingScope,
+): Promise<StudentResolution> {
+  let overlayOwner = ownerSub;
+  if (sitting) {
+    if (sitting.kind !== "practice" || sitting.practice_for_sub !== session.sub) {
+      return { ok: false, reason: "not_in_sitting" };
+    }
+    if (sitting.assessment_id) {
+      const [assessment] = await db
+        .select({ owner_sub: assessments.owner_sub })
+        .from(assessments)
+        .where(eq(assessments.id, sitting.assessment_id))
+        .limit(1);
+      if (!assessment) return { ok: false, reason: "not_in_sitting" };
+      overlayOwner = assessment.owner_sub;
+    }
+    const created = await findOrCreatePracticeOverlay(db, overlayOwner, session);
+    return { ok: true, student: created.student, roster: null, newlyBound: created.created };
+  }
+  const [existing] = await db
+    .select()
+    .from(students)
+    .where(and(eq(students.owner_sub, overlayOwner), eq(students.practice_for_sub, session.sub)))
+    .limit(1);
+  if (!existing) return { ok: false, reason: "not_on_roster" };
+  return { ok: true, student: existing, roster: null, newlyBound: false };
+}
+
+/**
+ * D-3: the `students` row a practising staff member's attempt hangs off —
+ * `practice_for_sub = session.sub`, named "Practice — <address>", no roster
+ * binding and no SSID. Unique on (owner_sub, practice_for_sub), so two first
+ * joins racing converge on one row.
+ *
+ * The session carries no display name (only the verified address), so the
+ * label uses the address's local part — the name the Monitor and the
+ * per-student page show beside "Practice".
+ */
+export async function findOrCreatePracticeOverlay(
+  db: Db,
+  ownerSub: string,
+  session: SessionPayload,
+): Promise<{ student: StudentRow; created: boolean }> {
+  const where = and(eq(students.owner_sub, ownerSub), eq(students.practice_for_sub, session.sub));
+  const [existing] = await db.select().from(students).where(where).limit(1);
+  if (existing) return { student: existing, created: false };
+
+  const [created] = await db
+    .insert(students)
+    .values({
+      owner_sub: ownerSub,
+      practice_for_sub: session.sub,
+      name: practiceOverlayName(session),
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return { student: created, created: true };
+
+  // Lost a race with a concurrent first join: read the winner.
+  const [winner] = await db.select().from(students).where(where).limit(1);
+  if (!winner) throw new Error("findOrCreatePracticeOverlay: row vanished after a conflict");
+  return { student: winner, created: false };
+}
+
+export function practiceOverlayName(session: Pick<SessionPayload, "email">): string {
+  const local = normalizeEmail(session.email)?.split("@")[0];
+  return local ? `Practice — ${local}` : "Practice";
 }
 
 /** HTTP status for a failed resolution. Kept beside the reasons so callers

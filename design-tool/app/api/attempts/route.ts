@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { attempts, type AttemptRow } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   resolveStudentForOwner,
   statusForResolutionFailure,
@@ -31,7 +31,7 @@ const StartBody = z.object({
  * student to the new sitting (see `rebindIfMoved`).
  */
 export async function POST(req: Request) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   let body;
@@ -82,6 +82,11 @@ export async function POST(req: Request) {
         student_id: resolved.student.id,
         test_session_id: sitting.id,
         status: "in_progress",
+        // Practice (docs/practice-sitting-design.md, D-3/D-4): the flag every
+        // class reader filters on. The resolver above admits a staff
+        // principal ONLY through a practice sitting, so a practice attempt is
+        // never created any other way.
+        practice: sitting.kind === "practice",
       })
       .returning();
     return NextResponse.json({ attempt: created, resumed: false }, { status: 201 });

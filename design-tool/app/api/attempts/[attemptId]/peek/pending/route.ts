@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { peek_requests } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { attemptSittingIsOver } from "@/lib/api/sittingOver";
 import { PEEK_PENDING_TTL_MS, sweepExpiredPeekImages } from "@/lib/api/peek";
@@ -29,7 +29,7 @@ interface RouteContext {
  * posture, the seeder) reports "open": nothing governs it.
  */
 export async function GET(_req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId } = await ctx.params;

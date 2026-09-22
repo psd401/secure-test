@@ -27,7 +27,9 @@ export async function GET() {
       student_accommodations,
       eq(student_accommodations.student_id, students.id),
     )
-    .where(eq(students.owner_sub, auth.session.sub))
+    // Practice (docs/practice-sitting-design.md, D-4): a staff member's
+    // practice overlay row is not a student.
+    .where(and(eq(students.owner_sub, auth.session.sub), isNull(students.practice_for_sub)))
     .groupBy(students.id)
     .orderBy(asc(students.ssid));
   return NextResponse.json({ students: rows });

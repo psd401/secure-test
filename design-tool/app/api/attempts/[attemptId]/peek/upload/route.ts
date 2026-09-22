@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { peek_requests } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import {
   PEEK_MAX_IMAGE_BASE64_LENGTH,
@@ -32,7 +32,7 @@ const Body = z.object({
  * already told "unavailable".
  */
 export async function POST(req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId } = await ctx.params;

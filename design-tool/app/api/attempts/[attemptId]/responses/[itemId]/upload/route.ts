@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   alreadySubmitted,
   attemptAcceptsWrites,
@@ -32,7 +32,7 @@ interface RouteContext {
  * — because there is no signature to lean on.
  */
 export async function PUT(req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId, itemId } = await ctx.params;

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { ItemResponseSchema } from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import { responses } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   alreadySubmitted,
   attemptAcceptsWrites,
@@ -49,7 +49,7 @@ const WriteBody = z.object({ response: ItemResponseSchema });
  * retry path.
  */
 export async function PUT(req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId, itemId } = await ctx.params;
@@ -159,7 +159,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
  * caller's intent — no answer for this item — is satisfied either way.
  */
 export async function DELETE(_req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { attemptId, itemId } = await ctx.params;

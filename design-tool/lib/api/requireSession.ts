@@ -88,3 +88,25 @@ export async function requireStaff(): Promise<SessionOrResponse> {
 export async function requireStudent(): Promise<SessionOrResponse> {
   return requireRole("student");
 }
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-3): the student-plane
+ * routes also admit a STAFF principal, who can only ever reach a practice
+ * sitting that names their own sub — a staff member sitting their own test on
+ * their own Mac, through the very routes a student uses.
+ *
+ * The role gate is the only thing that widens here. The marker the resolvers
+ * read is the session's own `role` (`isStaff(session.role)` in
+ * `resolveStudentForOwner` / `listMySittings`), so no route changes shape and
+ * every later student-side feature works for practice for free. Every other
+ * role (a guardian, a pre-slice-77 session) is still 403.
+ */
+export async function requireStudentOrPractice(): Promise<SessionOrResponse> {
+  const session = await readSession();
+  if (!session) return { ok: false, response: unauthenticated() };
+  const role = mapRole(session.role);
+  if (role !== "student" && role !== "staff") {
+    return { ok: false, response: forbidden() };
+  }
+  return { ok: true, session };
+}

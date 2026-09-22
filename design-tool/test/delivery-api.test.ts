@@ -240,11 +240,15 @@ describe("GET /api/assessments/:id/delivery — who may read it", () => {
     expect((await getDelivery(id)).status).toBe(401);
   });
 
+  // Practice sittings (docs/practice-sitting-design.md, D-3) changed this
+  // from 403: a staff principal now passes the role gate, and reaches only
+  // the bundle of its OWN practice attempt. A teacher with none gets the
+  // same 404 as anyone the assessment was never delivered to.
   test("refuses a teacher — this is the student's copy", async () => {
     const id = await seedAllTypes();
     await admitStudent(id);
     principal = { sub: OWNER, role: "staff" };
-    expect((await getDelivery(id)).status).toBe(403);
+    expect((await getDelivery(id)).status).toBe(404);
   });
 
   // Authorisation is an existing attempt, not merely being on the roster. The

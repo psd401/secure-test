@@ -49,7 +49,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.assessment_id, id))
+    // Practice (docs/practice-sitting-design.md, D-4): a staff member's own
+    // practice hand-in never waits in the class's queue.
+    .where(and(eq(attempts.assessment_id, id), eq(attempts.practice, false)))
     .orderBy(asc(attempts.started_at));
   const submitted = attemptRows.filter((a) => a.status === "submitted");
   if (submitted.length === 0) {

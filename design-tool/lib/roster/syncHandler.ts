@@ -16,7 +16,13 @@
 
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import type { getDb } from "@/db/client";
-import { RETENTION_DAYS_DEFAULT, sweepEventTables, type SweepCounts } from "@/lib/retention/sweep";
+import {
+  PRACTICE_RETENTION_DAYS,
+  RETENTION_DAYS_DEFAULT,
+  sweepEventTables,
+  sweepPracticeSittings,
+  type SweepCounts,
+} from "@/lib/retention/sweep";
 import { importSnapshot, type ImportCounts, type ImportResult } from "./importSnapshot";
 
 type Db = ReturnType<typeof getDb>;
@@ -266,6 +272,7 @@ export async function handleS3Event(
     log({ event: "roster_sync_ignored", records: outcome.ignored });
   }
   await sweepBestEffort(db, log);
+  await sweepPracticeBestEffort(db, log);
   return outcome;
 }
 
@@ -287,6 +294,26 @@ async function sweepBestEffort(db: Db, log: SyncLogger): Promise<void> {
   } catch (err) {
     log({
       event: "retention_sweep_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Practice sittings (docs/practice-sitting-design.md, D-7): the second sweep,
+ * same best-effort rule and its own try so one failing never skips the other.
+ */
+async function sweepPracticeBestEffort(db: Db, log: SyncLogger): Promise<void> {
+  try {
+    const counts = await sweepPracticeSittings(db, new Date(), PRACTICE_RETENTION_DAYS);
+    log({
+      event: "practice_sweep",
+      retention_days: PRACTICE_RETENTION_DAYS,
+      ...counts,
+    });
+  } catch (err) {
+    log({
+      event: "practice_sweep_failed",
       error: err instanceof Error ? err.message : String(err),
     });
   }

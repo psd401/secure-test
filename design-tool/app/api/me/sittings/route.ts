@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { listMySittings } from "@/lib/api/mySittings";
 
 /**
@@ -16,7 +16,7 @@ import { listMySittings } from "@/lib/api/mySittings";
  * caller could join by code anyway.
  */
 export async function GET() {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const result = await listMySittings(getDb(), auth.session);

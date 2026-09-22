@@ -252,15 +252,20 @@ describe("GET /api/me/sittings", () => {
     expect(bySitting.get(second.id)!.code).toMatch(/^[A-Z0-9]{6}$/);
   });
 
-  test("explains an account that cannot be listed, and refuses staff", async () => {
+  test("explains an account that cannot be listed; staff with no practice sitting", async () => {
     const stranger = await listAs("nobody.here@edtools.psd401.net");
     expect(stranger).toEqual({ sittings: [], reason: "not_on_roster" });
 
     principal = { sub: "no-email-student", role: "student" };
     expect(await (await mySittings()).json()).toEqual({ sittings: [], reason: "no_email" });
 
+    // Practice sittings (docs/practice-sitting-design.md, D-3) changed this
+    // assertion: staff used to be 403 here. A staff sign-in now gets its own
+    // practice sittings — none yet, so an empty list and the reason.
     principal = staffPrincipal(TEACHER);
-    expect((await mySittings()).status).toBe(403);
+    const staff = await mySittings();
+    expect(staff.status).toBe(200);
+    expect(await staff.json()).toEqual({ sittings: [], reason: "no_practice_sitting" });
   });
 
   test("does not create an accommodations overlay row just by listing", async () => {

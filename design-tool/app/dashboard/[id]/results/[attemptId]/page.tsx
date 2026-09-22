@@ -280,6 +280,10 @@ export default async function AttemptResultPage({ params }: PageProps) {
 
   const results = await buildResults(id, {
     include_in_progress: true,
+    // Practice (docs/practice-sitting-design.md, D-4): the one reader that
+    // DOES show a practice attempt — reached only from the practice row, so
+    // a teacher can read back their own answers and the integrity timeline.
+    include_practice: true,
   });
   const row = results.rows.find((r) => r.attempt_id === attemptId);
   if (!row) {

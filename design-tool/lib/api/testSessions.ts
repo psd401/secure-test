@@ -96,6 +96,9 @@ export async function createSessionWithCode(
     section_ps_id?: string | null;
     student_ps_ids?: string[] | null;
     expires_at: Date;
+    /** Practice sittings (docs/practice-sitting-design.md, D-1). Default `class`. */
+    kind?: "class" | "practice";
+    practice_for_sub?: string | null;
   },
   attempts = 8,
 ) {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, test_sessions } from "@/db/schema";
+import { TEST_SESSION_KINDS, assessments, test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import {
   CodeExhaustionError,
@@ -34,6 +34,9 @@ const CreateBody = z.object({
   // list specific students. Not both.
   section_ps_id: PsId.optional(),
   student_ps_ids: z.array(PsId).min(1).max(500).optional(),
+  // Practice sittings (docs/practice-sitting-design.md, D-1/D-2): omitted =
+  // `class`. A practice sitting is for the caller alone and takes no scope.
+  kind: z.enum(TEST_SESSION_KINDS).optional(),
 });
 
 /**
@@ -141,6 +144,12 @@ export async function POST(req: Request) {
   // make-up group, but a teacher cannot admit a child they do not teach by
   // typing an id. Widening (coaches, admins) is open question 3.6.
   const ownerEmail = normalizeEmail(auth.session.email);
+  // D-1: a practice sitting admits exactly one principal — the caller — so a
+  // section or a student list on one is a contradiction, not a narrowing.
+  const practice = body.kind === "practice";
+  if (practice && (body.section_ps_id !== undefined || body.student_ps_ids !== undefined)) {
+    return NextResponse.json({ ok: false, error: "scope_conflict" }, { status: 400 });
+  }
   if (body.section_ps_id !== undefined && body.student_ps_ids !== undefined) {
     return NextResponse.json({ ok: false, error: "scope_conflict" }, { status: 400 });
   }
@@ -185,6 +194,13 @@ export async function POST(req: Request) {
         ? [...new Set(body.student_ps_ids)]
         : null,
       expires_at: expiresAt,
+      // D-1/D-2: `run` on the assessment (checked above) is all practice
+      // needs; the owner fields follow the creator exactly as a class
+      // sitting's do. `practice_for_sub` is the session's EFFECTIVE sub, so an
+      // act-as practice sitting is joinable only by the teacher (noted in the
+      // design, not special-cased).
+      kind: practice ? "practice" : "class",
+      practice_for_sub: practice ? auth.session.sub : null,
     });
     return NextResponse.json({ test_session: row }, { status: 201 });
   } catch (err) {

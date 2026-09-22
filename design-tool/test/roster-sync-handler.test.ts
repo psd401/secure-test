@@ -232,8 +232,9 @@ describe("handleS3Event with the mock source (DB)", () => {
     expect(active.length).toBe(7);
 
     // D-11: the retention sweep runs after the import and appends its own
-    // log line — the import's own line stays first.
-    expect(entries.length).toBe(2);
+    // log line — the import's own line stays first. The practice-sitting
+    // sweep (docs/practice-sitting-design.md, D-7) appends a third.
+    expect(entries.length).toBe(3);
     const line = JSON.stringify(entries[0]);
     expect(line).toContain('"status":"succeeded"');
     expect(line).toContain('"received":7');
@@ -244,6 +245,9 @@ describe("handleS3Event with the mock source (DB)", () => {
     const sweepLine = JSON.stringify(entries[1]);
     expect(sweepLine).toContain('"event":"retention_sweep"');
     expect(sweepLine).toContain('"retention_days":90');
+    const practiceLine = JSON.stringify(entries[2]);
+    expect(practiceLine).toContain('"event":"practice_sweep"');
+    expect(practiceLine).toContain('"retention_days":7');
   });
 
   test("CSV puts are ignored; only the manifest triggers an import", async () => {

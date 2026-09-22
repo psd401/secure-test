@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { attempts } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -64,7 +64,17 @@ export async function POST(_req: Request, ctx: RouteContext) {
   const onSitting = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.test_session_id, sitting.id))
+    .where(
+      and(
+        eq(attempts.test_session_id, sitting.id),
+        // Practice (docs/practice-sitting-design.md, D-4): a class sitting's
+        // sweep never touches a practice attempt, and a practice sitting's
+        // touches only its own. A practice attempt is only ever bound to a
+        // practice sitting, so this holds by construction too — checked
+        // anyway, on the flag every class reader uses.
+        eq(attempts.practice, sitting.kind === "practice"),
+      ),
+    )
     .orderBy(asc(attempts.started_at));
 
   const handed: { attempt_id: string; status: string }[] = [];

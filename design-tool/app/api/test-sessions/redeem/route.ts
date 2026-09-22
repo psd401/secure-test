@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, eq, gt } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { test_sessions } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   isWellFormedCode,
   normalizeCode,
@@ -28,7 +28,7 @@ const RedeemBody = z.object({ code: z.string().min(1).max(32) });
  * attempt. Creating the attempt itself is slice 61.
  */
 export async function POST(req: Request) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   let body;

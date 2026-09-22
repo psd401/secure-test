@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, attempts } from "@/db/schema";
-import { requireStudent } from "@/lib/api/requireSession";
+import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import {
   resolveStudentForOwner,
   statusForResolutionFailure,
@@ -37,7 +37,7 @@ interface RouteContext {
  * admitted to.
  */
 export async function GET(_req: Request, ctx: RouteContext) {
-  const auth = await requireStudent();
+  const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;

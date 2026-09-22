@@ -169,8 +169,20 @@ describe("POST /api/client-errors", () => {
     expect(await rows()).toHaveLength(0);
   });
 
-  test("a staff session answers 403 — this is the student plane", async () => {
+  // Practice sittings (docs/practice-sitting-design.md, D-3) changed this
+  // from 403: a teacher practising on their own Mac runs the same client, and
+  // its error drain posts under the teacher's own sub.
+  test("a staff session is accepted — a practising teacher's client drains too", async () => {
     principal = staffPrincipal("some-teacher", TEACHER_EMAIL);
+    const res = await post({ errors: [entry()] });
+    expect(res.status).toBe(200);
+    const stored = await rows();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.sub).toBe("some-teacher");
+  });
+
+  test("any other role answers 403", async () => {
+    principal = { sub: "guardian-sub", role: "guardian" } as typeof principal;
     const res = await post({ errors: [entry()] });
     expect(res.status).toBe(403);
     expect(await rows()).toHaveLength(0);

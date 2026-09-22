@@ -276,7 +276,13 @@ export async function selectCorpusResponses(
   db: Db,
   opts: SelectCorpusOptions,
 ): Promise<CorpusRow[]> {
-  const where = [eq(attempts.status, "submitted"), eq(items.type, "essay")];
+  // Practice (docs/practice-sitting-design.md, D-4/D-7): a staff member's
+  // practice essay is never research data.
+  const where = [
+    eq(attempts.status, "submitted"),
+    eq(attempts.practice, false),
+    eq(items.type, "essay"),
+  ];
   if (opts.assessment) where.push(eq(items.assessment_id, opts.assessment));
   if (opts.item) where.push(eq(items.id, opts.item));
   if (opts.owner) where.push(eq(assessments.owner_sub, opts.owner));
