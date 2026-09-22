@@ -827,7 +827,19 @@ PB-4 a `not_joined` row whose in-progress attempt on the assessment was passed
 back carries `passed_back_waiting` and the note "Passed back · waiting to
 rejoin". R-2 / R-3 need no code (rows 139 / 132 were reworded 2026-09-11).
 Re-check on the next deploy: 219 (E-1), 222 (CT-1), 231 (PB-1 / PB-2),
-233 (PB-3), 235 (PB-4).
+233 (PB-3), 235 (PB-4). **Re-checked ✅ 2026-09-22 ~16:35 PT on rev 48**
+(Chrome on the origin): 219 the Row S-f timeline reads "Time extended by
+teacher 8:45 AM · new deadline Sep 23, 11:59 PM"; 231 Earlier scores reads
+"Q3: 1 / 1 (auto-scored) · …" and the Pass back dialog "Their 1 score is kept
+as a record…"; 233 the hint reads "This attempt has a deadline — pick when it
+ends now."; 235 the Monitor for the ended `8V5EBF` shows "Passed back ·
+waiting to rejoin" on the (copy) fixture's passed-back student (the
+attendance JSON carries `passed_back_waiting: true`, status `not_joined`);
+222 the Share dialog with no roster suggestions labels the field "Enter a
+staff email". To reach the dialog the Row S-f attempt was handed in by
+teacher and passed back again with the same Sep 23 23:59 deadline — it now
+reads "passed back 3 times" with one more superseded score, still ready for
+the client rows 232 / 234.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
