@@ -690,3 +690,6 @@ check and adds the test that keeps it that way.
   origin/main `472372a`, task def rev 47, rollout COMPLETED, health stamp =
   HEAD, Aurora at **0040** via `deploy.sh`'s migrate step (41 journal rows).**
   Rows 245–252 NOT RUN.
+- **Rows 245–250 ✅, 251 half (empty state only — no open sitting that
+  evening) 2026-09-21** on rev 47, Chrome on the origin. 252 needs a second
+  staff account.
