@@ -209,11 +209,26 @@ final class WebViewAuthPresenter: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard !Self.isCancelledNavigation(error) else { return }
         finish(.failure(error))
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard !Self.isCancelledNavigation(error) else { return }
         finish(.failure(error))
+    }
+
+    /// D-3 (`docs/client-v1-3-5-design.md`, SI-1): `NSURLErrorCancelled`
+    /// (-999) is WebKit's ordinary shape for a navigation superseded by
+    /// another — a redirect issued while a POST was in flight, most often —
+    /// not a failure. The pilot's `cancelled` rows on day 1 were students
+    /// backing out of the sheet (the Cancel button, which still calls
+    /// `finish` directly); this only silences the standard WebKit pattern so
+    /// the sheet stays up and the superseding navigation carries on. No
+    /// retry logic — the superseding navigation IS the retry.
+    private static func isCancelledNavigation(_ error: Error) -> Bool {
+        (error as NSError).domain == NSURLErrorDomain
+            && (error as NSError).code == NSURLErrorCancelled
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {

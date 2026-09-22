@@ -145,3 +145,76 @@ before.
 ## Progress
 
 2026-09-22: this note. Nothing built.
+
+**Slices 1 + 2 BUILT 2026-09-22, not committed, not deployed, not released.**
+
+Slice 1 (Core, `client/SecureTestCore`):
+
+- `AssessmentLockdown.swift` — D-1: `Timings.init`'s `grace` default raised
+  5s → 20s (the only call sites, `Timings(watchdog:)` and
+  `fromEnvironment`, take the default, so both Debug and Release move
+  together with no other change). `endBeforeTeardown` now arms a second
+  timer at `grace / 2` on the same backstop scheduler that logs "still
+  waiting for DID END after Ns (grace Ms)" via `onLog` (→ the app's
+  `[security]` stderr channel) and is cancelled in `finishTeardown`
+  alongside the backstop itself, so a confirmed-early teardown leaves
+  nothing armed.
+- `CrashReporter.swift` — D-2: new `timedUnrecoverableLine(stamp:attemptID:occurredAt:osVersion:)`
+  builds the JSON line fresh (`occurred_at` ISO 8601 UTC, `context.os_version`
+  from `ProcessInfo.operatingSystemVersionString`) instead of reusing the
+  install-time buffer, and `writeTimedUnrecoverableLine(stamp:attemptID:)`
+  writes it with the same synchronous `write(2)` to `crashDescriptor` the
+  signal path uses. The old `writeUnrecoverableLine()` / pre-formatted
+  buffer path is untouched (the signal handlers still need it — they
+  cannot read a clock).
+- `AppDelegate.swift`'s `lockdown.onUnrecoverable` now calls
+  `CrashReporter.writeTimedUnrecoverableLine(stamp: Self.buildStamp,
+  attemptID: ClientErrorLog.shared?.attemptID)` instead of
+  `writeUnrecoverableLine()`.
+- Tests: `AssessmentLockdownTests.swift` (`testWatchdogDefaultsShortForTheTestingPosture`,
+  `testWatchdogIsDisabledWhenOverridesAreNotAllowed` updated for the new
+  default; `testHalfGraceStderrLineFiresBeforeTheBackstop`,
+  `testHalfGraceTimerIsCancelledWhenTeardownConfirmsEarly` added) and
+  `CrashReporterTests.swift` (`testTimedUnrecoverableLineCarriesOccurredAtAndOSVersion`,
+  `testTimedUnrecoverableLineOmitsAttemptIDWhenNoneIsOpen`,
+  `testWriteTimedUnrecoverableLineLandsInTheLogFile`,
+  `testWriteTimedUnrecoverableLineIsANoOpWithNoDescriptor`).
+
+Slice 2 (App + page script):
+
+- `WebViewAuthPresenter.swift` — D-3: both `didFail…` delegates now check a
+  new `isCancelledNavigation(_:)` (`NSURLErrorDomain` / `NSURLErrorCancelled`)
+  and return without finishing the sheet when it matches, leaving the
+  superseding navigation to carry on. The Cancel button's path
+  (`cancelPressed` → `finish(.failure(.cancelled))`) is untouched, so a
+  student backing out of the sheet is unaffected. No JSC/unit coverage
+  possible here (no window server); this is a `client/MANUAL-CHECKS.md` row.
+- `SessionEntryViewController.swift` — D-3's second half: `refreshSignInState()`
+  used to unconditionally overwrite `statusLabel` with "Sign in with your
+  school Google account first." whenever signed out, which clobbered the
+  "Sign-in was cancelled." / "Could not sign in. Tell your teacher." lines
+  set immediately before the `await refreshSignInState()` call that follows
+  every sign-in failure — the 2026-09-21 reading ("the bare sign-in card
+  came back"). Fixed: that branch now only fills the line when it is
+  already empty.
+- `AssessmentPage.swift` — D-4 (AS-1): the `textAutosave` module's
+  `el.onchange` handler posted unconditionally even when an idle/ceiling
+  autosave had already posted the identical text moments before blur. Now
+  compares `current()` against `lastPosted` first (the same check the
+  autosave path already used) and skips the underlying `change` post
+  (`priorChange`) when nothing changed, while still updating `lastPosted`
+  either way.
+- Tests: `RendererTextAutosaveTests.swift` (`testBlurAfterAnAutosaveOfTheSameTextDoesNotPostAgain`,
+  `testBlurWithNewTextAfterAnAutosaveStillPosts`) — the JSC harness the
+  existing autosave tests already use (`RendererHarness`, the virtual-clock
+  prelude).
+
+`swift test`: 677 → 690 (13 new). `xcodebuild` green, Debug and Release
+(Release rebuilt because the exit path both D-1 and D-2 touch runs there).
+No `client/MANUAL-CHECKS.md` rows written yet, no `MARKETING_VERSION` bump,
+no release — that is slice 3/4, later, together with the practice-sitting
+client copy (`docs/practice-sitting-design.md` slice 3, built the same
+session).
+
+Not built from this note: slice 3 (MANUAL-CHECKS rows, `MARKETING_VERSION`
+1.3.5) and slice 4 (release).

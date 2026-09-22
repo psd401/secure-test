@@ -373,7 +373,13 @@ final class SessionEntryViewController: NSObject {
         if needsSetup {
             statusLabel.stringValue = ""
             log("entry: not configured — no server URL and/or no google client id")
-        } else if signInConfigured && !signedIn {
+        } else if signInConfigured && !signedIn && statusLabel.stringValue.isEmpty {
+            // D-3 (docs/client-v1-3-5-design.md): a cancel or a failed sign-in
+            // sets its own line just before calling this — "Sign-in was
+            // cancelled." / "Could not sign in. Tell your teacher." — and
+            // this generic prompt must not clobber it (the 2026-09-21 reading
+            // was "the bare sign-in card came back"). Only fill the line when
+            // it is still blank.
             statusLabel.stringValue = "Sign in with your school Google account first."
         }
         if signedIn {

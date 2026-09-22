@@ -655,11 +655,21 @@ public enum AssessmentPage {
         // `change` still posts at once — blur beats the timer — and takes the
         // pending timers with it, since the value it posts is the one they
         // would have sent.
+        //
+        // D-4 (docs/client-v1-3-5-design.md, AS-1): an autosave may already
+        // have posted this exact text moments before the field lost focus —
+        // the idle timer fires independently of blur — and `change` used to
+        // post again regardless, one duplicate POST per focus with no data
+        // effect. Same rule as the autosave itself: skip the underlying post
+        // when nothing has changed since the last one, but still take the
+        // current text as the new baseline either way.
         var priorChange = el.onchange;
         el.onchange = function (event) {
           cancelTimers();
           dirty = false;
+          var alreadyPosted = current() === lastPosted;
           lastPosted = current();
+          if (alreadyPosted) return;
           if (typeof priorChange === 'function') priorChange.call(el, event);
         };
 

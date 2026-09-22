@@ -196,6 +196,35 @@ final class RendererTextAutosaveTests: XCTestCase {
         XCTAssertEqual(try posts(h, forItem: Self.essay).count, 1, "no duplicate autosave")
     }
 
+    /// AS-1 (`docs/client-v1-3-5-design.md`, D-4): leaving a field right after
+    /// the idle timer already posted the same text must not post again — the
+    /// guard applies to `onchange`, not just the timers, so blurring after an
+    /// autosave costs no duplicate POST.
+    func testBlurAfterAnAutosaveOfTheSameTextDoesNotPostAgain() throws {
+        let h = try harness()
+        try type(h, essayArea, "Blurred")
+        try advance(h, 5000)
+        XCTAssertEqual(try posts(h, forItem: Self.essay).count, 1, "the idle timer's post")
+
+        try h.eval("\(essayArea).onchange();")
+        XCTAssertEqual(try posts(h, forItem: Self.essay).count, 1, "nothing changed since the autosave")
+    }
+
+    /// The other side of the same guard: a change with NEW text since the
+    /// last post still goes through `change` at once, exactly as before.
+    func testBlurWithNewTextAfterAnAutosaveStillPosts() throws {
+        let h = try harness()
+        try type(h, essayArea, "First")
+        try advance(h, 5000)
+        XCTAssertEqual(try posts(h, forItem: Self.essay).count, 1)
+
+        try type(h, essayArea, "First and more")
+        try h.eval("\(essayArea).onchange();")
+        let posted = try posts(h, forItem: Self.essay)
+        XCTAssertEqual(posted.count, 2)
+        XCTAssertEqual((posted[1]["response"] as? [String: Any])?["text"] as? String, "First and more")
+    }
+
     // MARK: - the host's flush hook
 
     func testFlushInputPostsADirtyFieldThatIsNotFocused() throws {
