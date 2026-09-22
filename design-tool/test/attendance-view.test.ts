@@ -35,6 +35,7 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     alert: null,
     attempt_id: "a",
     timed: false,
+    passed_back_waiting: false,
     ...over,
   };
 }
@@ -174,6 +175,13 @@ describe("submitted_earlier (H-1)", () => {
       ),
     ).toBeNull();
     expect(earlierSessionNote(row({ status: "not_joined" }))).toBeNull();
+  });
+
+  // PB-4 (2026-09-22): a passed-back attempt waiting for its student.
+  test("a passed-back attempt waiting to rejoin gets its own line", () => {
+    expect(
+      earlierSessionNote(row({ status: "not_joined", passed_back_waiting: true })),
+    ).toBe("Passed back · waiting to rejoin");
   });
 
   // James, 2026-09-17: it counts under the Handed in tile, not Not joined.

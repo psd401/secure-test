@@ -663,7 +663,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 <span className="text-foreground">
                   {s.points} / {s.max}
                 </span>{" "}
-                ({METHOD_WORD[s.method] ?? s.method} by {s.scorer}) ·{" "}
+                ({METHOD_WORD[s.method] ?? s.method}) ·{" "}
                 {formatWhen(s.created_at)}
               </li>
             ))}

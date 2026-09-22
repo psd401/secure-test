@@ -449,6 +449,7 @@ describe("GET /api/test-sessions/:id/attendance", () => {
         last_activity_at: string | null;
         deadline_passed: boolean;
         alert: unknown;
+        passed_back_waiting: boolean;
       }[];
       counts: { expected: number; joined: number; submitted: number; submitted_earlier: number };
     };
@@ -473,7 +474,20 @@ describe("GET /api/test-sessions/:id/attendance", () => {
       attempt_id: null,
       answered: 0,
       submitted_at: null,
+      passed_back_waiting: false,
     });
+    expect(byId.get(STUDENT.ps_id)!.passed_back_waiting).toBe(false);
+
+    // PB-4 (2026-09-22): once that in-progress attempt was passed back, the
+    // row stays not_joined but says it is waiting for the student.
+    await db
+      .update(attempts)
+      .set({ pass_back_count: 1 })
+      .where(eq(attempts.status, "in_progress"));
+    const afterPassBack = (await (await attendance(today.id)).json()) as Body;
+    expect(
+      afterPassBack.rows.find((r) => r.ps_id === OTHER_STUDENT.ps_id),
+    ).toMatchObject({ status: "not_joined", attempt_id: null, passed_back_waiting: true });
 
     // James, 2026-09-17: counted apart — "0 of 2 joined · 0 handed in · 1
     // already handed in"; Ben's in-progress attempt elsewhere is not joined.

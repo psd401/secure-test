@@ -43,7 +43,7 @@ function describe(e: unknown): string {
 export function passBackCopy(studentName: string, scoreCount: number): string {
   const kept =
     scoreCount > 0
-      ? `Their ${scoreCount} score${scoreCount === 1 ? "" : "s"} are kept as a record ` +
+      ? `Their ${scoreCount === 1 ? "1 score is" : `${scoreCount} scores are`} kept as a record ` +
         "and the test is scored again on the next hand-in."
       : "The test is scored on the next hand-in.";
   return `Their answers stay; they can change them and hand in again. ${kept}`;
@@ -165,7 +165,7 @@ export function PassBackControl({
                 className="mt-0.5 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
               />
               <span className="mt-1 block text-xs text-muted-foreground">
-                This test has a time limit — pick when it ends now.
+                This attempt has a deadline — pick when it ends now.
               </span>
             </label>
           ) : null}

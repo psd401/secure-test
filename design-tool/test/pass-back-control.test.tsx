@@ -54,7 +54,8 @@ describe("passBackCopy", () => {
   });
 
   test("a singular score count drops the plural s", () => {
-    expect(passBackCopy("Alex", 1)).toContain("Their 1 score ");
+    // PB-1 (2026-09-22): the verb agrees too.
+    expect(passBackCopy("Alex", 1)).toContain("Their 1 score is kept as a record");
   });
 
   test("zero scores: the simpler line", () => {

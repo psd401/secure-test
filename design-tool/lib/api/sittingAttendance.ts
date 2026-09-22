@@ -97,6 +97,11 @@ export interface AttendanceRow {
    * attempt.deadline_override_at !== null`). False on `not_joined`, where
    * there is no attempt to pass back at all. */
   timed: boolean;
+  /** PB-4 (2026-09-22): a `not_joined` row whose student's attempt on this
+   * assessment was passed back and is waiting for them to rejoin — the join
+   * route rebinds it to this sitting, so the row stays `not_joined` until
+   * they do, but the teacher is told what to expect. False otherwise. */
+  passed_back_waiting: boolean;
   /** Slice 91: the newest client-reported event, whatever its kind. Null on a
    * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
@@ -222,13 +227,15 @@ export async function attendanceForSitting(
   // H-1 (2026-09-17): the expected students with NO attempt on this sitting
   // who nonetheless already handed this assessment in through an earlier one.
   // One extra query over exactly that set, and only when it is non-empty.
-  // Deliberately `status = 'submitted'` only: a student whose other attempt is
-  // still in progress CAN join today (the join route rebinds an in-progress
-  // attempt to the new sitting), so they stay a plain `not_joined`.
+  // Only a `submitted` attempt makes the row `submitted_earlier`: a student
+  // whose other attempt is still in progress CAN join today (the join route
+  // rebinds an in-progress attempt to the new sitting), so they stay
+  // `not_joined` — PB-4 only adds a note when that attempt was passed back.
   const notJoinedPsIds = [...expected.keys()].filter(
     (psId) => !byKey.has(psId),
   );
   const earlierByPsId = new Map<string, (typeof joined)[number]>();
+  const passedBackWaiting = new Set<string>();
   if (notJoinedPsIds.length > 0) {
     const rows = await db
       .select({ attempt: attempts, student: students })
@@ -237,7 +244,7 @@ export async function attendanceForSitting(
       .where(
         and(
           eq(attempts.assessment_id, sitting.assessment_id),
-          eq(attempts.status, "submitted"),
+          inArray(attempts.status, ["submitted", "in_progress"]),
           inArray(students.roster_ps_id, notJoinedPsIds),
         ),
       )
@@ -246,8 +253,10 @@ export async function attendanceForSitting(
     // there can only be one; ordering oldest-first means the newest wins if
     // that ever changes.
     for (const row of rows) {
-      if (row.student.roster_ps_id)
-        earlierByPsId.set(row.student.roster_ps_id, row);
+      const psId = row.student.roster_ps_id;
+      if (!psId) continue;
+      if (row.attempt.status === "submitted") earlierByPsId.set(psId, row);
+      else if (row.attempt.pass_back_count > 0) passedBackWaiting.add(psId);
     }
   }
 
@@ -401,6 +410,7 @@ export async function attendanceForSitting(
       alert: hit ? events(hit).alert : null,
       last_lockdown_begin_at: hit ? events(hit).last_lockdown_begin_at : null,
       timed: hit ? timedOf(hit) : earlier ? timedOf(earlier) : false,
+      passed_back_waiting: !hit && passedBackWaiting.has(psId),
     });
   }
   for (const [key, hit] of byKey) {
@@ -422,6 +432,7 @@ export async function attendanceForSitting(
       alert: events(hit).alert,
       last_lockdown_begin_at: events(hit).last_lockdown_begin_at,
       timed: timedOf(hit),
+      passed_back_waiting: false,
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));

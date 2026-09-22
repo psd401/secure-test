@@ -130,6 +130,20 @@ describe("buildTimeline — one line per kind", () => {
     expect(lines[0]!.text).not.toContain("teacher-sub");
   });
 
+  // E-1 (2026-09-22): a deadline on another day carries its date.
+  test("a next-day deadline carries its date", () => {
+    const lines = buildTimeline([
+      {
+        kind: "deadline_extended",
+        at: at("21:07:00"),
+        detail: { ends_at: "2026-09-09T06:59:00Z" },
+      },
+    ]);
+    expect(lines[0]!.text).toMatch(
+      /^Time extended by teacher 2:07 PM · new deadline Sep 8.*11:59 PM$/,
+    );
+  });
+
   test("deadline_extended with no usable detail still reads as a sentence", () => {
     for (const detail of [null, {}, { ends_at: "not a date" }]) {
       const lines = buildTimeline([

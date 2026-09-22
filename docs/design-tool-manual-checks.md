@@ -816,6 +816,18 @@ record" — singular / plural agreement; **PB-2** the Earlier-scores line reads
 "(auto-scored by auto)"; **PB-3** the deadline hint "This test has a time
 limit" also shows for an untimed test whose attempt carries an Extend-time
 override (the override is what opens the picker, as the row expected).
+**E-1, CT-1, PB-1…PB-4 BUILT 2026-09-22** (one commit, not deployed — rides
+with the practice-sitting server slice): E-1 the timeline dates a deadline
+on another day than its event (`formatWhen` against the event's instant);
+CT-1 the field reads "Enter a staff email" when the roster has no
+suggestions; PB-1 "Their 1 score is kept"; PB-2 the Earlier-scores line
+drops "by <scorer>" (an opaque id or provider name) and reads "(auto-scored)";
+PB-3 the hint reads "This attempt has a deadline — pick when it ends now.";
+PB-4 a `not_joined` row whose in-progress attempt on the assessment was passed
+back carries `passed_back_waiting` and the note "Passed back · waiting to
+rejoin". R-2 / R-3 need no code (rows 139 / 132 were reworded 2026-09-11).
+Re-check on the next deploy: 219 (E-1), 222 (CT-1), 231 (PB-1 / PB-2),
+233 (PB-3), 235 (PB-4).
 
 | # | Check | Expected | Result |
 |---|---|---|---|

@@ -47,6 +47,8 @@ export interface AttendanceRow {
   /** Pass back (docs/pass-back-design.md): whether this row's attempt needs a
    * new deadline before it can be passed back. False on `not_joined`. */
   timed: boolean;
+  /** PB-4: a `not_joined` row whose passed-back attempt waits for a rejoin. */
+  passed_back_waiting: boolean;
 }
 
 export interface AttendancePayload {
@@ -105,10 +107,14 @@ export function statusLabel(status: AttendanceRow["status"]): string {
 }
 
 /** H-1: the monitor's detail line under the badge, or null when there is
- * nothing extra to say. Pure so it can be tested without a DOM. */
+ * nothing extra to say. Pure so it can be tested without a DOM. PB-4: a
+ * passed-back attempt waiting for its student to rejoin gets a line too. */
 export function earlierSessionNote(
-  r: Pick<AttendanceRow, "status" | "submitted_at">,
+  r: Pick<AttendanceRow, "status" | "submitted_at"> &
+    Partial<Pick<AttendanceRow, "passed_back_waiting">>,
 ): string | null {
+  if (r.status === "not_joined" && r.passed_back_waiting)
+    return "Passed back · waiting to rejoin";
   if (r.status !== "submitted_earlier") return null;
   return r.submitted_at
     ? `Handed in ${when(r.submitted_at)} in an earlier session`

@@ -319,7 +319,9 @@ export function ShareDialog({
             }}
           >
             <div className="flex-1">
-              <Label htmlFor="co-teach-email">Or enter a staff email</Label>
+              <Label htmlFor="co-teach-email">
+                {openSuggestions.length > 0 ? "Or enter a staff email" : "Enter a staff email"}
+              </Label>
               <Input
                 id="co-teach-email"
                 type="email"

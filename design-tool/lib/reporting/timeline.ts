@@ -15,7 +15,7 @@
 // same clock every other teacher-facing date on this app is rendered in.
 
 import { eventLabel } from "@/app/dashboard/[id]/attendanceView";
-import { formatTime } from "@/lib/ui/format";
+import { formatTime, formatWhen } from "@/lib/ui/format";
 
 export interface TimelineEvent {
   at: string;
@@ -81,7 +81,9 @@ function lineText(event: TimelineEvent): string {
  * and a line that said only "extended" would send them to the events table for
  * it. A pass back on an UNLIMITED assessment writes `ends_at: null`, so it gets
  * the bare sentence; so does a row written without the detail (or with a
- * nonsense value), rather than printing "Invalid Date".
+ * nonsense value), rather than printing "Invalid Date". A deadline on a
+ * different day from the event carries its date (E-1, 2026-09-22): "new
+ * deadline Sep 23, 11:59 PM", not a bare "11:59 PM" that reads as tonight.
  */
 const KINDS_WITH_DEADLINE: ReadonlySet<string> = new Set([
   "deadline_extended",
@@ -92,7 +94,7 @@ function lineSuffix(event: TimelineEvent): string {
   if (!KINDS_WITH_DEADLINE.has(event.kind)) return "";
   const endsAt = event.detail?.ends_at;
   if (typeof endsAt !== "string" || Number.isNaN(Date.parse(endsAt))) return "";
-  return ` · new deadline ${formatTime(endsAt)}`;
+  return ` · new deadline ${formatWhen(endsAt, new Date(event.at))}`;
 }
 
 /**
