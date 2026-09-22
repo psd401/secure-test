@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
-import { buildResults, type ResultsCell, type ResultsRow } from "@/lib/scoring/results";
+import {
+  buildResults,
+  sectionFilterOptions,
+  type ResultsCell,
+} from "@/lib/scoring/results";
 import { formatMean } from "@/lib/reporting/analytics";
 import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
@@ -38,14 +42,6 @@ const CELL_TITLE: Record<ResultsCell["status"], string> = {
   unscored: "Awaiting scoring",
   no_response: "No response",
 };
-
-/** The distinct section labels on these rows, alphabetical, blanks last. */
-function sectionOptions(rows: ResultsRow[]): { labels: string[]; hasBlank: boolean } {
-  const labels = [
-    ...new Set(rows.map((r) => r.student.section).filter((s): s is string => !!s)),
-  ].sort((a, b) => a.localeCompare(b));
-  return { labels, hasBlank: rows.some((r) => !r.student.section) };
-}
 
 // Slice 40 + R1 (docs/reporting-design.md): teacher-facing results matrix.
 // Server-rendered — the only interactivity is the CSV link and the section
@@ -83,7 +79,9 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
 
   const raw = (await searchParams).section;
   const selectedSection = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
-  const { labels, hasBlank } = sectionOptions(results.rows);
+  // Co-teacher follow-ups, 2026-09-22: the options also carry every section a
+  // class sitting named (a co-teacher's included), not only labels on rows.
+  const { labels, hasBlank } = sectionFilterOptions(results);
   const filtered =
     selectedSection === ""
       ? results.rows

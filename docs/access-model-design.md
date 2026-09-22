@@ -745,3 +745,49 @@ check and adds the test that keeps it that way.
   owner's Students page lists such a student under "unlinked"; the results
   section label / work-packet enrolment count use only the owner's sections.
   Design-tool **2167** tests.
+- **2026-09-22 — co-teacher follow-ups: sections + Students page (BUILT,
+  not deployed).** The two gaps the tenant fix left open (James: build
+  both). **Students page:** `teacherRoster` (`lib/roster/teacherRoster.ts`)
+  now splits overlay rows the owner's current sections did not match into
+  `coTaught` groups and the rest (`unlinked`). A row is co-taught when its
+  student has a non-practice attempt on one of the owner's assessments
+  through a CLASS sitting whose `owner_sub` is not the owner — the only path
+  by which a join writes an owner row from someone else's sitting
+  (`sittingTenantSub`); the newest such sitting picks the group, keyed by
+  that sitting's `section_ps_id` + `owner_email`. The page renders each group
+  like one of the teacher's own sections — heading = the section label +
+  "co-taught · N students", a line naming the co-teacher's email and that the
+  student joined through a co-taught assessment — with the same row links
+  (accommodation editing unchanged). Which rows exist is unchanged.
+  **Results:** reading the code showed the per-attempt section label was
+  ALREADY right — `buildResults`' `resolveSection` reads the attempt's
+  sitting first — so a co-teacher's student already carried the co-teacher's
+  section and the row-derived filter already offered it (the test asserts
+  both as a regression guard; they pass on the pre-fix code). What was
+  owner-only: (1) the filter offered only labels on rows, so a section a
+  sitting named with nobody handed in yet was missing — `AssessmentResults`
+  now carries `sitting_sections` (every section a class sitting on the
+  assessment named, whoever ran it) and `sectionFilterOptions` (exported;
+  the results page uses it in place of its local `sectionOptions`) unions
+  the two; (2) the work packet's "N of M enrolled" counted only the owner's
+  sections — new `sectionEnrolment(db, assessmentId, label)` counts current
+  enrollment in the union of the owner's currently taught sections and the
+  sitting-named ones (new `studentsEnrolledInSection` in
+  `lib/roster/queries.ts`, no teacher in the join), deduped by student;
+  still 0 when an owner email is known and nothing matches, null only with
+  neither. Practice stays excluded: sittings by `kind = 'class'`, attempts by
+  `practice = false`. **Other owner-sections lookups checked:** results
+  fallback (b) (`studentsInTeachersSections(ownerEmail)` for an attempt whose
+  sitting named no section) — left as is by design ("else the current
+  owner-section logic"); the per-student page, print report + summary, CSV
+  and `lib/reporting/*` read `buildResults`' label and add no lookup of their
+  own; the print report has no filter UI (it takes `?section=` from the
+  matrix); `sittingAttendance` (the Monitor) reads the SITTING's owner, which
+  is right for admission; `POST /api/test-sessions` / `/api/roster/*` are the
+  caller's own sections by design. Tests: the third case in
+  `test/co-teacher-tenant.test.ts` — the English-9 option, the enrolment
+  count and the Students-page classification each fail on the pre-fix code
+  (verified with the non-test changes stashed); the section label and the
+  Biology option pass on it (see above). No existing test changed. No
+  migration. Rows 263–267 in `docs/design-tool-manual-checks.md` NOT RUN —
+  they need a live co-teach grant (held with 223 / 228 / 230).

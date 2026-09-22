@@ -11,10 +11,15 @@ import {
   students,
   test_sessions,
   type ItemRow,
+  type RosterSectionRow,
 } from "@/db/schema";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
-import { studentsInTeachersSections } from "@/lib/roster/queries";
+import {
+  sectionsCurrentlyTaughtBy,
+  studentsEnrolledInSection,
+  studentsInTeachersSections,
+} from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { tableMaxPoints } from "@/lib/scoring/auto";
 
@@ -112,6 +117,29 @@ export interface AssessmentResults {
   assessment_id: string;
   items: Array<{ id: string; position: number; type: string; stem: string }>;
   rows: ResultsRow[];
+  // Co-teacher follow-ups, 2026-09-22 (docs/access-model-design.md §Progress):
+  // the label of every section one of this assessment's CLASS sittings named,
+  // whoever ran it — a co-teacher's sitting (access D-5) names the
+  // co-teacher's section, which the owner does not teach. Alphabetical. The
+  // section filter offers these even before anyone in them has a row.
+  sitting_sections: string[];
+}
+
+/** The section filter's options (the results matrix; the print report reads
+ * the same `?section=` labels): every label on a row plus every section a
+ * class sitting named, alphabetical, and whether any row resolved to none.
+ * Co-teacher follow-ups, 2026-09-22 — before, only labels on rows. */
+export function sectionFilterOptions(results: Pick<AssessmentResults, "rows" | "sitting_sections">): {
+  labels: string[];
+  hasBlank: boolean;
+} {
+  const labels = [
+    ...new Set([
+      ...results.rows.map((r) => r.student.section).filter((s): s is string => !!s),
+      ...results.sitting_sections,
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
+  return { labels, hasBlank: results.rows.some((r) => !r.student.section) };
 }
 
 /** D-R1: an item's constant maximum — the same rule the manual-score route
@@ -149,6 +177,55 @@ export async function assessmentOwner(
     .orderBy(desc(test_sessions.created_at))
     .limit(1);
   return { ownerSub: row.owner_sub, ownerEmail: sitting?.owner_email ?? null };
+}
+
+/** Every CLASS sitting on this assessment that named a section, whoever ran
+ * it (owner or co-teacher), as roster section rows. Practice sittings never
+ * name one (the `test_sessions_practice_check` CHECK), and are excluded by
+ * kind as well so the rule does not rest on the constraint alone. */
+async function sectionsNamedBySittings(
+  db: ReturnType<typeof getDb>,
+  assessmentId: string,
+): Promise<RosterSectionRow[]> {
+  const rows = await db
+    .selectDistinct({ section: roster_sections })
+    .from(test_sessions)
+    .innerJoin(roster_sections, eq(roster_sections.ps_id, test_sessions.section_ps_id))
+    .where(and(eq(test_sessions.assessment_id, assessmentId), eq(test_sessions.kind, "class")));
+  return rows.map((r) => r.section);
+}
+
+/**
+ * The work packet's "M" in "N of M students in <section> handed in": the
+ * current enrollment of the section with this label, looked up in the union
+ * of the sections the assessment's OWNER teaches and the sections its class
+ * sittings named (co-teacher follow-ups, 2026-09-22 — a co-teacher's section
+ * counted 0 before, because only the owner's sections were searched). Null,
+ * as before, only when no owner email is known AND no sitting-named section
+ * carries the label — the strip then says N alone. Same access precondition
+ * as `buildResults`.
+ */
+export async function sectionEnrolment(
+  db: ReturnType<typeof getDb>,
+  assessmentId: string,
+  label: string,
+): Promise<number | null> {
+  const { ownerEmail } = await assessmentOwner(db, assessmentId);
+  const psIds = new Set<string>();
+  if (ownerEmail) {
+    for (const s of await sectionsCurrentlyTaughtBy(db, ownerEmail)) {
+      if (sectionLabel(s) === label) psIds.add(s.ps_id);
+    }
+  }
+  for (const s of await sectionsNamedBySittings(db, assessmentId)) {
+    if (sectionLabel(s) === label) psIds.add(s.ps_id);
+  }
+  if (psIds.size === 0) return ownerEmail ? 0 : null;
+  const students = new Set<string>();
+  for (const psId of psIds) {
+    for (const r of await studentsEnrolledInSection(db, psId)) students.add(r.ps_id);
+  }
+  return students.size;
 }
 
 /**
@@ -458,6 +535,9 @@ export async function buildResults(
       stem: i.stem,
     })),
     rows,
+    sitting_sections: [
+      ...new Set((await sectionsNamedBySittings(db, assessmentId)).map(sectionLabel)),
+    ].sort((a, b) => a.localeCompare(b)),
   };
 }
 

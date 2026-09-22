@@ -189,3 +189,30 @@ export async function studentsInTeachersSections(
       a.student.ps_id.localeCompare(b.student.ps_id),
   );
 }
+
+/**
+ * The active students currently enrolled in ONE section, with no teacher in
+ * the join — for a section the caller does not teach but a sitting on their
+ * assessment named (a co-teacher's, access D-5; co-teacher follow-ups,
+ * 2026-09-22). Same enrollment / liveness rules as
+ * `studentsInTeachersSections`; an inactive section has nobody.
+ */
+export async function studentsEnrolledInSection(
+  db: Db,
+  sectionPsId: string,
+): Promise<RosterStudentRow[]> {
+  const rows = await db
+    .selectDistinct({ student: roster_students })
+    .from(roster_enrollments)
+    .innerJoin(roster_sections, eq(roster_sections.ps_id, roster_enrollments.section_ps_id))
+    .innerJoin(roster_students, eq(roster_students.ps_id, roster_enrollments.student_ps_id))
+    .where(
+      and(
+        enrollmentIsCurrent,
+        eq(roster_enrollments.section_ps_id, sectionPsId),
+        eq(roster_sections.is_active, true),
+        eq(roster_students.is_active, true),
+      ),
+    );
+  return rows.map((r) => r.student).sort((a, b) => a.ps_id.localeCompare(b.ps_id));
+}

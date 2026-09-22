@@ -34,7 +34,9 @@ export const metadata: Metadata = { title: "Students" };
  * (`students` + `student_accommodations`: TIDE import, then teacher edits,
  * then manual entry — CLAUDE.md), shown against each roster student and,
  * for overlay rows that match nobody in the current sections, under their
- * own heading so nothing the teacher entered disappears from view.
+ * own heading so nothing the teacher entered disappears from view. Rows that
+ * joined through a co-teacher's sitting on the teacher's assessment get a
+ * co-taught heading per section instead (co-teacher follow-ups, 2026-09-22).
  *
  * UX pass 1, slice 8: every rostered student is a link (a student with no
  * overlay row yet goes through /roster/<ps_id>, which binds one — ACC-01);
@@ -146,6 +148,51 @@ export default async function StudentsPage() {
           ))}
         </div>
       )}
+
+      {/* Co-teacher follow-ups, 2026-09-22 (docs/access-model-design.md):
+          students who joined a co-teacher's sitting on one of your
+          assessments, under the section that sitting named. Their records
+          are yours (the join files them under the assessment owner), so the
+          rows open and edit exactly like any other. */}
+      {roster.coTaught.map((group) => (
+        <section
+          key={`${group.sectionPsId ?? ""}:${group.coTeacherEmail ?? ""}`}
+          className="space-y-2"
+        >
+          <h2 className="text-base font-semibold">
+            {group.section
+              ? sectionLabel(group.section)
+              : group.sectionPsId
+                ? `Section ${group.sectionPsId}`
+                : "No section"}
+            <span className="ml-2 font-normal text-muted-foreground">
+              co-taught · {group.students.length} student{group.students.length === 1 ? "" : "s"}
+            </span>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Joined a test session {group.coTeacherEmail ? <strong>{group.coTeacherEmail}</strong> : "a co-teacher"}{" "}
+            ran on one of your co-taught assessments. Accommodations you set here apply on your
+            assessments.
+          </p>
+          <div className="overflow-x-auto rounded-lg border bg-card">
+            <Table>
+              <TableBody>
+                {group.students.map((o) => (
+                  <StudentRow
+                    key={o.id}
+                    href={`/dashboard/accommodations/${o.id}`}
+                    name={o.name}
+                    ssid={o.ssid}
+                    grade={o.grade}
+                    overlay={o}
+                    pending={diffsByStudent.get(o.id) ?? 0}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      ))}
 
       {roster.unlinked.length > 0 ? (
         <section className="space-y-2">

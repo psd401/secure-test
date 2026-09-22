@@ -32,10 +32,8 @@ import {
   stemExcerpt,
   type PacketQuery,
 } from "@/lib/reporting/workPacket";
-import { studentsInTeachersSections } from "@/lib/roster/queries";
-import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { tableCellMatches } from "@/lib/scoring/auto";
-import { assessmentOwner, buildResults, type ResultsRow } from "@/lib/scoring/results";
+import { buildResults, sectionEnrolment, type ResultsRow } from "@/lib/scoring/results";
 import { formatDate, formatDateTime } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
@@ -392,16 +390,13 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     : null;
 
   // "N of M students in <section> handed in": M is the section's current
-  // enrollment in the sections the assessment's OWNER teaches — the same
-  // query the results matrix resolves its labels through (a co-teacher or
-  // admin reading the packet gets the owner's count, 2026-09-21). Null when
-  // no owner email is known, and the strip then says N alone.
-  let enrolled: number | null = null;
-  const { ownerEmail } = await assessmentOwner(db, id);
-  if (ownerEmail) {
-    const rostered = await studentsInTeachersSections(db, ownerEmail);
-    enrolled = rostered.filter((r) => sectionLabel(r.section) === section).length;
-  }
+  // enrollment, looked up in the sections the assessment's OWNER teaches
+  // (a co-teacher or admin reading the packet gets the owner's count,
+  // 2026-09-21) plus the sections its class sittings named — a co-teacher's
+  // section counted 0 before (co-teacher follow-ups, 2026-09-22,
+  // docs/access-model-design.md). Null when no owner email is known and no
+  // sitting named the section, and the strip then says N alone.
+  const enrolled = await sectionEnrolment(db, id, section);
 
   // ── Items, in delivery order, narrowed by ?items=.
   const allItems = await db

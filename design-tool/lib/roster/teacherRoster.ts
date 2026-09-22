@@ -15,11 +15,18 @@
 // a TIDE import covers the school, not one teacher's timetable, and a
 // manually-entered student may be a legitimate exception — under their own
 // heading, so the page never hides an accommodation the teacher entered.
+// Rows that arrived through a co-teacher's sitting on this teacher's
+// assessment are split out of that heading and grouped by the co-teacher's
+// section (co-teacher follow-ups, 2026-09-22; `splitCoTaught` below).
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import {
+  assessments,
+  attempts,
+  roster_sections,
   student_accommodations,
   students,
+  test_sessions,
   type RosterSectionRow,
   type RosterStudentRow,
 } from "@/db/schema";
@@ -57,11 +64,33 @@ export interface RosterSectionView {
   students: RosterStudentView[];
 }
 
+/**
+ * Co-teacher follow-ups, 2026-09-22 (docs/access-model-design.md §Progress):
+ * since the co-teacher tenant fix, a student who joins a CO-TEACHER's class
+ * sitting on this teacher's assessment gets an overlay row under THIS
+ * teacher — from a section they do not teach. Grouped by the section that
+ * sitting named and the co-teacher who ran it, so the page can say where the
+ * row came from instead of filing it under "not in your sections".
+ */
+export interface CoTaughtGroup {
+  /** The roster section the sitting named; null when it named none (a
+   * student-list sitting) or the section has left the mirror. */
+  section: RosterSectionRow | null;
+  sectionPsId: string | null;
+  /** The sitting's owner — the co-teacher (access D-5). */
+  coTeacherEmail: string | null;
+  students: OverlayInfo[];
+}
+
 export interface TeacherRoster {
   /** Null when the session carries no email — nothing to look up by. */
   teacherEmail: string | null;
   sections: RosterSectionView[];
-  /** Overlay rows not matched to anyone in the current sections. */
+  /** Overlay rows outside the current sections that joined through a
+   * co-teacher's sitting on one of this teacher's assessments. */
+  coTaught: CoTaughtGroup[];
+  /** Overlay rows not matched to anyone in the current sections, and not
+   * co-taught. */
   unlinked: OverlayInfo[];
 }
 
@@ -114,6 +143,77 @@ export async function loadOverlay(db: Db, ownerSub: string): Promise<OverlayInfo
   return [...byId.values()];
 }
 
+/**
+ * Splits overlay rows the current sections did not match into co-taught
+ * groups and the rest. A row is co-taught when its student has a class
+ * (non-practice) attempt on one of `ownerSub`'s assessments through a class
+ * sitting whose `owner_sub` is someone else — the only way a join writes a
+ * row under an owner from another teacher's sitting (the co-teacher tenant
+ * fix, `sittingTenantSub`). The student's NEWEST such sitting decides the
+ * group. Presentation only: which rows exist is unchanged.
+ */
+async function splitCoTaught(
+  db: Db,
+  ownerSub: string,
+  rest: OverlayInfo[],
+): Promise<{ coTaught: CoTaughtGroup[]; unlinked: OverlayInfo[] }> {
+  if (rest.length === 0) return { coTaught: [], unlinked: [] };
+  const links = await db
+    .select({
+      student_id: attempts.student_id,
+      section_ps_id: test_sessions.section_ps_id,
+      owner_email: test_sessions.owner_email,
+    })
+    .from(attempts)
+    .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
+    .innerJoin(test_sessions, eq(test_sessions.id, attempts.test_session_id))
+    .where(
+      and(
+        inArray(
+          attempts.student_id,
+          rest.map((o) => o.id),
+        ),
+        eq(attempts.practice, false),
+        eq(assessments.owner_sub, ownerSub),
+        eq(test_sessions.kind, "class"),
+        ne(test_sessions.owner_sub, ownerSub),
+      ),
+    )
+    .orderBy(desc(test_sessions.created_at), desc(test_sessions.id));
+  const newest = new Map<string, (typeof links)[number]>();
+  for (const l of links) if (!newest.has(l.student_id)) newest.set(l.student_id, l);
+  if (newest.size === 0) return { coTaught: [], unlinked: rest };
+
+  const psIds = [
+    ...new Set([...newest.values()].map((l) => l.section_ps_id).filter((v): v is string => !!v)),
+  ];
+  const sectionRows =
+    psIds.length > 0
+      ? await db.select().from(roster_sections).where(inArray(roster_sections.ps_id, psIds))
+      : [];
+  const sectionByPsId = new Map(sectionRows.map((r) => [r.ps_id, r]));
+
+  const groups = new Map<string, CoTaughtGroup>();
+  const unlinked: OverlayInfo[] = [];
+  for (const o of rest) {
+    const l = newest.get(o.id);
+    if (!l) {
+      unlinked.push(o);
+      continue;
+    }
+    const key = `${l.section_ps_id ?? ""}\u0000${l.owner_email ?? ""}`;
+    const group = groups.get(key) ?? {
+      section: l.section_ps_id ? (sectionByPsId.get(l.section_ps_id) ?? null) : null,
+      sectionPsId: l.section_ps_id,
+      coTeacherEmail: l.owner_email,
+      students: [],
+    };
+    group.students.push(o);
+    groups.set(key, group);
+  }
+  return { coTaught: [...groups.values()], unlinked };
+}
+
 export async function teacherRoster(
   db: Db,
   ownerSub: string,
@@ -121,7 +221,7 @@ export async function teacherRoster(
 ): Promise<TeacherRoster> {
   const overlay = await loadOverlay(db, ownerSub);
   const teacherEmail = normalizeEmail(sessionEmail);
-  if (!teacherEmail) return { teacherEmail: null, sections: [], unlinked: overlay };
+  if (!teacherEmail) return { teacherEmail: null, sections: [], ...(await splitCoTaught(db, ownerSub, overlay)) };
 
   const byPsId = new Map<string, OverlayInfo>();
   const bySsid = new Map<string, OverlayInfo>();
@@ -146,7 +246,11 @@ export async function teacherRoster(
   return {
     teacherEmail,
     sections: [...sections.values()],
-    unlinked: overlay.filter((o) => !matched.has(o.id)),
+    ...(await splitCoTaught(
+      db,
+      ownerSub,
+      overlay.filter((o) => !matched.has(o.id)),
+    )),
   };
 }
 

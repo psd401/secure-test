@@ -916,3 +916,21 @@ RUN. Row 258 needs the client + a Jamf-scoped OR off-fleet-launched Mac
 | 260 | Open the Monitor on a practice sitting | One row named "You (practice)"; no "Hand in everyone" or Extend time buttons in the header; the per-row View screen / Hand in / Extend time / Delete attempt controls work exactly as they would for a student row | NOT RUN |
 | 261 | With a practice sitting open, look at the Assessments home's **Open now** strip | The card shows a "Practice" badge beside the assessment name | NOT RUN |
 | 262 | As a system admin, open `/admin` while a practice sitting is open (any teacher's) | The row shows a "Practice" badge beside the assessment name and "Practice" in the Section column | NOT RUN |
+
+## Co-teacher follow-ups — sections + Students page (2026-09-22)
+
+`docs/access-model-design.md` §Progress, "co-teacher follow-ups". All NOT
+RUN, and all need a LIVE co-teach grant (the owner shares the assessment
+with a colleague as Co-teach, and that colleague opens a class sitting on
+THEIR section) — James is holding the grant rows 223 / 228 / 230, so these
+run in the same sitting as those. Teacher-side only (Chrome); rows 264–267
+need at least one student of the co-teacher's section to have joined (and,
+for 265–266, handed in) through the client.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 263 | As the owner, open **Results** on the co-taught assessment after the co-teacher has opened a sitting on their section but before anyone joins | The section filter lists the co-teacher's section (every section a class sitting named, whoever ran it); choosing it shows "No handed-in work in that section." | NOT RUN — needs a co-teach grant |
+| 264 | After a student of the co-teacher's section joins and hands in, open **Results** as the owner | The student's row names them and shows the co-teacher's section under the name; filtering by that section shows only that section's students; the CSV's `section` column carries the same label | NOT RUN — needs a co-teach grant + a student sitting |
+| 265 | **Print student work** → pick the co-teacher's section | The strip reads "N of M students in \<section\> handed in", with M = the co-teacher's section's current enrollment (it read "of 0" before) | NOT RUN — needs a co-teach grant + a student sitting |
+| 266 | Open the owner's **Students** page | The student is NOT under "Not in your current sections"; they sit under a heading with the co-teacher's section label and "co-taught · N students", with a line naming the co-teacher's email and that they joined through a co-taught assessment | NOT RUN — needs a co-teach grant + a student sitting |
+| 267 | Open that student from the co-taught group, turn a support on, go back | The accommodation page opens and saves exactly as for any other student; the Students page's count badge for the row updates | NOT RUN — needs a co-teach grant + a student sitting |

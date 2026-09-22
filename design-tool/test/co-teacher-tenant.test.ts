@@ -12,6 +12,7 @@ import {
   access_grants,
   assessments,
   items,
+  roster_sections,
   student_accommodations,
   students,
   type AttemptRow,
@@ -19,7 +20,8 @@ import {
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
-import { buildResults } from "../lib/scoring/results";
+import { sectionLabel, teacherRoster } from "../lib/roster/teacherRoster";
+import { buildResults, sectionEnrolment, sectionFilterOptions } from "../lib/scoring/results";
 import {
   BIOLOGY_STUDENT,
   OTHER_TEACHER_EMAIL,
@@ -295,5 +297,103 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
       source: "manual",
     });
     expect((await deliver()).accommodations).toBeUndefined();
+  });
+
+  // Co-teacher follow-ups, 2026-09-22 (docs/access-model-design.md §Progress):
+  // once the join files the student under the OWNER, the owner's surfaces must
+  // still say where the student came from — the co-teacher's section on every
+  // results reader, that section's enrolment in the work packet's "N of M",
+  // and "co-taught" (not "not in your sections") on the owner's Students page.
+  test("results, the work packet's enrolment and the owner's Students page carry the co-teacher's section", async () => {
+    const db = getDb();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, owner_email: TEACHER_EMAIL, name: "Co-taught, sections", status: "published" })
+      .returning();
+    await db.insert(items).values({
+      assessment_id: assessment!.id,
+      position: 0,
+      type: "multiple_choice_single",
+      stem: "Pick",
+      choices: [
+        { id: "a", text: "A" },
+        { id: "b", text: "B" },
+      ],
+      correct_choice_ids: ["a"],
+    });
+    await db.insert(access_grants).values({
+      grantee_email: OTHER_TEACHER_EMAIL,
+      scope_kind: "assessment",
+      scope_id: assessment!.id,
+      level: "edit",
+      note: "co-teacher",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+    });
+
+    principal = staffPrincipal(CO_TEACHER, OTHER_TEACHER_EMAIL);
+    const created = await call("../app/api/test-sessions/route", "POST", "/api/test-sessions", {}, {
+      assessment_id: assessment!.id,
+      section_ps_id: "5002",
+    });
+    expect(created.status).toBe(201);
+    const sitting = ((await created.json()) as { test_session: TestSessionRow }).test_session;
+
+    principal = studentPrincipal(BIOLOGY_STUDENT.email);
+    await call("../app/api/test-sessions/redeem/route", "POST", "/api/test-sessions/redeem", {}, {
+      code: sitting.code,
+    });
+    const joined = await call("../app/api/attempts/route", "POST", "/api/attempts", {}, {
+      test_session_id: sitting.id,
+    });
+    const { attempt } = (await joined.json()) as { attempt: AttemptRow };
+    const submitted = await call(
+      "../app/api/attempts/[attemptId]/submit/route",
+      "POST",
+      `/api/attempts/${attempt.id}/submit`,
+      { attemptId: attempt.id },
+    );
+    expect(submitted.status).toBe(200);
+
+    const [biology] = await db.select().from(roster_sections).where(eq(roster_sections.ps_id, "5002"));
+    const biologyLabel = sectionLabel(biology!);
+
+    // The owner also opens a sitting on English 9 that nobody has joined yet.
+    principal = staffPrincipal(OWNER, TEACHER_EMAIL);
+    const ownSitting = await call("../app/api/test-sessions/route", "POST", "/api/test-sessions", {}, {
+      assessment_id: assessment!.id,
+      section_ps_id: "5003",
+    });
+    expect(ownSitting.status).toBe(201);
+    const [english] = await db.select().from(roster_sections).where(eq(roster_sections.ps_id, "5003"));
+    const englishLabel = sectionLabel(english!);
+
+    // The section label comes from the co-teacher's sitting. (A regression
+    // guard: `resolveSection` already read the sitting first, so this held
+    // before the follow-up too.)
+    const results = await buildResults(assessment!.id);
+    expect(results.rows).toHaveLength(1);
+    expect(results.rows[0]!.student.section).toBe(biologyLabel);
+
+    // The filter offers every section a class sitting named — including one
+    // with no rows yet — and filtering by the co-teacher's finds the student.
+    const { labels } = sectionFilterOptions(results);
+    expect(labels).toContain(biologyLabel);
+    expect(labels).toContain(englishLabel);
+    expect(results.rows.filter((r) => r.student.section === biologyLabel).map((r) => r.attempt_id)).toEqual([
+      attempt.id,
+    ]);
+
+    // "N of M enrolled": the co-teacher's section counts its one student.
+    expect(await sectionEnrolment(db, assessment!.id, biologyLabel)).toBe(1);
+
+    // The owner's Students page: co-taught under the co-teacher's section,
+    // not "not in your current sections"; the link still opens the row.
+    const roster = await teacherRoster(db, OWNER, TEACHER_EMAIL);
+    expect(roster.unlinked.map((o) => o.id)).not.toContain(attempt.student_id);
+    expect(roster.coTaught).toHaveLength(1);
+    expect(roster.coTaught[0]!.section?.ps_id).toBe("5002");
+    expect(roster.coTaught[0]!.coTeacherEmail).toBe(OTHER_TEACHER_EMAIL);
+    expect(roster.coTaught[0]!.students.map((o) => o.id)).toEqual([attempt.student_id]);
   });
 });
