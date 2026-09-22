@@ -693,3 +693,8 @@ check and adds the test that keeps it that way.
 - **Rows 245–250 ✅, 251 half (empty state only — no open sitting that
   evening) 2026-09-21** on rev 47, Chrome on the origin. 252 needs a second
   staff account.
+- **2026-09-21 — row 247 follow-up BUILT, not deployed:** the root
+  `app/not-found.tsx` now renders `AppChrome` above its copy, so a 404 while
+  acting (e.g. `/admin`) carries the "Acting as" strip like every other page;
+  a signed-out 404 is unchanged (`AppChrome` renders nothing without a
+  session). Re-check row 247 on the next deploy.
