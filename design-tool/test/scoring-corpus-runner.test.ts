@@ -432,7 +432,7 @@ describe("the slice-1 guarantee", () => {
     });
     await seedEssay({ ssid: "S2", assessmentId: seeded.assessmentId, position: 1 });
 
-    const before = await buildResults(seeded.assessmentId, OWNER);
+    const before = await buildResults(seeded.assessmentId);
     const beforeCsv = resultsToCsv(before);
 
     const run = await createRun(db, {
@@ -449,7 +449,7 @@ describe("the slice-1 guarantee", () => {
     }
     expect(summarizeOutcomes(outcomes).tally.scored).toBe(2);
 
-    const after = await buildResults(seeded.assessmentId, OWNER);
+    const after = await buildResults(seeded.assessmentId);
     expect(JSON.stringify(after)).toBe(JSON.stringify(before));
     expect(resultsToCsv(after)).toBe(beforeCsv);
   });

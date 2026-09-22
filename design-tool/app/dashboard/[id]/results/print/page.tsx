@@ -143,7 +143,7 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
     notFound();
   }
 
-  const results = await buildResults(id, session.sub, session.email);
+  const results = await buildResults(id);
   let rows = results.rows;
   if (sectionFilter) {
     rows = rows.filter((r) => r.student.section === sectionFilter);

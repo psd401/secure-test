@@ -156,7 +156,7 @@ async function scene(status: "final" | "superseded") {
 describe("the results matrix, the CSV and the print summary are blind to superseded", () => {
   test("the same scene scores 2 of 2 as final and 0 of 2 as superseded", async () => {
     const live = await scene("final");
-    const scored = await buildResults(live.assessment.id, OWNER);
+    const scored = await buildResults(live.assessment.id);
     expect(scored.rows[0]!.total_points).toBe(4);
     expect(scored.rows[0]!.unscored_count).toBe(0);
     expect(scored.rows[0]!.cells.map((c) => c.status)).toEqual(["final", "final"]);
@@ -170,7 +170,7 @@ describe("the results matrix, the CSV and the print summary are blind to superse
     await db.execute(sql`truncate table students restart identity cascade`);
 
     const stale = await scene("superseded");
-    const results = await buildResults(stale.assessment.id, OWNER);
+    const results = await buildResults(stale.assessment.id);
     const row = results.rows[0]!;
     expect(row.cells.map((c) => c.status)).toEqual(["unscored", "unscored"]);
     expect(row.cells.every((c) => c.points === null)).toBe(true);

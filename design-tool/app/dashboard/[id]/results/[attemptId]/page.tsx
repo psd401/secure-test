@@ -278,7 +278,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
     notFound();
   }
 
-  const results = await buildResults(id, session.sub, session.email, {
+  const results = await buildResults(id, {
     include_in_progress: true,
   });
   const row = results.rows.find((r) => r.attempt_id === attemptId);

@@ -76,7 +76,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // ones already handed in. The Complete marker and the analytics footer
   // below stay submitted-only (loadItemAnalytics queries `submitted` attempts
   // directly, and the Complete check below is guarded on `row.status`).
-  const results = await buildResults(id, session.sub, session.email, {
+  const results = await buildResults(id, {
     include_in_progress: true,
   });
   const { analytics, submitted_count } = await loadItemAnalytics(id);

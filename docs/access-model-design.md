@@ -572,3 +572,29 @@ check and adds the test that keeps it that way.
   migration.** Row 240 re-checked ✅ on rev 46. The all view is the 6xl
   container; the normal list stays 4xl.
 
+- **2026-09-21 — A5-4: results scoped to the caller, not the owner (BUILT).**
+  James's field report from the all view: every student read "(unknown)"
+  and the section filter offered nothing. Cause: `buildResults` (the
+  matrix, per-student page, print report, work packet, CSV) and the
+  review-queue GET looked the student overlay up with
+  `students.owner_sub = session.sub` and resolved sections through
+  `session.email` — the CALLER, who in the all view is not the owner and
+  has no overlay rows for those students. **Co-teachers (slice 3) hit the
+  same defect** on every one of those surfaces; only the Monitor was right
+  (`sittingAttendance` scopes by the sitting's owner). Fix: `buildResults`
+  now takes `(assessmentId, options)` and reads the owner off the
+  assessment row via a new exported `assessmentOwner(db, id)` —
+  `owner_sub` always, `owner_email` from the row or, when that is null (a
+  pre-0038 row that never had a sitting), the newest sitting's
+  `owner_email`, the 0038 backfill rule; the tenant argument in the query
+  comment still holds because the owner's overlay is the one the ingest
+  wrote the attempts against, and access to the assessment is checked
+  upstream by every caller. The review queue scopes by
+  `access.assessment.owner_sub`; the work packet's "N of M enrolled"
+  denominator uses the owner's sections. Impersonation (slice 5) would
+  have masked this for admins only. Tests: `assessmentOwner` (row column
+  wins, sitting fallback) and an `ADMIN_EMAILS` caller on the results
+  route seeing names + sections; 27 `buildResults` call sites in tests
+  dropped their owner args. Design-tool **2108** tests, typecheck clean,
+  no migration. Row 245 unrun. Slice 5 (impersonation, D-8) is next,
+  James 2026-09-21 ("both").

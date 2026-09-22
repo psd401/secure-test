@@ -24,7 +24,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const assessment = access.assessment;
 
-  const results = await buildResults(id, auth.session.sub, auth.session.email);
+  const results = await buildResults(id);
 
   const format = new URL(req.url).searchParams.get("format");
   if (format === "csv") {

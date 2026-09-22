@@ -87,17 +87,19 @@ export async function GET(_req: Request, ctx: RouteContext) {
     itemRows.map((i) => [i.id, renderItemContent(i.stem, resolvedAssets)]),
   );
 
-  // Scope the roster lookup to the caller, not just to the attempt's
-  // student_id — same reasoning as lib/scoring/results.ts. Owning the
-  // ASSESSMENT says nothing about who owns the STUDENT an attempt points at;
-  // `attempts.student_id` carries no tenant constraint. A student that fails
-  // the predicate is absent from the map and renders as "(unknown)" below.
+  // Scope the roster lookup to the assessment's OWNER, not just to the
+  // attempt's student_id — same reasoning as lib/scoring/results.ts. Access
+  // to the ASSESSMENT says nothing about who owns the STUDENT an attempt
+  // points at; `attempts.student_id` carries no tenant constraint. The owner's
+  // overlay (not the caller's — a co-teacher or admin has none for these
+  // students, 2026-09-21) is the one the ingest wrote against. A student that
+  // fails the predicate is absent from the map and renders as "(unknown)".
   const studentRows = await db
     .select()
     .from(students)
     .where(
       and(
-        eq(students.owner_sub, auth.session.sub),
+        eq(students.owner_sub, access.assessment.owner_sub),
         inArray(
           students.id,
           submitted.map((a) => a.student_id),

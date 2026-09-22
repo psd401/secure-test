@@ -16,7 +16,7 @@ import {
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
-import { buildResults, resultsToCsv } from "../lib/scoring/results";
+import { assessmentOwner, buildResults, resultsToCsv } from "../lib/scoring/results";
 import {
   BIOLOGY_STUDENT,
   OTHER_STUDENT,
@@ -35,6 +35,7 @@ const expectTestDb = () => {
 
 let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
+let mockEmail: string | null = null;
 
 mock.module("next/headers", () => ({
   // Slice 58: requireSession now reads an Authorization bearer header as
@@ -48,7 +49,7 @@ mock.module("next/headers", () => ({
 mock.module("../lib/auth/session", () => ({
   ...sessionMod,
   readSessionFromCookies: async () =>
-    mockSub ? { sub: mockSub, role: "staff" } : null,
+    mockSub ? { sub: mockSub, role: "staff", ...(mockEmail ? { email: mockEmail } : {}) } : null,
 }));
 
 const OWNER = "results-teacher";
@@ -249,7 +250,7 @@ describe("buildResults — cross-tenant roster isolation", () => {
       .set({ owner_sub: "some-other-teacher" })
       .where(eq(students.ssid, "111"));
 
-    const results = await buildResults(assessment.id, OWNER);
+    const results = await buildResults(assessment.id);
 
     // The attempt row still appears (it belongs to this assessment), but the
     // foreign student's identity does not.
@@ -277,7 +278,7 @@ describe("buildResults — cross-tenant roster isolation", () => {
 describe("buildResults", () => {
   test("totals count finals only; statuses classify every cell", async () => {
     const { assessment } = await seedResultsScenario();
-    const results = await buildResults(assessment.id, OWNER);
+    const results = await buildResults(assessment.id);
 
     expect(results.items).toHaveLength(3);
     expect(results.rows).toHaveLength(2);
@@ -331,11 +332,11 @@ describe("buildResults", () => {
       response: { type: "multiple_choice_single", choice_id: "a" },
     });
 
-    const without = await buildResults(assessment.id, OWNER);
+    const without = await buildResults(assessment.id);
     expect(without.rows).toHaveLength(2);
     expect(without.rows.map((r) => r.status)).toEqual(["submitted", "submitted"]);
 
-    const withFlag = await buildResults(assessment.id, OWNER, null, {
+    const withFlag = await buildResults(assessment.id, {
       include_in_progress: true,
     });
     expect(withFlag.rows).toHaveLength(3);
@@ -387,7 +388,7 @@ describe("buildResults", () => {
         status: "in_progress",
         started_at: new Date(Date.now() - (opts.startedMinutesAgo ?? 5) * 60_000),
       });
-      const results = await buildResults(assessmentId, OWNER, null, {
+      const results = await buildResults(assessmentId, {
         include_in_progress: true,
       });
       return results.rows.find((r) => r.student.ssid === "444")!;
@@ -428,7 +429,7 @@ describe("buildResults", () => {
         .update(assessments)
         .set({ time_limit_seconds: 60 })
         .where(eq(assessments.id, assessment.id));
-      const results = await buildResults(assessment.id, OWNER, null, {
+      const results = await buildResults(assessment.id, {
         include_in_progress: true,
       });
       expect(results.rows.every((r) => r.status === "submitted")).toBe(true);
@@ -463,7 +464,7 @@ describe("buildResults", () => {
         started_at: new Date(Date.now() - (opts.startedMinutesAgo ?? 5) * 60_000),
         deadline_override_at: opts.override ?? null,
       });
-      const results = await buildResults(assessmentId, OWNER, null, {
+      const results = await buildResults(assessmentId, {
         include_in_progress: true,
       });
       return results.rows.find((r) => r.student.ssid === "555")!;
@@ -501,14 +502,14 @@ describe("buildResults", () => {
 
   test("submitted_by_sub is null for a student hand-in and a sub for a teacher's", async () => {
     const { db, assessment } = await seedResultsScenario();
-    const before = await buildResults(assessment.id, OWNER);
+    const before = await buildResults(assessment.id);
     expect(before.rows.every((r) => r.submitted_by_sub === null)).toBe(true);
 
     await db
       .update(attempts)
       .set({ submitted_by_sub: OWNER })
       .where(eq(attempts.assessment_id, assessment.id));
-    const after = await buildResults(assessment.id, OWNER);
+    const after = await buildResults(assessment.id);
     expect(after.rows.every((r) => r.submitted_by_sub === OWNER)).toBe(true);
   });
 
@@ -518,7 +519,7 @@ describe("buildResults", () => {
       .insert(assessments)
       .values({ owner_sub: OWNER, name: "Empty" })
       .returning();
-    const results = await buildResults(empty!.id, OWNER);
+    const results = await buildResults(empty!.id);
     expect(results.rows).toEqual([]);
     expect(results.items).toEqual([]);
   });
@@ -527,7 +528,7 @@ describe("buildResults", () => {
 describe("resultsToCsv", () => {
   test("golden CSV: quoting, blanks for non-final, CRLF", async () => {
     const { assessment } = await seedResultsScenario();
-    const csv = resultsToCsv(await buildResults(assessment.id, OWNER));
+    const csv = resultsToCsv(await buildResults(assessment.id));
     // R0.3 header: student_number,name,email,section,submitted_at,Q1..Qn,
     // total,max,percent,unscored. This fixture's students carry no roster
     // binding, so student_number/email/section are blank; `max` is the
@@ -550,7 +551,7 @@ describe("resultsToCsv", () => {
 describe("buildResults + resultsToCsv ignore research rows", () => {
   test("the matrix and the CSV are identical with research rows present", async () => {
     const { db, assessment } = await seedResultsScenario();
-    const before = await buildResults(assessment.id, OWNER);
+    const before = await buildResults(assessment.id);
     const csvBefore = resultsToCsv(before);
 
     const [run] = await db
@@ -579,7 +580,7 @@ describe("buildResults + resultsToCsv ignore research rows", () => {
       })),
     );
 
-    const after = await buildResults(assessment.id, OWNER);
+    const after = await buildResults(assessment.id);
     expect(after).toEqual(before);
     expect(resultsToCsv(after)).toBe(csvBefore);
     // Proof the rows really are there.
@@ -760,7 +761,7 @@ describe("buildResults — R0.3 identifiers, section fallback, denominator, perc
 
   test("roster join resolves student number and email", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     const alice = results.rows.find((r) => r.student.student_number === STUDENT.ps_id)!;
     expect(alice).toBeDefined();
     expect(alice.student.email).toBe(STUDENT.email);
@@ -771,21 +772,64 @@ describe("buildResults — R0.3 identifiers, section fallback, denominator, perc
 
   test("section fallback: sitting section wins over enrollment", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     const alice = results.rows.find((r) => r.student.student_number === STUDENT.ps_id)!;
     expect(alice.student.section).toBe("English 9 · 1(A)");
   });
 
   test("section fallback: falls back to the owner's current enrollment when the sitting names no section", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     const bob = results.rows.find((r) => r.student.student_number === OTHER_STUDENT.ps_id)!;
     expect(bob.student.section).toBe("Algebra 1 · 3(A)");
   });
 
+  test("2026-09-21: the owner email comes off the assessment row, else the newest sitting — never the caller", async () => {
+    // seedR03Scenario's assessment carries no owner_email (predates 0038);
+    // its one sitting does, so the enrollment fallback still resolves.
+    const { assessment } = await seedR03Scenario();
+    const db = getDb();
+    expect(await assessmentOwner(db, assessment.id)).toEqual({
+      ownerSub: OWNER,
+      ownerEmail: TEACHER_EMAIL,
+    });
+    // The row's own column wins once set.
+    await db
+      .update(assessments)
+      .set({ owner_email: "someone.else@psd401.net" })
+      .where(eq(assessments.id, assessment.id));
+    expect((await assessmentOwner(db, assessment.id)).ownerEmail).toBe("someone.else@psd401.net");
+  });
+
+  test("2026-09-21: a system admin reading another teacher's results gets names and sections (was '(unknown)')", async () => {
+    const { assessment } = await seedR03Scenario();
+    const { GET } = await import("../app/api/assessments/[id]/results/route");
+    mockSub = "district-admin";
+    mockEmail = "admin@psd401.net";
+    process.env.ADMIN_EMAILS = mockEmail;
+    try {
+      const res = await GET(
+        new Request(`http://localhost/api/assessments/${assessment.id}/results`),
+        { params: Promise.resolve({ id: assessment.id }) },
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        results: { rows: Array<{ student: { name: string; section: string | null } }> };
+      };
+      expect(body.results.rows.map((r) => r.student.name)).not.toContain("(unknown)");
+      const sections = body.results.rows.map((r) => r.student.section);
+      expect(sections).toContain("Algebra 1 · 3(A)");
+      expect(sections).toContain("English 9 · 1(A)");
+    } finally {
+      delete process.env.ADMIN_EMAILS;
+      mockSub = OWNER;
+      mockEmail = null;
+    }
+  });
+
   test("section fallback: blank when neither the sitting nor the owner's current sections name one, and another owner's section never leaks", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     const carol = results.rows.find((r) => r.student.student_number === BIOLOGY_STUDENT.ps_id)!;
     expect(carol.student.section).toBeNull();
     // Belt and suspenders: teacher.two's "Biology" section must not surface
@@ -795,7 +839,7 @@ describe("buildResults — R0.3 identifiers, section fallback, denominator, perc
 
   test("D-R1: max is the assessment-level constant denominator, not the scored-only sum", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     // 1 (MC) + 4 (rubric essay, max level points) + 2 (2 keyed table cells).
     for (const row of results.rows) {
       expect(row.max_points).toBe(7);
@@ -804,7 +848,7 @@ describe("buildResults — R0.3 identifiers, section fallback, denominator, perc
 
   test("D-R2: percent is blank while unscored > 0, filled once everything is scored", async () => {
     const { assessment } = await seedR03Scenario();
-    const results = await buildResults(assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(assessment.id);
     const alice = results.rows.find((r) => r.student.student_number === STUDENT.ps_id)!;
     expect(alice.unscored_count).toBe(0);
     expect(alice.percent).toBe(100); // 7/7
@@ -864,7 +908,7 @@ describe("resultsToCsv formula-injection neutralization (review fix)", () => {
       .update(students)
       .set({ name: '=HYPERLINK("http://evil","click")' })
       .where(eq(students.ssid, "111"));
-    const csv = resultsToCsv(await buildResults(assessment.id, OWNER));
+    const csv = resultsToCsv(await buildResults(assessment.id));
     expect(csv).toContain(`'=HYPERLINK`);
     expect(csv).not.toMatch(/[^']=HYPERLINK/);
   });

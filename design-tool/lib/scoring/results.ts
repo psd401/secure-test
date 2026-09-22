@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -126,26 +126,52 @@ export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
 }
 
 /**
- * @param ownerSub The session sub that has ALREADY been verified to own
- *   `assessmentId`. Required, not optional: it scopes the student lookup so a
- *   roster row can never be read across tenants. See the note on the students
- *   query below for why the caller's check alone is not sufficient.
+ * The assessment owner's sub and email. `owner_email` is nullable (0038
+ * backfilled it from sittings only), so a row that predates 0038 and never
+ * had a sitting still resolves through the newest sitting's `owner_email` —
+ * the same rule the backfill used — and otherwise to null.
+ */
+export async function assessmentOwner(
+  db: ReturnType<typeof getDb>,
+  assessmentId: string,
+): Promise<{ ownerSub: string; ownerEmail: string | null }> {
+  const [row] = await db
+    .select({ owner_sub: assessments.owner_sub, owner_email: assessments.owner_email })
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
+  if (!row) throw new Error(`buildResults: assessment ${assessmentId} not found`);
+  if (row.owner_email) return { ownerSub: row.owner_sub, ownerEmail: row.owner_email };
+  const [sitting] = await db
+    .select({ owner_email: test_sessions.owner_email })
+    .from(test_sessions)
+    .where(and(eq(test_sessions.assessment_id, assessmentId), isNotNull(test_sessions.owner_email)))
+    .orderBy(desc(test_sessions.created_at))
+    .limit(1);
+  return { ownerSub: row.owner_sub, ownerEmail: sitting?.owner_email ?? null };
+}
+
+/**
+ * The caller must ALREADY have cleared `assessmentId` through
+ * `authorizeAssessment` / `pageAssessment` (any level). The student lookup is
+ * scoped to the assessment's OWNER (`assessments.owner_sub`), not to the
+ * caller: the owner's `students` overlay is the one the student ingest wrote
+ * the attempts against, so a co-teacher (slice 3) or a system admin (slice
+ * 5a) sees the same names and sections the owner sees. Before 2026-09-21
+ * this took the caller's sub / email and every non-owner reader saw
+ * "(unknown)" with no section filter.
+ *
  * @param options `include_in_progress` adds the attempts that have not been
  *   handed in, as rows with no totals (D-1/B). Default false, so every caller
  *   that predates it — the CSV, the print report, the review queue — keeps
  *   the submitted-only results it has always had.
- * @param ownerEmail The owner's verified session email, used ONLY to resolve
- *   the sections they CURRENTLY teach (`studentsInTeachersSections`) for the
- *   enrollment-fallback section label. Null when the session carries no
- *   email (older sessions) — the fallback simply resolves nothing then.
  */
 export async function buildResults(
   assessmentId: string,
-  ownerSub: string,
-  ownerEmail?: string | null,
   options: { include_in_progress?: boolean } = {},
 ): Promise<AssessmentResults> {
   const db = getDb();
+  const { ownerSub, ownerEmail } = await assessmentOwner(db, assessmentId);
   const itemRows = await db
     .select()
     .from(items)
@@ -153,10 +179,9 @@ export async function buildResults(
     .orderBy(asc(items.position));
   const assessmentMaxPoints = itemRows.reduce((sum, i) => sum + itemMaxPoints(i), 0);
 
-  // T-2: the one column this function needs off the assessment row — the
-  // time limit every in-progress row's deadline is measured from. One select,
-  // because the deadline is per attempt (`started_at + limit`) but the limit
-  // is per assessment.
+  // T-2: the time limit every in-progress row's deadline is measured from.
+  // One select, because the deadline is per attempt (`started_at + limit`)
+  // but the limit is per assessment.
   const [assessmentRow] = await db
     .select({ time_limit_seconds: assessments.time_limit_seconds })
     .from(assessments)
@@ -181,8 +206,8 @@ export async function buildResults(
       (options.include_in_progress === true && a.status === "in_progress"),
   );
 
-  // Scope the roster lookup to the caller, not just to the attempt's
-  // student_id. The caller has already verified it owns the ASSESSMENT, but
+  // Scope the roster lookup to the assessment's OWNER, not just to the
+  // attempt's student_id. Access to the ASSESSMENT is already checked, but
   // that says nothing about who owns the STUDENT an attempt points at —
   // `attempts.student_id` is a plain FK with no tenant constraint. Without
   // this predicate, an attempt row referencing another teacher's student would
@@ -263,7 +288,7 @@ export async function buildResults(
   // Section resolution, fallback (b): the student's enrollment in one of the
   // OWNER's CURRENTLY taught sections (never another owner's — the query is
   // scoped by `ownerEmail`, the same join `attendanceForSitting` uses).
-  // Skipped entirely when the session carries no email.
+  // Skipped entirely when no owner email is known.
   const sectionsByStudentPsId = new Map<string, string>();
   if (ownerEmail) {
     for (const { student, section } of await studentsInTeachersSections(db, ownerEmail)) {

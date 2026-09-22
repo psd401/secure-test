@@ -35,7 +35,7 @@ import {
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { tableCellMatches } from "@/lib/scoring/auto";
-import { buildResults, type ResultsRow } from "@/lib/scoring/results";
+import { assessmentOwner, buildResults, type ResultsRow } from "@/lib/scoring/results";
 import { formatDate, formatDateTime } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
@@ -318,7 +318,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
 
   // Submitted only — buildResults' default — so an in-progress answer can
   // never reach a packet.
-  const results = await buildResults(id, session.sub, session.email);
+  const results = await buildResults(id);
   const handedIn = results.rows.filter((r) => r.status === "submitted");
 
   // Every section with at least one handed-in attempt, plus a count of
@@ -392,12 +392,14 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     : null;
 
   // "N of M students in <section> handed in": M is the section's current
-  // enrollment in the sections this teacher teaches — the same query the
-  // results matrix resolves its labels through. Null when the session carries
-  // no email (older sessions), and the strip then says N alone.
+  // enrollment in the sections the assessment's OWNER teaches — the same
+  // query the results matrix resolves its labels through (a co-teacher or
+  // admin reading the packet gets the owner's count, 2026-09-21). Null when
+  // no owner email is known, and the strip then says N alone.
   let enrolled: number | null = null;
-  if (session.email) {
-    const rostered = await studentsInTeachersSections(db, session.email);
+  const { ownerEmail } = await assessmentOwner(db, id);
+  if (ownerEmail) {
+    const rostered = await studentsInTeachersSections(db, ownerEmail);
     enrolled = rostered.filter((r) => sectionLabel(r.section) === section).length;
   }
 

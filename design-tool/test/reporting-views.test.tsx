@@ -491,7 +491,7 @@ describe("the results matrix", () => {
 
   test("the section filter narrows the rows and offers every section present", async () => {
     const scene = await seedScene();
-    const results = await buildResults(scene.assessment.id, OWNER, TEACHER_EMAIL);
+    const results = await buildResults(scene.assessment.id);
     const aliceSection = results.rows.find(
       (r) => r.attempt_id === scene.aliceAttempt.id,
     )!.student.section!;
@@ -961,8 +961,8 @@ describe("research score rows reach no teacher surface", () => {
 
   test("buildResults totals are unchanged", async () => {
     const scene = await seedScene();
-    const before = await buildResults(scene.assessment.id, OWNER);
+    const before = await buildResults(scene.assessment.id);
     await addResearchRows(scene.aliceAttempt.id);
-    expect(await buildResults(scene.assessment.id, OWNER)).toEqual(before);
+    expect(await buildResults(scene.assessment.id)).toEqual(before);
   });
 });
