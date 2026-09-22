@@ -1,0 +1,258 @@
+# Practice sittings — "assign to self" (roadmap U-4)
+
+Design note, 2026-09-22. Roadmap `docs/roadmap-2026-09.md` §"Unscoped" row
+**U-4** (James, 2026-09-17: teacher self-assign for practice; decided the
+same day: in the client app itself, practice attempts excluded from results).
+James's framing 2026-09-22: **a staff member assigns a session to themselves
+and sits it on their own Mac, in as close to the real environment as
+possible** — the client is the only preview that cannot drift from what
+students see, so the editor's web Preview stays a sketch and this becomes
+the authentic one. Decisions marked **D-n** are James's and are listed at
+the end; **§Progress says what is built** (nothing yet).
+
+## What exists that this stands on
+
+- **Two roles, from the email domain.** `roleForEmail` gives `staff` for
+  `psd401.net` and `student` for the student domain (ADR 0017,
+  `lib/auth/roles.ts`). Every student-side route is gated by
+  `requireStudent()` — `GET /api/me/sittings`, `POST /api/test-sessions/
+  redeem`, `POST /api/attempts`, `GET /api/assessments/[id]/delivery`, and
+  the eight per-attempt routes (responses, uploads, submit, peek, events,
+  client-errors). A staff session on any of them is 403 today.
+- **Student identity is the roster.** `resolveStudentForOwner` finds the
+  active roster row by email, checks the sitting's scope
+  (`isAdmittedToSitting`: an explicit `student_ps_ids` list, else the
+  owner's sections narrowed by `section_ps_id`), then finds or binds the
+  per-teacher overlay row in `students` (`owner_sub` + `roster_ps_id`).
+  `attempts.student_id` is NOT NULL and references `students.id`; attempts
+  are unique per `(assessment_id, student_id)`. A staff account has no
+  roster row, so every step above says `not_on_roster`.
+- **Per-attempt ownership is one seam.** `loadOwnAttempt` (`lib/api/
+  studentAttempt.ts`) resolves the caller to an overlay row and compares it
+  with `attempts.student_id`; every per-attempt student route goes through
+  it. `listMySittings` builds "Your tests" from the roster row the same
+  way.
+- **The client does not care about the role.** It logs `role` from the
+  session JWT and nothing else; "Your tests" renders whatever
+  `/api/me/sittings` returns (`MySittings.swift`: scope `sections |
+  section | students` with a label each), a join is `POST /api/attempts`,
+  and `JoinOutcome` refuses only a `submitted` attempt (H-1).
+- **Release always locks.** Security slice 2 (2026-09-15): the notarized
+  build ignores the simulate knob and refuses to run without the AAC
+  entitlement. Any Mac with the app, the profile and macOS 26.4+ can run a
+  real session — no MDM is required for AAC itself.
+- **Sittings carry an owner.** `test_sessions.owner_sub` / `owner_email`
+  (a co-teacher's sitting is under their own sub — access note D-5),
+  `created_by_sub`, `status` (`open | closed`, CHECK), `expires_at`,
+  `section_ps_id`, `student_ps_ids`, `archived_at`. Creation needs `run`
+  on the assessment.
+- **Readers of attempts.** Results matrix + CSV (`lib/scoring/results.ts`
+  `buildResults`), review queue, per-student page, print report + summary,
+  work packet, analytics, hand-in-all, the Monitor (`attendanceForSitting`),
+  the scoring corpus, the retention sweep, and the Students page (the
+  overlay list) — each would show a practice attempt or its overlay row
+  unless told not to.
+- **Teacher Macs.** Jamf scope today is the student test fleet; James asked
+  IT for the staff-Mac scope on 2026-09-22 (pkg policy + the
+  managed-preferences profile). Until it lands, a teacher's Mac runs the
+  Release app only with the two values on the command line.
+
+## Design
+
+### The sitting (D-1, D-2)
+
+A **practice sitting** is an ordinary `test_sessions` row with
+`kind = 'practice'` and `practice_for_sub = <the staff sub>`, created by
+`POST /api/test-sessions` with `{ assessment_id, kind: "practice" }` from
+the Test sessions tab ("Practice on my Mac"). `run` level on the assessment,
+so the owner and a co-teacher can each practise; `owner_sub` / `owner_email`
+follow the creator exactly as a class sitting's do. No section, no
+`student_ps_ids`; it gets a code like any sitting (the client's join by
+code keeps working), `expires_at` = now + the "How long" choice (default
+rest of day). **A practice sitting admits exactly one principal — the sub
+it names — and never a student.** `isAdmittedToSitting` returns false for
+any roster student on a practice sitting; the practice path never consults
+the roster.
+
+Under impersonation the effective sub is the teacher's, but the admin's Mac
+signs in as the admin — `practice_for_sub` is written from the session's
+effective `sub`, so an act-as practice sitting is only joinable by the
+teacher. Acceptable; noted, not special-cased.
+
+### The join path for a staff principal (D-3)
+
+Rather than a parallel API, the existing student routes learn one more way
+to resolve "who is this": a **practice principal**.
+
+- `requireStudent()` on the twelve routes becomes `requireStudentOrPractice()`:
+  a `student` role passes as today; a `staff` role passes too, carrying a
+  marker the resolvers read. Nothing else about the routes changes.
+- `resolveStudentForOwner(db, ownerSub, session, sitting)` gains the branch:
+  when the session is staff, the sitting (when given) must be `practice`
+  with `practice_for_sub === session.sub`, else `not_in_sitting`; the
+  overlay row is `findOrCreatePracticeOverlay(ownerSub, session)` — a
+  `students` row with `practice_for_sub = session.sub`, `name = "Practice —
+  <teacher display name>"`, no roster binding, no SSID. New column
+  `students.practice_for_sub` with `unique(owner_sub, practice_for_sub)`,
+  so one practice row per (assessment owner, practising teacher). When no
+  sitting is given (`loadOwnAttempt`), the staff branch resolves the
+  practice overlay under the attempt's assessment owner and the existing
+  `student_id` comparison does the rest.
+- `POST /api/attempts` sets `attempts.practice = true` (new boolean, default
+  false) when the sitting is practice. The flag lives on the attempt because
+  `test_session_id` is nullable and rebinds; readers must not have to reach
+  the sitting to know.
+- `listMySittings` for a staff session returns the open practice sittings
+  with `practice_for_sub = session.sub`, scope `"practice"`, plus the
+  attempt shape the client already reads. A staff session with none gets an
+  empty list and the reason `no_practice_sitting`.
+- `redeem` by code: same resolver, so a practice code typed into the client
+  works for its teacher and is `session_unavailable` for anyone else.
+- The delivery bundle, responses, uploads, submit, peek, events: unchanged
+  once `loadOwnAttempt` resolves the practice overlay. The time limit,
+  Extend time, Close, expiry, the peek poll, hand-in and the 409 rules all
+  apply — that is the point of practising.
+
+### Invisible everywhere a class result lives (D-4)
+
+Every reader listed above excludes `attempts.practice = true`, and the
+Students page and the accommodations import exclude
+`students.practice_for_sub IS NOT NULL`. The guarantee is a test, not a
+convention: `test/practice-invisibility.test.ts` seeds one assessment with
+a class attempt and a scored, handed-in practice attempt, then asserts that
+`buildResults`, the CSV, the review queue, the print report, the summary,
+the work packet, the analytics footer, hand-in-all, the corpus selection,
+`attendanceForSitting` on a CLASS sitting, and the Students list each
+return only the class attempt. The per-student page (`/dashboard/[id]/
+results/[attemptId]`) is the one reader that DOES show a practice attempt
+— reached only from the practice row on the Test sessions tab, so the
+teacher can read back their own answers and the integrity timeline.
+
+Auto-scoring runs on a practice hand-in as on any other (the teacher sees
+what a student's score would be); the scores are invisible because the
+attempt is.
+
+### The Test sessions tab and the Monitor (D-5)
+
+- The tab gains **"Practice on my Mac"** beside Start session: one click
+  creates the practice sitting for the rest of the day and shows its row.
+  Practice rows sit in the same list, labelled **Practice** where a class
+  row shows its section, and carry: Show code, Monitor, Close session, a
+  status line ("Not started yet" / "In progress · 3 of 10 answered" /
+  "Handed in 9:41 AM · 7 / 10"), **See my answers** (the per-student page)
+  and **Practice again** (D-6). No Attendance, Hand in everyone or Extend
+  time — one attempt, the teacher's own.
+- The Monitor works on a practice sitting with one row, so the teacher can
+  also see what the Monitor shows for a student: `attendanceForSitting`
+  returns the practice principal as its only expected row (label "You
+  (practice)"); View screen, Hand in, Extend time and Delete attempt work.
+  A teacher cannot be on the locked Mac and the Monitor at once; a
+  colleague or a phone can be.
+- The Assessments home's "Open now" strip and `/admin`'s district-wide list
+  show practice sittings with the Practice label (an admin should see
+  every open lock).
+
+### Practice again and cleanup (D-6, D-7)
+
+- **Practice again** = delete the practice attempt (the existing
+  `DELETE /api/attempts/[attemptId]` cascade + storage delete + audit row;
+  it is the teacher's own attempt, so the `session_open` refusal is
+  relaxed for practice) and the row returns to "Not started yet"; the next
+  join creates a fresh attempt. Nothing special on the client: "Your
+  tests" lists the sitting with `attempt: null` again.
+- **Cleanup**: the nightly retention sweep (`lib/retention/sweep.ts`, D-11)
+  deletes practice attempts whose sitting closed or expired more than
+  **7 days** earlier, through the same delete path (uploads included), and
+  archives the sitting. Practice never accumulates in the account, and
+  never reaches the corpus or a family-facing page.
+
+### Lockdown and the client (D-8)
+
+**Lockdown is always on.** A practice sitting is delivered to the same
+Release build students run: real `AEAssessmentSession`, fullscreen, the
+same exits (Cmd-E, Cmd-Q, the titlebar button), the same sheets. No
+"lockdown off" option — the Release posture has no way to skip `begin()`
+and should not learn one, and a practice that does not lock would not be
+the preview James wants. The one dev affordance stays: a Debug build with
+`SECURE_TEST_SIMULATE_LOCKDOWN` practises unlocked, for us.
+
+Client changes (XS, rides the next release):
+
+- `MySittings.Sitting.scope` gains `"practice"` → row label "Practice —
+  only you", the teacher line shows the assessment owner as today.
+- The empty state for a staff sign-in: "No practice tests right now. Start
+  one from your assessment's Test sessions tab." (today a staff sign-in
+  reads the student copy for `not_on_roster`).
+- `JoinErrorCopy`: `no_practice_sitting` and the practice `not_in_sitting`
+  map to "This practice test is for the teacher who started it."
+- Nothing else: paging, keypad, drawings, autosave, the countdown, the
+  Close sheet and hand-in are exactly the student's.
+
+An older client (v1.3.4) shows a practice sitting with the scope label
+missing (unknown scope → the `sections` copy) and otherwise works, so the
+server half can deploy ahead of the release.
+
+### Security notes
+
+- A staff principal can reach only practice sittings that name their sub;
+  a student can never be admitted to one. Both are asserted in
+  `test/access-enforcement.test.ts` style: the practice resolver is tested
+  with (staff, class sitting) → `not_in_sitting`, (student, practice
+  sitting) → `not_in_sitting`, (staff A, practice sitting for B) →
+  `not_in_sitting`.
+- The delivery bundle for a practice attempt carries no answer keys, as
+  for any attempt (ADR 0016). The teacher knows them; the wire does not.
+- Practice attempts are excluded from `client_error` → "Needs attention"
+  on CLASS monitors by construction (the attempt is on its own sitting).
+
+## Decisions (James, 2026-09-22)
+
+| # | Decision | Recommendation |
+|---|---|---|
+| D-1 | Where practice lives: a `kind` on `test_sessions` (not a separate table or a preview mode) | `kind = 'practice'` + `practice_for_sub`; `attempts.practice`; `students.practice_for_sub` |
+| D-2 | Who can practise | `run` level — owner and co-teachers; a substitute later, by the same level |
+| D-3 | Join path: the student routes admit a practice principal (not a parallel API) | Yes — one resolver branch + one gate helper, so every later student-side feature works for practice for free |
+| D-4 | Invisibility | Excluded from every class reader, enforced by a single test; the per-student page reachable only from the practice row |
+| D-5 | Test sessions tab / Monitor | Same list with a Practice label + See my answers + Practice again; the Monitor shows one row |
+| D-6 | Practice again | Delete the attempt (relaxing `session_open` for practice) and rejoin |
+| D-7 | Cleanup | Nightly sweep, 7 days after the sitting closed or expired; the sitting archived |
+| D-8 | Lockdown | Always real in Release; no on/off option (U-4's "likely shape" dropped) |
+
+## Slices
+
+| # | Slice | Side | Size | Model |
+|---|---|---|---|---|
+| 0 | This note | docs | — | Fable |
+| 1 | Server: **migration 0041** (`test_sessions.kind` + CHECK, `practice_for_sub`; `attempts.practice`; `students.practice_for_sub` + unique), `requireStudentOrPractice`, the resolver branch + `findOrCreatePracticeOverlay`, `POST /api/test-sessions` kind, `listMySittings` staff branch, the reader exclusions, the invisibility test, the access tests, the sweep | design tool | M | Opus 5 / medium |
+| 2 | Teacher UI: "Practice on my Mac", practice rows (label, status line, See my answers, Practice again), Monitor's single row, Open-now / admin labels | design tool | S | Sonnet 5 / medium |
+| 3 | Client: scope label, staff empty state, refusal copy; `swift test` for `MySittings` decoding | client | XS | Sonnet 5 / medium — rides v1.3.5 |
+| 4 | Rows in `docs/design-tool-manual-checks.md` + `client/MANUAL-CHECKS.md`; quick-start "Practise on your own Mac" | docs | S | Sonnet 5 / low |
+
+Slice 1 then 2 in this checkout (2 reads 1's types); 3 in parallel with 2
+(disjoint trees). Deploy after 2; the client copy waits for the release.
+
+## Dependencies and sequencing
+
+- **Teacher Macs get the app + profile through Jamf** — requested from IT
+  2026-09-22. The server half is deployable before that; nobody can use it
+  until a teacher's Mac has the client. Off-fleet: the two values on the
+  command line (`client/RELEASING.md`).
+- Nothing here changes the access model (its note lists U-4 as "its own
+  note"); the `run` level and `authorizeAssessment` are reused as-is.
+- The quick-start gains one paragraph; the pilot teachers hear about it
+  when their Macs carry the client.
+
+## Follow-ups (not in this note)
+
+- **Practise with accommodations**: pick a contrast / font / zoom set for
+  the practice row (the overlay row can carry them; a small picker on the
+  practice row). Worth doing once the accommodations rows have been run
+  with real students.
+- **Practise as a named student** (see exactly what one accommodated
+  student sees) — an admin-ish capability; wait for the pilot to ask.
+- **Practice on the Debug build for us** stays the dev launcher; nothing
+  to build.
+
+## Progress
+
+2026-09-22: this note. Nothing built.
