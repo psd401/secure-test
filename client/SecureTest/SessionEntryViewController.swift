@@ -420,8 +420,9 @@ final class SessionEntryViewController: NSObject {
         } catch {
             rows = []
             render(rows: [])
-            // A staff session gets a 403 here by contract; the code field
-            // still works (and will explain itself at join, as before).
+            // Since practice sittings a staff session gets its own list here
+            // (docs/practice-sitting-design.md, D-3); a failure is a real
+            // failure. The code field still works.
             listStatusLabel.stringValue = "No test list for this account."
             log("my-sittings failed: \(error)")
             AppDelegate.logError(kind: "sittings_failed", message: "\(error)")
@@ -655,7 +656,10 @@ final class SessionEntryViewController: NSObject {
                 }
             } catch {
                 joinButton.isEnabled = true
-                statusLabel.stringValue = Self.message(for: error)
+                // Practice slice 3 follow-up: a teacher's wrong code gets
+                // teacher words (JoinErrorCopy `isStaff`).
+                let isStaff = await client.signedInRole() == "staff"
+                statusLabel.stringValue = Self.message(for: error, isStaff: isStaff)
                 log("join failed: \(error)")
                 AppDelegate.logError(
                     kind: "join_failed",
@@ -669,8 +673,8 @@ final class SessionEntryViewController: NSObject {
         }
     }
 
-    static func message(for error: Error, isPractice: Bool = false) -> String {
-        JoinErrorCopy.message(for: error, isPractice: isPractice)
+    static func message(for error: Error, isPractice: Bool = false, isStaff: Bool = false) -> String {
+        JoinErrorCopy.message(for: error, isPractice: isPractice, isStaff: isStaff)
     }
 
     /// Sign-in failures, in a student's words. The one they can act on alone

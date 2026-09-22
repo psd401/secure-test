@@ -457,3 +457,12 @@ in the same session, since both ride the same v1.3.5 release.
 note's Progress for the per-slice split). `xcodebuild` green, Debug and
 Release. No `client/MANUAL-CHECKS.md` rows, no `MARKETING_VERSION` bump, no
 release yet — those are v1.3.5 slice 3/4 in the OTHER note.
+
+Slice 3 follow-up (main session, 2026-09-22, James: fix it in the client):
+the redeem route answers every wrong code `session_unavailable` (no code
+oracle), so a teacher typing a colleague's practice code, a class code or a
+closed one read "Check it with your teacher." `APIClient.signedInRole()`
+reads the role off the session token's own claims (display only), and
+`JoinErrorCopy` takes `isStaff`: a staff `session_unavailable` reads "That
+code is not open for you. A practice test opens only for the teacher who
+started it." The student copy is unchanged. swift test 691.

@@ -209,6 +209,13 @@ public actor APIClient {
         tokens.token().flatMap { SessionTokenClaims.decodeUnverified($0)?.email }
     }
 
+    /// Practice sittings (docs/practice-sitting-design.md, D-3): the signed-in
+    /// role from the session token's own claims, so the entry screen can word
+    /// a refusal for a teacher. Display only — the server decides access.
+    public func signedInRole() -> String? {
+        tokens.token().flatMap { SessionTokenClaims.decodeUnverified($0)?.role }
+    }
+
     public func signOut() throws {
         try tokens.clear()
     }

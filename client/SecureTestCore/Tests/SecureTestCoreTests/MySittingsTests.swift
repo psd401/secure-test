@@ -165,6 +165,24 @@ final class MySittingsTests: XCTestCase {
         )
     }
 
+    /// Follow-up: every wrong code is `session_unavailable` (no oracle); a
+    /// teacher reads teacher words, a student keeps "check it with your
+    /// teacher".
+    func testSessionUnavailableReadsDifferentlyForStaff() {
+        XCTAssertEqual(
+            JoinErrorCopy.message(forCode: "session_unavailable"),
+            "That code is not open for you right now. Check it with your teacher.",
+        )
+        XCTAssertEqual(
+            JoinErrorCopy.message(forCode: "session_unavailable", isStaff: true),
+            "That code is not open for you. A practice test opens only for the teacher who started it.",
+        )
+        XCTAssertEqual(
+            JoinErrorCopy.message(for: APIError.refused(status: 404, code: "session_unavailable"), isStaff: true),
+            "That code is not open for you. A practice test opens only for the teacher who started it.",
+        )
+    }
+
     func testExpiryLabelIsTimeOnlyOnTheSameDayAndDatedOtherwise() throws {
         let row = SittingRowModel(try sitting())
         let locale = Locale(identifier: "en_US_POSIX")

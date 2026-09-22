@@ -8,7 +8,7 @@ import Foundation
 /// versus fetch the teacher — and a student who reads the same sentence for
 /// both will do the wrong one.
 public enum JoinErrorCopy {
-    public static func message(for error: Error, isPractice: Bool = false) -> String {
+    public static func message(for error: Error, isPractice: Bool = false, isStaff: Bool = false) -> String {
         guard let apiError = error as? APIError else {
             return "Something went wrong. Tell your teacher."
         }
@@ -16,7 +16,7 @@ public enum JoinErrorCopy {
         case .notAuthenticated:
             return "You are not signed in. Tell your teacher."
         case .refused(_, let code):
-            return message(forCode: code, isPractice: isPractice)
+            return message(forCode: code, isPractice: isPractice, isStaff: isStaff)
         case .decoding, .notHTTP:
             return "Could not read the reply from the server. Tell your teacher."
         }
@@ -29,8 +29,16 @@ public enum JoinErrorCopy {
     /// `resolvePracticePrincipal`). The caller knows which row it tried to
     /// join (`SittingRowModel.isPractice`), so that is what tells the two
     /// apart here rather than the code alone.
-    public static func message(forCode code: String?, isPractice: Bool = false) -> String {
+    ///
+    /// `isStaff` (practice slice 3 follow-up, 2026-09-22): a teacher joins
+    /// only practice sittings, and the redeem route answers EVERY wrong code
+    /// `session_unavailable` on purpose (no code oracle), so a teacher who
+    /// types a colleague's practice code, a class code or a closed one reads
+    /// words meant for them rather than "check it with your teacher".
+    public static func message(forCode code: String?, isPractice: Bool = false, isStaff: Bool = false) -> String {
         switch code {
+        case "session_unavailable" where isStaff:
+            return "That code is not open for you. A practice test opens only for the teacher who started it."
         case "malformed_code":
             // The only failure the student can act on alone.
             return "That code does not look right. Check it and try again."
