@@ -490,6 +490,29 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-21 — v1.3.4 client sitting before the release
+
+14 of 17 v1.3.4 rows ✅ (real AAC sessions for the deferred-spool pair;
+`docs/client-autosave-and-deferred-spool-design.md` §Progress is the
+record). Readings, proposals only, none blocking the release:
+
+- **SI-1** (client) — the first sign-in of the day failed silently with
+  `NSURLErrorDomain -999` (cancelled) on the SSO ACS post
+  (`accounts.google.com/a/<student-domain>/acs`) with the network up; the
+  second attempt succeeded. Same silent-return path as the 2026-09-14 Wi-Fi
+  case. Proposal: retry the ACS navigation once, or show "Sign-in didn't
+  complete — try again" instead of the bare sign-in card. Watch the pilot's
+  `signin_failed` client-error rows for the rate.
+- **AS-1** (client) — leaving a field after an autosave posts the same text
+  again (one extra POST per focus). One-line guard; v1.3.5 candidate.
+- **AS-2** (client) — a deferred row for a since-handed-in attempt lingers
+  until the next join drops it. Inert; no change proposed.
+- **Working rule** (client dev) — an up-to-date `xcodebuild` re-runs only the
+  `PSDBuildCommit` stamp phase, which rewrites Info.plist AFTER codesign, so
+  the sandboxed Debug app is SIGKILLed at exec with nothing logged
+  (`codesign --verify` says "invalid Info.plist"). `clean build` fixes it;
+  `client/RELEASING.md` carries the rule.
+
 ## Row CS — Close session ends every attempt (scoped 2026-09-15, BEFORE the pilot)
 
 Pilot teachers' first feedback: closing a session (and the session running

@@ -39,6 +39,13 @@ the update pipeline reads it from the tag). Bump it before archiving; the build
 stamps the git sha into `PSDBuildCommit`, so About shows
 `<version> (<sha>)`. Tag = `v<MARKETING_VERSION>`; never reuse a tag.
 
+Gotcha (2026-09-21): a Debug `xcodebuild` that is otherwise up to date
+re-runs only the stamp phase, which rewrites Info.plist AFTER codesign — the
+sandboxed app is then SIGKILLed at exec with nothing logged
+(`codesign --verify --deep --strict` reports "invalid Info.plist"). Use
+`clean build` when HEAD moved but no source changed. The archive path is
+unaffected (psd-sign step 2c checks the stamp on a fresh archive).
+
 ## Steps
 
 The `psd-sign` skill (0.6.0+) runs the whole thing from the archive: its

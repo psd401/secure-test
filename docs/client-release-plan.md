@@ -148,8 +148,10 @@ batched IT afternoon.
 **Slice 1 BUILT 2026-09-03 evening** (Opus 5 / medium agent, reviewed and
 re-run in the main session): `MARKETING_VERSION 1.0.0` (D-R2 taken),
 `CFBundleDisplayName` "Secure Test", `Assets.xcassets` by hand (AppIcon =
-the white emblem on a Pacific Big Sur tile, AccentColor = Cedar, a
-`psd-emblem-white` imageset), a "Stamp build commit" run-script phase
+the white emblem on a Pacific Big Sur tile — **replaced 2026-09-21 for
+v1.3.4 by James's laptop-under-a-glass-dome icon on a Pacific tile**, a
+1254 px PNG resized with `sips` into the same ten `icon_*.png` slots;
+AccentColor = Cedar, a `psd-emblem-white` imageset), a "Stamp build commit" run-script phase
 writing `PSDBuildCommit` into the generated Info.plist (needs
 `ENABLE_USER_SCRIPT_SANDBOXING = NO` on the target — build-time only,
 unrelated to the app sandbox), `AppVersion.buildStamp` + an About item

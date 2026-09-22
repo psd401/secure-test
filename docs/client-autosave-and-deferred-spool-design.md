@@ -193,3 +193,29 @@ ceiling; offline autosave posts).
   row with a Terminal launch. Quick-start "looks wrong" bullets now say
   autosave is v1.3.4+. Tests: swift 671 → 674, both xcodebuilds green.
   Rows in `client/MANUAL-CHECKS.md` under the v1.3.4 section, NOT RUN.
+- 2026-09-21 — **v1.3.4 sitting RUN before the release** (Debug build from
+  `4e2da9f`, origin rev 46; James at the client, Claude on the teacher side
+  in Chrome; fixture `Client rows hand-run 2026-09-08 (copy)`, four sittings
+  simulated + two REAL AAC sessions on the phone's hotspot for the offline
+  rows; `client/MANUAL-CHECKS.md` "Text autosave + deferred spool" holds the
+  per-row record): **14 of 17 rows ✅**, the E12 row not exercisable (no
+  per-student stimulus on the fixture; same `textAutosave` path), the spool
+  migration row NOT RUN (the hand `DROP COLUMN` did not take; the unit test
+  `testTheDeferredColumnMigrationIsIdempotent` opens a hand-written v1.3.3
+  shape — accepted on that), T-3 ✅ CLOSED (`1 minute left` logged after
+  `banner hidden by the student` on two runs, and on the second James saw
+  the on-screen notice with the banner hidden — verify-only, no build item). The 30 s ceiling is now proven by hand
+  (three posts ~30 s apart during 60 s of continuous typing). Two readings,
+  proposals only: **AS-1** — after an autosave, leaving the field posts the
+  same text once more (`change` fires because the value differs from
+  focus-time and the handler posts unconditionally; essay, short_text and
+  table all show it; one extra post per focus, no data effect; fix = a
+  `current() === lastPosted` guard in `onchange`); **AS-2** — a deferred row
+  for an attempt that was then handed in stays in the spool because the H-1
+  refusal returns before the bundle fetch, and is dropped on the next join
+  (`deferred spool: 0 sent, 1 dropped`) — inert. Hand-run gotchas recorded
+  in the rows: inside a real session the Wi-Fi menu is suppressed, so the
+  offline rows need the phone's hotspot AND Auto-Join OFF on every other
+  saved network (the first try auto-rejoined the room's Wi-Fi and the write
+  went out online); the Close must come from the phone because the teacher
+  side shares the Mac. Release: v1.3.4 goes to psd-sign next.
