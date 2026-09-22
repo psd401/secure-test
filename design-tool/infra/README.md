@@ -104,7 +104,16 @@ path by default.
 
 ## Ad-hoc psql from a laptop (temporary rule)
 
-For a one-off query (`roster:health`, the go-live checklist SQL), open the
+**Read-only queries: use `scripts/query-aurora.sh <file.sql>`** (2026-09-22).
+It runs the manual recipe below in one shell — opens the cluster SG to your
+public /32, reads the cluster secret, runs the file in a session with
+`default_transaction_read_only = on` (writes fail at the database; a file
+that touches that setting is refused), and revokes the rule on any exit,
+including a rule an earlier interrupted run left behind. Pager off, so no
+"(END)" prompt. Writes still go through the migration path or
+`oneoff-aurora.sh`.
+
+For anything else (`roster:health`, the go-live checklist SQL), open the
 cluster SG to your current IP by hand and revoke it in the same session.
 Never make the district address a standing rule — it is the WSIPC/K-20 NAT
 for the whole network. The stack never re-adds a CIDR rule, so a rule left
