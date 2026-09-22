@@ -490,6 +490,24 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-22 — UX pass 3 research + practice-sitting note
+
+Two roadmap questions from James answered the same morning. **Practice
+sittings** ("assign to self"): agreed — the client is the only preview that
+cannot drift; `docs/practice-sitting-design.md` written (row U-4, D-1…D-8
+recommended, lockdown always real, teacher-Mac Jamf scope asked of IT).
+**A Forms-like design pass**: yes for the teacher side, interaction before
+visuals — `docs/ux-pass-3-research.md` measures the same ten-item MC quiz
+in both tools (~112 actions and ten explicit saves vs ~90 and none) and
+lists findings UX3-1…UX3-8 (real default text instead of placeholders, two
+clicks per extra choice, per-card Save vs autosave, the Add control above a
+growing list, toolbar buttons in the Tab order; keep the inline correct
+radio). The pilot week's logs: 26 client-error drain batches, no server
+500 since 2026-09-15, no feedback publish failure; the per-row kinds and
+the feedback text wait on an Aurora read (James). Sequencing: practice
+note now → UX pass 3 decisions after two weeks of pilot feedback → the
+client side as an accessibility audit.
+
 ### 2026-09-22 — verification rows, Chrome half
 
 Teacher rows run on the origin (rev 47, Aurora 0040) without a student:
