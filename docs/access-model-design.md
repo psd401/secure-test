@@ -686,3 +686,7 @@ check and adds the test that keeps it that way.
   NOT RUN — they need an `ADMIN_EMAILS` address and, for row 252, a second
   staff account. **Deferred, unchanged: the grants console (now slice 5b),
   substitutes (4) and principals (6).**
+- **2026-09-21 — A5-4 + slice 5 PUSHED + DEPLOYED: LIVE at https://<origin> =
+  origin/main `472372a`, task def rev 47, rollout COMPLETED, health stamp =
+  HEAD, Aurora at **0040** via `deploy.sh`'s migrate step (41 journal rows).**
+  Rows 245–252 NOT RUN.
