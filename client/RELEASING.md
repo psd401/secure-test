@@ -194,6 +194,20 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.3.4 — 2026-09-21** (built from `2168089cfe31`, tag on `main`): text
+  autosave (5 s idle / 30 s ceiling on essay, short_text, table cells,
+  inline outline), the deferred spool (a `sitting_closed` write is held
+  and sent on the next Resume), H-1 join wording, drawing toolbar roving
+  tabindex, the client-hygiene slice (24 h stale-spool purge, nonPersistent
+  web view, errors.log cap), and the new app icon. psd-sign 0.6.0 end to
+  end: pre-flight (clean tree, HEAD = `origin/main`, 1.3.4 > v1.3.3),
+  archive-only Developer ID + hardened runtime, six entitlements =
+  `expected-entitlements.txt`, profile `SecureTest Developer ID` to
+  2044-08-30, `PSDBuildCommit` = HEAD, app + pkg notarized (Accepted) and
+  stapled; pkg sha256 `a8179e3a…2734`. Hand-run first: 15 of 17 v1.3.4
+  rows incl. two real AAC sessions (`client/MANUAL-CHECKS.md`). Profile
+  unchanged from v1.3.0. Caveat: deployment target 26.4 still has no real
+  session on a 26.4 Mac (carried from v1.3.1).
 - **v1.3.3 — 2026-09-15** (built from `f2cc2e5`, tag on `main`): row CS —
   Close session / sitting expiry end the student's secure session and
   return them to Your tests ("Your teacher ended the test session." — not a
