@@ -51,6 +51,27 @@ time) and its rubric is attached.
    settings; results and test sessions are not copied. Use it for a second
    period's version or before a big edit.
 
+## Teacher — practise on your own Mac
+
+Sit your own test exactly as a student will, locked down, before your class
+does. **Needs Secure Test on your own Mac** — district IT is adding teacher
+Macs; until yours has it, this button has nothing to open.
+
+1. Open a **Published** assessment → **Test sessions** → **Practice on my
+   Mac**. A practice session opens for the rest of the day, for you alone.
+2. Open **Secure Test** on your Mac and sign in with your school Google
+   account. The test is under **Your tests** (the session code works too).
+   It is the real thing: full screen, locked, the same exits, time limit,
+   paging and hand-in your students get.
+3. Back on the Test sessions tab, the practice row shows how far you got.
+   **See my answers** opens your answers and score; **Practice again**
+   clears them so you can start over.
+
+Practice never shows up in your results, Monitor, scoring queue, Students
+page or printouts, and nobody else sees it. It is deleted a week after the
+practice session ends. Until your Mac has the next Secure Test update, the
+test's label under Your tests reads like a class test; nothing else differs.
+
 ## Three clocks — what actually ends a student's test
 
 All three stop a student who is already working; only **Hand in** finalises

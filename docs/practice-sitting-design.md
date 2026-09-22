@@ -409,3 +409,9 @@ Practice again that deletes the colleague's attempt. Both now add
 practice sittings whose `practice_for_sub` is the caller); `/admin` still
 lists every open sitting, labelled. Test: `test/practice-sitting.test.ts`
 "sitting lists" (fails without the filter). Design-tool 2176 tests.
+
+Slice 4 (2026-09-22 evening): `docs/pilot-quick-start.md` gains "Teacher —
+practise on your own Mac" (before "Three clocks"): the teacher-Mac
+prerequisite, the three steps, invisibility + the 7-day cleanup, and the
+v1.3.4 label caveat (D-8's "older client"). The hand-run rows were written in
+slice 2 (253–262); the client rows ride slice 3 / v1.3.5.
