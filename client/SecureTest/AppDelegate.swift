@@ -1041,6 +1041,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.log("secure session ended without a hand-in — leaving the test screen")
         let goHome: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
+            // The flush is async. A refused or interrupted start can reach
+            // `couldNotStartSecurely` meanwhile, which goes home and presents
+            // its own sheet (and `showEntry()` resets the once-per-screen flag),
+            // so a late arrival here would stack a second sheet — finding F-A,
+            // 2026-09-22. Whoever left the attempt screen first owns the sheet.
+            guard self.screen == .serverAttempt else { return }
             self.showEntry()
             let alert = NSAlert()
             if bySittingClosed {
@@ -1090,7 +1096,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Nothing is on screen worth keeping, and nothing about this attempt
         // should stay half-built. `showEntry()` also flips `screen` to `.entry`,
         // so the `.idle` that the end above produces arrives with the
-        // return-home path already guarded and cannot stack a second sheet.
+        // return-home path already guarded. An `.idle` that arrived FIRST and
+        // is still waiting on its input flush re-checks `screen` before it
+        // acts (F-A), so it cannot stack a second sheet either.
         showEntry()
         let alert = NSAlert()
         alert.messageText = "Couldn't start a secure session"
@@ -1099,8 +1107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         presentOnEntryWindow(alert)
     }
 
-    /// One button, so Escape and Return both land on the same harmless
-    /// dismissal. Presented on the window the entry screen now occupies.
+    /// One button, dismissed with Return or a click. Escape does NOT dismiss it:
+    /// NSAlert binds Escape only to a button titled "Cancel" (finding F-B,
+    /// 2026-09-22 — accepted as-is). Presented on the window the entry screen
+    /// now occupies.
     private func presentOnEntryWindow(_ alert: NSAlert) {
         guard let window else { return }
         alert.beginSheetModal(for: window) { _ in }
