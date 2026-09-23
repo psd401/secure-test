@@ -1784,3 +1784,32 @@ can be driven from Chrome on the origin. Run the v1.3.4 sitting first
 | **Practice joined by code.** Staff, type their own open practice sitting's code | Joins the practice attempt (the redeem route admits a practice principal) | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown: typing the practice code joined the attempt (13 items, gate opened) |
 | **Practice refusal from the list.** Not reachable by hand — the list shows only the teacher's own practice sittings; covered by `MySittingsTests` (`not_in_sitting` with `isPractice`) | — | NOT EXERCISABLE |
 | **Security slice 1 end rows, re-run on 1.3.5.** The "Content only while locked" rows for Cmd-E, the Close sheet and rejoin | As recorded in that section | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown — see "Content only while locked": every simulated row run; F-A found + fixed, F-B accepted |
+
+## v1.3.5 — EX-1 client, keyboard reach, ME-3 (2026-09-23)
+
+Findings from the 2026-09-23 district-Mac sitting (`docs/roadmap-2026-09.md`
+§Progress 2026-09-23), built the same afternoon: `ab7df2e` (EX-1 client —
+the poll's deadline restarts the countdown), `db26100` (keyboard reach —
+HS-1 / ME-1), `dc223c2` (ME-3 — KaTeX's TeX annotation stripped). The
+server half of EX-1 (`542842930822b6d2`) is live on the origin (rev 49). Run on the
+v1.3.5 build in a REAL session on a fleet Mac with **Keyboard navigation
+OFF** (System Settings › Keyboard — the fleet default). VoiceOver rows:
+turn VoiceOver on and dismiss its welcome BEFORE joining.
+
+| Check | Expect | Result |
+|---|---|---|
+| **EX-1 later.** Timed attempt in progress; the teacher presses Extend time on the Monitor row and picks a LATER time | Within ~5 s: the notice "Your teacher changed your time. The test now ends at <time>." and the countdown jumps to the new deadline; stderr `time limit: deadline changed by the teacher — Ns left` | NOT RUN |
+| **EX-1 earlier.** Same, a time a few minutes from now (under 5 min) | The countdown drops; the 5-minute notice (and the 1-minute one when due) follows the change notice; at zero the session ends with "Time is up." | NOT RUN |
+| **EX-1 untimed → timed.** An untimed test in progress; the teacher extends it to a time 10 min from now | A "Time left" strip appears at the top of the page where a timed test shows it, counting to the new time, plus the change notice | NOT RUN |
+| **EX-1 hidden timer.** Hide the timer (×), then the teacher extends | The strip stays hidden; the change notice still shows | NOT RUN |
+| **EX-1 no churn.** Timed test, no teacher action, sit for 1 minute | No change notice, no `deadline changed` line (poll jitter is not a change) | NOT RUN |
+| **Keyboard reach — choices.** Single-choice question: click the stem area, press Tab | Focus lands on ONE choice (the selected one, else the first) with a visible ring; ↓ / → select the next choice and ↑ / ← the previous, wrapping; each move saves (the teacher side shows the new answer); Tab leaves the group | NOT RUN |
+| **Keyboard reach — multi, order, match.** Multi-select, order (Move buttons), match | Tab reaches every checkbox, every Move button and every dropdown, each with a visible ring (the dropdowns had none before) | NOT RUN |
+| **Keyboard reach — hotspot (HS-1).** Tab through a hotspot question | Each region is its own Tab stop with the thick ring; Space toggles it | NOT RUN |
+| **Keyboard reach — Math keys (ME-1).** Short-text `$` item: Tab from the field, Tab again, then Shift-Tab twice | Field → the "Math keys" toggle → Fraction; Shift-Tab: Fraction → toggle → field | NOT RUN |
+| **Keyboard reach — page controls.** Paged test: keep tabbing past the last question control | Previous / Next, the page-strip buttons, Clear answer, and on the review page Finish, each reachable with a ring | NOT RUN |
+| **Keyboard reach — added later.** After a page turn, after the time strip appears (EX-1 untimed row), and in the picture overlay | The new controls (the strip's ×, the overlay's close) are reachable by Tab — the MutationObserver path, not testable headlessly | NOT RUN |
+| **Keyboard reach — roving groups unchanged.** Drawing toolbar and math keypad | Still ONE Tab stop each, arrows move within | NOT RUN |
+| **ME-3 preview.** VoiceOver on; type `\frac{1}{2}` in a short-text field | The preview is announced as a fraction ("1 over 2" / "one half"), never the literal `\frac{1}{2}`. If it goes silent, record that — the fallback is a visually hidden spoken-text span | NOT RUN |
+| **ME-3 stem.** VoiceOver on a stem carrying `$\frac{1}{4}$` | Read as math, not LaTeX | NOT RUN |
+

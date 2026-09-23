@@ -934,3 +934,17 @@ for 265–266, handed in) through the client.
 | 265 | **Print student work** → pick the co-teacher's section | The strip reads "N of M students in \<section\> handed in", with M = the co-teacher's section's current enrollment (it read "of 0" before) | NOT RUN — needs a co-teach grant + a student sitting |
 | 266 | Open the owner's **Students** page | The student is NOT under "Not in your current sections"; they sit under a heading with the co-teacher's section label and "co-taught · N students", with a line naming the co-teacher's email and that they joined through a co-taught assessment | NOT RUN — needs a co-teach grant + a student sitting |
 | 267 | Open that student from the co-taught group, turn a support on, go back | The accommodation page opens and saves exactly as for any other student; the Students page's count badge for the row updates | NOT RUN — needs a co-teach grant + a student sitting |
+
+## EX-1 server — the deadline on the peek poll + the "shortens" hint (2026-09-23)
+
+`542842930822b6d2`, live as task def rev 49. The poll half is covered by
+`test/peek-api.test.ts`; these rows are what only the browser or a running
+client shows. The client half (v1.3.5) has its rows in `client/MANUAL-CHECKS.md`
+"v1.3.5 — EX-1 client, keyboard reach, ME-3".
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 268 | Monitor on an open sitting with a timed, in-progress student → **Extend time** → pick a time EARLIER than their "Until …" | Under the picker: "This is earlier than the current deadline — it shortens their time."; Extend still submits | NOT RUN |
+| 269 | Same dialog, pick a time LATER than every in-progress deadline (and the default tomorrow 23:59) | No hint | NOT RUN |
+| 270 | The per-student page's Extend time and a Test sessions row's Extend time (Attendance expanded) with an earlier time | The same hint; with Attendance collapsed the sitting row shows no hint (nothing known), which is expected | NOT RUN |
+

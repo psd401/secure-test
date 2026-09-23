@@ -528,6 +528,21 @@ Contrast / zoom / font rows (math + drawing) deferred to another day
   that as math yet" note, not red raw text (4b replaced it) — both rows
   marked superseded. The per-student page renders short-text answers as
   KaTeX, so `10^{}` reads as an empty superscript, not raw text.
+- **BUILT the same afternoon (James: fold into v1.3.5):** `542842930822b6d2` EX-1
+  server (the poll carries `time_limit_ends_at` + `server_now`; the Extend
+  dialog hints "it shortens their time" for an earlier pick) — **DEPLOYED,
+  task def rev 49, health stamp = HEAD, no migration**; `ab7df2e` EX-1
+  client (a moved deadline restarts the countdown, change notice, hidden
+  timer stays hidden, an untimed page grows a strip); `db26100` keyboard
+  reach (HS-1 / ME-1 turned out to be one cause — with macOS Keyboard
+  navigation OFF, the fleet default, WebKit's Tab skipped every button,
+  radio and checkbox; every such control now carries tabindex, single-
+  choice radios are one stop with page-handled arrows, one focus-ring
+  rule); `dc223c2` ME-3 (KaTeX's TeX `annotation` stripped from the
+  preview and the stem pass). swift test 716, design-tool 2184. Rows:
+  `client/MANUAL-CHECKS.md` "v1.3.5 — EX-1 client, keyboard reach, ME-3",
+  design-tool rows 268–270 — NOT RUN. The three client commits are on
+  `main`, unpushed, held with v1.3.5.
 - **Working rules:** VoiceOver must be ON (and its welcome screen
   dismissed once) BEFORE lockdown — inside a session its start dialog
   cannot be clicked. The teacher-row script's row expired mid-morning the
