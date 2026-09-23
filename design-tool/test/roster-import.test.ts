@@ -207,6 +207,107 @@ describe("importSnapshot — absence deactivates, presence reactivates", () => {
   });
 });
 
+describe("importSnapshot — DCID columns (gradebook push slice 1)", () => {
+  async function sectionRow(psId: string) {
+    const [s] = await getDb()
+      .select()
+      .from(roster_sections)
+      .where(eq(roster_sections.ps_id, psId));
+    return s;
+  }
+
+  test("stores every DCID the extract carries", async () => {
+    await importFixture();
+    const [st] = await getDb()
+      .select()
+      .from(roster_students)
+      .where(eq(roster_students.ps_id, "1002"));
+    expect(st?.dcid).toBe("81002");
+    const [gus] = await getDb()
+      .select()
+      .from(roster_students)
+      .where(eq(roster_students.ps_id, "1007"));
+    expect(gus?.dcid).toBeNull();
+    const sec = await sectionRow("5002");
+    expect(sec?.dcid).toBe("85002");
+    expect(sec?.year_id).toBe("31");
+    const teachers = await getDb()
+      .select()
+      .from(roster_section_teachers)
+      .where(eq(roster_section_teachers.teacher_ps_id, "304"));
+    expect(teachers.map((t) => t.users_dcid)).toEqual(["8304"]);
+  });
+
+  test("a later file WITHOUT the columns keeps the stored ids", async () => {
+    await importFixture("night-1");
+    const ex = await loadExtract();
+    withSnapshotId(ex, "night-2");
+    replaceFile(
+      ex,
+      "sections",
+      [
+        "ps_id,school_id,course_code,course_name,term_id,period_expression",
+        "5001,200,MAT101,Algebra 1 Honors,3100,3(A)",
+        "5002,200,SCI201,Biology,3100,4(A)",
+        "5003,200,ENG101,English 9,3100,1(A)",
+        "5004,100,ELE500,Grade 5 Homeroom,3000,HR",
+        "",
+      ].join("\n"),
+    );
+    const result = await importSnapshot(getDb(), { manifest: ex.manifest, readFile: ex.readFile });
+    expect(result.ok).toBe(true);
+    const sec = await sectionRow("5001");
+    expect(sec?.course_name).toBe("Algebra 1 Honors"); // the rest still overwrites
+    expect(sec?.dcid).toBe("85001");
+    expect(sec?.year_id).toBe("31");
+  });
+
+  test("a later file WITH the column overwrites — an empty cell clears the id", async () => {
+    await importFixture("night-1");
+    const ex = await loadExtract();
+    withSnapshotId(ex, "night-2");
+    replaceFile(
+      ex,
+      "sections",
+      [
+        "ps_id,school_id,course_code,course_name,term_id,period_expression,dcid,year_id",
+        "5001,200,MAT101,Algebra 1,3100,3(A),,31",
+        "5002,200,SCI201,Biology,3100,4(A),85902,32",
+        "5003,200,ENG101,English 9,3100,1(A),85003,31",
+        "5004,100,ELE500,Grade 5 Homeroom,3000,HR,85004,30",
+        "",
+      ].join("\n"),
+    );
+    const result = await importSnapshot(getDb(), { manifest: ex.manifest, readFile: ex.readFile });
+    expect(result.ok).toBe(true);
+    expect((await sectionRow("5001"))?.dcid).toBeNull();
+    const s2 = await sectionRow("5002");
+    expect(s2?.dcid).toBe("85902");
+    expect(s2?.year_id).toBe("32");
+  });
+
+  test("a NEW row from a file without the columns lands with null ids", async () => {
+    const ex = await loadExtract();
+    replaceFile(
+      ex,
+      "sections",
+      [
+        "ps_id,school_id,course_code,course_name,term_id,period_expression",
+        "5001,200,MAT101,Algebra 1,3100,3(A)",
+        "5002,200,SCI201,Biology,3100,4(A)",
+        "5003,200,ENG101,English 9,3100,1(A)",
+        "5004,100,ELE500,Grade 5 Homeroom,3000,HR",
+        "",
+      ].join("\n"),
+    );
+    const result = await importSnapshot(getDb(), { manifest: ex.manifest, readFile: ex.readFile });
+    expect(result.ok).toBe(true);
+    const sec = await sectionRow("5003");
+    expect(sec?.dcid).toBeNull();
+    expect(sec?.year_id).toBeNull();
+  });
+});
+
 describe("importSnapshot — refusals preserve last-known-good", () => {
   test("a partial extract is refused, changes nothing, and is logged with its reason", async () => {
     await importFixture("night-1");

@@ -163,7 +163,7 @@ Points only (D-4): `scorepoints = total_points`, assignment max =
 - Token cached in-process until `expires_in − 60 s`; one retry on 401.
 - Id mapping is a pure function over the roster tables: sender email →
   `users_dcid` via the section-teacher row; section → `roster_sections.dcid`
-  and `term_id` (`year_id = floor(term_id / 100)`); student →
+  and `year_id` (both from the extract since 2026-09-23); student →
   `students.roster_ps_id` → `roster_students.dcid`. A missing DCID holds
   the row back with reason `no_dcid` (the extract will backfill overnight).
 - Category: `GET /ws/xte/teacher_category` filtered `isactive`; the dialog
@@ -299,7 +299,28 @@ files and may run in parallel once 1 is merged.
 
 ## Progress
 
-Nothing built.
+**Slice 1 BUILT 2026-09-23** (extract DCIDs; **migration 0042**
+`roster_dcids`, applied to the test DB; NOT deployed). The newest snapshot
+was checked first (headers only): `students.dcid`, `sections.dcid` +
+`year_id`, `section_teachers.users_dcid` all present. The four columns are
+`OPTIONAL_COLUMNS` in `lib/roster/extract.ts` — a file without one is
+accepted and the importer leaves the stored value alone (a warehouse
+regression cannot erase ids a send depends on, and cannot refuse the roster
+everyone signs in against); present-and-empty stores NULL; a non-integer
+refuses the row like any malformed cell. Stored as nullable `text`
+(opaque ids, like `ps_id`) on `roster_students.dcid`,
+`roster_sections.dcid` / `year_id`, `roster_section_teachers.users_dcid`.
+The complete fixture now carries the columns (4–5 digit synthetic ids);
+tests in `test/roster-extract-dcids.test.ts` and `test/roster-import.test.ts`.
+**Deploy order matters:** the roster-sync Lambda bundle carries the new
+importer, which writes the new columns — run `migrate-aurora.sh` right after
+the deploy (the recipe does), and before the 06:00 import, or that night's
+import fails `write_failed:students:42703` and the roster stays at the
+previous night's.
+
+The Schoology app credentials (`SCHOOLOGY_CONSUMER_KEY` / `_SECRET`) and
+`GRADEBOOK_TOKEN_KEY` were added to the `app-env` secret the same evening
+(nothing references them until slice 3 deploys).
 
 **2026-09-23 — IT's second reply** (the reply and ours are in the ops
 repository):

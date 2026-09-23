@@ -68,7 +68,10 @@ All four: UTF-8, RFC 4180 (`"` quoting, `""` escape), a header line, LF or
 CRLF, one file per table (`UNLOAD … PARALLEL OFF` if it comes from Redshift).
 Column order does not matter — the header is read by name, case-insensitive.
 Columns beyond the ones listed are ignored. A column listed here that is
-absent refuses the extract.
+absent refuses the extract — except the **optional columns** (the DCIDs,
+marked "optional column" below): a file without one is accepted and the
+value already stored is kept. When an optional column is present, an empty
+cell stores NULL and a non-empty cell must be a non-negative integer.
 
 "Required" below means the cell must be non-empty on every row. Everything
 else may be empty, and an empty cell is stored as NULL.
@@ -91,6 +94,7 @@ absent the next is *deactivated* on our side, never deleted.
 | `grade` | no | `grade_level` | as text; "K" or "0" both fine |
 | `school_id` | no | `schoolid` | |
 | `enroll_status` | yes | `enroll_status` | integer as PowerSchool defines it (0 active, -1 pre-registered, 1 inactive, 2 transferred, 3 graduated, 4 imported) |
+| `dcid` | no — optional column | `students.dcid` | Added 2026-09-23 for the gradebook push (`docs/gradebook-push-design.md`): the id PowerTeacher Pro's score API keys on |
 
 ### sections.csv
 
@@ -102,6 +106,8 @@ absent the next is *deactivated* on our side, never deleted.
 | `course_name` | no | `courses.course_name` (joined on `courseid`) — what teachers see |
 | `term_id` | no | `sections.termid` |
 | `period_expression` | no | `sections.period_expression` |
+| `dcid` | no — optional column | `sections.dcid` (2026-09-23; = Schoology's `section_school_code`) |
+| `year_id` | no — optional column | `terms.yearid` (2026-09-23; sent rather than derived from `term_id`) |
 
 ### section_teachers.csv
 
@@ -114,6 +120,7 @@ absent the next is *deactivated* on our side, never deleted.
 | `priority_order` | no | `section_teachers.priorityorder` | integer |
 | `start_date` | yes | `section_teachers.start_date` | `YYYY-MM-DD` |
 | `end_date` | yes | `section_teachers.end_date` | `YYYY-MM-DD`; PowerSchool gives a future date for a current assignment |
+| `users_dcid` | no — optional column | `users.dcid` of the teacher | 2026-09-23; the sender's PowerTeacher Pro identity |
 
 Key: (`section_ps_id`, `teacher_ps_id`, `start_date`) — unique within the file.
 

@@ -21,7 +21,7 @@
 // deactivates nothing on the second pass, because every row already carries
 // that snapshot id.
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql, type SQL } from "drizzle-orm";
 import {
   roster_enrollments,
   roster_section_teachers,
@@ -159,6 +159,7 @@ async function importTable(
                 grade: sql`excluded.grade`,
                 school_id: sql`excluded.school_id`,
                 enroll_status: sql`excluded.enroll_status`,
+                ...optionalSet(snapshot.optionalColumns.students),
                 ...stamp,
               },
             })
@@ -180,6 +181,7 @@ async function importTable(
                 course_name: sql`excluded.course_name`,
                 term_id: sql`excluded.term_id`,
                 period_expression: sql`excluded.period_expression`,
+                ...optionalSet(snapshot.optionalColumns.sections),
                 ...stamp,
               },
             })
@@ -204,6 +206,7 @@ async function importTable(
                 role_name: sql`excluded.role_name`,
                 priority_order: sql`excluded.priority_order`,
                 end_date: sql`excluded.end_date`,
+                ...optionalSet(snapshot.optionalColumns.section_teachers),
                 ...stamp,
               },
             })
@@ -248,6 +251,18 @@ async function importTable(
       deactivated: deactivated.length,
     };
   });
+}
+
+/**
+ * Gradebook push slice 1: the DCID columns are overwritten only when this
+ * snapshot's file carried them. A run whose file lacks the column keeps the
+ * stored ids (a new row still gets NULL from the insert) — a warehouse
+ * regression must not erase ids a gradebook send depends on.
+ */
+// `sql.raw` is safe here: the names come only from `OPTIONAL_COLUMNS`, never
+// from the file (validateExtract filters the header against that constant).
+function optionalSet(columns: readonly string[]): Record<string, SQL> {
+  return Object.fromEntries(columns.map((c) => [c, sql.raw(`excluded.${c}`)]));
 }
 
 const TABLE_FOR = {

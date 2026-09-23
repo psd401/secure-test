@@ -1145,6 +1145,10 @@ export const roster_students = pgTable(
     /** PowerSchool enroll_status: 0 active, -1 pre-registered, 1 inactive,
      * 2 transferred, 3 graduated, 4 imported. Stored as sent. */
     enroll_status: integer("enroll_status").notNull(),
+    /** PowerSchool `students.dcid` — the id PowerTeacher Pro's score API
+     * keys on (gradebook push, docs/gradebook-push-design.md). Opaque text;
+     * null until the extract carries it for this student. */
+    dcid: text("dcid"),
     ...rosterSyncColumns,
   },
   (t) => ({
@@ -1165,6 +1169,12 @@ export const roster_sections = pgTable("roster_sections", {
   course_name: text("course_name").notNull().default(""),
   term_id: text("term_id"),
   period_expression: text("period_expression").notNull().default(""),
+  /** PowerSchool `sections.dcid`; Schoology's `section_school_code` for an
+   * SIS-provisioned section (gradebook push). */
+  dcid: text("dcid"),
+  /** PowerSchool `terms.yearid` — sent by the extract rather than derived
+   * from `term_id` (gradebook push). */
+  year_id: text("year_id"),
   ...rosterSyncColumns,
 });
 
@@ -1182,6 +1192,9 @@ export const roster_section_teachers = pgTable(
     priority_order: integer("priority_order"),
     start_date: date("start_date").notNull(),
     end_date: date("end_date").notNull(),
+    /** PowerSchool `users.dcid` of this teacher (gradebook push: the
+     * sender's PowerTeacher Pro identity). */
+    users_dcid: text("users_dcid"),
     ...rosterSyncColumns,
   },
   (t) => ({
