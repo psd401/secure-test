@@ -944,7 +944,7 @@ client shows. The client half (v1.3.5) has its rows in `client/MANUAL-CHECKS.md`
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 268 | Monitor on an open sitting with a timed, in-progress student → **Extend time** → pick a time EARLIER than their "Until …" | Under the picker: "This is earlier than the current deadline — it shortens their time."; Extend still submits | NOT RUN |
-| 269 | Same dialog, pick a time LATER than every in-progress deadline (and the default tomorrow 23:59) | No hint | NOT RUN |
-| 270 | The per-student page's Extend time and a Test sessions row's Extend time (Attendance expanded) with an earlier time | The same hint; with Attendance collapsed the sitting row shows no hint (nothing known), which is expected | NOT RUN |
+| 268 | Monitor on an open sitting with a timed, in-progress student → **Extend time** → pick a time EARLIER than their "Until …" | Under the picker: "This is earlier than the current deadline — it shortens their time."; Extend still submits | ✅ 2026-09-23 on the origin (rev 49), `F3RP99` with the demo student in progress: the Monitor header dialog at Sep 24 10:00 PM (current Sep 24 11:59 PM) showed the hint; Extend submitted — "Extended 1 student.", the row read "Until Sep 24, 10:00 PM" |
+| 269 | Same dialog, pick a time LATER than every in-progress deadline (and the default tomorrow 23:59) | No hint | ✅ 2026-09-23 on the origin (rev 49), `F3RP99` with the demo student in progress: the default (Sep 24 11:59 PM) and Sep 25 11:59 PM showed no hint |
+| 270 | The per-student page's Extend time and a Test sessions row's Extend time (Attendance expanded) with an earlier time | The same hint; with Attendance collapsed the sitting row shows no hint (nothing known), which is expected | ✅ 2026-09-23 on the origin (rev 49), `F3RP99` with the demo student in progress: per-student page — 9:00 PM hint, 11:00 PM none (current 10:00 PM); Test sessions row — no hint with Attendance collapsed, hint after expanding it |
 
