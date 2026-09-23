@@ -490,6 +490,53 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-23 — v1.3.4 client sitting on the district Mac (real sessions)
+
+James at the Jamf-installed v1.3.4 Release on the student Mac (a demo
+student, real `AEAssessmentSession`s), Claude on the teacher side in Chrome
+(origin rev 48). Two passes: `F3RP99` on `Client rows hand-run 2026-09-08
+(copy)` and `A9ZRVN` on `Math entry + drawing tools hand-run 2026-09-22`.
+Results in `client/MANUAL-CHECKS.md` (math entry, drawing tools, batch 0b,
+security slices 1 + 2) and `docs/design-tool-manual-checks.md` (217, 232,
+234). Math entry 33 ✅ (2 ❌, 1 accepted, 1 superseded), drawing tools 22 ✅,
+batch 0b 12 ✅ (1 ❌, 1 not exercisable),
+the real-session Cmd-E / Cmd-Q / Release hand-in / no-watchdog rows ✅
+(first launch's stderr; the second launch was from Finder, so the
+drawing-save rows are judged on the status line + the teacher side).
+Contrast / zoom / font rows (math + drawing) deferred to another day
+(James).
+
+- **EX-1 DECIDED (James): the peek poll carries the deadline when it
+  changes.** Row 217 showed a running client keeps the deadline it read at
+  join; the Extend dialog also accepts an EARLIER deadline, so the screen
+  can say 11:59 PM while the server refuses writes from 10:00:30 PM.
+  Client + server slice, unbuilt — v1.3.6 candidate.
+- **ME-1** (client) — Shift-Tab from a math key skips the "Math keys"
+  toggle and lands in the field (forward Tab is right). Proposal only.
+- **ME-2 ACCEPTED (James)** — Cmd-Z in a text field beeps: the Edit menu
+  has no Undo by design. Code comment + `docs/math-entry-design.md` + the
+  row corrected; the canvas Cmd-Z (own handler) works.
+- **ME-3** (client) — VoiceOver reads the preview as literal `\frac{1}{2}`
+  instead of "one half". Proposal only; check whether the preview carries
+  a MathML twin or VoiceOver is reading the field.
+- **HS-1** (client) — hotspot regions are unreachable by Tab (plain
+  `<button>`s; WebKit skips buttons on Tab unless the Mac's keyboard
+  navigation is on). Fix shape: `tabindex="0"` (or the keypad's roving
+  tabindex). Proposal only; likely affects other plain buttons in the page.
+- **Readings:** the hotspot hover box is the theme accent (dashed yellow),
+  not the blue the 2026-09-03 row assumed; `a {b` shows the S-4 "Can't read
+  that as math yet" note, not red raw text (4b replaced it) — both rows
+  marked superseded. The per-student page renders short-text answers as
+  KaTeX, so `10^{}` reads as an empty superscript, not raw text.
+- **Working rules:** VoiceOver must be ON (and its welcome screen
+  dismissed once) BEFORE lockdown — inside a session its start dialog
+  cannot be clicked. The teacher-row script's row expired mid-morning the
+  day after it was made (section listed at 10:25, gone by ~12:20) — run the
+  script on every sitting day before starting sessions. `F3RP99` / `A9ZRVN`
+  stay open (expire 16:00 PT); the `(copy)` attempt is passed back until
+  Sep 24 23:59 and handed in again; the math fixture's attempt is handed
+  in (9/13, three drawings unscored).
+
 ### 2026-09-22 evening — v1.3.5 simulated hand-run (Claude via computer use)
 
 Debug client from `5b5bf41` (1.3.5), `SECURE_TEST_SIMULATE_LOCKDOWN`, against

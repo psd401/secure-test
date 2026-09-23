@@ -1141,9 +1141,11 @@ public enum AssessmentPage {
         var caret = selected
           ? start + text.length - (wrappedBack || 0)
           : start + before.length;
-        // setRangeText is standard WebKit and participates in the field's own
-        // undo stack, so Cmd-Z undoes an insertion without an Edit menu (there
-        // is none). The splice is the fallback for a host without it.
+        // setRangeText is standard WebKit; the splice is the fallback for a
+        // host without it. There is no Cmd-Z here: the host's Edit menu has no
+        // Undo (AppDelegate, by design), so the chord only beeps — accepted
+        // 2026-09-23 (finding ME-2). The drawing canvas's Cmd-Z is its own
+        // keydown handler and is unaffected.
         if (typeof input.setRangeText === 'function') {
           input.setRangeText(text, start, end, 'end');
         } else {

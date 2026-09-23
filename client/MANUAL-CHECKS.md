@@ -768,11 +768,11 @@ is 1 × 1 and useless for this).
 
 | Check | Expect | Result |
 |---|---|---|
-| Open the hotspot question | The picture shows at its natural size (no wider than the column) with nothing drawn on it and nothing under it; moving the pointer over a region shows a faint dashed blue box at its authored place | |
-| Click a region, then another | The clicked region fills blue with a solid border and stays so when the pointer leaves; clicking again clears it; each click posts (stderr `response: … type=hotspot`) | |
-| Tab to a region | A thick focus ring on the region; Space toggles it | |
-| Narrow the window until the picture shrinks | The regions shrink and move with the picture, staying over the same part of it | |
-| Quit, relaunch, rejoin (P-1) | The saved regions come back already filled | |
+| Open the hotspot question | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac (reading H-Y: the hover box is the theme `--accent`, dashed yellow — this row predates batch 4's tokens; expectation superseded) |
+| Click a region, then another | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Tab to a region | ❌ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — finding HS-1: Tab never reaches a region and the arrows do nothing (the regions are plain `<button>`s; WebKit skips buttons on Tab unless the Mac's keyboard navigation is on — the math pad works because it sets `tabindex`) |
+| Narrow the window until the picture shrinks | NOT EXERCISABLE 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — fullscreen lockdown cannot be narrowed |
+| Quit, relaunch, rejoin (P-1) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
 
 ## Batch 0b slice 2 — the math preview on every short-text answer (2026-09-03)
 
@@ -782,11 +782,11 @@ Rebuild first. Fixture: any Published assessment with a short-text question.
 
 | Check | Expect | Result |
 |---|---|---|
-| Type `mitochondria` | The word appears under the field, upright, as it will be read | |
-| Type `New York` | Both words, with their space | |
-| Type `H_2O`, then `x^2` | Subscript and superscript rendered, as before this build | |
-| Clear the field (or leave only spaces) | The preview disappears | |
-| Type `a {b` | The preview shows the raw text in red (KaTeX's error colour) rather than vanishing; the posted answer is still the raw text | |
+| Type `mitochondria` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Type `New York` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Type `H_2O`, then `x^2` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field (or leave only spaces) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Type `a {b` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac by current design — the preview shows "a" plus the S-4 note "Can't read that as math yet — keep typing." (math entry 4b replaced the red raw text; expectation superseded) |
 
 ## Batch 0b slice 3 — a match is answered when every pair is set (2026-09-03)
 
@@ -798,10 +798,10 @@ time** with a three-pair match question. Order and table keep the old rule
 
 | Check | Expect | Result |
 |---|---|---|
-| Set the first pair, then the second | stderr posts a match response each time; the strip button for the question stays un-marked and the review page counts it as not answered | |
-| Set the third pair | The strip button turns green at once; the review count goes up by one | |
-| Put one dropdown back to "Choose…" | A response still posts (the two remaining pairs); the mark drops and the count goes down | |
-| Quit with two of three pairs set, relaunch, rejoin | The two dropdowns come back on their saved rights; the question is NOT marked and the review count excludes it; nothing posts until the third pair is set, which marks it | |
+| Set the first pair, then the second | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Set the third pair | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Put one dropdown back to "Choose…" | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Quit with two of three pairs set, relaunch, rejoin | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
 
 ## Drawing background — grid and axes (2026-09-03)
 
@@ -1207,41 +1207,41 @@ section does.
 
 | Check | Expect | Result |
 |---|---|---|
-| Open a drawing item and look above the canvas | A toolbar strip with ten buttons in order: Pen, Eraser, Thin, Medium, Thick, Black, Red, Blue, Green, Undo; Pen / Medium / Black pressed; Undo greyed | Not run |
-| Select Thin, then Medium, then Thick and draw a stroke each time | Thin is visibly the thinnest line, Medium matches today's pen, Thick is visibly the thickest | Not run |
-| Select each colour in turn and draw a stroke | The stroke is that colour's ink (black, red, blue, green) and the swatch dot beside the button's label matches it | Not run |
-| Select the Eraser | The four colour buttons grey out (disabled) | Not run |
-| Draw ink over a grid or axes drawing, then erase across it, including across a grid line | The eraser removes ink in a smooth round band about 4× the pen width; the grid and axes lines are intact under and around the erased band (open the saved PNG) | Not run |
+| Open a drawing item and look above the canvas | A toolbar strip with ten buttons in order: Pen, Eraser, Thin, Medium, Thick, Black, Red, Blue, Green, Undo; Pen / Medium / Black pressed; Undo greyed | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Select Thin, then Medium, then Thick and draw a stroke each time | Thin is visibly the thinnest line, Medium matches today's pen, Thick is visibly the thickest | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac (reading: the Thin→Medium step looks smaller than Medium→Thick — 1.5 / 2.5 / 5 per D-1) |
+| Select each colour in turn and draw a stroke | The stroke is that colour's ink (black, red, blue, green) and the swatch dot beside the button's label matches it | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Select the Eraser | The four colour buttons grey out (disabled) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Draw ink over a grid or axes drawing, then erase across it, including across a grid line | The eraser removes ink in a smooth round band about 4× the pen width; the grid and axes lines are intact under and around the erased band (open the saved PNG) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — the stored Q11 picture shows the erased gap with the grid intact (teacher side) |
 | Erase on the **blank** canvas | The saved PNG stays transparent where erased — no white blobs | Not run |
-| Relaunch and rejoin a question with a restored picture, then erase part of it | The baseline under the erased band is gone and the paper (grid/axes, or transparent for blank) shows through | Not run |
-| Draw several strokes (pen and eraser mixed), then press Undo repeatedly | Each press removes exactly one stroke, in reverse order; the paper is never removed; Undo greys out once the list is empty | Not run |
-| Relaunch onto a question with a restored picture, then press Undo | Undo stays greyed — the restored picture cannot be undone — until a new stroke is drawn | Not run |
-| Press Clear, then press Undo | Nothing happens; Undo stays greyed (Clear is not an undo step) | Not run |
-| Undo every stroke, then press Save drawing | "Draw something first." | Not run |
-| **Real AAC session:** focus a toolbar button, draw a stroke, press Cmd-Z | The stroke is undone | Not run |
-| **Real AAC session:** click the canvas to focus it, draw a stroke, press Cmd-Z | The stroke is undone | Not run |
+| Relaunch and rejoin a question with a restored picture, then erase part of it | The baseline under the erased band is gone and the paper (grid/axes, or transparent for blank) shows through | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Draw several strokes (pen and eraser mixed), then press Undo repeatedly | Each press removes exactly one stroke, in reverse order; the paper is never removed; Undo greys out once the list is empty | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Relaunch onto a question with a restored picture, then press Undo | Undo stays greyed — the restored picture cannot be undone — until a new stroke is drawn | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Press Clear, then press Undo | Nothing happens; Undo stays greyed (Clear is not an undo step) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Undo every stroke, then press Save drawing | "Draw something first." | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| **Real AAC session:** focus a toolbar button, draw a stroke, press Cmd-Z | The stroke is undone | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — the stroke is undone (the page's own keydown handler; the menu has no Undo) |
+| **Real AAC session:** click the canvas to focus it, draw a stroke, press Cmd-Z | The stroke is undone | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
 | **Real AAC session:** Tab into an essay item's textarea, type text, press Cmd-Z | The essay's own undo removes the typed text; no drawing on the page is affected | Not run |
-| Save a drawing carrying every colour, an erased band and the paper | The stored PNG (read via `aws s3 cp`) shows ink in every colour used, the erasures, and the paper intact | Not run |
+| Save a drawing carrying every colour, an erased band and the paper | The stored PNG (read via `aws s3 cp`) shows ink in every colour used, the erasures, and the paper intact | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — teacher side shows all four inks, the erasure and the grid (read through the upload route, not `aws s3 cp`) |
 | Set Color Contrast = **Reverse Contrast**, rejoin, open a drawing item | The toolbar's pressed state is readable, every swatch dot is visible with its name beside it | Not run |
 | Set Color Contrast = **Yellow on Blue**, rejoin, open a drawing item | Same: pressed state readable, every swatch dot visible with its name | Not run |
 | Under either dark contrast set, look at the **blank** canvas on screen, then draw with Black | The canvas shows as white paper on screen (D-6) and the black ink is visible against it | Not run |
 | Under either dark contrast set, save that blank drawing and read the stored PNG | Still transparent — D-6 is a screen-only ground, the PNG contract is unchanged | Not run |
 | Set Zoom = **3X**, open a drawing item | The toolbar strip wraps into multiple rows instead of overflowing; drawing still lands under the pointer | Not run |
 | VoiceOver (Cmd-F5) over the toolbar | Each button reads its name and its pressed / dimmed state; the canvas reads "Drawing area" | Not run |
-| Look at Clear and Save drawing | Styled like the page's other buttons, not WebKit's default button chrome | Not run |
-| Draw one stroke and wait ~5 s without touching the canvas again | Status reads "Saving…" then "Saved."; stderr shows exactly ONE `drawing saved` line for the whole idle period | Not run |
-| Draw several strokes within the same 5 s window, then stop | Still exactly one `drawing saved` line after the idle period, not one per stroke | Not run |
-| Draw continuously (never idle 5 s) for 15 s, then stop | No `drawing saved` line appears until 5 s after the LAST stroke | Not run |
+| Look at Clear and Save drawing | Styled like the page's other buttons, not WebKit's default button chrome | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Draw one stroke and wait ~5 s without touching the canvas again | Status reads "Saving…" then "Saved."; stderr shows exactly ONE `drawing saved` line for the whole idle period | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — status "Saving…" → "Saved."; stderr NOT read (second launch was from Finder) |
+| Draw several strokes within the same 5 s window, then stop | Still exactly one `drawing saved` line after the idle period, not one per stroke | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — one Saving/Saved cycle; stderr not read |
+| Draw continuously (never idle 5 s) for 15 s, then stop | No `drawing saved` line appears until 5 s after the LAST stroke | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — status only; stderr not read |
 | Draw a stroke during the "Saving…" moment of a prior save | A second `drawing saved` line follows the first at once, not after another 5 s wait | Not run |
-| Draw two strokes, then press Undo once | A save fires ~5 s later (Undo dirties the picture) | Not run |
-| Undo every stroke, or press Clear | No new `drawing saved` line follows; the earlier saved picture stays the answer on the server | Not run |
+| Draw two strokes, then press Undo once | A save fires ~5 s later (Undo dirties the picture) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — status only |
+| Undo every stroke, or press Clear | No new `drawing saved` line follows; the earlier saved picture stays the answer on the server | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — after Clear the server still held the earlier picture (teacher side) |
 | On an untouched canvas, press Save drawing | Still "Draw something first." — the manual button and its guard are unchanged | Not run |
-| Paged mode: draw a stroke, then press Next immediately (well under 5 s) | `drawing saved` appears at once, before the idle timer would have fired | Not run |
-| Draw a stroke, then Tab focus out of the drawing item to the next question | `drawing saved` appears at once (flush on focus-out) | Not run |
+| Paged mode: draw a stroke, then press Next immediately (well under 5 s) | `drawing saved` appears at once, before the idle timer would have fired | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — the stroke is on the server (teacher side) |
+| Draw a stroke, then Tab focus out of the drawing item to the next question | `drawing saved` appears at once (flush on focus-out) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — "Saving…" showed as focus left; the server matched the screen |
 | Draw a stroke, then press Finish and hand in within a second | stderr shows the upload's `drawing saved` before the submit; the attempt's stored answer for that item carries the new drawing (check teacher-side); no `submit refused: … still in flight` unless the upload genuinely stalled | Not run |
 | Cmd-O offline bundle: draw a stroke and wait 10 s | Nothing posts — no `drawing ignored` line appears until the button is pressed | Not run |
 | Cmd-O offline bundle: press Save drawing | stderr shows `drawing ignored`; on screen: "Offline mode: not saved to a server." | Not run |
-| Relaunch (fresh sign-in) onto a question with a restored picture, and do not draw | Status shows "Saved." with no new stroke; no auto-save fires until a new stroke is drawn | Not run |
+| Relaunch (fresh sign-in) onto a question with a restored picture, and do not draw | Status shows "Saved." with no new stroke; no auto-save fires until a new stroke is drawn | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
 
 ## Math entry — the keypad on short-text items (2026-09-08)
 
@@ -1285,48 +1285,48 @@ simulator — blank `SECURE_TEST_SIMULATE_LOCKDOWN` on the command line.
 
 | Check | Expect | Result |
 |---|---|---|
-| Open a `$`-stem short-text item | The "Math keys" toggle reads expanded (`aria-expanded="true"`) and the 22-key pad is visible with no click needed | Not run |
-| Open the prose short-text item (no `$` in its stem) | The toggle reads collapsed (`aria-expanded="false"`) and the pad is hidden | Not run |
-| Click the toggle on the prose item | The pad opens; a second click collapses it again | Not run |
-| Look at the pad on any `$`-stem item | 22 keys in three rows — Structure (Fraction, Exponent, Subscript, Square root, `(`, `)`), Operators (`× ÷ ± ≤ ≥ ≠ °`), Greek (`π θ α β Δ λ μ Σ Ω`); the four structure keys show rendered KaTeX faces — a small stacked a-over-b, x², x₂, √a — not their glyph text | Not run |
-| Clear the field, caret at the end, press Fraction | The field reads `\frac{}{}`; the caret sits inside the first pair of braces (typing next lands in the numerator); the preview shows an EMPTY fraction bar | Not run |
-| Continuing: type `1`, press Right twice, type `2` | The field reads `\frac{1}{2}`; the preview shows one-half stacked | Not run |
-| Clear the field, type `x+1`, select it, press Fraction | The field reads `\frac{x+1}{}`; the caret is in the denominator | Not run |
-| Clear the field, type `10` (caret at the end, nothing selected), press Exponent | The field reads `10^{}`; the caret is between the braces; typing `5` gives `10^{5}` | Not run |
-| Clear the field, type `3.2` then the × key then `105`, select the trailing `5`, press Exponent | The field reads `3.2×10^{5}`; the caret lands after the closing brace; the preview shows a properly stacked exponent | Not run |
-| Clear the field, type `H`, press Subscript, type `2`, press Right, type `O` | The field reads `H_{2}O` (the Right press was needed to leave the braces before typing `O`); the preview shows H₂O | Not run |
-| Clear the field, type `H2O`, select the `2`, press Subscript | The field reads `H_{2}O`; the caret lands after the closing brace; the preview shows H₂O | Not run |
-| Clear the field, caret in the empty field, press Square root, then type `2` | The field reads `\sqrt{2}` (caret was between the braces right after the key); the preview shows √2 | Not run |
-| Clear the field, type `2`, select it, press Square root | The field reads `\sqrt{2}`; the caret lands after the closing brace; the preview shows √2 | Not run |
-| Clear the field, press `(` then `)` | The field reads `()`; each key inserts only its own character after the caret — no wrapping | Not run |
-| Clear the field, press each operator key in turn (×, ÷, ±, ≤, ≥, ≠, °), clearing between presses | Each key inserts exactly its character after the caret and the preview shows that same symbol | Not run |
-| Clear the field, press each Greek key in turn (π, θ, α, β, Δ, λ, μ, Σ, Ω), clearing between presses | Each key inserts the Unicode letter after the caret and the preview shows it | Not run |
-| Click a key with the mouse, then immediately type more characters (do not click back into the field) | The typed characters land right after the inserted key's text — the click never moved focus off the field | Not run |
-| Tab from the short-text field | Focus moves to the "Math keys" toggle | Not run |
-| Tab again, with the pad open | Focus moves into the pad, landing on Fraction — ONE Tab stop for the whole 22-key pad, not 22 | Not run |
-| With focus on Fraction, press Right twice, then Home, then End | Right/Right moves two keys into the Structure row; Home returns focus to Fraction; End moves it to Omega, the last key in the pad | Not run |
-| With focus on any key, press Space | The key's insertion fires and focus STAYS on that key, not the field | Not run |
-| With focus on a key, press Shift-Tab (twice) | Focus returns to the toggle, then to the field | Not run |
-| **Roving stop vs. a pointer click:** click the Times key with the mouse, then Tab out of the item and Tab back in to the pad | Focus lands on Fraction, not Times — a pointer click never moves the roving Tab stop (the click handler inserts but never calls the roving-index update) | Not run |
-| **THE TRAP:** clear the field, type `10`, Tab to the pad (lands on Fraction), press Right to reach Exponent, press Space, then press Next at once with no click back into the field | The teacher-side response for that item is `10^{}` — a keyboard-driven insertion posts immediately. If the teacher side instead shows the pre-keypad `10`, that is the bug this row exists to catch | Not run |
-| Type `\frac{1}` (one closing brace short) into a field | The S-4 note appears: "Can't read that as math yet — keep typing." | Not run |
-| Continue typing to close it (`\frac{1}{2}`) | The S-4 note disappears and the fraction preview renders | Not run |
-| **Real session:** press a key, then immediately press Cmd-Z | The insertion is undone (WebKit's own undo stack on the field; `setRangeText` participates in it) | Not run |
-| VoiceOver (Cmd-F5) on the "Math keys" toggle | Announces "Math keys, [collapsed/expanded], button" | Not run |
-| VoiceOver on three keys — Fraction, Times, Pi | Announces the word from the table ("Fraction, button" / "Times, button" / "Pi, button"), never the glyph or the LaTeX | Not run |
-| VoiceOver on the preview after pressing Fraction and filling it to `1/2` | Record exactly what is announced — expected "one half" from KaTeX's MathML twin, not "backslash f r a c one over two" | Not run |
+| Open a `$`-stem short-text item | The "Math keys" toggle reads expanded (`aria-expanded="true"`) and the 22-key pad is visible with no click needed | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Open the prose short-text item (no `$` in its stem) | The toggle reads collapsed (`aria-expanded="false"`) and the pad is hidden | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Click the toggle on the prose item | The pad opens; a second click collapses it again | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Look at the pad on any `$`-stem item | 22 keys in three rows — Structure (Fraction, Exponent, Subscript, Square root, `(`, `)`), Operators (`× ÷ ± ≤ ≥ ≠ °`), Greek (`π θ α β Δ λ μ Σ Ω`); the four structure keys show rendered KaTeX faces — a small stacked a-over-b, x², x₂, √a — not their glyph text | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, caret at the end, press Fraction | The field reads `\frac{}{}`; the caret sits inside the first pair of braces (typing next lands in the numerator); the preview shows an EMPTY fraction bar | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Continuing: type `1`, press Right twice, type `2` | The field reads `\frac{1}{2}`; the preview shows one-half stacked | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `x+1`, select it, press Fraction | The field reads `\frac{x+1}{}`; the caret is in the denominator | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `10` (caret at the end, nothing selected), press Exponent | The field reads `10^{}`; the caret is between the braces; typing `5` gives `10^{5}` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `3.2` then the × key then `105`, select the trailing `5`, press Exponent | The field reads `3.2×10^{5}`; the caret lands after the closing brace; the preview shows a properly stacked exponent | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `H`, press Subscript, type `2`, press Right, type `O` | The field reads `H_{2}O` (the Right press was needed to leave the braces before typing `O`); the preview shows H₂O | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `H2O`, select the `2`, press Subscript | The field reads `H_{2}O`; the caret lands after the closing brace; the preview shows H₂O | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, caret in the empty field, press Square root, then type `2` | The field reads `\sqrt{2}` (caret was between the braces right after the key); the preview shows √2 | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, type `2`, select it, press Square root | The field reads `\sqrt{2}`; the caret lands after the closing brace; the preview shows √2 | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, press `(` then `)` | The field reads `()`; each key inserts only its own character after the caret — no wrapping | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, press each operator key in turn (×, ÷, ±, ≤, ≥, ≠, °), clearing between presses | Each key inserts exactly its character after the caret and the preview shows that same symbol | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Clear the field, press each Greek key in turn (π, θ, α, β, Δ, λ, μ, Σ, Ω), clearing between presses | Each key inserts the Unicode letter after the caret and the preview shows it | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Click a key with the mouse, then immediately type more characters (do not click back into the field) | The typed characters land right after the inserted key's text — the click never moved focus off the field | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Tab from the short-text field | Focus moves to the "Math keys" toggle | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Tab again, with the pad open | Focus moves into the pad, landing on Fraction — ONE Tab stop for the whole 22-key pad, not 22 | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| With focus on Fraction, press Right twice, then Home, then End | Right/Right moves two keys into the Structure row; Home returns focus to Fraction; End moves it to Omega, the last key in the pad | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac (Home / End = Fn-← / Fn-→ on a MacBook) |
+| With focus on any key, press Space | The key's insertion fires and focus STAYS on that key, not the field | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| With focus on a key, press Shift-Tab (twice) | Focus returns to the toggle, then to the field | ❌ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — finding ME-1: Shift-Tab from a key goes straight to the field, skipping the toggle; a second Shift-Tab leaves no visible focus. Forward Tab (field → toggle → Fraction) is right |
+| **Roving stop vs. a pointer click:** click the Times key with the mouse, then Tab out of the item and Tab back in to the pad | Focus lands on Fraction, not Times — a pointer click never moves the roving Tab stop (the click handler inserts but never calls the roving-index update) | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| **THE TRAP:** clear the field, type `10`, Tab to the pad (lands on Fraction), press Right to reach Exponent, press Space, then press Next at once with no click back into the field | The teacher-side response for that item is `10^{}` — a keyboard-driven insertion posts immediately. If the teacher side instead shows the pre-keypad `10`, that is the bug this row exists to catch | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — the teacher side holds `10^{}` (an empty superscript in the rendered answer; an early read before the post landed showed an older value) |
+| Type `\frac{1}` (one closing brace short) into a field | The S-4 note appears: "Can't read that as math yet — keep typing." | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Continue typing to close it (`\frac{1}{2}`) | The S-4 note disappears and the fraction preview renders | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| **Real session:** press a key, then immediately press Cmd-Z | The insertion is undone (WebKit's own undo stack on the field; `setRangeText` participates in it) | ACCEPTED 2026-09-23 (James) — finding ME-2: Cmd-Z beeps; the client's Edit menu has no Undo by design (PoC-B, `AppDelegate.swift`), so text fields have no Cmd-Z at all. The drawing canvas's Cmd-Z works (its own handler) |
+| VoiceOver (Cmd-F5) on the "Math keys" toggle | Announces "Math keys, [collapsed/expanded], button" | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — VoiceOver must be ON (welcome screen dismissed) BEFORE lockdown; inside a session its start dialog cannot be clicked |
+| VoiceOver on three keys — Fraction, Times, Pi | Announces the word from the table ("Fraction, button" / "Times, button" / "Pi, button"), never the glyph or the LaTeX | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| VoiceOver on the preview after pressing Fraction and filling it to `1/2` | Record exactly what is announced — expected "one half" from KaTeX's MathML twin, not "backslash f r a c one over two" | ❌ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — finding ME-3: VoiceOver reads the literal `\frac{1}{2}`, not "one half" |
 | Color Contrast = Reverse Contrast, open a `$`-stem item | Every key is readable against its background; the pressed/active instant on a key press is visible | Not run |
 | Color Contrast = Yellow on Blue, open a `$`-stem item | Same: keys readable, active state readable | Not run |
 | Zoom = 3X, open a `$`-stem item | The pad wraps into more rows instead of overflowing sideways; each key's hit target visibly grows with its label | Not run |
 | Optional font = Atkinson Hyperlegible, look at the Greek row | The Greek letters are legible; per the design note they may render in Inter rather than Atkinson (partial Greek coverage) — either is acceptable | Not run |
-| Look at the hint line under a `$`-stem item | Reads "Use the math keys below, or type _ for a subscript and ^ for an exponent. Your answer shows below as it will be read." | Not run |
-| Answer every keyed item with the notation shown above, hand in | The client accepts the hand-in with no errors | Not run |
-| Teacher side, **after slice 1a is deployed** — check auto-scoring on each keyed item | Every item scores 1 against its plain key: `\frac{1}{2}` vs `1/2`, `x^{2}` vs `x^2`, `H_{2}O` vs `H2O`, `\sqrt{2}` vs `sqrt(2)`, `3.2×10^{5}` vs `3.2 x 10^5`, `45°C` vs `45°C`, `π` vs `π`, `≤` vs `<=` | Not run |
-| Teacher side, the per-student results page | Shows the student's raw typed text for each item (the keypad's Unicode/LaTeX mix), not a rendered picture | Not run |
+| Look at the hint line under a `$`-stem item | Reads "Use the math keys below, or type _ for a subscript and ^ for an exponent. Your answer shows below as it will be read." | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Answer every keyed item with the notation shown above, hand in | The client accepts the hand-in with no errors | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| Teacher side, **after slice 1a is deployed** — check auto-scoring on each keyed item | Every item scores 1 against its plain key: `\frac{1}{2}` vs `1/2`, `x^{2}` vs `x^2`, `H_{2}O` vs `H2O`, `\sqrt{2}` vs `sqrt(2)`, `3.2×10^{5}` vs `3.2 x 10^5`, `45°C` vs `45°C`, `π` vs `π`, `≤` vs `<=` | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — Q1–Q8 each 1/1 auto-scored against the plain keys (rev 48) |
+| Teacher side, the per-student results page | Shows the student's raw typed text for each item (the keypad's Unicode/LaTeX mix), not a rendered picture | SUPERSEDED — since 4b-f the page renders short-text answers as KaTeX, not raw text; `10^{}` reads as an empty superscript |
 | Download the gradebook CSV for the sitting | Each column carries the same raw text as the results page | Not run |
-| Teacher side, the prose item (no `$` stem) | Scores exactly as it did before this slice — a plain exact-match comparison, untouched by the fold changes | Not run |
-| **Regression, E7(b):** type `H_2O` by keyboard only, no keypad keys pressed | The preview still renders H₂O and the posted response is the typed text `H_2O`, unaffected by the keypad's presence | Not run |
-| **Regression, resume:** after answering a keyed item, relaunch and rejoin the same sitting | The restored field shows the keypad-produced text (e.g. `\frac{1}{2}`) and its formula preview is repainted to match, exactly as P-1 built for typed text | Not run |
+| Teacher side, the prose item (no `$` stem) | Scores exactly as it did before this slice — a plain exact-match comparison, untouched by the fold changes | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — 1/1 exact match |
+| **Regression, E7(b):** type `H_2O` by keyboard only, no keypad keys pressed | The preview still renders H₂O and the posted response is the typed text `H_2O`, unaffected by the keypad's presence | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac |
+| **Regression, resume:** after answering a keyed item, relaunch and rejoin the same sitting | The restored field shows the keypad-produced text (e.g. `\frac{1}{2}`) and its formula preview is repainted to match, exactly as P-1 built for typed text | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — after a pass back + rejoin, `\frac{1}{2}` and `H_{2}O` restored with their previews |
 
 ## Multi-source stimulus — sources beside the question (2026-09-09)
 
@@ -1612,8 +1612,8 @@ the `[security]` lines. Rebuild the client first.
 | Join with `SECURE_TEST_SIMULATE_LOCKDOWN=cooperative` (or no value — the default simulated session) | The test opens immediately; `page load gate: opened`. A cooperative session is active synchronously and must not wait on anything | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown (`=1`): the gate opened at once on the first join |
 | **Time limit.** A sitting whose clock runs out mid-attempt | At zero the session ends and the app lands on "Your tests" by itself, then a one-button sheet "Time is up." / "Your answers are saved." / **OK**. The test is not left on screen behind it | ✅ 2026-09-17 — Debug build from `d4f9e13` (v1.3.4 candidate), simulated lockdown, 3-minute fixture: "Time is up." sheet at zero, back on Your tests (James at the client). Earlier the same sitting: Close on `TGJDM6` → "Your teacher ended the test session." sheet + return home on this build too |
 | **Hand-in, unchanged.** Answer and hand in normally | Exactly as before this slice: the in-page handed-in notice stays on screen with its own "Back to your tests" button and the titlebar one; NO "Secure session ended" sheet and no automatic trip home | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown: in-page "Handed in. You can close the app." + "Back to your tests" in the page and the titlebar; no sheet, no trip home after 5 s; `hand-in confirmed` → `DID END` |
-| **Cmd-Q mid-session, unchanged.** Join, then Cmd-Q with the session up | Exactly as before: `quit requested with lockdown active — ending the session first`, the session confirms, the app exits. No sheet flashes and no trip home on the way out | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown (Quit Secure Test from the menu — same action as Cmd-Q; the automation tool blocks the raw chord): `quit requested with lockdown active — ending the session first` → `DID END` → exit; no sheet, no trip home |
-| **Real session.** Repeat the Cmd-E row inside a REAL `AEAssessmentSession` | Same landing as the simulated row, and the Mac unlocks (`DID END`) before the entry screen is on view — check the order in stderr | NOT RUN |
+| **Cmd-Q mid-session, unchanged.** Join, then Cmd-Q with the session up | Exactly as before: `quit requested with lockdown active — ending the session first`, the session confirms, the app exits. No sheet flashes and no trip home on the way out | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown (Quit Secure Test from the menu — same action as Cmd-Q; the automation tool blocks the raw chord): `quit requested with lockdown active — ending the session first` → `DID END` → exit; no sheet, no trip home; ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — real session: `quit requested with lockdown active` → `DID END`, clean exit |
+| **Real session.** Repeat the Cmd-E row inside a REAL `AEAssessmentSession` | Same landing as the simulated row, and the Mac unlocks (`DID END`) before the entry screen is on view — check the order in stderr | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — stderr: `emergency end control pressed` → `DID END` → `leaving the test screen` → `controller retired`; the rejoin resumed |
 | **Watchdog.** `SECURE_TEST_WATCHDOG_SECONDS=30`, join, wait it out | The watchdog end lands home like every other end: "Your tests" plus the one-button "Secure session ended" sheet. stderr: `WATCHDOG: 30s elapsed — ending lockdown` then the leaving-the-test-screen line | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown: `WATCHDOG: 30s elapsed — ending lockdown` → `DID END` → `leaving the test screen`, the "Secure session ended" sheet on Your tests |
 | Type into the essay (do not leave the field), then Cmd-E; sign in again and Resume | The typed text is present in the field — the page blurred the focused field and flushed dirty drawings before the view came down (`__secureTestFlushInput`), so the last `change` reached the spool | ✅ 2026-09-22 — 1.3.5 Debug, simulated lockdown: typed " Flushed words." into the essay and pressed Cmd-E before the 5 s autosave; an essay post landed after `DID END`; Resume showed the words |
 | **Real session, hung begin() — recovery.** After a "Couldn't start a secure session" refusal (simulate with `SECURE_TEST_SIMULATE_LOCKDOWN=hang` if the simulator gains that value; otherwise only a real begin() that never answers), press Cmd-Q on the entry screen | The app quits at once — `applicationShouldTerminate` defers only on `.active`; a `.starting` session that never began holds nothing to release. stderr shows no `quit requested with lockdown active` | NOT RUN |
@@ -1654,12 +1654,12 @@ from Terminal so stderr is readable.
 | **Unmanaged Release still configurable.** On a Mac with NO profile, launch the Release app with `SECURE_TEST_SERVER` + `SECURE_TEST_GOOGLE_CLIENT_ID` set | It comes up configured — `config: server URL from environment` — and can sign in. (This is how a Release build is tested off the fleet at all) | NOT RUN |
 | **Release has no Cmd-O.** Open the File menu on the Release app; then press Cmd-O | There is no File menu at all, and Cmd-O does nothing (a beep at most). Launching with `--bundle <path>` starts on the entry screen and logs `--bundle ignored: offline bundles are development-only` | NOT RUN |
 | **Release has no crash item.** Session menu on the Release app, with `SECURE_TEST_DEBUG_CRASH=1` set | No "Trigger Debug Crash (SIGABRT)" item | NOT RUN |
-| **The watchdog is off.** A real session on the Release app: join and sit in the test for **15 minutes** without touching anything | The session is still up at 15 minutes and the Mac is still locked. stderr at begin: `lockdown begin() called; no watchdog armed for this build`, and NO `WATCHDOG:` line ever. (Before this slice the session ended itself at 10:00) | NOT RUN |
+| **The watchdog is off.** A real session on the Release app: join and sit in the test for **15 minutes** without touching anything | The session is still up at 15 minutes and the Mac is still locked. stderr at begin: `lockdown begin() called; no watchdog armed for this build`, and NO `WATCHDOG:` line ever. (Before this slice the session ended itself at 10:00) | ✅ in part 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — `no watchdog armed for this build` at every begin; the 15-minute idle wait was not timed |
 | **The watchdog knob is ignored.** Same, launched with `SECURE_TEST_WATCHDOG_SECONDS=30` | Identical — no watchdog, no countdown, nothing ends at 30 s | NOT RUN |
 | **Debug watchdog still there.** Debug build, `SECURE_TEST_WATCHDOG_SECONDS=30`, join and wait | `WATCHDOG: 30s elapsed — ending lockdown` and slice 1's trip home, as recorded in the section above | NOT RUN |
 | **Release with the entitlement stripped.** Take a Release build, ad-hoc re-sign it WITHOUT the AAC entitlement (`codesign -f -s -` with entitlements omitted), launch it and join a sitting | **No test is rendered at any point.** stderr: `lockdown session: REFUSED — no AAC entitlement in this RELEASE binary`, `lockdown FAILED TO BEGIN`, `SECURE START REFUSED`. The app lands on "Your tests" with "Couldn't start a secure session" / "Your test didn't open. Ask your teacher for help." | NOT RUN |
 | **Debug with no entitlement, unchanged.** A Debug build with no entitlement (the ordinary dev posture), join | The cooperative simulated fallback as always — `lockdown session: SIMULATED (no AAC entitlement in this binary)` — and the test renders. CI and unsigned dev builds must not become unusable | NOT RUN |
-| **Hand-in on the Release build.** One ordinary sitting end to end on the notarized Release app | Unchanged by this slice: join, answer, hand in, handed-in notice, back to your tests | NOT RUN |
+| **Hand-in on the Release build.** One ordinary sitting end to end on the notarized Release app | Unchanged by this slice: join, answer, hand in, handed-in notice, back to your tests | ✅ 2026-09-23 — v1.3.4 Release (fleet), real AAC session, district Mac — two hand-ins on the Jamf-installed build |
 
 ## Client hygiene (2026-09-15) — v1.3.3 candidate
 

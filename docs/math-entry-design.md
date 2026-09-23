@@ -337,9 +337,10 @@ teacher's request, each is one row in the table.
 - **No system input UIs**: no Character Viewer, no keyboard viewer, no
   predictive text inside a session — the keypad is the only path to a
   symbol, which is why it lists every symbol rather than relying on chords.
-  Undo of an insertion is WebKit's own Cmd-Z on the input (`setRangeText`
-  participates in the field's undo stack; a hand-run row confirms this
-  inside a real session, as 4c's Cmd-Z rows do for the canvas).
+  There is no undo of an insertion: the host's Edit menu carries no Undo
+  (a PoC-B decision), so Cmd-Z in a text field only beeps — measured and
+  ACCEPTED 2026-09-23 (finding ME-2). 4c's canvas Cmd-Z works because it
+  is the page's own keydown handler.
 - **Paste** is disabled unless the bundle allows the clipboard (unchanged);
   a pasted `$\frac{1}{2}$` when it is allowed still strips its `$` in the
   preview and folds on the server as today.
