@@ -1118,6 +1118,29 @@ public enum AssessmentPage {
           macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
         };
       }
+      // Finding ME-3 (2026-09-23, district Mac, real AAC session, v1.3.4): VoiceOver
+      // read a previewed `\frac{1}{2}` as the literal LaTeX. KaTeX's default output
+      // hides the visual `.katex-html` from assistive tech and leaves a MathML twin
+      // for it — but that twin ends in
+      // an `annotation` element (encoding application/x-tex) holding the source, and the
+      // annotation is the one place the LaTeX survives as text. Removing it after a
+      // render leaves the MathML (what a screen reader should speak) and takes the
+      // source out of the text a live region announces. Walks childNodes rather than
+      // querySelectorAll so the harness's shim and any DOM without it behave the same.
+      function stripTexAnnotations(el) {
+        if (!el) return;
+        var kids = el.childNodes || el.children || [];
+        for (var i = kids.length - 1; i >= 0; i--) {
+          var node = kids[i];
+          if (!node || node.nodeType !== 1) continue;
+          var name = String(node.localName || node.nodeName || '').toLowerCase();
+          if (name === 'annotation') {
+            el.removeChild(node);
+          } else {
+            stripTexAnnotations(node);
+          }
+        }
+      }
       function formulaPreviewNote(preview) {
         var note = document.createElement('span');
         note.className = 'formula-preview-note';
@@ -1136,6 +1159,7 @@ public enum AssessmentPage {
         if (typeof katex === 'object' && katex && typeof katex.render === 'function') {
           try {
             katex.render(tex, preview, katexOptions(true));
+            stripTexAnnotations(preview);
             preview.setAttribute('data-last-good', tex);
           } catch (e) {
             var lastGood = preview.getAttribute('data-last-good');
@@ -1145,6 +1169,7 @@ public enum AssessmentPage {
               // because katex.render may have emptied it before it threw.
               try {
                 katex.render(lastGood, preview, katexOptions(false));
+                stripTexAnnotations(preview);
               } catch (e2) {
                 preview.textContent = '';
               }
@@ -3632,6 +3657,10 @@ public enum AssessmentPage {
               trust: false,
               macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
             });
+            // ME-3 (2026-09-23): the same MathML twin carries the stem's LaTeX
+            // source as an annotation; VoiceOver reading a stem or choice would
+            // meet it exactly as it did in the answer preview.
+            stripTexAnnotations(span);
             frag.appendChild(span);
           } catch (e) {
             // throwOnError keeps parse errors red rather than thrown, but a
