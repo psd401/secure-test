@@ -1753,3 +1753,34 @@ teacher-row script for the student first.
 | **Keypad tap then typing posts once (1.3).** On a `$` short-text item, tap a keypad key, then type two characters and pause 5 s | One autosave post for the typing; no second post carrying the keypad text alone (stderr / server log) | ✅ 2026-09-21 — keypad tap + two characters + 5 s pause: exactly one short_text post (two total with the `$…$` row before it) |
 | **A v1.3.3 spool migrates cleanly.** Using a spool database left over from a v1.3.2/v1.3.3 install (no `deferred_at` column), launch the v1.3.4 client | No crash and no error line at launch (the migration is silent — a `PRAGMA table_info` check then one `ALTER TABLE`); the app behaves normally afterward and any rows already in the spool still flush | NOT RUN 2026-09-21 — the hand DROP COLUMN did not take (the column was still present at the relaunch); `ResponseSpoolTests.testTheDeferredColumnMigrationIsIdempotent` opens a hand-written v1.3.3 shape and migrates it — accepted on the unit test unless James re-runs the hand check |
 | **H-1: joining a new sitting after an earlier one was handed in.** A student whose only attempt on the assessment was submitted during an EARLIER sitting joins a NEW sitting for the same assessment | The entry screen reads "You already handed this test in during an earlier session. Ask your teacher if you need to take it again." (not today's same-sitting wording), and no session begins | ✅ 2026-09-21 — the listed row read Done (finding 10.2 resolves Done per assessment, so the list never reaches the join); typing the code in the session-code field gave "You already handed this test in during an earlier session…", no session began |
+
+## v1.3.5 — teardown grace, sign-in, AS-1, practice copy (2026-09-22)
+
+`docs/client-v1-3-5-design.md` (D-1…D-4) and `docs/practice-sitting-design.md`
+slice 3 + its follow-up. Build from `main` at or after `5cf4639` with
+`MARKETING_VERSION` 1.3.5. Rows marked **real AAC** need the signed build (or
+a Release build from Xcode) outside the simulator; the rest run on a Debug
+build via `client/scripts/launch-client.ts` from Terminal (stderr readable)
+with `SECURE_TEST_SIMULATE_LOCKDOWN=1`. Staff rows sign in with a
+`psd401.net` account; the teacher side (practice sitting, Close, Monitor)
+can be driven from Chrome on the origin. Run the v1.3.4 sitting first
+(roadmap §Progress 2026-09-22) — this build is released only after both.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Version.** About Secure Test | Reads 1.3.5 and the build commit | NOT RUN |
+| **Close while locked, slowest Mac available (real AAC, D-1).** Join, answer one question, teacher presses Close session | The "Your teacher ended the test session." sheet; stderr shows `DID END` and never `lockdown did not confirm within 20s`; if the end took over 10 s, `still waiting for DID END after 10s (grace 20s)` precedes `DID END`; the app does NOT exit 70 | NOT RUN |
+| **Every exit still ends a real session (real AAC, AAC exit-path rule).** Three joins: Cmd-E; the titlebar exit; Cmd-Q | Cmd-E and the titlebar return to Your tests with the session ended (`DID END`); Cmd-Q quits with exit 0; none waits more than 20 s | NOT RUN |
+| **Time is up still ends at zero (real AAC).** `Time limit hand-run 2026-09-11` (3-minute limit), let it run out | "Time is up." sheet, `DID END`, back to Your tests; no unrecoverable line | NOT RUN |
+| **Unrecoverable line carries its own time (D-2).** Not forceable — the simulator has no hanging-end mode; covered by `CrashReporterTests`. If any session this week ends in `lockdown_unrecoverable` (exit 70) | The drained `client_error_events` row's message carries `occurred_at` (the exit time, not the drain time) and `os_version` — read with `query-aurora.sh` | NOT EXERCISABLE unless it happens |
+| **Cancelled sign-in keeps its words (D-3).** Sign in, press Cancel in the sheet | The card reads "Sign-in was cancelled." and keeps it after the refresh (it used to snap back to the bare "Sign in with your school Google account first.") | NOT RUN |
+| **Failed sign-in keeps its words (D-3).** Network off, press Sign in | "Could not sign in…" (or the presenter's failure line) stays on the card after the refresh | NOT RUN |
+| **A superseded navigation no longer ends sign-in (D-3, -999).** Sign in through the full Google → ClassLink → MFA chain, first sign-in of the day if possible (SI-1's shape) | The sheet stays up through every redirect and completes; stderr has no `signin_failed` carrying `-999`; no silent return to the card | NOT RUN |
+| **Leaving a field after an autosave posts nothing more (D-4, AS-1).** Type in an essay, wait 5 s for the autosave, then click out without typing | One post only (stderr / server log); the Monitor's last activity does not move on the click-out. Type one more character and click out → one post | NOT RUN |
+| **Practice row label (practice slice 3).** Teacher opens Practice on my Mac; sign in to the client as that teacher | Your tests lists the row labelled "Practice — only you"; joining starts the attempt (simulated lockdown here; real on the signed build) | NOT RUN |
+| **Staff with nothing to practise.** Sign in as staff with no open practice sitting | The list reads "No practice tests right now. Start one from your assessment's Test sessions tab." — not the student `not_on_roster` copy | NOT RUN |
+| **Staff wrong code (follow-up 5cf4639).** Signed in as staff, type a class sitting's code, then a closed code | Both read "That code is not open for you. A practice test opens only for the teacher who started it." | NOT RUN |
+| **Student wrong code unchanged.** Signed in as a demo student, type a closed code | "That code is not open for you right now. Check it with your teacher." | NOT RUN |
+| **Practice joined by code.** Staff, type their own open practice sitting's code | Joins the practice attempt (the redeem route admits a practice principal) | NOT RUN |
+| **Practice refusal from the list.** Not reachable by hand — the list shows only the teacher's own practice sittings; covered by `MySittingsTests` (`not_in_sitting` with `isPractice`) | — | NOT EXERCISABLE |
+| **Security slice 1 end rows, re-run on 1.3.5.** The "Content only while locked" rows for Cmd-E, the Close sheet and rejoin | As recorded in that section | NOT RUN |
