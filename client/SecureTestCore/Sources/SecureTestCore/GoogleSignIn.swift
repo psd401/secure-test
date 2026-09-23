@@ -82,6 +82,18 @@ public enum SignInError: Error, Equatable {
     case exchangeRefused(status: Int, code: String?)
 }
 
+/// The text a failed sign-in writes to stderr and `errors.log`. A `SignInError`
+/// prints as itself; anything else (a WebKit / URL-loading failure) is reduced
+/// to `domain code: description`. The full `NSError` description carries the
+/// whole authorize URL in its user info — client id, state, nonce, PKCE
+/// challenge — which is noise in a line that is drained to the server
+/// (v1.3.5 reading, 2026-09-22).
+public func signInFailureSummary(_ error: Error) -> String {
+    if let error = error as? SignInError { return "\(error)" }
+    let ns = error as NSError
+    return "\(ns.domain) \(ns.code): \(ns.localizedDescription)"
+}
+
 public enum AuthorizationRequest {
     public static func url(
         config: SignInConfig,

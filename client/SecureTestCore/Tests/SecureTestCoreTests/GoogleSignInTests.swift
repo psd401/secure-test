@@ -353,3 +353,20 @@ enum TestJWT {
         return "\(header).\(body).sig"
     }
 }
+
+final class SignInFailureSummaryTests: XCTestCase {
+    func testASignInErrorPrintsAsItself() {
+        XCTAssertEqual(signInFailureSummary(SignInError.cancelled), "cancelled")
+    }
+
+    func testAURLErrorDropsTheAuthorizeURL() {
+        let url = "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc.apps.googleusercontent.com&state=s&nonce=n&code_challenge=c"
+        let error = NSError(domain: NSURLErrorDomain, code: -1009, userInfo: [
+            NSLocalizedDescriptionKey: "The Internet connection appears to be offline.",
+            NSURLErrorFailingURLStringErrorKey: url,
+        ])
+        let summary = signInFailureSummary(error)
+        XCTAssertEqual(summary, "NSURLErrorDomain -1009: The Internet connection appears to be offline.")
+        XCTAssertFalse(summary.contains("accounts.google.com"))
+    }
+}

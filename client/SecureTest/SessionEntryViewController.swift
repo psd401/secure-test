@@ -607,8 +607,11 @@ final class SessionEntryViewController: NSObject {
                 AppDelegate.logError(kind: "signin_failed", message: "\(error)")
             } catch {
                 statusLabel.stringValue = "Could not sign in. Tell your teacher."
-                log("sign-in failed: \(error)")
-                AppDelegate.logError(kind: "signin_failed", message: "\(error)")
+                // Not "\(error)": a WebKit failure's description embeds the
+                // whole authorize URL (v1.3.5 reading, 2026-09-22).
+                let summary = signInFailureSummary(error)
+                log("sign-in failed: \(summary)")
+                AppDelegate.logError(kind: "signin_failed", message: summary)
             }
             await refreshSignInState()
         }
