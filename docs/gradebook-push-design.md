@@ -274,7 +274,9 @@ files and may run in parallel once 1 is merged.
 ## Open questions (James)
 
 - 8.1 Due date default: latest sitting's date, or today?
-- 8.2 Publish scores: category default, or always "Immediately"?
+- 8.2 Publish scores: category default, or always "Immediately"? —
+  **ANSWERED 2026-09-23: category default** until Teaching & Learning
+  decides otherwise.
 - 8.3 Should a **passed-back** attempt's earlier send be withdrawn
   (score cleared in the gradebook) or left until the next send overwrites
   it? Recommend: left, summary notes it.
@@ -297,6 +299,29 @@ files and may run in parallel once 1 is merged.
 
 ## Progress
 
-Nothing built. Waiting on: IT's plugin on a test instance + the OAuth
-pair; the three extract columns; a Schoology district-private app's
-consumer key / secret (IT, with D-2 answered).
+Nothing built.
+
+**2026-09-23 — IT's second reply** (the reply and ours are in the ops
+repository):
+
+- **Extract columns SHIPPED** from the 2026-09-23 nightly run, same manifest
+  and `format_version`: `students.csv` → `dcid`; `sections.csv` → `dcid`
+  **and `year_id`** (`TERMS.YEARID`); `section_teachers.csv` →
+  `users_dcid`. `floor(term_id / 100)` was confirmed for PSD terms, but
+  slice 1 reads `year_id` from the extract instead of deriving it (the
+  "Id mapping" paragraph above changes accordingly). Slice 1 is unblocked:
+  first confirm a snapshot carries the columns.
+- **PowerSchool plugin written** (write access to the assignment, category
+  association and score tables; read access to teacher + district
+  categories; audit columns read-only; a failed write names the missing
+  field). Waiting on IT's test instance, then the OAuth pair. We read a
+  real assignment first, then one create + score write + re-send on a test
+  section, before a production install.
+- **Schoology:** a district Standard App (not launched inside Schoology) is
+  being registered; teachers connect their own accounts (D-2). ONE app, on
+  the origin — Secure Test has one deployed environment and `localhost`
+  cannot receive the callback, so slice 3 is built and verified against
+  the origin with the feature switched on for the maintainer's account
+  only (decision 2026-09-23).
+- **8.2 answered:** new assignments follow the **category default** for
+  score publishing until Teaching & Learning decides otherwise.
