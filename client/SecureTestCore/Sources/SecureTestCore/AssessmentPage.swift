@@ -131,6 +131,14 @@ public enum AssessmentPage {
       box-shadow: 0 0 0 2px var(--paper) inset;
     }
     .hotspot-region.selected:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* Findings HS-1 / ME-1 (2026-09-23, real session): once Tab reaches every
+       control (reachByKeyboard), each one needs a visible ring — a match
+       <select> was reached but showed none. Bare element selectors, so every
+       class-specific ring above and below still wins. */
+    button:focus-visible, select:focus-visible,
+    input[type=radio]:focus-visible, input[type=checkbox]:focus-visible {
+      outline: 3px solid var(--accent); outline-offset: 2px;
+    }
     /* Fix slice S-9 (2026-09-08 sitting): the match item had no rules at all —
        the rows sat flush under the stem at browser-default size, hard to read
        and hard to hit. Sizing is rem throughout so it scales with data-zoom;
@@ -496,6 +504,38 @@ public enum AssessmentPage {
       ((BUNDLE && BUNDLE.answered_item_ids) || []).forEach(function (id) {
         if (typeof id === 'string') ANSWERED[id] = true;
       });
+      // Findings HS-1 / ME-1 (2026-09-23, a district Mac, real session):
+      // macOS "Keyboard navigation" is OFF by default on the fleet, and with
+      // it off WebKit's Tab reaches only text fields and elements carrying an
+      // explicit tabindex — a keyboard-only student could not reach a
+      // checkbox, a Move / Previous / Next / Finish button, the page strip, a
+      // hotspot region or the Math keys toggle. An explicit tabindex="0" puts
+      // them in the Tab order whatever that setting says (one stop per
+      // hotspot region, decision 2026-09-23). A control that already carries
+      // a tabindex is left alone: the roving groups (math keypad, drawing
+      // toolbar, source tabs) own their 0 / -1 stops, and single-choice
+      // radios get theirs in choiceList (decision 13.1).
+      function reachByKeyboard(node) {
+        if (!node || node.nodeType !== 1) return;
+        var tag = String(node.tagName || '').toLowerCase();
+        var wanted = tag === 'button' || tag === 'select' ||
+          (tag === 'input' && node.type === 'checkbox');
+        if (wanted && node.getAttribute('tabindex') === null) node.setAttribute('tabindex', '0');
+        var kids = node.children || [];
+        for (var i = 0; i < kids.length; i++) reachByKeyboard(kids[i]);
+      }
+      // Everything added after the build — page turns, banners, the
+      // time-limit strip, the image overlay, notices. JavaScriptCore (the
+      // test harness) has no MutationObserver, hence the guard.
+      if (typeof MutationObserver === 'function' && document.body) {
+        new MutationObserver(function (records) {
+          for (var r = 0; r < records.length; r++) {
+            var added = records[r].addedNodes || [];
+            for (var a = 0; a < added.length; a++) reachByKeyboard(added[a]);
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      }
+
       var onAnswered = null;
       function markAnswered(itemId) {
         ANSWERED[itemId] = true;
@@ -954,6 +994,21 @@ public enum AssessmentPage {
         function refreshClear() {
           clearBtn.disabled = !inputs.some(function (i) { return i.checked; });
         }
+        // Decision 13.1 (2026-09-23): ONE Tab stop per single-choice
+        // question, arrows between its choices — the radio-group pattern,
+        // done here because WebKit leaves radios out of the Tab order
+        // entirely while macOS Keyboard navigation is off (finding HS-1's
+        // sitting). The stop is the checked radio, else the first.
+        function refreshRadioStop() {
+          if (multi) return;
+          var stop = 0;
+          for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].checked) { stop = i; break; }
+          }
+          for (var j = 0; j < inputs.length; j++) {
+            inputs[j].setAttribute('tabindex', j === stop ? '0' : '-1');
+          }
+        }
         (item.choices || []).forEach(function (choice) {
           var label = document.createElement('label');
           label.className = 'choice';
@@ -964,6 +1019,7 @@ public enum AssessmentPage {
           inputs.push(input);
           input.onchange = function () {
             refreshClear();
+            refreshRadioStop();
             if (multi) {
               var picked = inputs.filter(function (i) { return i.checked; })
                                  .map(function (i) { return i.value; });
@@ -977,6 +1033,26 @@ public enum AssessmentPage {
               post(item.id, { type: 'multiple_choice_single', choice_id: choice.id });
             }
           };
+          if (!multi) {
+            // Handled here, not left to WebKit's native radio arrows, so the
+            // move is one path: check the next choice (wrapping) and run its
+            // onchange — the same single post a click makes. Setting
+            // `checked` fires no change event, so nothing posts twice.
+            input.onkeydown = function (event) {
+              if (!event || event.metaKey || event.ctrlKey || event.altKey) return;
+              var step = (event.key === 'ArrowDown' || event.key === 'ArrowRight') ? 1
+                : (event.key === 'ArrowUp' || event.key === 'ArrowLeft') ? -1 : 0;
+              if (step === 0) return;
+              if (typeof event.preventDefault === 'function') event.preventDefault();
+              var at = inputs.indexOf(input);
+              var next = inputs[(at + step + inputs.length) % inputs.length];
+              var already = next.checked;
+              inputs.forEach(function (i) { i.checked = i === next; });
+              next.focus();
+              // A one-choice question wraps onto itself: nothing changed.
+              if (!already) next.onchange();
+            };
+          }
           label.appendChild(input);
           label.appendChild(emphasisNodes(choice.text || ''));
           wrap.appendChild(label);
@@ -987,6 +1063,7 @@ public enum AssessmentPage {
           // a shortcut for unchecking every box by hand.
           inputs.forEach(function (i) { i.checked = false; });
           refreshClear();
+          refreshRadioStop();
           withdraw(item.id);
         };
         // P-1: a saved answer comes back checked. Before refreshClear(), so a
@@ -1005,6 +1082,7 @@ public enum AssessmentPage {
           });
         }
         refreshClear();
+        refreshRadioStop();
         wrap.appendChild(clearBtn);
         return wrap;
       }
@@ -3500,6 +3578,11 @@ public enum AssessmentPage {
         });
         root.appendChild(buildFinish());
       }
+
+      // HS-1 / ME-1: the whole built page once. The body when it holds the
+      // item tree (the page); the tree itself when it does not (the harness,
+      // whose body is a separate node).
+      reachByKeyboard(document.body && document.body.contains(root) ? document.body : root);
 
       // KaTeX (ADR 0009): render $…$ and $$…$$ in everything authored — stems,
       // choices, match sides, sequence labels, stimuli — now that the tree is
