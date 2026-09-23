@@ -117,6 +117,39 @@ public final class TimeLimitCountdown {
         }
     }
 
+    /// EX-1: the deadline this clock counts down to.
+    public var currentDeadline: Date { deadline }
+
+    /// EX-1: has the server's deadline moved enough to restart the clock?
+    ///
+    /// The poll's deadline is rebuilt from `ends_at − server_now` at receipt,
+    /// so the same server deadline arrives a little different on every poll
+    /// (network time). `tolerance` swallows that jitter; a teacher's change is
+    /// minutes, not seconds. No running clock (an untimed attempt that just
+    /// got an override) is always a change.
+    public static func deadlineChanged(
+        from current: Date?,
+        to new: Date,
+        tolerance: TimeInterval = 3
+    ) -> Bool {
+        guard let current else { return true }
+        return abs(new.timeIntervalSince(current)) > tolerance
+    }
+
+    /// EX-1: what the student reads when the teacher moves their deadline.
+    public static func changedNoticeText(
+        deadline: Date,
+        timeZone: TimeZone = .current,
+        locale: Locale = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        formatter.timeZone = timeZone
+        formatter.locale = locale
+        return "Your teacher changed your time. The test now ends at \(formatter.string(from: deadline))."
+    }
+
     /// `mm:ss`, and `h:mm:ss` past an hour. Rounded UP, so a limit of exactly
     /// five minutes reads "5:00" at the first tick and "0:00" only at zero.
     public static func text(for remaining: TimeInterval) -> String {

@@ -2953,7 +2953,12 @@ public enum AssessmentPage {
 
       window.__timeLimit = {
         update: function (text, danger) {
-          if (!timeValue || timeHidden) return;
+          if (timeHidden) return;
+          // EX-1 (2026-09-23): an UNTIMED attempt can gain a deadline mid-test
+          // (a teacher's Extend time, reported by the peek poll). The page
+          // built no strip for it, so the first push builds one, in the same
+          // place the build would have put it.
+          if (!timeValue) root.insertBefore(buildTimeLimit(), root.firstChild);
           timeValue.textContent = String(text);
           timeStrip.className = danger ? 'time-limit danger' : 'time-limit';
         }

@@ -20,6 +20,8 @@ final class PeekResponderTests: XCTestCase {
         private var _requested: [PendingPeek] = []
         private var _logs: [String] = []
         private var _closedCount = 0
+        private var _wireDeadline: (endsAt: String, serverNow: String)?
+        private var _deadlines: [Date] = []
 
         var pending: PendingPeek? {
             get { lock.withLock { _pending } }
@@ -31,6 +33,13 @@ final class PeekResponderTests: XCTestCase {
             get { lock.withLock { _sitting } }
             set { lock.withLock { _sitting = newValue } }
         }
+        /// EX-1: the poll's deadline pair, nil = absent (untimed / older server).
+        var wireDeadline: (endsAt: String, serverNow: String)? {
+            get { lock.withLock { _wireDeadline } }
+            set { lock.withLock { _wireDeadline = newValue } }
+        }
+        var deadlines: [Date] { lock.withLock { _deadlines } }
+        func recordDeadline(_ d: Date) { lock.withLock { _deadlines.append(d) } }
         var fetchError: Error? {
             get { lock.withLock { _fetchError } }
             set { lock.withLock { _fetchError = newValue } }
@@ -67,7 +76,13 @@ final class PeekResponderTests: XCTestCase {
             fetchPending: {
                 probe.countFetch()
                 if let error = probe.fetchError { throw error }
-                return PeekPoll(pending: probe.pending, sitting: probe.sitting)
+                let wire = probe.wireDeadline
+                return PeekPoll(
+                    pending: probe.pending,
+                    sitting: probe.sitting,
+                    timeLimitEndsAt: wire?.endsAt,
+                    serverNow: wire?.serverNow
+                )
             },
             upload: { peekID, imageBase64 in
                 if let error = probe.uploadError { throw error }
@@ -76,6 +91,7 @@ final class PeekResponderTests: XCTestCase {
         )
         responder.onPeekRequested = { probe.recordRequest($0) }
         responder.onSittingClosed = { probe.countClosed() }
+        responder.onDeadline = { probe.recordDeadline($0) }
         return responder
     }
 
@@ -255,6 +271,61 @@ final class PeekResponderTests: XCTestCase {
         await drain(responder)
         XCTAssertEqual(probe.closedCount, 1)
         XCTAssertEqual(probe.requested.count, 0)
+    }
+
+    /// EX-1: a poll carrying the deadline reports it, as a DURATION from
+    /// receipt (ends_at − server_now), on every poll; none when absent.
+    func testAPollWithADeadlineReportsItEveryPoll() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertTrue(probe.deadlines.isEmpty, "untimed: nothing reported")
+
+        probe.wireDeadline = ("2026-09-23T22:00:00.000Z", "2026-09-23T21:00:00.000Z")
+        let before = Date()
+        scheduler.advance(by: 5)
+        await drain(responder)
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.deadlines.count, 2)
+        let left = probe.deadlines[0].timeIntervalSince(before)
+        XCTAssertEqual(left, 3600, accuracy: 5, "an hour from receipt, whatever this Mac's clock says")
+        responder.stop()
+    }
+
+    /// A closed sitting stops the responder before the deadline is read.
+    func testAClosedSittingReportsNoDeadline() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+        probe.sitting = .closed
+        probe.wireDeadline = ("2026-09-23T22:00:00.000Z", "2026-09-23T21:00:00.000Z")
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 1)
+        XCTAssertTrue(probe.deadlines.isEmpty)
+    }
+
+    /// Both or neither; an unparseable or wrong-typed value costs the timer,
+    /// never the poll (the sitting answer rides the same body).
+    func testPeekPollDecodesTheDeadlinePermissively() throws {
+        func poll(_ json: String) throws -> PeekPoll {
+            try JSONDecoder().decode(PeekPoll.self, from: Data(json.utf8))
+        }
+        let both = try poll(#"{"pending":null,"sitting":"open","time_limit_ends_at":"2026-09-23T22:00:00.000Z","server_now":"2026-09-23T21:30:00.000Z"}"#)
+        let at = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertEqual(both.deadline(receivedAt: at), at.addingTimeInterval(1800))
+        XCTAssertNil(try poll(#"{"pending":null,"time_limit_ends_at":"2026-09-23T22:00:00.000Z"}"#).deadline())
+        XCTAssertNil(try poll(#"{"pending":null,"time_limit_ends_at":"soon","server_now":"now"}"#).deadline())
+        let wrongType = try poll(#"{"pending":null,"sitting":"closed","time_limit_ends_at":5,"server_now":true}"#)
+        XCTAssertNil(wrongType.deadline())
+        XCTAssertTrue(wrongType.sittingIsClosed, "the rest of the poll still decodes")
+        XCTAssertNil(try poll(#"{"pending":null}"#).deadline())
     }
 
     /// Unknown value → open. The client must never end a test because the

@@ -171,4 +171,33 @@ final class TimeLimitCountdownTests: XCTestCase {
         XCTAssertEqual(expiries, 0)
         XCTAssertEqual(scheduler.pendingCount, 0)
     }
+
+    // MARK: EX-1 (2026-09-23) — a deadline moved by the teacher
+
+    func testDeadlineChangedIgnoresPollJitterButNotATeachersChange() {
+        let d = Date(timeIntervalSince1970: 2_000_000)
+        XCTAssertFalse(TimeLimitCountdown.deadlineChanged(from: d, to: d.addingTimeInterval(2)))
+        XCTAssertFalse(TimeLimitCountdown.deadlineChanged(from: d, to: d.addingTimeInterval(-2.5)))
+        XCTAssertTrue(TimeLimitCountdown.deadlineChanged(from: d, to: d.addingTimeInterval(600)))
+        XCTAssertTrue(TimeLimitCountdown.deadlineChanged(from: d, to: d.addingTimeInterval(-600)), "earlier counts too")
+        XCTAssertTrue(TimeLimitCountdown.deadlineChanged(from: nil, to: d), "an untimed attempt gaining a deadline")
+    }
+
+    func testChangedNoticeTextNamesTheNewTime() {
+        var cal = Calendar(identifier: .gregorian)
+        let tz = TimeZone(identifier: "America/Los_Angeles")!
+        cal.timeZone = tz
+        let deadline = cal.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 22, minute: 0))!
+        let text = TimeLimitCountdown.changedNoticeText(
+            deadline: deadline, timeZone: tz, locale: Locale(identifier: "en_US")
+        )
+        XCTAssertTrue(text.hasPrefix("Your teacher changed your time. The test now ends at 10:00"), text)
+        XCTAssertTrue(text.hasSuffix("PM."), text)
+    }
+
+    func testCurrentDeadlineIsTheOneItCountsTo() {
+        let d = Date(timeIntervalSince1970: 3_000_000)
+        let clock = TimeLimitCountdown(deadline: d, scheduler: ManualLockdownScheduler())
+        XCTAssertEqual(clock.currentDeadline, d)
+    }
 }

@@ -623,6 +623,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         responder.onSittingClosed = { [weak self] in
             Task { @MainActor in self?.sittingClosedDuringAttempt(via: "peek") }
         }
+        // EX-1: every poll carries the deadline when there is one; the app
+        // restarts the clock only when it actually moved.
+        responder.onDeadline = { [weak self] deadline in
+            Task { @MainActor in self?.deadlineReportedByPoll(deadline) }
+        }
         responder.onPeekRequested = { [weak self, weak controller, weak responder] pending in
             Task { @MainActor in
                 guard let self, let controller, let responder, !self.attemptHandedIn else { return }
@@ -656,6 +661,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         countdown = nil
         guard let deadline = bundle.deadline() else { return }
         Self.log("time limit: \(Int(deadline.timeIntervalSinceNow))s left on this attempt")
+        startCountdown(deadline: deadline)
+    }
+
+    /// EX-1 (2026-09-23): the peek poll reported this attempt's deadline. A
+    /// teacher's Extend time (or an earlier time) restarts the clock at once
+    /// instead of landing on the next join. Jitter from the poll's round trip
+    /// is not a change (`TimeLimitCountdown.deadlineChanged`). The student's
+    /// "hide the banner" choice carries over; the 5- and 1-minute notices
+    /// re-arm against the new deadline.
+    private func deadlineReportedByPoll(_ deadline: Date) {
+        guard controller != nil, !attemptHandedIn, !sessionEndedByTimeLimit else { return }
+        guard TimeLimitCountdown.deadlineChanged(from: countdown?.currentDeadline, to: deadline) else {
+            return
+        }
+        let wasDismissed = countdown?.isDismissed ?? false
+        countdown?.stop()
+        countdown = nil
+        Self.log("time limit: deadline changed by the teacher — \(Int(deadline.timeIntervalSinceNow))s left")
+        startCountdown(deadline: deadline, dismissed: wasDismissed)
+        controller?.showTimeNotice(TimeLimitCountdown.changedNoticeText(deadline: deadline))
+    }
+
+    private func startCountdown(deadline: Date, dismissed: Bool = false) {
         let clock = TimeLimitCountdown(
             deadline: deadline,
             scheduler: DispatchLockdownScheduler.main
@@ -676,6 +704,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.timeLimitExpired()
             }
         }
+        if dismissed { clock.dismiss() }
         countdown = clock
         clock.start()
     }

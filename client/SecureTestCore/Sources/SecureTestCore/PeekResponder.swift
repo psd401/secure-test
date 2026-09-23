@@ -13,23 +13,50 @@ public enum SittingState: String, Sendable {
 }
 
 /// The peek poll's whole answer. `pending` is the teacher's request for a look
-/// (unchanged since P2); `sitting` is row CS's addition.
+/// (unchanged since P2); `sitting` is row CS's addition; the deadline pair is
+/// EX-1's (2026-09-23).
 public struct PeekPoll: Decodable, Equatable, Sendable {
     public let pending: PendingPeek?
     /// nil = the server did not say, which means open (older server).
     public let sitting: SittingState?
+    /// EX-1: the attempt's deadline in the delivery bundle's own wire shape —
+    /// both or neither, kept as strings for the bundle's reason (fractional
+    /// seconds; an unparseable date costs the timer, never the poll). Absent
+    /// on an untimed attempt and on every server older than EX-1.
+    public let timeLimitEndsAt: String?
+    public let serverNow: String?
 
-    public init(pending: PendingPeek?, sitting: SittingState? = nil) {
+    public init(
+        pending: PendingPeek?,
+        sitting: SittingState? = nil,
+        timeLimitEndsAt: String? = nil,
+        serverNow: String? = nil
+    ) {
         self.pending = pending
         self.sitting = sitting
+        self.timeLimitEndsAt = timeLimitEndsAt
+        self.serverNow = serverNow
     }
 
     /// The only question the client asks of it.
     public var sittingIsClosed: Bool { sitting == .closed }
 
+    /// The deadline in THIS Mac's clock — `ends_at − server_now` added to the
+    /// receipt time, exactly as `DeliveryBundle.deadline(receivedAt:)` does, so
+    /// a skewed classroom clock still counts the right number of seconds.
+    /// Nil unless both fields are present and parseable.
+    public func deadline(receivedAt: Date = Date()) -> Date? {
+        guard let endsAt = timeLimitEndsAt.flatMap(ISO8601.parse),
+              let sentAt = serverNow.flatMap(ISO8601.parse)
+        else { return nil }
+        return receivedAt.addingTimeInterval(endsAt.timeIntervalSince(sentAt))
+    }
+
     private enum CodingKeys: String, CodingKey {
         case pending
         case sitting
+        case timeLimitEndsAt = "time_limit_ends_at"
+        case serverNow = "server_now"
     }
 
     public init(from decoder: Decoder) throws {
@@ -38,6 +65,10 @@ public struct PeekPoll: Decodable, Equatable, Sendable {
         let raw = try container.decodeIfPresent(String.self, forKey: .sitting)
         // Unknown string → nil → open. See the enum's note.
         sitting = raw.flatMap(SittingState.init(rawValue:))
+        // A wrong-typed value must not fail the whole poll (the sitting and
+        // peek answers ride the same body): try? drops just the field.
+        timeLimitEndsAt = (try? container.decodeIfPresent(String.self, forKey: .timeLimitEndsAt)) ?? nil
+        serverNow = (try? container.decodeIfPresent(String.self, forKey: .serverNow)) ?? nil
     }
 }
 
@@ -79,6 +110,12 @@ public final class PeekResponder: @unchecked Sendable {
     /// made and discarded with the attempt — and the poll stops with it: there
     /// is nothing further to ask, and the app is on its way home.
     public var onSittingClosed: (() -> Void)?
+    /// EX-1: the deadline the server reported on this poll, in this Mac's
+    /// clock. Fires on EVERY poll that carries one; whether it differs from
+    /// the running countdown is the app's question
+    /// (`TimeLimitCountdown.deadlineChanged`). Never fires once the sitting
+    /// is reported closed — that poll stops the responder instead.
+    public var onDeadline: ((Date) -> Void)?
 
     private var timer: LockdownTimer?
     /// Read by tests (9.2) to wait for the in-flight poll deterministically
@@ -175,6 +212,9 @@ public final class PeekResponder: @unchecked Sendable {
             stop()
             onSittingClosed?()
             return
+        }
+        if let deadline = poll.deadline() {
+            onDeadline?(deadline)
         }
         guard let pending = poll.pending else { return }
         // The server replaces rather than stacks, so one id is one ask; the
