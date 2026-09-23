@@ -14,6 +14,12 @@ export type PacketScoresMode = (typeof PACKET_SCORE_MODES)[number];
 export interface PacketQuery {
   /** Required by the page: one PDF per class means one URL per section. */
   section: string | null;
+  /**
+   * One student's work alone (pilot-teacher request, 2026-09-23): an attempt
+   * id, lower-cased, or null. Needs no section, and — unlike the section
+   * packet — may name an in-progress attempt.
+   */
+  attempt: string | null;
   /** The item ids to include, in the caller's order; null = every item. */
   items: string[] | null;
   /** `questions=0` prints answers only. */
@@ -73,6 +79,11 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
     }
   }
 
+  // A non-uuid `attempt` is the same as none, by the rule above; the
+  // toolbar's "Everyone in this section" option submits it blank.
+  const rawAttempt = (lastParam(searchParams.attempt) ?? "").trim().toLowerCase();
+  const attempt = UUID_RE.test(rawAttempt) ? rawAttempt : null;
+
   const rawScores = (lastParam(searchParams.scores) ?? "").trim().toLowerCase();
   const scores = (PACKET_SCORE_MODES as readonly string[]).includes(rawScores)
     ? (rawScores as PacketScoresMode)
@@ -80,6 +91,7 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
 
   return {
     section,
+    attempt,
     items: ids.length > 0 ? ids : null,
     questions: flag(lastParam(searchParams.questions), true),
     scores,

@@ -948,3 +948,22 @@ client shows. The client half (v1.3.5) has its rows in `client/MANUAL-CHECKS.md`
 | 269 | Same dialog, pick a time LATER than every in-progress deadline (and the default tomorrow 23:59) | No hint | ✅ 2026-09-23 on the origin (rev 49), `F3RP99` with the demo student in progress: the default (Sep 24 11:59 PM) and Sep 25 11:59 PM showed no hint |
 | 270 | The per-student page's Extend time and a Test sessions row's Extend time (Attendance expanded) with an earlier time | The same hint; with Attendance collapsed the sitting row shows no hint (nothing known), which is expected | ✅ 2026-09-23 on the origin (rev 49), `F3RP99` with the demo student in progress: per-student page — 9:00 PM hint, 11:00 PM none (current 10:00 PM); Test sessions row — no hint with Attendance collapsed, hint after expanding it |
 
+
+## Print one student's work (2026-09-23)
+
+`docs/student-work-export-design.md` §Progress, 2026-09-23 (a pilot
+teacher: print one student's paper for a reflection without printing the
+whole class). `?attempt=<id>` on the work packet page; the render is
+covered by `test/work-packet-page.test.tsx`, so these rows are what only a
+browser and a saved PDF show. Teacher-side only (Chrome); rows 271 / 274
+need an in-progress attempt (a student mid-sitting, or a passed-back one).
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 271 | Open a HANDED-IN student's per-student results page → **Print this student's work** | Lands on `/results/work?attempt=<id>` with ONE student page (that student only); the strip reads "One student's work — handed in"; the toolbar's Section select shows their section and the Student select shows their name | NOT RUN |
+| 272 | Open an IN-PROGRESS student's per-student page → **Print this student's work** | Same page, one student; the strip reads "One student's work — in progress, not handed in"; under the student's name the page reads "**In progress — not handed in** · answers saved so far"; saved answers print, unreached questions read "No answer." | NOT RUN — needs an in-progress attempt |
+| 273 | **Print student work** → pick a section → the toolbar's **Student** select | "Everyone in this section" selected by default; every student with an attempt in the section listed alphabetically, in-progress ones marked "(in progress)"; choose one → **Update** prints only that student, the other options (questions, scores, anonymous) kept | NOT RUN |
+| 274 | From 273's single-student page, set Student back to "Everyone in this section" → **Update**; then pick a student, change the Section select to another section → **Update** | The first prints the whole section again (handed in only — an in-progress student is NOT in it); the second prints the NEW section's packet, not the old student | NOT RUN |
+| 275 | On a single-student page, **Print / Save as PDF** → the print preview | The in-progress marker (272) prints on the paper; one inch margins; a long essay paginates across sheets rather than clipping; no toolbar or strip on the paper; page count = that student's pages only | NOT RUN |
+| 276 | Single-student page with **Anonymous** checked | The printed page is headed with the SAME label the section packet and the Student select give that student ("Student NN"; "In progress n" when in progress), with no name or student number above the key page; the key page maps that label to the student and reads "one student's work" (no label-shift caveat); the Student select shows labels ("Student NN" / "In progress n"), never a name | NOT RUN |
+| 277 | Open a practice attempt's per-student page (See my answers) | No "Print this student's work" button (practice attempts are invisible to the packet) | NOT RUN — needs a practice attempt |

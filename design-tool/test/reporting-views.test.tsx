@@ -537,6 +537,10 @@ describe("the per-student attempt page", () => {
     expect(html).toContain("Handed in");
     // Roadmap 2026-09 delete attempt: the owner's button is on the page.
     expect(html).toContain("Delete attempt");
+    // Print one student's work (2026-09-23): the packet page for this attempt.
+    expect(html).toContain(
+      `href="/dashboard/${scene.assessment.id}/results/work?attempt=${scene.aliceAttempt.id}"`,
+    );
     // 4 of 12 (MC 1 + essay 4 + six 1-pointers + a 1-cell table) with the
     // short_text proposal uncounted, so a "n unscored" count, not a percent.
     expect(html).toContain("unscored");
@@ -858,6 +862,18 @@ describe("in-progress attempts on the teacher surfaces", () => {
     // Nothing has been scored yet: no "Not scored yet" noise, no method word.
     expect(html).not.toContain("Not scored yet");
     expect(html).not.toContain("auto-scored");
+  });
+
+  // Print one student's work (docs/student-work-export-design.md §Progress,
+  // 2026-09-23): offered for an in-progress attempt too.
+  test("the per-student page links an in-progress attempt to its own work printout", async () => {
+    const scene = await seedScene();
+    const { carolAttempt } = await seedInProgressAttempt(scene.assessment.id);
+    const html = await renderAttempt(scene.assessment.id, carolAttempt.id);
+    expect(html).toContain(
+      `href="/dashboard/${scene.assessment.id}/results/work?attempt=${carolAttempt.id}"`,
+    );
+    expect(html).toContain("Print this student&#x27;s work");
   });
 
   test("a teacher-handed-in attempt shows 'Handed in by teacher' on the matrix, the per-student page and the print report", async () => {

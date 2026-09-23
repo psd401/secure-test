@@ -444,6 +444,18 @@ export default async function AttemptResultPage({ params }: PageProps) {
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Print one student's work (docs/student-work-export-design.md
+                §Progress, 2026-09-23): the packet page for this attempt alone,
+                handed in or not. Practice attempts are invisible to the packet
+                (docs/practice-sitting-design.md, D-4), so none is offered. */}
+            {attempt.practice ? null : (
+              <a
+                href={`/dashboard/${id}/results/work?attempt=${attemptId}`}
+                className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+              >
+                Print this student&apos;s work
+              </a>
+            )}
             {row.status === "in_progress" ? (
               <HandInAttemptAndReload
                 attemptId={attemptId}

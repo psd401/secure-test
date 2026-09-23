@@ -24,6 +24,12 @@ import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { sectionLabel } from "../lib/roster/teacherRoster";
 import { OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
+import { anonymousLabels } from "../lib/reporting/workPacket";
+
+/** The label the section packet gives `id` among the section's handed-in attempts. */
+function sectionLabelFor(id: string, handedInIds: string[]): string {
+  return anonymousLabels(handedInIds).get(id) ?? "";
+}
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -551,7 +557,9 @@ describe("work packet — one page per student, every item type", () => {
     expect(html).toContain("CHOICE-COPPER");
     expect(html).toContain("CHOICE-NEON");
     expect(html).toContain("CHOICE-IRON");
-    const adaPage = html.slice(html.indexOf("Fixture, Ada"), html.indexOf("Sample, Ben"));
+    // Scoped to the packet: the toolbar's student picker names them first.
+    const body = packetBody(html);
+    const adaPage = body.slice(body.indexOf("Fixture, Ada"), body.indexOf("Sample, Ben"));
     expect(adaPage).toContain("☑</span>CHOICE-COPPER");
     expect(adaPage).toContain("☐</span>CHOICE-NEON");
     expect(adaPage).toContain("☐</span>CHOICE-IRON");
@@ -911,5 +919,205 @@ describe("work packet — a set's stimulus, sources and pictures", () => {
     expect(html).not.toContain("STIMULUS-LEAD");
     expect(html).not.toContain("SOURCE-A-BODY");
     expect(html).toContain("SET-ESSAY-PROSE");
+  });
+});
+
+// A pilot teacher, 2026-09-23: "either print a whole class set of papers, OR
+// just one kid's paper" — `?attempt=` prints one student, handed in or not.
+describe("work packet — one student's work (?attempt=)", () => {
+  /** The packet scene plus Cal, still mid-test in the same sitting (so his
+   * section resolves the same), with one saved essay answer. */
+  async function seedWithInProgress() {
+    const scene = await seedPacketScene();
+    const db = getDb();
+    const [adaRow] = await db
+      .select({ test_session_id: attempts.test_session_id })
+      .from(attempts)
+      .where(eq(attempts.id, scene.adaAttempt.id));
+    const [cal] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER, name: "Draft, Cal" })
+      .returning();
+    const [calAttempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: scene.assessment.id,
+        student_id: cal!.id,
+        test_session_id: adaRow!.test_session_id,
+        status: "in_progress" as const,
+        started_at: new Date("2026-09-14T16:10:00Z"),
+      })
+      .returning();
+    await db.insert(responses).values({
+      attempt_id: calAttempt!.id,
+      item_id: scene.items[1]!.id,
+      response: { type: "essay", text: "CAL-ESSAY-SO-FAR" },
+    });
+    return { ...scene, calAttempt: calAttempt! };
+  }
+
+  async function expect404(id: string, search: Record<string, string>) {
+    let digest = "";
+    try {
+      await render(id, search);
+      throw new Error("expected notFound()");
+    } catch (err) {
+      digest = String((err as { digest?: string }).digest ?? "");
+    }
+    expect(digest).toContain("404");
+  }
+
+  test("a handed-in attempt prints that one student's page and nobody else's", async () => {
+    const { assessment, adaAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { attempt: adaAttempt.id });
+    const body = packetBody(html);
+
+    expect(body.split('class="student-page').length - 1).toBe(1);
+    expect(body).toContain("Fixture, Ada");
+    expect(body).toContain("ADA-ESSAY-PROSE");
+    expect(body).toContain("Handed in");
+    expect(body).not.toContain("Sample, Ben");
+    expect(body).not.toContain("BEN-ESSAY-PROSE");
+    expect(body).not.toContain("CAL-ESSAY-SO-FAR");
+    // No section needed, and the strip speaks of one student, not a class.
+    expect(html).not.toContain("One packet per class: pick a section.");
+    expect(html).toContain("One student&#x27;s work — handed in");
+    expect(html).not.toContain("students in");
+  });
+
+  test("an in-progress attempt prints with its saved answers and the marker on the page", async () => {
+    const { assessment, calAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { attempt: calAttempt.id });
+    const body = packetBody(html);
+
+    expect(body.split('class="student-page').length - 1).toBe(1);
+    expect(body).toContain("Draft, Cal");
+    expect(body).toContain("CAL-ESSAY-SO-FAR");
+    // The marker is inside the printed packet, not only on the screen strip.
+    expect(body).toContain("In progress — not handed in");
+    expect(body).not.toContain("Handed in ");
+    expect(html).toContain("One student&#x27;s work — in progress, not handed in");
+    // Items he has not reached say so.
+    expect(body).toContain("No answer.");
+  });
+
+  test("the section packet still excludes the in-progress attempt", async () => {
+    const { assessment } = await seedWithInProgress();
+    const html = await render(assessment.id, { section: SECTION });
+    const body = packetBody(html);
+    expect(body.split('class="student-page').length - 1).toBe(2);
+    expect(body).not.toContain("Draft, Cal");
+    expect(body).not.toContain("CAL-ESSAY-SO-FAR");
+    expect(body).not.toContain("In progress");
+    expect(html).toContain(`2 of 2 students in ${SECTION} handed in`);
+    // The chooser counts handed-in work only, too.
+    const chooser = await render(assessment.id);
+    expect(chooser).toContain("2 handed in");
+  });
+
+  test("an attempt at another assessment, or no attempt at all, is notFound()", async () => {
+    const { assessment, calAttempt } = await seedWithInProgress();
+    const [other] = await getDb()
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Other Fixture" })
+      .returning();
+    await expect404(other!.id, { attempt: calAttempt.id });
+    await expect404(assessment.id, { attempt: "99999999-9999-4999-8999-999999999999" });
+  });
+
+  test("another teacher cannot print one student either", async () => {
+    const { assessment, adaAttempt } = await seedWithInProgress();
+    principal = { sub: OTHER_TEACHER, role: "staff", email: "teacher.two@psd401.net" };
+    await expect404(assessment.id, { attempt: adaAttempt.id });
+  });
+
+  test("the other options still apply: questions=0, items, scores", async () => {
+    const { assessment, adaAttempt, items: itemRows } = await seedWithInProgress();
+    const html = await render(assessment.id, {
+      attempt: adaAttempt.id,
+      items: itemRows[1]!.id,
+      questions: "0",
+      scores: "teacher",
+    });
+    const body = packetBody(html);
+    expect(body).toContain("ADA-ESSAY-PROSE");
+    expect(body).not.toContain("STEM-ESSAY");
+    expect(body).not.toContain("CHOICE-COPPER");
+    expect(body).toContain("Teacher score");
+  });
+
+  test("anonymous with one student: a label, and a key page for that one print", async () => {
+    const { assessment, adaAttempt, benAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { attempt: adaAttempt.id, anon: "1" });
+    const keyAt = html.indexOf("Teacher key — do not distribute");
+    expect(keyAt).toBeGreaterThan(-1);
+    const packet = packetBody(html.slice(0, keyAt));
+    expect(packet).toContain(sectionLabelFor(adaAttempt.id, [adaAttempt.id, benAttempt.id]));
+    expect(packet).not.toContain("Fixture, Ada");
+    const key = html.slice(keyAt);
+    expect(key).toContain("Fixture, Ada");
+    expect(key).toContain("one student&#x27;s work");
+    expect(key).not.toContain("the labels can");
+  });
+
+  // James, 2026-09-23 (22.2): a single anonymous print keeps the section
+  // packet's number, whichever student it is; in progress = "In progress n".
+  test("anonymous single prints reuse the section packet's labels", async () => {
+    const { assessment, adaAttempt, benAttempt, calAttempt } = await seedWithInProgress();
+    const handedIn = [adaAttempt.id, benAttempt.id];
+    for (const id of handedIn) {
+      const html = await render(assessment.id, { attempt: id, anon: "1" });
+      const keyAt = html.indexOf("Teacher key — do not distribute");
+      const packet = packetBody(html.slice(0, keyAt));
+      expect(packet).toContain(`<h2>${sectionLabelFor(id, handedIn)}</h2>`);
+    }
+    const html = await render(assessment.id, { attempt: calAttempt.id, anon: "1" });
+    const keyAt = html.indexOf("Teacher key — do not distribute");
+    expect(packetBody(html.slice(0, keyAt))).toContain("<h2>In progress 1</h2>");
+  });
+
+  test("with a section the student is not in, the section packet wins", async () => {
+    const { assessment, adaAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, {
+      section: "Nonexistent · 9",
+      attempt: adaAttempt.id,
+    });
+    expect(packetBody(html)).not.toContain("ADA-ESSAY-PROSE");
+    expect(html).toContain("has handed this in yet");
+  });
+
+  test("the toolbar's student picker lists the section's students, in progress marked, Everyone by default", async () => {
+    const { assessment, adaAttempt, benAttempt, calAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { section: SECTION });
+    expect(html).toContain('<select id="packet-attempt" name="attempt">');
+    expect(html).toContain('<option value="" selected="">Everyone in this section</option>');
+    expect(html).toContain(`<option value="${adaAttempt.id}">Fixture, Ada</option>`);
+    expect(html).toContain(`<option value="${benAttempt.id}">Sample, Ben</option>`);
+    expect(html).toContain(`<option value="${calAttempt.id}">Draft, Cal (in progress)</option>`);
+  });
+
+  test("anonymous mode's picker carries labels, never a name (D-1)", async () => {
+    const { assessment, calAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { section: SECTION, anon: "1" });
+    const picker = html.slice(
+      html.indexOf('<select id="packet-attempt"'),
+      html.indexOf("</select>", html.indexOf('<select id="packet-attempt"')),
+    );
+    expect(picker).toContain(">Student 01</option>");
+    expect(picker).toContain(">Student 02</option>");
+    expect(picker).toContain(`<option value="${calAttempt.id}">In progress 1</option>`);
+    expect(picker).not.toContain("Fixture, Ada");
+    expect(picker).not.toContain("Draft, Cal");
+  });
+
+  test("in single mode the picker selects the student and the section select their section", async () => {
+    const { assessment, calAttempt } = await seedWithInProgress();
+    const html = await render(assessment.id, { attempt: calAttempt.id });
+    expect(html).toContain(
+      `<option value="${calAttempt.id}" selected="">Draft, Cal (in progress)</option>`,
+    );
+    expect(html).toContain(`<option value="${SECTION}" selected="">`);
+    // "Select all" keeps the one student.
+    expect(html).toContain(`attempt=${calAttempt.id}`);
   });
 });

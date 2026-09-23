@@ -63,13 +63,22 @@ import { pageAssessment } from "@/lib/api/access";
  *     ?section=<label>   REQUIRED — one PDF per class is one URL per section.
  *                        Without it the page renders a screen-only list of the
  *                        sections that have handed-in work and prints nothing.
+ *     ?attempt=<uuid>    ONE student's work instead, no section needed (the
+ *                        per-student page's button and the toolbar's student
+ *                        picker). An id that is not an attempt at this
+ *                        assessment is notFound(). With a `section` it does
+ *                        not belong to, the section wins — the toolbar's
+ *                        picker only offers the chosen section's students.
  *     ?items=<uuid,...>  the questions to include; default every one
  *     ?questions=0       answers only (no stems, stimulus or unselected choices)
  *     ?scores=none|teacher|ai|both
  *     ?anon=1            labels instead of names, key page last
  *
- * Handed-in attempts only: an in-progress answer can still change and a packet
- * is a record.
+ * The section packet is handed-in attempts only: an in-progress answer can
+ * still change and a packet is a record. `?attempt=` (a pilot teacher,
+ * 2026-09-23: "print their response so they can do their reflection") prints
+ * an in-progress attempt too, with the answers saved so far, marked "In
+ * progress — not handed in" on the printed page itself.
  */
 
 // Same reason as the print report: force-dynamic is what makes Next answer
@@ -165,6 +174,7 @@ function packetHref(
 ): string {
   const params = new URLSearchParams();
   if (query.section) params.set("section", query.section);
+  if (query.attempt) params.set("attempt", query.attempt);
   if (!omit.has("items") && query.items) params.set("items", query.items.join(","));
   params.set("questions", query.questions ? "1" : "0");
   params.set("scores", query.scores);
@@ -314,10 +324,30 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     notFound();
   }
 
-  // Submitted only — buildResults' default — so an in-progress answer can
-  // never reach a packet.
-  const results = await buildResults(id);
+  // In-progress rows are read for `?attempt=` and the toolbar's student
+  // picker only; every section count and the section packet itself use
+  // `handedIn`, so an in-progress answer never reaches a class packet.
+  // Practice attempts stay out (buildResults' default), as on every class
+  // reader — the per-student page offers no print button for one.
+  const results = await buildResults(id, { include_in_progress: true });
   const handedIn = results.rows.filter((r) => r.status === "submitted");
+
+  // ── One student's work. buildResults only returns this assessment's
+  // attempts, so a foreign or mistyped id finds nothing: the same notFound()
+  // as a missing assessment.
+  let single: ResultsRow | null = null;
+  if (query.attempt !== null) {
+    single = results.rows.find((r) => r.attempt_id === query.attempt) ?? null;
+    if (!single) {
+      notFound();
+    }
+    // The toolbar submits the section select AND the picker. A section the
+    // student is not in means the teacher switched sections without resetting
+    // the picker: print the section they switched to.
+    if (query.section !== null && single.student.section !== query.section) {
+      single = null;
+    }
+  }
 
   // Every section with at least one handed-in attempt, plus a count of
   // attempts that resolve to no section at all. Shared by the chooser below
@@ -336,7 +366,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   // ── No section: the chooser. One URL per section is the contract, so rather
   // than printing "all sections" this lists what there is to print. Screen
   // only; there is nothing printable on this branch.
-  if (query.section === null) {
+  if (query.section === null && single === null) {
     return (
       <main className="mx-auto max-w-2xl space-y-4 px-6 py-10">
         <h1 className="text-2xl font-semibold">Print student work</h1>
@@ -382,10 +412,17 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     );
   }
 
-  const section = query.section;
+  // Single mode takes the student's own section (null when none resolves),
+  // so the toolbar and the page header name the right class.
+  const section = single ? single.student.section : query.section;
   const inSection = handedIn.filter((r) => r.student.section === section);
-  const ordered = packetOrdering(inSection, query.anon);
-  const labels = query.anon
+  const ordered = single ? [single] : packetOrdering(inSection, query.anon);
+  // Anonymous labels. A single student printed alone keeps the number the
+  // section packet (and the toolbar's picker) gives them — James, 2026-09-23 —
+  // so a teacher matching a reprint to the class set finds the same label;
+  // an in-progress student, who has no packet number, reads "In progress n",
+  // as in the picker. Both are set below, once the picker's labels exist.
+  let labels = query.anon && !single
     ? anonymousLabels(ordered.map((r) => r.attempt_id))
     : null;
 
@@ -396,7 +433,43 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   // section counted 0 before (co-teacher follow-ups, 2026-09-22,
   // docs/access-model-design.md). Null when no owner email is known and no
   // sitting named the section, and the strip then says N alone.
-  const enrolled = await sectionEnrolment(db, id, section);
+  const enrolled =
+    single === null && section !== null ? await sectionEnrolment(db, id, section) : null;
+
+  // The toolbar's student picker: everyone in the chosen section who has an
+  // attempt, handed in or not. Named, alphabetical — except in anonymous
+  // mode, where no name appears anywhere above the key page (D-1), so each
+  // option carries the section packet's label instead (handed in) or an
+  // "In progress n" of its own (in progress; no label exists for one).
+  const pickable = packetOrdering(
+    results.rows.filter((r) => r.student.section === section),
+    query.anon,
+  );
+  const sectionLabels = query.anon
+    ? anonymousLabels(inSection.map((r) => r.attempt_id))
+    : null;
+  const inProgressIds = pickable
+    .filter((r) => r.status === "in_progress")
+    .map((r) => r.attempt_id);
+  function pickerLabel(r: ResultsRow): string {
+    if (sectionLabels) {
+      return (
+        sectionLabels.get(r.attempt_id) ??
+        `In progress ${inProgressIds.indexOf(r.attempt_id) + 1}`
+      );
+    }
+    const name = r.student.name || r.student.ssid || "(unknown)";
+    return r.status === "in_progress" ? `${name} (in progress)` : name;
+  }
+  if (query.anon && single) {
+    labels = new Map([[single.attempt_id, pickerLabel(single)]]);
+  }
+  // The section select lists sections with handed-in work; a single
+  // in-progress student's section may have none yet, so it is added.
+  const sectionOptions =
+    section !== null && !sectionCounts.has(section)
+      ? [...sections, [section, 0] as [string, number]].sort((a, b) => a[0].localeCompare(b[0]))
+      : sections;
 
   // ── Items, in delivery order, narrowed by ?items=.
   const allItems = await db
@@ -505,9 +578,13 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           Print / Save as PDF
         </button>
         <span className="text-sm">
-          {enrolled === null
-            ? `${ordered.length} handed in`
-            : `${ordered.length} of ${enrolled} students in ${section} handed in`}
+          {single
+            ? single.status === "in_progress"
+              ? "One student's work — in progress, not handed in"
+              : "One student's work — handed in"
+            : enrolled === null
+              ? `${ordered.length} handed in`
+              : `${ordered.length} of ${enrolled} students in ${section} handed in`}
         </span>
         <a
           href={`/dashboard/${assessment.id}/results`}
@@ -529,10 +606,26 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
       >
         <div className="toolbar-row">
           <label htmlFor="packet-section">Section</label>
-          <select id="packet-section" name="section" defaultValue={section}>
-            {sections.map(([label, count]) => (
+          <select id="packet-section" name="section" defaultValue={section ?? ""}>
+            {/* Only a single student no section resolves for gets here with
+                none; "" parses as no section, so the attempt still prints. */}
+            {section === null ? <option value="">No section</option> : null}
+            {sectionOptions.map(([label, count]) => (
               <option key={label} value={label}>
                 {label} ({count} handed in)
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="toolbar-row">
+          {/* One student's work: "Everyone" submits `attempt=` blank, which
+              parses as none — the section packet. */}
+          <label htmlFor="packet-attempt">Student</label>
+          <select id="packet-attempt" name="attempt" defaultValue={single?.attempt_id ?? ""}>
+            <option value="">Everyone in this section</option>
+            {pickable.map((r) => (
+              <option key={r.attempt_id} value={r.attempt_id}>
+                {pickerLabel(r)}
               </option>
             ))}
           </select>
@@ -588,7 +681,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
         </button>
       </form>
       <main className="packet">
-        {ordered.length === 0 ? (
+        {ordered.length === 0 && section !== null ? (
           <p className="meta">
             Nobody in {section} has handed this in yet, so there is nothing to
             print.
@@ -607,9 +700,17 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           >
             <h2>{identityLine(row)}</h2>
             <p className="meta">
-              {section} · {assessment.name}
+              {[section, assessment.name].filter(Boolean).join(" · ")}
             </p>
-            <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
+            {/* Printed, not screen-only: the paper itself has to say these
+                answers were not handed in (only `?attempt=` reaches here). */}
+            {row.status === "in_progress" ? (
+              <p className="meta">
+                <strong>In progress — not handed in</strong> · answers saved so far
+              </p>
+            ) : (
+              <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
+            )}
 
             {includedItems.map((item) => {
               const setId = setOpensAtItem.get(item.id);
@@ -768,18 +869,26 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           <section className="student-page key-page" aria-label="Teacher key">
             <h2>Teacher key — do not distribute</h2>
             <p className="meta">
-              {assessment.name} · {section}
+              {[assessment.name, section].filter(Boolean).join(" · ")}
             </p>
-            <p className="meta">
-              Printed {printedOn} · {ordered.length} handed-in attempt
-              {ordered.length === 1 ? "" : "s"}
-            </p>
-            <p className="meta muted">
-              Labels are assigned over the {ordered.length} attempt
-              {ordered.length === 1 ? "" : "s"} handed in as of this print. If
-              another student hands in and you print again, the labels can
-              shift — keep this page with its packet.
-            </p>
+            {single ? (
+              // One student printed alone: the label is the section packet's
+              // (or "In progress n"), as of this print.
+              <p className="meta">Printed {printedOn} · one student&apos;s work</p>
+            ) : (
+              <>
+                <p className="meta">
+                  Printed {printedOn} · {ordered.length} handed-in attempt
+                  {ordered.length === 1 ? "" : "s"}
+                </p>
+                <p className="meta muted">
+                  Labels are assigned over the {ordered.length} attempt
+                  {ordered.length === 1 ? "" : "s"} handed in as of this print. If
+                  another student hands in and you print again, the labels can
+                  shift — keep this page with its packet.
+                </p>
+              </>
+            )}
             <table>
               <thead>
                 <tr>

@@ -21,6 +21,7 @@ describe("parsePacketQuery", () => {
   test("an empty query is the documented default: all items, questions on, no scores, named", () => {
     expect(parsePacketQuery({})).toEqual({
       section: null,
+      attempt: null,
       items: null,
       questions: true,
       scores: "none",
@@ -34,6 +35,17 @@ describe("parsePacketQuery", () => {
     // Next hands a repeated parameter as an array; the LAST one wins (slice
     // 2: the questions checkbox relies on this — see the lastParam test).
     expect(parsePacketQuery({ section: ["Biology", "Algebra"] }).section).toBe("Algebra");
+  });
+
+  // One student's work (2026-09-23): the per-student page's button and the
+  // toolbar's picker, whose "Everyone in this section" option submits blank.
+  test("attempt is a uuid, case-folded; blank or junk is none; the LAST value wins", () => {
+    expect(parsePacketQuery({ attempt: A }).attempt).toBe(A);
+    expect(parsePacketQuery({ attempt: `  ${A.toUpperCase()} ` }).attempt).toBe(A);
+    expect(parsePacketQuery({ attempt: "" }).attempt).toBeNull();
+    expect(parsePacketQuery({ attempt: "not-a-uuid" }).attempt).toBeNull();
+    expect(parsePacketQuery({ attempt: [A, B] }).attempt).toBe(B);
+    expect(parsePacketQuery({ attempt: [A, ""] }).attempt).toBeNull();
   });
 
   test("items is a comma list of uuids; junk is dropped, duplicates collapse, empty = all", () => {

@@ -351,6 +351,20 @@ describe("practice attempts are invisible to every class reader (D-4)", () => {
     );
     expect(html).toContain("Ada Fixture");
     expect(html).not.toContain(PRACTICE_NAME);
+
+    // One student's work (2026-09-23): a practice attempt is not an attempt
+    // this page knows, so naming it is the same 404 as a foreign id.
+    let digest = "";
+    try {
+      await WorkPage({
+        params: Promise.resolve({ id: assessmentId }),
+        searchParams: Promise.resolve({ attempt: practiceAttempt.id }),
+      });
+      throw new Error("expected notFound()");
+    } catch (err) {
+      digest = String((err as { digest?: string }).digest ?? "");
+    }
+    expect(digest).toContain("404");
   });
 
   test("the scoring corpus selection", async () => {

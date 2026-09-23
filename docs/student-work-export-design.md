@@ -281,3 +281,28 @@ slice 1 here can exclude it from the start.
   their symbol (× ÷ · ± ≤ ≥ ≠ π √ ° ∞), the rest and their braces vanish. Fixture readings, not defects: a `$`-before-digit
   stem prints raw on every page by C-2's rule; one stored short-text answer
   is `4^2^`.
+- 2026-09-23 — **One student's work** (a pilot teacher: some students are
+  still finishing and need their own response printed for a reflection,
+  without re-printing the class packet). BUILT, not deployed. The packet page
+  takes `?attempt=<uuid>` (`parsePacketQuery` gained `attempt`: a uuid,
+  case-folded, last value wins, blank or junk = none): no section needed,
+  every other option (`items`, `questions`, `scores`, `anon`) applies, and an
+  attempt that is not this assessment's — including a practice attempt — is
+  `notFound()` under the same `pageAssessment(…, "view")` check. Unlike the
+  section packet it prints an IN-PROGRESS attempt, with the answers saved so
+  far and "In progress — not handed in" on the printed page; the section
+  packet and the chooser's counts stay handed-in only (`buildResults` now runs
+  with `include_in_progress` and the page filters). Two entry points: a
+  "Print this student's work" button on the per-student results page (not on
+  a practice attempt), and a Student select in the toolbar listing the chosen
+  section's students ("Everyone in this section" = blank `attempt`). With a
+  `section` the chosen student is not in, the section packet wins, so
+  switching sections with a student still picked prints the new section.
+  Wording for one student: the strip reads "One student's work — handed in /
+  in progress, not handed in", and an anonymous single print keeps the
+  label the section packet gives that student ("Student NN"; "In progress
+  n" for an in-progress one — James, 2026-09-23), with a key page that drops
+  the label-shift caveat. In
+  anonymous mode the picker shows labels ("Student NN", "In progress n"),
+  never names, to keep D-1's no-name-above-the-key-page rule. Rows 271–277 in
+  `docs/design-tool-manual-checks.md`, NOT RUN.
