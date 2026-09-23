@@ -490,6 +490,40 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-22 evening — v1.3.5 simulated hand-run (Claude via computer use)
+
+Debug client from `5b5bf41` (1.3.5), `SECURE_TEST_SIMULATE_LOCKDOWN`, against
+the origin (rev 48), practice sittings on `Math entry + drawing tools hand-run
+2026-09-22`; Claude drove the client through computer use (background capture
+cannot see WKWebView content — full-screen control needed for the page) and
+the teacher side in Chrome; James signed in (staff + a demo student). Results
+in `client/MANUAL-CHECKS.md` ("v1.3.5" and "Content only while locked").
+
+- **v1.3.5 rows ✅:** version, cancelled + failed sign-in, -999 (six full-chain
+  sign-ins), AS-1 (short_text + essay), practice label / staff empty state /
+  staff + student wrong code / practice join by code, security-slice-1 re-run.
+- **Content only while locked ✅:** Cmd-E, titlebar end, rejoin prefill,
+  flush-on-end, slow, cooperative, watchdog 30 s, hand-in unchanged, Cmd-Q
+  (via the Quit menu item).
+- **F-A FIXED (`5b26889`):** a refused / interrupted secure start stacked two
+  sheets — the `.idle` return-home path waited on its async input flush while
+  `couldNotStartSecurely` went home; `goHome` now returns unless the attempt
+  screen is still up. Re-run: one sheet.
+- **F-B ACCEPTED (James):** Escape does not dismiss the one-button sheets
+  (NSAlert binds Escape only to "Cancel"); comment + row corrected.
+- **Sign-in log trim BUILT (`19a4d8b`):** a failed sign-in logged the whole
+  NSError, authorize URL included, into `errors.log` and the drained
+  `client_error_events` row; `signInFailureSummary` keeps domain / code /
+  description. Both sign-in rows re-run on it ✅.
+- **Still open before the v1.3.5 release:** the three real-AAC rows (Close on
+  the slowest Mac, every exit, time is up) and the v1.3.4 sitting on the
+  district Mac. **Build the release from `db56551` or later.**
+- Working rules: the automation tool blocks raw Cmd-Q (use the menu item);
+  reading the client's container from the Bash tool triggers a macOS "access
+  data from other apps" prompt for Claude — read stderr instead; the dev
+  launcher does not forward `SECURE_TEST_WATCHDOG_SECONDS` (a scratchpad copy
+  did).
+
 ### 2026-09-22 — UX pass 3 research + practice-sitting note
 
 Two roadmap questions from James answered the same morning. **Practice

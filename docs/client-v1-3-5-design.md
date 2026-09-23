@@ -218,3 +218,12 @@ session).
 
 Not built from this note: slice 3 (MANUAL-CHECKS rows, `MARKETING_VERSION`
 1.3.5) and slice 4 (release).
+
+**Slice 3 hand-run (simulated) 2026-09-22 evening** — every v1.3.5 row that
+does not need a real AAC session ✅ (`client/MANUAL-CHECKS.md`; roadmap
+§Progress "2026-09-22 evening"). Two fixes landed on top, both in v1.3.5:
+`5b26889` (F-A: a refused / interrupted start no longer stacks a second sheet;
+F-B Escape reading accepted, comment corrected) and `19a4d8b` (a failed sign-in
+logs `domain code: description` via `signInFailureSummary`, not the whole
+NSError with the authorize URL; `swift test` 693). Open: the three real-AAC
+rows, then slice 4 (release) built from `db56551` or later.
