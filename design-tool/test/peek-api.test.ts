@@ -239,6 +239,55 @@ describe("GET /api/attempts/:id/peek/pending (student poll)", () => {
     const res = await getPeek(attempt.id);
     expect(((await res.json()) as { pending: unknown }).pending).toBeNull();
   });
+
+  // EX-1 (2026-09-23): the poll carries the deadline so an Extend time
+  // reaches a client already counting down.
+  test("an untimed attempt carries no deadline keys", async () => {
+    const a = await seedAssessment();
+    const attempt = await seedAttempt(a.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+    const body = (await (await getPeek(attempt.id)).json()) as Record<string, unknown>;
+    expect("time_limit_ends_at" in body).toBe(false);
+    expect("server_now" in body).toBe(false);
+  });
+
+  test("a timed attempt carries both keys; a teacher override replaces the deadline", async () => {
+    const a = await seedAssessment();
+    const db = getDb();
+    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    const attempt = await seedAttempt(a.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+
+    const before = (await (await getPeek(attempt.id)).json()) as {
+      time_limit_ends_at: string;
+      server_now: string;
+    };
+    expect(new Date(before.time_limit_ends_at).getTime()).toBe(
+      attempt.started_at.getTime() + 600_000,
+    );
+    expect(Number.isNaN(new Date(before.server_now).getTime())).toBe(false);
+
+    const override = new Date(Date.now() + 3 * 3600_000);
+    await db
+      .update(attempts)
+      .set({ deadline_override_at: override })
+      .where(eq(attempts.id, attempt.id));
+    const after = (await (await getPeek(attempt.id)).json()) as { time_limit_ends_at: string };
+    expect(after.time_limit_ends_at).toBe(override.toISOString());
+  });
+
+  test("an override on an untimed assessment gives the poll a deadline", async () => {
+    const a = await seedAssessment();
+    const attempt = await seedAttempt(a.id, STUDENT.ps_id);
+    const override = new Date(Date.now() + 3600_000);
+    await getDb()
+      .update(attempts)
+      .set({ deadline_override_at: override })
+      .where(eq(attempts.id, attempt.id));
+    principal = studentPrincipal(STUDENT.email);
+    const body = (await (await getPeek(attempt.id)).json()) as { time_limit_ends_at?: string };
+    expect(body.time_limit_ends_at).toBe(override.toISOString());
+  });
 });
 
 describe("POST /api/attempts/:id/peek/upload", () => {

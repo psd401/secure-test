@@ -11,6 +11,7 @@ import {
   defaultExtendValue,
   extendHint,
   extendStatusText,
+  shortensHint,
   toIsoInstant,
 } from "../components/app/ExtendTimeControl";
 
@@ -79,5 +80,27 @@ describe("toIsoInstant", () => {
     const iso = toIsoInstant("2026-09-18T23:59");
     expect(iso).not.toBeNull();
     expect(Number.isNaN(Date.parse(iso as string))).toBe(false);
+  });
+});
+
+// EX-1 (2026-09-23): an earlier time is allowed, with a hint saying so.
+describe("shortensHint", () => {
+  const current = new Date("2026-09-23T23:59:00").toISOString();
+  test("earlier than the current deadline -> hint", () => {
+    expect(shortensHint("2026-09-23T22:00", [current])).toContain("shortens their time");
+  });
+  test("later than or equal to it -> no hint", () => {
+    expect(shortensHint("2026-09-24T23:59", [current])).toBeNull();
+    expect(shortensHint("2026-09-23T23:59", [current])).toBeNull();
+  });
+  test("a sitting compares against the LATEST current deadline", () => {
+    const earlier = new Date("2026-09-23T12:00:00").toISOString();
+    expect(shortensHint("2026-09-23T18:00", [earlier, current])).not.toBeNull();
+    expect(shortensHint("2026-09-23T18:00", [earlier, null])).toBeNull();
+  });
+  test("nothing known, or no value -> no hint", () => {
+    expect(shortensHint("2026-09-23T18:00", undefined)).toBeNull();
+    expect(shortensHint("2026-09-23T18:00", [null, undefined])).toBeNull();
+    expect(shortensHint("", [current])).toBeNull();
   });
 });

@@ -459,7 +459,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
               />
             ) : null}
             {row.status === "in_progress" ? (
-              <ExtendTimeAndReload attemptId={attemptId} />
+              <ExtendTimeAndReload attemptId={attemptId} deadlineAt={row.deadline_at} />
             ) : null}
             {row.status === "submitted" ? (
               <PassBackAndReload

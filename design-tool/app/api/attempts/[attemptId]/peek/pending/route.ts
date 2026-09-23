@@ -5,6 +5,7 @@ import { peek_requests } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { attemptSittingIsOver } from "@/lib/api/sittingOver";
+import { loadDeadline } from "@/lib/api/attemptDeadline";
 import { PEEK_PENDING_TTL_MS, sweepExpiredPeekImages } from "@/lib/api/peek";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -27,6 +28,12 @@ interface RouteContext {
  * no new channel and no new timer — a Close reaches the client within the 5 s
  * it already waits. An attempt with no sitting at all (the `--token` dev
  * posture, the seeder) reports "open": nothing governs it.
+ *
+ * EX-1 (2026-09-23): the poll also carries the attempt's deadline, in the
+ * delivery bundle's own shape — `time_limit_ends_at` + `server_now`, both or
+ * neither — so an Extend time (or a pass back's new deadline) reaches a
+ * client that is already counting down. Before this the client read the
+ * deadline only at join, and a teacher's change landed on the next join.
  */
 export async function GET(_req: Request, ctx: RouteContext) {
   const auth = await requireStudentOrPractice();
@@ -60,10 +67,17 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .limit(1);
 
   const over = await attemptSittingIsOver(db, access.attempt);
+  const deadline = await loadDeadline(db, access.attempt);
 
   return NextResponse.json({
     ok: true,
     pending: pending ?? null,
     sitting: over ? "closed" : "open",
+    ...(deadline
+      ? {
+          time_limit_ends_at: deadline.toISOString(),
+          server_now: new Date().toISOString(),
+        }
+      : {}),
   });
 }

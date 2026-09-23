@@ -920,6 +920,9 @@ export function SittingsPanel({
                                 void loadAttendance(s.id);
                               }}
                               variant="ghost"
+                              currentDeadlines={att?.rows
+                                .filter((r) => canExtend(r.status))
+                                .map((r) => r.deadline_at)}
                               disabledReason={
                                 att && !att.rows.some((r) => canExtend(r.status))
                                   ? "No one is in progress on this session."

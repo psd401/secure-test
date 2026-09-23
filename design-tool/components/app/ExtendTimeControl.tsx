@@ -63,6 +63,30 @@ export function defaultExtendValue(now: Date = new Date()): string {
 }
 
 /**
+ * EX-1 (2026-09-23): the hint under the picker when the chosen time is
+ * EARLIER than a current deadline — for a sitting, earlier than the latest
+ * deadline among the students it applies to. Allowed on purpose (the teacher
+ * may mean it); the hint only says so. Null when nothing would be shortened,
+ * the value is empty or unparseable, or no current deadline is known.
+ */
+export function shortensHint(
+  localValue: string,
+  currentDeadlines: ReadonlyArray<string | Date | null | undefined> | undefined,
+): string | null {
+  const chosen = toIsoInstant(localValue);
+  if (!chosen || !currentDeadlines) return null;
+  const latest = currentDeadlines.reduce<number>((max, d) => {
+    if (!d) return max;
+    const ms = new Date(d).getTime();
+    return Number.isNaN(ms) ? max : Math.max(max, ms);
+  }, Number.NEGATIVE_INFINITY);
+  if (!Number.isFinite(latest)) return null;
+  return new Date(chosen).getTime() < latest
+    ? "This is earlier than the current deadline — it shortens their time."
+    : null;
+}
+
+/**
  * A `datetime-local` value ("YYYY-MM-DDTHH:mm", read as local time by the
  * browser) turned into an ISO instant. `null` when the value is empty or
  * unparseable, which the caller treats as "nothing to submit" rather than
@@ -95,10 +119,13 @@ export function ExtendTimeControl({
   disabledReason,
   size = "sm",
   variant = "outline",
+  currentDeadlines,
 }: {
   target: ExtendTarget;
   onExtended: () => void;
   disabledReason?: string;
+  /** The in-scope students' current deadlines, for the "shortens" hint. */
+  currentDeadlines?: ReadonlyArray<string | Date | null | undefined>;
   size?: "xs" | "sm" | "default";
   variant?: "outline" | "ghost";
 }) {
@@ -185,6 +212,11 @@ export function ExtendTimeControl({
               className="mt-0.5 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
             />
           </label>
+          {shortensHint(value, currentDeadlines) ? (
+            <p className="text-xs text-muted-foreground">
+              {shortensHint(value, currentDeadlines)}
+            </p>
+          ) : null}
           {error ? (
             <p role="alert" className="text-sm text-danger-foreground">
               {error}

@@ -330,6 +330,9 @@ export function MonitorView({
               <ExtendTimeControl
                 target={{ kind: "sitting", sessionId: sittingId }}
                 onExtended={() => void load()}
+                currentDeadlines={(data?.rows ?? [])
+                  .filter((r) => canExtend(r.status))
+                  .map((r) => r.deadline_at)}
                 size="default"
                 disabledReason={
                   (data?.rows ?? []).some((r) => canExtend(r.status))
@@ -684,6 +687,7 @@ function StudentRow({
                   <ExtendTimeControl
                     target={{ kind: "attempt", attemptId: r.attempt_id }}
                     onExtended={onDeleted}
+                    currentDeadlines={[r.deadline_at]}
                   />
                 ) : null}
                 {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
