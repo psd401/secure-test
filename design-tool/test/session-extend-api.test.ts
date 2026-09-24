@@ -79,6 +79,8 @@ async function seedSitting(opts: {
   expired?: boolean;
   timeLimitSeconds?: number | null;
   attempts: SeedAttempt[];
+  /** Distinct ssids when a test seeds two sittings. */
+  ssidPrefix?: string;
 }) {
   const db = getDb();
   const [assessment] = await db
@@ -116,7 +118,7 @@ async function seedSitting(opts: {
   for (const [i, spec] of opts.attempts.entries()) {
     const [student] = await db
       .insert(students)
-      .values({ owner_sub: OWNER, ssid: `80${i}`, name: `Student ${i}` })
+      .values({ owner_sub: OWNER, ssid: `${opts.ssidPrefix ?? "80"}${i}`, name: `Student ${i}` })
       .returning();
     const status = spec.status ?? "in_progress";
     const [attempt] = await db
@@ -147,6 +149,18 @@ async function extendAll(sessionId: string, endsAt?: string, raw?: string) {
     }),
     { params: Promise.resolve({ sessionId }) },
   );
+}
+
+async function extendAllBody(sessionId: string, body: unknown) {
+  return extendAll(sessionId, undefined, JSON.stringify(body));
+}
+
+async function sittingFlag(sessionId: string) {
+  const [row] = await getDb()
+    .select({ removed: test_sessions.time_limit_removed })
+    .from(test_sessions)
+    .where(eq(test_sessions.id, sessionId));
+  return row!.removed;
 }
 
 async function rowOf(attemptId: string) {
@@ -266,5 +280,94 @@ describe("POST /api/test-sessions/[sessionId]/extend", () => {
       (await extendAll("11111111-1111-4111-8111-111111111111", inMinutes(30))).status,
     ).toBe(404);
     expect((await extendAll("nope", inMinutes(30))).status).toBe(400);
+  });
+});
+
+// Remove time limit + Monitor checkboxes (2026-09-24).
+describe("POST /api/test-sessions/[sessionId]/extend — no_limit and attempt_ids", () => {
+  test("whole sitting no_limit: every in-progress attempt AND the sitting flag", async () => {
+    const s = await seedSitting({
+      timeLimitSeconds: 600,
+      attempts: [{}, {}, { status: "submitted" }],
+    });
+    const body = await (await extendAllBody(s.sitting.id, { no_limit: true })).json();
+    expect(body.extended).toBe(2);
+    expect(body.skipped).toBe(1);
+    expect((await rowOf(s.attempts[0]!.id)).time_limit_removed).toBe(true);
+    expect((await rowOf(s.attempts[1]!.id)).time_limit_removed).toBe(true);
+    expect((await rowOf(s.attempts[2]!.id)).time_limit_removed).toBe(false);
+    expect(await sittingFlag(s.sitting.id)).toBe(true);
+    const events = await getDb().select().from(attempt_events);
+    expect(events.map((e) => e.detail)).toEqual([
+      { no_limit: true, by: OWNER },
+      { no_limit: true, by: OWNER },
+    ]);
+  });
+
+  test("a later whole-sitting ends_at clears the sitting flag and the removals", async () => {
+    const s = await seedSitting({ timeLimitSeconds: 600, attempts: [{}] });
+    await extendAllBody(s.sitting.id, { no_limit: true });
+    const endsAt = inMinutes(30);
+    expect((await extendAll(s.sitting.id, endsAt)).status).toBe(200);
+    expect(await sittingFlag(s.sitting.id)).toBe(false);
+    const row = await rowOf(s.attempts[0]!.id);
+    expect(row.time_limit_removed).toBe(false);
+    expect(row.deadline_override_at!.toISOString()).toBe(endsAt);
+  });
+
+  test("attempt_ids touches only the selected attempts and never the sitting flag", async () => {
+    const s = await seedSitting({ timeLimitSeconds: 600, attempts: [{}, {}, {}] });
+    const body = await (
+      await extendAllBody(s.sitting.id, {
+        no_limit: true,
+        attempt_ids: [s.attempts[0]!.id, s.attempts[2]!.id],
+      })
+    ).json();
+    expect(body.extended).toBe(2);
+    expect(body.skipped).toBe(0);
+    expect((await rowOf(s.attempts[0]!.id)).time_limit_removed).toBe(true);
+    expect((await rowOf(s.attempts[1]!.id)).time_limit_removed).toBe(false);
+    expect((await rowOf(s.attempts[2]!.id)).time_limit_removed).toBe(true);
+    expect(await sittingFlag(s.sitting.id)).toBe(false);
+  });
+
+  test("attempt_ids with ends_at leaves a flagged sitting flagged", async () => {
+    const s = await seedSitting({ timeLimitSeconds: 600, attempts: [{}, {}] });
+    await extendAllBody(s.sitting.id, { no_limit: true });
+    const endsAt = inMinutes(30);
+    await extendAllBody(s.sitting.id, { ends_at: endsAt, attempt_ids: [s.attempts[0]!.id] });
+    expect(await sittingFlag(s.sitting.id)).toBe(true);
+    expect((await rowOf(s.attempts[0]!.id)).time_limit_removed).toBe(false);
+    expect((await rowOf(s.attempts[1]!.id)).time_limit_removed).toBe(true);
+  });
+
+  test("an id from ANOTHER sitting is skipped, never touched", async () => {
+    const mine = await seedSitting({ attempts: [{}] });
+    const other = await seedSitting({ attempts: [{}], ssidPrefix: "81" });
+    const body = await (
+      await extendAllBody(mine.sitting.id, {
+        no_limit: true,
+        attempt_ids: [mine.attempts[0]!.id, other.attempts[0]!.id],
+      })
+    ).json();
+    expect(body.extended).toBe(1);
+    expect(body.skipped).toBe(1);
+    expect((await rowOf(other.attempts[0]!.id)).time_limit_removed).toBe(false);
+  });
+
+  test("XOR: both or neither is 400 invalid_body; empty or malformed attempt_ids too", async () => {
+    const s = await seedSitting({ attempts: [{}] });
+    expect(
+      (await extendAllBody(s.sitting.id, { ends_at: inMinutes(30), no_limit: true })).status,
+    ).toBe(400);
+    expect((await extendAllBody(s.sitting.id, {})).status).toBe(400);
+    expect(
+      (await extendAllBody(s.sitting.id, { no_limit: true, attempt_ids: [] })).status,
+    ).toBe(400);
+    expect(
+      (await extendAllBody(s.sitting.id, { no_limit: true, attempt_ids: ["nope"] })).status,
+    ).toBe(400);
+    expect((await rowOf(s.attempts[0]!.id)).time_limit_removed).toBe(false);
+    expect(await sittingFlag(s.sitting.id)).toBe(false);
   });
 });

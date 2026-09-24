@@ -201,17 +201,17 @@ describe("deadlineFor / isPastDeadline", () => {
   const started = new Date("2026-09-11T17:00:00.000Z");
 
   test("no limit means no deadline, and nothing is ever past it", () => {
-    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: null })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null, time_limit_removed: false }, { time_limit_seconds: null })).toBeNull();
     expect(isPastDeadline(new Date("2099-01-01T00:00:00Z"), null)).toBe(false);
   });
 
   test("a zero or negative limit is treated as no limit, not as already over", () => {
-    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: 0 })).toBeNull();
-    expect(deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: -5 })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null, time_limit_removed: false }, { time_limit_seconds: 0 })).toBeNull();
+    expect(deadlineFor({ started_at: started, deadline_override_at: null, time_limit_removed: false }, { time_limit_seconds: -5 })).toBeNull();
   });
 
   test("the deadline is started_at + the limit", () => {
-    const deadline = deadlineFor({ started_at: started, deadline_override_at: null }, { time_limit_seconds: 1800 });
+    const deadline = deadlineFor({ started_at: started, deadline_override_at: null, time_limit_removed: false }, { time_limit_seconds: 1800 });
     expect(deadline!.toISOString()).toBe("2026-09-11T17:30:00.000Z");
   });
 
@@ -235,7 +235,7 @@ describe("deadlineFor — the teacher's deadline_override_at", () => {
   test("null override leaves the old behaviour untouched", () => {
     expect(
       deadlineFor(
-        { started_at: started, deadline_override_at: null },
+        { started_at: started, deadline_override_at: null, time_limit_removed: false },
         { time_limit_seconds: 1800 },
       )!.toISOString(),
     ).toBe("2026-09-11T17:30:00.000Z");
@@ -244,7 +244,7 @@ describe("deadlineFor — the teacher's deadline_override_at", () => {
   test("the override wins over the assessment's limit", () => {
     expect(
       deadlineFor(
-        { started_at: started, deadline_override_at: override },
+        { started_at: started, deadline_override_at: override, time_limit_removed: false },
         { time_limit_seconds: 1800 },
       )!.toISOString(),
     ).toBe(override.toISOString());
@@ -256,13 +256,13 @@ describe("deadlineFor — the teacher's deadline_override_at", () => {
     // there is no limit to do arithmetic on.
     expect(
       deadlineFor(
-        { started_at: started, deadline_override_at: override },
+        { started_at: started, deadline_override_at: override, time_limit_removed: false },
         { time_limit_seconds: null },
       )!.toISOString(),
     ).toBe(override.toISOString());
     expect(
       deadlineFor(
-        { started_at: started, deadline_override_at: override },
+        { started_at: started, deadline_override_at: override, time_limit_removed: false },
         { time_limit_seconds: 0 },
       )!.toISOString(),
     ).toBe(override.toISOString());
@@ -275,7 +275,7 @@ describe("deadlineFor — the teacher's deadline_override_at", () => {
     const earlier = new Date("2026-09-11T17:10:00.000Z");
     expect(
       deadlineFor(
-        { started_at: started, deadline_override_at: earlier },
+        { started_at: started, deadline_override_at: earlier, time_limit_removed: false },
         { time_limit_seconds: 1800 },
       )!.toISOString(),
     ).toBe(earlier.toISOString());
@@ -283,14 +283,39 @@ describe("deadlineFor — the teacher's deadline_override_at", () => {
 
   test("an extended attempt is no longer past its original deadline", () => {
     const now = new Date("2026-09-11T17:45:00.000Z"); // 15 min past 17:30
-    const attempt = { started_at: started, deadline_override_at: null };
+    const attempt = { started_at: started, deadline_override_at: null, time_limit_removed: false };
     expect(isPastDeadline(now, deadlineFor(attempt, { time_limit_seconds: 1800 }))).toBe(true);
     expect(
       isPastDeadline(
         now,
-        deadlineFor({ ...attempt, deadline_override_at: override }, { time_limit_seconds: 1800 }),
+        deadlineFor({ ...attempt, deadline_override_at: override, time_limit_removed: false }, { time_limit_seconds: 1800 }),
       ),
     ).toBe(false);
+  });
+});
+
+// Remove time limit (2026-09-24): the teacher's "No time limit" beats both
+// the assessment's limit and an override.
+describe("deadlineFor — time_limit_removed", () => {
+  const started = new Date("2026-09-11T17:00:00.000Z");
+  const override = new Date("2026-09-11T18:15:00.000Z");
+
+  test("a removed limit is no deadline, whatever the assessment says", () => {
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: null, time_limit_removed: true },
+        { time_limit_seconds: 1800 },
+      ),
+    ).toBeNull();
+  });
+
+  test("a removed limit beats an override too", () => {
+    expect(
+      deadlineFor(
+        { started_at: started, deadline_override_at: override, time_limit_removed: true },
+        { time_limit_seconds: 1800 },
+      ),
+    ).toBeNull();
   });
 });
 

@@ -1,0 +1,2 @@
+ALTER TABLE "attempts" ADD COLUMN "time_limit_removed" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "test_sessions" ADD COLUMN "time_limit_removed" boolean DEFAULT false NOT NULL;

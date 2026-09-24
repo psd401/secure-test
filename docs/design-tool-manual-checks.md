@@ -967,3 +967,32 @@ need an in-progress attempt (a student mid-sitting, or a passed-back one).
 | 275 | On a single-student page, **Print / Save as PDF** → the print preview | The in-progress marker (272) prints on the paper; one inch margins; a long essay paginates across sheets rather than clipping; no toolbar or strip on the paper; page count = that student's pages only | ✅ in part 2026-09-23 on the origin (rev 50, Chrome) by the page's print rules, not a print preview (Chrome's dialog cannot be driven from here): `@media print` hides the strip and the `.toolbar.screen-only` form, `@page { size: letter; margin: 1in }`, each student page breaks before; the in-progress marker is an ordinary `.meta` line, not screen-only, so it prints. Pagination of a long essay and the sheet count need a real Save as PDF |
 | 276 | Single-student page with **Anonymous** checked | The printed page is headed with the SAME label the section packet and the Student select give that student ("Student NN"; "In progress n" when in progress), with no name or student number above the key page; the key page maps that label to the student and reads "one student's work" (no label-shift caveat); the Student select shows labels ("Student NN" / "In progress n"), never a name | ✅ 2026-09-23 on the origin (rev 50, Chrome): handed-in student → "Student 01" (the section packet's label; one handed-in attempt in the section); in-progress student → "In progress 1"; in both the name / number appear ONLY on the key page, which reads "one student's work"; the picker shows labels only |
 | 277 | Open a practice attempt's per-student page (See my answers) | No "Print this student's work" button (practice attempts are invisible to the packet) | NOT RUN 2026-09-23 — no practice attempt exists on the origin (every practice sitting reads "Not started yet"); starting one needs the client on a Mac. The hidden link is covered by `test/reporting-views.test.tsx` and the 404 by `test/practice-invisibility.test.ts` |
+
+## Remove time limit + Monitor checkboxes (2026-09-24)
+
+A pilot teacher asked to take the time limit away — for a whole session
+(including students who join later) or for some students. The Adjust time
+dialog gains "No time limit"; the Monitor gains a checkbox per in-progress
+row and "Adjust time for selected (N)". Server: `attempts.time_limit_removed`
++ `test_sessions.time_limit_removed` (migration 0043), `no_limit` / `attempt_ids`
+on the two extend routes, the join path copying the sitting's flag. The routes,
+the join and pass back are covered by `test/attempt-extend-api.test.ts`,
+`test/session-extend-api.test.ts`, `test/attempt-ingest-api.test.ts` and
+`test/attempt-pass-back-api.test.ts`; these rows are what only the browser and
+a running client show. Needs a timed assessment and two or more students in
+progress on an open sitting.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 278 | Monitor → header **Adjust time** → choose **No time limit** | The picker greys out; the hint reads "Every student still in progress, and anyone who joins this session later, has no time limit."; no "shortens" hint | NOT RUN |
+| 279 | Submit 278 | Status "Time limit removed for N students."; every in-progress row reads "No time limit" where it read "Until …" | NOT RUN |
+| 280 | After 279, a new student joins the same session | Their row reads "No time limit" once joined; their client shows no countdown | NOT RUN |
+| 281 | Header **Adjust time** → **New deadline** (any future time) | Every in-progress row reads "Until …" again; a student who joins AFTER this gets the assessment's normal limit | NOT RUN |
+| 282 | Tick two in-progress rows | "Adjust time for selected (2)" enables; the header checkbox shows the mixed state; with nothing ticked the button is disabled and its tooltip reads "Tick the students in progress to adjust first." | NOT RUN |
+| 283 | Header checkbox ("Select all students in progress") | Ticks every in-progress row (submitted / not-joined rows have no checkbox); a second click clears them | NOT RUN |
+| 284 | **Adjust time for selected** → **No time limit** → submit | The hint reads "The selected students have no time limit." (no mention of later joiners); only the ticked rows read "No time limit"; the selection clears; a student who joins later still gets the normal limit | NOT RUN |
+| 285 | Tick a student, then let them hand in (or hand them in) | After the next poll their tick is gone and the button's count drops | NOT RUN |
+| 286 | Per-row **Adjust time** → **No time limit**; then the per-student results page | Status "Time limit removed."; the per-student page header reads "No time limit"; its timeline line reads "Time limit removed by teacher \<time\>" | NOT RUN |
+| 287 | Hand in a removed student, then **Pass back** from the per-student page | The dialog asks for no deadline (untimed); after it the page still reads "No time limit" | NOT RUN |
+| 288 | Client: a student already in the test when the limit is removed | Every client through v1.3.5 as built: the old countdown stays on screen (the peek poll simply stops carrying a deadline, and the client only reacts to a deadline that is present); if it reaches zero the Mac ends the secure session with "Time is up." as usual, the server still accepts their answers, and on **Resume** there is no countdown. A client that hides the countdown when the poll stops carrying one is unbuilt | NOT RUN |
+| 289 | A practice sitting's Monitor | No checkboxes, no "Adjust time for selected"; the row's own Adjust time still offers both choices | NOT RUN |

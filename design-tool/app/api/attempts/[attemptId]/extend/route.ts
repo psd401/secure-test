@@ -3,21 +3,22 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAttempt } from "@/lib/api/access";
-import { extendAttempt } from "@/lib/api/extendAttempt";
+import {
+  extendAttempt,
+  extendBodyFields,
+  hasExactlyOneTarget,
+  toExtendTarget,
+  type ExtendTarget,
+} from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
   params: Promise<{ attemptId: string }>;
 }
 
-const Body = z.object({
-  /** An ABSOLUTE instant — "this student finishes at 10:45" — not a number of
-   * extra minutes. The teacher's UI does the arithmetic; the server stores the
-   * answer, so nothing has to re-derive it from a limit that may change. */
-  ends_at: z.string().refine((s) => !Number.isNaN(Date.parse(s)), {
-    message: "ends_at must be a parseable date",
-  }),
-});
+/** `ends_at` (an absolute instant) XOR `no_limit: true` — see
+ * `extendBodyFields`. */
+const Body = z.object(extendBodyFields);
 
 /**
  * Give one student more time.
@@ -51,6 +52,10 @@ const Body = z.object({
  *
  * Idempotent: the override replaces rather than accumulates, so posting the
  * same instant twice leaves the same deadline.
+ *
+ * Remove time limit (2026-09-24): `{ no_limit: true }` instead of `ends_at`
+ * takes this student's limit away altogether (`attempts.time_limit_removed`);
+ * a later `ends_at` puts a deadline back. Both or neither is `invalid_body`.
  */
 export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -66,15 +71,17 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const attempt = access.attempt;
 
-  let endsAt: Date;
+  let target: ExtendTarget;
   try {
-    endsAt = new Date(Date.parse(Body.parse(await req.json()).ends_at));
+    const body = Body.parse(await req.json());
+    if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
+    target = toExtendTarget(body);
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
   const now = new Date();
-  if (endsAt.getTime() <= now.getTime()) {
+  if ("endsAt" in target && target.endsAt.getTime() <= now.getTime()) {
     return NextResponse.json({ ok: false, error: "ends_at_past" }, { status: 400 });
   }
 
@@ -82,7 +89,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "not_in_progress" }, { status: 409 });
   }
 
-  const { attempt: row } = await extendAttempt(db, attempt, auth.session.sub, endsAt, now);
+  const { attempt: row } = await extendAttempt(db, attempt, auth.session.sub, target, now);
 
   return NextResponse.json({
     ok: true,

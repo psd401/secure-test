@@ -85,7 +85,12 @@ their work.
    or on one student's row) moves the deadline to a time you pick, later or
    earlier — the default is today at 11:59 PM; for a class finishing
    tomorrow, pick tomorrow, start a new session tomorrow and close it when
-   they are done.
+   they are done. Choose **No time limit** in the same dialog to take the
+   limit away — from the header it also covers anyone who joins that
+   session later; tick students on the Monitor and use **Adjust time for
+   selected** for just those. A student already in the test keeps seeing
+   their old countdown until they leave and **Resume** (if it reaches zero
+   their Mac ends the session as usual; they resume with no limit).
 2. **The session length** ("How long" when you start a session) and
    **Close session**. When the session runs out or you close it, every
    student still inside is returned to **Your tests** within a few seconds

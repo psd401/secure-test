@@ -76,6 +76,9 @@ import {
   eventLabel,
   earlierSessionNote,
   idleFor,
+  pruneSelection,
+  selectAllState,
+  selectableAttemptIds,
   studentState,
   type AttendancePayload,
   type AttendanceRow,
@@ -147,6 +150,10 @@ export function MonitorView({
   const [pendingClose, setPendingClose] = useState(false);
   const [filter, setFilter] = useState<StudentState | null>(null);
   const [sort, setSort] = useState<"triage" | "name">("triage");
+  // Monitor checkboxes (2026-09-24): the attempt ids ticked for "Adjust time
+  // for selected". Not offered on a practice sitting (D-5 — one row, the
+  // teacher's own; the per-row Adjust time covers it).
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 
   const load = useCallback(async () => {
     try {
@@ -168,6 +175,22 @@ export function MonitorView({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A row that stops being eligible after a reload (handed in, deleted) drops
+  // out of the selection, so the button's count is always what would be sent.
+  useEffect(() => {
+    if (data) setSelected((prev) => pruneSelection(prev, data.rows));
+  }, [data]);
+  const eligibleIds = useMemo(() => selectableAttemptIds(data?.rows ?? []), [data]);
+  const allState = selectAllState(selected.size, eligibleIds.length);
+  const toggleSelected = useCallback((attemptId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(attemptId)) next.delete(attemptId);
+      else next.add(attemptId);
+      return next;
+    });
+  }, []);
 
   // Server props first, the live payload once it arrives — so `open` (and
   // therefore polling) never depends on a fetch having succeeded.
@@ -325,7 +348,9 @@ export function MonitorView({
             {/* Extend time, whole sitting: additive, so — unlike Hand in
                 everyone — it is never gated on the sitting being open or
                 closed, only on someone in-progress to extend. D-5: not on a
-                practice sitting either; the per-row Extend time still works. */}
+                practice sitting either; the per-row Extend time still works.
+                The one adjustment that also covers students who join LATER
+                (2026-09-24): "No time limit" here sets the sitting's flag. */}
             {!isPractice ? (
               <ExtendTimeControl
                 target={{ kind: "sitting", sessionId: sittingId }}
@@ -460,10 +485,57 @@ export function MonitorView({
             </Button>
           </div>
 
+          {/* Monitor checkboxes (2026-09-24): Adjust time for just the ticked
+              students. Posts to the sitting route with `attempt_ids`, so it
+              never changes the sitting's own flag — later joiners are the
+              header control's business. D-5: not on a practice sitting. */}
+          {!isPractice ? (
+            <div className="flex justify-end">
+              <ExtendTimeControl
+                target={{
+                  kind: "selected",
+                  sessionId: sittingId,
+                  attemptIds: [...selected],
+                }}
+                label={`Adjust time for selected (${selected.size})`}
+                onExtended={() => {
+                  setSelected(new Set());
+                  void load();
+                }}
+                currentDeadlines={(data?.rows ?? [])
+                  .filter((r) => r.attempt_id !== null && selected.has(r.attempt_id))
+                  .map((r) => r.deadline_at)}
+                disabledReason={
+                  selected.size > 0
+                    ? undefined
+                    : "Tick the students in progress to adjust first."
+                }
+              />
+            </div>
+          ) : null}
+
           <div className="overflow-x-auto rounded-lg border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {!isPractice ? (
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all students in progress"
+                        checked={allState === "all"}
+                        ref={(el) => {
+                          if (el) el.indeterminate = allState === "some";
+                        }}
+                        disabled={eligibleIds.length === 0}
+                        onChange={() =>
+                          setSelected(
+                            allState === "all" ? new Set() : new Set(eligibleIds),
+                          )
+                        }
+                      />
+                    </TableHead>
+                  ) : null}
                   <TableHead>Student</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Status</TableHead>
@@ -480,6 +552,9 @@ export function MonitorView({
                     now={now}
                     sessionClosed={session.status === "closed"}
                     onDeleted={() => void load()}
+                    selectable={!isPractice}
+                    selected={r.attempt_id !== null && selected.has(r.attempt_id)}
+                    onToggleSelected={toggleSelected}
                   />
                 ))}
               </TableBody>
@@ -544,12 +619,19 @@ function StudentRow({
   now,
   sessionClosed,
   onDeleted,
+  selectable,
+  selected,
+  onToggleSelected,
 }: {
   row: AttendanceRow;
   state: StudentState;
   now: number;
   sessionClosed: boolean;
   onDeleted: () => void;
+  /** Whether the checkbox COLUMN exists (not on a practice sitting). */
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelected: (attemptId: string) => void;
 }) {
   const idle = idleFor(r, now);
   const current = st === "needs_attention";
@@ -563,6 +645,18 @@ function StudentRow({
         current && "shadow-[inset_4px_0_0_var(--danger-foreground)]",
       )}
     >
+      {selectable ? (
+        <TableCell className="w-8">
+          {canExtend(r.status) && r.attempt_id ? (
+            <input
+              type="checkbox"
+              aria-label={`Select ${r.name}`}
+              checked={selected}
+              onChange={() => onToggleSelected(r.attempt_id!)}
+            />
+          ) : null}
+        </TableCell>
+      ) : null}
       <TableCell>
         <div className="font-medium">
           {r.name}
@@ -605,11 +699,12 @@ function StudentRow({
             <span className="text-xs text-muted-foreground">{earlierNote}</span>
           ) : null}
           {/* Time extension: the effective deadline, once there is one to
-              show — null on every row with no limit and no extension. */}
+              show — null on every row with no limit and no extension; "No
+              time limit" once the teacher removed it (2026-09-24). */}
           {!earlier &&
-          deadlineNote(r.deadline_at, r.deadline_passed, new Date(now)) ? (
+          deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed) ? (
             <span className="text-xs text-muted-foreground">
-              {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now))}
+              {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
             </span>
           ) : null}
           {r.alert && current ? (

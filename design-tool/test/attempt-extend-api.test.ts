@@ -137,6 +137,10 @@ async function seedAttempt(
 
 const inMinutes = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
 
+async function extendBody(attemptId: string, body: unknown) {
+  return extend(attemptId, undefined, JSON.stringify(body));
+}
+
 async function extend(attemptId: string, endsAt?: string, raw?: string) {
   const { POST } = await import("../app/api/attempts/[attemptId]/extend/route");
   return POST(
@@ -277,5 +281,65 @@ describe("POST /api/attempts/[attemptId]/extend", () => {
       (await extend("11111111-1111-4111-8111-111111111111", inMinutes(30))).status,
     ).toBe(404);
     expect((await extend("nope", inMinutes(30))).status).toBe(400);
+  });
+});
+
+// Remove time limit (2026-09-24): `{ no_limit: true }` instead of `ends_at`.
+describe("POST /api/attempts/[attemptId]/extend — no_limit", () => {
+  test("no_limit removes the limit, clears an override, and writes the event", async () => {
+    const s = await seedAttempt({ timeLimitSeconds: 600 });
+    await extend(s.attempt.id, inMinutes(20));
+    const res = await extendBody(s.attempt.id, { no_limit: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      attempt_id: s.attempt.id,
+      deadline_override_at: null,
+    });
+    const row = (await getDb().select().from(attempts).where(eq(attempts.id, s.attempt.id)))[0]!;
+    expect(row.time_limit_removed).toBe(true);
+    expect(row.deadline_override_at).toBeNull();
+    const events = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, s.attempt.id));
+    expect(events.map((e) => e.detail)).toContainEqual({ no_limit: true, by: OWNER });
+  });
+
+  test("a later ends_at puts a deadline back and clears the removal", async () => {
+    const s = await seedAttempt({ timeLimitSeconds: 600 });
+    await extendBody(s.attempt.id, { no_limit: true });
+    const endsAt = inMinutes(30);
+    expect((await extend(s.attempt.id, endsAt)).status).toBe(200);
+    const row = (await getDb().select().from(attempts).where(eq(attempts.id, s.attempt.id)))[0]!;
+    expect(row.time_limit_removed).toBe(false);
+    expect(row.deadline_override_at!.toISOString()).toBe(endsAt);
+  });
+
+  test("a removed attempt is no longer past its old deadline", async () => {
+    // Started 20 min ago on a 10-min limit: past it, then not once removed.
+    const s = await seedAttempt({ timeLimitSeconds: 600, startedMinutesAgo: 20 });
+    const { isPastDeadline, loadDeadline } = await import("../lib/api/attemptDeadline");
+    const db = getDb();
+    expect(isPastDeadline(new Date(), await loadDeadline(db, s.attempt))).toBe(true);
+    await extendBody(s.attempt.id, { no_limit: true });
+    const row = (await db.select().from(attempts).where(eq(attempts.id, s.attempt.id)))[0]!;
+    expect(await loadDeadline(db, row)).toBeNull();
+  });
+
+  test("both ends_at and no_limit, or neither, is 400 invalid_body", async () => {
+    const s = await seedAttempt({});
+    expect(
+      (await extendBody(s.attempt.id, { ends_at: inMinutes(30), no_limit: true })).status,
+    ).toBe(400);
+    expect((await extendBody(s.attempt.id, {})).status).toBe(400);
+    expect((await extendBody(s.attempt.id, { no_limit: false })).status).toBe(400);
+    const row = (await getDb().select().from(attempts).where(eq(attempts.id, s.attempt.id)))[0]!;
+    expect(row.time_limit_removed).toBe(false);
+  });
+
+  test("no_limit on a submitted attempt is 409 not_in_progress", async () => {
+    const s = await seedAttempt({ status: "submitted" });
+    expect((await extendBody(s.attempt.id, { no_limit: true })).status).toBe(409);
   });
 });

@@ -63,6 +63,13 @@ function lineText(event: TimelineEvent): string {
       return "Back in the test";
     case "client_error":
       return clientErrorText(event.detail);
+    case "deadline_extended":
+      // Remove time limit (2026-09-24): the same event kind carries the
+      // teacher's "No time limit" as `detail.no_limit`. It has no `ends_at`,
+      // so `lineSuffix` adds nothing and the line is the fact alone.
+      return event.detail?.no_limit === true
+        ? "Time limit removed by teacher"
+        : eventLabel(event.kind);
     case "lockdown_failed":
     case "lockdown_interrupted":
       // The monitor's words, deliberately shared rather than re-typed.

@@ -40,6 +40,12 @@ export interface DeadlineAttempt {
    * it required means the typechecker names the callers that need the column.
    */
   deadline_override_at: Date | null;
+  /**
+   * The teacher's "No time limit" (2026-09-24). Required for the same reason
+   * as `deadline_override_at`: a consumer that forgot to select it would keep
+   * counting a student down whose limit the teacher had removed.
+   */
+  time_limit_removed: boolean;
 }
 
 export interface DeadlineAssessment {
@@ -60,6 +66,9 @@ export interface DeadlineAssessment {
  *     extension be an absolute instant rather than arithmetic on a limit that
  *     may not exist.
  *
+ * A REMOVED limit beats both: the teacher's "No time limit" returns null
+ * before the override or the assessment's limit is read.
+ *
  * A non-positive limit is treated as no limit rather than as "already over":
  * a 0 stored by a form that wrote an empty field as a number should not lock
  * a class out of a test.
@@ -68,10 +77,29 @@ export function deadlineFor(
   attempt: DeadlineAttempt,
   assessment: DeadlineAssessment,
 ): Date | null {
+  if (attempt.time_limit_removed) return null;
   if (attempt.deadline_override_at) return attempt.deadline_override_at;
   const limit = assessment.time_limit_seconds;
   if (limit == null || limit <= 0) return null;
   return new Date(attempt.started_at.getTime() + limit * 1000);
+}
+
+/**
+ * Pass back (docs/pass-back-design.md): does this attempt have a deadline AT
+ * ALL — a limit on the assessment or an override on the attempt — whatever
+ * its status and whenever it falls. The pass-back route asks it to decide
+ * whether a new deadline is required; the Monitor and the per-student page
+ * ask it so the dialog knows up front. One rule in one place since the
+ * removed limit (2026-09-24) added a third term: a removed attempt is NOT
+ * timed, so a pass back neither asks for a deadline nor gives it one, and the
+ * attempt stays removed.
+ */
+export function attemptIsTimed(
+  attempt: Pick<DeadlineAttempt, "deadline_override_at" | "time_limit_removed">,
+  assessment: DeadlineAssessment,
+): boolean {
+  if (attempt.time_limit_removed) return false;
+  return (assessment.time_limit_seconds ?? 0) > 0 || attempt.deadline_override_at !== null;
 }
 
 /**

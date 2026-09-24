@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, and } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempts, item_sets, items, responses, scores, students, test_sessions } from "../db/schema";
+import { assessments, attempt_events, attempts, item_sets, items, responses, scores, students, test_sessions } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import * as scoringMod from "../lib/scoring/runAutoScoring";
@@ -331,6 +331,68 @@ describe("POST /api/attempts", () => {
     const [row] = await getDb().select().from(attempts);
     expect(row!.id).toBe(first.attempt.id);
     expect(row!.test_session_id).toBe(s.sitting.id);
+  });
+});
+
+// Remove time limit (2026-09-24): a sitting whose whole-session "No time
+// limit" is on passes it to students who join LATER — new and resumed.
+describe("POST /api/attempts — a sitting with its time limit removed", () => {
+  async function flag(sittingId: string) {
+    await getDb()
+      .update(test_sessions)
+      .set({ time_limit_removed: true })
+      .where(eq(test_sessions.id, sittingId));
+  }
+
+  test("a NEW attempt through a flagged sitting has no time limit, with the event", async () => {
+    const s = await scenario();
+    await flag(s.sitting.id);
+    asStudent();
+    const res = await start(s.sitting.id);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.attempt.time_limit_removed).toBe(true);
+    const events = await getDb().select().from(attempt_events);
+    expect(events.map((e) => [e.kind, e.detail])).toEqual([
+      // `created_by_sub` is null on this seeded sitting → the owner.
+      ["deadline_extended", { no_limit: true, by: TEACHER }],
+    ]);
+  });
+
+  test("a RESUMED attempt joining through a flagged sitting gets it too, once", async () => {
+    const s = await scenario();
+    asStudent();
+    const first = await (await start(s.sitting.id)).json();
+    expect(first.attempt.time_limit_removed).toBe(false);
+    const second = await secondSitting(s.assessment.id);
+    await flag(second.id);
+
+    const body = await (await start(second.id)).json();
+    expect(body.resumed).toBe(true);
+    expect(body.attempt.test_session_id).toBe(second.id);
+    expect(body.attempt.time_limit_removed).toBe(true);
+    // Rejoining the same flagged sitting does not write a second event.
+    await start(second.id);
+    expect(await getDb().select().from(attempt_events)).toHaveLength(1);
+  });
+
+  test("an unflagged sitting changes nothing", async () => {
+    const s = await scenario();
+    asStudent();
+    const body = await (await start(s.sitting.id)).json();
+    expect(body.attempt.time_limit_removed).toBe(false);
+    expect(await getDb().select().from(attempt_events)).toHaveLength(0);
+  });
+
+  test("a submitted attempt resumed through a flagged sitting is untouched", async () => {
+    const s = await scenario();
+    asStudent();
+    const first = await (await start(s.sitting.id)).json();
+    expect((await submit(first.attempt.id)).status).toBe(200);
+    const second = await secondSitting(s.assessment.id);
+    await flag(second.id);
+    const body = await (await start(second.id)).json();
+    expect(body.attempt.time_limit_removed).toBe(false);
   });
 });
 

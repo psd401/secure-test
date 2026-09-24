@@ -429,6 +429,23 @@ describe("POST /api/attempts/[attemptId]/pass-back", () => {
     expect((await attemptRow(s.attempt.id)).deadline_override_at).toBeNull();
   });
 
+  // Remove time limit (2026-09-24): a removed attempt is NOT timed — the pass
+  // back asks for no deadline, gives it none, and the removal survives.
+  test("a removed limit on a timed assessment: no ends_at needed, stays removed", async () => {
+    const s = await scenario({ timeLimitSeconds: 600 });
+    await getDb()
+      .update(attempts)
+      .set({ time_limit_removed: true })
+      .where(eq(attempts.id, s.attempt.id));
+    const res = await passBack(s.attempt.id, inMinutes(60));
+    expect(res.status).toBe(200);
+    expect((await res.json()).deadline_override_at).toBeNull();
+    const row = await attemptRow(s.attempt.id);
+    expect(row.status).toBe("in_progress");
+    expect(row.time_limit_removed).toBe(true);
+    expect(row.deadline_override_at).toBeNull();
+  });
+
   test("a malformed body is 400 invalid_body; an absent one is fine", async () => {
     const bad = await scenario();
     expect((await passBack(bad.attempt.id, undefined, "{")).status).toBe(400);

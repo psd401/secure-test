@@ -9,6 +9,7 @@ import {
   sittingTenantSub,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
+import { applySittingNoLimit } from "@/lib/api/extendAttempt";
 import { loadJoinableSitting } from "@/lib/api/studentAttempt";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { UUID_RE } from "@/lib/uuid";
@@ -30,6 +31,11 @@ const StartBody = z.object({
  * strand the first set of answers somewhere the results page would have to
  * guess between. Since finding 8.2 the resumed attempt also FOLLOWS the
  * student to the new sitting (see `rebindIfMoved`).
+ *
+ * Remove time limit (2026-09-24): when the sitting's whole-session "No time
+ * limit" is on, the attempt — new or resumed — gets it too
+ * (`applySittingNoLimit`), so a student who joins after the teacher pressed it
+ * is not the one child in the room still counting down.
  */
 export async function POST(req: Request) {
   const auth = await requireStudentOrPractice();
@@ -82,7 +88,11 @@ export async function POST(req: Request) {
     )
     .limit(1);
   if (existing) {
-    return NextResponse.json({ attempt: await rebindIfMoved(db, existing, sitting.id), resumed: true });
+    const rebound = await rebindIfMoved(db, existing, sitting.id);
+    return NextResponse.json({
+      attempt: await applySittingNoLimit(db, rebound, sitting),
+      resumed: true,
+    });
   }
 
   try {
@@ -100,7 +110,10 @@ export async function POST(req: Request) {
         practice: sitting.kind === "practice",
       })
       .returning();
-    return NextResponse.json({ attempt: created, resumed: false }, { status: 201 });
+    return NextResponse.json(
+      { attempt: await applySittingNoLimit(db, created!, sitting), resumed: false },
+      { status: 201 },
+    );
   } catch (err) {
     // Two devices starting at once: the unique constraint decides, and the
     // loser reads what the winner wrote rather than reporting an error to a
@@ -117,7 +130,11 @@ export async function POST(req: Request) {
         )
         .limit(1);
       if (row) {
-        return NextResponse.json({ attempt: await rebindIfMoved(db, row, sitting.id), resumed: true });
+        const rebound = await rebindIfMoved(db, row, sitting.id);
+        return NextResponse.json({
+          attempt: await applySittingNoLimit(db, rebound, sitting),
+          resumed: true,
+        });
       }
     }
     throw err;

@@ -49,6 +49,9 @@ export interface AttendanceRow {
   timed: boolean;
   /** PB-4: a `not_joined` row whose passed-back attempt waits for a rejoin. */
   passed_back_waiting: boolean;
+  /** Remove time limit (2026-09-24): this row's in-progress attempt has "No
+   * time limit". False on every other row, submitted ones included. */
+  time_limit_removed: boolean;
 }
 
 export interface AttendancePayload {
@@ -245,17 +248,61 @@ export function canExtend(status: AttendanceRow["status"]): boolean {
 }
 
 /**
+ * Monitor checkboxes (2026-09-24): the attempt ids a teacher may select for
+ * "Adjust time for selected" — the rows the per-row Adjust time is offered on
+ * (`canExtend`, and an attempt id to post). Pure so selection, select-all and
+ * the prune after a reload are testable without a DOM.
+ */
+export function selectableAttemptIds(
+  rows: ReadonlyArray<Pick<AttendanceRow, "status" | "attempt_id">>,
+): string[] {
+  return rows
+    .filter((r) => canExtend(r.status) && r.attempt_id !== null)
+    .map((r) => r.attempt_id!);
+}
+
+/**
+ * The selection with every id that is no longer selectable dropped — a
+ * student who handed in (or was deleted) since the last poll. Returns the SAME
+ * set when nothing changed, so a state setter can skip a re-render.
+ */
+export function pruneSelection(
+  selected: ReadonlySet<string>,
+  rows: ReadonlyArray<Pick<AttendanceRow, "status" | "attempt_id">>,
+): ReadonlySet<string> {
+  const eligible = new Set(selectableAttemptIds(rows));
+  const kept = [...selected].filter((id) => eligible.has(id));
+  return kept.length === selected.size ? selected : new Set(kept);
+}
+
+/** The select-all checkbox: checked, indeterminate ("some"), or empty. */
+export function selectAllState(
+  selectedCount: number,
+  eligibleCount: number,
+): "none" | "some" | "all" {
+  if (selectedCount === 0 || eligibleCount === 0) return "none";
+  return selectedCount >= eligibleCount ? "all" : "some";
+}
+
+/**
  * The effective deadline as a short teacher-facing line: "Until 3:00 PM" /
  * "Until Sep 18, 11:59 PM" (today's date omitted, `formatWhen`) once
  * `deadline_passed` flips to "Time expired" — the same two facts the hand-in
  * route's own relaxation reads. Null when there is nothing to say: no limit,
  * no extension, or a submitted row (`deadline_at` is always null there).
+ *
+ * `time_limit_removed` (2026-09-24): the teacher chose "No time limit", so the
+ * line says so rather than going silent — silence would read as "untimed
+ * test", and the teacher needs to see the removal took. Callers pass it only
+ * for an in-progress attempt, as they do `deadline_at`.
  */
 export function deadlineNote(
   deadline_at: string | null,
   deadline_passed: boolean,
   now: Date = new Date(),
+  time_limit_removed = false,
 ): string | null {
+  if (time_limit_removed) return "No time limit";
   if (deadline_passed) return "Time expired";
   if (!deadline_at) return null;
   return `Until ${formatWhen(deadline_at, now)}`;

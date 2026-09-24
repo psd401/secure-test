@@ -624,6 +624,14 @@ export const test_sessions = pgTable(
     // finished sitting from the Test sessions tab without deleting it —
     // attendance and the monitor's history keep working on an archived row.
     archived_at: timestamp("archived_at", { withTimezone: true }),
+    // Remove time limit (2026-09-24): the teacher pressed "No time limit" for
+    // the WHOLE sitting. Every in-progress attempt on it was flagged at that
+    // moment (`attempts.time_limit_removed`); this column exists for the
+    // students who join LATER — the join path copies it onto their attempt.
+    // A later whole-sitting "New deadline" clears it, so later joiners go back
+    // to the assessment's own limit. A "selected students" adjustment never
+    // touches it. False on every other row.
+    time_limit_removed: boolean("time_limit_removed").notNull().default(false),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -715,6 +723,15 @@ export const attempts = pgTable(
     // survive that rebind rather than evaporating with the sitting it was
     // granted in.
     deadline_override_at: timestamp("deadline_override_at", { withTimezone: true }),
+    // Remove time limit (2026-09-24): the teacher chose "No time limit" for
+    // this student (or for the sitting they were on, or joined later). WINS
+    // over both the assessment's limit and `deadline_override_at` —
+    // `deadlineFor` returns null before reading either — and the write that
+    // sets it also nulls the override, so the row never carries two answers.
+    // A later "New deadline" clears it. Per attempt for the reason the
+    // override is: it must survive the finding-8.2 rebind. False = the normal
+    // rules apply.
+    time_limit_removed: boolean("time_limit_removed").notNull().default(false),
     // Pass back (docs/pass-back-design.md, D-1): how many times a teacher has
     // put this handed-in attempt back to `in_progress` so the student could
     // keep working. 0 on every row that has never been passed back, which is

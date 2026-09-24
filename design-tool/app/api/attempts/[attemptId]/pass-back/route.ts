@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAttempt } from "@/lib/api/access";
+import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { passBackAttempt } from "@/lib/api/passBackAttempt";
 import { UUID_RE } from "@/lib/uuid";
 
@@ -93,9 +94,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   // because what matters here is whether a deadline EXISTS at all, not when it
   // falls. Both halves count: an override on an unlimited assessment is a
   // deadline a teacher granted by hand, and dropping it silently on a pass back
-  // would be the same "nobody can type" failure.
-  const timed =
-    (assessment.time_limit_seconds ?? 0) > 0 || attempt.deadline_override_at !== null;
+  // would be the same "nobody can type" failure. A REMOVED limit (2026-09-24)
+  // is not timed: the pass back asks for no deadline and the attempt keeps its
+  // "No time limit" (`passBackAttempt` never touches the flag).
+  const timed = attemptIsTimed(attempt, assessment);
 
   if (timed) {
     if (!endsAt) {

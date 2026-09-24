@@ -27,7 +27,7 @@ import {
   type TestSessionRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
+import { attemptIsTimed, deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel, studentDisplayName } from "@/lib/roster/teacherRoster";
 
@@ -102,6 +102,10 @@ export interface AttendanceRow {
    * route rebinds it to this sitting, so the row stays `not_joined` until
    * they do, but the teacher is told what to expect. False otherwise. */
   passed_back_waiting: boolean;
+  /** Remove time limit (2026-09-24): this row's in-progress attempt has "No
+   * time limit" — the Monitor says so where it would otherwise show the
+   * deadline. False on every other row, submitted ones included. */
+  time_limit_removed: boolean;
   /** Slice 91: the newest client-reported event, whatever its kind. Null on a
    * `submitted_earlier` row: its events belong to the earlier sitting. */
   last_event: AttendanceEvent | null;
@@ -304,8 +308,11 @@ export async function attendanceForSitting(
   // asks directly, rather than through `deadlineFor` — a limit on the
   // assessment OR an override already on the attempt, regardless of status.
   const timedOf = (hit: (typeof joined)[number]) =>
-    (timeLimit.time_limit_seconds ?? 0) > 0 ||
-    hit.attempt.deadline_override_at !== null;
+    attemptIsTimed(hit.attempt, timeLimit);
+  // Remove time limit (2026-09-24): shown only while the attempt is still in
+  // progress, the same rule `deadline_at` follows.
+  const removedOf = (hit: (typeof joined)[number]) =>
+    hit.attempt.status === "in_progress" && hit.attempt.time_limit_removed;
   const progress = new Map<string, { answered: number; last: Date | null }>();
   // H-1: the earlier-sitting attempts ride along in the same grouped count, so
   // their `answered` costs nothing extra.
@@ -425,6 +432,7 @@ export async function attendanceForSitting(
       last_lockdown_begin_at: hit ? events(hit).last_lockdown_begin_at : null,
       timed: hit ? timedOf(hit) : earlier ? timedOf(earlier) : false,
       passed_back_waiting: !hit && passedBackWaiting.has(psId),
+      time_limit_removed: hit ? removedOf(hit) : false,
     });
   }
   for (const [key, hit] of byKey) {
@@ -447,6 +455,7 @@ export async function attendanceForSitting(
       last_lockdown_begin_at: events(hit).last_lockdown_begin_at,
       timed: timedOf(hit),
       passed_back_waiting: false,
+      time_limit_removed: removedOf(hit),
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -478,6 +487,7 @@ export async function attendanceForSitting(
         last_lockdown_begin_at: null,
         timed: false,
         passed_back_waiting: false,
+        time_limit_removed: false,
       });
     }
   }

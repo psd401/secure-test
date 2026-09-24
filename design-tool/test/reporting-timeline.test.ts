@@ -153,6 +153,18 @@ describe("buildTimeline — one line per kind", () => {
     }
   });
 
+  // Remove time limit (2026-09-24): the same kind, `detail.no_limit`.
+  test("deadline_extended with no_limit reads as the limit being removed", () => {
+    const lines = buildTimeline([
+      {
+        kind: "deadline_extended",
+        at: at("21:07:00"),
+        detail: { no_limit: true, by: "teacher-sub" },
+      },
+    ]);
+    expect(lines[0]!.text).toBe("Time limit removed by teacher 2:07 PM");
+  });
+
   // Pass back (docs/pass-back-design.md): the same shape as deadline_extended
   // — the fact, then what the student was given — because a teacher reading
   // this months later needs to know the test was reopened AND until when.

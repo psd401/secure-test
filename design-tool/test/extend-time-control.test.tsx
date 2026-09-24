@@ -7,9 +7,15 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  pruneSelection,
+  selectAllState,
+  selectableAttemptIds,
+} from "../app/dashboard/[id]/attendanceView";
+import {
   ExtendTimeControl,
   defaultExtendValue,
   extendHint,
+  extendRequest,
   extendStatusText,
   shortensHint,
   toIsoInstant,
@@ -107,5 +113,89 @@ describe("shortensHint", () => {
     expect(shortensHint("2026-09-23T18:00", undefined)).toBeNull();
     expect(shortensHint("2026-09-23T18:00", [null, undefined])).toBeNull();
     expect(shortensHint("", [current])).toBeNull();
+  });
+});
+
+// Remove time limit + Monitor checkboxes (2026-09-24).
+describe("No time limit — copy", () => {
+  test("hints: only the whole sitting mentions later joiners", () => {
+    expect(extendHint("sitting", "no_limit")).toBe(
+      "Every student still in progress, and anyone who joins this session later, has no time limit.",
+    );
+    expect(extendHint("attempt", "no_limit")).toBe("This student has no time limit.");
+    expect(extendHint("selected", "no_limit")).not.toContain("later");
+    expect(extendHint("selected")).toBe("The selected students get until this time.");
+  });
+
+  test("status text", () => {
+    expect(extendStatusText("attempt", 1, "no_limit")).toBe("Time limit removed.");
+    expect(extendStatusText("sitting", 3, "no_limit")).toBe("Time limit removed for 3 students.");
+    expect(extendStatusText("selected", 1, "no_limit")).toBe("Time limit removed for 1 student.");
+    expect(extendStatusText("selected", 2)).toBe("Adjusted 2 students.");
+  });
+
+  test("the button label is the caller's", () => {
+    const html = renderToStaticMarkup(
+      <ExtendTimeControl
+        target={{ kind: "selected", sessionId: "s1", attemptIds: [] }}
+        label="Adjust time for selected (0)"
+        onExtended={() => {}}
+        disabledReason="Tick the students in progress to adjust first."
+      />,
+    );
+    expect(html).toContain("Adjust time for selected (0)");
+    expect(html).toContain('disabled=""');
+  });
+});
+
+describe("extendRequest", () => {
+  test("no_limit posts { no_limit: true } and never ends_at", () => {
+    expect(extendRequest({ kind: "attempt", attemptId: "a1" }, "no_limit", "2026-09-24T23:59")).toEqual({
+      url: "/api/attempts/a1/extend",
+      body: { no_limit: true },
+    });
+  });
+
+  test("deadline posts ends_at; an empty value is null", () => {
+    const r = extendRequest({ kind: "sitting", sessionId: "s1" }, "deadline", "2026-09-24T23:59");
+    expect(r!.url).toBe("/api/test-sessions/s1/extend");
+    expect(Object.keys(r!.body)).toEqual(["ends_at"]);
+    expect(extendRequest({ kind: "sitting", sessionId: "s1" }, "deadline", "")).toBeNull();
+  });
+
+  test("selected students go to the sitting route with attempt_ids", () => {
+    expect(
+      extendRequest({ kind: "selected", sessionId: "s1", attemptIds: ["a", "b"] }, "no_limit", ""),
+    ).toEqual({
+      url: "/api/test-sessions/s1/extend",
+      body: { no_limit: true, attempt_ids: ["a", "b"] },
+    });
+  });
+});
+
+describe("Monitor selection helpers", () => {
+  const rows = [
+    { status: "in_progress" as const, attempt_id: "a" },
+    { status: "in_progress" as const, attempt_id: "b" },
+    { status: "submitted" as const, attempt_id: "c" },
+    { status: "not_joined" as const, attempt_id: null },
+  ];
+
+  test("only in-progress rows with an attempt are selectable", () => {
+    expect(selectableAttemptIds(rows)).toEqual(["a", "b"]);
+  });
+
+  test("a row that stops being eligible drops out; an unchanged selection is the same set", () => {
+    const sel = new Set(["a", "b"]);
+    expect(pruneSelection(sel, rows)).toBe(sel);
+    const after = pruneSelection(sel, [{ status: "submitted", attempt_id: "a" }, rows[1]!]);
+    expect([...after]).toEqual(["b"]);
+  });
+
+  test("select-all state", () => {
+    expect(selectAllState(0, 2)).toBe("none");
+    expect(selectAllState(1, 2)).toBe("some");
+    expect(selectAllState(2, 2)).toBe("all");
+    expect(selectAllState(0, 0)).toBe("none");
   });
 });

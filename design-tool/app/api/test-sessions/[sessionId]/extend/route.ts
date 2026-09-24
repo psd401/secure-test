@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { attempts } from "@/db/schema";
+import { attempts, test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
-import { extendAttempt } from "@/lib/api/extendAttempt";
+import {
+  extendAttempt,
+  extendBodyFields,
+  hasExactlyOneTarget,
+  toExtendTarget,
+  type ExtendTarget,
+} from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
 
@@ -13,9 +19,9 @@ interface RouteContext {
 }
 
 const Body = z.object({
-  ends_at: z.string().refine((s) => !Number.isNaN(Date.parse(s)), {
-    message: "ends_at must be a parseable date",
-  }),
+  ...extendBodyFields,
+  /** The Monitor's checked students (2026-09-24). Absent = the whole sitting. */
+  attempt_ids: z.array(z.string().regex(UUID_RE)).min(1).optional(),
 });
 
 /**
@@ -45,6 +51,22 @@ const Body = z.object({
  * Sequential, not parallel, and one attempt's failure is its own — the same
  * posture as the sitting-wide hand-in: a row that disappears under us must not
  * cost the rest of the class their extra time.
+ *
+ * Remove time limit + Monitor checkboxes (2026-09-24). The body is `ends_at`
+ * XOR `no_limit: true` (both or neither → `invalid_body`), plus an optional
+ * `attempt_ids`:
+ *   - WITH `attempt_ids` (the Monitor's "Adjust time for selected"): only
+ *     those in-progress attempts that are ON THIS SITTING are touched — an id
+ *     from another sitting is skipped, never adjusted, because authorization
+ *     was decided on this sitting alone — and the sitting's own flag is left
+ *     as it is.
+ *   - WITHOUT (the whole session): every in-progress attempt, as before, AND
+ *     the sitting's `time_limit_removed` follows the choice — set by
+ *     `no_limit` so students who join later have no limit either (the join
+ *     path copies it, `applySittingNoLimit`), cleared by `ends_at` so later
+ *     joiners go back to the assessment's own limit.
+ * `skipped` counts the submitted rows plus any requested id that was not an
+ * in-progress attempt on this sitting.
  */
 export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -60,15 +82,19 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const sitting = access.sitting;
 
-  let endsAt: Date;
+  let target: ExtendTarget;
+  let attemptIds: string[] | undefined;
   try {
-    endsAt = new Date(Date.parse(Body.parse(await req.json()).ends_at));
+    const body = Body.parse(await req.json());
+    if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
+    target = toExtendTarget(body);
+    attemptIds = body.attempt_ids;
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
   const now = new Date();
-  if (endsAt.getTime() <= now.getTime()) {
+  if ("endsAt" in target && target.endsAt.getTime() <= now.getTime()) {
     return NextResponse.json({ ok: false, error: "ends_at_past" }, { status: 400 });
   }
 
@@ -78,15 +104,30 @@ export async function POST(req: Request, ctx: RouteContext) {
     .where(eq(attempts.test_session_id, sitting.id))
     .orderBy(asc(attempts.started_at));
 
+  // Selected students: the requested ids narrowed to this sitting's rows. An
+  // id that names nothing here (another sitting's attempt, a stale row, a
+  // typo) is counted as skipped rather than refused — the rest of the
+  // selection still gets its time.
+  const requested = attemptIds ? new Set(attemptIds) : null;
+  const inScope = requested ? onSitting.filter((a) => requested.has(a.id)) : onSitting;
+
   const extended: { attempt_id: string }[] = [];
-  let skipped = 0;
-  for (const attempt of onSitting) {
+  let skipped = requested ? requested.size - inScope.length : 0;
+  for (const attempt of inScope) {
     if (attempt.status !== "in_progress") {
       skipped++;
       continue;
     }
-    const { attempt: row } = await extendAttempt(db, attempt, auth.session.sub, endsAt, now);
+    const { attempt: row } = await extendAttempt(db, attempt, auth.session.sub, target, now);
     extended.push({ attempt_id: row.id });
+  }
+
+  // Whole sitting only: the flag later joiners inherit.
+  if (!requested) {
+    await db
+      .update(test_sessions)
+      .set({ time_limit_removed: "noLimit" in target, updated_at: now })
+      .where(eq(test_sessions.id, sitting.id));
   }
 
   return NextResponse.json({

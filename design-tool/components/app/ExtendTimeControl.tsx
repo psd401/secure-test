@@ -14,7 +14,15 @@ import { ApiError, extendErrorCopy } from "@/lib/ui/errorCopy";
 
 export type ExtendTarget =
   | { kind: "sitting"; sessionId: string }
-  | { kind: "attempt"; attemptId: string };
+  | { kind: "attempt"; attemptId: string }
+  /** Remove time limit + Monitor checkboxes (2026-09-24): some of a sitting's
+   * students, posted to the sitting route with `attempt_ids`. Unlike the
+   * whole-sitting target it never changes the sitting's own flag, so later
+   * joiners are unaffected. */
+  | { kind: "selected"; sessionId: string; attemptIds: string[] };
+
+/** The dialog's two choices (2026-09-24): an absolute deadline, or none. */
+export type ExtendChoice = "deadline" | "no_limit";
 
 async function readError(res: Response): Promise<ApiError> {
   let code = `http_${res.status}`;
@@ -36,17 +44,76 @@ function describe(e: unknown): string {
  * "Every student still in progress on this session gets until this time" /
  * "This student gets until this time" — the dialog's one-line hint, pure so
  * it is testable without a DOM (the repo has no testing-library harness).
+ *
+ * The "No time limit" choice (2026-09-24) has its own line, and only the
+ * WHOLE-sitting target mentions later joiners: that is the one adjustment that
+ * sets the sitting's flag. Selected students are just those attempts.
  */
-export function extendHint(target: ExtendTarget["kind"]): string {
-  return target === "sitting"
-    ? "Every student still in progress on this session gets until this time."
-    : "This student gets until this time.";
+export function extendHint(
+  target: ExtendTarget["kind"],
+  choice: ExtendChoice = "deadline",
+): string {
+  if (choice === "no_limit") {
+    if (target === "sitting") {
+      return (
+        "Every student still in progress, and anyone who joins this session " +
+        "later, has no time limit."
+      );
+    }
+    if (target === "selected") return "The selected students have no time limit.";
+    return "This student has no time limit.";
+  }
+  if (target === "sitting") {
+    return "Every student still in progress on this session gets until this time.";
+  }
+  if (target === "selected") return "The selected students get until this time.";
+  return "This student gets until this time.";
 }
 
-/** "Adjusted 3 students." / "Adjusted 1 student." / "Adjusted." */
-export function extendStatusText(target: ExtendTarget["kind"], extended: number): string {
+/**
+ * "Adjusted 3 students." / "Adjusted 1 student." / "Adjusted." — and for "No
+ * time limit", "Time limit removed for 3 students." / "Time limit removed.".
+ */
+export function extendStatusText(
+  target: ExtendTarget["kind"],
+  extended: number,
+  choice: ExtendChoice = "deadline",
+): string {
+  const students = `${extended} student${extended === 1 ? "" : "s"}`;
+  if (choice === "no_limit") {
+    return target === "attempt"
+      ? "Time limit removed."
+      : `Time limit removed for ${students}.`;
+  }
   if (target === "attempt") return "Adjusted.";
-  return `Adjusted ${extended} student${extended === 1 ? "" : "s"}.`;
+  return `Adjusted ${students}.`;
+}
+
+/**
+ * What the dialog posts, or null when the deadline choice has no usable time
+ * (the caller says "Pick a time in the future."). Pure so the XOR the routes
+ * enforce — `ends_at` or `no_limit`, never both — is tested here too, and the
+ * selected-students target carries its `attempt_ids`.
+ */
+export function extendRequest(
+  target: ExtendTarget,
+  choice: ExtendChoice,
+  localValue: string,
+): { url: string; body: Record<string, unknown> } | null {
+  const url =
+    target.kind === "attempt"
+      ? `/api/attempts/${target.attemptId}/extend`
+      : `/api/test-sessions/${target.sessionId}/extend`;
+  let body: Record<string, unknown>;
+  if (choice === "no_limit") {
+    body = { no_limit: true };
+  } else {
+    const endsAt = toIsoInstant(localValue);
+    if (!endsAt) return null;
+    body = { ends_at: endsAt };
+  }
+  if (target.kind === "selected") body.attempt_ids = target.attemptIds;
+  return { url, body };
 }
 
 /**
@@ -116,6 +183,11 @@ export function toIsoInstant(localValue: string): string | null {
  * (`onExtended`). Unlike those controls there is no "are you sure" — the
  * action is additive, not destructive — so the click opens straight into a
  * small inline dialog asking for the new deadline instead of a confirm.
+ *
+ * Remove time limit (2026-09-24): the dialog offers "New deadline" (the
+ * picker) or "No time limit", and a third target — the Monitor's checked
+ * students — posts to the sitting route with `attempt_ids`. `label` lets that
+ * caller name the button "Adjust time for selected (N)".
  */
 export function ExtendTimeControl({
   target,
@@ -124,8 +196,11 @@ export function ExtendTimeControl({
   size = "sm",
   variant = "outline",
   currentDeadlines,
+  label = "Adjust time",
 }: {
   target: ExtendTarget;
+  /** The button's text; the dialog's title stays "Adjust time". */
+  label?: string;
   onExtended: () => void;
   disabledReason?: string;
   /** The in-scope students' current deadlines, for the "shortens" hint. */
@@ -135,6 +210,7 @@ export function ExtendTimeControl({
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [choice, setChoice] = useState<ExtendChoice>("deadline");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -142,30 +218,27 @@ export function ExtendTimeControl({
   function openDialog() {
     setError(null);
     setValue(defaultExtendValue());
+    setChoice("deadline");
     setOpen(true);
   }
 
   async function confirmExtend() {
-    const endsAt = toIsoInstant(value);
-    if (!endsAt) {
+    const request = extendRequest(target, choice, value);
+    if (!request) {
       setError("Pick a time in the future.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const url =
-        target.kind === "sitting"
-          ? `/api/test-sessions/${target.sessionId}/extend`
-          : `/api/attempts/${target.attemptId}/extend`;
-      const res = await fetch(url, {
+      const res = await fetch(request.url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ends_at: endsAt }),
+        body: JSON.stringify(request.body),
       });
       if (!res.ok) throw await readError(res);
       const body = (await res.json()) as { extended?: number };
-      setStatus(extendStatusText(target.kind, body.extended ?? 0));
+      setStatus(extendStatusText(target.kind, body.extended ?? 0, choice));
       setOpen(false);
       onExtended();
     } catch (err) {
@@ -186,7 +259,7 @@ export function ExtendTimeControl({
           title={disabledReason}
           onClick={openDialog}
         >
-          Adjust time
+          {label}
         </Button>
         {status ? (
           <span role="status" className="text-xs text-muted-foreground">
@@ -203,20 +276,40 @@ export function ExtendTimeControl({
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Adjust time</DialogTitle>
-            <DialogDescription>{extendHint(target.kind)}</DialogDescription>
+            <DialogDescription>{extendHint(target.kind, choice)}</DialogDescription>
           </DialogHeader>
-          <label className="text-sm">
-            <span className="block text-xs text-muted-foreground">New deadline</span>
+          <fieldset className="space-y-2 text-sm" disabled={busy}>
+            <legend className="sr-only">Time limit</legend>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="extend-choice"
+                value="deadline"
+                checked={choice === "deadline"}
+                onChange={() => setChoice("deadline")}
+              />
+              New deadline
+            </label>
             <input
               type="datetime-local"
               value={value}
-              disabled={busy}
+              disabled={busy || choice !== "deadline"}
               onChange={(e) => setValue(e.target.value)}
               aria-label="New deadline"
-              className="mt-0.5 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="ml-6 w-[calc(100%-1.5rem)] rounded-md border border-border bg-transparent px-2 py-1 text-sm disabled:opacity-50"
             />
-          </label>
-          {shortensHint(value, currentDeadlines) ? (
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="extend-choice"
+                value="no_limit"
+                checked={choice === "no_limit"}
+                onChange={() => setChoice("no_limit")}
+              />
+              No time limit
+            </label>
+          </fieldset>
+          {choice === "deadline" && shortensHint(value, currentDeadlines) ? (
             <p className="text-xs text-muted-foreground">
               {shortensHint(value, currentDeadlines)}
             </p>

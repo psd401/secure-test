@@ -33,6 +33,7 @@ import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
+import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
@@ -377,9 +378,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
   // Pass back (docs/pass-back-design.md): the same "does a deadline exist at
   // all" test the route applies, asked here so the dialog knows up front
   // whether to ask for a new one.
-  const timed =
-    (assessment.time_limit_seconds ?? 0) > 0 ||
-    attempt.deadline_override_at !== null;
+  const timed = attemptIsTimed(attempt, assessment);
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
@@ -417,9 +416,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   {attempt.pass_back_count === 1 ? "" : "s"}
                 </>
               ) : null}
-              {deadlineNote(row.deadline_at, row.deadline_passed) ? (
+              {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed) ? (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  {deadlineNote(row.deadline_at, row.deadline_passed)}
+                  {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed)}
                 </span>
               ) : null}
             </p>

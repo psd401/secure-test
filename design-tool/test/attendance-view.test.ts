@@ -39,6 +39,7 @@ function row(over: Partial<AttendanceRow>): AttendanceRow {
     attempt_id: "a",
     timed: false,
     passed_back_waiting: false,
+    time_limit_removed: false,
     ...over,
   };
 }
@@ -271,6 +272,11 @@ describe("deadlineNote", () => {
 
   test("deadline_passed with no deadline_at (defensive): still 'Time expired'", () => {
     expect(deadlineNote(null, true, new Date(T0))).toBe("Time expired");
+  });
+
+  // Remove time limit (2026-09-24): the removal is said, not left silent.
+  test("a removed limit reads 'No time limit'", () => {
+    expect(deadlineNote(null, false, new Date(T0), true)).toBe("No time limit");
   });
 });
 
