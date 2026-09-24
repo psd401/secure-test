@@ -300,7 +300,11 @@ files and may run in parallel once 1 is merged.
 ## Progress
 
 **Slice 1 BUILT 2026-09-23** (extract DCIDs; **migration 0042**
-`roster_dcids`, applied to the test DB; NOT deployed). The newest snapshot
+`roster_dcids`). **DEPLOYED 2026-09-24 ~14:30 PT**: LIVE =
+origin/main `7b33384`, health stamp = HEAD, Aurora at 0042 via
+`migrate-aurora.sh` (43 journal rows); roster-health exit 0 before the deploy
+(the 06:00 run on the old code succeeded). The first import that stores the
+DCIDs is 2026-09-25 06:00 — check it with `roster-health` then. The newest snapshot
 was checked first (headers only): `students.dcid`, `sections.dcid` +
 `year_id`, `section_teachers.users_dcid` all present. The four columns are
 `OPTIONAL_COLUMNS` in `lib/roster/extract.ts` — a file without one is
