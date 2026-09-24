@@ -1,4 +1,4 @@
-// "Extend time" (teacher UI half of 889cf38's server-side extend routes).
+// "Adjust time" (teacher UI half of 889cf38's server-side extend routes).
 // Same static-markup style as test/hand-in-all-control.test.tsx — no
 // testing-library / DOM harness exists in this repo, so these check the
 // disabled-and-noted posture and the pure copy/date helpers the dialog
@@ -20,7 +20,7 @@ describe("ExtendTimeControl", () => {
     const html = renderToStaticMarkup(
       <ExtendTimeControl target={{ kind: "attempt", attemptId: "a1" }} onExtended={() => {}} />,
     );
-    expect(html).toContain("Extend time");
+    expect(html).toContain("Adjust time");
     expect(html).not.toContain('disabled=""');
   });
 
@@ -49,24 +49,29 @@ describe("extendHint", () => {
 
 describe("extendStatusText", () => {
   test("attempt: no count in the copy", () => {
-    expect(extendStatusText("attempt", 1)).toBe("Extended.");
+    expect(extendStatusText("attempt", 1)).toBe("Adjusted.");
   });
 
   test("sitting: pluralizes the count", () => {
-    expect(extendStatusText("sitting", 3)).toBe("Extended 3 students.");
-    expect(extendStatusText("sitting", 1)).toBe("Extended 1 student.");
-    expect(extendStatusText("sitting", 0)).toBe("Extended 0 students.");
+    expect(extendStatusText("sitting", 3)).toBe("Adjusted 3 students.");
+    expect(extendStatusText("sitting", 1)).toBe("Adjusted 1 student.");
+    expect(extendStatusText("sitting", 0)).toBe("Adjusted 0 students.");
   });
 });
 
 describe("defaultExtendValue", () => {
-  test("tomorrow at 23:59, in the datetime-local shape", () => {
+  test("today at 23:59, in the datetime-local shape", () => {
     const now = new Date(2026, 8, 17, 9, 0, 0); // Sep 17 2026, local
-    expect(defaultExtendValue(now)).toBe("2026-09-18T23:59");
+    expect(defaultExtendValue(now)).toBe("2026-09-17T23:59");
   });
 
-  test("crosses a month boundary correctly", () => {
-    const now = new Date(2026, 8, 30, 22, 0, 0); // Sep 30 2026
+  test("still today one minute before", () => {
+    const now = new Date(2026, 8, 17, 23, 58, 30);
+    expect(defaultExtendValue(now)).toBe("2026-09-17T23:59");
+  });
+
+  test("in the last minute of the day: tomorrow, crossing a month boundary", () => {
+    const now = new Date(2026, 8, 30, 23, 59, 20); // Sep 30 2026
     expect(defaultExtendValue(now)).toBe("2026-10-01T23:59");
   });
 });

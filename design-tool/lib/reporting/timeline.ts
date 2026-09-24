@@ -75,7 +75,7 @@ function lineText(event: TimelineEvent): string {
 /**
  * What follows the event's own time on the line, or "".
  *
- * Only `deadline_extended` and `passed_back` have any: "Time extended by teacher
+ * Only `deadline_extended` and `passed_back` have any: "Time adjusted by teacher
  * 2:14 PM · new deadline 3:00 PM". The instant matters more than the fact here —
  * a teacher reading this months later wants to know what the student was given,
  * and a line that said only "extended" would send them to the events table for

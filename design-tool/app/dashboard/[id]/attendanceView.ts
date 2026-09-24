@@ -162,7 +162,7 @@ export function eventLabel(kind: string): string {
     // The new instant is on the row's detail (`ends_at`) — the timeline says
     // it, the monitor's one-line label does not have room.
     case "deadline_extended":
-      return "Time extended by teacher";
+      return "Time adjusted by teacher";
     // Pass back (docs/pass-back-design.md): the teacher put a handed-in attempt
     // back to in progress. The new deadline, when the assessment is timed, is on
     // the row's detail (`ends_at`) and shown by the timeline.

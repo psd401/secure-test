@@ -722,7 +722,7 @@ describe("pass back on the per-student attempt page", () => {
     expect(html).not.toContain("AI proposal");
     expect(html).not.toContain("Pass back");
     expect(html).toContain("Hand in");
-    expect(html).toContain("Extend time");
+    expect(html).toContain("Adjust time");
   });
 });
 

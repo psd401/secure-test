@@ -125,7 +125,7 @@ describe("buildTimeline — one line per kind", () => {
         detail: { ends_at: at("22:00:00"), by: "teacher-sub" },
       },
     ]);
-    expect(lines[0]!.text).toBe("Time extended by teacher 2:07 PM · new deadline 3:00 PM");
+    expect(lines[0]!.text).toBe("Time adjusted by teacher 2:07 PM · new deadline 3:00 PM");
     // The staff sub is an identifier, not a sentence — it stays on the row.
     expect(lines[0]!.text).not.toContain("teacher-sub");
   });
@@ -140,7 +140,7 @@ describe("buildTimeline — one line per kind", () => {
       },
     ]);
     expect(lines[0]!.text).toMatch(
-      /^Time extended by teacher 2:07 PM · new deadline Sep 8.*11:59 PM$/,
+      /^Time adjusted by teacher 2:07 PM · new deadline Sep 8.*11:59 PM$/,
     );
   });
 
@@ -149,7 +149,7 @@ describe("buildTimeline — one line per kind", () => {
       const lines = buildTimeline([
         { kind: "deadline_extended", at: at("21:07:00"), detail },
       ]);
-      expect(lines[0]!.text).toBe("Time extended by teacher 2:07 PM");
+      expect(lines[0]!.text).toBe("Time adjusted by teacher 2:07 PM");
     }
   });
 

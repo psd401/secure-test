@@ -310,7 +310,7 @@ export function attemptHandInErrorCopy(code: string): ErrorCopy {
 
 /**
  * POST /api/attempts/[attemptId]/extend and
- * POST /api/test-sessions/[sessionId]/extend — the teacher's "Extend time".
+ * POST /api/test-sessions/[sessionId]/extend — the teacher's "Adjust time".
  * Unlike the other copy functions here, an unrecognized code falls straight
  * through as its own message rather than a generic "tell IT" sentence: the
  * route's codes are all short and self-explanatory (see the two routes'
@@ -325,7 +325,7 @@ export function extendErrorCopy(code: string): ErrorCopy {
       return { message: "Already handed in.", showCode: false };
     case "not_found":
     case "forbidden":
-      return { message: "Not yours to extend.", showCode: false };
+      return { message: "Not yours to adjust.", showCode: false };
     case "network":
       return {
         message:

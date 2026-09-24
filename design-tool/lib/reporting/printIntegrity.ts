@@ -37,7 +37,7 @@ const PHRASES: Record<string, string> = {
   // Teacher-granted extra time. The print line counts the extensions; the
   // instant each one granted is on the per-student page's timeline, which has
   // room for it.
-  deadline_extended: "Time extended by teacher",
+  deadline_extended: "Time adjusted by teacher",
   // Pass back (docs/pass-back-design.md): a count here, the instant and the new
   // deadline on the per-student page's timeline, which has room for them. A
   // family reading this line wants to know the test was reopened, and how often.

@@ -43,21 +43,24 @@ export function extendHint(target: ExtendTarget["kind"]): string {
     : "This student gets until this time.";
 }
 
-/** "Extended 3 students." / "Extended 1 student." / "Extended." */
+/** "Adjusted 3 students." / "Adjusted 1 student." / "Adjusted." */
 export function extendStatusText(target: ExtendTarget["kind"], extended: number): string {
-  if (target === "attempt") return "Extended.";
-  return `Extended ${extended} student${extended === 1 ? "" : "s"}.`;
+  if (target === "attempt") return "Adjusted.";
+  return `Adjusted ${extended} student${extended === 1 ? "" : "s"}.`;
 }
 
 /**
- * Tomorrow at 23:59, local time, in the `datetime-local` input's own string
+ * Today at 23:59, local time, in the `datetime-local` input's own string
  * shape ("YYYY-MM-DDTHH:mm") — pure and injectable with `now` so the default
- * is testable without depending on the clock.
+ * is testable without depending on the clock. Pilot teachers asked for today
+ * (2026-09-24; it was tomorrow). In the last minute of the day today's 23:59
+ * is no longer in the future and the server would refuse it, so the default
+ * falls to tomorrow.
  */
 export function defaultExtendValue(now: Date = new Date()): string {
   const d = new Date(now.getTime());
-  d.setDate(d.getDate() + 1);
   d.setHours(23, 59, 0, 0);
+  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -99,7 +102,8 @@ export function toIsoInstant(localValue: string): string | null {
 }
 
 /**
- * "Extend time" (docs/time-limit-and-unfinished-attempts-design.md follow-up,
+ * "Adjust time" — "Extend time" until 2026-09-24, renamed because the same
+ * dialog also shortens a deadline (docs/time-limit-and-unfinished-attempts-design.md follow-up,
  * built 2026-09-17 server-side in 889cf38): a teacher-chosen absolute instant,
  * posted to whichever route the caller's `target` names —
  * POST /api/attempts/[attemptId]/extend for one student, or
@@ -182,7 +186,7 @@ export function ExtendTimeControl({
           title={disabledReason}
           onClick={openDialog}
         >
-          Extend time
+          Adjust time
         </Button>
         {status ? (
           <span role="status" className="text-xs text-muted-foreground">
@@ -198,7 +202,7 @@ export function ExtendTimeControl({
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Extend time</DialogTitle>
+            <DialogTitle>Adjust time</DialogTitle>
             <DialogDescription>{extendHint(target.kind)}</DialogDescription>
           </DialogHeader>
           <label className="text-sm">
@@ -232,7 +236,7 @@ export function ExtendTimeControl({
               Cancel
             </Button>
             <Button type="button" onClick={() => void confirmExtend()} disabled={busy}>
-              {busy ? "Extending…" : "Extend"}
+              {busy ? "Adjusting…" : "Adjust"}
             </Button>
           </DialogFooter>
         </DialogContent>
