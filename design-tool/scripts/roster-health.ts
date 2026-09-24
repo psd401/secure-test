@@ -57,6 +57,32 @@ for (const [k, v] of Object.entries(counts[0] ?? {})) {
   console.log(`${k.padEnd(22)} ${String(v)}`);
 }
 
+// Gradebook push slice 1 (docs/gradebook-push-design.md): the PowerSchool
+// DCIDs the extract carries since 2026-09-23. Active rows only, "with / of",
+// so a night that stored none (a file without the column keeps the old
+// values; a first import stores them) is visible at a glance.
+const dcids = (await db.execute(sql`
+  select
+    (select count(*) from roster_students where is_active and dcid is not null) as students_dcid,
+    (select count(*) from roster_students where is_active) as students_active,
+    (select count(*) from roster_sections where is_active and dcid is not null) as sections_dcid,
+    (select count(*) from roster_sections where is_active and year_id is not null) as sections_year_id,
+    (select count(*) from roster_sections where is_active) as sections_active,
+    (select count(*) from roster_section_teachers where is_active and users_dcid is not null) as teacher_rows_users_dcid,
+    (select count(*) from roster_section_teachers where is_active) as teacher_rows_active
+`)) as unknown as Array<Record<string, unknown>>;
+
+const d = dcids[0] ?? {};
+console.log("── DCIDs (active rows with a value / active rows)");
+for (const [label, have, of] of [
+  ["students.dcid", d.students_dcid, d.students_active],
+  ["sections.dcid", d.sections_dcid, d.sections_active],
+  ["sections.year_id", d.sections_year_id, d.sections_active],
+  ["section_teachers.users_dcid", d.teacher_rows_users_dcid, d.teacher_rows_active],
+] as const) {
+  console.log(`${label.padEnd(28)} ${String(have)} / ${String(of)}`);
+}
+
 if (teacherEmail) {
   const roster = (await db.execute(sql`
     select s.ps_id, s.course_name, s.period_expression,
