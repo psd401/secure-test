@@ -278,6 +278,21 @@ final class RendererHarness {
         }
         return child;
       };
+      // No time limit (2026-09-24): the page's time strip is rebuilt with
+      // `root.insertBefore(strip, root.firstChild)` after a removal (and on an
+      // EX-1 untimed-gains-a-deadline push), so the shim grew insertBefore and firstChild.
+      // A null / unknown reference appends, as the real API does for null.
+      Object.defineProperty(n, 'firstChild', {
+        get: function () { return this.children.length ? this.children[0] : null; }
+      });
+      n.insertBefore = function (child, ref) {
+        __detach(child);
+        var at = ref ? this.children.indexOf(ref) : -1;
+        child.parentNode = this;
+        if (at === -1) this.children.push(child);
+        else this.children.splice(at, 0, child);
+        return child;
+      };
       n.replaceChild = function (fresh, old) {
         var at = this.children.indexOf(old);
         if (at === -1) return old;

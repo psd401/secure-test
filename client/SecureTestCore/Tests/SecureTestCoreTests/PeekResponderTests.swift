@@ -22,6 +22,8 @@ final class PeekResponderTests: XCTestCase {
         private var _closedCount = 0
         private var _wireDeadline: (endsAt: String, serverNow: String)?
         private var _deadlines: [Date] = []
+        private var _removed = false
+        private var _removedCount = 0
 
         var pending: PendingPeek? {
             get { lock.withLock { _pending } }
@@ -39,6 +41,13 @@ final class PeekResponderTests: XCTestCase {
             set { lock.withLock { _wireDeadline = newValue } }
         }
         var deadlines: [Date] { lock.withLock { _deadlines } }
+        /// No time limit (2026-09-24): what the poll says about a removal.
+        var removed: Bool {
+            get { lock.withLock { _removed } }
+            set { lock.withLock { _removed = newValue } }
+        }
+        var removedCount: Int { lock.withLock { _removedCount } }
+        func countRemoved() { lock.withLock { _removedCount += 1 } }
         func recordDeadline(_ d: Date) { lock.withLock { _deadlines.append(d) } }
         var fetchError: Error? {
             get { lock.withLock { _fetchError } }
@@ -81,7 +90,8 @@ final class PeekResponderTests: XCTestCase {
                     pending: probe.pending,
                     sitting: probe.sitting,
                     timeLimitEndsAt: wire?.endsAt,
-                    serverNow: wire?.serverNow
+                    serverNow: wire?.serverNow,
+                    timeLimitRemoved: probe.removed
                 )
             },
             upload: { peekID, imageBase64 in
@@ -92,6 +102,7 @@ final class PeekResponderTests: XCTestCase {
         responder.onPeekRequested = { probe.recordRequest($0) }
         responder.onSittingClosed = { probe.countClosed() }
         responder.onDeadline = { probe.recordDeadline($0) }
+        responder.onTimeLimitRemoved = { probe.countRemoved() }
         return responder
     }
 
@@ -309,6 +320,62 @@ final class PeekResponderTests: XCTestCase {
         await drain(responder)
         XCTAssertEqual(probe.closedCount, 1)
         XCTAssertTrue(probe.deadlines.isEmpty)
+    }
+
+    /// No time limit (2026-09-24): a removal fires `onTimeLimitRemoved` on
+    /// every poll that says so, and INSTEAD of `onDeadline` — even if a
+    /// deadline pair rode along, the removal is the answer. A later poll with
+    /// a deadline and no removal reports the deadline again (the teacher set
+    /// one after removing it).
+    func testARemovedTimeLimitFiresInsteadOfTheDeadline() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+
+        probe.removed = true
+        probe.wireDeadline = ("2026-09-23T22:00:00.000Z", "2026-09-23T21:00:00.000Z")
+        scheduler.advance(by: 5)
+        await drain(responder)
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.removedCount, 2, "every poll that says so")
+        XCTAssertTrue(probe.deadlines.isEmpty, "never the deadline on a removal poll")
+
+        probe.removed = false
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.deadlines.count, 1, "a deadline set again is reported")
+        XCTAssertEqual(probe.removedCount, 2)
+        responder.stop()
+    }
+
+    /// A closed sitting still wins: the responder stops before a removal is read.
+    func testAClosedSittingReportsNoRemoval() async {
+        let scheduler = ManualLockdownScheduler()
+        let probe = Probe()
+        let responder = makeResponder(probe, scheduler: scheduler)
+        responder.start()
+        probe.sitting = .closed
+        probe.removed = true
+        scheduler.advance(by: 5)
+        await drain(responder)
+        XCTAssertEqual(probe.closedCount, 1)
+        XCTAssertEqual(probe.removedCount, 0)
+    }
+
+    /// Only an unambiguous `true` is a removal; absent or wrong-typed is not,
+    /// and never fails the poll.
+    func testPeekPollDecodesTheRemovalPermissively() throws {
+        func poll(_ json: String) throws -> PeekPoll {
+            try JSONDecoder().decode(PeekPoll.self, from: Data(json.utf8))
+        }
+        XCTAssertTrue(try poll(#"{"pending":null,"sitting":"open","time_limit_removed":true}"#).timeLimitRemoved)
+        XCTAssertFalse(try poll(#"{"pending":null,"sitting":"open"}"#).timeLimitRemoved)
+        XCTAssertFalse(try poll(#"{"pending":null,"time_limit_removed":false}"#).timeLimitRemoved)
+        let wrongType = try poll(#"{"pending":null,"sitting":"closed","time_limit_removed":"yes"}"#)
+        XCTAssertFalse(wrongType.timeLimitRemoved)
+        XCTAssertTrue(wrongType.sittingIsClosed, "the rest of the poll still decodes")
     }
 
     /// Both or neither; an unparseable or wrong-typed value costs the timer,

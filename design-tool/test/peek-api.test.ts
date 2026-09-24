@@ -288,6 +288,29 @@ describe("GET /api/attempts/:id/peek/pending (student poll)", () => {
     const body = (await (await getPeek(attempt.id)).json()) as { time_limit_ends_at?: string };
     expect(body.time_limit_ends_at).toBe(override.toISOString());
   });
+
+  // No time limit (2026-09-24): a removal is said explicitly, so an absent
+  // key keeps meaning "no news" to the client.
+  test("a removed time limit reports time_limit_removed and no deadline keys", async () => {
+    const a = await seedAssessment();
+    const db = getDb();
+    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    const attempt = await seedAttempt(a.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+
+    const timed = (await (await getPeek(attempt.id)).json()) as Record<string, unknown>;
+    expect("time_limit_removed" in timed).toBe(false);
+    expect(typeof timed.time_limit_ends_at).toBe("string");
+
+    await db
+      .update(attempts)
+      .set({ time_limit_removed: true })
+      .where(eq(attempts.id, attempt.id));
+    const removed = (await (await getPeek(attempt.id)).json()) as Record<string, unknown>;
+    expect(removed.time_limit_removed).toBe(true);
+    expect("time_limit_ends_at" in removed).toBe(false);
+    expect("server_now" in removed).toBe(false);
+  });
 });
 
 describe("POST /api/attempts/:id/peek/upload", () => {

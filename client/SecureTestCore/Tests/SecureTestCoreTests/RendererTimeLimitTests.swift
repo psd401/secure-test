@@ -75,6 +75,38 @@ final class RendererTimeLimitTests: XCTestCase {
         XCTAssertEqual(try page.string("__first('.time-limit-value').textContent"), "4:00")
     }
 
+    /// No time limit (2026-09-24): `remove` takes the strip off the page, and
+    /// a later push (the teacher set a deadline again) builds a fresh one in
+    /// the same place — first child of the item root.
+    func testRemoveTakesTheStripOffAndALaterPushRebuildsIt() throws {
+        let page = try harness(deadline: true)
+        try page.eval("window.__timeLimit.update('12:00', false);")
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 1)
+
+        try page.eval("window.__timeLimit.remove();")
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 0)
+        try page.eval("window.__timeLimit.remove();")  // idempotent
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 0)
+
+        try page.eval("window.__timeLimit.update('30:00', false);")
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 1)
+        XCTAssertEqual(try page.string("__root.children[0].className"), "time-limit")
+        XCTAssertEqual(try page.string("__first('.time-limit-value').textContent"), "30:00")
+    }
+
+    /// The student's "hide the timer" choice carries over a removal: a
+    /// deadline set again afterwards brings no strip back.
+    func testAHiddenStripStaysHiddenAcrossARemoval() throws {
+        let page = try harness(deadline: true)
+        try page.eval("window.__timeLimit.update('4:00', false);")
+        try page.eval("__first('.time-limit-hide').onclick();")
+        try page.eval("window.__timeLimit.remove();")
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 0)
+
+        try page.eval("window.__timeLimit.update('30:00', false);")
+        XCTAssertEqual(try page.int("__count('.time-limit')"), 0)
+    }
+
     // MARK: - the stylesheet
 
     /// T-1 (2026-09-14): `display: flex` on `.time-limit` beat the UA

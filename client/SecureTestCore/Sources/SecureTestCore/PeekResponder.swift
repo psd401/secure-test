@@ -14,7 +14,8 @@ public enum SittingState: String, Sendable {
 
 /// The peek poll's whole answer. `pending` is the teacher's request for a look
 /// (unchanged since P2); `sitting` is row CS's addition; the deadline pair is
-/// EX-1's (2026-09-23).
+/// EX-1's (2026-09-23); `timeLimitRemoved` is the teacher's "No time limit"
+/// (2026-09-24).
 public struct PeekPoll: Decodable, Equatable, Sendable {
     public let pending: PendingPeek?
     /// nil = the server did not say, which means open (older server).
@@ -25,17 +26,26 @@ public struct PeekPoll: Decodable, Equatable, Sendable {
     /// on an untimed attempt and on every server older than EX-1.
     public let timeLimitEndsAt: String?
     public let serverNow: String?
+    /// No time limit (2026-09-24): the teacher removed this attempt's limit.
+    /// Said explicitly by the server (`time_limit_removed: true`) because an
+    /// absent deadline pair already means "no news" — an untimed attempt, or
+    /// a server older than EX-1 — and must keep meaning it. False when absent
+    /// or wrong-typed: a removal is the one reading that stops the countdown,
+    /// so only an unambiguous `true` counts.
+    public let timeLimitRemoved: Bool
 
     public init(
         pending: PendingPeek?,
         sitting: SittingState? = nil,
         timeLimitEndsAt: String? = nil,
-        serverNow: String? = nil
+        serverNow: String? = nil,
+        timeLimitRemoved: Bool = false
     ) {
         self.pending = pending
         self.sitting = sitting
         self.timeLimitEndsAt = timeLimitEndsAt
         self.serverNow = serverNow
+        self.timeLimitRemoved = timeLimitRemoved
     }
 
     /// The only question the client asks of it.
@@ -57,6 +67,7 @@ public struct PeekPoll: Decodable, Equatable, Sendable {
         case sitting
         case timeLimitEndsAt = "time_limit_ends_at"
         case serverNow = "server_now"
+        case timeLimitRemoved = "time_limit_removed"
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,6 +80,7 @@ public struct PeekPoll: Decodable, Equatable, Sendable {
         // peek answers ride the same body): try? drops just the field.
         timeLimitEndsAt = (try? container.decodeIfPresent(String.self, forKey: .timeLimitEndsAt)) ?? nil
         serverNow = (try? container.decodeIfPresent(String.self, forKey: .serverNow)) ?? nil
+        timeLimitRemoved = ((try? container.decodeIfPresent(Bool.self, forKey: .timeLimitRemoved)) ?? nil) ?? false
     }
 }
 
@@ -116,6 +128,13 @@ public final class PeekResponder: @unchecked Sendable {
     /// (`TimeLimitCountdown.deadlineChanged`). Never fires once the sitting
     /// is reported closed — that poll stops the responder instead.
     public var onDeadline: ((Date) -> Void)?
+    /// No time limit (2026-09-24): the teacher removed this attempt's time
+    /// limit. Fires on EVERY poll that says so, like `onDeadline` — whether a
+    /// countdown is still running is the app's question, and its handler is a
+    /// no-op once the countdown is gone. Fires INSTEAD of `onDeadline` for that
+    /// poll (a removed attempt carries no deadline anyway), and never once the
+    /// sitting is reported closed.
+    public var onTimeLimitRemoved: (() -> Void)?
 
     private var timer: LockdownTimer?
     /// Read by tests (9.2) to wait for the in-flight poll deterministically
@@ -213,7 +232,9 @@ public final class PeekResponder: @unchecked Sendable {
             onSittingClosed?()
             return
         }
-        if let deadline = poll.deadline() {
+        if poll.timeLimitRemoved {
+            onTimeLimitRemoved?()
+        } else if let deadline = poll.deadline() {
             onDeadline?(deadline)
         }
         guard let pending = poll.pending else { return }

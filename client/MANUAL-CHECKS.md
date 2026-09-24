@@ -1820,3 +1820,24 @@ between the deferred `end()` and `DID END`, then the app returned home. No conte
 outside a lock, and the server refuses writes — but the client could refuse before
 `begin()` when the bundle's deadline is already past (v1.3.6 candidate).
 
+## v1.3.5 — No time limit mid-test (2026-09-24)
+
+The teacher's "No time limit" (`3daef55`, migration 0043) makes the peek poll
+drop the deadline pair — which the client already reads as "no news" — so
+the server now says `time_limit_removed: true` explicitly and the client
+stops the countdown, takes the strip off the page and shows a notice
+(`PeekResponder.onTimeLimitRemoved` → `AppDelegate.timeLimitRemovedByPoll`
+→ `window.__timeLimit.remove()`). Needs the design-tool deploy carrying the
+`time_limit_removed` poll field AND a v1.3.5 build from this change. The
+unit tests cover the decode, the responder's choice and the page's
+remove-then-rebuild; these rows cover the app wiring. Simulated lockdown is
+enough unless a row says otherwise — nothing here depends on AAC.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Removed for one student.** Timed attempt in progress with a few minutes left; on the Monitor tick that student, Adjust time for selected → No time limit | Within ~5 s: the "Time left" strip leaves the page, the notice "Your teacher removed the time limit." shows (and takes itself down after 8 s); stderr `time limit: removed by the teacher` ONCE (later polls log nothing); the session is NOT ended when the old deadline passes — keep working past it and save an answer | NOT RUN |
+| **Removed for the whole session.** Two students in one timed sitting; Adjust time from the header → No time limit | Both clients drop the strip and show the notice; neither ends at the old zero. A third student joining afterwards gets no strip at all | NOT RUN |
+| **Set again after removal.** Continue from the first row: Adjust time for that student → a time 10 min from now | The strip comes back at the top of the page counting to the new time, with the change notice "Your teacher changed your time…"; stderr `deadline changed by the teacher — Ns left`; the 5- and 1-minute notices and "Time is up." follow as usual | NOT RUN |
+| **Hidden timer.** Timed attempt; hide the timer (×); then the teacher removes the limit | The strip stays gone; the removal notice still shows; the session does not end at the old zero. If the teacher then sets a deadline again, the strip stays hidden (the choice carries over) and only the notices show | NOT RUN |
+| **Real session, end at old zero.** One REAL AAC session on a fleet Mac: remove the limit with under a minute left and let the old deadline pass | No "Time is up.", no `DID END`; the session stays locked until hand-in or Cmd-E — the one row where the lock itself matters | NOT RUN |
+

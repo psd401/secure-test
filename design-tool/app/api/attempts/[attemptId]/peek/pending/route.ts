@@ -34,6 +34,14 @@ interface RouteContext {
  * neither — so an Extend time (or a pass back's new deadline) reaches a
  * client that is already counting down. Before this the client read the
  * deadline only at join, and a teacher's change landed on the next join.
+ *
+ * No time limit (2026-09-24): a teacher's "No time limit" makes deadlineFor
+ * return null, so the deadline pair drops out — but an absent pair already
+ * means "no news" to the client (an untimed attempt, or a poll that says
+ * nothing about time), and the countdown it started at join would keep
+ * running and end the session at the old zero. So a removed attempt says so
+ * explicitly: `time_limit_removed: true`, omitted otherwise like the pair.
+ * The client (v1.3.5) stops its countdown and drops the strip on it.
  */
 export async function GET(_req: Request, ctx: RouteContext) {
   const auth = await requireStudentOrPractice();
@@ -79,5 +87,6 @@ export async function GET(_req: Request, ctx: RouteContext) {
           server_now: new Date().toISOString(),
         }
       : {}),
+    ...(access.attempt.time_limit_removed ? { time_limit_removed: true } : {}),
   });
 }

@@ -3064,6 +3064,17 @@ public enum AssessmentPage {
           if (!timeValue) root.insertBefore(buildTimeLimit(), root.firstChild);
           timeValue.textContent = String(text);
           timeStrip.className = danger ? 'time-limit danger' : 'time-limit';
+        },
+        // No time limit (2026-09-24): the teacher removed this attempt's
+        // limit mid-test (reported by the peek poll). The strip leaves the
+        // page, and both references reset so a later `update` — the teacher
+        // setting a deadline again — builds a fresh one in the same place.
+        // `timeHidden` is left as it is: the student's "hide the timer" choice
+        // carries over, as it does across an EX-1 deadline change.
+        remove: function () {
+          if (timeStrip && timeStrip.parentNode) timeStrip.parentNode.removeChild(timeStrip);
+          timeStrip = null;
+          timeValue = null;
         }
       };
 

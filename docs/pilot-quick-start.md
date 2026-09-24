@@ -88,9 +88,11 @@ their work.
    they are done. Choose **No time limit** in the same dialog to take the
    limit away — from the header it also covers anyone who joins that
    session later; tick students on the Monitor and use **Adjust time for
-   selected** for just those. A student already in the test keeps seeing
-   their old countdown until they leave and **Resume** (if it reaches zero
-   their Mac ends the session as usual; they resume with no limit).
+   selected** for just those. On Secure Test 1.3.5 or later, a student
+   already in the test sees their countdown disappear within a few seconds,
+   with a notice; on older versions it keeps counting until they leave and
+   **Resume** (at zero the Mac ends the session as usual and they resume
+   with no limit).
 2. **The session length** ("How long" when you start a session) and
    **Close session**. When the session runs out or you close it, every
    student still inside is returned to **Your tests** within a few seconds

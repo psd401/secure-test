@@ -628,6 +628,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         responder.onDeadline = { [weak self] deadline in
             Task { @MainActor in self?.deadlineReportedByPoll(deadline) }
         }
+        // No time limit (2026-09-24): the teacher removed the limit. Fires on
+        // every poll that says so; the handler acts only while a clock runs.
+        responder.onTimeLimitRemoved = { [weak self] in
+            Task { @MainActor in self?.timeLimitRemovedByPoll() }
+        }
         responder.onPeekRequested = { [weak self, weak controller, weak responder] pending in
             Task { @MainActor in
                 guard let self, let controller, let responder, !self.attemptHandedIn else { return }
@@ -681,6 +686,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.log("time limit: deadline changed by the teacher — \(Int(deadline.timeIntervalSinceNow))s left")
         startCountdown(deadline: deadline, dismissed: wasDismissed)
         controller?.showTimeNotice(TimeLimitCountdown.changedNoticeText(deadline: deadline))
+    }
+
+    /// No time limit (2026-09-24): the peek poll reported that the teacher
+    /// removed this attempt's time limit. The clock stops — it would otherwise
+    /// end the secure session at the old zero — the strip comes off the page,
+    /// and the student is told once. Idempotent: the poll says so every 5 s
+    /// and only the first report finds a countdown to stop. A deadline the
+    /// teacher sets again later reaches `deadlineReportedByPoll` with no clock
+    /// running, which `deadlineChanged` always treats as a change, so a fresh
+    /// countdown starts and its first tick rebuilds the strip (the page keeps
+    /// the student's "hide the timer" choice itself).
+    private func timeLimitRemovedByPoll() {
+        guard controller != nil, !attemptHandedIn, !sessionEndedByTimeLimit else { return }
+        guard let clock = countdown else { return }
+        clock.stop()
+        countdown = nil
+        Self.log("time limit: removed by the teacher")
+        controller?.removeTimeLimit()
+        controller?.showTimeNotice("Your teacher removed the time limit.")
     }
 
     private func startCountdown(deadline: Date, dismissed: Bool = false) {

@@ -509,6 +509,16 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         )
     }
 
+    /// No time limit (2026-09-24): the teacher removed this attempt's limit,
+    /// so the strip comes off the page. A later `updateTimeLimit` (the teacher
+    /// setting a deadline again) rebuilds it — the page resets its references.
+    func removeTimeLimit() {
+        webView.evaluateJavaScript(
+            "window.__timeLimit && window.__timeLimit.remove && window.__timeLimit.remove();",
+            completionHandler: nil
+        )
+    }
+
     /// "5 minutes left" / "1 minute left" (D-3), on the SAME strip the peek
     /// disclosure uses — it is already the client's one unobtrusive,
     /// non-modal, focus-preserving notice surface.
