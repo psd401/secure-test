@@ -491,6 +491,22 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-24 — v1.3.5 real-session rows closed; gradebook push slice 1 live
+
+- **v1.3.5:** every row closed (`client/MANUAL-CHECKS.md` "v1.3.5 — EX-1
+  client, keyboard reach, ME-3" + the three real-AAC rows of "v1.3.5 —
+  teardown grace…"), Release build of `26f4824` on a fleet Mac, real
+  sessions. One false alarm on the way: an EX-1 "miss" was the sitting's
+  close time read as the student's deadline. Reading **EX-2** (proposal): a
+  join on an attempt already past its deadline still calls `begin()` and ends
+  at once — the client could refuse before `begin()` (v1.3.6 candidate).
+  Next: psd-sign + release.
+- **Gradebook push slice 1** (`docs/gradebook-push-design.md`): DCID columns
+  imported as optional columns, migration 0042, deployed with the
+  roster-health DCID block (`7b33384`, `89fcf6e`). Schoology credentials in
+  `app-env`. Slice 3 waits on 8.3 / 8.4 / 8.5 + the callback setting;
+  slice 2 on IT's PowerSchool test instance.
+
 ### 2026-09-23 — v1.3.4 client sitting on the district Mac (real sessions)
 
 James at the Jamf-installed v1.3.4 Release on the student Mac (a demo
