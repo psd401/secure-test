@@ -444,6 +444,24 @@ describe("static markup", () => {
       ),
     ).toBe("");
   });
+
+  test("SG-F1: a forced answer's card still says it was flagged", () => {
+    const html = renderToStaticMarkup(
+      <QueueAlerts
+        assessmentId="a1"
+        entry={{
+          attempt_id: "t1",
+          safeguarding: {
+            injection: null,
+            injection_forced: { id: "i", ai_forced_at: "2026-09-25T18:00:00Z" },
+            wellbeing: [],
+          },
+        }}
+      />,
+    );
+    expect(html).toContain("AI scored at your request");
+    expect(html).not.toContain("AI scoring is paused");
+  });
 });
 
 // ---------------------------------------------------------------- routes

@@ -46,6 +46,8 @@ interface QueueEntry {
       created_at: string;
       acknowledged_at: string | null;
     } | null;
+    /** SG-F1: a prompt-injection alert the teacher overrode with Score with AI anyway. */
+    injection_forced?: { id: string; ai_forced_at: string | null } | null;
     wellbeing: Array<{ id: string; category: string; acknowledged_at: string | null }>;
   };
   item: {
@@ -182,8 +184,9 @@ export function QueueAlerts({
   assessmentId: string;
 }) {
   const injection = entry.safeguarding?.injection ?? null;
+  const forced = injection ? null : (entry.safeguarding?.injection_forced ?? null);
   const wellbeing = entry.safeguarding?.wellbeing ?? [];
-  if (!injection && wellbeing.length === 0) return null;
+  if (!injection && !forced && wellbeing.length === 0) return null;
   const openWellbeing = openAlertCount(wellbeing);
   return (
     <div className="mt-2 space-y-2">
@@ -201,6 +204,12 @@ export function QueueAlerts({
             AI scoring is paused for this answer.
           </p>
         </div>
+      ) : null}
+      {forced ? (
+        <p className="text-xs text-danger-foreground">
+          AI scored at your request after this answer was flagged as a possible
+          attempt to instruct the AI scorer.
+        </p>
       ) : null}
       {wellbeing.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">

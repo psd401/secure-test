@@ -195,6 +195,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
     const responseAlerts = alertsByResponse.get(response.id) ?? [];
     const injection =
       responseAlerts.find((a) => a.kind === "prompt_injection" && a.ai_forced_at === null) ?? null;
+    // SG-F1 (2026-09-25 local check): once the teacher chose Score with AI
+    // anyway, the card still says why the answer was flagged, so whoever
+    // approves the proposal later can tell.
+    const forcedInjection = injection
+      ? null
+      : (responseAlerts.find((a) => a.kind === "prompt_injection" && a.ai_forced_at !== null) ??
+        null);
     entries.push({
       outline,
       safeguarding: {
@@ -206,6 +213,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
               created_at: injection.created_at,
               acknowledged_at: injection.acknowledged_at,
             }
+          : null,
+        injection_forced: forcedInjection
+          ? { id: forcedInjection.id, ai_forced_at: forcedInjection.ai_forced_at }
           : null,
         wellbeing: responseAlerts
           .filter((a) => a.kind === "wellbeing")
