@@ -45,17 +45,61 @@ In Chrome on `http://localhost:3000`, set the cookie printed in step 1
 (DevTools console): `document.cookie = "secure-test-session=<token>; path=/"`,
 then open `/dashboard`.
 
-## 4. Content
+## 4. Content (as captured 2026-09-25)
 
-Build assessments in the UI as the demo teacher — the building is part of
-what the help page shows. For results, scoring and Monitor screenshots,
-run a sitting with a demo student (`scripts/mint-student.ts
-<first.last>@edtools.psd401.net` → the client's `SECURE_TEST_TOKEN`), or
-fabricate submitted attempts with `scripts/seed-attempts.ts <assessment-id>`
-(it uses the owner's roster students first).
+Build it through the UI as the demo teacher — the building is part of what
+the help page shows. Files are in `design-tool/scripts/help-capture/content/`.
 
-## 5. Before committing a screenshot
+- **Cell Structure Check-in** (30 min): New assessment; question 1
+  (multiple choice) typed in the editor; questions 2–5 pasted into
+  **Import items from CSV** from `cell-structure-items.csv`; a Matching
+  question (Nucleus → Stores the cell's DNA, Ribosome → Builds proteins,
+  Mitochondrion → Releases energy from food) and an Ordering question
+  (DNA is transcribed into mRNA in the nucleus → mRNA leaves the nucleus →
+  A ribosome reads the mRNA → The protein is packaged by the Golgi
+  apparatus) added with the type picker. Publish; start a session for
+  AP Biology.
+- **Sunday Library Hours: Source Analysis**: home → **Import assessment
+  file** → `sunday-hours.json` (three fictional sources, side by side).
+- **Photosynthesis Quiz**: New assessment → **Import items from PDF** with
+  the file from `bun scripts/help-capture/make-pdf.ts <out.pdf>` (local dev
+  runs the mock extractor, which reads its markers) → **Add all**.
+- **Students taking the test** (Monitor, scoring queue, results): with the
+  session open on the Monitor,
+  `bun --env-file=.env.local scripts/help-capture/sim-students.ts <CODE> scripts/help-capture/content/monitor-plan.json`
+  drives ten demo students through the student API (join, answer, one
+  leaves the test window, five hand in) over about 40 seconds. A student
+  has one attempt per assessment: a re-run needs a fresh assessment or
+  deleted attempts.
+- One accommodation (Color Contrast, Yellow on Black) on Avery Brooks via
+  **Students → Add support**.
+
+Typing through Chrome automation drops characters while the editor
+re-renders; set field values with the native value setter plus an `input`
+event instead, and keep real clicks for buttons. A native `<select>`
+changed that way only takes effect once the page has hydrated.
+
+## 5. Capturing
+
+Chrome must be in front with the Claude tab visible and localhost zoom at
+100% (⌘0) — a hidden or zoomed tab gives blank or scaled captures. Hide the
+Next.js dev badge first (`nextjs-portal { display: none }`) and move the
+pointer off the page.
+
+- **Stills.** Chrome's screenshot action returns no file, so record one
+  frame instead: start the recorder, run a batch of *hover + screenshot* (a
+  frame is kept only after an action), stop, export with every overlay off
+  and quality 1 as `<name>.gif`, then
+  `scripts/help-capture/still.sh <name> <w:h:x:y>` → `public/help/<name>.png`.
+  Crop to the content column (e.g. `900:694:285:52` below the header band).
+- **GIFs.** Record the steps with a *hover + screenshot* after each (extra
+  frames = a longer pause), export with click indicators and progress bar
+  on, labels and watermark off (James, 2026-09-25), as `<name>-raw.gif`, then
+  `scripts/help-capture/anim.sh <name>-raw <name> <seconds-per-frame> <crop>`
+  → 900 px wide, last frame held 3 s.
+
+## 6. Before committing a screenshot
 
 - Only demo names, demo emails and fictional assessment content on screen.
 - No hostname other than `localhost`, no real session codes that matter.
-- Crop browser chrome; 2× PNG, then compress.
+- Each still well under 200 KB, each GIF under ~1.5 MB.

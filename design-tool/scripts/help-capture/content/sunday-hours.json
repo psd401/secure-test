@@ -1,0 +1,160 @@
+{
+  "test_id": "sunday-hours-demo",
+  "title": "Sunday Library Hours: Source Analysis",
+  "student_layout": "paged",
+  "items": [
+    {
+      "type": "multiple_choice_single",
+      "id": "q1",
+      "stem": "What is the main claim of Source A?",
+      "choices": [
+        {
+          "id": "a",
+          "text": "The library should cut weekday evening hours."
+        },
+        {
+          "id": "b",
+          "text": "Sunday hours should become permanent."
+        },
+        {
+          "id": "c",
+          "text": "Volunteers should run the library on Sundays."
+        },
+        {
+          "id": "d",
+          "text": "Families rarely use the library."
+        }
+      ],
+      "correct_choice_id": "b"
+    },
+    {
+      "type": "multiple_choice_multi",
+      "id": "q2",
+      "stem": "Which details does Source B use to support its position? Select all that apply.",
+      "choices": [
+        {
+          "id": "a",
+          "text": "The cost of each Sunday opening"
+        },
+        {
+          "id": "b",
+          "text": "The number of children served by the summer program"
+        },
+        {
+          "id": "c",
+          "text": "Survey results by age group"
+        },
+        {
+          "id": "d",
+          "text": "Visitor counts on Sundays"
+        }
+      ],
+      "correct_choice_ids": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "type": "short_text",
+      "id": "q3",
+      "stem": "According to Source C, what percent of residents under 30 would use Sunday hours?",
+      "correct_answers": [
+        "71",
+        "71%",
+        "71 percent"
+      ]
+    },
+    {
+      "type": "essay",
+      "id": "q4",
+      "stem": "Should the town make Sunday library hours permanent? Write a short argument that uses at least two of the sources and answers the strongest objection.",
+      "max_word_count": 400,
+      "placeholder": "Write your argument here.",
+      "scoring_method": "hybrid",
+      "rubric": {
+        "style": "analytic",
+        "criteria": [
+          {
+            "id": "k1",
+            "name": "Claim",
+            "levels": [
+              {
+                "id": "k1a",
+                "label": "Beginning",
+                "points": 1,
+                "descriptor": "Position is unclear."
+              },
+              {
+                "id": "k1b",
+                "label": "Developing",
+                "points": 2,
+                "descriptor": "Takes a position without qualifying it."
+              },
+              {
+                "id": "k1c",
+                "label": "Proficient",
+                "points": 3,
+                "descriptor": "Takes a clear, qualified position."
+              }
+            ]
+          },
+          {
+            "id": "k2",
+            "name": "Use of sources",
+            "levels": [
+              {
+                "id": "k2a",
+                "label": "Beginning",
+                "points": 1,
+                "descriptor": "Mentions a source without using it."
+              },
+              {
+                "id": "k2b",
+                "label": "Developing",
+                "points": 2,
+                "descriptor": "Uses one source as support."
+              },
+              {
+                "id": "k2c",
+                "label": "Proficient",
+                "points": 3,
+                "descriptor": "Uses two or more sources and weighs them against each other."
+              }
+            ]
+          }
+        ],
+        "student_visibility": {
+          "during_test": true,
+          "with_feedback": true
+        }
+      }
+    }
+  ],
+  "item_sets": [
+    {
+      "id": "set1",
+      "stimulus": "Read the three sources about a proposal to keep the town library open on Sundays. Then answer the questions.",
+      "layout": "side_by_side",
+      "sources": [
+        {
+          "label": "Source A",
+          "text": "From a town newsletter, spring issue.\n\nOur library opened its doors on Sunday afternoons last year as a trial. Visits on Sundays averaged 340 people, more than any weekday evening. Families told volunteers that Sunday is the only day both parents are free. The council should make Sunday hours permanent."
+        },
+        {
+          "label": "Source B",
+          "text": "From a letter to the editor.\n\nSunday hours sound generous, but they are not free. Keeping the building open costs about $1,200 each Sunday in staff and heating. That money currently pays for the summer reading program, which served 900 children last year. I would rather keep the program."
+        },
+        {
+          "label": "Source C",
+          "text": "From a survey summary prepared by the library board.\n\nOf 1,050 residents surveyed, 58 percent said they would use Sunday hours at least once a month. Among residents under 30, the figure was 71 percent. Only 22 percent said they had ever attended the summer reading program."
+        }
+      ],
+      "item_ids": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ]
+    }
+  ]
+}
