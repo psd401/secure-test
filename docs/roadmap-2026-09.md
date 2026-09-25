@@ -750,3 +750,32 @@ settings). **Trigger for a second, scale-to-zero CDK stack (staging):** the
 first gradebook slice that writes to PowerSchool from the deployed app, or
 the first change that needs real Aurora / ECS / S3 / importer behaviour
 before production — whichever comes first. Side: infra.
+
+## Deploy safety + scheduled deploys (James, 2026-09-25)
+
+Found while planning the row SG deploy: `deploy.sh` deploys first and runs
+`migrate-aurora.sh` after, so between the new task going live and the
+migration finishing, new code runs against the old schema — every Drizzle
+read of a table with a new column fails (answer saves, resume, hand-in,
+Monitor). Earlier additive migrations (0041, 0043…) had the same gap; it
+just never landed in a sitting.
+
+- **DS-1 (decided, build right after the row SG deploy): migrate on start.**
+  The container's server mode runs `db/migrate.mjs` before starting Next;
+  the new task goes healthy only after its migrations applied while the old
+  task keeps serving (old code tolerates an added column / table).
+  `migrate-aurora.sh` stays as the fallback. Watch: a slow migration vs the
+  health-check grace period (circuit-breaker rollback); a NON-additive
+  migration still breaks the old task during the overlap.
+- **DS-2 (decided, same slice): deploy-hours guard.** `deploy.sh` refuses a
+  deploy carrying new migration files on weekdays 07:00–15:30 PT unless
+  `--during-school` is passed — the backstop for the rare non-additive one.
+- **DS-3 (scoped, later — pairs with the staging-stack trigger in
+  "Environments"): GitHub Actions deploys.** OIDC-assumed deploy role (no
+  SSO session, no colima, no laptop), an ARM64 image build on the public
+  repo's ARM runners, the `cdk.context.json` values as repository
+  variables, a `production` environment with a required reviewer; triggers
+  = manual dispatch and optionally a weekday 15:45 PT cron that still waits
+  for approval. Not a local scheduled task: SSO expiry, colima after a
+  reboot, a sleeping Mac and no one watching a failed rollout make an
+  unattended laptop deploy fragile. Side: infra.
