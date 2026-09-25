@@ -22,3 +22,6 @@ design-tool/tsconfig.tsbuildinfo
 # being swept in by the standalone trace — 38 MB of samples/ in the ECR image).
 design-tool/samples
 design-tool/test
+# Help-page capture tooling (docs/help-capture.md): dev-only, and make-pdf.ts
+# imports the test tree above, so `next build`'s type check fails without it.
+design-tool/scripts/help-capture
