@@ -1,0 +1,2 @@
+ALTER TABLE "guardrail_events" DROP CONSTRAINT "guardrail_events_action_check";--> statement-breakpoint
+ALTER TABLE "guardrail_events" ADD CONSTRAINT "guardrail_events_action_check" CHECK (action IN ('allow', 'block', 'flag'));

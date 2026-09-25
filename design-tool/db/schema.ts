@@ -542,7 +542,10 @@ export const guardrail_events = pgTable(
     ),
     actionCheck: check(
       "guardrail_events_action_check",
-      sql`action IN ('allow', 'block')`,
+      // 'flag' (2026-09-25): an input check that found something but was
+      // configured to record rather than block — essay scoring, where the
+      // checked text is the student's own work (runGuarded inputMode).
+      sql`action IN ('allow', 'block', 'flag')`,
     ),
   }),
 );

@@ -56,7 +56,15 @@ export async function POST(_req: Request, ctx: RouteContext) {
       );
     case "blocked":
       return NextResponse.json(
-        { ok: false, error: "blocked_by_guardrail" },
+        {
+          ok: false,
+          error: "blocked_by_guardrail",
+          // The queue shows `detail` in place of the code. Only the output
+          // check blocks on this surface (inputMode "record"), so it is the
+          // AI's own feedback text that was stopped.
+          detail:
+            "The AI safety filter stopped the feedback written for this essay. Score it by hand with the rubric.",
+        },
         { status: 422 },
       );
     case "provider_error":

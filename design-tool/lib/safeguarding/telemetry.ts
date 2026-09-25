@@ -12,7 +12,11 @@ export interface GuardrailEventInput {
   owner_sub: string;
   surface: GuardrailSurface;
   stage: GuardrailStage;
-  action: GuardrailAction;
+  /**
+   * The provider's verdict, or "flag" when an input check found something
+   * but the caller asked for record-only (`inputMode: "record"`).
+   */
+  action: GuardrailAction | "flag";
   provider_id: string;
   findings: GuardrailFinding[];
   text_snippet: string;

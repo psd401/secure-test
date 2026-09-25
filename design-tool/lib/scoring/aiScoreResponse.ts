@@ -118,6 +118,10 @@ export async function runEssayScorer(opts: {
       surface: "essay-score",
       ownerSub,
       inputText: responseText,
+      // 2026-09-25 pilot report: the input is the student's own essay, which
+      // the teacher reads anyway — record a content hit ("flag") instead of
+      // refusing to score. Only the output check can block here now.
+      inputMode: "record",
       run: () =>
         provider.scoreEssay(
           {

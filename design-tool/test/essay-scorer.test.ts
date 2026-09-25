@@ -444,10 +444,12 @@ describe("POST /api/attempts/:id/score-ai", () => {
     expect(rows.every((s) => s.status === "proposed")).toBe(true);
   });
 
-  test("guardrail mock blocks BLOCKME input and records telemetry", async () => {
+  // 2026-09-25 pilot report: essay scoring records an input hit as "flag"
+  // and still scores — the essay is the student's own work (inputMode record).
+  test("guardrail mock flags BLOCKME input, still scores, records telemetry", async () => {
     process.env.GUARDRAIL_PROVIDER = "mock";
     const { db, attempt, itemRows } = await seedAiScenario();
-    // Poison the ai item's response with the mock guardrail sentinel.
+    // Put the mock guardrail sentinel in the ai item's response.
     await db
       .update(responses)
       .set({ response: { type: "essay", text: "BLOCKME plus essay text" } })
@@ -455,20 +457,24 @@ describe("POST /api/attempts/:id/score-ai", () => {
 
     const res = await postScoreAi(attempt.id);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body.blocked).toBe(1);
-    expect(body.scored_final).toBe(1); // hybrid item still scored
+    expect(body.blocked).toBe(0);
 
-    const blockedEvents = await db
+    const flagged = await db
+      .select()
+      .from(guardrail_events)
+      .where(eq(guardrail_events.action, "flag"));
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]!.surface).toBe("essay-score");
+    expect(flagged[0]!.stage).toBe("input");
+    const blocked = await db
       .select()
       .from(guardrail_events)
       .where(eq(guardrail_events.action, "block"));
-    expect(blockedEvents).toHaveLength(1);
-    expect(blockedEvents[0]!.surface).toBe("essay-score");
-    expect(blockedEvents[0]!.stage).toBe("input");
+    expect(blocked).toHaveLength(0);
 
-    // The blocked response got no score row (1 hybrid final + 0 for ai).
+    // Both responses got a score row (ai proposed + hybrid).
     const rows = await db.select().from(scores);
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
   });
 
   test("blank essay text is skipped, not sent to the model", async () => {

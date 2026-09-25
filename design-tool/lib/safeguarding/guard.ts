@@ -99,6 +99,16 @@ export interface RunGuardedOpts<T> {
    * stage always runs.
    */
   inputText?: string;
+  /**
+   * "enforce" (default): a blocked input stops the call. "record": the input
+   * check still runs and a hit is persisted as action "flag", but the model
+   * runs anyway. For surfaces where the input is a student's own work the
+   * teacher reads regardless (essay scoring, 2026-09-25): a literary essay
+   * about a story with mature themes tripped SEXUAL / VIOLENCE and left the
+   * teacher with no AI feedback for that student. The output check is
+   * unaffected — it still blocks.
+   */
+  inputMode?: "enforce" | "record";
   /** Invokes the AI provider. Skipped entirely if the input is blocked. */
   run: () => Promise<T>;
   /** Extracts the text to check from the model's result. */
@@ -129,7 +139,8 @@ async function safeRecord(
  * - Provider `null` (GUARDRAIL_PROVIDER=off, the default): runs the call
  *   directly, no checks, no telemetry — zero overhead.
  * - Input blocked: the model is NOT called (saves cost); returns a
- *   stage:"input" block.
+ *   stage:"input" block — unless `inputMode: "record"`, where the hit is
+ *   recorded as "flag" and the call proceeds.
  * - Output blocked: returns a stage:"output" block.
  * - Every check performed is recorded (allow or block).
  */
@@ -150,16 +161,20 @@ export async function runGuarded<T>(
       surface: opts.surface,
     });
     const inputFindings = redactFindings(inputVerdict.findings, opts.inputText);
+    const recordOnly = opts.inputMode === "record";
     await safeRecord(record, {
       owner_sub: opts.ownerSub,
       surface: opts.surface,
       stage: "input",
-      action: inputVerdict.action,
+      action:
+        recordOnly && inputVerdict.action === "block"
+          ? "flag"
+          : inputVerdict.action,
       provider_id: provider.id,
       findings: inputFindings,
       text_snippet: snippetFor(opts.inputText, inputFindings),
     });
-    if (inputVerdict.action === "block") {
+    if (inputVerdict.action === "block" && !recordOnly) {
       return { ok: false, stage: "input", findings: inputFindings };
     }
   }

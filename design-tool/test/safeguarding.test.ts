@@ -156,6 +156,55 @@ describe("runGuarded", () => {
     expect(events[0]!.action).toBe("block");
   });
 
+  test("inputMode record: a hit is flagged, the model still runs", async () => {
+    const { events, record } = captureRecorder();
+    let ran = 0;
+    const outcome = await runGuarded(
+      {
+        surface: "essay-score",
+        ownerSub: "teacher-1",
+        inputText: "an essay with BLOCKME in it",
+        inputMode: "record",
+        run: async () => {
+          ran += 1;
+          return "feedback";
+        },
+        outputText: (r) => r,
+      },
+      { provider: mockGuardrail, record },
+    );
+    expect(outcome).toEqual({ ok: true, result: "feedback" });
+    expect(ran).toBe(1);
+    expect(events.map((e) => [e.stage, e.action])).toEqual([
+      ["input", "flag"],
+      ["output", "allow"],
+    ]);
+    expect(events[0]!.findings).toEqual([
+      { type: "blocked_term", detail: "blockme" },
+    ]);
+  });
+
+  test("inputMode record: a clean input still records allow, output still blocks", async () => {
+    const { events, record } = captureRecorder();
+    const outcome = await runGuarded(
+      {
+        surface: "essay-score",
+        ownerSub: "teacher-1",
+        inputText: "a clean essay",
+        inputMode: "record",
+        run: async () => "contains 123-45-6789",
+        outputText: (r) => r,
+      },
+      { provider: mockGuardrail, record },
+    );
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.stage).toBe("output");
+    expect(events.map((e) => [e.stage, e.action])).toEqual([
+      ["input", "allow"],
+      ["output", "block"],
+    ]);
+  });
+
   test("clean input but blocked output → output block, two events", async () => {
     const { events, record } = captureRecorder();
     const outcome = await runGuarded(
