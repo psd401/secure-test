@@ -96,6 +96,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </p>
         </CardContent>
       </Card>
+      <p className="mt-4 text-center text-sm text-muted-foreground">
+        New here? <a href="/help.html" className="underline underline-offset-2">How Secure Test works</a>
+      </p>
     </main>
   );
 }

@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secure Test Help</title>
+<meta name="description" content="How to build, run, score and report on secure tests in Peninsula School District's Secure Test.">
+<link rel="icon" href="/icon.png">
+<!--
+  Teacher help, one topic per section. Public page.
+
+  UPKEEP:
+  - Screenshots: drop the file named in a figure's data-src into
+    design-tool/public/help/ — the frame shows it automatically; until then it
+    shows a placeholder with the caption. Capture them from the _demo database
+    only (docs/help-capture.md).
+  - Copy: labels must match the app's buttons exactly. When a UI change touches
+    a topic, update its steps and re-capture its screenshot.
+  - Nothing here names a real student, staff member, hostname or assessment.
+-->
+<style>
+  @font-face {
+    font-family: "Inter";
+    src: url("/fonts/inter-latin-var.woff2") format("woff2");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Josefin Sans";
+    src: url("/fonts/josefin-sans-latin-var.woff2") format("woff2");
+    font-weight: 100 700;
+    font-display: swap;
+  }
+
+  /* PSD tokens, same values as design-tool/app/globals.css. Light only, like the app. */
+  :root {
+    color-scheme: light;
+    --mist: #f3f8fa;
+    --pacific: #25424c;
+    --cedar: #466857;
+    --whulge: #346780;
+    --sea-foam: #eeebe4;
+    --brand-ink: #40745e;
+    --skylight: #fffaec;
+    --ochre: #8d5d1c;
+    --ochre-tint: #f1ece4;
+    --muted: #5a6c73;
+    --border: #cddadf;
+    --card: #ffffff;
+    --radius: 10px;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-heading: "Josefin Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; background: var(--mist); color: var(--pacific);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: var(--font-heading); line-height: 1.2; margin: 0; }
+  a { color: var(--whulge); }
+  button { font: inherit; }
+  :focus-visible { outline: 3px solid var(--whulge); outline-offset: 2px; }
+  b.ui { font-weight: 650; white-space: nowrap; }
+
+  .band { background: var(--pacific); color: var(--skylight); position: sticky; top: 0; z-index: 10; }
+  .band-inner { max-width: 1160px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+  .brand img { width: 32px; height: 32px; }
+  .brand span { font-family: var(--font-heading); font-weight: 600; font-size: 1.15rem; padding-top: 3px; }
+  .band nav { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+  .band nav a { color: var(--skylight); text-decoration: none; font-weight: 500; }
+  .band nav a:hover { text-decoration: underline; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 14px;
+    cursor: pointer; font-weight: 600; border: 1px solid var(--cedar); background: var(--cedar); color: #fff; text-decoration: none;
+  }
+  .btn.ghost { background: transparent; color: var(--cedar); }
+  .band .btn { background: var(--skylight); color: var(--pacific); border-color: var(--skylight); }
+
+  .hero { max-width: 1160px; margin: 0 auto; padding: 44px 16px 8px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; font-weight: 700; color: var(--brand-ink); }
+  .hero h1 { font-size: clamp(2rem, 5vw, 2.9rem); margin-top: 8px; }
+  .hero p { font-size: 1.1rem; max-width: 64ch; color: var(--muted); margin: 12px 0 0; }
+
+  .layout { max-width: 1160px; margin: 0 auto; padding: 24px 16px 80px; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 36px; align-items: start; }
+  .toc { position: sticky; top: 72px; }
+  .toc h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-family: var(--font-sans); margin-bottom: 8px; }
+  .toc ol { list-style: none; margin: 0; padding: 0; counter-reset: t; }
+  .toc li { counter-increment: t; }
+  .toc a {
+    display: flex; gap: 10px; padding: 6px 10px; border-radius: 8px; text-decoration: none; color: var(--pacific); font-size: .95rem;
+  }
+  .toc a::before { content: counter(t); min-width: 1.4em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .toc a:hover { background: #eaf3ec; }
+  .toc a[aria-current="true"] { background: var(--card); box-shadow: inset 3px 0 0 var(--cedar); font-weight: 600; }
+  .toc .extra a::before { content: "•"; }
+  .toc-select { display: none; }
+
+  .topic { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 28px; }
+  .topic header { display: flex; gap: 14px; align-items: baseline; }
+  .topic .n {
+    flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--cedar); color: #fff;
+    display: grid; place-items: center; font-weight: 700; transform: translateY(-2px);
+  }
+  .topic h2 { font-size: 1.6rem; padding-top: 3px; }
+  .topic .lead { color: var(--muted); margin: 10px 0 18px; max-width: 70ch; }
+  .topic-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+  .topic-body.wide { grid-template-columns: 1fr; }
+  .steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li { counter-increment: s; position: relative; padding-left: 38px; margin-bottom: 12px; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid var(--cedar); color: var(--cedar); display: grid; place-items: center; font-weight: 700; font-size: .85rem;
+  }
+  h3.sub { font-size: 1.1rem; margin: 18px 0 10px; padding-top: 2px; }
+
+  figure.shot { margin: 0; }
+  figure.shot img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(37,66,76,.10); background: #fff; }
+  figure.shot .placeholder {
+    aspect-ratio: 16 / 10; border: 2px dashed var(--border); border-radius: 10px; background: repeating-linear-gradient(135deg, #f7fafb 0 12px, #eef4f6 12px 24px);
+    display: grid; place-items: center; text-align: center; padding: 16px; color: var(--muted); font-size: .9rem;
+  }
+  figure.shot figcaption { font-size: .88rem; color: var(--muted); margin-top: 8px; }
+  .shots { display: grid; gap: 18px; }
+
+  .tip { margin-top: 18px; background: var(--ochre-tint); border-left: 4px solid var(--ochre); border-radius: 8px; padding: 12px 14px; font-size: .95rem; }
+  .tip strong { color: var(--ochre); }
+  .note { margin-top: 14px; font-size: .95rem; color: var(--muted); }
+
+  .clocks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
+  .clock { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: #fbfdfd; }
+  .clock h4 { margin: 0 0 4px; font-family: var(--font-heading); font-size: 1.05rem; padding-top: 2px; }
+  .clock p { margin: 0; font-size: .92rem; color: var(--muted); }
+  .clock .ends { display: inline-block; margin-top: 8px; font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 2px 10px; background: var(--sea-foam); }
+
+  .faq dt { font-weight: 650; margin-top: 14px; }
+  .faq dd { margin: 4px 0 0; color: var(--muted); }
+
+  footer { max-width: 1160px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: .88rem; }
+
+  dialog { border: 1px solid var(--border); border-radius: 12px; padding: 0; width: min(520px, calc(100vw - 32px)); color: var(--pacific); background: var(--card); }
+  dialog::backdrop { background: rgba(37,66,76,.45); }
+  dialog form { padding: 20px; display: grid; gap: 12px; }
+  dialog h2 { font-size: 1.3rem; padding-top: 2px; }
+  dialog label { font-weight: 600; font-size: .95rem; }
+  dialog textarea { width: 100%; min-height: 140px; resize: vertical; font: inherit; color: inherit; border: 1px solid #7d888d; border-radius: 8px; padding: 10px; }
+  .about { font-size: .9rem; color: var(--muted); }
+  .status { font-size: .95rem; min-height: 1.4em; }
+  .status.ok { color: var(--cedar); }
+  .status.err { color: #a04034; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  @media (max-width: 980px) {
+    .topic-body { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; gap: 16px; }
+    .toc { position: static; }
+    .toc h2, .toc ol { display: none; }
+    .toc-select { display: block; width: 100%; font: inherit; padding: 10px; border-radius: 8px; border: 1px solid #7d888d; background: #fff; color: inherit; }
+    .topic { padding: 18px; }
+    .clocks { grid-template-columns: 1fr; }
+    .band nav a.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="band-inner">
+    <a class="brand" href="/dashboard">
+      <img src="/brand/psd-emblem-white.png" alt="">
+      <span>Secure Test</span>
+    </a>
+    <nav aria-label="Site">
+      <a href="/dashboard">Open the app</a>
+      <a class="hide-sm" href="/roadmap.html">Roadmap</a>
+      <button class="btn" type="button" data-feedback="">Send feedback</button>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">Help for teachers</div>
+  <h1>What you can do, and how</h1>
+  <p>Secure Test locks a student's Mac for the length of a test. This tool is where you build that test, run the session, watch it live, score it and report on it. Each topic below is a few steps and a picture; start at the top or jump to what you need.</p>
+</section>
+
+<div class="layout">
+  <nav class="toc" aria-label="Topics">
+    <h2>Topics</h2>
+    <ol id="toc-list"></ol>
+    <select class="toc-select" id="toc-select" aria-label="Jump to a topic"></select>
+  </nav>
+
+  <main id="topics">
+
+    <section class="topic" id="get-started" data-title="Get started">
+      <header><span class="n" aria-hidden="true">1</span><h2>Get started</h2></header>
+      <p class="lead">Sign in with your school Google account. Everything you own, or that is shared with you, is on one page.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Open the app and press <b class="ui">Sign in with Google</b>. Use your school account.</li>
+            <li>You land on <b class="ui">Assessments</b>: each row shows its status (Draft or Published), its test sessions and a <b class="ui">Results</b> button.</li>
+            <li>Assessments a colleague shared with you sit under <b class="ui">Shared with you</b> until you press <b class="ui">Add to my assessments</b>.</li>
+            <li>Your class lists come from PowerSchool and refresh every morning; you never type a roster.</li>
+          </ol>
+          <p class="note">Anything odd? <b class="ui">Send feedback</b>, top right of every page, reaches the project team with the page you were on.</p>
+        </div>
+        <figure class="shot" data-src="/help/home.png" data-alt="The Assessments home page with a list of assessments">
+          <figcaption>The Assessments home.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="build" data-title="Build an assessment">
+      <header><span class="n" aria-hidden="true">2</span><h2>Build an assessment</h2></header>
+      <p class="lead">Start blank, add questions of any type, and check it the way a student will see it.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>On the home page press <b class="ui">New assessment</b> and give it a name.</li>
+            <li>Press <b class="ui">Add question</b> and choose a type: multiple choice (one or several answers), short answer, essay, matching, ordering, hotspot on a picture, drawing, or a table.</li>
+            <li>Write the question and its answer key. Math goes between dollar signs, for example <code>$\frac{1}{2}$</code>, and shows as you type.</li>
+            <li>Upload pictures on the <b class="ui">Images</b> page (link at the top of the home page), then add them to a question.</li>
+            <li>Press <b class="ui">Show preview</b> to see exactly what a student will see, without the lockdown.</li>
+          </ol>
+        </div>
+        <div class="shots">
+          <figure class="shot" data-src="/help/build-add-question.gif" data-alt="Adding a multiple-choice question in the editor">
+            <figcaption>Adding a question.</figcaption>
+          </figure>
+          <figure class="shot" data-src="/help/build-preview.png" data-alt="The student preview of an assessment">
+            <figcaption>Show preview: the student's view.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="topic" id="import" data-title="Bring in an existing test">
+      <header><span class="n" aria-hidden="true">3</span><h2>Bring in an existing test</h2></header>
+      <p class="lead">Most tests already exist on paper. Let the tool read them, then check what it found.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Inside an assessment press <b class="ui">Import items from PDF</b> and choose the file. Scanned pages work too.</li>
+            <li>The tool proposes questions, answer keys and reading passages. Nothing is added until you accept it.</li>
+            <li>Check each proposal, fix what it got wrong, and add the ones you want.</li>
+            <li>A colleague's exported test? Use <b class="ui">Import assessment file</b> on the home page.</li>
+          </ol>
+          <div class="tip"><strong>Looks wrong but isn't:</strong> a source marked "Looks shorter than the document — check it" means the tool thinks it missed text. Compare it with the paper before adding.</div>
+        </div>
+        <figure class="shot" data-src="/help/import-pdf.png" data-alt="Proposed questions from a PDF, each with an Add button">
+          <figcaption>Proposals from a PDF, waiting for you to check.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="sources" data-title="Readings and sources">
+      <header><span class="n" aria-hidden="true">4</span><h2>Readings and sources</h2></header>
+      <p class="lead">Put a passage, or several labelled sources, next to the questions that use them.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Add a stimulus: the passage or sources, with any charts, shared by one or more questions.</li>
+            <li>Choose its layout. <b class="ui">Side by side</b> puts the sources beside the question and is the default whenever there are sources.</li>
+            <li>In <b class="ui">Settings</b>, set <b class="ui">How students move through the test</b> to <b class="ui">One question at a time</b>. Side by side needs it.</li>
+            <li>Students can switch between <b class="ui">Beside</b> and <b class="ui">Above</b> themselves, and click a chart to enlarge it.</li>
+          </ol>
+          <div class="tip"><strong>Looks wrong but isn't:</strong> sources above the question instead of beside it usually means the test is set to one scrolling page, or the student's window is narrow.</div>
+        </div>
+        <figure class="shot" data-src="/help/sources-side-by-side.png" data-alt="A question with its labelled sources beside it">
+          <figcaption>Sources beside the question.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="accommodations" data-title="Accommodations">
+      <header><span class="n" aria-hidden="true">5</span><h2>Accommodations</h2></header>
+      <p class="lead">Each student's documented supports, such as contrast, font and zoom, follow them into every test.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Open <b class="ui">Students</b>. Your class list is already there from PowerSchool.</li>
+            <li>Press <b class="ui">Import TIDE settings</b> to bring in the state testing accommodations file.</li>
+            <li>Open a student to review or change their supports. Your edits survive the next TIDE import.</li>
+            <li>An assessment's <b class="ui">Accommodations</b> tab narrows which supports apply to that test. It saves as you go.</li>
+          </ol>
+        </div>
+        <figure class="shot" data-src="/help/accommodations.png" data-alt="The Students page listing a class with accommodation markers">
+          <figcaption>Students, with their supports.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="publish" data-title="Publish and practise">
+      <header><span class="n" aria-hidden="true">6</span><h2>Publish and practise</h2></header>
+      <p class="lead">Only a Published test can be given. Try it yourself, locked down, before your class does.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Press <b class="ui">Publish</b>. A Published test is locked so a running test can't change; <b class="ui">Unpublish</b> to edit.</li>
+            <li>Open <b class="ui">Test sessions</b> and press <b class="ui">Practice on my Mac</b>. A practice session opens for you alone for the rest of the day.</li>
+            <li>Open Secure Test on your Mac, sign in, and find the test under <b class="ui">Your tests</b>. It is the real thing: full screen, locked, timed.</li>
+            <li>Back in the tool, <b class="ui">See my answers</b> shows how you did; <b class="ui">Practice again</b> starts over.</li>
+          </ol>
+          <p class="note">Practice never appears in your results, Monitor or printouts, and is deleted a week later. It needs Secure Test on your own Mac.</p>
+        </div>
+        <figure class="shot" data-src="/help/publish-practice.png" data-alt="The Test sessions tab with the Practice on my Mac button">
+          <figcaption>Test sessions, with Practice on my Mac.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="run" data-title="Run a test session">
+      <header><span class="n" aria-hidden="true">7</span><h2>Run a test session</h2></header>
+      <p class="lead">Open the test for your class, watch it live, and decide when it ends.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>In <b class="ui">Test sessions</b>, choose who it is for (all your sections, one section, or picked students) and how long it stays open, then press <b class="ui">Start session</b>.</li>
+            <li>Students see the test under <b class="ui">Your tests</b> right away. The six-letter <b class="ui">Session code</b> is for anyone whose list is empty.</li>
+            <li><b class="ui">Monitor</b> shows every student: Not joined, In progress, Idle, Needs attention, Handed in. <b class="ui">View screen</b> shows one student's screen once (they are told you looked).</li>
+            <li>Need more time? <b class="ui">Adjust time</b> for everyone, for one student, or for students you tick. <b class="ui">No time limit</b> removes it.</li>
+            <li><b class="ui">Close session</b> when you're done, then <b class="ui">Hand in everyone</b> to finalise work still in progress.</li>
+          </ol>
+        </div>
+        <figure class="shot" data-src="/help/monitor.gif" data-alt="The Monitor updating as students join and hand in">
+          <figcaption>The Monitor during a session.</figcaption>
+        </figure>
+      </div>
+      <h3 class="sub">Three clocks: what ends a student's test</h3>
+      <div class="clocks">
+        <div class="clock">
+          <h4>Time limit</h4>
+          <p>Set in Settings. Counts per student from when they open the test. At zero their Mac ends the session; answers are kept.</p>
+          <span class="ends">Stops the student</span>
+        </div>
+        <div class="clock">
+          <h4>Session length or Close</h4>
+          <p>When the session runs out or you close it, students return to Your tests with answers saved. They can resume in a later session.</p>
+          <span class="ends">Stops the student</span>
+        </div>
+        <div class="clock">
+          <h4>Hand in</h4>
+          <p>The student's <b class="ui">Finish and hand in</b>, or yours on the Monitor. Nothing is scored until work is handed in.</p>
+          <span class="ends">Finalises the work</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="topic" id="score" data-title="Score and give feedback">
+      <header><span class="n" aria-hidden="true">8</span><h2>Score and give feedback</h2></header>
+      <p class="lead">Questions with answer keys score themselves. Essays and hand-scored questions wait for you, with help from AI if you want it.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>On an essay question, <b class="ui">Upload rubric</b> (PDF, Word, Markdown or pasted text) or reuse one from your library.</li>
+            <li>Open the <b class="ui">Scoring queue</b>. Each answer waits there with its rubric.</li>
+            <li>Press <b class="ui">Score with AI</b> for a proposed score and feedback per criterion. Approve it, change it, or score it yourself.</li>
+            <li>Nothing reaches a student or a report until you approve it.</li>
+          </ol>
+          <div class="tip"><strong>Safeguarding alerts:</strong> handed-in writing is screened for signs that a student may be at risk, and for attempts to trick the AI scorer. An alert appears on your home page beside the assessment. Follow your school's usual process for a student at risk; the alert does not replace it.</div>
+        </div>
+        <figure class="shot" data-src="/help/scoring-queue.png" data-alt="The scoring queue with an AI-proposed rubric score">
+          <figcaption>The scoring queue, with an AI proposal to review.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="results" data-title="Results and printing">
+      <header><span class="n" aria-hidden="true">9</span><h2>Results and printing</h2></header>
+      <p class="lead">One row per student, one column per question, and several ways to put it on paper.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li><b class="ui">Results</b> shows the class, with a section filter, totals and percent. <b class="ui">Download CSV</b> takes it to a spreadsheet.</li>
+            <li>Open a student for their answers, scores and a timeline of their session.</li>
+            <li><b class="ui">Print report</b> gives a class summary, or a single family-facing page for one student.</li>
+            <li><b class="ui">Print student work</b> prints each student's answers, optionally anonymous with a key page, for marking by hand.</li>
+            <li><b class="ui">Pass back</b> returns a handed-in test to a student to keep working; earlier scores are kept as a record.</li>
+          </ol>
+        </div>
+        <figure class="shot" data-src="/help/results.png" data-alt="The results table for a class">
+          <figcaption>Results for a class.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="share" data-title="Share and co-teach">
+      <header><span class="n" aria-hidden="true">10</span><h2>Share and co-teach</h2></header>
+      <p class="lead">Give a colleague their own copy, or work on the same test with a co-teacher.</p>
+      <div class="topic-body">
+        <div>
+          <ol class="steps">
+            <li>Press <b class="ui">Share</b> and enter a colleague's school email. They get their own copy; later edits don't travel either way.</li>
+            <li>For a class you teach together, use <b class="ui">Co-teach</b> in the same dialog. You both see and run the same test and its results.</li>
+            <li><b class="ui">Duplicate</b> makes your own Draft copy, for a second period's version or before a big edit.</li>
+          </ol>
+        </div>
+        <figure class="shot" data-src="/help/share.png" data-alt="The Share dialog with Share a copy and Co-teach">
+          <figcaption>The Share dialog.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="topic" id="looks-wrong" data-title="Looks wrong but isn't" data-extra>
+      <header><h2>Things that look wrong but aren't</h2></header>
+      <dl class="faq">
+        <dt>A student's row still says In progress after I closed the session.</dt>
+        <dd>Closing returns students to Your tests with answers saved, but does not hand in. Press <b class="ui">Hand in</b> on the row, or open another session and they resume.</dd>
+        <dt>A row says Idle while the student is clearly writing.</dt>
+        <dd>Idle means nothing has been saved for 10 minutes. View screen shows what they are doing; typed text saves every few seconds on current Macs.</dd>
+        <dt>A student's session ended by itself.</dt>
+        <dd>Their time limit ran out ("Time is up."), or the session was closed or ran out. Their answers are kept either way.</dd>
+        <dt>"No tests assigned right now."</dt>
+        <dd>No session is open for a section that student is in today. Read them the Session code.</dd>
+        <dt>"This Mac isn't set up for Secure Test yet."</dt>
+        <dd>That Mac hasn't received its settings from IT yet. Contact IT, not the project.</dd>
+        <dt>Wi-Fi drops mid-test.</dt>
+        <dd>Answers are stored on the Mac and sent when the connection returns.</dd>
+        <dt>Delete is greyed out.</dt>
+        <dd>A Published test must be unpublished first; a test with student work can only be archived.</dd>
+      </dl>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>Still stuck? Use <b class="ui">Send feedback</b> at the top of this page or in the app. Last updated <span id="updated"></span>.</p>
+</footer>
+
+<dialog id="feedback">
+  <form method="dialog">
+    <h2>Send feedback</h2>
+    <p class="about" id="fb-about" hidden></p>
+    <label for="fb-message">What should we know?</label>
+    <textarea id="fb-message" maxlength="1900" required></textarea>
+    <p class="status" id="fb-status" role="status"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="fb-cancel">Close</button>
+      <button class="btn" type="button" id="fb-send">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const UPDATED = "2026-09-25";
+document.getElementById("updated").textContent =
+  new Date(UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+// Topic list and phone jump menu, built from the sections.
+const topics = [...document.querySelectorAll(".topic")];
+const list = document.getElementById("toc-list");
+const select = document.getElementById("toc-select");
+for (const t of topics) {
+  const li = document.createElement("li");
+  if (t.hasAttribute("data-extra")) li.className = "extra";
+  const a = document.createElement("a");
+  a.href = "#" + t.id;
+  a.textContent = t.dataset.title;
+  li.append(a);
+  list.append(li);
+  select.append(new Option(t.dataset.title, t.id));
+}
+select.addEventListener("change", () => { location.hash = select.value; });
+
+// Highlight the topic in view.
+const links = new Map([...list.querySelectorAll("a")].map((a) => [a.hash.slice(1), a]));
+const seen = new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    for (const a of links.values()) a.removeAttribute("aria-current");
+    links.get(e.target.id)?.setAttribute("aria-current", "true");
+    select.value = e.target.id;
+  }
+}, { rootMargin: "-80px 0px -60% 0px" });
+topics.forEach((t) => seen.observe(t));
+
+// Screenshots: show the file if it exists, otherwise a labelled placeholder.
+for (const fig of document.querySelectorAll("figure.shot")) {
+  const img = new Image();
+  img.alt = fig.dataset.alt || "";
+  img.loading = "lazy";
+  img.decoding = "async";
+  const placeholder = document.createElement("div");
+  placeholder.className = "placeholder";
+  placeholder.textContent = "Screenshot coming: " + (fig.dataset.alt || "");
+  fig.prepend(placeholder);
+  img.onload = () => placeholder.replaceWith(img);
+  img.src = fig.dataset.src;
+}
+
+// Feedback: POST /api/feedback (staff sign-in required), same as the roadmap.
+const DRAFT_KEY = "help-feedback-draft";
+const dlg = document.getElementById("feedback");
+const msg = document.getElementById("fb-message");
+const about = document.getElementById("fb-about");
+const status = document.getElementById("fb-status");
+const send = document.getElementById("fb-send");
+let topic = "";
+
+function currentTopic() {
+  return list.querySelector("a[aria-current]")?.textContent || "";
+}
+function openFeedback(t, text = "") {
+  topic = t || "";
+  about.hidden = !topic;
+  about.textContent = topic ? "About: " + topic : "";
+  msg.value = text;
+  status.textContent = ""; status.className = "status";
+  send.disabled = false;
+  dlg.showModal();
+  msg.focus();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-feedback]");
+  if (b) openFeedback(b.dataset.feedback || currentTopic());
+});
+document.getElementById("fb-cancel").addEventListener("click", () => dlg.close());
+
+send.addEventListener("click", async () => {
+  const body = msg.value.trim();
+  if (!body) { status.textContent = "Write a message first."; status.className = "status err"; return; }
+  send.disabled = true;
+  status.textContent = "Sending…"; status.className = "status";
+  const message = "[Help]" + (topic ? ` About: ${topic}` : "") + "\n\n" + body;
+  try {
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ message, path: "/help.html" + location.hash }),
+    });
+    if (res.ok) {
+      status.textContent = "Thanks. Your feedback was sent."; status.className = "status ok";
+      msg.value = "";
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      return;
+    }
+    if (res.status === 401) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ topic, text: body })); } catch {}
+      status.className = "status err";
+      status.textContent = "Sign in with your PSD staff account to send. ";
+      const a = document.createElement("a");
+      a.href = "/login?next=" + encodeURIComponent("/help.html?resume=1" + location.hash);
+      a.textContent = "Sign in";
+      status.append(a, " (your message is kept).");
+      send.disabled = false;
+      return;
+    }
+    if (res.status === 403) {
+      status.textContent = "Feedback here is for PSD staff accounts."; status.className = "status err";
+      return;
+    }
+    throw new Error(String(res.status));
+  } catch {
+    status.textContent = "Could not send. Try again in a moment."; status.className = "status err";
+    send.disabled = false;
+  }
+});
+
+if (new URLSearchParams(location.search).get("resume") === "1") {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch {}
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (draft) openFeedback(draft.topic, draft.text);
+}
+</script>
+</body>
+</html>

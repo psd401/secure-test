@@ -133,6 +133,18 @@ export function AppHeader({
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
+          {/* A static page in public/ (not a route), so a plain anchor; a new
+              tab keeps the teacher's place in the app. */}
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="text-band-foreground hover:bg-band-foreground/10 hover:text-band-foreground"
+          >
+            <a href="/help.html" target="_blank" rel="noopener">
+              Help
+            </a>
+          </Button>
           <Button
             type="button"
             variant="ghost"
