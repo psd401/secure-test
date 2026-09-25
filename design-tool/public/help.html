@@ -230,7 +230,7 @@
           </ol>
         </div>
         <div class="shots">
-          <figure class="shot" data-src="/help/build-add-question.gif" data-alt="Adding a multiple-choice question in the editor">
+          <figure class="shot" data-src="/help/build-add-question.gif" data-alt="Adding a short-answer question in the editor">
             <figcaption>Adding a question.</figcaption>
           </figure>
           <figure class="shot" data-src="/help/build-preview.png" data-alt="The student preview of an assessment">
@@ -272,8 +272,8 @@
           </ol>
           <div class="tip"><strong>Looks wrong but isn't:</strong> sources above the question instead of beside it usually means the test is set to one scrolling page, or the student's window is narrow.</div>
         </div>
-        <figure class="shot" data-src="/help/sources-side-by-side.png" data-alt="A question with its labelled sources beside it">
-          <figcaption>Sources beside the question.</figcaption>
+        <figure class="shot" data-src="/help/sources-side-by-side.png" data-alt="A stimulus card with three labelled sources and the Side by side layout chosen">
+          <figcaption>A stimulus with its sources, set to Side by side.</figcaption>
         </figure>
       </div>
     </section>
@@ -361,7 +361,7 @@
             <li>On an essay question, <b class="ui">Upload rubric</b> (PDF, Word, Markdown or pasted text) or reuse one from your library.</li>
             <li>Open the <b class="ui">Scoring queue</b>. Each answer waits there with its rubric.</li>
             <li>Press <b class="ui">Score with AI</b> for a proposed score and feedback per criterion. Approve it, change it, or score it yourself.</li>
-            <li>Nothing reaches a student or a report until you approve it.</li>
+            <li>The question's scoring method decides what happens next: with <b class="ui">AI</b>, every AI score waits for your approval; with <b class="ui">Hybrid</b>, a confident AI score becomes final on its own and the rest wait for you.</li>
           </ol>
           <div class="tip"><strong>Safeguarding alerts:</strong> handed-in writing is screened for signs that a student may be at risk, and for attempts to trick the AI scorer. An alert appears on your home page beside the assessment. Follow your school's usual process for a student at risk; the alert does not replace it.</div>
         </div>
@@ -485,13 +485,14 @@ topics.forEach((t) => seen.observe(t));
 for (const fig of document.querySelectorAll("figure.shot")) {
   const img = new Image();
   img.alt = fig.dataset.alt || "";
-  img.loading = "lazy";
   img.decoding = "async";
   const placeholder = document.createElement("div");
   placeholder.className = "placeholder";
   placeholder.textContent = "Screenshot coming: " + (fig.dataset.alt || "");
-  fig.prepend(placeholder);
-  img.onload = () => placeholder.replaceWith(img);
+  // Not lazy: Chrome never loads a lazy image that is hidden or detached.
+  img.hidden = true;
+  fig.prepend(placeholder, img);
+  img.onload = () => { placeholder.remove(); img.hidden = false; };
   img.src = fig.dataset.src;
 }
 
