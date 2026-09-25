@@ -31,6 +31,7 @@ import {
 } from "../lib/safeguarding/screening/prompt";
 import { getScreeningProvider } from "../lib/safeguarding/screening/provider";
 import { screenAttempt, screenResponse } from "../lib/safeguarding/screening/screen";
+import { RETRY_GRACE_MS, RETRY_WINDOW_DAYS, screenPending } from "../lib/safeguarding/screening/retry";
 import type { ScreeningProvider } from "../lib/safeguarding/screening/types";
 import type { GuardrailProvider } from "../lib/safeguarding/types";
 import { handInAttempt } from "../lib/api/handInAttempt";
@@ -630,5 +631,43 @@ describe("D-4: AI scoring withheld behind an injection alert", () => {
     const body = (await (await postScoreAi(s.attempt.id)).json()) as Record<string, unknown>;
     expect(body.withheld).toBe(0);
     expect(body.scored_proposed).toBe(1);
+  });
+});
+
+// ------------------------------------------------ retry (9.1 = A, in-app)
+
+describe("screenPending — the hourly retry", () => {
+  test("screens missed hand-ins past the grace period, inside the window", async () => {
+    const { db, attempt, essay } = await seed({ texts: { essay: "Essay. SG_SELFHARM last night." } });
+    const later = new Date(Date.now() + RETRY_GRACE_MS + 60_000);
+    const s = await screenPending(db, later, { screener: mockScreener, guardrail: null });
+    expect(s.candidates).toBe(2); // essay + short text, not the MC answer
+    expect(s.alerts).toBe(1);
+    expect((await alertsFor(essay.id)).map((a) => a.category)).toEqual(["self_harm"]);
+    // Screened now: a second run finds nothing.
+    const again = await screenPending(db, later, { screener: mockScreener, guardrail: null });
+    expect(again.candidates).toBe(0);
+    void attempt;
+  });
+
+  test("leaves the hand-in's own pass its grace period", async () => {
+    const { db } = await seed();
+    const s = await screenPending(db, new Date(), { screener: mockScreener, guardrail: null });
+    expect(s.candidates).toBe(0);
+  });
+
+  test("ignores hand-ins older than the window, practice attempts, and screening off", async () => {
+    const old = await seed();
+    const past = new Date(Date.now() - (RETRY_WINDOW_DAYS + 1) * 86_400_000);
+    await old.db.update(attempts).set({ submitted_at: past }).where(eq(attempts.id, old.attempt.id));
+    const later = new Date(Date.now() + RETRY_GRACE_MS + 60_000);
+    expect((await screenPending(old.db, later, { screener: mockScreener, guardrail: null })).candidates).toBe(0);
+
+    await old.db.execute(sql`truncate table assessments restart identity cascade`);
+    await old.db.execute(sql`truncate table students restart identity cascade`);
+    const practice = await seed({ practice: true });
+    expect((await screenPending(practice.db, later, { screener: mockScreener, guardrail: null })).candidates).toBe(0);
+
+    expect((await screenPending(practice.db, later, { screener: null })).candidates).toBe(0);
   });
 });
