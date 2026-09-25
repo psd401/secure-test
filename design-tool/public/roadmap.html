@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secure Test Roadmap</title>
+<meta name="description" content="Peninsula School District's secure testing app: how it was built, and what comes next.">
+<link rel="icon" href="/icon.png">
+<!--
+  The project story, in two views: #journey (the past, for external audiences)
+  and #ahead (the planned order, for internal input).
+
+  UPKEEP: edit the JOURNEY / AHEAD / PILOT_QUESTIONS / STATS arrays in the
+  script at the bottom. Nothing else needs to change. Sources of truth:
+  docs/roadmap-2026-09.md and the CLAUDE.md ledger. Public page: no student
+  data, no staff names, no hostnames (see CLAUDE.md "what stays out").
+-->
+<style>
+  @font-face {
+    font-family: "Inter";
+    src: url("/fonts/inter-latin-var.woff2") format("woff2");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Josefin Sans";
+    src: url("/fonts/josefin-sans-latin-var.woff2") format("woff2");
+    font-weight: 100 700;
+    font-display: swap;
+  }
+
+  /* PSD tokens, same values as design-tool/app/globals.css. Light only, like the app. */
+  :root {
+    color-scheme: light;
+    --mist: #f3f8fa;
+    --pacific: #25424c;
+    --cedar: #466857;
+    --whulge: #346780;
+    --sea-foam: #eeebe4;
+    --sea-glass: #6ca18a;
+    --brand-ink: #40745e;
+    --skylight: #fffaec;
+    --ochre: #8d5d1c;
+    --muted: #5a6c73;
+    --border: #cddadf;
+    --card: #ffffff;
+    --asphalt: #3a4a50;
+    --lane: #fffaec;
+    --planned: #8fa3ab;
+    --radius: 10px;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-heading: "Josefin Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+  body {
+    margin: 0;
+    background: var(--mist);
+    color: var(--pacific);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  h1, h2, h3 { font-family: var(--font-heading); line-height: 1.2; margin: 0; }
+  a { color: var(--whulge); }
+  button { font: inherit; }
+  :focus-visible { outline: 3px solid var(--whulge); outline-offset: 2px; }
+
+  /* Header band */
+  .band {
+    background: var(--pacific);
+    color: var(--skylight);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .band-inner {
+    max-width: 1080px; margin: 0 auto; padding: 10px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+  .brand img { width: 32px; height: 32px; }
+  .brand span { font-family: var(--font-heading); font-weight: 600; font-size: 1.15rem; padding-top: 3px; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; }
+  .tab {
+    background: transparent; color: var(--skylight); border: 1px solid transparent;
+    border-radius: 999px; padding: 6px 14px; cursor: pointer; font-weight: 500;
+  }
+  .tab[aria-selected="true"] { background: var(--skylight); color: var(--pacific); }
+  .tab:hover:not([aria-selected="true"]) { border-color: rgba(255,250,236,.5); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600;
+    border: 1px solid var(--cedar); background: var(--cedar); color: #fff;
+    text-decoration: none;
+  }
+  .btn.ghost { background: transparent; color: var(--cedar); }
+  .band .btn { background: var(--skylight); color: var(--pacific); border-color: var(--skylight); }
+
+  /* Hero */
+  .hero { max-width: 1080px; margin: 0 auto; padding: 48px 16px 24px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; font-weight: 700; color: var(--brand-ink); }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.1rem); margin-top: 8px; max-width: 18ch; }
+  .hero p.lede { font-size: 1.12rem; max-width: 60ch; color: var(--muted); margin: 14px 0 0; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; margin-top: 28px;
+  }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .stat b { display: block; font-family: var(--font-heading); font-size: 2rem; font-weight: 700; color: var(--cedar); line-height: 1.1; padding-top: 4px; }
+  .stat span { font-size: .9rem; color: var(--muted); }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 8px 16px 80px; }
+  .view[hidden] { display: none; }
+  .view-intro { max-width: 62ch; margin: 16px 0 28px; color: var(--muted); }
+  .view-intro strong { color: var(--pacific); }
+
+  /* The road: a switchback. Stops sit in rows that alternate direction; an SVG
+     road (drawn by drawRoad) weaves through their markers and hairpins at the
+     ends of each row. Row width adapts: 3 / 2 / 1 stops. */
+  .winding { position: relative; padding: 0 56px 12px; }
+  .winding.single { padding: 0 0 12px; }
+  .roadsvg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .roadsvg .edge { stroke: transparent; }
+  .roadsvg .asphalt { stroke: var(--asphalt); }
+  .roadsvg .lane { stroke: var(--lane); stroke-dasharray: 12 12; }
+  .winding.planned .roadsvg .edge { stroke: var(--planned); stroke-dasharray: 5 5; }
+  .winding.planned .roadsvg .asphalt { stroke: #dfe7ea; }
+  .winding.planned .roadsvg .lane { stroke: #ffffff; }
+
+  .lane-row {
+    position: relative; display: grid; gap: 16px 26px; align-items: start;
+    padding-top: 96px;
+  }
+  .lane-row.rev { direction: rtl; }
+  .lane-row.rev > * { direction: ltr; }
+  .winding.single .lane-row { padding: 18px 0 0 52px; }
+
+  .wstop { position: relative; }
+  .marker {
+    position: absolute; left: 50%; top: -58px; transform: translate(-50%, -50%);
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--skylight); border: 4px solid var(--asphalt); z-index: 2;
+  }
+  .wstop.star .marker {
+    width: 40px; height: 40px; border: 3px solid #fff;
+    background: var(--ochre); color: #fff;
+    display: grid; place-items: center; font-size: 1.15rem;
+    box-shadow: 0 2px 6px rgba(37,66,76,.35);
+  }
+  .winding.planned .marker {
+    width: 36px; height: 36px; background: var(--card); border: 3px solid var(--whulge); color: var(--whulge);
+    display: grid; place-items: center; font-weight: 700;
+  }
+  .wstop.end .marker { width: 24px; height: 24px; background: var(--whulge); border: 4px solid #fff; box-shadow: 0 2px 6px rgba(37,66,76,.35); }
+  .flag {
+    position: absolute; left: calc(50% + 26px); top: -94px; z-index: 2;
+    background: var(--cedar); color: #fff; font-family: var(--font-heading); font-weight: 700; font-size: .85rem;
+    padding: 4px 10px 1px; border-radius: 5px; border: 2px solid #fff; white-space: nowrap;
+  }
+  /* Every other marker sits lower, so the road climbs and dips between stops. */
+  .winding:not(.single) .wstop:nth-child(even) .marker { top: -40px; }
+  .winding:not(.single) .wstop:nth-child(even) .flag { top: -76px; }
+  .winding.single .marker { left: -30px; top: 26px; }
+  .winding.single .flag { position: static; display: inline-block; margin-bottom: 6px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; position: relative;
+  }
+  .wstop.star .card { border-color: var(--ochre); border-width: 2px; box-shadow: 0 4px 14px rgba(37,66,76,.10); }
+  .date { font-size: .8rem; font-weight: 700; color: var(--brand-ink); text-transform: uppercase; letter-spacing: .05em; }
+  .card h3 { font-size: 1.1rem; margin-top: 4px; padding-top: 2px; }
+  .wstop.star .card h3 { font-size: 1.22rem; }
+  .card p { margin: 6px 0 0; color: var(--muted); font-size: .94rem; }
+  .here {
+    display: inline-block; background: var(--whulge); color: #fff; border-radius: 999px; padding: 8px 16px;
+    font-weight: 700; box-shadow: 0 2px 8px rgba(37,66,76,.3); border: 3px solid #fff;
+  }
+  .wstop.end { text-align: center; }
+  .winding.single .wstop.end { text-align: left; }
+
+  /* Ahead */
+  .ahead-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: .78rem; font-weight: 600; border-radius: 999px; padding: 2px 10px; background: var(--sea-foam); color: var(--pacific); }
+  .chip.wait { background: #f1ece4; color: var(--ochre); }
+  .suggest {
+    margin-top: 8px; background: none; border: 0; padding: 0; color: var(--whulge);
+    text-decoration: underline; cursor: pointer; font-size: .9rem;
+  }
+  aside .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  aside h2 { font-size: 1.15rem; padding-top: 2px; }
+  aside ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); }
+  aside li { margin: 6px 0; }
+  aside p { color: var(--muted); margin: 8px 0 0; font-size: .95rem; }
+
+  footer { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: .88rem; }
+
+  /* Feedback dialog */
+  dialog {
+    border: 1px solid var(--border); border-radius: 12px; padding: 0; width: min(520px, calc(100vw - 32px));
+    color: var(--pacific); background: var(--card);
+  }
+  dialog::backdrop { background: rgba(37,66,76,.45); }
+  dialog form { padding: 20px; display: grid; gap: 12px; }
+  dialog h2 { font-size: 1.3rem; padding-top: 2px; }
+  dialog label { font-weight: 600; font-size: .95rem; }
+  dialog textarea {
+    width: 100%; min-height: 140px; resize: vertical; font: inherit; color: inherit;
+    border: 1px solid #7d888d; border-radius: 8px; padding: 10px;
+  }
+  .about { font-size: .9rem; color: var(--muted); }
+  .status { font-size: .95rem; min-height: 1.4em; }
+  .status.ok { color: var(--cedar); }
+  .status.err { color: #a04034; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  @media (max-width: 760px) {
+    .ahead-grid { grid-template-columns: 1fr; }
+    .tabs { margin-left: 0; order: 3; width: 100%; }
+    .band .btn { margin-left: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="band-inner">
+    <a class="brand" href="/">
+      <img src="/brand/psd-emblem-white.png" alt="">
+      <span>Secure Test</span>
+    </a>
+    <div class="tabs" role="tablist" aria-label="Roadmap views">
+      <button class="tab" role="tab" id="tab-journey" aria-controls="journey" data-view="journey">The journey</button>
+      <button class="tab" role="tab" id="tab-ahead" aria-controls="ahead" data-view="ahead">The road ahead</button>
+    </div>
+    <button class="btn" type="button" data-feedback="">Send feedback</button>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">Peninsula School District</div>
+  <h1>From a one-day experiment to a district pilot</h1>
+  <p class="lede">Secure Test locks a student's Mac for the length of a test, and gives teachers a web tool to build, run, monitor and score those tests. It is built in the open by the district's Research &amp; Assessment office.</p>
+  <div class="stats" id="stats"></div>
+</section>
+
+<main>
+  <section class="view" id="journey" role="tabpanel" aria-labelledby="tab-journey">
+    <p class="view-intro">Every stop is a real date. <strong>★ marks the high points.</strong> The rest shows how each one was reached: small steps, each checked by hand before the next.</p>
+    <div class="winding" id="journey-road"></div>
+  </section>
+
+  <section class="view" id="ahead" role="tabpanel" aria-labelledby="tab-ahead" hidden>
+    <p class="view-intro"><strong>Order, not dates.</strong> This is the planned sequence as of the date below. Your input can change it: use <em>Suggest a change</em> on any stop, or <em>Send feedback</em> at the top. Feedback needs a PSD staff sign-in.</p>
+    <div class="ahead-grid">
+      <div>
+        <div class="winding planned" id="ahead-road"></div>
+      </div>
+      <aside>
+        <div class="panel">
+          <h2>Questions for the pilot</h2>
+          <p>Deliberately not built until pilot teachers and students tell us they are wanted.</p>
+          <ul id="pilot-questions"></ul>
+        </div>
+        <div class="panel">
+          <h2>How work moves</h2>
+          <ul>
+            <li>Teacher tool changes go live within the hour.</li>
+            <li>Student app changes need a signed release, then reach district Macs the next day through IT.</li>
+            <li>Every change is tried by hand in a real session before it is called done.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>Last updated <span id="updated"></span>. The source code is public on GitHub at psd401/secure-test.</p>
+</footer>
+
+<dialog id="feedback">
+  <form method="dialog">
+    <h2>Send feedback</h2>
+    <p class="about" id="fb-about" hidden></p>
+    <label for="fb-message">What should we know?</label>
+    <textarea id="fb-message" maxlength="1900" required></textarea>
+    <p class="status" id="fb-status" role="status"></p>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="fb-cancel">Close</button>
+      <button class="btn" type="button" id="fb-send">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// ---------------------------------------------------------------------------
+// Content. Update these lists as work lands; the page is built from them.
+// ---------------------------------------------------------------------------
+const UPDATED = "2026-09-25";
+
+const STATS = [
+  { value: "130", label: "days from first experiment" },
+  { value: "9", label: "student app releases" },
+  { value: "46", label: "database migrations" },
+  { value: "3,000+", label: "automated tests" },
+];
+
+// star: true = a high point on the map.
+const JOURNEY = [
+  { date: "2026-05-19", star: true, title: "Three experiments in one day",
+    text: "Can a Mac lock down for a test using Apple's assessment mode? Can a locked browser stay sealed? Can students sign in? Three small prototypes answered yes." },
+  { date: "2026-05-21", title: "The teacher tool, version one",
+    text: "Build questions, render math, set time limits, and import state testing accommodations." },
+  { date: "2026-06-16", star: true, title: "AI joins, behind a guardrail",
+    text: "Claude on Amazon Bedrock drafts questions and translates math, with a district safeguarding guardrail in front of every call." },
+  { date: "2026-07-09", title: "Import from CSV and PDF",
+    text: "Teachers bring existing tests in; AI reads the PDF and proposes questions for the teacher to check." },
+  { date: "2026-08-14", title: "Scanned PDFs and two code reviews",
+    text: "Scanned pages can be read too. Two full reviews found about 35 problems, all fixed." },
+  { date: "2026-08-25", title: "The student app begins",
+    text: "Answers are saved to the Mac first, then sent. The student's copy of a test has no place to hold an answer key." },
+  { date: "2026-08-26", star: true, title: "Apple grants the lockdown permission",
+    text: "The first real locked session ran the same day, with safe ways out built in the same change. Sign-in moved to Google and the roster to the district data warehouse." },
+  { date: "2026-08-28", title: "Test sessions and a live Monitor",
+    text: "Teachers open a session with a code and watch progress live. The first nightly roster arrived from the warehouse." },
+  { date: "2026-08-29", star: true, title: "The first real student hands in",
+    text: "A student signed in with a district account, took a test in a locked session, and handed it in." },
+  { date: "2026-08-30", title: "Two design passes",
+    text: "District branding, and plain teacher words throughout: Test session, Session code, Handed in, Needs attention." },
+  { date: "2026-08-31", star: true, title: "Live on the web",
+    text: "The teacher tool went live on district cloud infrastructure." },
+  { date: "2026-09-02", title: "Richer tests",
+    text: "Reading passages, matching, drawing, tables, and tests shown one question per page." },
+  { date: "2026-09-04", star: true, title: "Open source",
+    text: "The code became public, after a sweep that removed every account id, hostname and student-shaped detail." },
+  { date: "2026-09-07", star: true, title: "Student app 1.0",
+    text: "Signed and notarized by Apple. Also: error alerts, contrast, font and zoom accommodations, and reporting views." },
+  { date: "2026-09-08", title: "Math keypad and drawing tools",
+    text: "Students enter fractions, roots and symbols from on-screen keys; drawings get pen sizes, colours, an eraser and undo." },
+  { date: "2026-09-09", title: "Several sources beside one question",
+    text: "Built for the first pilot assessment: tabbed sources and charts next to the prompt." },
+  { date: "2026-09-11", title: "Rubrics and AI feedback",
+    text: "Teachers upload a rubric; AI proposes scores and feedback for the teacher to accept or change. Time limits are enforced." },
+  { date: "2026-09-14", star: true, title: "First sitting on a district Mac",
+    text: "Installed through the district's device management, run by a student in a real session. Printable student-work packets followed the same week." },
+  { date: "2026-09-15", title: "Security hardening",
+    text: "A full audit of how a session can end. Closing a session now ends every student's locked session." },
+  { date: "2026-09-17", star: true, title: "Pilot day one",
+    text: "Pilot classes took their first tests. When one class ran out of time, Extend time shipped the same afternoon. Co-teachers share their classes." },
+  { date: "2026-09-18", title: "Pass back, admin view, practice",
+    text: "Teachers can return work to a student. Teachers can try a test on their own Mac before students do." },
+  { date: "2026-09-24", title: "Student app 1.3.5",
+    text: "Full keyboard reach, and a teacher can remove a time limit mid-test. Groundwork for gradebook sync." },
+  { date: "2026-09-25", star: true, title: "Safeguarding alerts",
+    text: "Handed-in writing is screened for signs of self-harm or abuse and for attempts to game the AI scorer; the teacher of the class is alerted." },
+];
+
+// Planned order. wait = what it depends on outside the team.
+const AHEAD = [
+  { title: "Safeguarding alerts by email", text: "Alerts reach the teacher's inbox, not only the app.", wait: "AWS email setup" },
+  { title: "Deploy safety", text: "Database changes apply before new code serves, and risky changes wait until after school." },
+  { title: "Finish the pilot and gather feedback", text: "Teacher and student feedback rounds; the questions at right are part of it." },
+  { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
+  { title: "Send scores to the gradebook", text: "Schoology first, then PowerSchool.", wait: "IT: gradebook access" },
+  { title: "Staging environment and automated deploys", text: "A practice copy of the system, and deploys that no longer run from one laptop." },
+  { title: "A working-time clock", text: "Time limits count time actually spent in a test across several sessions." },
+  { title: "Print chosen students or sections together", text: "One packet for any mix of students and classes." },
+  { title: "Substitute and principal access", text: "A substitute can run the session; a principal can see their building." },
+  { title: "Students not yet enrolled", text: "A way to test a student who has not reached the roster yet." },
+  { title: "Handwritten math", text: "An experiment: write an answer on the trackpad and have it recognised." },
+];
+
+const PILOT_QUESTIONS = [
+  "Do students want on-screen number keys on the math keypad?",
+  "Should changing an answer key rescore work already handed in?",
+  "What shape should a gradebook export file take?",
+];
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k) n.append(k);
+  return n;
+};
+const fmtDay = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const fmtMonth = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+const fmtFull = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+document.getElementById("stats").append(
+  ...STATS.map((s) => el("div", { class: "stat" }, el("b", { text: s.value }), el("span", { text: s.label })))
+);
+
+// Stop elements, built once; the road re-flows them into rows on resize.
+let month = "";
+const journeyStops = JOURNEY.map((m) => {
+  const mo = fmtMonth(m.date);
+  const flag = mo !== month ? el("div", { class: "flag", text: mo }) : null;
+  month = mo;
+  return el("div", { class: "wstop" + (m.star ? " star" : "") },
+    flag,
+    el("div", { class: "marker", "aria-hidden": "true", text: m.star ? "★" : "" }),
+    el("div", { class: "card" },
+      el("div", { class: "date", text: fmtDay(m.date) + (m.star ? " · high point" : "") }),
+      el("h3", { text: m.title }),
+      el("p", { text: m.text })));
+});
+const hereStop = () => el("div", { class: "wstop end" },
+  el("div", { class: "marker", "aria-hidden": "true" }),
+  el("span", { class: "here", text: "You are here · " + fmtDay(UPDATED) }));
+journeyStops.push(hereStop());
+
+const aheadStops = [hereStop()].concat(AHEAD.map((a, i) => {
+  const suggest = el("button", { class: "suggest", type: "button", text: "Suggest a change" });
+  suggest.dataset.feedback = a.title;
+  return el("div", { class: "wstop" },
+    el("div", { class: "marker", "aria-hidden": "true", text: String(i + 1) }),
+    el("div", { class: "card" },
+      el("h3", { text: `${i + 1}. ${a.title}` }),
+      el("p", { text: a.text }),
+      a.wait ? el("div", { class: "chips" }, el("span", { class: "chip wait", text: "Waits on: " + a.wait })) : null,
+      suggest));
+}));
+
+const SVG = "http://www.w3.org/2000/svg";
+function mountRoad(container, stops) {
+  let cols = 0;
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", "roadsvg");
+  svg.setAttribute("aria-hidden", "true");
+  const paths = [["edge", 28], ["asphalt", 22], ["lane", 3]].map(([cls, w]) => {
+    const p = document.createElementNS(SVG, "path");
+    p.setAttribute("class", cls);
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke-width", w);
+    p.setAttribute("stroke-linecap", "round");
+    p.setAttribute("stroke-linejoin", "round");
+    svg.append(p);
+    return p;
+  });
+
+  function layout() {
+    const w = container.clientWidth;
+    if (!w) return; // hidden tab: redrawn when it becomes visible
+    const n = w >= 900 ? 3 : w >= 560 ? 2 : 1;
+    if (n !== cols) {
+      cols = n;
+      container.classList.toggle("single", n === 1);
+      container.replaceChildren(svg);
+      for (let i = 0; i < stops.length; i += n) {
+        const row = el("div", { class: "lane-row" + ((i / n) % 2 ? " rev" : "") });
+        row.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+        row.append(...stops.slice(i, i + n));
+        container.append(row);
+      }
+    }
+    draw();
+  }
+
+  function draw() {
+    const box = container.getBoundingClientRect();
+    const pts = stops.map((s) => {
+      const r = s.querySelector(".marker").getBoundingClientRect();
+      return [r.left + r.width / 2 - box.left, r.top + r.height / 2 - box.top, s.parentElement];
+    });
+    if (!pts.length) return;
+    const single = cols === 1;
+    const [x0, y0] = pts[0];
+    let d = single ? `M ${x0} ${y0 - 30} L ${x0} ${y0}` : `M ${x0 - 70} ${y0 + 10} Q ${x0 - 30} ${y0} ${x0} ${y0}`;
+    let wave = 1;
+    for (let i = 1; i < pts.length; i++) {
+      const [xa, ya, rowA] = pts[i - 1];
+      const [xb, yb, rowB] = pts[i];
+      if (single) {
+        // A gentle S between stacked stops, in the left gutter.
+        const dy = yb - ya;
+        d += ` C ${xa + 20} ${ya + dy / 3} ${xb - 20} ${yb - dy / 3} ${xb} ${yb}`;
+      } else if (rowA === rowB) {
+        // Same row: a strong S-curve, alternating up and down.
+        const dx = xb - xa;
+        d += ` C ${xa + dx / 2} ${ya - 30 * wave} ${xb - dx / 2} ${yb + 30 * wave} ${xb} ${yb}`;
+        wave = -wave;
+      } else {
+        // Row change: a hairpin out past the end of the row.
+        // Rounded like a stadium end, in the side gutter so no card hides it.
+        const right = xa > box.width / 2;
+        const edge = right ? box.width - 22 : 22;
+        const r = Math.min(40, (yb - ya) / 2);
+        const sx = right ? 1 : -1;
+        d += ` L ${edge - sx * r} ${ya} Q ${edge} ${ya} ${edge} ${ya + r}` +
+             ` L ${edge} ${yb - r} Q ${edge} ${yb} ${edge - sx * r} ${yb} L ${xb} ${yb}`;
+        wave = 1;
+      }
+    }
+    for (const p of paths) p.setAttribute("d", d);
+  }
+
+  new ResizeObserver(layout).observe(container);
+  document.fonts?.ready.then(draw);
+  layout();
+  return layout;
+}
+const relayout = [
+  mountRoad(document.getElementById("journey-road"), journeyStops),
+  mountRoad(document.getElementById("ahead-road"), aheadStops),
+];
+document.getElementById("pilot-questions").append(...PILOT_QUESTIONS.map((q) => el("li", { text: q })));
+document.getElementById("updated").textContent = fmtFull(UPDATED);
+
+// Tabs, driven by the URL hash so #journey and #ahead can be shared directly.
+const tabs = [...document.querySelectorAll(".tab")];
+function show(view) {
+  if (view !== "journey" && view !== "ahead") view = "journey";
+  for (const t of tabs) {
+    const on = t.dataset.view === view;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.dataset.view).hidden = !on;
+  }
+  relayout.forEach((f) => f());
+}
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => { history.replaceState(null, "", "#" + t.dataset.view); show(t.dataset.view); });
+  t.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus(); next.click();
+  });
+});
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+show(location.hash.slice(1));
+
+// ---------------------------------------------------------------------------
+// Feedback: POST /api/feedback (staff sign-in required). A signed-out visitor
+// keeps their draft across the sign-in round trip.
+// ---------------------------------------------------------------------------
+const DRAFT_KEY = "roadmap-feedback-draft";
+const dlg = document.getElementById("feedback");
+const msg = document.getElementById("fb-message");
+const about = document.getElementById("fb-about");
+const status = document.getElementById("fb-status");
+const send = document.getElementById("fb-send");
+let topic = "";
+
+function openFeedback(t, text = "") {
+  topic = t || "";
+  about.hidden = !topic;
+  about.textContent = topic ? "About: " + topic : "";
+  msg.value = text;
+  status.textContent = ""; status.className = "status";
+  send.disabled = false;
+  dlg.showModal();
+  msg.focus();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-feedback]");
+  if (b) openFeedback(b.dataset.feedback);
+});
+document.getElementById("fb-cancel").addEventListener("click", () => dlg.close());
+
+send.addEventListener("click", async () => {
+  const body = msg.value.trim();
+  if (!body) { status.textContent = "Write a message first."; status.className = "status err"; return; }
+  send.disabled = true;
+  status.textContent = "Sending…"; status.className = "status";
+  const view = location.hash.slice(1) || "journey";
+  const message = `[Roadmap · ${view}]` + (topic ? ` About: ${topic}` : "") + "\n\n" + body;
+  try {
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ message, path: "/roadmap.html#" + view }),
+    });
+    if (res.ok) {
+      status.textContent = "Thanks. Your feedback was sent."; status.className = "status ok";
+      msg.value = "";
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      return;
+    }
+    if (res.status === 401) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ topic, text: body })); } catch {}
+      status.className = "status err";
+      status.textContent = "";
+      const next = `/roadmap.html?resume=1#${view}`;
+      status.append("Sign in with your PSD staff account to send. ",
+        el("a", { href: "/login?next=" + encodeURIComponent(next), text: "Sign in" }),
+        " (your message is kept).");
+      send.disabled = false;
+      return;
+    }
+    if (res.status === 403) {
+      status.textContent = "Feedback here is for PSD staff accounts."; status.className = "status err";
+      return;
+    }
+    throw new Error(String(res.status));
+  } catch {
+    status.textContent = "Could not send. Try again in a moment."; status.className = "status err";
+    send.disabled = false;
+  }
+});
+
+// Back from sign-in: reopen the dialog with the kept draft.
+if (new URLSearchParams(location.search).get("resume") === "1") {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch {}
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (draft) openFeedback(draft.topic, draft.text);
+}
+</script>
+</body>
+</html>
