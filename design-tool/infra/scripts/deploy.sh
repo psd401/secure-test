@@ -91,6 +91,30 @@ CDK_EXIT=$?
 set -e
 [ "$CDK_EXIT" -eq 0 ] || echo "deploy: cdk exited $CDK_EXIT — checking the stack anyway (see the Signature-expired quirk above)"
 
+# Guard (2026-09-25): after a FAILED cdk deploy, migrate only once the new
+# image is provably serving. The Signature-expired quirk means cdk can exit 1
+# while the stack still finishes, so wait for /api/health to report HEAD; if it
+# never does (the build or the stack really failed), nothing new is live and the
+# migration step would only run the OLD image's migrations — stop instead.
+# DEPLOY_HEALTH_WAIT (seconds, default 600) bounds the wait.
+wait_for_head() {
+  local deadline=$(( $(date +%s) + ${DEPLOY_HEALTH_WAIT:-600} )) sha
+  while :; do
+    sha="$(curl -fsS --max-time 15 "$ORIGIN/api/health" 2>/dev/null | jq -r '.commit // empty' || true)"
+    [ "$sha" = "$HEAD_SHA" ] && return 0
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep 20
+  done
+}
+if [ "$CDK_EXIT" -ne 0 ]; then
+  echo "deploy: waiting up to ${DEPLOY_HEALTH_WAIT:-600}s for /api/health to report HEAD before any migration"
+  if ! wait_for_head; then
+    echo "deploy: health never reported HEAD ($HEAD_SHA) — nothing new is live; migrations NOT run. Fix the cdk failure and re-run." >&2
+    exit "$CDK_EXIT"
+  fi
+  echo "deploy: health reports HEAD — the stack finished despite the cdk exit; continuing"
+fi
+
 # ---------- 5. migrations ----------
 NEW_MIGRATIONS=""
 if [ -n "$LIVE_SHA" ] && git -C "$REPO" cat-file -e "$LIVE_SHA^{commit}" 2>/dev/null; then
