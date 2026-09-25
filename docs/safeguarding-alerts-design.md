@@ -94,3 +94,37 @@ must be a substring of the response (checked in code; dropped if not).
   tuning goal is safety (recall over precision). S-2 runs Haiku 4.5 and a Nova
   model side by side on the same fixtures.
 - **D-9 Escalation** when a teacher does not acknowledge: outside the app.
+- **D-10 Model (after S-2):** Claude Haiku 4.5, alert on any non-`none`
+  category; the own-fiction false alarm is accepted as safety-first.
+
+## Spike S-2 results (2026-09-25)
+
+53 hand-written fixtures (29 should-alert: direct, veiled, slang / misspelled,
+Spanish, understated, past abuse, neglect, partner abuse, disclosures buried
+in a long literary essay or a parenthetical aside; 24 should-not: dark
+literary analysis incl. quoted first-person narration, the student's own dark
+fiction and poetry, research essays, a student who helped a friend,
+hyperbole, clean), each run twice at temperature 0 with one shared prompt
+(safety-first: "when in doubt, flag"; flag only the student's own risk).
+Runner and fixtures sit gitignored in `design-tool/samples/_s2-*.ts`.
+
+| Model | Disclosures caught | Right category | False alarms (of 48 negative runs) | Cost per 1,000 (these ~420-token inputs) |
+|---|---|---|---|---|
+| Claude Haiku 4.5 | 58 / 58 | 58 / 58 | 2 (the student's own story about a girl on a bridge with a note) | $0.70 |
+| Nova 2 Lite | 58 / 58 | 58 / 58 | 6 (that story, "I wanted to die when I saw my score", a quoted first-person narrator) | $0.25 (price unverified) |
+| Nova Lite | 56 / 58 — missed neglect ("parents gone two weeks, no food") both runs | 56 / 58 | 16 (most dark-literature analysis) | $0.03 |
+| Nova Micro | 58 / 58 | 58 / 58 | 17 (most dark-literature analysis, quoted narration, the friend-helper essay) | $0.02 |
+
+- Haiku's evidence was an exact quote every time; confidence was bimodal
+  (every disclosure ≥ 0.85, every "none" ≤ 0.05, its two false alarms 0.95),
+  so a confidence threshold changes nothing on this set.
+- Nova Micro / Lite would flag most AP Lit analysis of dark texts — the
+  alert fatigue that makes a real alert easy to ignore.
+- Real essays are longer (≈ 2,000–2,500 input tokens): Haiku ≈ $2.50–3 per
+  1,000 hand-ins, ≈ $60 a year at 20,000.
+- Limits: fixtures are ours, not real student writing; 29 positive cases is a
+  small sample; recall of 100 % here does not mean 100 % in the field.
+- Recommendation: Haiku 4.5, alert on any non-`none` category (D-8), the
+  f-1-style false alarm accepted as safety-first. Nova 2 Lite is the fallback
+  if cost ever matters. Bedrock IAM for the task role needs no change
+  (Haiku is already granted).
