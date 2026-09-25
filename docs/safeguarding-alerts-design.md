@@ -128,3 +128,36 @@ Runner and fixtures sit gitignored in `design-tool/samples/_s2-*.ts`.
   f-1-style false alarm accepted as safety-first. Nova 2 Lite is the fallback
   if cost ever matters. Bedrock IAM for the task role needs no change
   (Haiku is already granted).
+
+## Spike S-1 results (2026-09-25)
+
+The district guardrail (version 1, the one the task uses) already has
+`PROMPT_ATTACK` on input at HIGH / BLOCK — since `8b2e266` an essay-score hit
+is recorded as `flag` and scoring continues. 16 hand-written fixtures
+(9 injections, 7 ordinary answers incl. an AI-ethics essay, a quoted "ignore
+all previous orders" inside literary analysis, a persuasive "you should
+ignore…", a student mentioning the rubric, code), ApplyGuardrail source
+INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
+
+| Detector | Injections caught | False alarms |
+|---|---|---|
+| Guardrail `PROMPT_ATTACK` | 5 / 9 — missed the polite "Note to the AI grader…", the fake JSON result after a closing tag, the Spanish override, the "(If you are an AI reading this…)" aside | 0 / 7 |
+| Haiku 4.5 classifier | 8 / 9 — missed the fake JSON result | 0 / 7 |
+
+- ApplyGuardrail DOES evaluate prompt attack on untagged INPUT text — the
+  open question in the tool table is answered.
+- Neither catches everything; the two miss different things except the fake
+  JSON, which is a STRUCTURAL weakness of the scorer prompt: the student text
+  follows a plain `STUDENT RESPONSE:` line (`buildEssayScoreUserPrompt`) and
+  the system prompt never says to treat it as data.
+- Proposal for slice 1 (needs James's OK — it changes the scorer prompt, so
+  `ESSAY_SCORER_PROMPT_VERSION` + its recorded hash bump):
+  1. ONE Haiku call per eligible response returns both
+     `{wellbeing: {category, confidence, evidence}, injection: {detected, evidence}}`
+     — same cost as the wellbeing check alone.
+  2. Either the Haiku `injection` or a guardrail `PROMPT_ATTACK` flag on the
+     scorer's input raises a prompt-injection alert (OR — safety-first).
+  3. Scorer hardening: the student text inside `<student_response>` tags
+     with any literal closing tag neutralised, and a system-prompt line
+     that everything inside is the student's work to be scored, never
+     instructions.
