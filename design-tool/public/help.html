@@ -117,6 +117,8 @@
   h3.sub { font-size: 1.1rem; margin: 18px 0 10px; padding-top: 2px; }
 
   figure.shot { margin: 0; }
+  figure.shot .zoom-open { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 10px; }
+  figure.shot .zoom-open[hidden] { display: none; }
   figure.shot img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(37,66,76,.10); background: #fff; }
   figure.shot .placeholder {
     aspect-ratio: 16 / 10; border: 2px dashed var(--border); border-radius: 10px; background: repeating-linear-gradient(135deg, #f7fafb 0 12px, #eef4f6 12px 24px);
@@ -138,6 +140,10 @@
   .faq dt { font-weight: 650; margin-top: 14px; }
   .faq dd { margin: 4px 0 0; color: var(--muted); }
 
+  dialog.zoom { inset: 0; margin: auto; width: fit-content; height: fit-content; max-width: 96vw; max-height: 94vh; padding: 0; border: 0; background: transparent; overflow: visible; }
+  dialog.zoom::backdrop { background: rgba(20,32,37,.82); }
+  dialog.zoom img { display: block; max-width: 96vw; max-height: 86vh; width: auto; height: auto; border-radius: 10px; background: #fff; cursor: zoom-out; }
+  dialog.zoom p { color: #fff; text-align: center; margin: 10px 0 0; font-size: .95rem; }
   footer { max-width: 1160px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: .88rem; }
 
   dialog { border: 1px solid var(--border); border-radius: 12px; padding: 0; width: min(520px, calc(100vw - 32px)); color: var(--pacific); background: var(--card); }
@@ -434,6 +440,11 @@
   <p>Still stuck? Use <b class="ui">Send feedback</b> at the top of this page or in the app. Last updated <span id="updated"></span>.</p>
 </footer>
 
+<dialog id="zoom" class="zoom" aria-label="Enlarged picture">
+  <img id="zoom-img" alt="">
+  <p id="zoom-cap"></p>
+</dialog>
+
 <dialog id="feedback">
   <form method="dialog">
     <h2>Send feedback</h2>
@@ -481,6 +492,11 @@ const seen = new IntersectionObserver((entries) => {
 }, { rootMargin: "-80px 0px -60% 0px" });
 topics.forEach((t) => seen.observe(t));
 
+const zoom = document.getElementById("zoom");
+const zoomImg = document.getElementById("zoom-img");
+const zoomCap = document.getElementById("zoom-cap");
+zoom.addEventListener("click", () => zoom.close());
+
 // Screenshots: show the file if it exists, otherwise a labelled placeholder.
 for (const fig of document.querySelectorAll("figure.shot")) {
   const img = new Image();
@@ -490,9 +506,21 @@ for (const fig of document.querySelectorAll("figure.shot")) {
   placeholder.className = "placeholder";
   placeholder.textContent = "Screenshot coming: " + (fig.dataset.alt || "");
   // Not lazy: Chrome never loads a lazy image that is hidden or detached.
-  img.hidden = true;
-  fig.prepend(placeholder, img);
-  img.onload = () => { placeholder.remove(); img.hidden = false; };
+  // Click (or Enter) enlarges the picture; the column is too narrow to read UI text.
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "zoom-open";
+  open.setAttribute("aria-label", "Enlarge: " + (fig.dataset.alt || "picture"));
+  open.hidden = true;
+  open.append(img);
+  fig.prepend(placeholder, open);
+  img.onload = () => { placeholder.remove(); open.hidden = false; };
+  open.addEventListener("click", () => {
+    zoomImg.src = img.src;
+    zoomImg.alt = img.alt;
+    zoomCap.textContent = fig.querySelector("figcaption")?.textContent || "";
+    zoom.showModal();
+  });
   img.src = fig.dataset.src;
 }
 
