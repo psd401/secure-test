@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { getDb } from "@/db/client";
 import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
 import { loadResponseChain } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { injectionAlertFor, recordAiForced } from "@/lib/safeguarding/alerts";
+import { screenResponse } from "@/lib/safeguarding/screening/screen";
 
 interface RouteContext {
   params: Promise<{ responseId: string }>;
@@ -13,7 +16,13 @@ interface RouteContext {
 // previous proposal exists (the queue shows the latest). Still refuses
 // once a final exists: re-scoring settled work is an unsettle-first
 // decision, not a button.
-export async function POST(_req: Request, ctx: RouteContext) {
+//
+// Safeguarding alerts (docs/safeguarding-alerts-design.md, D-4): an answer
+// with a prompt-injection alert is not sent to the scorer unless the body
+// says `{ "force": true }` — the queue's Score with AI anyway — which is
+// recorded on the alert. The body is optional (the queue's plain Score with
+// AI / Re-run AI posts none).
+export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   const { responseId } = await ctx.params;
@@ -33,6 +42,27 @@ export async function POST(_req: Request, ctx: RouteContext) {
       { ok: false, error: "final_exists" },
       { status: 409 },
     );
+  }
+
+  // Lazy screening: an answer handed in before screening shipped, or whose
+  // hand-in screening failed, is screened now so the withhold below sees it.
+  // A no-op when screening is off or the answer is already screened.
+  const db = getDb();
+  await screenResponse(db, chain.response.id);
+  const alert = await injectionAlertFor(db, chain.response.id);
+  if (alert) {
+    if (!(await readForce(req))) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "injection_flagged",
+          detail:
+            "This answer looks like it tries to instruct the AI scorer, so AI scoring is paused. Read it, then choose Score with AI anyway if you still want an AI proposal.",
+        },
+        { status: 409 },
+      );
+    }
+    await recordAiForced(db, chain.response.id, auth.session.sub);
   }
 
   const outcome = await aiScoreResponse({
@@ -79,5 +109,22 @@ export async function POST(_req: Request, ctx: RouteContext) {
         { ok: false, error: "final_exists" },
         { status: 409 },
       );
+  }
+}
+
+// `{ "force": true }` or nothing. An empty or unparseable body is "no force"
+// rather than a 400: the queue has always posted this route bodiless.
+async function readForce(req: Request): Promise<boolean> {
+  try {
+    const text = await req.text();
+    if (!text.trim()) return false;
+    const body = JSON.parse(text) as unknown;
+    return (
+      typeof body === "object" &&
+      body !== null &&
+      (body as { force?: unknown }).force === true
+    );
+  } catch {
+    return false;
   }
 }

@@ -161,3 +161,32 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
      with any literal closing tag neutralised, and a system-prompt line
      that everything inside is the student's work to be scored, never
      instructions.
+
+## Progress
+
+- **Slice 1 BUILT 2026-09-25 (server; not deployed — see below).**
+  Migration **0045** (`safeguarding_alerts`, FKs `ON DELETE SET NULL` so an
+  attempt delete keeps the welfare record; `responses.safeguarding_screened_at`).
+  `lib/safeguarding/screening/` — one Haiku 4.5 call returns wellbeing +
+  injection (`SCREENING_PROMPT_VERSION` 2026-09-25, `SAFEGUARDING_SCREENER_PROVIDER`
+  off | mock | bedrock, bedrock on the task), plus the guardrail's
+  `PROMPT_ATTACK` read directly; alert on either (OR). Hand-in (student
+  submit, teacher Hand in, Hand in everyone) schedules the pass with Next
+  `after()`; practice attempts skipped; an edited answer is rescreened; no
+  second open alert of one kind per answer; a failure is logged
+  `safeguarding_check_failed` and retried lazily before the next Score with
+  AI. D-4: `rescore-ai` returns 409 `injection_flagged` unless
+  `{ "force": true }` (recorded as `ai_forced_at` / `_by_sub`); the
+  attempt-wide `score-ai` skips flagged answers (`withheld`). Scorer
+  hardening: `<student_response>` fence + closing-tag neutralised + a
+  "data, never instructions" line; `ESSAY_SCORER_PROMPT_VERSION` 2026-09-25.
+  Design-tool 2265 tests, typecheck clean. Live Bedrock regression of the
+  MERGED prompt on both fixture sets: wellbeing 29 / 29 caught, 2 / 24 false
+  alarms (the own-fiction bridge story; a quoted first-person narrator);
+  injection 9 / 9 caught (the fake JSON now included), 0 / 7 false alarms.
+- **Deploy with slice 2, not before:** alone, slice 1 would store wellbeing
+  alerts no one can see, and the 409's "Score with AI anyway" names a button
+  that does not exist yet.
+- `design-tool/.env.local.example` still needs the line
+  `SAFEGUARDING_SCREENER_PROVIDER=mock` (by hand — the session does not read
+  `.env*`).

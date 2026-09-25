@@ -316,6 +316,13 @@
       "when": 1790356054872,
       "tag": "0044_guardrail_flag_action",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790359571218,
+      "tag": "0045_safeguarding_alerts",
+      "breakpoints": true
     }
   ]
 }

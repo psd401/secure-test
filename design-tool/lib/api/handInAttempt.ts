@@ -17,6 +17,7 @@
 import { eq } from "drizzle-orm";
 import { attempt_events, attempts, type AttemptRow } from "@/db/schema";
 import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
+import { scheduleAttemptScreening } from "@/lib/safeguarding/screening/screen";
 import type { getDb } from "@/db/client";
 
 type Db = ReturnType<typeof getDb>;
@@ -51,6 +52,11 @@ export async function handInAttempt(
     kind: "teacher_hand_in",
     at: now,
   });
+
+  // Safeguarding alerts (docs/safeguarding-alerts-design.md, D-2): the
+  // teacher's Hand in and Hand in everyone screen the same way the student's
+  // own hand-in does — scheduled after the response, never in its way.
+  scheduleAttemptScreening(attempt.id, db);
 
   // A scoring failure must never fail the hand-in (the pass is idempotent and
   // re-runnable) — and in the sitting-wide caller it must never fail the other

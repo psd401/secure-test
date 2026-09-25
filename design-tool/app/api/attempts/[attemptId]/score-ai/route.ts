@@ -13,6 +13,8 @@ import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAttempt } from "@/lib/api/access";
+import { injectionAlertFor } from "@/lib/safeguarding/alerts";
+import { screenResponse } from "@/lib/safeguarding/screening/screen";
 
 // Is this item one the AI scorer targets at all? (essay + ai/hybrid)
 function isAiEligible(item: ItemRow): boolean {
@@ -31,6 +33,10 @@ interface RouteContext {
 // re-run). This route's own policy: a response that already has ANY score
 // row (proposed or final) is skipped — re-proposing is the explicit
 // slice-39 re-run action, not silent accumulation on every call.
+//
+// Safeguarding alerts (D-4): a response with an unforced prompt-injection
+// alert is withheld from this run (counted in `withheld`); only the
+// per-response route's explicit force releases it.
 export async function POST(_req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
@@ -89,6 +95,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   let skippedUnscorable = 0;
   let blocked = 0;
   let providerErrors = 0;
+  let withheld = 0;
 
   for (const response of responseRows) {
     const item = itemsById.get(response.item_id);
@@ -102,6 +109,12 @@ export async function POST(_req: Request, ctx: RouteContext) {
     }
     if (alreadyScoredIds.has(response.id)) {
       alreadyScored++;
+      continue;
+    }
+    // Lazy screening (a no-op when off or already screened), then D-4.
+    await screenResponse(db, response.id);
+    if (await injectionAlertFor(db, response.id)) {
+      withheld++;
       continue;
     }
     const outcome = await aiScoreResponse({
@@ -141,6 +154,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     skipped_not_ai: skippedNotAi,
     skipped_unscorable: skippedUnscorable,
     blocked,
+    withheld,
     provider_errors: providerErrors,
     total_responses: responseRows.length,
   });

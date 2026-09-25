@@ -207,6 +207,10 @@ export class AppService extends Construct {
       // Rubric upload (docs/rubric-upload-design.md, slice 1).
       RUBRIC_EXTRACTOR_PROVIDER: "bedrock",
       GUARDRAIL_PROVIDER: "bedrock",
+      // Safeguarding alerts (docs/safeguarding-alerts-design.md, slice 1):
+      // the Haiku 4.5 hand-in screener — already covered by the Haiku grant
+      // above.
+      SAFEGUARDING_SCREENER_PROVIDER: "bedrock",
       GUARDRAIL_ID: props.guardrailId,
       GUARDRAIL_VERSION: "1",
       OIDC_ISSUER: "https://accounts.google.com",

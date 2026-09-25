@@ -9,6 +9,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   unique,
@@ -943,6 +944,15 @@ export const responses = pgTable(
     updated_at: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // Safeguarding alerts slice 1 (docs/safeguarding-alerts-design.md): when
+    // this answer was last screened for a wellbeing disclosure / prompt
+    // injection. Null = never screened (answers from before the feature, a
+    // screening that failed, or an item type that is not screened). An answer
+    // whose `updated_at` has moved past it (edited after a pass back) is
+    // screened again on the next hand-in.
+    safeguarding_screened_at: timestamp("safeguarding_screened_at", {
+      withTimezone: true,
+    }),
   },
   (t) => ({
     attemptIdIdx: index("responses_attempt_id_idx").on(t.attempt_id),
@@ -1676,3 +1686,85 @@ export const impersonation_sessions = pgTable("impersonation_sessions", {
 
 export type ImpersonationSessionRow = typeof impersonation_sessions.$inferSelect;
 export type ImpersonationSessionInsert = typeof impersonation_sessions.$inferInsert;
+
+// Safeguarding alerts (docs/safeguarding-alerts-design.md, slice 1). One row
+// per concern raised on a handed-in essay / short-text answer: a first-person
+// wellbeing disclosure (suicidal ideation, self-harm, abuse — the Haiku
+// screener) or a prompt-injection attempt against the AI scorer (the Haiku
+// screener and/or the guardrail's PROMPT_ATTACK filter).
+//
+// Welfare records, kept indefinitely (D-6) and NOT on the 90-day sweep — so
+// every reference is ON DELETE SET NULL: deleting an attempt, an assessment
+// or a student must not delete the record that a concern was raised.
+// `evidence` is the one sentence that triggered it and the ONLY student text
+// stored; the full answer stays with the response (and goes with it).
+export const SAFEGUARDING_ALERT_KINDS = ["wellbeing", "prompt_injection"] as const;
+export type SafeguardingAlertKind = (typeof SAFEGUARDING_ALERT_KINDS)[number];
+
+export const SAFEGUARDING_ALERT_CATEGORIES = [
+  "suicidal_ideation",
+  "self_harm",
+  "abuse",
+  "prompt_injection",
+] as const;
+export type SafeguardingAlertCategory =
+  (typeof SAFEGUARDING_ALERT_CATEGORIES)[number];
+
+export const safeguarding_alerts = pgTable(
+  "safeguarding_alerts",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    response_id: uuid("response_id").references(() => responses.id, {
+      onDelete: "set null",
+    }),
+    attempt_id: uuid("attempt_id").references(() => attempts.id, {
+      onDelete: "set null",
+    }),
+    assessment_id: uuid("assessment_id").references(() => assessments.id, {
+      onDelete: "set null",
+    }),
+    /** The attempt's student (the teacher's overlay row). */
+    student_id: uuid("student_id").references(() => students.id, {
+      onDelete: "set null",
+    }),
+    /** No FK — an edited assessment may drop the item; the alert stays. */
+    item_id: uuid("item_id"),
+    kind: text("kind").notNull(),
+    category: text("category").notNull(),
+    /** The screener's 0–1 confidence; null for the guardrail (no score). */
+    confidence: real("confidence"),
+    /** The triggering sentence — an exact substring of the answer, or "". */
+    evidence: text("evidence").notNull().default(""),
+    /** `haiku-<prompt-version>`, `bedrock-guardrail`, both joined by `+`, or `mock`. */
+    detector: text("detector").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    acknowledged_at: timestamp("acknowledged_at", { withTimezone: true }),
+    acknowledged_by_sub: text("acknowledged_by_sub"),
+    acknowledged_by_email: text("acknowledged_by_email"),
+    // D-4: the teacher's "Score with AI anyway" on a prompt-injection alert —
+    // who and when, so a withheld score that was released is on the record.
+    ai_forced_at: timestamp("ai_forced_at", { withTimezone: true }),
+    ai_forced_by_sub: text("ai_forced_by_sub"),
+  },
+  (t) => ({
+    responseIdIdx: index("safeguarding_alerts_response_id_idx").on(t.response_id),
+    attemptIdIdx: index("safeguarding_alerts_attempt_id_idx").on(t.attempt_id),
+    assessmentIdIdx: index("safeguarding_alerts_assessment_id_idx").on(
+      t.assessment_id,
+    ),
+    createdAtIdx: index("safeguarding_alerts_created_at_idx").on(t.created_at),
+    kindCheck: check(
+      "safeguarding_alerts_kind_check",
+      sql`kind IN ('wellbeing', 'prompt_injection')`,
+    ),
+    categoryCheck: check(
+      "safeguarding_alerts_category_check",
+      sql`category IN ('suicidal_ideation', 'self_harm', 'abuse', 'prompt_injection')`,
+    ),
+  }),
+);
+
+export type SafeguardingAlertRow = typeof safeguarding_alerts.$inferSelect;
+export type SafeguardingAlertInsert = typeof safeguarding_alerts.$inferInsert;

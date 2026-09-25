@@ -99,7 +99,9 @@ export type ConverseSurface =
   | "math-translate"
   | "pdf-import"
   | "essay-score"
-  | "rubric-extract";
+  | "rubric-extract"
+  // Safeguarding alerts slice 1: the hand-in wellbeing / injection screener.
+  | "safeguarding-screen";
 
 // Emits the ai_usage log line (D-7). Never throws — a field read off a
 // malformed/missing `usage` becomes null rather than losing the call's

@@ -7,6 +7,7 @@ import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
+import { scheduleAttemptScreening } from "@/lib/safeguarding/screening/screen";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -62,6 +63,11 @@ export async function POST(_req: Request, ctx: RouteContext) {
     .set({ status: "submitted", submitted_at: now, updated_at: now })
     .where(eq(attempts.id, access.attempt.id))
     .returning();
+
+  // Safeguarding alerts (docs/safeguarding-alerts-design.md, D-2): screen the
+  // essay / short-text answers after the response is sent — never slows or
+  // fails the hand-in.
+  scheduleAttemptScreening(row!.id);
 
   // R0.1: auto-score in the same request the student hands in — same
   // idempotent pass the teacher-facing score route runs by hand. A scoring
