@@ -727,3 +727,26 @@ note — the commit messages and the checks file are the record. **Rows
 201–205 ✅ 2026-09-16** (Chrome on the origin; finding **D-1** cosmetic: the
 list row's inline duplicate error squeezes the name column — A-1's shape; BUILT the same night: the error is out of the flow under the button, Duplicate + Archive);
 **rows 206–214 ✅ 2026-09-17** (one demo student, Debug client, simulated lockdown; 212's two-student half not exercisable). **Finding H-1:** a student whose earlier attempt on the same assessment was handed in cannot join a new sitting — the client says "already handed in", the Monitor says Not joined with no hint; **ACCEPTED by James 2026-09-17, not built:** the Monitor / attendance row for a student whose only attempt on the assessment belongs to an earlier sitting reads "Handed in (earlier session)" (design-tool, S — `attendanceForSitting` looks up the student's attempt on the assessment, not only on this sitting), and the client's join refusal names it ("You already handed this test in during an earlier session. Ask your teacher if you need to take it again." — client, XS). **BUILT 2026-09-17 morning**: `2c8cfbc` design-tool (`submitted_earlier` status, badge + note, Handed in tile, header "· O already handed in"; joined / handed in stay this sitting's own — James), `39778810` client (rides v1.3.4). **DEPLOYED rev 39, row 215 ✅ live**; the client row is NOT RUN.
+
+## Row SG — safeguarding alerts (scoped 2026-09-25) — `docs/safeguarding-alerts-design.md` is the record
+
+Trigger: a pilot teacher's AP Lit essay blocked by the guardrail (fixed and
+live the same morning, `8b2e266`, rev 55, Aurora 0044 — essay-score input
+hits are recorded as `flag`). James then asked for alerts on suicidal
+ideation / self-harm / abuse disclosures and on prompt-injection attempts:
+teacher of the class in-app + email, maintainer CC'd for tuning. D-1…D-9
+decided; nothing built. Next: spike S-2 (Haiku 4.5 vs Nova Micro / Lite on a
+hand-built fixture set, recall on disclosures first), then S-1 (Guardrails
+`PROMPT_ATTACK` in detect mode), then slices 1–3. Email (slice 4) waits on
+SES, HELD for the next IT/AWS batch. Side: design-tool.
+
+## Environments — staging stack trigger (James, 2026-09-25)
+
+Decision: no long-lived dev / prod branches. `main` stays the one
+deployable branch; multi-slice work that must not ship half-done uses a
+short-lived feature branch + PR or an off-by-default setting. Local dev
+points at the PowerSchool test instance (base URL + credentials are
+settings). **Trigger for a second, scale-to-zero CDK stack (staging):** the
+first gradebook slice that writes to PowerSchool from the deployed app, or
+the first change that needs real Aurora / ECS / S3 / importer behaviour
+before production — whichever comes first. Side: infra.
