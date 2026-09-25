@@ -194,6 +194,23 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.3.5 — 2026-09-24** (built from `0082272bd4fe`, tag on `main`): the
+  EX-1 client (a teacher-moved deadline restarts the running countdown),
+  the No-time-limit client half (the peek poll's `time_limit_removed`
+  stops the countdown and removes the strip with a notice), keyboard reach
+  with macOS Keyboard navigation off (HS-1 + ME-1), ME-3 (KaTeX's TeX
+  annotation stripped for VoiceOver), F-A (one sheet on a refused secure
+  start), the teardown grace and sign-in logging slices, and the practice
+  sitting copy. psd-sign 0.6.0 end to end: pre-flight (clean tree, HEAD =
+  `origin/main`, 1.3.5 > v1.3.4), archive-only Developer ID + hardened
+  runtime (no re-sign), six entitlements = `expected-entitlements.txt`,
+  profile `SecureTest Developer ID` to 2044-08-30, `PSDBuildCommit` = HEAD,
+  app + pkg notarized (Accepted) and stapled; pkg sha256 `c0ba0e0d…31f5`,
+  and the `/releases/latest/download/` redirect resolves to `/v1.3.5/`
+  with the same hash. Hand-run first: the v1.3.5 rows in
+  `client/MANUAL-CHECKS.md`, real AAC sessions on a Release build
+  (2026-09-22 to 2026-09-24), including "No time limit mid-test" row 5.
+  Profile unchanged from v1.3.0.
 - **v1.3.4 — 2026-09-21** (built from `2168089cfe31`, tag on `main`): text
   autosave (5 s idle / 30 s ceiling on essay, short_text, table cells,
   inline outline), the deferred spool (a `sitting_closed` write is held
