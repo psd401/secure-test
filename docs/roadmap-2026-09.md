@@ -779,3 +779,21 @@ just never landed in a sitting.
   for approval. Not a local scheduled task: SSO expiry, colima after a
   reboot, a sleeping Mac and no one watching a failed rollout make an
   unattended laptop deploy fragile. Side: infra.
+
+## Findings from the help-page capture (2026-09-25) — proposals, nothing built
+
+Found while capturing the help page (`design-tool/public/help.html`,
+`docs/help-capture.md`) on the demo database. James: roadmap, not now.
+Side: design tool, both XS.
+
+- **HC-1 — the Hybrid label promises a review that may not happen.** The
+  editor's scoring-method select reads "Hybrid (AI + human review)", but
+  `lib/scoring/aiScoreResponse.ts` finalizes a hybrid AI score on its own at
+  confidence ≥ `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85); only below that
+  does it wait for the teacher. Proposal: relabel (e.g. "Hybrid (AI scores
+  confident answers; you review the rest)") and match the help page's
+  scoring step, which already says this.
+- **HC-2 — PDF import proposals show raw type ids.** The proposal cards
+  print `multiple_choice_single`, `short_text`, `essay` where the rest of
+  the editor says Multiple choice / Short answer / Essay. Proposal: reuse
+  the editor's type labels on the proposal cards.
