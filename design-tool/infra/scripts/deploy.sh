@@ -8,25 +8,35 @@
 #      AWS creds valid (SSO login opens a browser, so it stays a human step),
 #      colima running (it does not come back after a reboot; the image build
 #      fails with "failed to connect to the docker API" otherwise).
-#   2. what is live now: /api/health's commit, so the migration decision below
-#      is a diff between two commits, not a guess.
+#   2. what is live now: /api/health's commit, and whether this deploy carries
+#      new migration files (a diff between two commits, not a guess). DS-2: a
+#      deploy that does is refused on weekdays 07:00–15:30 America/Los_Angeles
+#      unless --during-school — the old task keeps serving while the new one
+#      migrates, and a non-additive migration would break it mid-class.
 #   3. cdk diff, printed for the record.
 #   4. cdk deploy --require-approval never (no TTY in a scripted run).
-#   5. migrate-aurora.sh — ONLY when the deploy carried new migration files.
-#      Deploy first, then migrate: the image carries its own migrations.
-#   6. verify: /api/health commit == HEAD, the service's newest deployment
-#      rolloutState == COMPLETED.
+#   5. verify: wait (up to DEPLOY_HEALTH_WAIT s, default 600) for /api/health
+#      to report HEAD, then print the service's rollout.
+#
+# Migrations (DS-1, 2026-09-25): the container runs them at boot, before the
+# server starts (scripts/docker-entrypoint.mjs), so a health stamp == HEAD also
+# proves the new image's migrations applied — the server cannot start
+# otherwise. A failing migration leaves the new task unhealthy, the circuit
+# breaker rolls back, and the old task keeps serving. migrate-aurora.sh stays
+# as the manual fallback (infra/README.md "Migrating Aurora").
 #
 # Usage (from anywhere; AWS creds loaded, colima up):
-#   design-tool/infra/scripts/deploy.sh            # the whole recipe
-#   design-tool/infra/scripts/deploy.sh --diff     # pre-flight + diff only
-#   design-tool/infra/scripts/deploy.sh --no-migrate
-# Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool).
+#   design-tool/infra/scripts/deploy.sh                  # the whole recipe
+#   design-tool/infra/scripts/deploy.sh --diff           # pre-flight + diff only
+#   design-tool/infra/scripts/deploy.sh --during-school  # override DS-2
+# Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool),
+#      DEPLOY_HEALTH_WAIT (seconds, default 600).
 #
-# Exit codes: 1 pre-flight refused; the cdk / migrate exit code otherwise.
+# Exit codes: 1 pre-flight refused; the cdk exit code otherwise; 1 when the
+# health stamp never reaches HEAD.
 # Known quirk (2026-09-08): the CDK CLI can exit 1 with "SignatureDoesNotMatch:
 # Signature expired" while monitoring a long stack event and the stack still
-# finishes — step 6 is what decides, so read it before re-running.
+# finishes — step 5 waits for the health stamp and decides.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -36,11 +46,11 @@ export AWS_REGION="${AWS_REGION:-us-west-2}"
 STACK="${STACK:-SecureTestDesignTool}"
 
 DIFF_ONLY=0
-MIGRATE=1
+DURING_SCHOOL=0
 for arg in "$@"; do
   case "$arg" in
     --diff) DIFF_ONLY=1 ;;
-    --no-migrate) MIGRATE=0 ;;
+    --during-school) DURING_SCHOOL=1 ;;
     *) echo "deploy: unknown flag $arg" >&2; exit 2 ;;
   esac
 done
@@ -74,7 +84,25 @@ LIVE_SHA="$(curl -fsS --max-time 15 "$ORIGIN/api/health" | jq -r '.commit // emp
 if [ -n "$LIVE_SHA" ]; then
   echo "live commit: $LIVE_SHA"
 else
-  echo "live commit: unknown (health did not answer) — migrations will be run unconditionally"
+  echo "live commit: unknown (health did not answer)"
+fi
+NEW_MIGRATIONS=""
+if [ -n "$LIVE_SHA" ] && git -C "$REPO" cat-file -e "$LIVE_SHA^{commit}" 2>/dev/null; then
+  NEW_MIGRATIONS="$(git -C "$REPO" diff --name-only "$LIVE_SHA" "$HEAD_SHA" -- design-tool/db/migrations/ | grep -v '/meta/' || true)"
+else
+  NEW_MIGRATIONS="(unknown live commit — assuming new migrations)"
+fi
+if [ -n "$NEW_MIGRATIONS" ]; then
+  echo "new migrations (the new task applies them at boot):"
+  echo "$NEW_MIGRATIONS"
+  # DS-2: school hours = Mon–Fri 07:00–15:30 Pacific.
+  DOW="$(TZ=America/Los_Angeles date +%u)"
+  HM="$(TZ=America/Los_Angeles date +%H%M)"
+  if [ "$DOW" -le 5 ] && [ "$((10#$HM))" -ge 700 ] && [ "$((10#$HM))" -lt 1530 ] && [ "$DURING_SCHOOL" -eq 0 ]; then
+    fail "this deploy carries migrations and it is school hours (weekday 07:00–15:30 PT) — deploy after 15:30, or pass --during-school if every migration is additive"
+  fi
+else
+  echo "no new migrations"
 fi
 
 # ---------- 3. diff ----------
@@ -91,12 +119,10 @@ CDK_EXIT=$?
 set -e
 [ "$CDK_EXIT" -eq 0 ] || echo "deploy: cdk exited $CDK_EXIT — checking the stack anyway (see the Signature-expired quirk above)"
 
-# Guard (2026-09-25): after a FAILED cdk deploy, migrate only once the new
-# image is provably serving. The Signature-expired quirk means cdk can exit 1
-# while the stack still finishes, so wait for /api/health to report HEAD; if it
-# never does (the build or the stack really failed), nothing new is live and the
-# migration step would only run the OLD image's migrations — stop instead.
-# DEPLOY_HEALTH_WAIT (seconds, default 600) bounds the wait.
+# ---------- 5. verify ----------
+# Wait for /api/health to report HEAD: the new task only starts serving once its
+# boot-time migrations applied, and the Signature-expired quirk can make cdk
+# exit 1 while the stack still finishes. DEPLOY_HEALTH_WAIT bounds the wait.
 wait_for_head() {
   local deadline=$(( $(date +%s) + ${DEPLOY_HEALTH_WAIT:-600} )) sha
   while :; do
@@ -106,44 +132,19 @@ wait_for_head() {
     sleep 20
   done
 }
-if [ "$CDK_EXIT" -ne 0 ]; then
-  echo "deploy: waiting up to ${DEPLOY_HEALTH_WAIT:-600}s for /api/health to report HEAD before any migration"
-  if ! wait_for_head; then
-    echo "deploy: health never reported HEAD ($HEAD_SHA) — nothing new is live; migrations NOT run. Fix the cdk failure and re-run." >&2
-    exit "$CDK_EXIT"
-  fi
-  echo "deploy: health reports HEAD — the stack finished despite the cdk exit; continuing"
-fi
-
-# ---------- 5. migrations ----------
-NEW_MIGRATIONS=""
-if [ -n "$LIVE_SHA" ] && git -C "$REPO" cat-file -e "$LIVE_SHA^{commit}" 2>/dev/null; then
-  NEW_MIGRATIONS="$(git -C "$REPO" diff --name-only "$LIVE_SHA" "$HEAD_SHA" -- design-tool/db/migrations/ | grep -v '/meta/' || true)"
-else
-  NEW_MIGRATIONS="(unknown live commit)"
-fi
-if [ "$MIGRATE" -eq 1 ] && [ -n "$NEW_MIGRATIONS" ]; then
-  say "migrate-aurora (new migration files since $LIVE_SHA)"
-  echo "$NEW_MIGRATIONS"
-  bash "$HERE/migrate-aurora.sh"
-else
-  say "no new migrations — Aurora untouched"
-fi
-
-# ---------- 6. verify ----------
 say "verify"
-sleep 5
-HEALTH="$(curl -fsS --max-time 15 "$ORIGIN/api/health" || echo '{}')"
-echo "health: $HEALTH"
+HEAD_LIVE=0
+wait_for_head && HEAD_LIVE=1
+echo "health: $(curl -fsS --max-time 15 "$ORIGIN/api/health" || echo '{}')"
 CLUSTER="$(aws ecs list-clusters --query "clusterArns[?contains(@, '${STACK}-')] | [0]" --output text)"
 SERVICE="$(aws ecs list-services --cluster "$CLUSTER" --query 'serviceArns[0]' --output text)"
 aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
   --query 'services[0].{taskDefinition:taskDefinition,rollout:deployments[0].rolloutState,running:runningCount}' --output table
-LIVE_AFTER="$(echo "$HEALTH" | jq -r '.commit // empty')"
-if [ "$LIVE_AFTER" = "$HEAD_SHA" ]; then
-  echo "health stamp = HEAD ✅"
-else
-  echo "health stamp ($LIVE_AFTER) != HEAD ($HEAD_SHA) — the rollout may still be in progress; re-check in a minute" >&2
-  exit "${CDK_EXIT:-1}"
+if [ "$HEAD_LIVE" -eq 1 ]; then
+  echo "health stamp = HEAD ✅ (boot-time migrations applied)"
+  [ "$CDK_EXIT" -ne 0 ] && echo "deploy: cdk exited $CDK_EXIT but the new image is serving — treated as success"
+  exit 0
 fi
-exit "$CDK_EXIT"
+echo "health stamp never reached HEAD ($HEAD_SHA) — the new task did not go healthy (failed build, failed boot migration, or a rollback). Read the task's logs before re-running." >&2
+[ "$CDK_EXIT" -ne 0 ] && exit "$CDK_EXIT"
+exit 1

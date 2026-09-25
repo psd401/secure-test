@@ -46,21 +46,28 @@ bunx cdk bootstrap aws://<account-id>/us-west-2
 # Optional: --context env=prod to name the asset bucket for prod (default dev).
 bunx cdk deploy
 
-# Then, if the deploy shipped new migrations (deploy FIRST — the image
-# carries the migrations it was built with):
-scripts/migrate-aurora.sh
+# Migrations need no separate step since DS-1 (2026-09-25): the new task
+# applies pending migrations at boot, before the server listens (see
+# "Migrating Aurora" below).
 ```
 
 Or the whole recipe as one command — pre-flight (clean tree, HEAD =
 origin/main, AWS creds, colima, context file), the live commit from
-`/api/health`, `cdk diff`, `cdk deploy --require-approval never`,
-`migrate-aurora.sh` only when migration files changed between the live
-commit and HEAD, then the health stamp + rollout state:
+`/api/health` and the migration files it would ship, `cdk diff`,
+`cdk deploy --require-approval never`, then a wait (up to 10 min) for the
+health stamp to reach HEAD + the rollout state. A health stamp = HEAD also
+proves the boot-time migrations applied.
+
+DS-2 (2026-09-25): a deploy that carries new migration files is refused
+on weekdays 07:00–15:30 America/Los_Angeles — the old task keeps serving
+while the new one migrates, and a non-additive migration would break it
+mid-class. `--during-school` overrides it when every migration is
+additive.
 
 ```bash
-scripts/deploy.sh            # everything
-scripts/deploy.sh --diff     # pre-flight + diff, no deploy
-scripts/deploy.sh --no-migrate
+scripts/deploy.sh                  # everything
+scripts/deploy.sh --diff           # pre-flight + diff, no deploy
+scripts/deploy.sh --during-school  # override the school-hours guard
 ```
 
 `aws sso login` stays a human step (it opens a browser).
@@ -203,6 +210,18 @@ bunx cdk destroy
 - Whether to keep public-access posture for prod, or move to private + RDS Proxy + in-VPC app deployment (folds into the future Next.js deployment slice).
 
 ## Migrating Aurora
+
+**Since DS-1 (2026-09-25) every deploy migrates on its own:**
+`scripts/docker-entrypoint.mjs` imports `db/migrate.mjs` before
+`server.js` when it boots the server, under a Postgres advisory lock
+(`hashtext('secure-test:migrate')`) so two tasks — or a task and a manual
+run — never migrate at once. Drizzle applies all pending migrations in one
+transaction; a failure exits the container, the task never passes the ALB
+health check (120 s grace), the circuit breaker rolls back, and the old
+task keeps serving on the untouched schema. `SKIP_MIGRATE_ON_START=1` in
+the task environment turns it off without a new image. `migrate-aurora.sh`
+below stays as the manual path (a re-run is a no-op) and as the way to
+read the migration count.
 
 REWRITTEN 2026-09-01 (infra slice): migrations run **inside the VPC** as a
 one-off ECS `run-task`, and the laptop CIDR rule is gone from the stack.

@@ -760,14 +760,14 @@ read of a table with a new column fails (answer saves, resume, hand-in,
 Monitor). Earlier additive migrations (0041, 0043…) had the same gap; it
 just never landed in a sitting.
 
-- **DS-1 (decided, build right after the row SG deploy): migrate on start.**
+- **DS-1 (decided, build right after the row SG deploy): migrate on start.** **BUILT 2026-09-25 evening, not yet deployed** — entrypoint migrates before `server.js` under an advisory lock, health-check grace 120 s, `deploy.sh` drops its migrate step and waits for the health stamp; proven on a local image-like layout (fresh boot, no-op re-boot, `SKIP_MIGRATE_ON_START=1`, a broken migration → exit 1, no server, schema rolled back), the real proof is the next deploy carrying a migration.
   The container's server mode runs `db/migrate.mjs` before starting Next;
   the new task goes healthy only after its migrations applied while the old
   task keeps serving (old code tolerates an added column / table).
   `migrate-aurora.sh` stays as the fallback. Watch: a slow migration vs the
   health-check grace period (circuit-breaker rollback); a NON-additive
   migration still breaks the old task during the overlap.
-- **DS-2 (decided, same slice): deploy-hours guard.** `deploy.sh` refuses a
+- **DS-2 (decided, same slice): deploy-hours guard.** **BUILT 2026-09-25 evening** with DS-1. `deploy.sh` refuses a
   deploy carrying new migration files on weekdays 07:00–15:30 PT unless
   `--during-school` is passed — the backstop for the rare non-additive one.
 - **DS-3 (scoped, later — pairs with the staging-stack trigger in

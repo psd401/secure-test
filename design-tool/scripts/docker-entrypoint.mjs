@@ -79,6 +79,19 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `postgres://${user}:${pass}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=require`;
 }
 
+// DS-1 (docs/roadmap-2026-09.md "Deploy safety", 2026-09-25): the server boot
+// applies pending migrations FIRST. The new task only starts listening — and
+// so only passes the ALB health check — once they applied; a failing one
+// throws here, the container exits non-zero, ECS's circuit breaker rolls the
+// deploy back and the old task keeps serving. Drizzle applies all pending
+// migrations in one transaction, so a failure leaves the schema untouched.
+// SKIP_MIGRATE_ON_START=1 in the task environment turns this off without a
+// new image (migrate-aurora.sh remains the manual path).
+if (mode === undefined && process.env.SKIP_MIGRATE_ON_START !== "1") {
+  console.log("docker-entrypoint: applying migrations before the server starts");
+  await import(new URL("../db/migrate.mjs", import.meta.url).href);
+}
+
 await import(
   new URL(mode === undefined ? "../server.js" : MODES[mode], import.meta.url).href,
 );

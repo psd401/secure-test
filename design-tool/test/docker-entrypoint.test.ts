@@ -63,11 +63,59 @@ async function run(
   };
 }
 
+async function runAll(
+  env: Record<string, string>,
+): Promise<{ code: number; lines: string[] }> {
+  const proc = Bun.spawn(["node", entry], {
+    env: { PATH: process.env.PATH ?? "", ...env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  return { code, lines: out.trim().split("\n") };
+}
+
 describe("docker-entrypoint mode dispatch", () => {
-  test("no argument boots the server", async () => {
-    const { code, out } = await run([]);
-    expect(out).toBe('server []');
+  // DS-1 (2026-09-25): a server boot applies migrations FIRST.
+  test("no argument migrates, then boots the server", async () => {
+    const { code, lines } = await runAll({ DATABASE_URL: "postgres://stub/stub" });
+    const migrate = lines.indexOf("migrate []");
+    const server = lines.indexOf("server []");
+    expect(migrate).toBeGreaterThan(-1);
+    expect(server).toBeGreaterThan(migrate);
     expect(code).toBe(0);
+  });
+
+  test("SKIP_MIGRATE_ON_START=1 boots the server without migrating", async () => {
+    const { code, lines } = await runAll({
+      DATABASE_URL: "postgres://stub/stub",
+      SKIP_MIGRATE_ON_START: "1",
+    });
+    expect(lines).not.toContain("migrate []");
+    expect(lines).toContain("server []");
+    expect(code).toBe(0);
+  });
+
+  test("a failing boot migration exits non-zero and never starts the server", async () => {
+    const failDir = await mkdtemp(path.join(os.tmpdir(), "entrypoint-fail-"));
+    try {
+      await mkdir(path.join(failDir, "scripts"));
+      await mkdir(path.join(failDir, "db"));
+      const failEntry = path.join(failDir, "scripts", "docker-entrypoint.mjs");
+      await copyFile(entry, failEntry);
+      await writeFile(path.join(failDir, "db", "migrate.mjs"), 'throw new Error("migration failed");\n');
+      await writeFile(path.join(failDir, "server.js"), STUB("server"));
+      const proc = Bun.spawn(["node", failEntry], {
+        env: { PATH: process.env.PATH ?? "", DATABASE_URL: "postgres://stub/stub" },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+      expect(code).not.toBe(0);
+      expect(out).not.toContain("server []");
+    } finally {
+      await rm(failDir, { recursive: true, force: true });
+    }
   });
 
   test("each mode runs its own bundled script", async () => {

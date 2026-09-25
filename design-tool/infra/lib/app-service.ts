@@ -310,6 +310,10 @@ export class AppService extends Construct {
         // Roll back a deploy whose tasks never go healthy instead of
         // flapping forever.
         circuitBreaker: { rollback: true },
+        // DS-1: the container applies migrations before it listens, so the
+        // first health checks can land while Aurora wakes or a migration
+        // runs. 120 s before a failing check counts (James, 2026-09-25).
+        healthCheckGracePeriod: cdk.Duration.seconds(120),
         // Slice 4: HTTPS listener on the placeholder domain (decision 1.1)
         // + HTTP→HTTPS redirect. domainZone stays unset — the psd401.ai
         // zone is outside this stack, James adds the ALIAS/CNAME to the

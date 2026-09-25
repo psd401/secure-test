@@ -29,7 +29,16 @@ const journal = JSON.parse(
 const sql = postgres(url, { max: 1 });
 const db = drizzle(sql);
 
-await migrate(db, { migrationsFolder });
+// DS-1 (2026-09-25): the container now migrates at boot, so two tasks (or a
+// task and a manual migrate-aurora.sh run) can reach this at once. A session
+// advisory lock serialises them; the second waits, then finds nothing to do.
+// `max: 1` above keeps the lock and the migration on the same connection.
+await sql`select pg_advisory_lock(hashtext('secure-test:migrate'))`;
+try {
+  await migrate(db, { migrationsFolder });
+} finally {
+  await sql`select pg_advisory_unlock(hashtext('secure-test:migrate'))`;
+}
 
 // drizzle's table records hash + created_at only, so the count against the
 // journal is the verification line — after a run-task, CloudWatch is the only
