@@ -32,12 +32,14 @@ import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
-import { pageAssessment } from "@/lib/api/access";
+import { authorizeAssessment } from "@/lib/api/access";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
 import { PassBackAndReload } from "../PassBackAndReload";
+import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
+import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -235,6 +237,11 @@ function TableGrid({
   );
 }
 
+/** The page anchor of one answer — the safeguarding panel links to it. */
+function answerAnchor(itemId: string): string {
+  return `answer-${itemId}`;
+}
+
 /**
  * R1 (docs/reporting-design.md): one student's whole attempt on one page —
  * every item in order with what they answered, what it scored and who
@@ -265,10 +272,16 @@ export default async function AttemptResultPage({ params }: PageProps) {
   }
 
   const db = getDb();
-  const assessment = await pageAssessment(db, session, id, "view");
-  if (!assessment) {
+  const access = await authorizeAssessment(db, session, id, "view");
+  if (!access.ok) {
     notFound();
   }
+  const assessment = access.assessment;
+  // Safeguarding alerts slice 2: an admin reading a teacher's page (D-7) sees
+  // the alerts but does not acknowledge them — Acknowledge clears the
+  // teacher's badge, and access-model D-6 keeps admin writes outside the admin surface to
+  // Act as. The route refuses the same way.
+  const canAcknowledge = access.via !== "admin";
 
   const [attempt] = await db
     .select()
@@ -370,6 +383,25 @@ export default async function AttemptResultPage({ params }: PageProps) {
       detail: e.detail,
     })),
   );
+
+  // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): every
+  // alert on this attempt, open and acknowledged, newest first — the panel
+  // at the top. Each links to its answer below by the article's anchor; an
+  // item removed since has no anchor and the card names no question.
+  const positionByItem = new Map(itemRows.map((i) => [i.id, i.position] as const));
+  const panelAlerts: PanelAlert[] = (await alertsForAttempt(db, attemptId)).map((a) => {
+    const position = a.item_id ? (positionByItem.get(a.item_id) ?? null) : null;
+    return {
+      id: a.id,
+      category: a.category,
+      evidence: a.evidence,
+      created_at: a.created_at,
+      acknowledged_at: a.acknowledged_at,
+      acknowledged_by_email: a.acknowledged_by_email,
+      item_position: position,
+      answer_anchor: position === null ? null : answerAnchor(a.item_id!),
+    };
+  });
 
   const identity = [row.student.student_number, row.student.section]
     .filter(Boolean)
@@ -498,6 +530,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
         </div>
       </div>
 
+      <SafeguardingPanel alerts={panelAlerts} canAcknowledge={canAcknowledge} />
+
       <section aria-labelledby="answers" className="space-y-4">
         <h2 id="answers" className="text-lg font-semibold">
           Answers
@@ -531,7 +565,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
           return (
             <article
               key={item.id}
-              className="rounded-lg border border-border p-4"
+              id={answerAnchor(item.id)}
+              className="scroll-mt-4 rounded-lg border border-border p-4"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-sm font-medium">

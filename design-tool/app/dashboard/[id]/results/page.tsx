@@ -12,6 +12,8 @@ import { UUID_RE } from "@/lib/uuid";
 import { pageAssessment } from "@/lib/api/access";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
+import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
+import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +78,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     include_in_progress: true,
   });
   const { analytics, submitted_count } = await loadItemAnalytics(id);
+  // Safeguarding alerts slice 2: the "Needs attention" badge on each row
+  // with an OPEN alert; the per-student page carries the detail.
+  const openAlerts = await openAlertCountsByAttempt(
+    db,
+    results.rows.map((r) => r.attempt_id),
+  );
 
   const raw = (await searchParams).section;
   const selectedSection = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
@@ -227,6 +235,11 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                         .filter(Boolean)
                         .join(" · ") || row.student.ssid}
                     </span>
+                    {openAlerts.get(row.attempt_id) ? (
+                      <span className="ml-2 align-middle">
+                        <SafeguardingBadge count={openAlerts.get(row.attempt_id) ?? 0} />
+                      </span>
+                    ) : null}
                   </td>
                   {row.cells.map((cell, i) => (
                     <td

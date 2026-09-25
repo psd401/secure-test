@@ -137,6 +137,13 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("admin", "impersonate"),
     "admin surface: principal-addressed, gated by isAdmin with a 404 refusal",
   ],
+  // Safeguarding alerts slice 2 (D-7): the district-wide alert list. It
+  // addresses no one row — every alert, for the system admin — and carries the
+  // same isAdmin-with-a-404 gate as the rest of the admin surface.
+  [
+    join("admin", "safeguarding-alerts"),
+    "admin surface: district-wide list, gated by isAdmin with a 404 refusal",
+  ],
   [
     join("admin", "impersonate", "stop"),
     "gated on the session's own actor_* with a 404 refusal; addresses no row",

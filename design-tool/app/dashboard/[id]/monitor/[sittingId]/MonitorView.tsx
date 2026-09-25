@@ -60,6 +60,7 @@ import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
 import { PassBackControl } from "@/components/app/PassBackControl";
+import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt } from "@/lib/ui/format";
@@ -556,6 +557,7 @@ export function MonitorView({
                     row={r}
                     state={st}
                     now={now}
+                    assessmentId={assessmentId}
                     sessionClosed={session.status === "closed"}
                     onDeleted={() => void load()}
                     selectable={!isPractice}
@@ -623,6 +625,7 @@ function StudentRow({
   row: r,
   state: st,
   now,
+  assessmentId,
   sessionClosed,
   onDeleted,
   selectable,
@@ -632,6 +635,7 @@ function StudentRow({
   row: AttendanceRow;
   state: StudentState;
   now: number;
+  assessmentId: string;
   sessionClosed: boolean;
   onDeleted: () => void;
   /** Whether the checkbox COLUMN exists (not on a practice sitting). */
@@ -703,6 +707,16 @@ function StudentRow({
           />
           {earlierNote ? (
             <span className="text-xs text-muted-foreground">{earlierNote}</span>
+          ) : null}
+          {/* Safeguarding alerts slice 2: an OPEN alert on this attempt —
+              the per-student results page has the detail and Acknowledge. */}
+          {r.attempt_id && (r.safeguarding_open ?? 0) > 0 ? (
+            <Link
+              href={`/dashboard/${assessmentId}/results/${r.attempt_id}`}
+              className="no-underline"
+            >
+              <SafeguardingBadge count={r.safeguarding_open ?? 0} />
+            </Link>
           ) : null}
           {/* Time extension: the effective deadline, once there is one to
               show — null on every row with no limit and no extension; "No

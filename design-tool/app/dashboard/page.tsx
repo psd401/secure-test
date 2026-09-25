@@ -31,6 +31,8 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
 import { SessionCode } from "@/components/app/SessionCode";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
+import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
+import { openAlertCountsByAssessment } from "@/lib/safeguarding/alertQueries";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessments" };
@@ -172,6 +174,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const accessFor = new Map(rows.map((a) => [a.id, visible.annotate(a)]));
   const questionsFor = new Map(questionCounts.map((c) => [c.assessment_id, c.n]));
   const attemptsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c.n]));
+  // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): open
+  // alerts per row, through the same scope fragment as the list itself.
+  const openAlertsFor = await openAlertCountsByAssessment(db, visible.condition);
   // Slice C: offers from colleagues that have not been added yet. Accepted
   // ones already appear in the list below as the teacher's own copy.
   const pendingShares = session.email
@@ -367,6 +372,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <AssessmentStatusBadge status={a.status} />
+                        {openAlertsFor.get(a.id) ? (
+                          <Link href={`/dashboard/${a.id}/results`} className="no-underline">
+                            <SafeguardingBadge
+                              count={openAlertsFor.get(a.id) ?? 0}
+                              title="A safeguarding check flagged an answer on this assessment. Open Results to read it."
+                            />
+                          </Link>
+                        ) : null}
                         {code ? (
                           <Badge variant="info">
                             Open session · <span className="font-mono">{code}</span>

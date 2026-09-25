@@ -996,3 +996,33 @@ progress on an open sitting.
 | 287 | Hand in a removed student, then **Pass back** from the per-student page | The dialog asks for no deadline (untimed); after it the page still reads "No time limit" | ✅ 2026-09-24 — the pass-back dialog had no deadline input; after it the header read "passed back 1 time · No time limit" |
 | 288 | Client: a student already in the test when the limit is removed | Every client through v1.3.5 as built: the old countdown stays on screen (the peek poll simply stops carrying a deadline, and the client only reacts to a deadline that is present); if it reaches zero the Mac ends the secure session with "Time is up." as usual, the server still accepts their answers, and on **Resume** there is no countdown. A client that hides the countdown when the poll stops carrying one is unbuilt | Superseded 2026-09-24 by `89f989c` (the peek poll now says `time_limit_removed: true` and v1.3.5 drops the countdown) — the client behaviour is the five rows in `client/MANUAL-CHECKS.md` "v1.3.5 — No time limit mid-test"; older clients behave as this row first described |
 | 289 | A practice sitting's Monitor | No checkboxes, no "Adjust time for selected"; the row's own Adjust time still offers both choices | ✅ 2026-09-24 — practice Monitor: no checkboxes, no "Adjust time for selected", no header Adjust time; the row's Adjust time offers New deadline + No time limit |
+
+## Safeguarding alerts — teacher + admin UI (2026-09-25)
+
+Slice 2 of `docs/safeguarding-alerts-design.md`: the "Needs attention" badge
+on the results matrix, the Monitor and the home list; the per-student panel
+with Acknowledge; the scoring queue's alert card and **Score with AI
+anyway**; the admin list at `/admin/safeguarding`. The routes, access and
+markup are covered by `test/safeguarding-alerts-ui.test.tsx`; these rows are
+what only the browser shows. Needs `SAFEGUARDING_SCREENER_PROVIDER=mock` on
+the server (local dev) so hand-in screening runs on the mock sentinels, an
+assessment with an AI-scored essay and a short text, and a student sitting.
+Fixture text is written for the purpose: the answer carries a sentinel
+(`SG_SUICIDE`, `SG_SELFHARM`, `SG_ABUSE`, `SG_INJECT`) inside an ordinary
+sentence — never real student writing.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 290 | Hand in four attempts, one sentinel each (`SG_SUICIDE`, `SG_SELFHARM`, `SG_ABUSE` in the essay; `SG_INJECT` in the short text) | Each attempt carries one alert of the right kind and category (`GET /api/assessments/<id>/safeguarding-alerts`) | NOT RUN |
+| 291 | Results matrix after 290 | A red "Needs attention" badge beside each of the four names; a clean attempt has none; two alerts on one attempt read "Needs attention (2)" | NOT RUN |
+| 292 | The Monitor for that sitting, after the next poll | The badge on each flagged handed-in row; clicking it opens that student's results page | NOT RUN |
+| 293 | Home (Assessments list) | The assessment row shows the badge with its open count; clicking it opens Results | NOT RUN |
+| 294 | Per-student page of a flagged attempt | A "Needs attention" panel at the top: the category heading ("Possible suicidal thoughts" / "Possible self-harm" / "Possible abuse" / "Possible attempt to instruct the AI scorer"), the evidence sentence quoted, "From Q<n>" linking down to that answer, "Flagged automatically on <date>", **Acknowledge**, and the fixed "This check is automated…" line under the cards | NOT RUN |
+| 295 | **Acknowledge** on 294 | The page reloads; the card reads "Acknowledged by <your email> on <date>"; the matrix, Monitor and home badges drop that alert (gone when none is left open) | NOT RUN |
+| 296 | Scoring queue: an AI-scored essay with `SG_INJECT`, handed in while screening was OFF, then screening turned on → **Score with AI** | The error line shows the "AI scoring is paused" detail; the card reloads with the alert (heading + evidence) and **Score with AI anyway** where Score with AI was — no dead end | NOT RUN |
+| 297 | **Score with AI anyway** on 296 | An AI proposal appears on the card; the alert card is gone from it; the alert row has `ai_forced_at` set (DB or the GET route) | NOT RUN |
+| 298 | A queue card whose answer has a wellbeing alert | The badge and a link "Read the flagged answer on the student's page" that opens it | NOT RUN |
+| 299 | Acknowledge the injection alert of a NOT-yet-forced answer, then back to the queue | The card still shows the alert and **Score with AI anyway** — acknowledging does not release the AI score (D-4) | NOT RUN |
+| 300 | System admin: `/admin` → **Safeguarding alerts** | The line reads "N open"; the page lists date, concern, assessment, teacher email, student, Open / Acknowledged; **Open only** / **All** toggle the list; **Open** lands on the per-student page with the panel but no Acknowledge button ("Not acknowledged yet by the teacher.") | NOT RUN |
+| 301 | Co-teacher (granted on the assessment) | Sees the badges and the panel with the owner's student names, and can **Acknowledge** — the card then names the co-teacher's email | NOT RUN (needs a second staff account) |
+| 302 | A teacher with no access to the assessment | The per-student URL and `GET /api/assessments/<id>/safeguarding-alerts` both 404; `/admin/safeguarding` 404s too (and for an admin while acting as someone) | NOT RUN (needs a second staff account) |

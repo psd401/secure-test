@@ -6,6 +6,8 @@ import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
 import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 import { tableCellMatches } from "@/lib/scoring/auto";
+import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
+import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
 
 // Slice 39: client panel for the review queue. Two groups fall out of the
 // API's `proposed` field: AI proposals awaiting approve/override, and
@@ -18,6 +20,12 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 // proposal yet also gets a "Score with AI" button above the manual picker —
 // before this the per-response rescore-ai route was only reachable from the
 // proposal branch ("Re-run AI"), so a first proposal had no UI path at all.
+//
+// Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md, D-4): an
+// answer with an unforced prompt-injection alert shows the alert and offers
+// only "Score with AI anyway" (posts `{ "force": true }`) where Score with AI
+// / Re-run AI would be. A plain Score with AI that the lazy screen turns into
+// a 409 `injection_flagged` refetches, so the card lands in that same state.
 
 interface QueueEntry {
   response_id: string;
@@ -25,6 +33,21 @@ interface QueueEntry {
   /** E12 slice 4: what this student saw as the stimulus, when it was their own earlier answer. */
   outline?: { origin: "source" | "inline" | "missing"; words: number } | null;
   student: { name: string; ssid: string };
+  /**
+   * Safeguarding alerts slice 2: the newest prompt-injection alert that still
+   * withholds the AI score (not yet forced), and every wellbeing alert on this
+   * answer. Absent from an older payload = none.
+   */
+  safeguarding?: {
+    injection: {
+      id: string;
+      category: string;
+      evidence: string;
+      created_at: string;
+      acknowledged_at: string | null;
+    } | null;
+    wellbeing: Array<{ id: string; category: string; acknowledged_at: string | null }>;
+  };
   item: {
     id: string;
     position: number;
@@ -91,6 +114,108 @@ export function offersAiScoring(entry: {
   if (entry.proposed) return false;
   return (
     entry.item.scoring_method === "ai" || entry.item.scoring_method === "hybrid"
+  );
+}
+
+/**
+ * Safeguarding alerts slice 2 (D-4): does this card replace Score with AI /
+ * Re-run AI with "Score with AI anyway"? Only when an unforced
+ * prompt-injection alert withholds the AI score AND the card would otherwise
+ * offer an AI run at all — a proposal already there (Re-run AI) or a first
+ * one on offer (`offersAiScoring`). A `human` item's card has no AI button to
+ * replace, so it shows the alert and nothing more.
+ */
+export function offersScoreAnyway(entry: {
+  item: { scoring_method: string };
+  proposed: unknown | null;
+  safeguarding?: { injection: unknown | null } | null;
+}): boolean {
+  if (!entry.safeguarding?.injection) return false;
+  return entry.proposed !== null || offersAiScoring(entry);
+}
+
+/**
+ * The refusal that means "reload, the card has changed": rescore-ai's 409
+ * `injection_flagged`, raised when the lazy screen flags the answer at click
+ * time. After the refetch the entry carries the alert, so the card shows it
+ * and Score with AI anyway rather than a button that can only fail again.
+ */
+export function refetchesAfterRefusal(status: number, error: string | undefined): boolean {
+  return status === 409 && error === "injection_flagged";
+}
+
+/** Safeguarding alerts slice 2: the withheld card's one AI button. */
+export function ScoreAnywayRow({
+  busy,
+  onClick,
+}: {
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button
+        disabled={busy}
+        onClick={onClick}
+        className="rounded-md border border-border px-3 py-1 text-xs font-medium disabled:opacity-40"
+      >
+        Score with AI anyway
+      </button>
+      <span className="text-xs text-muted-foreground">
+        Read the answer first. Or score it yourself below.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Safeguarding alerts slice 2: what the queue card shows about the answer's
+ * alerts — the injection alert in full (it is why the AI button changed), and
+ * for a wellbeing alert the badge and a link to the student's page, where the
+ * detail and Acknowledge live. Renders nothing when there are none.
+ */
+export function QueueAlerts({
+  entry,
+  assessmentId,
+}: {
+  entry: Pick<QueueEntry, "attempt_id" | "safeguarding">;
+  assessmentId: string;
+}) {
+  const injection = entry.safeguarding?.injection ?? null;
+  const wellbeing = entry.safeguarding?.wellbeing ?? [];
+  if (!injection && wellbeing.length === 0) return null;
+  const openWellbeing = openAlertCount(wellbeing);
+  return (
+    <div className="mt-2 space-y-2">
+      {injection ? (
+        <div className="rounded border border-danger-foreground/40 bg-danger p-2">
+          <p className="text-xs font-semibold text-danger-foreground">
+            {alertHeading(injection.category)}
+          </p>
+          {injection.evidence ? (
+            <blockquote className="mt-1 whitespace-pre-wrap rounded bg-background p-2 text-xs">
+              {injection.evidence}
+            </blockquote>
+          ) : null}
+          <p className="mt-1 text-xs text-muted-foreground">
+            AI scoring is paused for this answer.
+          </p>
+        </div>
+      ) : null}
+      {wellbeing.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <SafeguardingBadge count={openWellbeing} />
+          <Link
+            href={`/dashboard/${assessmentId}/results/${entry.attempt_id}`}
+            className="text-xs underline"
+          >
+            {openWellbeing > 0
+              ? "Read the flagged answer on the student's page"
+              : "Flagged earlier, acknowledged — see the student's page"}
+          </Link>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -286,6 +411,9 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           error?: string;
           detail?: string;
         } | null;
+        // Safeguarding alerts slice 2: the card changed under the click (the
+        // lazy screen flagged the answer) — reload it before showing why.
+        if (refetchesAfterRefusal(res.status, body?.error)) await refetch();
         throw new Error(body?.detail ?? body?.error ?? `HTTP ${res.status}`);
       }
       await refetch();
@@ -303,6 +431,18 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
   function rerunAi(responseId: string) {
     void act(() =>
       fetch(`/api/responses/${responseId}/rescore-ai`, { method: "POST" }),
+    );
+  }
+
+  // D-4: the teacher's explicit override of the withhold, recorded on the
+  // alert by the route (`ai_forced_at`).
+  function scoreAnyway(responseId: string) {
+    void act(() =>
+      fetch(`/api/responses/${responseId}/rescore-ai`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      }),
     );
   }
 
@@ -476,6 +616,7 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground"
           dangerouslySetInnerHTML={{ __html: entry.item.stem_html }}
         />
+        <QueueAlerts entry={entry} assessmentId={assessmentId} />
         {entry.outline ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Outline:{" "}
@@ -529,13 +670,23 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
                 >
                   Approve
                 </button>
-                <button
-                  disabled={busy}
-                  onClick={() => rerunAi(entry.response_id)}
-                  className="rounded-md border border-border px-3 py-1 text-xs disabled:opacity-40"
-                >
-                  Re-run AI
-                </button>
+                {offersScoreAnyway(entry) ? (
+                  <button
+                    disabled={busy}
+                    onClick={() => scoreAnyway(entry.response_id)}
+                    className="rounded-md border border-border px-3 py-1 text-xs disabled:opacity-40"
+                  >
+                    Score with AI anyway
+                  </button>
+                ) : (
+                  <button
+                    disabled={busy}
+                    onClick={() => rerunAi(entry.response_id)}
+                    className="rounded-md border border-border px-3 py-1 text-xs disabled:opacity-40"
+                  >
+                    Re-run AI
+                  </button>
+                )}
               </div>
             </div>
             {proposalDetail(entry)}
@@ -557,7 +708,12 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           </div>
         ) : (
           <>
-            {offersAiScoring(entry) ? (
+            {offersScoreAnyway(entry) ? (
+              <ScoreAnywayRow
+                busy={busy}
+                onClick={() => scoreAnyway(entry.response_id)}
+              />
+            ) : offersAiScoring(entry) ? (
               <ScoreWithAiRow
                 busy={busy}
                 onClick={() => rerunAi(entry.response_id)}

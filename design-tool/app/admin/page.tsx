@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, test_sessions } from "@/db/schema";
+import { assessments, safeguarding_alerts, test_sessions } from "@/db/schema";
 import { isAdmin } from "@/lib/auth/admin";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { closesAt, formatDate } from "@/lib/ui/format";
@@ -72,6 +72,10 @@ export default async function AdminPage() {
     .innerJoin(assessments, eq(assessments.id, test_sessions.assessment_id))
     .where(and(eq(test_sessions.status, "open"), gt(test_sessions.expires_at, now)))
     .orderBy(desc(test_sessions.created_at));
+  const [{ n: openAlerts } = { n: 0 }] = await db
+    .select({ n: count() })
+    .from(safeguarding_alerts)
+    .where(isNull(safeguarding_alerts.acknowledged_at));
 
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-6 py-12">
@@ -79,6 +83,17 @@ export default async function AdminPage() {
         title="Admin"
         description={`Test sessions open across the district (${rows.length})`}
       />
+
+      {/* Safeguarding alerts slice 2 (D-7): the district-wide list lives on
+          its own page; this line says whether there is anything on it. */}
+      <p className="text-sm">
+        <Link href="/admin/safeguarding" className="font-medium underline">
+          Safeguarding alerts
+        </Link>{" "}
+        <span className="text-muted-foreground">
+          · {openAlerts === 0 ? "none open" : `${openAlerts} open`}
+        </span>
+      </p>
 
       {rows.length === 0 ? (
         <EmptyState title="No test sessions are open right now." />

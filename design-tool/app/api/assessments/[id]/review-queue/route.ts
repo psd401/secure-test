@@ -23,6 +23,7 @@ import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -159,6 +160,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .from(item_sets)
     .where(eq(item_sets.assessment_id, id));
   const sourceOfSet = new Map(setSourceRows.map((s) => [s.id, s.source_item_id]));
+  // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): each
+  // entry carries the alerts on its answer — the newest UNFORCED
+  // prompt-injection alert (the one withholding the AI score, D-4, whether or
+  // not it has been acknowledged) and every wellbeing alert.
+  const alertsByResponse = await alertsForResponses(
+    db,
+    responseRows.map((r) => r.id),
+  );
   const outlineCache = new Map<string, { origin: "source" | "inline" | "missing"; words: number }>();
   const entries = [];
   for (const response of responseRows) {
@@ -183,8 +192,29 @@ export async function GET(_req: Request, ctx: RouteContext) {
       }
       outline = cached;
     }
+    const responseAlerts = alertsByResponse.get(response.id) ?? [];
+    const injection =
+      responseAlerts.find((a) => a.kind === "prompt_injection" && a.ai_forced_at === null) ?? null;
     entries.push({
       outline,
+      safeguarding: {
+        injection: injection
+          ? {
+              id: injection.id,
+              category: injection.category,
+              evidence: injection.evidence,
+              created_at: injection.created_at,
+              acknowledged_at: injection.acknowledged_at,
+            }
+          : null,
+        wellbeing: responseAlerts
+          .filter((a) => a.kind === "wellbeing")
+          .map((a) => ({
+            id: a.id,
+            category: a.category,
+            acknowledged_at: a.acknowledged_at,
+          })),
+      },
       response_id: response.id,
       attempt_id: response.attempt_id,
       student: student

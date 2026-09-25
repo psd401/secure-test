@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { attendanceForSitting } from "@/lib/api/sittingAttendance";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
+import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -30,6 +31,15 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const sitting = access.sitting;
 
   const attendance = await attendanceForSitting(db, sitting);
+  // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): each
+  // row's OPEN alert count, for the Monitor's "Needs attention" badge.
+  // Screening runs after hand-in, so a count appears on a handed-in row at the
+  // next poll. Added here rather than in `attendanceForSitting`, whose other
+  // callers (the Test sessions tab) have no badge to draw.
+  const openAlerts = await openAlertCountsByAttempt(
+    db,
+    attendance.rows.map((r) => r.attempt_id).filter((v): v is string => !!v),
+  );
   return NextResponse.json({
     test_session: {
       id: sitting.id,
@@ -40,5 +50,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
       student_ps_ids: sitting.student_ps_ids,
     },
     ...attendance,
+    rows: attendance.rows.map((r) => ({
+      ...r,
+      safeguarding_open: r.attempt_id ? (openAlerts.get(r.attempt_id) ?? 0) : 0,
+    })),
   });
 }

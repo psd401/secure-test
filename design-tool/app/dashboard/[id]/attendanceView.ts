@@ -52,6 +52,9 @@ export interface AttendanceRow {
   /** Remove time limit (2026-09-24): this row's in-progress attempt has "No
    * time limit". False on every other row, submitted ones included. */
   time_limit_removed: boolean;
+  /** Safeguarding alerts slice 2: open alerts on this row's attempt. Only the
+   * Monitor's attendance route sends it; absent = 0. */
+  safeguarding_open?: number;
 }
 
 export interface AttendancePayload {

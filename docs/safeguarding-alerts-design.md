@@ -190,3 +190,57 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
 - `design-tool/.env.local.example` still needs the line
   `SAFEGUARDING_SCREENER_PROVIDER=mock` (by hand — the session does not read
   `.env*`).
+- **Slice 2 BUILT 2026-09-25 (teacher + admin UI; not deployed, nothing
+  run by hand).** Routes: `GET /api/assessments/[id]/safeguarding-alerts`
+  (view level; newest first; `?open=1`; the student named through
+  `buildResults`, so the owner's overlay names them for a co-teacher or an
+  admin too; an alert whose attempt was deleted falls back to the owner's
+  overlay row), `POST /api/safeguarding-alerts/[alertId]/acknowledge`
+  (through the alert's assessment at view level; idempotent — the first
+  acknowledgement stands; an alert whose assessment is gone 404s; does not
+  touch `ai_forced_at`), `GET /api/admin/safeguarding-alerts` (`isAdmin`
+  with a 404, so an impersonating admin is refused; adds the assessment
+  title and owner email). Shared reads in `lib/safeguarding/alertQueries.ts`,
+  pure wording / counts / filter in `lib/safeguarding/alertView.ts`. UI:
+  `components/app/SafeguardingBadge.tsx` (the `danger` tint + warning icon
+  the Monitor's own "Needs attention" uses; the count only above 1) on the
+  results matrix row, the Monitor row (the attendance route adds
+  `safeguarding_open` per row — screening runs after hand-in, so it shows
+  on the next poll), the home list row (counted through the list's own
+  scope fragment), and the queue card; `SafeguardingPanel` at the top of the
+  per-student page (category heading, the evidence quoted, "From Q<n>"
+  anchored to the answer, the date, Acknowledge or "Acknowledged by …", the
+  fixed disclaimer). Queue entries carry `safeguarding.injection` (the newest
+  unforced injection alert, acknowledged or not) and `safeguarding.wellbeing`;
+  an injection alert replaces Score with AI / Re-run AI with **Score with AI
+  anyway** (`{ "force": true }`), and a 409 `injection_flagged` refetches so
+  the card lands in that state. Admin: `/admin/safeguarding` (Open only /
+  All), linked from `/admin` with the open count; rows link straight to the
+  per-student page — an admin already resolves view on every assessment
+  (via `"admin"`), the same path `/admin`'s Monitor links use, so no Act as
+  is needed to read.
+- **Decided in slice 2 (the spec left it open): an admin does not
+  acknowledge another teacher's alert.** Acknowledge clears the teacher's
+  badge, and D-6 of `docs/access-model-design.md` keeps admin writes outside the admin surface to Act as —
+  so the route 404s a request that resolves through `"admin"`, and the panel
+  shows "Not acknowledged yet by the teacher." instead of the button. On an
+  assessment the admin owns, they acknowledge as its owner. An admin acting
+  as a teacher acknowledges as that teacher (the row records the teacher's
+  sub and email; the act-as audit row is the trace).
+- Tests: `test/safeguarding-alerts-ui.test.tsx` (26 — the three routes and
+  their access incl. co-teacher, stranger, admin and impersonation;
+  idempotence; acknowledge leaves the withhold in place; the queue's
+  409 → anyway → proposal path; the pure helpers; badge / panel / queue-card
+  markup; the matrix, per-student, home and admin pages rendered). Design-tool
+  2294 pass, typecheck clean, `bun run build` compiles. Rows 290–302 in
+  `docs/design-tool-manual-checks.md`, NOT RUN.
+- **Retry BUILT 2026-09-25 (9.1 = A, James).** The roster-sync Lambda has no
+  route to Bedrock (isolated subnets, S3 + Secrets Manager endpoints only), so
+  the retry is an hourly timer in the app: `lib/safeguarding/screening/retry.ts`
+  `screenPending` (handed-in, non-practice essay / short-text answers never
+  screened or edited since, submitted 10 min – 14 days ago, 200 per run,
+  oldest first), started by `register` in `instrumentation.ts` (Node runtime
+  only, first run 5 min after boot, runs never overlap, a no-op when
+  screening is off). **10.1 (James): screen the pilot backlog** — the 14-day
+  window covers every pilot hand-in since 2026-09-17, so the first hours
+  after the deploy can raise alerts on last week's work.
