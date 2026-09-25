@@ -184,8 +184,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           No handed-in work in that section.
         </p>
       ) : (
+        // Narrow windows (2026-09-24): cells may wrap (no `min-w-max`), and
+        // the Scoring column — where Hand in lives — is pinned to the right
+        // edge, so a long question run scrolls under it instead of pushing
+        // the one action off-screen behind a scrollbar macOS hides.
         <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left">
                 <th className="py-2 pr-4 font-medium">Student</th>
@@ -200,7 +204,9 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                 ))}
                 <th className="px-2 py-2 text-right font-medium">Total</th>
                 <th className="px-2 py-2 text-right font-medium">%</th>
-                <th className="px-2 py-2 text-right font-medium">Scoring</th>
+                <th className="sticky right-0 bg-background px-2 py-2 text-right font-medium">
+                  Scoring
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -243,7 +249,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                         Not handed in — {row.answered_count} of {results.items.length}{" "}
                         answered
                       </td>
-                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                      <td className="sticky right-0 bg-background px-2 py-2 text-right whitespace-nowrap">
                         <HandInAttemptAndReload
                           attemptId={row.attempt_id}
                           studentName={row.student.name || row.student.ssid || "this student"}
@@ -267,7 +273,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                       {/* Text + a glyph, never colour alone: this cell is the
                           answer to "is this one finished?" and has to survive
                           a greyscale print and a colour-blind reader. */}
-                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                      <td className="sticky right-0 bg-background px-2 py-2 text-right whitespace-nowrap">
                         {row.unscored_count === 0 ? (
                           <span className="text-success-foreground">✓ Complete</span>
                         ) : (

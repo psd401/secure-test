@@ -1606,7 +1606,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       ) : null}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(parseTab(v))}>
-        <TabsList aria-label="Assessment editor sections">
+        {/* Narrow windows (2026-09-24): the five tabs wrap to a second
+            line instead of clipping "Test sessions" behind a hidden
+            scroll — the strip's fixed h-9 is what stopped them. */}
+        <TabsList
+          aria-label="Assessment editor sections"
+          className="max-w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto"
+        >
           {EDITOR_TABS.map((t) => (
             <TabsTrigger key={t} value={t}>
               {TAB_LABEL[t]}

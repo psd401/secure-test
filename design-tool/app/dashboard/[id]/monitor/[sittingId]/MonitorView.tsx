@@ -514,7 +514,13 @@ export function MonitorView({
             </div>
           ) : null}
 
-          <div className="overflow-x-auto rounded-lg border bg-card">
+          {/* Narrow windows (2026-09-24, a pilot teacher's half-width Monitor):
+              the table's own container is the one scroller — a second
+              overflow wrapper here only nested it — and Progress / Last
+              activity drop below lg so the row's actions fit without a
+              sideways scroll that macOS hides and a mouse wheel never
+              reaches. Status still carries the idle time and the deadline. */}
+          <div className="rounded-lg border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -537,9 +543,9 @@ export function MonitorView({
                     </TableHead>
                   ) : null}
                   <TableHead>Student</TableHead>
-                  <TableHead>Progress</TableHead>
+                  <TableHead className="hidden lg:table-cell">Progress</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last activity</TableHead>
+                  <TableHead className="hidden lg:table-cell">Last activity</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -657,7 +663,7 @@ function StudentRow({
           ) : null}
         </TableCell>
       ) : null}
-      <TableCell>
+      <TableCell className="whitespace-normal">
         <div className="font-medium">
           {r.name}
           {r.in_scope ? null : (
@@ -670,7 +676,7 @@ function StudentRow({
           {r.section_label ?? "—"}
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden lg:table-cell">
         {r.status === "not_joined" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
@@ -721,7 +727,7 @@ function StudentRow({
           ) : null}
         </div>
       </TableCell>
-      <TableCell className="whitespace-nowrap text-muted-foreground">
+      <TableCell className="hidden whitespace-nowrap text-muted-foreground lg:table-cell">
         {r.status === "not_joined" || earlier
           ? "—"
           : ago(r.last_activity_at, now)}

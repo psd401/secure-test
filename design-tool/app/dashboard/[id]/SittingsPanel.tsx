@@ -813,7 +813,10 @@ export function SittingsPanel({
                             </span>
                           ) : null}
                         </div>
-                        <span className="flex shrink-0 flex-wrap gap-2">
+                        {/* min-w-0, not shrink-0 (2026-09-24): at half a
+                            laptop screen the six buttons must wrap inside the
+                            card, not run past its edge where nothing scrolls. */}
+                        <span className="flex min-w-0 flex-wrap gap-2">
                           {/* D-4: an archived sitting drops Show code / Monitor
                               / Close — nothing new can join it and there is
                               nothing left to close. Attendance stays. */}
@@ -985,16 +988,20 @@ export function SittingsPanel({
                                 Nobody is in this session&rsquo;s scope right now.
                               </p>
                             ) : (
-                              <div className="overflow-x-auto rounded-md border">
+                              // Narrow windows (2026-09-24): one scroller (the
+                              // table's own), and Section / Last activity /
+                              // Started drop below lg so the columns that
+                              // answer "who is done" stay on screen.
+                              <div className="rounded-md border">
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead>Student</TableHead>
-                                      <TableHead>Section</TableHead>
+                                      <TableHead className="hidden lg:table-cell">Section</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Progress</TableHead>
-                                      <TableHead>Last activity</TableHead>
-                                      <TableHead>Started</TableHead>
+                                      <TableHead className="hidden lg:table-cell">Last activity</TableHead>
+                                      <TableHead className="hidden lg:table-cell">Started</TableHead>
                                       <TableHead>Handed in</TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -1004,13 +1011,13 @@ export function SittingsPanel({
                                       const idle = idleFor(r, now);
                                       return (
                                         <TableRow key={r.ps_id}>
-                                          <TableCell>
+                                          <TableCell className="whitespace-normal">
                                             {r.name}
                                             {r.in_scope ? null : (
                                               <span className="ml-2 text-xs text-muted-foreground">(not in scope)</span>
                                             )}
                                           </TableCell>
-                                          <TableCell>{r.section_label ?? "—"}</TableCell>
+                                          <TableCell className="hidden lg:table-cell">{r.section_label ?? "—"}</TableCell>
                                           <TableCell>
                                             {/* Wrapping flex: a long chip drops to the next
                                                 line rather than widening the column
@@ -1053,15 +1060,15 @@ export function SittingsPanel({
                                             )}
                                           </TableCell>
                                           {/* H-1: no activity in THIS sitting. */}
-                                          <TableCell>
+                                          <TableCell className="hidden lg:table-cell">
                                             {r.status === "not_joined" || r.status === "submitted_earlier"
                                               ? "—"
                                               : ago(r.last_activity_at, now)}
                                           </TableCell>
-                                          <TableCell className="whitespace-nowrap">
+                                          <TableCell className="hidden lg:table-cell lg:whitespace-normal">
                                             {r.started_at ? formatWhen(r.started_at, new Date(now)) : "—"}
                                           </TableCell>
-                                          <TableCell className="whitespace-nowrap">
+                                          <TableCell className="whitespace-normal">
                                             {r.submitted_at ? formatWhen(r.submitted_at, new Date(now)) : "—"}
                                           </TableCell>
                                         </TableRow>
