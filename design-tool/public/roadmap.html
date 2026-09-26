@@ -360,12 +360,13 @@ const JOURNEY = [
     text: "Full keyboard reach, and a teacher can remove a time limit mid-test. Groundwork for gradebook sync." },
   { date: "2026-09-25", star: true, title: "Safeguarding alerts",
     text: "Handed-in writing is screened for signs of self-harm or abuse and for attempts to game the AI scorer; the teacher of the class is alerted." },
+  { date: "2026-09-25", title: "Safer deploys, help and this roadmap",
+    text: "Database changes now apply before new code serves, and deploys that change the database wait until after school. Teachers got a help page, and the project got this roadmap." },
 ];
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
   { title: "Safeguarding alerts by email", text: "Alerts reach the teacher's inbox, not only the app.", wait: "AWS email setup" },
-  { title: "Deploy safety", text: "Database changes apply before new code serves, and risky changes wait until after school." },
   { title: "Finish the pilot and gather feedback", text: "Teacher and student feedback rounds; the questions at right are part of it." },
   { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
   { title: "Send scores to the gradebook", text: "Schoology first, then PowerSchool.", wait: "IT: gradebook access" },
