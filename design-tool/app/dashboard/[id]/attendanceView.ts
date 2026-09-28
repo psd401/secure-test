@@ -174,6 +174,11 @@ export function eventLabel(kind: string): string {
     // the row's detail (`ends_at`) and shown by the timeline.
     case "passed_back":
       return "Passed back by teacher";
+    // Gradebook push (docs/gradebook-push-design.md): the attempt's points
+    // were written to PowerSchool / Schoology. Target and points are on the
+    // row's detail; slice 4 decides how the per-student timeline shows them.
+    case "gradebook_sent":
+      return "Score sent to the gradebook";
     default:
       return kind;
   }

@@ -262,10 +262,11 @@ if (!cc) {
     );
     for (const h of hits) {
       if (h.error) failed++;
-      else if (h.rows.length) {
+      else if (h.rows[0]) {
+        const r = h.rows[0];
         matched++;
-        if (h.rows[0].dcid) withDcid++;
-        if (h.rows[0].id === h.rows[0].dcid) idEqualsDcid++;
+        if (r.dcid) withDcid++;
+        if (r.id === r.dcid) idEqualsDcid++;
       }
     }
   }

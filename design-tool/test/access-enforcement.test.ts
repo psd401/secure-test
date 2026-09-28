@@ -181,6 +181,17 @@ const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
     join("scores", "[scoreId]", "approve"),
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
   ],
+  // Gradebook push (docs/gradebook-push-design.md, "Authorization, in one
+  // place"): `edit` on the assessment through authorizeAssessment, THEN the
+  // sender must currently teach the section — both 404.
+  [
+    join("assessments", "[id]", "gradebook-send"),
+    { symbol: "authorizeSend", module: "lib/gradebook/authorizeSend.ts" },
+  ],
+  [
+    join("assessments", "[id]", "gradebook-categories"),
+    { symbol: "authorizeSend", module: "lib/gradebook/authorizeSend.ts" },
+  ],
 ]);
 
 /**

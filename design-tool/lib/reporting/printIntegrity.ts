@@ -42,6 +42,9 @@ const PHRASES: Record<string, string> = {
   // deadline on the per-student page's timeline, which has room for them. A
   // family reading this line wants to know the test was reopened, and how often.
   passed_back: "Passed back by teacher",
+  // Gradebook push (docs/gradebook-push-design.md): a record of a staff action,
+  // named so a printed line never shows the raw kind.
+  gradebook_sent: "Score sent to the gradebook",
 };
 
 /**
@@ -67,6 +70,7 @@ const KIND_ORDER = [
   // After the hand-ins, because that is when it happens: a pass back always
   // follows a submitted attempt.
   "passed_back",
+  "gradebook_sent",
   "client_error",
 ];
 

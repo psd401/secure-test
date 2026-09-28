@@ -829,14 +829,20 @@ export const ATTEMPT_EVENT_KINDS = [
   // could post one could claim a teacher reopened a test that was never
   // reopened.
   "passed_back",
+  // Gradebook push (docs/gradebook-push-design.md, "The send" step 5): this
+  // attempt's points were written to an external gradebook. `detail` is
+  // { target, external_assignment_id, points }. Server-written only, like the
+  // three above: a client that could post one could claim a score reached the
+  // gradebook when it never did.
+  "gradebook_sent",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
 /**
  * The subset a CLIENT may post to /api/attempts/[attemptId]/events.
  *
- * `teacher_hand_in`, `deadline_extended` and `passed_back` are records of STAFF
- * actions and are written by their own routes alone; a client that could post one
+ * `teacher_hand_in`, `deadline_extended`, `passed_back` and `gradebook_sent` are
+ * records of STAFF actions and are written by their own routes alone; a client that could post one
  * could plant a timeline line claiming a teacher did something they did not —
  * and in `deadline_extended`'s case one claiming a later deadline than the
  * column actually holds. Nothing is scored off these rows, so the damage is
@@ -847,6 +853,7 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "teacher_hand_in",
   "deadline_extended",
   "passed_back",
+  "gradebook_sent",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -885,7 +892,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent')`,
     ),
   }),
 );
@@ -1768,3 +1775,106 @@ export const safeguarding_alerts = pgTable(
 
 export type SafeguardingAlertRow = typeof safeguarding_alerts.$inferSelect;
 export type SafeguardingAlertInsert = typeof safeguarding_alerts.$inferInsert;
+
+// Gradebook push (docs/gradebook-push-design.md, slice 2 — PowerSchool; the
+// Schoology connection table is slice 3's). Three tables:
+//
+//   gradebook_pushes        one live row per (assessment, section, target):
+//                           the external assignment a re-send reuses (D-7).
+//   gradebook_push_scores   what each attempt last sent, so a re-send updates
+//                           a changed score and skips an unchanged one.
+//   gradebook_section_prefs the remembered destination per (teacher, section)
+//                           (D-5), pre-filling the dialog, never sending alone.
+export const GRADEBOOK_TARGETS = ["powerschool", "schoology"] as const;
+export type GradebookTarget = (typeof GRADEBOOK_TARGETS)[number];
+
+export const gradebook_pushes = pgTable(
+  "gradebook_pushes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    /** `roster_sections.ps_id` — no FK: the roster row is deactivated, never
+     * deleted, but a push must outlive a roster rebuild all the same. */
+    section_ps_id: text("section_ps_id").notNull(),
+    target: text("target").notNull(),
+    /** PowerSchool `assignmentsectionid`; Schoology `assignment_id`. NULL only
+     * while the first send's create is in flight: the row is inserted BEFORE
+     * the external create so the live-row unique index, not luck, decides
+     * which of two concurrent first sends creates the assignment. */
+    external_assignment_id: text("external_assignment_id"),
+    /** Schoology's section id (slice 3); null for PowerSchool. */
+    external_section_id: text("external_section_id"),
+    category_id: text("category_id"),
+    name: text("name").notNull(),
+    /** The teacher the send ran as (under act-as, the TARGET teacher). */
+    created_by_sub: text("created_by_sub").notNull(),
+    /** The admin behind an act-as session, else null. */
+    actor_sub: text("actor_sub"),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    last_sent_at: timestamp("last_sent_at", { withTimezone: true }),
+    /** The last send's summary: { sent, updated, skipped_unchanged,
+     * held_back, failed[] } — counts and student numbers, never names. */
+    last_result: jsonb("last_result").$type<Record<string, unknown>>(),
+    /** Set when the external assignment is found deleted; the next send then
+     * creates a new one (the unique index is partial on this). */
+    archived_at: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => ({
+    liveUnq: uniqueIndex("gradebook_pushes_live_unq")
+      .on(t.assessment_id, t.section_ps_id, t.target)
+      .where(sql`archived_at is null`),
+    assessmentIdx: index("gradebook_pushes_assessment_id_idx").on(t.assessment_id),
+    targetCheck: check(
+      "gradebook_pushes_target_check",
+      sql`target IN ('powerschool', 'schoology')`,
+    ),
+  }),
+);
+
+export const gradebook_push_scores = pgTable(
+  "gradebook_push_scores",
+  {
+    push_id: uuid("push_id")
+      .notNull()
+      .references(() => gradebook_pushes.id, { onDelete: "cascade" }),
+    attempt_id: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    /** PowerSchool `assignmentscoreid` when the write returned one; Schoology
+     * keys a grade by enrollment and has none. */
+    external_score_id: text("external_score_id"),
+    points_sent: doublePrecision("points_sent").notNull(),
+    sent_at: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.push_id, t.attempt_id] }),
+  }),
+);
+
+export const gradebook_section_prefs = pgTable(
+  "gradebook_section_prefs",
+  {
+    staff_sub: text("staff_sub").notNull(),
+    section_ps_id: text("section_ps_id").notNull(),
+    target: text("target").notNull(),
+    category_id: text("category_id"),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.staff_sub, t.section_ps_id] }),
+    targetCheck: check(
+      "gradebook_section_prefs_target_check",
+      sql`target IN ('powerschool', 'schoology')`,
+    ),
+  }),
+);
+
+export type GradebookPushRow = typeof gradebook_pushes.$inferSelect;
+export type GradebookPushScoreRow = typeof gradebook_push_scores.$inferSelect;
+export type GradebookSectionPrefRow = typeof gradebook_section_prefs.$inferSelect;

@@ -472,3 +472,34 @@ the test server because it is a June 2025 copy of production.
   stays as IT documented it until 2c's first write.
 - The shapes file sits gitignored in `design-tool/samples/`; slice 2b turns
   it into hand-written fixtures with synthetic ids.
+
+**2026-09-28 — slice 2b BUILT (not deployed)**: the PowerSchool send on
+the mock. **Migration 0046** `gradebook_push` (`gradebook_pushes`,
+`gradebook_push_scores`, `gradebook_section_prefs`, attempt-event kind
+`gradebook_sent`, staff-only) — applied to dev + test; Aurora takes it at
+the next deploy (migrate-on-start). `lib/gradebook/`: `powerschool.ts`
+(`GRADEBOOK_PROVIDER=mock|live`, mock default; token cached to
+`expires_in − 60 s`, one retry on 401 and on 412; optional injected
+`fetch` for 2c's pinned transport; a missing env → 503
+`gradebook_not_configured`), `powerschoolPayloads.ts` (categories, D-6
+default or null, the 50-character name, the create body),
+`powerschoolScoreBodyUnconfirmed.ts` (the score body + its reader, isolated
+until 2c's first write), `mapping.ts` (roster ids + the pure `planSend`),
+`authorizeSend.ts`, `sendPowerSchool.ts`. Routes `POST
+/api/assessments/[id]/gradebook-send` and `GET
+/api/assessments/[id]/gradebook-categories` (also returns the remembered
+target + category for slice 4). Readings beyond the note: held-back reason
+`not_on_roster` beside `unscored` / `no_dcid`; missing teacher / section
+ids → 409 `missing_dcid`; the push row is claimed BEFORE the external
+create so the live-row unique index settles two concurrent first sends
+(409 `send_in_progress`, a stale claim taken over after 2 minutes); a
+create whose response carries no id → 502 `create_response_unreadable`
+(a duplicate assignment is possible then); nothing to send → no
+PowerSchool call; a 404 on the score write archives the push so the next
+send creates anew; 409 bodies are logged with every 4+-digit run masked;
+the remembered destination is written only when a score reached the
+gradebook; 8.3 notes name passed-back and awaiting-scoring students
+separately. **Not handled:** deleting an attempt after a send leaves its
+score in the gradebook; a send that fails between the external write and
+recording it may re-write rows on the next send. Design-tool 2343 tests,
+typecheck clean. Next: 2c live check on the test server.
