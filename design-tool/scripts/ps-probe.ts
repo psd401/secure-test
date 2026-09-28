@@ -1,7 +1,8 @@
 // Read-only probe of the PowerSchool plugin's data access
 // (docs/gradebook-push-design.md, slice 2). Answers one question before we
-// build against the test server: can the fields IT granted on plugin v1.1
-// be joined into teacher → section → student DCIDs, or do we need more?
+// build against the test server: can the fields IT granted on the plugin
+// (v1.1, widened in v1.2 on 2026-09-28) be joined into teacher → section →
+// student DCIDs, or do we need more?
 //
 //   PS_BASE_URL=https://<ps-test-host> PS_CONNECT_IP=<test-server-ip> \
 //   PS_CA_FILE=~/ps-test.pem PS_CLIENT_ID=… PS_CLIENT_SECRET=… \
@@ -178,13 +179,15 @@ try {
 }
 console.log(`── token ok (${base})`);
 
-console.log("── granted on plugin v1.1");
+console.log("── granted on plugin v1.1 + v1.2");
 const granted: Array<[string, string]> = [
   ["users", "dcid,email_addr"],
   ["sections", "dcid,id,termid,schoolid"],
   ["cc", "sectionid,studentid"],
-  ["students", "dcid,student_number"],
+  ["students", "dcid,id,student_number"],
   ["terms", "yearid"],
+  ["sectionteacher", "sectionid,teacherid"],
+  ["schoolstaff", "id,users_dcid"],
 ];
 const g: Record<string, Result> = {};
 for (const [t, p] of granted) {
@@ -193,12 +196,7 @@ for (const [t, p] of granted) {
 }
 
 console.log("── not requested (expect refusals; a success changes the plan)");
-for (const [t, p] of [
-  ["students", "id"],
-  ["terms", "id"],
-  ["sectionteacher", "sectionid,teacherid"],
-  ["schoolstaff", "id,users_dcid"],
-] as const) {
+for (const [t, p] of [["terms", "id"]] as const) {
   line(`${t} [${p}]`, await table(t, p));
 }
 
@@ -211,21 +209,17 @@ if (!cc) {
   const bySection = await table("sections", "dcid,id", `id==${cc.sectionid}`, 1);
   console.log(`cc.sectionid → sections.id                   ${bySection.rows.length ? "MATCH" : `no match${bySection.error ? ` (HTTP ${bySection.status})` : ""}`}`);
 
-  // CC.STUDENTID is STUDENTS.ID in the PowerSchool schema; ID was not
-  // granted. Try a filter on id (may be refused), then on dcid (in case
-  // the record-level id or dcid happens to carry the same value).
-  const byId = await table("students", "dcid", `id==${cc.studentid}`, 1);
-  console.log(`cc.studentid → students.id (filter)          ${byId.error ? `HTTP ${byId.status} ${byId.error}` : byId.rows.length ? "MATCH" : "no match"}`);
-  const byDcid = await table("students", "dcid", `dcid==${cc.studentid}`, 1);
-  console.log(`cc.studentid → students.dcid (filter)        ${byDcid.error ? `HTTP ${byDcid.status}` : byDcid.rows.length ? "match on this row (ID = DCID here? see the sample below)" : "no match"}`);
-  const s = g.students?.rows[0];
-  console.log(`students record-level id == dcid?            ${s ? (s._id === s.dcid ? "yes (id = DCID, not STUDENTS.ID)" : `no (record id is a different key)`) : "no student row"}`);
+  // CC.STUDENTID is STUDENTS.ID in the PowerSchool schema; ID is granted
+  // since v1.2, so the join is read directly and DCID comes back beside it.
+  const byId = await table("students", "id,dcid", `id==${cc.studentid}`, 1);
+  const hit = byId.rows[0];
+  console.log(
+    `cc.studentid → students.id                   ${byId.error ? `HTTP ${byId.status} ${byId.error}` : hit ? `MATCH (dcid ${hit.dcid ? "present" : "MISSING"}; id ${hit.id === hit.dcid ? "==" : "!="} dcid on this row)` : "no match"}`,
+  );
 
-  // One row cannot tell a coincidence from the common PowerSchool pattern
-  // of STUDENTS.ID = STUDENTS.DCID. Sample up to 200 enrolments and count
-  // how many CC.STUDENTID values exist as a student DCID. Evidence, not
-  // proof: a DCID match does not show it is the SAME student — only
-  // reading STUDENTS.ID beside DCID would.
+  // Sample up to 200 enrolments: does every CC.STUDENTID resolve through
+  // STUDENTS.ID to a row with a DCID, and how often is ID = DCID (the
+  // common PowerSchool pattern — informational only, nothing builds on it).
   const ids = new Set<string>();
   for (const page of [1, 2]) {
     const r = await table("cc", "studentid", undefined, 100, page);
@@ -233,25 +227,54 @@ if (!cc) {
   }
   const sample = [...ids].slice(0, 200);
   let matched = 0;
+  let withDcid = 0;
+  let idEqualsDcid = 0;
   let failed = 0;
   for (let i = 0; i < sample.length; i += 10) {
     const hits = await Promise.all(
-      sample.slice(i, i + 10).map((id) => table("students", "dcid", `dcid==${id}`, 1)),
+      sample.slice(i, i + 10).map((id) => table("students", "id,dcid", `id==${id}`, 1)),
     );
     for (const h of hits) {
       if (h.error) failed++;
-      else if (h.rows.length) matched++;
+      else if (h.rows.length) {
+        matched++;
+        if (h.rows[0].dcid) withDcid++;
+        if (h.rows[0].id === h.rows[0].dcid) idEqualsDcid++;
+      }
     }
   }
   console.log(
-    `cc.studentid found as a students.dcid        ${matched} of ${sample.length} distinct student ids${failed ? ` (${failed} lookups failed)` : ""}`,
+    `cc.studentid → students.id → dcid            ${matched} of ${sample.length} resolve, ${withDcid} with a dcid, ${idEqualsDcid} where id == dcid${failed ? ` (${failed} lookups failed)` : ""}`,
   );
 }
 
 if (teacherEmail) {
   console.log("── teacher");
+  // USERS.DCID → SCHOOLSTAFF.USERS_DCID → SCHOOLSTAFF.ID = SECTIONTEACHER.TEACHERID
+  // → SECTIONTEACHER.SECTIONID = SECTIONS.ID → SECTIONS.DCID.
   const u = await table("users", "dcid", `email_addr==${teacherEmail}`, 1);
-  console.log(`users by email                               ${u.error ? `HTTP ${u.status}` : u.rows.length ? "found" : "not found"}`);
-  // No granted table links USERS to SECTIONS; sectionteacher / schoolstaff
-  // above say whether that path is open.
+  const usersDcid = u.rows[0]?.dcid;
+  console.log(`users by email                               ${u.error ? `HTTP ${u.status}` : usersDcid ? "found" : "not found"}`);
+  if (usersDcid) {
+    const staff = await table("schoolstaff", "id,users_dcid", `users_dcid==${usersDcid}`, 20);
+    const staffIds = staff.rows.map((r) => r.id).filter((x): x is string => !!x);
+    console.log(`users.dcid → schoolstaff.users_dcid          ${staff.error ? `HTTP ${staff.status} ${staff.error}` : `${staffIds.length} staff row(s)`}`);
+    let sectionIds: string[] = [];
+    for (const sid of staffIds) {
+      const st = await table("sectionteacher", "sectionid,teacherid", `teacherid==${sid}`, 100);
+      if (st.error) {
+        console.log(`schoolstaff.id → sectionteacher.teacherid    HTTP ${st.status} ${st.error}`);
+        break;
+      }
+      sectionIds.push(...st.rows.map((r) => r.sectionid).filter((x): x is string => !!x));
+    }
+    sectionIds = [...new Set(sectionIds)];
+    console.log(`schoolstaff.id → sectionteacher.teacherid    ${sectionIds.length} distinct section id(s)`);
+    let withDcid = 0;
+    for (const sid of sectionIds.slice(0, 50)) {
+      const sec = await table("sections", "id,dcid", `id==${sid}`, 1);
+      if (sec.rows[0]?.dcid) withDcid++;
+    }
+    console.log(`sectionteacher.sectionid → sections.dcid     ${withDcid} of ${Math.min(sectionIds.length, 50)} resolve to a section dcid`);
+  }
 }

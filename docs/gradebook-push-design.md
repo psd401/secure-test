@@ -403,3 +403,23 @@ our questions are in the ops repository). OAuth sign-in and plugin reads
   2026-09-28): 2024-25 sections and terms, every student record and
   enrolment on file as of then. Test sends target a 2024-25 section; the
   current extract's section ids will not exist there.
+
+**2026-09-28 — plugin v1.2 closes both gaps** (IT, the same afternoon,
+over the collab channel — its first use, clean both ways): read-only
+`STUDENTS.ID`, `SECTIONTEACHER` (`SECTIONID`, `TEACHERID`),
+`SCHOOLSTAFF` (`ID`, `USERS_DCID`) added on the ONE plugin, same
+credentials, same rule (lookups and pre-send checks only; the extract
+stays the production roster). The probe re-run against v1.2 (a pilot
+teacher's email as the argument; counts only):
+
+- Every granted field reads; `TERMS.ID` still refused as expected.
+- **Student join proven:** `CC.STUDENTID` → `STUDENTS.ID` matches, and
+  over a 187-enrolment sample every row resolves to a student with a
+  DCID (187 of 187; `ID` = `DCID` on all 187 — informational, nothing
+  builds on it).
+- **Teacher → sections proven:** `USERS.DCID` → `SCHOOLSTAFF.USERS_DCID`
+  (3 staff rows, one per school) → `SECTIONTEACHER.TEACHERID` → 100
+  distinct section ids (a page cap, a floor not a count) →
+  `SECTIONS.DCID` resolves for 50 of the 50 checked.
+- Nothing more is needed from the plugin for slice 2. The probe's
+  expected-refusal block now holds only `TERMS.ID`.
