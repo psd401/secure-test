@@ -352,3 +352,54 @@ repository):
   only (decision 2026-09-23).
 - **8.2 answered:** new assignments follow the **category default** for
   score publishing until Teaching & Learning decides otherwise.
+
+**2026-09-25 — IT's reply on the PowerSchool test server** (the reply and
+our questions are in the ops repository). OAuth sign-in and plugin reads
+(assignments, teacher categories) already worked from the maintainer's Mac.
+
+- **Roster read access granted on the ONE plugin (v1.1), not a test-only
+  copy** — what we test is what ships: `USERS` (`DCID`, `EMAIL_ADDR`),
+  `SECTIONS` (`DCID`, `ID`, `TERMID`, `SCHOOLID`), `CC` (`SECTIONID`,
+  `STUDENTID`), `STUDENTS` (`DCID`, `STUDENT_NUMBER`), `TERMS` (`YEARID`),
+  read-only. IT's condition, which the design already follows: these reads
+  are for lookups and pre-send checks, never a second roster — in
+  production the nightly extract stays the source of who teaches and who
+  is enrolled. **Accepted exposure (maintainer, 2026-09-25):** the
+  production plugin's credentials can now read staff emails, student
+  numbers and enrolments district-wide, so they are guarded like the
+  roster itself (secret only, never logged).
+- **No DNS or trusted certificate for the test server** (temporary). Local
+  workaround only (no admin rights for `/etc/hosts`): the local probe
+  connects to the server's IP but presents and verifies the certificate
+  against its name, trusting only the saved self-signed certificate, and
+  refuses to run if a wrong name is accepted — verification stays on, and
+  the transport lives in a dev script, so nothing test-shaped reaches
+  production code.
+- **Production has a publicly trusted certificate** — slice 2 builds for
+  normal verification.
+- **Probe run 2026-09-28** (`design-tool/scripts/ps-probe.ts`, read-only,
+  on the district network; run it with **node** — Bun's TLS refuses the
+  test server's self-signed certificate because it lacks the CA flag,
+  Node's OpenSSL accepts it; production's public certificate is
+  unaffected). Name check proven (a wrong name is refused); every granted
+  field reads; `CC.SECTIONID` → `SECTIONS.ID` joins. **Two gaps
+  confirmed**, both ours, test-server only (production takes these links
+  from the extract): `STUDENTS.ID` is refused, so `CC.STUDENTID` cannot be
+  joined to a student DCID for certain. A filter on `DCID` matched on the
+  one row tried — possibly the common PowerSchool pattern of `ID` =
+  `DCID`, unverified. A second run sampled 187 distinct `CC.STUDENTID`
+  values: 187 of 187 exist as a student DCID. Weak evidence all the same
+  — with the whole student history on file, DCIDs are likely dense enough
+  (not measured) that most numbers in range exist as SOME student's DCID,
+  so existence does not show it is the same student. Only reading `STUDENTS.ID` beside `DCID` proves it,
+  and the pattern is not guaranteed row by row, so nothing is built on
+  it; nothing granted links a teacher to their sections
+  (`SECTIONTEACHER`, `SCHOOLSTAFF` refused). `TERMS.ID` is refused and
+  not needed (`year_id` comes from the term id). Follow-up ask to IT:
+  `STUDENTS.ID`, `SECTIONTEACHER` (`SECTIONID`, `TEACHERID`),
+  `SCHOOLSTAFF` (`ID`, `USERS_DCID`) — or the fallback of one teacher's
+  `USERS.DCID`, one section DCID and a few student DCIDs.
+- **The test server holds a June 2025 snapshot** (the maintainer,
+  2026-09-28): 2024-25 sections and terms, every student record and
+  enrolment on file as of then. Test sends target a 2024-25 section; the
+  current extract's section ids will not exist there.
