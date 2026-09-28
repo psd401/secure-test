@@ -7,6 +7,17 @@
 //   PS_BASE_URL=https://<ps-test-host> PS_CONNECT_IP=<test-server-ip> \
 //   PS_CA_FILE=~/ps-test.pem PS_CLIENT_ID=… PS_CLIENT_SECRET=… \
 //   node scripts/ps-probe.ts [teacher-email]
+//   node scripts/ps-probe.ts <teacher-email> --shapes [--course <text>] [--section <dcid>] [--out <file>]
+//
+// --shapes (slice 2a) skips the checks below and instead reads the
+// gradebook side, still GET-only: the teacher's sections in the snapshot's
+// latest year, the one whose course name contains --course (default
+// "seminar") or the --section DCID, its /ws/xte/section/assignment list
+// and the teacher's /ws/xte/teacher_category list. It prints SHAPES — every
+// key with its value's type, values kept only for booleans and enum-like
+// keys (scoretype, publishoption, …) — so the create / score payloads can be
+// built against what PowerTeacher Pro really returns. --out writes the same
+// shapes as JSON (point it under design-tool/samples/, which is gitignored).
 //
 // Run it with NODE, not bun (measured 2026-09-28): the test server's
 // certificate is self-signed without the CA flag, which Node's OpenSSL
@@ -33,17 +44,27 @@
 // joins matched — never field values (emails, student numbers), the token
 // or the credentials.
 import https from "node:https";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const base = (process.env.PS_BASE_URL ?? "").replace(/\/$/, "");
 const connectIp = process.env.PS_CONNECT_IP;
 const caFile = process.env.PS_CA_FILE?.replace(/^~(?=\/)/, process.env.HOME ?? "~");
 const clientId = process.env.PS_CLIENT_ID;
 const clientSecret = process.env.PS_CLIENT_SECRET;
-const teacherEmail = process.argv[2]?.toLowerCase();
+const args = process.argv.slice(2);
+const flag = (name: string) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const teacherEmail = args[0]?.startsWith("--") ? undefined : args[0]?.toLowerCase();
+const shapesMode = args.includes("--shapes");
 
 if (!base || !clientId || !clientSecret) {
   console.error("PS_BASE_URL, PS_CLIENT_ID and PS_CLIENT_SECRET must be set.");
+  process.exit(2);
+}
+if (shapesMode && !teacherEmail) {
+  console.error("--shapes needs the teacher email as the first argument.");
   process.exit(2);
 }
 
@@ -179,6 +200,11 @@ try {
 }
 console.log(`── token ok (${base})`);
 
+if (shapesMode) {
+  await shapes();
+  process.exit(0);
+}
+
 console.log("── granted on plugin v1.1 + v1.2");
 const granted: Array<[string, string]> = [
   ["users", "dcid,email_addr"],
@@ -276,5 +302,191 @@ if (teacherEmail) {
       if (sec.rows[0]?.dcid) withDcid++;
     }
     console.log(`sectionteacher.sectionid → sections.dcid     ${withDcid} of ${Math.min(sectionIds.length, 50)} resolve to a section dcid`);
+  }
+}
+
+// ── --shapes (slice 2a) ─────────────────────────────────────────────────
+
+// Keys whose values are enums or point settings, not identities — kept in
+// the shapes so the payload builders can match them. A function, not a
+// module const: shapes() runs before the module body reaches this line.
+function keepsValue(key: string): boolean {
+  return new Set([
+  "scoretype",
+  "publishoption",
+  "defaultpublishoption",
+  "defaultpublishstate",
+  "defaultscoretype",
+  "categorytype",
+  "actualscorekind",
+  "calculationrelationship",
+  "standardscoringmethod",
+  "totalpointvalue",
+  "scoreentrypoints",
+  "extracreditpoints",
+  "weight",
+  "districtteachercategoryid",
+  "displayposition",
+  "defaultscoreentrypoints",
+  "defaultweight",
+  "defaulttotalvalue",
+    "_name", // PowerSchool's object type tag (e.g. which table a record is)
+  ]).has(key.toLowerCase());
+}
+
+// Every key with its value's type; values only for booleans and keepsValue()
+// keys; an array is shown by its first element.
+function shapeOf(v: unknown, key = ""): unknown {
+  if (v === null || v === undefined) return "<null>";
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return keepsValue(key) ? v : "<number>";
+  if (typeof v === "string") {
+    if (keepsValue(key)) return v;
+    if (v === "true" || v === "false") return v;
+    if (/^-?\d+(\.\d+)?$/.test(v)) return "<numeric-string>";
+    // Dates keep their format with digits masked, e.g. "9999-99-99".
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.replace(/\d/g, "9");
+    return "<string>";
+  }
+  if (Array.isArray(v)) return v.length ? [shapeOf(v[0], key), `<${v.length} item(s)>`] : [];
+  if (typeof v === "object") {
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, shapeOf(x, k)]));
+  }
+  return `<${typeof v}>`;
+}
+
+async function getJson(path: string): Promise<{ status: number; body?: unknown; error?: string }> {
+  const res = await request("GET", path, { Authorization: `Bearer ${bearer}`, Accept: "application/json" });
+  if (!res.ok) return { status: res.status, error: res.text.slice(0, 160).replace(/\s+/g, " ") };
+  return { status: res.status, body: res.text ? JSON.parse(res.text) : undefined };
+}
+
+// Arrays anywhere in a body, first match by key predicate — the xte list
+// wrappers are not documented, so find the records rather than assume.
+function firstArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === "object") {
+    for (const x of Object.values(v as Record<string, unknown>)) {
+      const a = firstArray(x);
+      if (a.length) return a;
+    }
+  }
+  return [];
+}
+
+async function pagedTable(name: string, projection: string, q: string): Promise<Result> {
+  const rows: Row[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const r = await table(name, projection, q, 100, page);
+    if (r.error) return r;
+    rows.push(...r.rows);
+    if (r.rows.length < 100) break;
+  }
+  return { status: 200, rows };
+}
+
+async function shapes() {
+  const course = (flag("--course") ?? "seminar").toLowerCase();
+  const wantSection = flag("--section");
+  const out = flag("--out");
+  const say = (label: string, text: string) => console.log(`${label.padEnd(44)} ${text}`);
+
+  console.log("── teacher → sections");
+  const u = await table("users", "dcid", `email_addr==${teacherEmail}`, 1);
+  const usersDcid = u.rows[0]?.dcid;
+  if (!usersDcid) return say("users by email", u.error ? `HTTP ${u.status}` : "not found — stopping");
+  say("users by email", "found");
+
+  const staff = await table("schoolstaff", "id,users_dcid", `users_dcid==${usersDcid}`, 20);
+  const sectionIds = new Set<string>();
+  for (const s of staff.rows) {
+    if (!s.id) continue;
+    const st = await pagedTable("sectionteacher", "sectionid,teacherid", `teacherid==${s.id}`);
+    if (st.error) return say("sectionteacher", `HTTP ${st.status} ${st.error}`);
+    for (const r of st.rows) if (r.sectionid) sectionIds.add(r.sectionid);
+  }
+  say("distinct section ids", String(sectionIds.size));
+
+  // course_number is not on the granted list; ask anyway and fall back.
+  let withCourse = true;
+  const sections: Row[] = [];
+  const ids = [...sectionIds];
+  for (let i = 0; i < ids.length; i += 10) {
+    const hits = await Promise.all(
+      ids.slice(i, i + 10).map((id) =>
+        table("sections", withCourse ? "id,dcid,termid,course_number" : "id,dcid,termid", `id==${id}`, 1),
+      ),
+    );
+    if (withCourse && hits.some((h) => h.error)) {
+      say("sections.course_number", `refused (HTTP ${hits.find((h) => h.error)?.status}) — name match unavailable`);
+      withCourse = false;
+      i -= 10;
+      continue;
+    }
+    for (const h of hits) if (h.rows[0]) sections.push(h.rows[0]);
+  }
+  const yearOf = (r: Row) => Math.floor(Number(r.termid) / 100);
+  const yearId = Math.max(...sections.map(yearOf).filter((n) => Number.isFinite(n)));
+  const inYear = sections.filter((r) => yearOf(r) === yearId);
+  say("latest year in the snapshot", `year_id ${yearId}, ${inYear.length} of the teacher's sections`);
+
+  let chosen: Row | undefined;
+  if (wantSection) {
+    chosen = inYear.find((r) => r.dcid === wantSection);
+    say("--section", chosen ? "found among the teacher's sections" : "NOT among the teacher's sections in that year");
+  } else if (withCourse) {
+    const numbers = [...new Set(inYear.map((r) => r.course_number).filter((x): x is string => !!x))];
+    const names = new Map<string, string>();
+    for (const n of numbers) {
+      const c = await table("courses", "course_number,course_name", `course_number==${n}`, 1);
+      if (c.error) {
+        say("courses.course_name", `refused (HTTP ${c.status}) — pass --section <dcid>`);
+        break;
+      }
+      if (c.rows[0]?.course_name) names.set(n, c.rows[0].course_name);
+    }
+    const matches = inYear.filter((r) => names.get(r.course_number ?? "")?.toLowerCase().includes(course));
+    say(`sections whose course name has "${course}"`, String(matches.length));
+    chosen = matches[0];
+    if (chosen) say("chosen", names.get(chosen.course_number ?? "") ?? "?");
+  }
+  if (!chosen) {
+    console.log("No section chosen. Pass --section <dcid> (read it from the test server's PowerSchool UI).");
+    return;
+  }
+
+  console.log("── gradebook reads (GET only)");
+  const result: Record<string, unknown> = { read_on: new Date().toISOString().slice(0, 10) };
+
+  const cats = await getJson(`/ws/xte/teacher_category?users_dcid=${usersDcid}&year_id=${yearId}`);
+  const catRows = firstArray(cats.body) as Array<Record<string, unknown>>;
+  say("teacher_category", cats.error ? `HTTP ${cats.status} ${cats.error}` : `${catRows.length} categor(ies)`);
+  for (const c of catRows) {
+    console.log(
+      `   ${String(c.name ?? "?").padEnd(24)} district ${String(c.districtteachercategoryid ?? "-").padEnd(4)} active ${String(c.isactive).padEnd(5)} publish ${String(c.defaultpublishoption ?? "?")}`,
+    );
+  }
+  result.teacher_category = shapeOf(cats.body);
+
+  const list = await getJson(`/ws/xte/section/assignment/?users_dcid=${usersDcid}&section_ids=${chosen.dcid}`);
+  const assignments = firstArray(list.body) as Array<Record<string, unknown>>;
+  say("section/assignment (chosen section)", list.error ? `HTTP ${list.status} ${list.error}` : `${assignments.length} assignment(s)`);
+  result.section_assignment_list = shapeOf(list.body);
+
+  // Prefer a points assignment: that is what we will create.
+  const text = (a: unknown) => JSON.stringify(a);
+  const sample = assignments.find((a) => /"scoretype":"POINTS"/i.test(text(a))) ?? assignments[0];
+  const sampleId = sample?.assignmentid ?? sample?.id;
+  if (sampleId !== undefined) {
+    const one = await getJson(`/ws/xte/section/assignment/${sampleId}?users_dcid=${usersDcid}`);
+    say("section/assignment/{id}", one.error ? `HTTP ${one.status} ${one.error}` : "ok");
+    result.section_assignment_one = shapeOf(one.body);
+  }
+
+  console.log("── shapes");
+  console.log(JSON.stringify(result, null, 2));
+  if (out) {
+    writeFileSync(out.replace(/^~(?=\/)/, process.env.HOME ?? "~"), JSON.stringify(result, null, 2) + "\n");
+    console.log(`written to ${out}`);
   }
 }

@@ -166,9 +166,11 @@ Points only (D-4): `scorepoints = total_points`, assignment max =
   and `year_id` (both from the extract since 2026-09-23); student →
   `students.roster_ps_id` → `roster_students.dcid`. A missing DCID holds
   the row back with reason `no_dcid` (the extract will backfill overnight).
-- Category: `GET /ws/xte/teacher_category` filtered `isactive`; the dialog
+- Category: `GET /ws/xte/teacher_category?users_dcid&year_id` (a plain
+  array; the id is `teachercategoryid`) filtered `isactive`; the dialog
   lists them; default = the row with `districtteachercategoryid = 2`
-  ("Test") when active, else the first active one (D-6).
+  ("Test") when active, else **no default — the teacher must pick** (D-6,
+  revised 2026-09-28).
 - Name truncated to 50 characters (a limit two vendors document; confirm on
   the test section). `publishoption` = the category's
   `defaultpublishoption` unless the dialog overrides.
@@ -255,19 +257,23 @@ files and may run in parallel once 1 is merged.
   A teacher without Schoology → PTP sync sends twice.
 - **D-2 (James, 2026-09-22)** Schoology via three-legged OAuth per
   teacher; no district admin key.
-- **D-3 (recommended)** only fully scored attempts are sent; held-back
+- **D-3 (James, 2026-09-28)** only fully scored attempts are sent; held-back
   rows are counted in the dialog and the summary. A later send picks them
   up. *Alternative: send partial points and overwrite later — rejected
   because a partial score in a gradebook reads as a real grade.*
-- **D-4 (recommended)** points only; max = the assessment's constant
+- **D-4 (James, 2026-09-28)** points only; max = the assessment's constant
   `max_points`.
-- **D-5 (IT's suggestion, recommended)** remember destination + category
+- **D-5 (IT's suggestion; James, 2026-09-28)** remember destination + category
   per (teacher, section); always show the pre-filled dialog, never send
   silently.
-- **D-6 (recommended)** PowerSchool default category = the teacher's
-  active copy of district "Test"; Schoology has no default (per-course
-  categories) — required pick, remembered.
-- **D-7 (recommended)** a re-send updates the existing assignment's
+- **D-6 (James, 2026-09-28)** PowerSchool default
+  category = the teacher's active copy of district "Test"; when that copy
+  is inactive there is **no default and the teacher must pick** (the 2a
+  read found a teacher whose four district categories were all inactive —
+  a first-active fallback would have preselected an unrelated category).
+  Schoology has no default (per-course categories) — required pick,
+  remembered.
+- **D-7 (James, 2026-09-28)** a re-send updates the existing assignment's
   scores and skips unchanged rows; name / due date edits after the first
   send belong to the gradebook.
 
@@ -423,3 +429,46 @@ teacher's email as the argument; counts only):
   `SECTIONS.DCID` resolves for 50 of the 50 checked.
 - Nothing more is needed from the plugin for slice 2. The probe's
   expected-refusal block now holds only `TERMS.ID`.
+
+**2026-09-28 — slice 2a: the gradebook read shapes** (`ps-probe.ts
+--shapes`, GET only, node, the test server; prints shapes — keys and
+types, values only for booleans, enum-like settings and PowerSchool's
+`_name` type tags; dates masked to their format). Target: a pilot-analog
+teacher's 2024-25 AP Seminar section (the teacher email and section DCID
+are command-line arguments, not recorded here). `SECTIONS.COURSE_NUMBER`
+is refused (403), so the section is chosen by DCID — read from the
+production PowerSchool section page (`frn=003<dcid>`), which is valid on
+the test server because it is a June 2025 copy of production.
+
+- **List responses are plain arrays** (no wrapper) for both
+  `/ws/xte/teacher_category` and `/ws/xte/section/assignment/`.
+- **Assignment shape confirmed** (`_name: "assignment"`): `assignmentid`,
+  `hasstandards`, `standardscoringmethod`, `calculationrelationship`,
+  `_assignmentsections[]` (`_name: "assignmentsection"`) with
+  `sectionsdcid`, `name`, `description`, `duedate`, `scoretype`,
+  `scoreentrypoints`, `weight`, `totalpointvalue`, `extracreditpoints`,
+  `iscountedinfinalgrade`, `isscoringneeded`, `publishoption`,
+  `isscorespublish`, `islocked`, `assignmentsectionid`, and
+  `_assignmentcategoryassociations[]` (`_name: "assignmentcategoryassoc"`,
+  `teachercategoryid`, `isprimary`). The embedded field names in "What IT
+  established" are right.
+- **Points:** `scoretype` seen as `POINTS` and `COLLECTED`; on a points
+  row `totalpointvalue` = `scoreentrypoints` × `weight` (10 × 1 = 10). Our
+  create sends `scoretype: POINTS`, `scoreentrypoints` = `totalpointvalue`
+  = the assessment's `max_points`, `weight: 1`.
+- **Dates are `YYYY-MM-DD`** (`duedate`, `publisheddate`,
+  `publishonspecificdate`).
+- One PowerSchool assignment can span several sections (the sample had
+  three `_assignmentsections`); ours always carries one (D-1: one send =
+  one section).
+- **Categories** (`_name: "teachercategory"`): id `teachercategoryid`,
+  `name`, `categorytype` (`user` | `district`), `districtteachercategoryid`
+  on district copies, `isactive`, `defaultpublishoption`,
+  `defaultscoreentrypoints`, `defaultweight`, `defaulttotalvalue`,
+  `isdefaultpublishscores`, `_teachercategorysectionexcludeassociations[]`.
+  This teacher had 16 in 2024-25, the four district copies all inactive
+  (→ D-6 revised), every one publishing `Immediately`.
+- **Not read:** score rows (no plugin GET for scores); the score body
+  stays as IT documented it until 2c's first write.
+- The shapes file sits gitignored in `design-tool/samples/`; slice 2b turns
+  it into hand-written fixtures with synthetic ids.
