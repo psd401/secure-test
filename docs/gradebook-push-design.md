@@ -525,6 +525,8 @@ probe's pinned transport (injected `fetch`), against the pilot-analog
   `assignment.createdbyplugin` — a column PowerTeacher Pro fills itself on
   a plugin's create, not one we send. Nothing was written. Asked IT for
   plugin v1.3 with write access on every column (audit columns included)
-  of ASSIGNMENT, ASSIGNMENTSECTION, ASSIGNMENTCATEGORYASSOC and
-  ASSIGNMENTSCORE, so the grant is not discovered one field per round.
+  of ASSIGNMENT, ASSIGNMENTSECTION, ASSIGNMENTCATEGORYASSOC,
+  ASSIGNMENTSCORE and ASSIGNMENTSCORECOMMENT (score comments are not sent
+  yet — James expects to want them), so the grant is not discovered one
+  field per round.
   The deploy of 0046 stays held until 2c's writes pass.
