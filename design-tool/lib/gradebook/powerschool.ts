@@ -21,15 +21,20 @@ import {
 } from "./powerschoolPayloads";
 
 /** A non-2xx from PowerSchool, after the retries. */
+// Plain fields rather than parameter properties: scripts/ps-send-check.ts
+// loads this file under node's type stripping, which refuses those.
 export class GradebookHttpError extends Error {
-  constructor(
-    readonly status: number,
-    /** The response body as text, cut to 4 000 characters. */
-    readonly body: string,
-    readonly stage: "token" | "request",
-  ) {
+  readonly status: number;
+  /** The response body as text, cut to 4 000 characters. */
+  readonly body: string;
+  readonly stage: "token" | "request";
+
+  constructor(status: number, body: string, stage: "token" | "request") {
     super(`powerschool ${stage} failed with HTTP ${status}`);
     this.name = "GradebookHttpError";
+    this.status = status;
+    this.body = body;
+    this.stage = stage;
   }
 }
 
@@ -79,11 +84,17 @@ const BODY_MAX = 4000;
 
 async function readText(res: Response): Promise<string> {
   try {
-    const text = await res.text();
-    return text.length <= BODY_MAX ? text : `${text.slice(0, BODY_MAX - 1)}…`;
+    return await res.text();
   } catch {
     return "";
   }
+}
+
+// Only an ERROR body is cut, for the error it rides on. A 2xx body is parsed
+// whole: a category list with HTML descriptions runs well past 4 000
+// characters, and cutting it first broke the JSON (slice 2c, 2026-09-28).
+function cut(text: string): string {
+  return text.length <= BODY_MAX ? text : `${text.slice(0, BODY_MAX - 1)}…`;
 }
 
 function parseJson(text: string): unknown {
@@ -117,7 +128,7 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
       body: "grant_type=client_credentials",
     });
     const text = await readText(res);
-    if (!res.ok) throw new GradebookHttpError(res.status, text, "token");
+    if (!res.ok) throw new GradebookHttpError(res.status, cut(text), "token");
     const json = parseJson(text) as { access_token?: unknown; expires_in?: unknown } | null;
     const access = typeof json?.access_token === "string" ? json.access_token : null;
     if (!access) throw new GradebookHttpError(res.status, "token response had no access_token", "token");
@@ -161,7 +172,7 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
         continue;
       }
       const text = await readText(res);
-      if (!res.ok) throw new GradebookHttpError(res.status, text, "request");
+      if (!res.ok) throw new GradebookHttpError(res.status, cut(text), "request");
       return { status: res.status, json: parseJson(text), location: res.headers.get("location") };
     }
   }

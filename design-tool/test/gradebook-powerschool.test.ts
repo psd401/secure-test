@@ -336,6 +336,22 @@ describe("live client", () => {
     expect(seen[3]!.url).toContain("/oauth/access_token/");
   });
 
+  test("a 2xx body over 4 000 characters is parsed whole (long HTML category descriptions)", async () => {
+    // Slice 2c, 2026-09-28: a real teacher's category list ran past the error
+    // cut and came back as zero categories.
+    const long = CATEGORIES_TEST_ACTIVE.map((c) => ({ ...c, description: `<p>${"x".repeat(3000)}</p>` }));
+    const { fetch } = fakeFetch([tokenOk(), json(200, long), tokenOk(), json(409, { message: "y".repeat(9000) })]);
+    const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
+    expect((await client.listCategories("8301", "31")).map((c) => c.id)).toEqual(["4301", "4302", "4401"]);
+
+    // An error body is still cut for the error it rides on.
+    const err = await createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch })
+      .createAssignment("8301", {})
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(GradebookHttpError);
+    expect(err.body.length).toBeLessThanOrEqual(4000);
+  });
+
   test("one retry on 401 with a fresh token; a second 401 surfaces", async () => {
     const { fetch, seen } = fakeFetch([
       tokenOk(),

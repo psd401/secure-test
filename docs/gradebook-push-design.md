@@ -503,3 +503,28 @@ separately. **Not handled:** deleting an attempt after a send leaves its
 score in the gradebook; a send that fails between the external write and
 recording it may re-write rows on the next send. Design-tool 2343 tests,
 typecheck clean. Next: 2c live check on the test server.
+
+**2026-09-28 — slice 2c STARTED, blocked on a plugin field grant.**
+`design-tool/scripts/ps-send-check.ts` (node; read-only unless `--write`;
+`--cleanup <assignmentid>` deletes a check assignment with `force=true`)
+drives the app's own client, payload and score-body code through the
+probe's pinned transport (injected `fetch`), against the pilot-analog
+2024-25 section. Found and fixed on the way:
+
+- **2b bug:** the live client cut every response to 4 000 characters
+  BEFORE parsing, so a category list with long HTML descriptions parsed as
+  zero categories (a real send would have failed the same way). Now only
+  an error body is cut; a regression test covers both halves.
+- `GradebookHttpError` uses plain fields (node's type stripping refuses
+  parameter properties); the schema-table API caps `pagesize` at 100.
+- The read-only run resolved the teacher, the section (year 34, first
+  semester by its due dates), 31 enrolments with DCIDs, and the categories:
+  16, 6 active, district "Test" inactive → no default (D-6 as revised).
+  The create and score bodies printed as designed.
+- **The first create was refused:** 403 `No access to field`
+  `assignment.createdbyplugin` — a column PowerTeacher Pro fills itself on
+  a plugin's create, not one we send. Nothing was written. Asked IT for
+  plugin v1.3 with write access on every column (audit columns included)
+  of ASSIGNMENT, ASSIGNMENTSECTION, ASSIGNMENTCATEGORYASSOC and
+  ASSIGNMENTSCORE, so the grant is not discovered one field per round.
+  The deploy of 0046 stays held until 2c's writes pass.
