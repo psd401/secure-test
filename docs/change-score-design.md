@@ -98,4 +98,19 @@ and must flow through the next send as an update (D-7 there).
   slice 2 may map `item_id`). Readings: a passed-back attempt still in
   progress answers 400 `attempt_not_submitted` from the shared chain, not
   `no_final`. Design-tool 2378 tests, typecheck clean.
+- 2026-09-28 — **slice 2 BUILT**: `components/app/ChangeScoreControl.tsx`
+  + `ChangeScoreAndReload` (a "Change" control beside every final score on
+  the per-student page, any method; dialog "Now 2 of 4 · auto | AI | you",
+  points input with the queue's step rule or the rubric's criterion
+  pickers prefilled from the final's picks, optional Reason ≤ 500, Save →
+  reload), `lib/scoring/changeScoreDialog.ts` (pure: `canChange`,
+  `nowLine`, `pointsStep`, `parsePoints`, `changeScoreErrorMessage`,
+  `causeLine`), "Earlier scores" (heading no longer says "before pass
+  back") with a cause per row — "set aside by pass back" / "changed by
+  teacher to N — <note>". **D-3's queue half is a FOLLOW-UP:** the queue
+  lists only needs-manual + proposals (no scored list), so there is no card
+  to put the link on. The timeline keeps "2 → 3 of 4" without a Q number
+  (`buildTimeline` takes events only). Like Pass back, the control is not
+  level-gated on the page — a view-level viewer gets "You cannot change
+  this score." from the route. Design-tool 2386 tests, typecheck clean.
 

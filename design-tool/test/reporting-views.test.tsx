@@ -680,9 +680,48 @@ describe("pass back on the per-student attempt page", () => {
     });
     const html = await renderAttempt(scene.assessment.id, scene.bobAttempt.id);
     expect(html).not.toContain("AI proposal");
-    expect(html).toContain("Earlier scores (before pass back)");
+    expect(html).toContain("Earlier scores");
   });
 
+
+  test("Earlier scores names the cause: pass back vs a teacher change (with its note)", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const [resp] = await db
+      .select()
+      .from(responses)
+      .where(eq(responses.attempt_id, scene.aliceAttempt.id))
+      .orderBy(asc(responses.created_at))
+      .limit(1);
+    const { changeFinalScore } = await import("../lib/api/changeScore");
+    const done = await changeFinalScore(
+      db,
+      {
+        response_id: resp!.id,
+        attempt_id: scene.aliceAttempt.id,
+        item_id: resp!.item_id,
+      },
+      { points: 0, max_points: 1, reason: "rubric misread" },
+      "teacher-sub",
+    );
+    expect(done.ok).toBe(true);
+    let html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("changed by teacher to 0 — rubric misread");
+    expect(html).not.toContain("set aside by pass back");
+    // Every final carries the Change control.
+    expect(html).toContain("Change");
+
+    const { passBackAttempt } = await import("../lib/api/passBackAttempt");
+    const [before] = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.id, scene.aliceAttempt.id))
+      .limit(1);
+    await passBackAttempt(db, before!, "teacher-sub");
+    html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("set aside by pass back");
+    expect(html).toContain("changed by teacher to 0 — rubric misread");
+  });
 
   test("a submitted attempt offers Pass back; an in-progress one does not", async () => {
     const scene = await seedScene();
@@ -708,7 +747,7 @@ describe("pass back on the per-student attempt page", () => {
     expect(html).toContain("Not handed in");
     expect(html).toContain("passed back 1 time");
     expect(html).not.toContain("passed back 1 times");
-    expect(html).toContain("Earlier scores (before pass back)");
+    expect(html).toContain("Earlier scores");
     // Q1 = the MC item (auto 1/1), Q2 = the essay (human 3/4) — both now
     // superseded and listed, not counted anywhere on the page any more.
     expect(html).toContain("Q1");

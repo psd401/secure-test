@@ -38,6 +38,9 @@ import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
 import { PassBackAndReload } from "../PassBackAndReload";
+import { ChangeScoreAndReload } from "../ChangeScoreAndReload";
+import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
+import { canChange, causeLine } from "@/lib/scoring/changeScoreDialog";
 import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
 import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
 
@@ -656,13 +659,40 @@ export default async function AttemptResultPage({ params }: PageProps) {
               {row.status === "in_progress" ? null : (
                 <div className="mt-3 border-t border-border pt-2 text-sm">
                   {final ? (
-                    <p>
-                      <strong>
-                        {final.points} / {final.max_points}
-                      </strong>{" "}
-                      <span className="text-muted-foreground">
-                        ({METHOD_WORD[final.method] ?? final.method})
+                    <p className="flex flex-wrap items-center gap-2">
+                      <span>
+                        <strong>
+                          {final.points} / {final.max_points}
+                        </strong>{" "}
+                        <span className="text-muted-foreground">
+                          ({METHOD_WORD[final.method] ?? final.method})
+                        </span>
                       </span>
+                      {/* Change a final score (docs/change-score-design.md,
+                          D-1/D-2): any final, whatever its method. */}
+                      {response && canChange(final) ? (
+                        <ChangeScoreAndReload
+                          responseId={response.id}
+                          questionLabel={`Q${item.position + 1}`}
+                          score={{
+                            points: final.points,
+                            max_points: final.max_points,
+                            method: final.method,
+                          }}
+                          maxPoints={itemMaxPoints(item)}
+                          rubric={rubric ? scoringView(rubric) : null}
+                          initialPicks={Object.fromEntries(
+                            (
+                              (final.rationale as {
+                                criterion_scores?: Array<{
+                                  criterion_id: string;
+                                  level_id: string;
+                                }>;
+                              } | null)?.criterion_scores ?? []
+                            ).map((c) => [c.criterion_id, c.level_id]),
+                          )}
+                        />
+                      ) : null}
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
@@ -704,7 +734,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
       {supersededScores.length > 0 ? (
         <details className="rounded-lg border border-border p-4">
           <summary className="cursor-pointer text-sm font-semibold">
-            Earlier scores (before pass back)
+            Earlier scores
           </summary>
           <ul className="mt-3 space-y-1 text-sm">
             {supersededScores.map((s, i) => (
@@ -714,7 +744,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   {s.points} / {s.max}
                 </span>{" "}
                 ({METHOD_WORD[s.method] ?? s.method}) ·{" "}
-                {formatWhen(s.created_at)}
+                {formatWhen(s.created_at)} · {causeLine(s)}
               </li>
             ))}
           </ul>
