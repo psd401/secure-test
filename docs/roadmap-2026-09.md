@@ -492,6 +492,25 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-09-29 — PowerSchool send live on production; share notifications (row SN)
+
+- **Gradebook push (PowerSchool) LIVE for every teacher with edit access**
+  (rev 61, `5e496d6`): test-server check passed in the morning (rows
+  314–316, GB-1 + GB-2 fixed), IT issued the production plugin
+  credentials the same day, `GRADEBOOK_PROVIDER=live`, in-VPC `ps-reach`
+  PASS. No production write yet — one pilot teacher asked to send and
+  verify in PowerTeacher Pro. Record: `docs/gradebook-push-design.md`
+  §Progress. Schoology (slice 3) still held.
+- **Row SN — share notifications** (pilot-teacher request): New badge on
+  share offers + unopened co-teach rows (migration 0048) live; the email
+  is built behind `lib/email/` and dark until SES. IT ask sent
+  (`~/it-ses-email-ask.md`, combined with safeguarding email). Record:
+  `docs/share-notifications-design.md`.
+- **Teacher pages** (rev 62, `4f9fa83`): `/help.html` Results topic + three
+  "looks wrong" entries for Send to gradebook, `/roadmap.html` milestone +
+  Ahead reorder (Email from the app; Send scores to Schoology),
+  `docs/pilot-quick-start.md`. No new help screenshot yet.
+
 ### 2026-09-24 — v1.3.5 real-session rows closed; gradebook push slice 1 live
 
 - **v1.3.5:** every row closed (`client/MANUAL-CHECKS.md` "v1.3.5 — EX-1

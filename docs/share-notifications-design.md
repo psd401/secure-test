@@ -58,3 +58,8 @@ outside the dashboard.
   deployed. Badge hand-run ✅ on local dev — rows 325–328 in
   `docs/design-tool-manual-checks.md`; row 329 (the email itself) waits on
   SES.
+- 2026-09-29: DEPLOYED — rev 61 (`5e496d6`) carried both slices and
+  migration 0048 (applied at boot). The badge is live; `EMAIL_PROVIDER` is
+  unset on the origin, so no email is sent. IT ask for SES sent the same
+  day (James leans option B, `no-reply@psd401.net`); slice 3 follows the
+  answer.

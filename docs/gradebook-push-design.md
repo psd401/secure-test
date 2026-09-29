@@ -632,3 +632,9 @@ deploy: all three `POWERSCHOOL_*` set, `GRADEBOOK_PROVIDER=live`, token ok,
 4 categories read in 377 ms — PASS. Send to gradebook is live for every
 teacher with edit access. No production write yet: one pilot teacher has
 been asked to send and verify in PowerTeacher Pro.
+
+**2026-09-29 ~15:45 PT — rev 62 (`4f9fa83`)** carries only the teacher
+pages: `/help.html` (Send to gradebook steps + three FAQ entries),
+`/roadmap.html` (milestone; Schoology is the next gradebook item),
+`docs/pilot-quick-start.md`. The first production send is still pending
+the pilot teacher.
