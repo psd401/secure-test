@@ -1064,3 +1064,23 @@ student data: the demo roster only.
 
 **Reading SG-2 (2026-09-28):** a re-send never re-checks the section's `dcid` because the stored external assignment id is reused; only a first send needs it. Expected — recorded so a hand-run with a stale roster is not misread.
 
+
+## Change a final score (2026-09-28)
+
+`docs/change-score-design.md` slices 1–2 (D-1 correct in place, D-2 any
+method, D-3 per-student page; the queue half is a follow-up). Logic and
+markup are covered by `test/change-score.test.ts` +
+`test/change-score-dialog.test.ts`; these rows are what only the browser
+shows. Local dev on the demo DB (migration 0047 applied) with a handed-in
+attempt carrying an auto-scored MC cell and a human- or AI-scored essay.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 317 | Per-student page of a handed-in attempt | A **Change** control beside every final score — auto MC cells included; none beside an unscored answer; none anywhere on an in-progress attempt | NOT RUN |
+| 318 | **Change** on an auto-scored MC cell (1/1) → 0, Reason "misread" → Save | The page reloads: the cell reads 0 / 1 (you); the matrix total drops by 1; **Earlier scores** lists "1 / 1 (auto) · <time> · changed by teacher to 0 — misread" | NOT RUN |
+| 319 | **Change** on the essay (rubric item) | The dialog shows the criterion pickers prefilled with the current picks and "Now n of m · you / AI"; picking a different level and Save → the new points and picks are the final; the old row is in Earlier scores | NOT RUN |
+| 320 | Points outside 0…max, or blank | The dialog refuses before posting ("Points must be between 0 and m." / "Enter a points value."); Save does not fire | NOT RUN |
+| 321 | Timeline after 318 | A line "Score changed by teacher <time> · 1 → 0 of 1" | NOT RUN |
+| 322 | **Send to gradebook** again after 318 (the attempt was sent before) | "1 updated" and the student's history gains a "Sent to PowerSchool … · <new total> points" line | NOT RUN |
+| 323 | **Pass back** the attempt after 318, then hand it in again and score it | Earlier scores shows the changed row ("changed by teacher …") AND the pass-back rows ("set aside by pass back"); no Change control while in progress | NOT RUN |
+| 324 | A view-level viewer (co-teacher without edit, second staff account) | Change is shown (like Pass back) but Save answers "You cannot change this score." | NOT RUN (needs a second staff account) |
