@@ -373,17 +373,31 @@ if (!write) {
 
 console.log("── 1. create");
 let assignmentSectionId: string | null = null;
+let createdAssignmentId: string | null = null;
 try {
   const created = await client.createAssignment(usersDcid, createBody);
   assignmentSectionId = created.assignmentSectionId;
+  createdAssignmentId = created.assignmentId;
   record.create_response = shapeOf(created.raw);
-  say("create", `ok; assignmentsectionid ${assignmentSectionId ? "read" : "NOT readable from the response"}`);
+  record.create_location = created.location ? mask(created.location) : null;
+  say("create", `ok; assignmentsectionid ${assignmentSectionId ? "read" : "NOT readable"}, assignmentid ${createdAssignmentId ? "read" : "NOT readable"}`);
+  say("create Location (masked)", created.location ? mask(created.location) : "none");
+  if (created.location && createdAssignmentId && assignmentSectionId) {
+    const tail = /(\d+)\/?$/.exec(created.location)?.[1];
+    say(
+      "Location ends in",
+      tail === createdAssignmentId ? "the assignmentid" : tail === assignmentSectionId ? "the assignmentsectionid" : "neither id",
+    );
+  }
   console.log(JSON.stringify(record.create_response, null, 2));
 } catch (err) {
   say("create", `FAILED ${explain(err)}`);
   finish(1);
 }
-if (!assignmentSectionId) finish(1);
+if (!assignmentSectionId) {
+  if (createdAssignmentId) console.log(`   created but unusable — clean up: --cleanup ${createdAssignmentId}`);
+  finish(1);
+}
 
 // Read it back by listing the section and finding our assignmentsectionid.
 const back = await getJson(`/ws/xte/section/assignment/?${new URLSearchParams({ users_dcid: usersDcid, section_ids: sectionDcid! })}`);
@@ -394,8 +408,9 @@ const ours = (Array.isArray(back.json) ? back.json : []).find((a: unknown) => {
     text.includes(`"assignmentsectionid":"${assignmentSectionId}"`)
   );
 }) as Record<string, unknown> | undefined;
-const assignmentId = ours?.assignmentid !== undefined ? String(ours.assignmentid) : null;
+const assignmentId = ours?.assignmentid !== undefined ? String(ours.assignmentid) : createdAssignmentId;
 say("read back in the section list", ours ? "found" : `not found (HTTP ${back.status})`);
+if (ours && createdAssignmentId) say("listed assignmentid = the create's", String(ours.assignmentid) === createdAssignmentId ? "yes" : "NO");
 if (assignmentId) console.log(`   cleanup later: --cleanup ${assignmentId}`);
 record.read_back = ours ? shapeOf(ours) : null;
 

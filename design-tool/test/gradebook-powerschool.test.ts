@@ -19,7 +19,7 @@ import {
   buildAssignmentCreateBody,
   defaultCategoryId,
   parseCategories,
-  parseCreatedAssignmentSectionId,
+  parseCreatedAssignment,
   truncateAssignmentName,
 } from "../lib/gradebook/powerschoolPayloads";
 import {
@@ -138,16 +138,27 @@ describe("assignment create body", () => {
     expect(truncateAssignmentName("  short  ")).toBe("short");
   });
 
-  test("the created id is read from the echoed section, a top-level field, or Location", () => {
+  test("created ids: the section id only from a body; a Location number is the assignmentid", () => {
     expect(
-      parseCreatedAssignmentSectionId(
+      parseCreatedAssignment(
         { _name: "assignment", assignmentid: 5, _assignmentsections: [{ _name: "assignmentsection", assignmentsectionid: 77001 }] },
         null,
       ),
-    ).toBe("77001");
-    expect(parseCreatedAssignmentSectionId({ assignmentsectionid: "77002" }, null)).toBe("77002");
-    expect(parseCreatedAssignmentSectionId(null, "https://ps.example.test/ws/xte/section/assignment/77003")).toBe("77003");
-    expect(parseCreatedAssignmentSectionId({}, null)).toBeNull();
+    ).toEqual({ assignmentId: "5", assignmentSectionId: "77001" });
+    expect(parseCreatedAssignment({ assignmentsectionid: "77002" }, null)).toEqual({
+      assignmentId: null,
+      assignmentSectionId: "77002",
+    });
+    // Measured live 2026-09-29: empty 201, Location = …/<assignmentid>.
+    expect(parseCreatedAssignment(null, "https://ps.example.test/ws/xte/section/assignment/55003")).toEqual({
+      assignmentId: "55003",
+      assignmentSectionId: null,
+    });
+    // A GET answered as an array reads the same.
+    expect(
+      parseCreatedAssignment([{ assignmentid: 6, _assignmentsections: [{ assignmentsectionid: 77004 }] }], null),
+    ).toEqual({ assignmentId: "6", assignmentSectionId: "77004" });
+    expect(parseCreatedAssignment({}, null)).toEqual({ assignmentId: null, assignmentSectionId: null });
   });
 });
 
@@ -404,6 +415,36 @@ describe("live client", () => {
     expect(seen[1]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/?users_dcid=8301");
     expect(JSON.parse(String(seen[1]!.init.body))).toEqual({ _assignmentsections: [] });
   });
+
+  test("an empty 201 with Location = …/<assignmentid> is read back for the section id", async () => {
+    // The live shape, measured on the test server 2026-09-29.
+    const { fetch, seen } = fakeFetch([
+      tokenOk(),
+      () =>
+        new Response(null, {
+          status: 201,
+          headers: { Location: "https://ps.example.test/ws/xte/section/assignment/55010" },
+        }),
+      json(200, { _name: "assignment", assignmentid: 55010, _assignmentsections: [{ assignmentsectionid: 77010 }] }),
+    ]);
+    const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
+    const created = await client.createAssignment("8301", { _assignmentsections: [] });
+    expect(created.assignmentId).toBe("55010");
+    expect(created.assignmentSectionId).toBe("77010");
+    expect(seen[2]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/55010?users_dcid=8301");
+    expect(seen[2]!.init.method).toBe("GET");
+  });
+
+  test("a read-back that carries no section id leaves it null (the caller refuses the send)", async () => {
+    const { fetch } = fakeFetch([
+      tokenOk(),
+      () => new Response(null, { status: 201, headers: { Location: "/ws/xte/section/assignment/55011" } }),
+      json(200, { _name: "assignment", assignmentid: 55011 }),
+    ]);
+    const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
+    const created = await client.createAssignment("8301", {});
+    expect(created).toMatchObject({ assignmentId: "55011", assignmentSectionId: null });
+  });
 });
 
 describe("the mock gradebook", () => {
@@ -423,6 +464,7 @@ describe("the mock gradebook", () => {
       publishOption: null,
     }));
     const asid = created.assignmentSectionId!;
+    expect(created.assignmentId).not.toBe(asid);
     const first = parseScoreWriteResponseUnconfirmed(
       await mock.writeScores("8301", "3100", buildScoreWriteBodyUnconfirmed(asid, [
         { studentDcid: "81001", points: 2, externalScoreId: null },

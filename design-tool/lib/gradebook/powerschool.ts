@@ -16,7 +16,7 @@
 // response body. Callers log what they need through `lib/log.ts`.
 import {
   parseCategories,
-  parseCreatedAssignmentSectionId,
+  parseCreatedAssignment,
   type PsCategory,
 } from "./powerschoolPayloads";
 
@@ -46,15 +46,27 @@ export class GradebookConfigError extends Error {
   }
 }
 
+export interface CreatedAssignment {
+  assignmentSectionId: string | null;
+  assignmentId: string | null;
+  /** The create's parsed 201 body (null when empty, as measured live). */
+  raw: unknown;
+  /** The create's `Location` header, when it sent one. */
+  location: string | null;
+}
+
 export interface PowerSchoolClient {
   readonly id: "mock" | "live";
   /** Every category the teacher has for that school year (active or not). */
   listCategories(usersDcid: string, yearId: string): Promise<PsCategory[]>;
-  /** Creates the assignment; answers its `assignmentsectionid`. */
+  /**
+   * Creates the assignment; answers its `assignmentsectionid` (what the score
+   * write needs) and its `assignmentid` (what a DELETE needs).
+   */
   createAssignment(
     usersDcid: string,
     body: Record<string, unknown>,
-  ): Promise<{ assignmentSectionId: string | null; raw: unknown }>;
+  ): Promise<CreatedAssignment>;
   /** Writes scores; answers the parsed 2xx body (or null when empty). */
   writeScores(
     usersDcid: string,
@@ -193,7 +205,19 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
         { users_dcid: usersDcid },
         body,
       );
-      return { assignmentSectionId: parseCreatedAssignmentSectionId(json, location), raw: json };
+      const ids = parseCreatedAssignment(json, location);
+      if (!ids.assignmentSectionId && ids.assignmentId) {
+        // The live 201 is empty with Location = …/<assignmentid>: read the
+        // assignment back for its section id. A failure here surfaces like a
+        // failed create's — the caller cannot tell the two apart anyway.
+        const back = await call(
+          "GET",
+          `/ws/xte/section/assignment/${encodeURIComponent(ids.assignmentId)}`,
+          { users_dcid: usersDcid },
+        );
+        ids.assignmentSectionId = parseCreatedAssignment(back.json, null).assignmentSectionId;
+      }
+      return { ...ids, raw: json, location };
     },
     async writeScores(usersDcid, termId, body) {
       const { json } = await call(
@@ -274,19 +298,16 @@ export class MockPowerSchool implements PowerSchoolClient {
     this.maybeFail("createAssignment");
     const id = String(this.nextAssignment++);
     this.assignments.set(id, body);
-    // Echo the assignment the way the create is expected to (see
-    // parseCreatedAssignmentSectionId): the first section carries the id.
-    const sections = (body._assignmentsections as Record<string, unknown>[] | undefined) ?? [];
-    const raw = {
-      _name: "assignment",
-      assignmentid: Number(id) - 50000,
-      _assignmentsections: sections.map((s) => ({
-        ...s,
-        _name: "assignmentsection",
-        assignmentsectionid: Number(id),
-      })),
+    // Answer the way the live client does after its read-back: both ids,
+    // with the assignmentid distinct from the section id (the live 201's
+    // Location carries only the assignmentid — see parseCreatedAssignment).
+    const assignmentId = String(Number(id) - 50000);
+    return {
+      assignmentSectionId: id,
+      assignmentId,
+      raw: null,
+      location: `/ws/xte/section/assignment/${assignmentId}`,
     };
-    return { assignmentSectionId: parseCreatedAssignmentSectionId(raw, null), raw };
   }
 
   async writeScores(usersDcid: string, termId: string, body: Record<string, unknown>) {

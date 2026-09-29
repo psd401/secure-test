@@ -299,6 +299,14 @@ export async function sendToPowerSchool(
       });
       return { ok: false, status: 502, error: "create_response_unreadable" };
     }
+    // The assignmentid is what a DELETE of the assignment takes; the push
+    // row keeps only the section id, so the log line is where it is found.
+    log.info("gradebook_assignment_created", {
+      target: "powerschool",
+      assessment_id: assessment.id,
+      assignment_id: created.assignmentId,
+      assignment_section_id: created.assignmentSectionId,
+    });
     const [updated] = await db
       .update(gradebook_pushes)
       .set({ external_assignment_id: created.assignmentSectionId })

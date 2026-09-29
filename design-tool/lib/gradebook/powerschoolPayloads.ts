@@ -145,28 +145,35 @@ export function buildAssignmentCreateBody(input: AssignmentCreateInput): Record<
 }
 
 /**
- * The created assignment's `assignmentsectionid` from a 201. The body shape
- * is not yet read live (slice 2c's first write), so this accepts the three
- * plausible places: the echoed assignment's first section, a top-level field,
- * or the trailing number of a `Location` header. Null when none carries it.
+ * The ids of a created assignment, from the create's 201 or from a GET of the
+ * assignment. Measured on the test server 2026-09-29: the 201 has an EMPTY
+ * body and a `Location` ending in the `assignmentid` — NOT the
+ * `assignmentsectionid` the score write needs (sending that one answered 403
+ * "User does not teach section…"). So a trailing Location number is only ever
+ * the `assignmentid`; the section id comes from a body (an echoed assignment's
+ * first section, or a top-level field), and the live client GETs the
+ * assignment to read it when the 201 carries none.
  */
-export function parseCreatedAssignmentSectionId(
+export function parseCreatedAssignment(
   body: unknown,
   location: string | null,
-): string | null {
-  if (body && typeof body === "object") {
-    const row = body as Record<string, unknown>;
-    const sections = row._assignmentsections;
+): { assignmentId: string | null; assignmentSectionId: string | null } {
+  let assignmentId: string | null = null;
+  let assignmentSectionId: string | null = null;
+  // A GET may answer the assignment inside an array.
+  const row = Array.isArray(body) ? body[0] : body;
+  if (row && typeof row === "object") {
+    const r = row as Record<string, unknown>;
+    assignmentId = asIdString(r.assignmentid);
+    const sections = r._assignmentsections;
     if (Array.isArray(sections) && sections[0] && typeof sections[0] === "object") {
-      const id = asIdString((sections[0] as Record<string, unknown>).assignmentsectionid);
-      if (id) return id;
+      assignmentSectionId = asIdString((sections[0] as Record<string, unknown>).assignmentsectionid);
     }
-    const top = asIdString(row.assignmentsectionid);
-    if (top) return top;
+    assignmentSectionId ??= asIdString(r.assignmentsectionid);
   }
-  if (location) {
+  if (!assignmentId && location) {
     const match = /(\d+)\/?$/.exec(location);
-    if (match) return match[1]!;
+    if (match) assignmentId = match[1]!;
   }
-  return null;
+  return { assignmentId, assignmentSectionId };
 }
