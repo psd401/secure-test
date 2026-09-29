@@ -1028,3 +1028,34 @@ sentence — never real student writing.
 | 302 | A teacher with no access to the assessment | The per-student URL and `GET /api/assessments/<id>/safeguarding-alerts` both 404; `/admin/safeguarding` 404s too (and for an admin while acting as someone) | NOT RUN (needs a second staff account) |
 
 **Finding SG-F1 (2026-09-25 local check) — BUILT the same day, seen on local dev:** once a teacher chooses Score with AI anyway, the proposal card no longer says the answer was flagged as an attempt to instruct the scorer — a reviewer approving the proposal later cannot tell. Proposal: keep a one-line "AI scored at your request after a possible attempt to instruct the scorer" note on a forced answer's proposal card.
+
+## Send to gradebook — PowerSchool dialog (2026-09-28)
+
+Slice 4 of `docs/gradebook-push-design.md` (PowerSchool only; slice 3
+Schoology is held). The predicates, copy and static markup are covered by
+`test/gradebook-send-dialog.test.ts`; these rows are what only the browser
+shows. Rows 303–313 run on **local dev with `GRADEBOOK_PROVIDER` unset**
+(the mock gradebook: five synthetic categories, district "Test" active, so
+D-6 preselects it) on an assessment with at least two handed-in attempts
+in ONE section the signed-in teacher currently teaches — one fully scored,
+one with an unscored essay — plus a signed-in teacher who has `dcid`s in
+the roster (`roster-health` on dev, or the seeded demo roster). Rows
+314–316 need the test server (slice 2c, after plugin v1.3). No real
+student data: the demo roster only.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 303 | Results page as the owner | **Send to gradebook** beside Print student work; a teacher at `view` / `run` level, or one who teaches none of the sections with handed-in work, sees no button | NOT RUN |
+| 304 | Open the dialog | Section select lists only sections the signed-in teacher teaches, each "<label> — n scored · m awaiting scoring" (counts match the matrix: an attempt with an unscored response is "awaiting"); Category preselects **Test**; Name = the assessment title (cut to 50 with the counter); Due date = today (local); **Send** enabled | NOT RUN |
+| 305 | Clear the category (choose the blank option) or blank the name | **Send** disables; a date outside `YYYY-MM-DD` disables it too | NOT RUN |
+| 306 | **Send** | The dialog shows "<n> sent · <m> held back." then "Held back, not sent: <m> awaiting scoring. A later send picks them up."; no failure list; **Done** reloads the page; the button now reads "Sent to PowerSchool · <today>"; the matrix is unchanged | NOT RUN |
+| 307 | Per-student page of a sent attempt | The history reads "Sent to PowerSchool <time> · <points> points" (the attempt's total, D-4); the held-back attempt has no such line | NOT RUN |
+| 308 | Open the dialog again (same section) | The note "Already sent on <date>. Sending again updates changed scores and skips unchanged ones; the name and due date stay as they are in PowerSchool."; the button reads **Send again**; the category is the remembered one (change it before a send that fails → not remembered, D-5) | NOT RUN |
+| 309 | **Send again** with nothing changed | "<n> unchanged." and nothing else; the per-student history gains NO new "Sent" line | NOT RUN |
+| 310 | Score the held-back essay, then **Send again** | "1 sent · <n> unchanged."; that student's history now carries the "Sent to PowerSchool" line | NOT RUN |
+| 311 | Change one sent student's score (rescore), **Send again** | "1 updated · <n> unchanged."; the history line's points are the new total | NOT RUN |
+| 312 | **Pass back** a sent student, then **Send again** | The summary carries "1 student passed back since an earlier send keeps that earlier score in the gradebook until they hand in again and you send again." (8.3); nothing else changes for them | NOT RUN |
+| 313 | Send from a section whose students lack `dcid`s (dev roster without them) | An error line "This section has no PowerSchool ids yet. The roster brings them in overnight; if they stay missing, tell IT." — nothing sent, no "Sent" button label | NOT RUN |
+| 314 | Test server (`GRADEBOOK_PROVIDER=live`, plugin v1.3): 306 on the pilot-analog section | The assignment appears in PowerTeacher Pro under the chosen category with the name and due date; one score per sent student, the held-back student blank | NOT RUN (needs plugin v1.3 on the test server) |
+| 315 | Test server: 311 | The corrected score is what PowerTeacher Pro shows; no duplicate assignment | NOT RUN (needs plugin v1.3) |
+| 316 | Test server: delete the assignment in PowerTeacher Pro, then **Send again** | The failure list names every student with "the assignment is missing in PowerSchool", the note "The assignment was not found in PowerSchool (deleted there?). Send again to create a new one."; a second Send again creates a fresh assignment | NOT RUN (needs plugin v1.3) |
