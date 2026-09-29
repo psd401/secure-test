@@ -8,6 +8,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
+import { markAssessmentGrantSeen } from "@/lib/api/grants";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,11 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
     notFound();
   }
   const assessment = access.assessment;
+  // Share notifications: a co-teacher opening the assessment clears its "New"
+  // on their home list. An admin acting as the teacher does not.
+  if (access.via === "grant" && !session.actor_sub) {
+    await markAssessmentGrantSeen(db, session.email, id);
+  }
 
   const itemRows = await db
     .select()

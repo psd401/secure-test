@@ -6,6 +6,7 @@ import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
 import { assessments, attempts, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
+import { unseenAssessmentGrantIds } from "@/lib/api/grants";
 import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
 import { AcceptShareButton } from "@/components/app/AcceptShareButton";
 import { ArchiveAssessmentButton } from "./ArchiveAssessmentButton";
@@ -182,6 +183,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const pendingShares = session.email
     ? (await listSharesForRecipient(session.email)).filter((s) => !s.copied_assessment_id)
     : [];
+  // Share notifications (docs/share-notifications-design.md): a co-teach grant
+  // the teacher has not opened yet carries "New" on its row.
+  const unseenGrants = await unseenAssessmentGrantIds(db, session.email);
   const openCodeFor = new Map<string, string>();
   for (const s of openSessions) {
     if (!openCodeFor.has(s.assessment_id)) openCodeFor.set(s.assessment_id, s.code);
@@ -265,7 +269,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <Card key={s.id}>
               <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{s.assessment_name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{s.assessment_name}</span>
+                    <Badge variant="info">New</Badge>
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     From {s.shared_by_email} · {formatDate(s.created_at)} · you get your own copy
                   </div>
@@ -345,9 +352,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           grant kind with UI so far, so the label doesn't need
                           to say which level. */}
                       {rowAccess?.via === "grant" ? (
-                        <div className="truncate text-xs text-muted-foreground">
-                          Shared with you as co-teacher
-                          {rowAccess.owner_email ? ` · by ${rowAccess.owner_email}` : ""}
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="truncate">
+                            Shared with you as co-teacher
+                            {rowAccess.owner_email ? ` · by ${rowAccess.owner_email}` : ""}
+                          </span>
+                          {unseenGrants.has(a.id.toLowerCase()) ? <Badge variant="info">New</Badge> : null}
                         </div>
                       ) : null}
                     </TableCell>

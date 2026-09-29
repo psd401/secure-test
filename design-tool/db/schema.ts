@@ -1641,6 +1641,9 @@ export const access_grants = pgTable(
     /** "sub for 9/18", "co-teacher" — shown back to the granter. */
     note: text("note"),
     revoked_at: timestamp("revoked_at", { withTimezone: true }),
+    /** First time the grantee opened the assessment (docs/share-notifications-design.md).
+     * null = the home list shows "New" on the co-teach row. */
+    seen_at: timestamp("seen_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

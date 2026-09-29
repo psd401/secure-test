@@ -220,6 +220,53 @@ export async function listGrantsOnScope(
     .orderBy(desc(access_grants.created_at));
 }
 
+// ── "New" on the grantee's home list (docs/share-notifications-design.md) ────
+
+/** Assessment ids with a live assessment-scope grant this email has not opened yet. */
+export async function unseenAssessmentGrantIds(
+  db: Db,
+  email: string | null | undefined,
+): Promise<Set<string>> {
+  const grantee = normalizeEmail(email);
+  if (!grantee) return new Set();
+  const rows = await db
+    .select({ scope_id: access_grants.scope_id })
+    .from(access_grants)
+    .where(
+      and(
+        eq(access_grants.grantee_email, grantee),
+        eq(access_grants.scope_kind, "assessment"),
+        isNull(access_grants.seen_at),
+        isNull(access_grants.revoked_at),
+        lte(access_grants.starts_at, sql`now()`),
+        or(isNull(access_grants.ends_at), gt(access_grants.ends_at, sql`now()`)),
+      ),
+    );
+  return new Set(rows.map((r) => r.scope_id.toLowerCase()));
+}
+
+/** The grantee opened the assessment: clear its "New". A no-op for anyone else. */
+export async function markAssessmentGrantSeen(
+  db: Db,
+  email: string | null | undefined,
+  assessmentId: string,
+): Promise<void> {
+  const grantee = normalizeEmail(email);
+  if (!grantee) return;
+  await db
+    .update(access_grants)
+    .set({ seen_at: sql`now()` })
+    .where(
+      and(
+        eq(access_grants.grantee_email, grantee),
+        eq(access_grants.scope_kind, "assessment"),
+        eq(access_grants.scope_id, assessmentId.toLowerCase()),
+        isNull(access_grants.seen_at),
+        isNull(access_grants.revoked_at),
+      ),
+    );
+}
+
 export interface CreateGrantInput {
   grantee_email: string;
   scope_kind: AccessGrantScope;
