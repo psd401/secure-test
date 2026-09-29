@@ -29,6 +29,17 @@ export function canSendToGradebook(level: AccessLevel): boolean {
   return levelSatisfies(level, "edit");
 }
 
+/**
+ * The button shows only when `GRADEBOOK_PROVIDER` is set explicitly. Unset
+ * falls back to the in-memory mock (`getPowerSchoolClient`), which on the
+ * origin would report "Sent to PowerSchool" while nothing reached it — so the
+ * origin hides the button until it is configured `live`; local dev sets
+ * `mock` to hand-run the dialog.
+ */
+export function gradebookSendConfigured(provider: string | undefined): boolean {
+  return provider === "live" || provider === "mock";
+}
+
 /** "n scored · m awaiting scoring". */
 export function sectionOptionLabel(s: Pick<SendDialogSection, "label" | "scored" | "awaiting">): string {
   return `${s.label} — ${s.scored} scored · ${s.awaiting} awaiting scoring`;

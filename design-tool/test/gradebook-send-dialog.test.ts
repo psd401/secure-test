@@ -12,6 +12,7 @@ import {
   defaultAssignmentName,
   formatFailure,
   formatSendSummary,
+  gradebookSendConfigured,
   sectionOptionLabel,
   sendAgainNote,
   sendButtonLabel,
@@ -28,6 +29,16 @@ const summary = (over: Partial<Parameters<typeof formatSendSummary>[0]> = {}) =>
   failed: [],
   notes: [],
   ...over,
+});
+
+describe("gradebookSendConfigured", () => {
+  test("only an explicit provider shows the button — unset is the silent mock", () => {
+    expect(gradebookSendConfigured("live")).toBe(true);
+    expect(gradebookSendConfigured("mock")).toBe(true);
+    expect(gradebookSendConfigured(undefined)).toBe(false);
+    expect(gradebookSendConfigured("")).toBe(false);
+    expect(gradebookSendConfigured("carrier-pigeon")).toBe(false);
+  });
 });
 
 describe("canSendToGradebook", () => {

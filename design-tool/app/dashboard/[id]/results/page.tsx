@@ -10,7 +10,7 @@ import {
 import { formatMean } from "@/lib/reporting/analytics";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
-import { canSendToGradebook } from "@/lib/gradebook/sendDialog";
+import { canSendToGradebook, gradebookSendConfigured } from "@/lib/gradebook/sendDialog";
 import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
@@ -94,7 +94,10 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // send; the send route refuses anything else. Last push per section is read
   // by a small server-side query here (`loadSendDialogSections`), not the
   // categories GET, which is per-section and only runs once the dialog opens.
-  const sendSections = canSendToGradebook(access.level)
+  // Hidden unless GRADEBOOK_PROVIDER is set explicitly (unset = the mock).
+  const sendSections =
+    canSendToGradebook(access.level) &&
+    gradebookSendConfigured(process.env.GRADEBOOK_PROVIDER)
     ? await loadSendDialogSections(db, assessment.id, session.email, results)
     : [];
 

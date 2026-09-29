@@ -1039,9 +1039,13 @@ shows. Rows 303–313 run on **local dev with `GRADEBOOK_PROVIDER` unset**
 D-6 preselects it) on an assessment with at least two handed-in attempts
 in ONE section the signed-in teacher currently teaches — one fully scored,
 one with an unscored essay — plus a signed-in teacher who has `dcid`s in
-the roster (`roster-health` on dev, or the seeded demo roster). Rows
-314–316 need the test server (slice 2c, after plugin v1.3). No real
-student data: the demo roster only.
+the roster (`roster-health` on dev, or the seeded demo roster). The button
+shows only when `GRADEBOOK_PROVIDER` is set explicitly (`mock` for rows
+303–313; unset hides it — 2026-09-29, the origin runs unset until it is
+configured `live`). Rows 314–316 need the test server (slice 2c, after
+plugin v1.3), which answers only on the district network — so they run
+from local dev there with `GRADEBOOK_PROVIDER=live` and the POWERSCHOOL_*
+variables, not from the origin. No real student data: the demo roster only.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
