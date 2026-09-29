@@ -46,6 +46,12 @@ outside the dashboard.
 
 ## Progress
 
-- 2026-09-29: slice 1 built in the worktree (4 new tests; design-tool suite
-  2397 pass, typecheck clean); not committed, not merged, not deployed. Not
-  yet hand-run in a browser.
+- 2026-09-29: slice 1 committed in the worktree (4 new tests). Not merged,
+  not deployed, not hand-run in a browser (after merge, per James).
+- 2026-09-29: slice 2 built in the worktree: `lib/email/` (`mock` | `ses`,
+  `@aws-sdk/client-sesv2`), `sendShareEmail` awaited after the row insert in
+  `POST /api/assessments/[id]/shares` (links to `/dashboard`) and
+  `POST /api/assessments/[id]/grants` (links to the editor); 11 tests. With
+  `EMAIL_PROVIDER` unset nothing leaves the process. `.env.local.example`
+  does not list `EMAIL_PROVIDER` / `EMAIL_FROM` / `EMAIL_REGION` yet (env
+  files are off-limits to Claude — add by hand).

@@ -4,6 +4,8 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAssessment } from "@/lib/api/access";
 import { CreateShareBody, createShare, listSharesForAssessment } from "@/lib/api/shares";
 import { UUID_RE } from "@/lib/uuid";
+import { appOrigin } from "@/lib/auth/appOrigin";
+import { sendShareEmail } from "@/lib/email/shareNotifications";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -46,5 +48,14 @@ export async function POST(req: Request, ctx: RouteContext) {
     const { status, ...failure } = result;
     return NextResponse.json(failure, { status });
   }
+  // Share notifications (docs/share-notifications-design.md): best effort,
+  // after the row exists; a duplicate (409) returned above sends nothing.
+  await sendShareEmail({
+    kind: "share",
+    to: result.share.recipient_email,
+    sharerEmail: result.share.shared_by_email,
+    assessmentName: access.assessment.name,
+    link: `${appOrigin(req)}/dashboard`,
+  });
   return NextResponse.json({ ok: true, share: result.share }, { status: 201 });
 }

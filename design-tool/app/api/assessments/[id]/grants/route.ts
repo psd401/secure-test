@@ -18,6 +18,8 @@ import {
   validateGrantRequest,
 } from "@/lib/api/grants";
 import { UUID_RE } from "@/lib/uuid";
+import { appOrigin } from "@/lib/auth/appOrigin";
+import { sendShareEmail } from "@/lib/email/shareNotifications";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -97,5 +99,15 @@ export async function POST(req: Request, ctx: RouteContext) {
     // grant on this assessment. Revoke it and grant again to change the level.
     return NextResponse.json({ ok: false, error: created.error }, { status: 409 });
   }
+  // Share notifications (docs/share-notifications-design.md): best effort,
+  // after the row exists; the 409 above sends nothing. Co-teach is the only
+  // grant this route writes, and it links straight to the editor.
+  await sendShareEmail({
+    kind: "co_teach",
+    to: created.grant.grantee_email,
+    sharerEmail: created.grant.granted_by_email,
+    assessmentName: access.assessment.name,
+    link: `${appOrigin(req)}/dashboard/${id}`,
+  });
   return NextResponse.json({ ok: true, grant: created.grant }, { status: 201 });
 }

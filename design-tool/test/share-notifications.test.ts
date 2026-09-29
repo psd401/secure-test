@@ -36,7 +36,7 @@ async function assessment(name: string) {
     .insert(assessments)
     .values({ owner_sub: OWNER.sub, owner_email: OWNER.email, name })
     .returning();
-  return row;
+  return row!;
 }
 
 async function grant(assessmentId: string, grantee = CO) {
