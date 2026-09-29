@@ -25,6 +25,7 @@
 //   compare       → compare-runs.mjs
 //   seed-essays   → seed-essays.mjs    (README "Seeding pilot essays")
 //   roster-health → roster-health.mjs
+//   ps-reach      → ps-reach.mjs      (read-only PowerSchool check)
 //
 // A one-off ECS run-task on the service's own task definition is how any of
 // these reaches Aurora now that the cluster SG has no laptop CIDR
@@ -50,6 +51,10 @@ const MODES = {
   // only way to run it against Aurora now that the cluster SG has no laptop
   // CIDR.
   "roster-health": "./roster-health.mjs",
+  // Read-only PowerSchool reachability check (docs/gradebook-push-design.md):
+  // token + one category read through the task's own network path and
+  // POWERSCHOOL_* values. Writes nothing.
+  "ps-reach": "./ps-reach.mjs",
 };
 
 const mode = process.argv[2];

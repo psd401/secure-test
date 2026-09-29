@@ -611,3 +611,17 @@ the whole section list. Row 316 re-run ✅. Two further readings from the
 run: the check teacher has no "Test" category (the D-6 default is absent,
 the dialog asks for a pick), and the due date must fall inside the
 section's term (today's date is outside a 2024-25 test copy).
+
+**2026-09-29 — production wiring (built, not deployed).** IT issued the
+production plugin credentials; James added them to the app secret with a
+hidden-prompt script kept outside the repo (`POWERSCHOOL_BASE_URL` /
+`_CLIENT_ID` / `_CLIENT_SECRET` — the base URL rides in the secret so the
+district hostname stays out of the repo). Production PowerSchool is
+reachable from the internet (James), unlike the test server.
+`infra/lib/app-service.ts` maps the three keys into the task and sets
+`GRADEBOOK_PROVIDER=live` — Send to gradebook for every teacher with edit
+access (James). New read-only operator mode `ps-reach`
+(`scripts/ps-reach.ts`, `oneoff-aurora.sh ps-reach [teacher@psd401.net]`):
+the OAuth token plus one category read through the task's own network path,
+printing statuses and counts only. Run it right after the deploy, before
+the first real send.

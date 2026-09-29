@@ -229,6 +229,10 @@ export class AppService extends Construct {
       // deployment's statement about who is an admin rather than something
       // inherited from whatever the last task definition happened to carry.
       ADMIN_EMAILS: props.adminEmails,
+      // Gradebook push: Send to gradebook is shown only when this is set
+      // explicitly (GB-1). `live` = the production PowerSchool plugin, for
+      // every teacher with edit access (James, 2026-09-29).
+      GRADEBOOK_PROVIDER: "live",
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;
@@ -266,6 +270,23 @@ export class AppService extends Construct {
       OIDC_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
         appSecret,
         "OIDC_CLIENT_SECRET",
+      ),
+      // Gradebook push (docs/gradebook-push-design.md): the PRODUCTION
+      // PowerSchool plugin, added to the app secret by the maintainer's
+      // hidden-prompt script. The base URL rides in the secret too so the
+      // district hostname stays out of the repo. A key missing from the
+      // secret stops the task from starting — add all three before a deploy.
+      POWERSCHOOL_BASE_URL: ecs.Secret.fromSecretsManager(
+        appSecret,
+        "POWERSCHOOL_BASE_URL",
+      ),
+      POWERSCHOOL_CLIENT_ID: ecs.Secret.fromSecretsManager(
+        appSecret,
+        "POWERSCHOOL_CLIENT_ID",
+      ),
+      POWERSCHOOL_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
+        appSecret,
+        "POWERSCHOOL_CLIENT_SECRET",
       ),
     };
 

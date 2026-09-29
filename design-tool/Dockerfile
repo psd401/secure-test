@@ -41,7 +41,8 @@ RUN cd design-tool && bun build scripts/score-corpus.ts --target=node --format=e
 # reason: the runtime image has no bun, and drizzle/postgres are not
 # resolvable modules in the standalone trace.
 RUN cd design-tool && bun build scripts/seed-essays.ts --target=node --format=esm --outfile scripts/seed-essays.mjs \
- && bun build scripts/roster-health.ts --target=node --format=esm --outfile scripts/roster-health.mjs
+ && bun build scripts/roster-health.ts --target=node --format=esm --outfile scripts/roster-health.mjs \
+ && bun build scripts/ps-reach.ts --target=node --format=esm --outfile scripts/ps-reach.mjs
 
 FROM node:22.23.2-slim AS runner
 # Build stamp (docs/observability-design.md slice 3 follow-up): the git
@@ -73,7 +74,7 @@ COPY --from=builder /repo/design-tool/node_modules/@napi-rs ./design-tool/node_m
 # Boot shim (slice 3): assembles DATABASE_URL from the ECS-injected DB_*
 # secret vars, then imports server.js — or, with a mode as its argument, one
 # of the bundled operator scripts (`migrate`, `corpus`, `compare`,
-# `seed-essays`, `roster-health`; a one-off
+# `seed-essays`, `roster-health`, `ps-reach`; a one-off
 # ECS run-task, infra/README.md "Migrating Aurora" and "Corpus runs on
 # Aurora"). Local runs that set DATABASE_URL directly pass straight through.
 COPY --from=builder /repo/design-tool/scripts/docker-entrypoint.mjs ./design-tool/scripts/docker-entrypoint.mjs
@@ -81,6 +82,7 @@ COPY --from=builder /repo/design-tool/scripts/score-corpus.mjs ./design-tool/scr
 COPY --from=builder /repo/design-tool/scripts/compare-runs.mjs ./design-tool/scripts/compare-runs.mjs
 COPY --from=builder /repo/design-tool/scripts/seed-essays.mjs ./design-tool/scripts/seed-essays.mjs
 COPY --from=builder /repo/design-tool/scripts/roster-health.mjs ./design-tool/scripts/roster-health.mjs
+COPY --from=builder /repo/design-tool/scripts/ps-reach.mjs ./design-tool/scripts/ps-reach.mjs
 COPY --from=builder /repo/design-tool/db/migrate.mjs ./design-tool/db/migrate.mjs
 COPY --from=builder /repo/design-tool/db/migrations ./design-tool/db/migrations
 
