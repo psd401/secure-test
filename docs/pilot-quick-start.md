@@ -152,6 +152,15 @@ its own.
   `?attempt=…` from a student's row for a family-facing single page),
   *Print student work* (each student's answers with the key on a last
   page, for scoring by hand or evidence).
+- **Send to gradebook** (Results page, since 2026-09-29): each student's
+  total points go to PowerSchool for one section at a time. Pick the
+  section and a category; the assignment name and due date (today) can be
+  edited before the first send. It creates the assignment in PowerTeacher
+  Pro, and publishing follows the category's default. Only fully scored
+  work is sent. Anything still in the scoring queue is *held back* and
+  goes on a later send. After you change a score, **Send again** updates
+  just the changed ones; the name and due date are then edited in
+  PowerTeacher Pro, not here.
 - **Scoring queue**: essays and hand-scored items wait here. A rubric can
   be uploaded on the question (PDF, Word, Markdown or plain text); with a rubric, *Score
   with AI* proposes a score and feedback you approve or change. Nothing
@@ -230,7 +239,8 @@ its own.
 
 ## Not in this pilot
 
-- Gradebook export to PowerSchool / Schoology (a CSV is available).
+- Sending scores to Schoology (PowerSchool is available; a CSV works for
+  anything else).
 - Rescoring already-scored answers after an answer key changes.
 - Handwriting or drawn math recognition (a keypad is available on short
   answers whose question contains math).

@@ -388,6 +388,8 @@
             <li><b class="ui">Print report</b> gives a class summary, or a single family-facing page for one student.</li>
             <li><b class="ui">Print student work</b> prints each student's answers, optionally anonymous with a key page, for marking by hand.</li>
             <li><b class="ui">Pass back</b> returns a handed-in test to a student to keep working; earlier scores are kept as a record.</li>
+            <li><b class="ui">Send to gradebook</b> puts each student's total points into PowerSchool, one class section at a time. Pick the section and a category; the name and due date (today) can be changed before sending. It creates the assignment in PowerTeacher Pro, and publishing follows that category's default.</li>
+            <li>Only fully scored work is sent. Anything still waiting in the scoring queue is held back, and a later send picks it up. After you change a score, <b class="ui">Send again</b> updates just the changed ones.</li>
           </ol>
         </div>
         <figure class="shot" data-src="/help/results.png" data-alt="The results table for a class">
@@ -428,6 +430,12 @@
         <dd>That Mac hasn't received its settings from IT yet. Contact IT, not the project.</dd>
         <dt>Wi-Fi drops mid-test.</dt>
         <dd>Answers are stored on the Mac and sent when the connection returns.</dd>
+        <dt>Send to gradebook says some students were "held back".</dt>
+        <dd>Their work still has a question waiting to be scored. Finish scoring, then press <b class="ui">Send again</b>; partial points are never sent.</dd>
+        <dt>I don't see my section in Send to gradebook.</dt>
+        <dd>The list shows sections you teach in PowerSchool that have handed-in work on this test (or an earlier send). A co-teacher sends for their own sections.</dd>
+        <dt>I renamed the assignment here, but PowerSchool kept the old name.</dt>
+        <dd>The name and due date are set on the first send only. Change them in PowerTeacher Pro after that.</dd>
         <dt>Delete is greyed out.</dt>
         <dd>A Published test must be unpublished first; a test with student work can only be archived.</dd>
       </dl>
@@ -460,7 +468,7 @@
 </dialog>
 
 <script>
-const UPDATED = "2026-09-25";
+const UPDATED = "2026-09-29";
 document.getElementById("updated").textContent =
   new Date(UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 

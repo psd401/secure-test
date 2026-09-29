@@ -303,12 +303,12 @@
 // ---------------------------------------------------------------------------
 // Content. Update these lists as work lands; the page is built from them.
 // ---------------------------------------------------------------------------
-const UPDATED = "2026-09-25";
+const UPDATED = "2026-09-29";
 
 const STATS = [
   { value: "130", label: "days from first experiment" },
   { value: "9", label: "student app releases" },
-  { value: "46", label: "database migrations" },
+  { value: "49", label: "database migrations" },
   { value: "3,000+", label: "automated tests" },
 ];
 
@@ -362,14 +362,18 @@ const JOURNEY = [
     text: "Handed-in writing is screened for signs of self-harm or abuse and for attempts to game the AI scorer; the teacher of the class is alerted." },
   { date: "2026-09-25", title: "Safer deploys, help and this roadmap",
     text: "Database changes now apply before new code serves, and deploys that change the database wait until after school. Teachers got a help page, and the project got this roadmap." },
+  { date: "2026-09-29", title: "Change a final score",
+    text: "A teacher can correct any final score, with the earlier one kept as a record." },
+  { date: "2026-09-29", star: true, title: "Scores go to PowerSchool",
+    text: "Send to gradebook puts each student's total points into PowerTeacher Pro, one section at a time, through a district PowerSchool plugin. Colleagues now see a New badge when something is shared with them." },
 ];
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
-  { title: "Safeguarding alerts by email", text: "Alerts reach the teacher's inbox, not only the app.", wait: "AWS email setup" },
+  { title: "Email from the app", text: "Safeguarding alerts reach the teacher's inbox, and colleagues get an email when a test is shared with them.", wait: "IT + AWS email setup" },
   { title: "Finish the pilot and gather feedback", text: "Teacher and student feedback rounds; the questions at right are part of it." },
   { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
-  { title: "Send scores to the gradebook", text: "Schoology first, then PowerSchool.", wait: "IT: gradebook access" },
+  { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
   { title: "Staging environment and automated deploys", text: "A practice copy of the system, and deploys that no longer run from one laptop." },
   { title: "A working-time clock", text: "Time limits count time actually spent in a test across several sessions." },
   { title: "Print chosen students or sections together", text: "One packet for any mix of students and classes." },
