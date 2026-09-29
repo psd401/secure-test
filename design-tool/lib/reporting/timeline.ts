@@ -70,6 +70,10 @@ function lineText(event: TimelineEvent): string {
       return event.detail?.no_limit === true
         ? "Time limit removed by teacher"
         : eventLabel(event.kind);
+    case "gradebook_sent":
+      // Gradebook push slice 4: PowerSchool is the only destination so far;
+      // the points ride on `lineSuffix`.
+      return event.detail?.target === "schoology" ? "Sent to Schoology" : "Sent to PowerSchool";
     case "lockdown_failed":
     case "lockdown_interrupted":
       // The monitor's words, deliberately shared rather than re-typed.
@@ -98,6 +102,11 @@ const KINDS_WITH_DEADLINE: ReadonlySet<string> = new Set([
 ]);
 
 function lineSuffix(event: TimelineEvent): string {
+  if (event.kind === "gradebook_sent") {
+    const points = event.detail?.points;
+    if (typeof points !== "number" || !Number.isFinite(points)) return "";
+    return ` · ${points} ${points === 1 ? "point" : "points"}`;
+  }
   if (!KINDS_WITH_DEADLINE.has(event.kind)) return "";
   const endsAt = event.detail?.ends_at;
   if (typeof endsAt !== "string" || Number.isNaN(Date.parse(endsAt))) return "";

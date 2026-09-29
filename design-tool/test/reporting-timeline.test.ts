@@ -203,6 +203,27 @@ describe("buildTimeline — one line per kind", () => {
   });
 });
 
+describe("buildTimeline — gradebook_sent", () => {
+  test("names PowerSchool and carries the points", () => {
+    const lines = buildTimeline([
+      { kind: "gradebook_sent", at: at("21:07:00"), detail: { target: "powerschool", points: 17.5 } },
+    ]);
+    expect(lines[0]!.text).toBe("Sent to PowerSchool 2:07 PM · 17.5 points");
+  });
+
+  test("one point is singular; missing or odd points leave the bare sentence", () => {
+    expect(
+      buildTimeline([{ kind: "gradebook_sent", at: at("21:07:00"), detail: { target: "powerschool", points: 1 } }])[0]!
+        .text,
+    ).toBe("Sent to PowerSchool 2:07 PM · 1 point");
+    for (const detail of [null, {}, { points: "12" }, { points: Number.NaN }]) {
+      expect(buildTimeline([{ kind: "gradebook_sent", at: at("21:07:00"), detail }])[0]!.text).toBe(
+        "Sent to PowerSchool 2:07 PM",
+      );
+    }
+  });
+});
+
 describe("durationLabel", () => {
   test("under a minute is seconds; a minute and over rounds to minutes", () => {
     expect(durationLabel(0)).toBe("0 sec");

@@ -9,9 +9,12 @@ import {
 } from "@/lib/scoring/results";
 import { formatMean } from "@/lib/reporting/analytics";
 import { UUID_RE } from "@/lib/uuid";
-import { pageAssessment } from "@/lib/api/access";
+import { authorizeAssessment } from "@/lib/api/access";
+import { canSendToGradebook } from "@/lib/gradebook/sendDialog";
+import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
+import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 
@@ -64,10 +67,11 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // Access slice 1 (D-3): the Forbidden panel this used to render told a
   // stranger the assessment exists. A row the caller cannot reach is a 404,
   // the posture every other surface already had.
-  const assessment = await pageAssessment(db, session, id, "view");
-  if (!assessment) {
+  const access = await authorizeAssessment(db, session, id, "view");
+  if (!access.ok) {
     notFound();
   }
+  const assessment = access.assessment;
 
   // Time limit / unfinished attempts (D-1/B): in-progress rows join the
   // matrix so a teacher can see and hand in an unfinished attempt, not just
@@ -84,6 +88,15 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     db,
     results.rows.map((r) => r.attempt_id),
   );
+
+  // Gradebook push slice 4: the button is edit-level only (8.4 — a co-teacher
+  // at edit sees it) and only when the sender teaches a section with work to
+  // send; the send route refuses anything else. Last push per section is read
+  // by a small server-side query here (`loadSendDialogSections`), not the
+  // categories GET, which is per-section and only runs once the dialog opens.
+  const sendSections = canSendToGradebook(access.level)
+    ? await loadSendDialogSections(db, assessment.id, session.email, results)
+    : [];
 
   const raw = (await searchParams).section;
   const selectedSection = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
@@ -135,6 +148,13 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           >
             Print student work
           </a>
+          {sendSections.length > 0 ? (
+            <SendToGradebookAndReload
+              assessmentId={assessment.id}
+              assessmentName={assessment.name}
+              sections={sendSections}
+            />
+          ) : null}
         </div>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">

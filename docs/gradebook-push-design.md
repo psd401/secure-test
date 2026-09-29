@@ -279,17 +279,20 @@ files and may run in parallel once 1 is merged.
 
 ## Open questions (James)
 
-- 8.1 Due date default: latest sitting's date, or today?
+- 8.1 Due date default: latest sitting's date, or today? — **ANSWERED
+  2026-09-28 (James): today**, the date the send is run.
 - 8.2 Publish scores: category default, or always "Immediately"? —
   **ANSWERED 2026-09-23: category default** until Teaching & Learning
   decides otherwise.
 - 8.3 Should a **passed-back** attempt's earlier send be withdrawn
   (score cleared in the gradebook) or left until the next send overwrites
-  it? Recommend: left, summary notes it.
+  it? Recommend: left, summary notes it. — **ANSWERED 2026-09-28 (James):
+  left**; the next send overwrites, the summary notes it.
 - 8.4 Show the button to co-teachers (edit level) — yes per the access
-  model; confirm.
+  model; confirm. — **CONFIRMED 2026-09-28 (James): yes.**
 - 8.5 Schoology "Connect" placement: header chrome vs first-send prompt
-  only?
+  only? — OPEN; slice 3 is HELD (James, 2026-09-28) until the PowerSchool
+  send works end to end.
 
 ## Verification
 
@@ -530,3 +533,27 @@ probe's pinned transport (injected `fetch`), against the pilot-analog
   yet — James expects to want them), so the grant is not discovered one
   field per round.
   The deploy of 0046 stays held until 2c's writes pass.
+
+**2026-09-28 — slice 4 BUILT (not deployed), PowerSchool only; decisions
+8.1 today / 8.3 leave / 8.4 yes; slice 3 HELD until the PowerSchool send
+works end to end.** `lib/gradebook/sendDialog.ts` (pure: `SEND_TARGET`
+is the one extension point for a destination picker; `canSendToGradebook`
+= edit level; `chooseCategory` = remembered → route default → forced pick,
+never first-active; `canSubmitSend`; name cut to 50; `todayLocal`;
+`formatSendSummary` / `formatFailure` / `sendErrorCopy` map every route
+code to a teacher sentence), `lib/gradebook/sendDialogData.ts` (server:
+sections the SENDER currently teaches with handed-in work or an earlier
+push, "n scored · m awaiting scoring" from the page's own `buildResults`
+rows by the `loadSectionCandidates` section rule, last live push per
+section from `gradebook_pushes` — one enrollment query per taught section
+per page load), `components/app/SendToGradebookControl.tsx` + the
+`SendToGradebookAndReload` wrapper (button beside Print student work;
+label "Sent to PowerSchool · <date>" once any section has a push; the
+dialog notes the chosen section's own date and reads "Send again";
+summary + held-back reasons + failures stay visible until Done, then a
+full reload), the results page reads `access.level` via
+`authorizeAssessment`, the per-student timeline renders `gradebook_sent`
+as "Sent to PowerSchool <time> · N points". Left out: destination picker,
+Connect Schoology chrome, the other-target warning (slice 3). Design-tool
+2364 tests, typecheck clean; no browser hand-run yet — slice 5 writes the
+rows.
