@@ -1088,3 +1088,24 @@ attempt carrying an auto-scored MC cell and a human- or AI-scored essay.
 | 322 | **Send to gradebook** again after 318 (the attempt was sent before) | "1 updated" and the student's history gains a "Sent to PowerSchool … · <new total> points" line | ✅ 2026-09-28 via the route: `updated: 1` after the Q2 change. Reading: the FIRST re-send after the dev-server restart answered `assignment_missing` for the sent student (the in-memory mock had lost the assignment), archived the push, and the next send created it anew with `sent: 1` — row 316's recovery path, seen on the mock |
 | 323 | **Pass back** the attempt after 318, then hand it in again and score it | Earlier scores shows the changed row ("changed by teacher …") AND the pass-back rows ("set aside by pass back"); no Change control while in progress | ✅ 2026-09-28: while passed back, zero Change controls and both causes listed ("set aside by pass back" on the 7 rows, "changed by teacher to …" on the 3); after the teacher Hand in, Change is back on the six auto finals |
 | 324 | A view-level viewer (co-teacher without edit, second staff account) | Change is shown (like Pass back) but Save answers "You cannot change this score." | NOT RUN (needs a second staff account) |
+
+## Share notifications (2026-09-29)
+
+`docs/share-notifications-design.md` slices 1–2. Logic is covered by
+`test/share-notifications.test.ts` + `test/share-notifications-email.test.ts`;
+these rows are what only the browser shows. Local dev on the dev DB
+(migration 0048 applied), two locally minted staff sessions (owner +
+recipient), fixtures created through the API and deleted after.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 325 | Owner shares assessment A, co-teaches assessment B to the recipient; a second co-teach on B | 201, 201, then 409 `already_granted` | ✅ 2026-09-29 |
+| 326 | Recipient's home | **New** on A's "Shared with you" card and on B's "Shared with you as co-teacher" row | ✅ 2026-09-29 |
+| 327 | Recipient opens B's editor, returns home | B's **New** is gone; `access_grants.seen_at` set | ✅ 2026-09-29 |
+| 328 | Recipient adds A | The card is gone; the copy is in the list (no New — it is their own row) | ✅ 2026-09-29 |
+| 329 | The share / co-teach email arrives (`EMAIL_PROVIDER=ses`, after SES) | One email per event from the no-reply sender, Reply-To = the owner; share links to the home page, co-teach to the editor | NOT RUN (waits on SES, slice 3) |
+
+**Reading SN-1 (2026-09-29):** the main checkout's first `bun run dev`
+after the merge answered 500 on both routes — `@aws-sdk/client-sesv2` was
+not installed there yet. A root `bun install` fixed it; the image installs
+its own dependencies.

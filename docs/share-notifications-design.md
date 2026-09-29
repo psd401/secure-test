@@ -46,8 +46,7 @@ outside the dashboard.
 
 ## Progress
 
-- 2026-09-29: slice 1 committed in the worktree (4 new tests). Not merged,
-  not deployed, not hand-run in a browser (after merge, per James).
+- 2026-09-29: slice 1 committed in the worktree (4 new tests).
 - 2026-09-29: slice 2 built in the worktree: `lib/email/` (`mock` | `ses`,
   `@aws-sdk/client-sesv2`), `sendShareEmail` awaited after the row insert in
   `POST /api/assessments/[id]/shares` (links to `/dashboard`) and
@@ -55,3 +54,7 @@ outside the dashboard.
   `EMAIL_PROVIDER` unset nothing leaves the process. `.env.local.example`
   does not list `EMAIL_PROVIDER` / `EMAIL_FROM` / `EMAIL_REGION` yet (env
   files are off-limits to Claude — add by hand).
+- 2026-09-29: both slices merged to `main` (`ac2f4f3`, `28ff1fd`), not
+  deployed. Badge hand-run ✅ on local dev — rows 325–328 in
+  `docs/design-tool-manual-checks.md`; row 329 (the email itself) waits on
+  SES.
