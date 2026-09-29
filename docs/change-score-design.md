@@ -70,15 +70,32 @@ and must flow through the next send as an update (D-7 there).
 | 2 | Per-student page control + dialog; queue card link; Earlier-scores cause | design tool | S | Sonnet 5 / medium |
 | 3 | Rows in `docs/design-tool-manual-checks.md` | docs | XS | Sonnet 5 / low |
 
-No migration. Rides the held deploy with gradebook 0046.
+**Migration 0047** (`attempt_events.kind` is a DB CHECK, so `score_changed` needs it — the note's first draft said none). Rides the held deploy with gradebook 0046.
 
 ## Open questions
 
-- 4.1 Reason required or optional? (Assumed optional.)
+- 4.1 Reason required or optional? — **optional** (James, 2026-09-28).
 - 4.2 Should a change re-run the AI feedback (`with_feedback`) for the
   family print page? (Assumed no — the teacher's number stands, the AI
-  rationale is superseded with the row.)
+  rationale is superseded with the row.) — **no** (James, 2026-09-28).
 
 ## Progress
 
 - 2026-09-28 — note written, D-1…D-3 decided; nothing built.
+- 2026-09-28 — **slice 1 BUILT**: `POST /api/responses/[responseId]/change-score`
+  (`ChangeScoreBody` = manual body + optional `reason` ≤ 500; the score
+  route's max / rubric-bounds checks moved into the shared
+  `checkManualScore` so the two routes cannot drift), `lib/api/changeScore.ts`
+  (one transaction: the UPDATE `WHERE status = 'final' … RETURNING` IS the
+  read — a racing second change flips nothing and answers `no_final`; the
+  new row is `human`, `rationale.changed_from = { score_id, points, method,
+  scorer }`, `note` = the reason; event `score_changed { response_id,
+  item_id, from, to, max }`), **migration 0047** adds the kind to the
+  CHECK (dev + test applied; staff-only — clients cannot post it),
+  `supersededScores.ts` rows carry `cause: pass_back | changed` +
+  `replaced_by`, timeline / print-integrity line "Score changed by teacher
+  <time> · 2 → 3 of 4" (no Q number — the timeline has no item numbering;
+  slice 2 may map `item_id`). Readings: a passed-back attempt still in
+  progress answers 400 `attempt_not_submitted` from the shared chain, not
+  `no_final`. Design-tool 2378 tests, typecheck clean.
+

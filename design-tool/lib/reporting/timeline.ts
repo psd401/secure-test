@@ -101,7 +101,23 @@ const KINDS_WITH_DEADLINE: ReadonlySet<string> = new Set([
   "passed_back",
 ]);
 
+/** A finite number, or null — for detail fields written by our own routes. */
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function lineSuffix(event: TimelineEvent): string {
+  if (event.kind === "score_changed") {
+    // Change a final score (docs/change-score-design.md): "· 2 → 3 of 4". The
+    // timeline's inputs carry no item numbering (events only), so the question
+    // is not named here; the per-student page lists the scores beside it. A row
+    // without usable numbers gets the bare sentence.
+    const from = finiteNumber(event.detail?.from);
+    const to = finiteNumber(event.detail?.to);
+    if (from === null || to === null) return "";
+    const max = finiteNumber(event.detail?.max);
+    return ` · ${from} → ${to}${max === null ? "" : ` of ${max}`}`;
+  }
   if (event.kind === "gradebook_sent") {
     const points = event.detail?.points;
     if (typeof points !== "number" || !Number.isFinite(points)) return "";

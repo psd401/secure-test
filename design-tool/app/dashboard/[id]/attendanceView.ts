@@ -179,6 +179,11 @@ export function eventLabel(kind: string): string {
     // row's detail; slice 4 decides how the per-student timeline shows them.
     case "gradebook_sent":
       return "Score sent to the gradebook";
+    // Change a final score (docs/change-score-design.md): a teacher replaced a
+    // response's final. The old and new points are on the row's detail and
+    // shown by the timeline.
+    case "score_changed":
+      return "Score changed by teacher";
     default:
       return kind;
   }

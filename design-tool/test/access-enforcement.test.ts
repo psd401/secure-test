@@ -174,6 +174,10 @@ const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
   ],
   [
+    join("responses", "[responseId]", "change-score"),
+    { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
+  ],
+  [
     join("responses", "[responseId]", "rescore-ai"),
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
   ],

@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { scores } from "@/db/schema";
 import {
-  rubricMaxPoints,
-  scoringView,
-  validateAgainstRubric,
-} from "@/lib/ai/essayScorer/scoreCore";
-import { ManualScoreBody, loadResponseChain } from "@/lib/api/reviewActions";
+  ManualScoreBody,
+  checkManualScore,
+  loadResponseChain,
+} from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
-import { tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -54,53 +52,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
 
-  const rubric = chain.item.config.rubric;
-  // Review fix (2026-08-14, finding 4): max_points is not caller-chosen —
-  // it must equal the rubric max when a rubric exists, else 1 (the
-  // slice-37 every-item-worth-1-point rule). Otherwise the same column
-  // carries different maxima per student and results/CSV totals become
-  // incomparable. E3 slice 2: a table is worth its cells (keyed cells when
-  // any, else every cell) — a per-item constant, so the rule still holds.
-  const expectedMax = rubric
-    ? rubricMaxPoints(rubric)
-    : chain.item.type === "table"
-      ? tableMaxPoints(chain.item.config)
-      : 1;
-  if (body.max_points !== expectedMax) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "max_points_mismatch",
-        expected: expectedMax,
-      },
-      { status: 400 },
-    );
-  }
-  if (body.criterion_scores) {
-    if (!rubric) {
-      return NextResponse.json(
-        { ok: false, error: "item_has_no_rubric" },
-        { status: 400 },
-      );
-    }
-    // D-5: picks are validated against the SCORING VIEW, so a single-point
-    // item takes the derived `<target>.below|.meets|.exceeds` ids the queue
-    // offers and the AI proposes. Identity for analytic/holistic, and the
-    // max is unchanged by the expansion, so the rule above still holds.
-    const bounds = validateAgainstRubric(
-      {
-        criterion_scores: body.criterion_scores,
-        points: body.points,
-        max_points: body.max_points,
-      },
-      scoringView(rubric),
-    );
-    if (!bounds.valid) {
-      return NextResponse.json(
-        { ok: false, error: "rubric_bounds", detail: bounds.reason },
-        { status: 400 },
-      );
-    }
+  const check = checkManualScore(chain.item, body);
+  if (!check.ok) {
+    return NextResponse.json(check.body, { status: check.status });
   }
 
   const db = getDb();

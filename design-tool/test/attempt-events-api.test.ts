@@ -205,6 +205,8 @@ describe("POST /api/attempts/:attemptId/events", () => {
     // Pass back (docs/pass-back-design.md): a client that could post one could
     // claim a teacher reopened a test that was never reopened.
     expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("passed_back");
+    // Change a final score (docs/change-score-design.md): same reasoning.
+    expect(CLIENT_ATTEMPT_EVENT_KINDS).not.toContain("score_changed");
     // …and it still carries the kinds the client genuinely sends.
     expect(CLIENT_ATTEMPT_EVENT_KINDS).toContain("lockdown_begin");
 

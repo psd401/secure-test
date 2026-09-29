@@ -4,6 +4,12 @@ import { getDb } from "@/db/client";
 import { responses, items, scores } from "@/db/schema";
 import type { SessionPayload } from "@/lib/auth/session";
 import { authorizeAttempt } from "@/lib/api/access";
+import {
+  rubricMaxPoints,
+  scoringView,
+  validateAgainstRubric,
+} from "@/lib/ai/essayScorer/scoreCore";
+import { tableMaxPoints } from "@/lib/scoring/auto";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
 // re-run AI). Loads the response → attempt → assessment chain and enforces
@@ -34,6 +40,14 @@ export const ManualScoreBody = z
     path: ["points"],
   });
 export type ManualScoreBody = z.infer<typeof ManualScoreBody>;
+
+// Change a final score (docs/change-score-design.md): the manual score body
+// plus an optional reason (4.1: optional), stored as the new row's
+// `rationale.note`. A `note` on this body is ignored — the reason is the note.
+export const ChangeScoreBody = ManualScoreBody.and(
+  z.object({ reason: z.string().max(500).optional() }),
+);
+export type ChangeScoreBody = z.infer<typeof ChangeScoreBody>;
 
 export type ResponseChain =
   | { ok: true; response: typeof responses.$inferSelect; item: typeof items.$inferSelect; hasFinal: boolean }
@@ -78,4 +92,65 @@ export async function loadResponseChain(
     item,
     hasFinal: scoreRows.some((s) => s.status === "final"),
   };
+}
+
+export type ManualScoreCheck =
+  | { ok: true }
+  | { ok: false; status: 400; body: Record<string, unknown> };
+
+/**
+ * The two rules a hand-given score must satisfy, shared by the score route and
+ * the change-score route (docs/change-score-design.md) so "what a valid manual
+ * score is" cannot drift between the first score and a correction.
+ *
+ * Review fix (2026-08-14, finding 4): max_points is not caller-chosen — it
+ * must equal the rubric max when a rubric exists, else 1 (the slice-37
+ * every-item-worth-1-point rule). Otherwise the same column carries different
+ * maxima per student and results/CSV totals become incomparable. E3 slice 2: a
+ * table is worth its cells (keyed cells when any, else every cell) — a
+ * per-item constant, so the rule still holds.
+ *
+ * When the body carries criterion_scores, the picks are validated against the
+ * SCORING VIEW (D-5), so a single-point item takes the derived
+ * `<target>.below|.meets|.exceeds` ids the queue offers and the AI proposes.
+ * Identity for analytic/holistic, and the max is unchanged by the expansion.
+ */
+export function checkManualScore(
+  item: typeof items.$inferSelect,
+  body: ManualScoreBody,
+): ManualScoreCheck {
+  const rubric = item.config.rubric;
+  const expectedMax = rubric
+    ? rubricMaxPoints(rubric)
+    : item.type === "table"
+      ? tableMaxPoints(item.config)
+      : 1;
+  if (body.max_points !== expectedMax) {
+    return {
+      ok: false,
+      status: 400,
+      body: { ok: false, error: "max_points_mismatch", expected: expectedMax },
+    };
+  }
+  if (body.criterion_scores) {
+    if (!rubric) {
+      return { ok: false, status: 400, body: { ok: false, error: "item_has_no_rubric" } };
+    }
+    const bounds = validateAgainstRubric(
+      {
+        criterion_scores: body.criterion_scores,
+        points: body.points,
+        max_points: body.max_points,
+      },
+      scoringView(rubric),
+    );
+    if (!bounds.valid) {
+      return {
+        ok: false,
+        status: 400,
+        body: { ok: false, error: "rubric_bounds", detail: bounds.reason },
+      };
+    }
+  }
+  return { ok: true };
 }

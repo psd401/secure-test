@@ -110,6 +110,19 @@ describe("formatIntegrityLine", () => {
     ).toEqual(["Handed in by the teacher", "Passed back by teacher", "The app hit a problem"]);
   });
 
+  // Change a final score (docs/change-score-design.md): plain words, the
+  // monitor's label, a count, and a slot after the hand-ins.
+  test("score_changed reads in plain words, counts, and sorts after the hand-in", () => {
+    expect(formatIntegrityLine([{ kind: "score_changed" }])).toBe("Score changed by teacher");
+    expect(formatIntegrityLine([{ kind: "score_changed" }])).toBe(eventLabel("score_changed"));
+    expect(
+      formatIntegrityLine([{ kind: "score_changed" }, { kind: "score_changed" }]),
+    ).toBe("Score changed by teacher 2 times");
+    expect(
+      integrityPhrases([{ kind: "score_changed" }, { kind: "teacher_hand_in" }]),
+    ).toEqual(["Handed in by the teacher", "Score changed by teacher"]);
+  });
+
   test("an unknown kind still shows, last, under its own name", () => {
     const phrases = integrityPhrases([{ kind: "quit" }, { kind: "future_kind" }]);
     expect(phrases).toEqual(["Quit the app", "future_kind"]);

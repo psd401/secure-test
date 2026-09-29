@@ -835,13 +835,20 @@ export const ATTEMPT_EVENT_KINDS = [
   // three above: a client that could post one could claim a score reached the
   // gradebook when it never did.
   "gradebook_sent",
+  // Change a final score (docs/change-score-design.md, D-1): the teacher
+  // superseded a response's `final` with a new human final. `detail` is
+  // { response_id, item_id, from, to, max } — the old and new points. Server-
+  // written only, like the four above: a client that could post one could
+  // plant a line claiming a teacher changed a score that was never changed.
+  "score_changed",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
 /**
  * The subset a CLIENT may post to /api/attempts/[attemptId]/events.
  *
- * `teacher_hand_in`, `deadline_extended`, `passed_back` and `gradebook_sent` are
+ * `teacher_hand_in`, `deadline_extended`, `passed_back`, `gradebook_sent` and
+ * `score_changed` are
  * records of STAFF actions and are written by their own routes alone; a client that could post one
  * could plant a timeline line claiming a teacher did something they did not —
  * and in `deadline_extended`'s case one claiming a later deadline than the
@@ -854,6 +861,7 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "deadline_extended",
   "passed_back",
   "gradebook_sent",
+  "score_changed",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -892,7 +900,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed')`,
     ),
   }),
 );

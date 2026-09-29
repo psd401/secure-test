@@ -224,6 +224,30 @@ describe("buildTimeline — gradebook_sent", () => {
   });
 });
 
+describe("buildTimeline — score_changed", () => {
+  test("says the old and new points out of the max", () => {
+    const lines = buildTimeline([
+      {
+        kind: "score_changed",
+        at: at("21:07:00"),
+        detail: { response_id: "r", item_id: "i", from: 2, to: 3, max: 4 },
+      },
+    ]);
+    expect(lines[0]!.text).toBe("Score changed by teacher 2:07 PM · 2 → 3 of 4");
+  });
+
+  test("no max drops the 'of'; missing or odd points leave the bare sentence", () => {
+    expect(
+      buildTimeline([{ kind: "score_changed", at: at("21:07:00"), detail: { from: 0, to: 1 } }])[0]!.text,
+    ).toBe("Score changed by teacher 2:07 PM · 0 → 1");
+    for (const detail of [null, {}, { from: 1 }, { from: "1", to: 2 }, { from: 1, to: Number.NaN }]) {
+      expect(buildTimeline([{ kind: "score_changed", at: at("21:07:00"), detail }])[0]!.text).toBe(
+        "Score changed by teacher 2:07 PM",
+      );
+    }
+  });
+});
+
 describe("durationLabel", () => {
   test("under a minute is seconds; a minute and over rounds to minutes", () => {
     expect(durationLabel(0)).toBe("0 sec");

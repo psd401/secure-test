@@ -45,6 +45,9 @@ const PHRASES: Record<string, string> = {
   // Gradebook push (docs/gradebook-push-design.md): a record of a staff action,
   // named so a printed line never shows the raw kind.
   gradebook_sent: "Score sent to the gradebook",
+  // Change a final score (docs/change-score-design.md): a count here; which
+  // question and the old / new points are on the per-student page's timeline.
+  score_changed: "Score changed by teacher",
 };
 
 /**
@@ -71,6 +74,8 @@ const KIND_ORDER = [
   // follows a submitted attempt.
   "passed_back",
   "gradebook_sent",
+  // After the hand-ins: a final score exists only on a submitted attempt.
+  "score_changed",
   "client_error",
 ];
 

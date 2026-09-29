@@ -330,6 +330,13 @@
       "when": 1790635915915,
       "tag": "0046_gradebook_push",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790645833537,
+      "tag": "0047_score_changed_event",
+      "breakpoints": true
     }
   ]
 }
