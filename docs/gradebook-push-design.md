@@ -591,3 +591,23 @@ Every check assignment was deleted (`--cleanup`, 204). The send's own
 code path (DB + route) was not run against the test server — its two new
 branches are unit-tested against the measured bodies; rows 314–316 run on
 the deployed app.
+
+**2026-09-29 — GB-2 fixed: a Send again checks the assignment still
+exists.** Found running rows 314–316 through the app (local dev on the
+district network, a loopback relay to the test server): a Send again whose
+scores were all unchanged wrote nothing, so an assignment deleted in
+PowerTeacher Pro went unnoticed ("2 unchanged") — only a failing write
+surfaced `assignment_missing`. Now every send with an earlier push first
+reads `GET /ws/xte/section/assignment/?users_dcid=…&section_ids=<dcid>`
+(`listAssignmentSectionIds`). Measured the same day: a plain array, no
+paging (`pagesize` ignored), the id a NUMBER at
+`_assignmentsections[].assignmentsectionid`; 26 assignments / 28 KB on
+the check section. Missing → the push is archived, every student (to be
+written or unchanged) fails `assignment_missing`, the note is shown,
+nothing is written. An unreadable list refuses the send (502
+`gradebook_unavailable`) and keeps the push — never read as "deleted",
+which would duplicate the assignment. Cost: one read per Send again, of
+the whole section list. Row 316 re-run ✅. Two further readings from the
+run: the check teacher has no "Test" category (the D-6 default is absent,
+the dialog asks for a pick), and the due date must fall inside the
+section's term (today's date is outside a 2024-25 test copy).

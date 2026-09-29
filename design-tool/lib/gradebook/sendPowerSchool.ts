@@ -248,6 +248,44 @@ export async function sendToPowerSchool(
     }
   }
 
+  // GB-2 (2026-09-29): a Send again whose scores are all unchanged writes
+  // nothing, so a failing write never reveals an assignment deleted in
+  // PowerTeacher Pro. Check it still exists first — one read per Send again.
+  if (push?.external_assignment_id) {
+    let ids: string[];
+    try {
+      ids = await client.listAssignmentSectionIds(usersDcid, section.dcid!);
+    } catch (err) {
+      logFailure("assignment_check", assessment.id, err, plan.writes.length);
+      return { ok: false, status: 502, error: "gradebook_unavailable" };
+    }
+    if (!ids.includes(push.external_assignment_id)) {
+      await db
+        .update(gradebook_pushes)
+        .set({ archived_at: new Date() })
+        .where(eq(gradebook_pushes.id, push.id));
+      const numberByAttempt = new Map(candidates.map((c) => [c.attempt_id, c.student_number]));
+      summary.failed.push(
+        ...plan.writes.map((w): SendFailure => ({ student_number: w.student_number, reason: "assignment_missing" })),
+        ...plan.skipped_unchanged.map(
+          (id): SendFailure => ({ student_number: numberByAttempt.get(id) ?? "", reason: "assignment_missing" }),
+        ),
+      );
+      summary.skipped_unchanged = 0;
+      summary.notes.push(
+        "The assignment was not found in PowerSchool (deleted there?). Send again to create a new one.",
+      );
+      log.error("gradebook_push_failed", {
+        target: "powerschool",
+        stage: "assignment_missing",
+        assessment_id: assessment.id,
+        rows: summary.failed.length,
+      });
+      await recordSend(db, push.id, input, summary);
+      return { ok: true, summary };
+    }
+  }
+
   // Nothing to write: never create an empty assignment.
   if (plan.writes.length === 0) {
     if (push) await recordSend(db, push.id, input, summary);

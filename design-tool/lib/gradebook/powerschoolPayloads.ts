@@ -179,6 +179,28 @@ export function parseCreatedAssignment(
 }
 
 /**
+ * `GET /ws/xte/section/assignment/?users_dcid=…&section_ids=<dcid>` → every
+ * `assignmentsectionid` in the section. Measured on the test server
+ * 2026-09-29: a plain array (no paging; `pagesize` is ignored), one entry per
+ * assignment, the id a NUMBER at `_assignmentsections[].assignmentsectionid`.
+ * Null when the body is not an array — an unreadable list must never read as
+ * "the assignment is gone" (that would archive the push and duplicate it).
+ */
+export function parseSectionAssignmentSectionIds(body: unknown): string[] | null {
+  if (!Array.isArray(body)) return null;
+  const ids: string[] = [];
+  for (const a of body) {
+    const sections = a && typeof a === "object" ? (a as Record<string, unknown>)._assignmentsections : null;
+    if (!Array.isArray(sections)) continue;
+    for (const s of sections) {
+      const id = s && typeof s === "object" ? asIdString((s as Record<string, unknown>).assignmentsectionid) : null;
+      if (id) ids.push(id);
+    }
+  }
+  return ids;
+}
+
+/**
  * A score write to an assignment deleted in PowerTeacher Pro. Measured on the
  * test server 2026-09-29: HTTP 500 {"message":"Unable to find
  * com.pearson.powerschool.xte.model.AssignmentSection with id …"}, not a 404.

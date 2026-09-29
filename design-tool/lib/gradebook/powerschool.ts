@@ -17,6 +17,8 @@
 import {
   parseCategories,
   parseCreatedAssignment,
+  parseSectionAssignmentSectionIds,
+  psId,
   type PsCategory,
 } from "./powerschoolPayloads";
 
@@ -67,6 +69,12 @@ export interface PowerSchoolClient {
     usersDcid: string,
     body: Record<string, unknown>,
   ): Promise<CreatedAssignment>;
+  /**
+   * Every `assignmentsectionid` in the section, for the Send-again check that
+   * an earlier assignment still exists (GB-2). Throws when the list cannot be
+   * read or parsed — never answers an empty list for an unreadable one.
+   */
+  listAssignmentSectionIds(usersDcid: string, sectionDcid: string): Promise<string[]>;
   /** Writes scores; answers the parsed 2xx body (or null when empty). */
   writeScores(
     usersDcid: string,
@@ -219,6 +227,15 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
       }
       return { ...ids, raw: json, location };
     },
+    async listAssignmentSectionIds(usersDcid, sectionDcid) {
+      const { status, json } = await call("GET", "/ws/xte/section/assignment/", {
+        users_dcid: usersDcid,
+        section_ids: sectionDcid,
+      });
+      const ids = parseSectionAssignmentSectionIds(json);
+      if (!ids) throw new GradebookHttpError(status, "section assignment list was not an array", "request");
+      return ids;
+    },
     async writeScores(usersDcid, termId, body) {
       const { json } = await call(
         "PUT",
@@ -234,9 +251,10 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
 // ── mock ─────────────────────────────────────────────────────────────────────
 
 export interface MockCall {
-  method: "listCategories" | "createAssignment" | "writeScores";
+  method: "listCategories" | "createAssignment" | "listAssignmentSectionIds" | "writeScores";
   usersDcid: string;
   yearId?: string;
+  sectionDcid?: string;
   termId?: string;
   body?: Record<string, unknown>;
 }
@@ -312,6 +330,18 @@ export class MockPowerSchool implements PowerSchoolClient {
       raw: null,
       location: `/ws/xte/section/assignment/${assignmentId}`,
     };
+  }
+
+  async listAssignmentSectionIds(usersDcid: string, sectionDcid: string): Promise<string[]> {
+    this.calls.push({ method: "listAssignmentSectionIds", usersDcid, sectionDcid });
+    this.maybeFail("listAssignmentSectionIds");
+    const want = String(psId(sectionDcid));
+    return [...this.assignments]
+      .filter(([, body]) => {
+        const sections = body._assignmentsections as Record<string, unknown>[] | undefined;
+        return String(sections?.[0]?.sectionsdcid ?? "") === want;
+      })
+      .map(([id]) => id);
   }
 
   async writeScores(usersDcid: string, termId: string, body: Record<string, unknown>) {

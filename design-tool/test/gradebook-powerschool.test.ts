@@ -20,6 +20,7 @@ import {
   defaultCategoryId,
   parseCategories,
   parseCreatedAssignment,
+  parseSectionAssignmentSectionIds,
   isAssignmentSectionMissing,
   parseUnassociatedStudents,
   truncateAssignmentName,
@@ -365,6 +366,23 @@ describe("live client", () => {
     clock += 2_000;
     await client.listCategories("8301", "31");
     expect(seen[3]!.url).toContain("/oauth/access_token/");
+  });
+
+  test("GB-2: the section assignment list — ids as numbers, an unreadable body throws", async () => {
+    // The measured shape (2026-09-29): a plain array, the id a number.
+    const list = [
+      { assignmentid: 1, _assignmentsections: [{ assignmentsectionid: 77001, sectionsdcid: 85001 }] },
+      { assignmentid: 2, _assignmentsections: [{ assignmentsectionid: 77002, sectionsdcid: 85001 }] },
+    ];
+    const { fetch, seen } = fakeFetch([tokenOk(), json(200, list), json(200, { message: "not a list" })]);
+    const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
+    expect(await client.listAssignmentSectionIds("8301", "85001")).toEqual(["77001", "77002"]);
+    expect(seen[1]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/?users_dcid=8301&section_ids=85001");
+    await expect(client.listAssignmentSectionIds("8301", "85001")).rejects.toBeInstanceOf(GradebookHttpError);
+
+    expect(parseSectionAssignmentSectionIds([])).toEqual([]);
+    expect(parseSectionAssignmentSectionIds([{ _assignmentsections: [{}] }, null])).toEqual([]);
+    expect(parseSectionAssignmentSectionIds(null)).toBeNull();
   });
 
   test("a 2xx body over 4 000 characters is parsed whole (long HTML category descriptions)", async () => {

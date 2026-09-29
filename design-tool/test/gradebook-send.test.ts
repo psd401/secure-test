@@ -439,15 +439,16 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     let body = await (await send(s.assessment.id, { ...BASE_BODY, name: "Renamed" })).json();
     expect(body).toMatchObject({ assignment_created: false, sent: 0, updated: 0, skipped_unchanged: 1 });
     expect(body.external_assignment_id).toBe(first.external_assignment_id);
-    // Nothing to write: no PowerSchool call at all.
-    expect(mockPowerSchool.calls).toEqual([]);
+    // Nothing to write: only the GB-2 check that the assignment still exists.
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds"]);
 
     await scoreAll(ben.id, 1);
     await scoreAll(ada.id, 0);
+    mockPowerSchool.calls.length = 0;
     body = await (await send(s.assessment.id, BASE_BODY)).json();
     expect(body).toMatchObject({ sent: 1, updated: 1, skipped_unchanged: 0, held_back: { count: 0 } });
-    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["writeScores"]);
-    const rows = mockPowerSchool.calls[0]!.body!.assignment_scores as Record<string, unknown>[];
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds", "writeScores"]);
+    const rows = mockPowerSchool.calls[1]!.body!.assignment_scores as Record<string, unknown>[];
     const adaRow = rows.find((r) => r.studentsdcid === 81001)!;
     const benRow = rows.find((r) => r.studentsdcid === 81002)!;
     expect(adaRow.scorepoints).toBe(0);
@@ -542,14 +543,53 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     const first = await (await send(s.assessment.id, BASE_BODY)).json();
     mockPowerSchool.deleteAssignment(first.external_assignment_id);
     await scoreAll(ben.id, 1);
+    mockPowerSchool.calls.length = 0;
     const body = await (await send(s.assessment.id, BASE_BODY)).json();
-    expect(body.failed).toEqual([{ student_number: "1002", reason: "assignment_missing" }]);
+    // GB-2: found by the existence check, so the unchanged student is named too.
+    expect(body.failed).toEqual([
+      { student_number: "1002", reason: "assignment_missing" },
+      { student_number: "1001", reason: "assignment_missing" },
+    ]);
+    expect(body.skipped_unchanged).toBe(0);
+    expect(mockPowerSchool.calls.map((c) => c.method)).not.toContain("writeScores");
     const [retired] = await getDb().select().from(gradebook_pushes);
     expect(retired!.archived_at).not.toBeNull();
 
     const again = await (await send(s.assessment.id, BASE_BODY)).json();
     expect(again).toMatchObject({ assignment_created: true, sent: 2 });
     expect(again.external_assignment_id).not.toBe(first.external_assignment_id);
+  });
+
+  test("GB-2: every score unchanged and the assignment deleted — every student named, nothing written", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await attempt(s, OTHER_STUDENT, s.algebra.id, [1, 0]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(first.sent).toBe(2);
+    mockPowerSchool.deleteAssignment(first.external_assignment_id);
+    mockPowerSchool.calls.length = 0;
+
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ sent: 0, updated: 0, skipped_unchanged: 0 });
+    expect(body.failed.map((f: { reason: string }) => f.reason)).toEqual(["assignment_missing", "assignment_missing"]);
+    expect(body.notes).toContain(
+      "The assignment was not found in PowerSchool (deleted there?). Send again to create a new one.",
+    );
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds"]);
+    const [retired] = await getDb().select().from(gradebook_pushes);
+    expect(retired!.archived_at).not.toBeNull();
+  });
+
+  test("GB-2: an unreadable assignment list refuses the send and keeps the push", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await send(s.assessment.id, BASE_BODY);
+    mockPowerSchool.failNext("listAssignmentSectionIds", 503, "unavailable");
+    const res = await send(s.assessment.id, BASE_BODY);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ ok: false, error: "gradebook_unavailable" });
+    const [push] = await getDb().select().from(gradebook_pushes);
+    expect(push!.archived_at).toBeNull();
   });
 
   test("a student PowerSchool has no association for is held out; the rest are written", async () => {
