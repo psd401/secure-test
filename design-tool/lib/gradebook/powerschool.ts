@@ -263,6 +263,7 @@ export class MockPowerSchool implements PowerSchoolClient {
     this.failures = [];
     this.assignments.clear();
     this.scores.clear();
+    this.unassociated.clear();
   }
 
   /** Categories for one teacher; a teacher never set gets `defaultMockCategories()`. */
@@ -274,6 +275,9 @@ export class MockPowerSchool implements PowerSchoolClient {
   failNext(method: MockCall["method"], status: number, body: string): void {
     this.failures.push({ method, status, body });
   }
+
+  /** Student DCIDs PowerTeacher Pro has no association for (left the class). */
+  readonly unassociated = new Set<string>();
 
   /** Forget an assignment, as a teacher deleting it in PTP would. */
   deleteAssignment(assignmentSectionId: string): void {
@@ -320,17 +324,38 @@ export class MockPowerSchool implements PowerSchoolClient {
         (row._assignmentsection as Record<string, unknown> | undefined)?.assignmentsectionid ?? "",
       );
       if (!this.assignments.has(asid)) {
-        throw new GradebookHttpError(404, `{"message":"assignment section not found"}`, "request");
+        // What the test server answers for a deleted assignment (2026-09-29).
+        throw new GradebookHttpError(
+          500,
+          `{"message":"Unable to find com.pearson.powerschool.xte.model.AssignmentSection with id ${asid}"}`,
+          "request",
+        );
       }
+      const dcid = String(row.studentsdcid);
+      if (this.unassociated.has(dcid)) {
+        // One such row refuses the whole batch, nothing written (2026-09-29).
+        const field = `Student.id [${dcid}] does not have an AssignmentStudentAssociation in AssignmentSection.Id: [${asid}]`;
+        throw new GradebookHttpError(
+          409,
+          JSON.stringify({
+            message: field,
+            errors: [{ code: "1", field, params: { assignment_section_id: Number(asid), student_dcid: Number(dcid) } }],
+          }),
+          "request",
+        );
+      }
+    }
+    for (const row of rows) {
+      const asid = String(
+        (row._assignmentsection as Record<string, unknown> | undefined)?.assignmentsectionid ?? "",
+      );
       const key = `${asid}:${String(row.studentsdcid)}`;
       const existing = this.scores.get(key);
       const assignmentscoreid = existing?.assignmentscoreid ?? String(this.nextScore++);
       this.scores.set(key, { assignmentscoreid, points: Number(row.scorepoints) });
-      out.push({
-        _name: "assignmentscore",
-        studentsdcid: row.studentsdcid,
-        assignmentscoreid: Number(assignmentscoreid),
-      });
+      // The live response names each student but carries NO assignmentscoreid
+      // (2026-09-29); a later write without one updates the same row.
+      out.push({ _name: "assignmentscore", studentsdcid: row.studentsdcid, scorepoints: Number(row.scorepoints) });
     }
     return { assignment_scores: out };
   }

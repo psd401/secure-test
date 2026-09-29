@@ -149,11 +149,13 @@ export function formatFailure(f: { student_number: string; reason: string }): st
   const reason =
     f.reason === "assignment_missing"
       ? "the assignment is missing in PowerSchool"
-      : f.reason === "network_error"
-        ? "could not reach PowerSchool"
-        : /^http_\d+$/.test(f.reason)
-          ? `PowerSchool refused it (${f.reason.replace("http_", "HTTP ")})`
-          : f.reason;
+      : f.reason === "not_in_powerschool_section"
+        ? "not on this class in PowerSchool (left the class?)"
+        : f.reason === "network_error"
+          ? "could not reach PowerSchool"
+          : /^http_\d+$/.test(f.reason)
+            ? `PowerSchool refused it (${f.reason.replace("http_", "HTTP ")})`
+            : f.reason;
   return `${f.student_number}: ${reason}`;
 }
 

@@ -20,6 +20,8 @@ import {
   defaultCategoryId,
   parseCategories,
   parseCreatedAssignment,
+  isAssignmentSectionMissing,
+  parseUnassociatedStudents,
   truncateAssignmentName,
 } from "../lib/gradebook/powerschoolPayloads";
 import {
@@ -159,6 +161,24 @@ describe("assignment create body", () => {
       parseCreatedAssignment([{ assignmentid: 6, _assignmentsections: [{ assignmentsectionid: 77004 }] }], null),
     ).toEqual({ assignmentId: "6", assignmentSectionId: "77004" });
     expect(parseCreatedAssignment({}, null)).toEqual({ assignmentId: null, assignmentSectionId: null });
+  });
+});
+
+describe("score write refusals (measured 2026-09-29)", () => {
+  test("a deleted assignment answers 500 'Unable to find …AssignmentSection'; a 404 counts too", () => {
+    const live = '{"message":"Unable to find com.pearson.powerschool.xte.model.AssignmentSection with id 751058"}';
+    expect(isAssignmentSectionMissing(500, live)).toBe(true);
+    expect(isAssignmentSectionMissing(404, "")).toBe(true);
+    expect(isAssignmentSectionMissing(500, '{"message":"NullPointerException"}')).toBe(false);
+    expect(isAssignmentSectionMissing(403, live)).toBe(false);
+  });
+
+  test("a 409 names the students with no AssignmentStudentAssociation", () => {
+    const field = "Student.id [1] does not have an AssignmentStudentAssociation in AssignmentSection.Id: [751,059]";
+    const body = JSON.stringify({ message: field, errors: [{ code: "123456", field, params: { assignment_section_id: 751059, student_dcid: 1 } }] });
+    expect(parseUnassociatedStudents(body)).toEqual(["1"]);
+    expect(parseUnassociatedStudents('{"message":"duedate outside term"}')).toEqual([]);
+    expect(parseUnassociatedStudents("not json")).toEqual([]);
   });
 });
 
@@ -470,11 +490,14 @@ describe("the mock gradebook", () => {
         { studentDcid: "81001", points: 2, externalScoreId: null },
       ])),
     );
-    const scoreId = first.byStudentDcid.get("81001")!.assignmentscoreid;
+    // Like the live server: the student is named, no assignmentscoreid.
+    expect(first.byStudentDcid.get("81001")).toEqual({ assignmentscoreid: null, error: null });
+    const stored = mock.scores.get(`${asid}:81001`)!.assignmentscoreid;
     await mock.writeScores("8301", "3100", buildScoreWriteBodyUnconfirmed(asid, [
-      { studentDcid: "81001", points: 1, externalScoreId: scoreId },
+      { studentDcid: "81001", points: 1, externalScoreId: null },
     ]));
-    expect(mock.scores.get(`${asid}:81001`)).toEqual({ assignmentscoreid: scoreId!, points: 1 });
+    // A write without the id updates the same row (measured live 2026-09-29).
+    expect(mock.scores.get(`${asid}:81001`)).toEqual({ assignmentscoreid: stored, points: 1 });
     expect(mock.calls.map((c) => c.method)).toEqual(["createAssignment", "writeScores", "writeScores"]);
 
     mock.failNext("writeScores", 409, "nope");

@@ -557,3 +557,37 @@ as "Sent to PowerSchool <time> · N points". Left out: destination picker,
 Connect Schoology chrome, the other-target warning (slice 3). Design-tool
 2364 tests, typecheck clean; no browser hand-run yet — slice 5 writes the
 rows.
+
+**2026-09-29 — slice 2c live check PASSED on the test server (plugin
+v1.3), after two fixes.** Run from the district network with
+`scripts/ps-send-check.ts` on a 2024-25 section (teacher and section on
+the command line, not recorded), plus scratchpad probes. Measured:
+- **The create answers 201 with an EMPTY body; `Location` ends in the
+  `assignmentid`**, not the `assignmentsectionid`. The first write run
+  took the Location number as the section id and the score write answered
+  403 "User does not teach section … EDIT". Fixed in `d73201b`: the live
+  client GETs `/ws/xte/section/assignment/<assignmentid>` and reads
+  `_assignmentsections[0].assignmentsectionid`; both ids are returned and
+  logged (`gradebook_assignment_created`).
+- **The score write body IT documented is right** (create → 3 scores →
+  corrected re-send all read back from ASSIGNMENTSCORE). Its 200 response
+  names each student but carries **no `assignmentscoreid`**, so
+  `external_score_id` stays null — and a re-send **without** the id
+  updates the same row in place (same `assignmentscoreid`, one row). No
+  change needed; the mock now answers the same way.
+- **A write to a deleted assignment answers 500** "Unable to find
+  …AssignmentSection with id …", not 404 — the send never retired the push.
+  Now `isAssignmentSectionMissing` treats that 500 (and a 404) as
+  `assignment_missing`.
+- **One student with no AssignmentStudentAssociation refuses the WHOLE
+  batch** (409, nothing written; `errors[].params.student_dcid`). A student
+  who left the class, or a roster a night behind, would have blocked the
+  class. Now the send holds those students out as
+  `not_in_powerschool_section` ("not on this class in PowerSchool (left the
+  class?)") and writes the rest once.
+- A score above the maximum (12 of 10) is accepted as extra credit; ours
+  never exceed max.
+Every check assignment was deleted (`--cleanup`, 204). The send's own
+code path (DB + route) was not run against the test server — its two new
+branches are unit-tested against the measured bodies; rows 314–316 run on
+the deployed app.

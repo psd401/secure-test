@@ -30,7 +30,12 @@ import {
   type SectionIds,
 } from "./mapping";
 import { GradebookHttpError, type PowerSchoolClient } from "./powerschool";
-import { buildAssignmentCreateBody, truncateAssignmentName } from "./powerschoolPayloads";
+import {
+  buildAssignmentCreateBody,
+  isAssignmentSectionMissing,
+  parseUnassociatedStudents,
+  truncateAssignmentName,
+} from "./powerschoolPayloads";
 import {
   buildScoreWriteBodyUnconfirmed,
   parseScoreWriteResponseUnconfirmed,
@@ -332,18 +337,40 @@ async function writeScores(
   summary: SendSummary,
 ): Promise<void> {
   const assignmentSectionId = push.external_assignment_id!;
-  const body = buildScoreWriteBodyUnconfirmed(
-    assignmentSectionId,
-    writes.map((w) => ({ studentDcid: w.student_dcid, points: w.points, externalScoreId: w.external_score_id })),
-  );
+  const put = (rows: PlannedWrite[]) =>
+    client.writeScores(
+      usersDcid,
+      input.section.term_id!,
+      buildScoreWriteBodyUnconfirmed(
+        assignmentSectionId,
+        rows.map((w) => ({ studentDcid: w.student_dcid, points: w.points, externalScoreId: w.external_score_id })),
+      ),
+    );
 
   let response: unknown;
   try {
-    response = await client.writeScores(usersDcid, input.section.term_id!, body);
+    try {
+      response = await put(writes);
+    } catch (err) {
+      // One student not on the assignment in PowerTeacher Pro (left the
+      // class, or our nightly roster is behind) refuses the whole batch
+      // (measured 2026-09-29). Hold those students back and write the rest,
+      // once.
+      const named = err instanceof GradebookHttpError && err.status === 409 ? new Set(parseUnassociatedStudents(err.body)) : null;
+      const rest = named && named.size > 0 ? writes.filter((w) => !named.has(w.student_dcid)) : null;
+      if (!named || !rest || rest.length === writes.length) throw err;
+      const dropped = writes.filter((w) => named.has(w.student_dcid));
+      summary.failed.push(
+        ...dropped.map((w): SendFailure => ({ student_number: w.student_number, reason: "not_in_powerschool_section" })),
+      );
+      writes = rest;
+      if (writes.length === 0) return;
+      response = await put(writes);
+    }
   } catch (err) {
     logFailure("scores", input.assessment.id, err, writes.length);
     let reason = failureReason(err);
-    if (err instanceof GradebookHttpError && err.status === 404) {
+    if (err instanceof GradebookHttpError && isAssignmentSectionMissing(err.status, err.body)) {
       // The assignment is gone from PowerTeacher Pro (deleted there). Retire
       // this push so the next send creates a new one.
       await db

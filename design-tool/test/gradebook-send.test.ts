@@ -415,7 +415,8 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(push!.last_result).toMatchObject({ sent: 1, held_back: { count: 1 } });
     const pushScores = await db.select().from(gradebook_push_scores);
     expect(pushScores.map((p) => [p.attempt_id, p.points_sent])).toEqual([[ada.id, 2]]);
-    expect(pushScores[0]!.external_score_id).not.toBeNull();
+    // The live score write returns no assignmentscoreid (2026-09-29).
+    expect(pushScores[0]!.external_score_id).toBeNull();
 
     const events = await db.select().from(attempt_events).where(eq(attempt_events.kind, "gradebook_sent"));
     expect(events.map((e) => [e.attempt_id, e.detail])).toEqual([
@@ -428,7 +429,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(logLines.join("\n")).not.toContain("1001");
   });
 
-  test("re-send: unchanged skipped, newly scored sent, changed updated with its score id; name ignored", async () => {
+  test("re-send: unchanged skipped, newly scored sent, changed updated in place; name ignored", async () => {
     const s = await scene();
     const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
     const ben = await attempt(s, OTHER_STUDENT, s.algebra.id, [1, null]);
@@ -450,8 +451,10 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     const adaRow = rows.find((r) => r.studentsdcid === 81001)!;
     const benRow = rows.find((r) => r.studentsdcid === 81002)!;
     expect(adaRow.scorepoints).toBe(0);
-    expect(typeof adaRow.assignmentscoreid).toBe("number");
+    // No id is known (the live write returns none); the write updates in place.
+    expect("assignmentscoreid" in adaRow).toBe(false);
     expect("assignmentscoreid" in benRow).toBe(false);
+    expect(mockPowerSchool.scores.get(`${first.external_assignment_id}:81001`)?.points).toBe(0);
 
     const db = getDb();
     expect((await db.select().from(gradebook_pushes)).length).toBe(1);
@@ -547,6 +550,29 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     const again = await (await send(s.assessment.id, BASE_BODY)).json();
     expect(again).toMatchObject({ assignment_created: true, sent: 2 });
     expect(again.external_assignment_id).not.toBe(first.external_assignment_id);
+  });
+
+  test("a student PowerSchool has no association for is held out; the rest are written", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await attempt(s, OTHER_STUDENT, s.algebra.id, [1, 1]);
+    // Ben left the class in PowerSchool; our roster has not caught up.
+    mockPowerSchool.unassociated.add("81002");
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ sent: 1, updated: 0 });
+    expect(body.failed).toEqual([{ student_number: "1002", reason: "not_in_powerschool_section" }]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listCategories", "createAssignment", "writeScores", "writeScores"]);
+    const pushScores = await getDb().select().from(gradebook_push_scores);
+    expect(pushScores.map((p) => p.attempt_id)).toEqual([ada.id]);
+  });
+
+  test("every student unassociated: nothing written, each held out", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.unassociated.add("81001");
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body.failed).toEqual([{ student_number: "1001", reason: "not_in_powerschool_section" }]);
+    expect(await getDb().select().from(gradebook_push_scores)).toEqual([]);
   });
 
   test("a first send already in flight → 409 send_in_progress", async () => {

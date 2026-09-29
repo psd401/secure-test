@@ -177,3 +177,41 @@ export function parseCreatedAssignment(
   }
   return { assignmentId, assignmentSectionId };
 }
+
+/**
+ * A score write to an assignment deleted in PowerTeacher Pro. Measured on the
+ * test server 2026-09-29: HTTP 500 {"message":"Unable to find
+ * com.pearson.powerschool.xte.model.AssignmentSection with id …"}, not a 404.
+ * A 404 is accepted too.
+ */
+export function isAssignmentSectionMissing(status: number, body: string): boolean {
+  if (status === 404) return true;
+  return status === 500 && /Unable to find [\w.]*AssignmentSection with id/.test(body);
+}
+
+/**
+ * The students a 409 score write names as not on the assignment. Measured on
+ * the test server 2026-09-29: ONE such row refuses the WHOLE batch (nothing
+ * written) with errors[].params { assignment_section_id, student_dcid } and a
+ * field "Student.id [n] does not have an AssignmentStudentAssociation …".
+ * Empty when the body is anything else.
+ */
+export function parseUnassociatedStudents(body: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return [];
+  }
+  const errors = (parsed as { errors?: unknown } | null)?.errors;
+  if (!Array.isArray(errors)) return [];
+  const out: string[] = [];
+  for (const e of errors) {
+    if (!e || typeof e !== "object") continue;
+    const field = (e as { field?: unknown }).field;
+    const params = (e as { params?: unknown }).params as Record<string, unknown> | undefined;
+    const dcid = asIdString(params?.student_dcid);
+    if (dcid && typeof field === "string" && field.includes("AssignmentStudentAssociation")) out.push(dcid);
+  }
+  return out;
+}

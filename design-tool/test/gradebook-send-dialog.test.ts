@@ -130,6 +130,9 @@ describe("formatFailure", () => {
       "9: the assignment is missing in PowerSchool",
     );
     expect(formatFailure({ student_number: "9", reason: "http_500" })).toBe("9: PowerSchool refused it (HTTP 500)");
+    expect(formatFailure({ student_number: "9", reason: "not_in_powerschool_section" })).toBe(
+      "9: not on this class in PowerSchool (left the class?)",
+    );
     expect(formatFailure({ student_number: "9", reason: "network_error" })).toBe("9: could not reach PowerSchool");
     expect(formatFailure({ student_number: "9", reason: "Score out of range" })).toBe("9: Score out of range");
   });
