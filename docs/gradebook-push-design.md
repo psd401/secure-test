@@ -625,3 +625,10 @@ access (James). New read-only operator mode `ps-reach`
 the OAuth token plus one category read through the task's own network path,
 printing statuses and counts only. Run it right after the deploy, before
 the first real send.
+
+**2026-09-29 ~14:45 PT — DEPLOYED (rev 61, health stamp `5e496d6`, Aurora
+0048).** `oneoff-aurora.sh ps-reach` from inside the VPC right after the
+deploy: all three `POWERSCHOOL_*` set, `GRADEBOOK_PROVIDER=live`, token ok,
+4 categories read in 377 ms — PASS. Send to gradebook is live for every
+teacher with edit access. No production write yet: one pilot teacher has
+been asked to send and verify in PowerTeacher Pro.
