@@ -84,3 +84,9 @@ outside the dashboard.
   checked. Not deployed. Reply to IT corrects the domain: the app hostname
   is under the `.ai` zone, not `.net`, so their DMARC answer (inherits the
   `.net` sp=none) needs re-checking against the `.ai` zone's policy.
+- 2026-09-30: DEPLOYED — rev 64 (`1e4b929`), health stamp = HEAD, no
+  migration. Identity created, DKIM `PENDING` until IT adds the three
+  CNAMEs (reply with the values sent by James). The SES account already has
+  production access (`ProductionAccessEnabled: true`) — no sandbox-exit
+  request needed. Next: identity verifies → two-address test (row 329),
+  telling IT when.
