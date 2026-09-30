@@ -26,6 +26,7 @@
 //   seed-essays   → seed-essays.mjs    (README "Seeding pilot essays")
 //   roster-health → roster-health.mjs
 //   ps-reach      → ps-reach.mjs      (read-only PowerSchool check)
+//   student-lookup → student-lookup.mjs (read-only; README "Student lookup")
 //
 // A one-off ECS run-task on the service's own task definition is how any of
 // these reaches Aurora now that the cluster SG has no laptop CIDR
@@ -55,6 +56,9 @@ const MODES = {
   // token + one category read through the task's own network path and
   // POWERSCHOOL_* values. Writes nothing.
   "ps-reach": "./ps-reach.mjs",
+  // Why can't this student get in? (roadmap U-11, 2026-09-30): the join
+  // routes' own resolution for one address or student number. Read-only.
+  "student-lookup": "./student-lookup.mjs",
 };
 
 const mode = process.argv[2];

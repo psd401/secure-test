@@ -390,6 +390,28 @@ scripts/oneoff-aurora.sh roster-health <teacher@psd401.net> # plus that teacher'
 
 Read-only. Exit 1 means the latest sync run did not succeed.
 
+## Student lookup — "my student can't get in"
+
+`scripts/student-lookup.ts` answers one student at a time with the join
+routes' own rules (`lib/roster/lookup.ts` calls the same
+`isAdmittedToSitting` the routes do):
+
+```bash
+scripts/oneoff-aurora.sh student-lookup <student@edtools.psd401.net>
+scripts/oneoff-aurora.sh student-lookup <student-number>
+```
+
+It prints the verdict the routes would reach (`ok`, `not_on_roster`,
+`identity_conflict`, `no_email`), the student's enrollments with each
+section's teachers and whether each is current on the app's UTC date, and
+the open sittings that admit the student or belong to one of those teachers.
+No student name and no stored address are printed — the task's stdout lands
+in CloudWatch. Looking up by student number and seeing `ok` while the
+student is refused by email means the Google address and the warehouse
+address differ; the resolution log line (`student_resolution_failed`) shows
+the refusal itself. Exit 0 on `ok`, 1 otherwise. Locally:
+`bun --env-file=.env.local scripts/student-lookup.ts <email | number>`.
+
 ## Roster sync — local / manual run
 
 The same importer the Lambda runs, pointed at a directory:
