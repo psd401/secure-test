@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { listMySittings } from "@/lib/api/mySittings";
+import { logResolutionFailure } from "@/lib/api/resolutionLog";
 
 /**
  * Slice 83: "Your tests" — the open sittings this student is admitted to,
@@ -21,6 +22,10 @@ export async function GET() {
 
   const result = await listMySittings(getDb(), auth.session);
   if (!result.ok) {
+    // A staff account with nothing to practise is not a refusal.
+    if (result.reason !== "no_practice_sitting") {
+      logResolutionFailure({ route: "GET /api/me/sittings", reason: result.reason, session: auth.session });
+    }
     return NextResponse.json({ sittings: [], reason: result.reason });
   }
   return NextResponse.json({ sittings: result.sittings });

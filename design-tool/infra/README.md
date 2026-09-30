@@ -409,7 +409,13 @@ No student name and no stored address are printed — the task's stdout lands
 in CloudWatch. Looking up by student number and seeing `ok` while the
 student is refused by email means the Google address and the warehouse
 address differ; the resolution log line (`student_resolution_failed`) shows
-the refusal itself. Exit 0 on `ok`, 1 otherwise. Locally:
+the refusal itself — the lookup prints the `email_ref` to search for:
+
+```
+filter event = "student_resolution_failed" and email_ref = "<ref>"
+```
+
+(CloudWatch Logs Insights, the app's log group). Exit 0 on `ok`, 1 otherwise. Locally:
 `bun --env-file=.env.local scripts/student-lookup.ts <email | number>`.
 
 ## Roster sync — local / manual run

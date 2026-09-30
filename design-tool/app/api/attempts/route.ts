@@ -13,6 +13,7 @@ import { applySittingNoLimit } from "@/lib/api/extendAttempt";
 import { loadJoinableSitting } from "@/lib/api/studentAttempt";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { UUID_RE } from "@/lib/uuid";
+import { logResolutionFailure } from "@/lib/api/resolutionLog";
 
 const StartBody = z.object({
   test_session_id: z.string().regex(UUID_RE, "test_session_id must be a uuid"),
@@ -71,6 +72,12 @@ export async function POST(req: Request) {
   }
   const resolved = await resolveStudentForOwner(db, tenantSub, auth.session, sitting);
   if (!resolved.ok) {
+    logResolutionFailure({
+      route: "POST /api/attempts",
+      reason: resolved.reason,
+      session: auth.session,
+      sittingId: sitting.id,
+    });
     return NextResponse.json(
       { ok: false, error: resolved.reason },
       { status: statusForResolutionFailure(resolved.reason) },

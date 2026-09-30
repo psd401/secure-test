@@ -6,6 +6,9 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments, roster_students, test_sessions } from "../db/schema";
 import { lookupStudent } from "../lib/roster/lookup";
+import { emailRef } from "../lib/api/resolutionLog";
+
+process.env.DESIGN_TOOL_SESSION_SECRET ??= "student-lookup-test-secret";
 import {
   LEFT_STUDENT,
   STUDENT,
@@ -62,6 +65,9 @@ describe("lookupStudent", () => {
     const r = await lookupStudent(db(), { email: STUDENT.email.toUpperCase() });
     expect(r.verdict).toBe("ok");
     expect(r.active_rows_with_email).toBe(1);
+    // The same ref student_resolution_failed carries for this address.
+    expect(r.email_ref).toBe(emailRef(STUDENT.email));
+    expect(r.email_ref).toMatch(/^[0-9a-f]{16}$/);
     expect(r.students).toEqual([
       expect.objectContaining({ ps_id: STUDENT.ps_id, email_is_student_shape: true, email_matches_query: true }),
     ]);

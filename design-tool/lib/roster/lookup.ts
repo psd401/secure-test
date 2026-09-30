@@ -20,6 +20,7 @@ import {
   test_sessions,
 } from "@/db/schema";
 import { isAdmittedToSitting } from "@/lib/api/resolveStudent";
+import { emailRef } from "@/lib/api/resolutionLog";
 import { normalizeEmail } from "./queries";
 
 type Db = ReturnType<typeof getDb>;
@@ -71,6 +72,9 @@ export interface LookupResult {
   /** The resolution the join routes would reach, for an email query. For a
    * student-number query, the verdict the student's STORED address would get. */
   verdict: LookupVerdict;
+  /** lib/api/resolutionLog.ts's keyed hash of the address the verdict is
+   * about — match it against `email_ref` on `student_resolution_failed`. */
+  email_ref: string | null;
   /** Active roster rows carrying the address (2+ = identity_conflict). */
   active_rows_with_email: number;
   students: LookupStudent[];
@@ -147,7 +151,7 @@ export async function lookupStudent(db: Db, query: LookupQuery): Promise<LookupR
   // Enrollments and sittings only make sense for exactly one student.
   const subject = verdict === "ok" ? active[0]! : rows.length === 1 ? rows[0]! : null;
   if (!subject) {
-    return { verdict, active_rows_with_email: active.length, students, enrollments: [], sittings: [], as_of: today };
+    return { verdict, email_ref: emailRef(verdictEmail), active_rows_with_email: active.length, students, enrollments: [], sittings: [], as_of: today };
   }
 
   const enrolRows = await db
@@ -206,5 +210,5 @@ export async function lookupStudent(db: Db, query: LookupQuery): Promise<LookupR
     });
   }
 
-  return { verdict, active_rows_with_email: active.length, students, enrollments, sittings, as_of: today };
+  return { verdict, email_ref: emailRef(verdictEmail), active_rows_with_email: active.length, students, enrollments, sittings, as_of: today };
 }

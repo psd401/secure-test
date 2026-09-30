@@ -30,6 +30,9 @@ await closeDb();
 const yn = (b: boolean) => (b ? "yes" : "NO");
 console.log(`── student lookup (as of ${r.as_of}, UTC — the app's date rules)`);
 console.log(`verdict: ${r.verdict}   (active rows with this address: ${r.active_rows_with_email})`);
+console.log(
+  `email_ref: ${r.email_ref ?? "(none)"}   — match against student_resolution_failed lines in CloudWatch`,
+);
 if (r.students.length === 0) console.log("no roster row matches");
 for (const s of r.students) {
   const match = s.email_matches_query === undefined ? "" : `  stored = asked: ${yn(s.email_matches_query)}`;

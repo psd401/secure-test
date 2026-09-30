@@ -13,6 +13,7 @@ import {
   sittingTenantSub,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
+import { logResolutionFailure } from "@/lib/api/resolutionLog";
 
 const RedeemBody = z.object({ code: z.string().min(1).max(32) });
 
@@ -82,6 +83,12 @@ export async function POST(req: Request) {
   }
   const resolved = await resolveStudentForOwner(db, tenantSub, auth.session, session);
   if (!resolved.ok) {
+    logResolutionFailure({
+      route: "POST /api/test-sessions/redeem",
+      reason: resolved.reason,
+      session: auth.session,
+      sittingId: session.id,
+    });
     // A roster miss — or, since slice 78, an on-roster student outside this
     // sitting's scope — is answered as `session_unavailable`, identically to
     // an unknown or closed code.
@@ -93,20 +100,16 @@ export async function POST(req: Request) {
     // check refuses them either way — but they could map which sittings are
     // running, in other classrooms and other schools.
     //
-    // The real reason is logged rather than discarded: a teacher fielding "it
-    // says the code is not open" needs to know whether the child is missing
-    // from the roster, and the server log is where that belongs.
+    // The real reason is logged rather than discarded (above, as
+    // `student_resolution_failed`): a teacher fielding "it says the code is
+    // not open" needs to know whether the child is missing from the roster,
+    // and the server log is where that belongs.
     //
     // The account-level failures are NOT collapsed. `no_email` and
     // `identity_conflict` are facts about the caller's own account, disclose
     // nothing about anyone else's sitting, and are the two a student can
     // actually get help with.
     if (resolved.reason === "not_on_roster" || resolved.reason === "not_in_sitting") {
-      // The subject is Google's opaque id, not the address.
-      console.warn(
-        `redeem: ${resolved.reason} for sub ${auth.session.sub} ` +
-          `on sitting ${session.id} (owner ${session.owner_sub})`,
-      );
       return NextResponse.json(
         { ok: false, error: "session_unavailable" },
         { status: 404 },
