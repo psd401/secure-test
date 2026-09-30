@@ -11,6 +11,7 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as ses from "aws-cdk-lib/aws-ses";
 import * as sns from "aws-cdk-lib/aws-sns";
 import { Construct } from "constructs";
 import { execFileSync } from "node:child_process";
@@ -159,6 +160,26 @@ export class AppService extends Construct {
       }),
     );
 
+    // Share notifications slice 3 (docs/share-notifications-design.md): the
+    // SES domain identity for the app hostname, sender no-reply@<host> (IT,
+    // 2026-09-30: option A — app mail kept apart from the district domain).
+    // Easy DKIM; NO Route 53 records — IT runs the zone and adds the three
+    // DKIM CNAMEs printed as outputs below. No custom MAIL FROM: DKIM alone
+    // aligns for DMARC. Until the CNAMEs verify and SES leaves the sandbox a
+    // send fails; lib/email/shareNotifications.ts logs that as a warn and the
+    // share itself still succeeds.
+    const emailIdentity = new ses.EmailIdentity(this, "EmailIdentity", {
+      identity: ses.Identity.domain(props.domainName),
+    });
+    this.taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:SendEmail"],
+        resources: [
+          `arn:aws:ses:${stack.region}:${stack.account}:identity/${props.domainName}`,
+        ],
+      }),
+    );
+
     // Observability slice 1: an explicit log group (30-day retention —
     // logs may carry student ids per request/session, the DB tables are
     // the durable record) in place of the CDK-generated one, which had no
@@ -233,6 +254,10 @@ export class AppService extends Construct {
       // explicitly (GB-1). `live` = the production PowerSchool plugin, for
       // every teacher with edit access (James, 2026-09-29).
       GRADEBOOK_PROVIDER: "live",
+      // Share notifications slice 3: the ses grant above is scoped to this
+      // sender's domain identity.
+      EMAIL_PROVIDER: "ses",
+      EMAIL_FROM: `no-reply@${props.domainName}`,
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;
@@ -428,6 +453,19 @@ export class AppService extends Construct {
     new cdk.CfnOutput(this, "AlbDnsName", {
       value: this.service.loadBalancer.loadBalancerDnsName,
       description: `ALB DNS name — CNAME target for ${props.domainName} in the psd401.ai zone.`,
+    });
+
+    // The three Easy DKIM CNAMEs for IT to add in the zone (IT, 2026-09-30:
+    // "send me the 3 DKIM CNAME name/value pairs").
+    [
+      [emailIdentity.dkimDnsTokenName1, emailIdentity.dkimDnsTokenValue1],
+      [emailIdentity.dkimDnsTokenName2, emailIdentity.dkimDnsTokenValue2],
+      [emailIdentity.dkimDnsTokenName3, emailIdentity.dkimDnsTokenValue3],
+    ].forEach(([name, value], i) => {
+      new cdk.CfnOutput(this, `EmailDkimCname${i + 1}`, {
+        value: cdk.Fn.join(" CNAME ", [name, value]),
+        description: `SES DKIM record ${i + 1} of 3 for ${props.domainName} — IT adds it.`,
+      });
     });
 
     new cdk.CfnOutput(this, "AppOrigin", {

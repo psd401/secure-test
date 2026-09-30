@@ -40,9 +40,24 @@ outside the dashboard.
 
 ## Slice 3 — infra (after SES exists)
 
-- Task role gets `ses:SendEmail` on the domain identity; `EMAIL_PROVIDER=ses`
-  and `EMAIL_FROM` in the task definition.
-- IT: DKIM records for the sending domain. AWS: sandbox exit request.
+- IT's answer (2026-09-30): option A — send as `no-reply@<app hostname>`,
+  keeping app mail's reputation apart from the district domain (p=quarantine);
+  no SMTP relay / Workspace delegation. IT runs both district zones and adds
+  the records by hand — the stack creates NONE. Custom MAIL FROM optional —
+  skipped (DKIM on the sending domain aligns for DMARC). Mail goes straight to
+  Gmail; Google opens every link, so a link may only open a page (ours do: the
+  editor marks a grant seen only for a signed-in teacher). After the
+  two-address test IT will likely add a `_dmarc` record at p=quarantine on the
+  sending domain.
+- Stack: `ses.EmailIdentity` for the app hostname (Easy DKIM), the three DKIM
+  CNAMEs as outputs `EmailDkimCname1..3`, `ses:SendEmail` on that identity for
+  the task role, `EMAIL_PROVIDER=ses` + `EMAIL_FROM=no-reply@<app hostname>`
+  in the task definition (derived from `domainName`, no new context key).
+- Until the CNAMEs verify and SES leaves the sandbox, a send fails and is
+  logged as `share_email_failed` (warn); the share itself succeeds.
+- Then: IT adds the CNAMEs → identity verifies → the two-address test (both
+  recipients verified while in the sandbox; tell IT when, they check
+  delivery) → James files the SES production-access request → row 329.
 
 ## Progress
 
@@ -63,3 +78,9 @@ outside the dashboard.
   unset on the origin, so no email is sent. IT ask for SES sent the same
   day (James leans option B, `no-reply@psd401.net`); slice 3 follows the
   answer.
+- 2026-09-30: IT answered (option A, records by hand, no custom MAIL FROM
+  needed). Slice 3 built: SES identity + DKIM outputs + scoped grant +
+  `EMAIL_PROVIDER` / `EMAIL_FROM` in `infra/lib/app-service.ts`; synth
+  checked. Not deployed. Reply to IT corrects the domain: the app hostname
+  is under the `.ai` zone, not `.net`, so their DMARC answer (inherits the
+  `.net` sp=none) needs re-checking against the `.ai` zone's policy.
