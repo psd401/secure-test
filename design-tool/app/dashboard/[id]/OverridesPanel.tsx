@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ACCOMMODATION_CATALOG,
+  VISIBLE_ACCOMMODATION_CATALOG,
+  isVisibleAccommodation,
   type AccommodationCatalogEntry,
 } from "@/lib/accommodations/catalog";
 import { tideValuesForTool } from "@/lib/accommodations/tideCatalog";
@@ -104,7 +106,7 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
   // allowedAccommodations → empty tool dropdown → CTA to add them first.
   const allowedCatalog: AccommodationCatalogEntry[] = useMemo(() => {
     const allowed = new Set(allowedAccommodations);
-    return ACCOMMODATION_CATALOG.filter((e) => allowed.has(e.id));
+    return VISIBLE_ACCOMMODATION_CATALOG.filter((e) => allowed.has(e.id));
   }, [allowedAccommodations]);
 
   const catalogById = useMemo(() => {
@@ -112,6 +114,13 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
     for (const e of ACCOMMODATION_CATALOG) m.set(e.id, e);
     return m;
   }, []);
+
+  // Overrides on hidden tools stay stored (catalog.ts VISIBLE_IDS); they are
+  // just not listed.
+  const shownOverrides = useMemo(
+    () => overrides.filter((o) => isVisibleAccommodation(o.tool_id)),
+    [overrides],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -325,8 +334,8 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
       </Card>
 
       <section className="space-y-2">
-        <h3 className="font-semibold">Overrides on this assessment ({overrides.length})</h3>
-        {overrides.length === 0 ? (
+        <h3 className="font-semibold">Overrides on this assessment ({shownOverrides.length})</h3>
+        {shownOverrides.length === 0 ? (
           <EmptyState title="No overrides yet" description="Every student gets the assessment's allowed tools as their own record sets them." />
         ) : (
           <div className="overflow-x-auto rounded-lg border bg-card">
@@ -342,7 +351,7 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {overrides.map((o) => {
+                {shownOverrides.map((o) => {
                   const tool = catalogById.get(o.tool_id);
                   return (
                     <TableRow key={o.id}>

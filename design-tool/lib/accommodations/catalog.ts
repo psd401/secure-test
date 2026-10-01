@@ -5,10 +5,9 @@
 // mapped to PSD strategy taxonomy). TIDE field-level mapping for any
 // per-student import lives in docs/accommodations-data-dictionary.md.
 //
-// Decision per the picker-scope rule in docs/accommodations.md: surface
-// ALL OSPI tools regardless of impl_tier, so the metadata is forward-
-// compatible. Tools the district browser doesn't render yet (T3/T4 + oob)
-// no-op at runtime but the picker state survives. Excluded entries are
+// The catalog keeps ALL OSPI tools regardless of impl_tier, so the metadata
+// is forward-compatible; since 2026-10-01 the teacher-facing surfaces show
+// only VISIBLE_ACCOMMODATION_CATALOG (see VISIBLE_IDS below). Excluded entries are
 // universal-baseline functionality teachers don't toggle (Breaks,
 // Keyboard Navigation, Writing Tools).
 //
@@ -110,6 +109,34 @@ export const ACCOMMODATION_CATALOG: readonly AccommodationCatalogEntry[] = [
   { id: "calculator_non_calc_items", label: "Calculator on non-calc items", ospi_tier: "accommodation", impl_tier: "oob", strategy: "D" },
   { id: "sensory_items", label: "Sensory Items", ospi_tier: "accommodation", impl_tier: "oob", strategy: "D" },
 ] as const;
+
+// Portfolio focus (James, 2026-10-01): teacher-facing surfaces show only the
+// tools the client delivers today plus the priority builds (text-to-speech,
+// speech-to-text). Everything else is HIDDEN, not removed — ids stay valid,
+// stored rows, TIDE imports, exported bundles and delivery are untouched;
+// the pickers, student lists, override lists and the TIDE review simply
+// don't show them. Un-hide by adding the id here.
+const VISIBLE_IDS: ReadonlySet<string> = new Set([
+  // Delivered by the client today.
+  "color_contrast",
+  "optional_font",
+  "zoom",
+  "spell_check",
+  // Priority builds — visible while being built.
+  "tts_test_content",
+  "tts_student_responses",
+  "tts_for_ela_reading",
+  "tts_spanish",
+  "speech_to_text",
+]);
+
+export function isVisibleAccommodation(id: string): boolean {
+  return VISIBLE_IDS.has(id);
+}
+
+/** The catalog teachers see — {@link ACCOMMODATION_CATALOG} minus hidden tools. */
+export const VISIBLE_ACCOMMODATION_CATALOG: readonly AccommodationCatalogEntry[] =
+  ACCOMMODATION_CATALOG.filter((e) => VISIBLE_IDS.has(e.id));
 
 const ID_SET = new Set(ACCOMMODATION_CATALOG.map((e) => e.id));
 

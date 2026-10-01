@@ -235,7 +235,7 @@ describe("renderAssessmentHtml — essay rubric visibility (slice 33)", () => {
 describe("renderAssessmentHtml — print mode (slice 34)", () => {
   const printAssessment = {
     ...assessment,
-    allowed_accommodations: ["highlighter"], // a T1 entry → toolbar on screen
+    allowed_accommodations: ["zoom"], // a T1 entry → toolbar on screen
   };
 
   test("drops the preview banner and Tier-1 toolbar on paper", () => {
@@ -371,14 +371,14 @@ describe("renderAssessmentHtml — Tier-1 accommodations toolbar (slice 22)", ()
   });
 
   test("Tier-1 entry in allowed_accommodations → toolbar contains its label", () => {
-    // `highlighter` is universal/T1 per catalog.ts.
-    const out = withAccoms(["highlighter"]);
+    // `zoom` is universal/T1 per catalog.ts (and visible).
+    const out = withAccoms(["zoom"]);
     expect(out).toContain('class="accommodations-toolbar"');
-    expect(out).toContain("Highlighter");
+    expect(out).toContain("Zoom (in-app)");
   });
 
   test("toolbar uses aria-disabled spans (not <button disabled>)", () => {
-    const out = withAccoms(["highlighter"]);
+    const out = withAccoms(["zoom"]);
     expect(out).toMatch(
       /<span class="tool-btn" role="button" aria-disabled="true">/,
     );
@@ -412,12 +412,12 @@ describe("renderAssessmentHtml — Tier-1 accommodations toolbar (slice 22)", ()
     const out = withAccoms([
       "tts_test_content", // T2 — drop
       "color_contrast", // T1 — keep
-      "highlighter", // T1 — keep
+      "zoom", // T1 — keep
       "english_glossary", // T3 — drop
     ]);
-    const hi = out.indexOf("Highlighter");
+    const hi = out.indexOf("Zoom (in-app)");
     const cc = out.indexOf("Color Contrast");
-    // highlighter is universal/T1 and appears before designated/T1 color_contrast
+    // zoom is universal/T1 and appears before designated/T1 color_contrast
     // in the catalog, so it must render first.
     expect(hi).toBeGreaterThan(-1);
     expect(cc).toBeGreaterThan(-1);
@@ -426,14 +426,20 @@ describe("renderAssessmentHtml — Tier-1 accommodations toolbar (slice 22)", ()
     expect(out).not.toContain("English Glossary");
   });
 
+  test("a HIDDEN T1 tool (catalog.ts VISIBLE_IDS, 2026-10-01) stays off the toolbar", () => {
+    const out = withAccoms(["highlighter", "zoom"]);
+    expect(out).toContain("Zoom (in-app)");
+    expect(out).not.toContain("Highlighter");
+  });
+
   test("unknown catalog ids in allowed are silently ignored (toolbar still renders other T1s)", () => {
-    const out = withAccoms(["highlighter", "not_a_real_tool"]);
-    expect(out).toContain("Highlighter");
+    const out = withAccoms(["zoom", "not_a_real_tool"]);
+    expect(out).toContain("Zoom (in-app)");
     expect(out).not.toContain("not_a_real_tool");
   });
 
   test("toolbar inserts between preview-banner and h1", () => {
-    const out = withAccoms(["highlighter"]);
+    const out = withAccoms(["zoom"]);
     // Match body-level div tags, not CSS class definitions in <style>.
     const banner = out.indexOf('<div class="preview-banner">');
     const toolbar = out.indexOf('<div class="accommodations-toolbar"');
@@ -446,7 +452,7 @@ describe("renderAssessmentHtml — Tier-1 accommodations toolbar (slice 22)", ()
   });
 
   test("CSP unchanged (no script-src added by the toolbar)", () => {
-    const out = withAccoms(["highlighter"]);
+    const out = withAccoms(["zoom"]);
     expect(out).toContain(
       `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'">`,
     );

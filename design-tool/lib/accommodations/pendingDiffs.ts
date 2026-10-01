@@ -1,6 +1,7 @@
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { students, student_accommodations } from "@/db/schema";
 import type { getDb } from "@/db/client";
+import { isVisibleAccommodation } from "./catalog";
 import { tideValueForCode } from "./tideCatalog";
 
 type Db = ReturnType<typeof getDb>;
@@ -56,6 +57,9 @@ export async function pendingTideDiffs(db: Db, ownerSub: string): Promise<Pendin
 
   return candidates.flatMap((r) => {
     if (!r.tide_code) return [];
+    // Hidden tools (catalog.ts VISIBLE_IDS) are not raised for review; the
+    // import still stores their values.
+    if (!isVisibleAccommodation(r.tool_id)) return [];
     // UX pass 2 slice 5 (P2-5): the teacher already chose "Keep mine"
     // against exactly this TIDE assertion — decided, not pending. A new
     // TIDE code stops matching and the diff comes back on its own.

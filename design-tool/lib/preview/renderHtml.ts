@@ -29,7 +29,7 @@ import type { ItemType } from "@/db/schema";
 import { assertNever } from "@/lib/assertNever";
 import { escapeHtml } from "@/lib/escapeHtml";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
-import { ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
+import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
 
 interface Choice {
@@ -110,7 +110,7 @@ export interface PreviewAssessment {
 function renderAccommodationsToolbar(allowed: readonly string[]): string {
   if (allowed.length === 0) return "";
   const allowedSet = new Set(allowed);
-  const tier1 = ACCOMMODATION_CATALOG.filter(
+  const tier1 = VISIBLE_ACCOMMODATION_CATALOG.filter(
     (e) => e.impl_tier === "T1" && allowedSet.has(e.id),
   );
   if (tier1.length === 0) return "";

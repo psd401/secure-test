@@ -57,7 +57,7 @@ import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
 import {
-  ACCOMMODATION_CATALOG,
+  VISIBLE_ACCOMMODATION_CATALOG,
   type AccommodationCatalogEntry,
   type OspiTier,
 } from "@/lib/accommodations/catalog";
@@ -739,7 +739,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
 
   const accommodationsByOspi = useMemo(() => {
     const groups = new Map<OspiTier, AccommodationCatalogEntry[]>();
-    for (const entry of ACCOMMODATION_CATALOG) {
+    for (const entry of VISIBLE_ACCOMMODATION_CATALOG) {
       const arr = groups.get(entry.ospi_tier) ?? [];
       arr.push(entry);
       groups.set(entry.ospi_tier, arr);

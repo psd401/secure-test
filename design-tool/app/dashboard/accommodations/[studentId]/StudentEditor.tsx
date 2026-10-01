@@ -6,6 +6,8 @@ import { Plus } from "lucide-react";
 import { TIDE_SUBJECTS } from "@/db/schema";
 import {
   ACCOMMODATION_CATALOG,
+  VISIBLE_ACCOMMODATION_CATALOG,
+  isVisibleAccommodation,
   type AccommodationCatalogEntry,
   type OspiTier,
 } from "@/lib/accommodations/catalog";
@@ -129,7 +131,7 @@ export function StudentEditor({ studentId, initial }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<{ subject: string; tool_id: string; value: string }>({
     subject: TIDE_SUBJECTS[0],
-    tool_id: ACCOMMODATION_CATALOG[0]!.id,
+    tool_id: VISIBLE_ACCOMMODATION_CATALOG[0]!.id,
     value: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export function StudentEditor({ studentId, initial }: Props) {
 
   const catalogByTier = useMemo(() => {
     const m = new Map<OspiTier, AccommodationCatalogEntry[]>();
-    for (const e of ACCOMMODATION_CATALOG) {
+    for (const e of VISIBLE_ACCOMMODATION_CATALOG) {
       const arr = m.get(e.ospi_tier) ?? [];
       arr.push(e);
       m.set(e.ospi_tier, arr);
@@ -172,7 +174,7 @@ export function StudentEditor({ studentId, initial }: Props) {
       if (!res.ok) throw await readError(res);
       const { accommodation } = (await res.json()) as { accommodation: AccRow };
       setRows((prev) => [...prev, accommodation]);
-      setDraft({ subject: TIDE_SUBJECTS[0], tool_id: ACCOMMODATION_CATALOG[0]!.id, value: "" });
+      setDraft({ subject: TIDE_SUBJECTS[0], tool_id: VISIBLE_ACCOMMODATION_CATALOG[0]!.id, value: "" });
       setAddOpen(false);
       router.refresh();
     } catch (err) {
@@ -225,9 +227,13 @@ export function StudentEditor({ studentId, initial }: Props) {
     }
   }
 
+  // Rows on hidden tools stay stored (catalog.ts VISIBLE_IDS) — every count,
+  // list and empty state below works on the shown rows only.
+  const shownRows = useMemo(() => rows.filter((r) => isVisibleAccommodation(r.tool_id)), [rows]);
+
   const grouped = useMemo(() => {
     const m = new Map<string, AccRow[]>();
-    for (const r of rows) {
+    for (const r of shownRows) {
       const arr = m.get(r.subject) ?? [];
       arr.push(r);
       m.set(r.subject, arr);
@@ -244,10 +250,10 @@ export function StudentEditor({ studentId, initial }: Props) {
       });
     }
     return m;
-  }, [rows, catalogById]);
+  }, [shownRows, catalogById]);
 
-  const onCount = rows.filter((r) => isEnabledValue(r.value)).length;
-  const offCount = rows.length - onCount;
+  const onCount = shownRows.filter((r) => isEnabledValue(r.value)).length;
+  const offCount = shownRows.length - onCount;
 
   return (
     <div className="space-y-6">
@@ -278,7 +284,7 @@ export function StudentEditor({ studentId, initial }: Props) {
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {shownRows.length === 0 ? (
         <EmptyState
           title="No supports on file"
           description="Anything TIDE lists for this student appears here after an import; you can add supports yourself too."
