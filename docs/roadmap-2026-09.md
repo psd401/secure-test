@@ -793,6 +793,36 @@ first gradebook slice that writes to PowerSchool from the deployed app, or
 the first change that needs real Aurora / ECS / S3 / importer behaviour
 before production — whichever comes first. Side: infra.
 
+**Status 2026-10-01 (James): still a potential, not scheduled.** The
+PowerSchool write shipped to production on 2026-09-29 without it (checked
+against the test server from local dev instead). **Cost note (September
+2026 bill):** the live stack runs at ~$98 / month, nearly all fixed —
+Aurora at its 0.5 ACU floor (~$45), ALB ($16), one Fargate task ($14),
+public IPv4 (~$12), the Secrets Manager endpoint ($7); Bedrock was ~$1.50.
+A straight copy of the stack would roughly double that. If staging is
+built, build it scale-to-zero: Aurora min 0 ACU (auto-pause), ECS desired
+count 0 when idle, and no second interface endpoint unless the importer
+must run there — a few dollars a month instead of ~$95.
+
+## Row AC — Aurora capacity schedule (possible change, 2026-10-01) — nothing built
+
+September's bill: 221 students, 28 sittings, and the production cluster
+sat at its 0.5 ACU minimum every day of the month (daily max 1.0) — ~$45
+of a ~$98 Secure Test month, the largest single line. Possible change: an
+EventBridge Scheduler pair that sets the cluster's
+`ServerlessV2ScalingConfiguration.MinCapacity` to 0 (auto-pause) in the
+evening and on weekends, and back to 0.5 before the school day (e.g.
+06:00–17:00 PT weekdays, so the 06:00 roster import and the first period
+both meet a warm cluster). Estimated saving ~$25 / month.
+Risks / open: the cold start after a pause (the first connection has
+exceeded 60 s — follow-up 9.1 is why the floor became 0.5); evening teacher
+work (scoring, results, editing) would meet the cold start once per idle
+spell; the roster import and its sweeps run at 06:00, inside the warm
+window; holidays and breaks stay on the weekday schedule unless
+a calendar is added. Cost per student at September's usage: ~$0.44 fully
+loaded, ~1–2¢ marginal — the schedule lowers the fixed part only.
+Side: infra.
+
 ## Deploy safety + scheduled deploys (James, 2026-09-25)
 
 Found while planning the row SG deploy: `deploy.sh` deploys first and runs
