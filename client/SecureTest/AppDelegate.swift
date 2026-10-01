@@ -168,9 +168,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // MIN-1 backstop: should anything still minimize the window (a
+        // title-bar double-click setting, a programmatic `miniaturize`), put
+        // it straight back. The app never has a reason to be minimized.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidMiniaturize),
+            name: NSWindow.didMiniaturizeNotification,
+            object: nil
+        )
+
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 980, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            // MIN-1 (2026-10-01 pilot report): no `.miniaturizable`. Under a
+            // real AAC session the Dock is gone, so a minimized window has no
+            // way back and the student is left on AAC's grey backdrop.
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -800,6 +813,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let reporter = eventReporter, !attemptHandedIn else { return }
         Self.log("app lost focus during an attempt")
         reporter.report(.focusLoss)
+    }
+
+    @objc private func windowDidMiniaturize(_ note: Notification) {
+        guard let minimized = note.object as? NSWindow, minimized === window else { return }
+        Self.log("window minimized — restoring (MIN-1)")
+        minimized.deminiaturize(nil)
     }
 
     @objc private func appDidBecomeActive() {

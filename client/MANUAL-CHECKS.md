@@ -1841,3 +1841,20 @@ enough unless a row says otherwise — nothing here depends on AAC.
 | **Hidden timer.** Timed attempt; hide the timer (×); then the teacher removes the limit | The strip stays gone; the removal notice still shows; the session does not end at the old zero. If the teacher then sets a deadline again, the strip stays hidden (the choice carries over) and only the notices show | ✅ in part 2026-09-24 — strip visible (10-min deadline), hidden with ×, then the limit removed: the strip stayed gone, the removal notice showed, stderr `banner hidden by the student` then `removed by the teacher`. NOT RUN: the "set a deadline again, strip stays hidden" half |
 | **Real session, end at old zero.** One REAL AAC session on a fleet Mac: remove the limit with under a minute left and let the old deadline pass | No "Time is up.", no `DID END`; the session stays locked until hand-in or Cmd-E — the one row where the lock itself matters | ✅ 2026-09-24 (James at the client, teacher side from a second machine on the origin at `89f989c`; Release build of `d5db328` from `~/Applications`, REAL `AEAssessmentSession`) — resumed with 169 s left; the teacher removed the limit with under a minute left; stderr `time limit: removed by the teacher` inside the locked session; the session stayed locked past the old deadline + 30 s grace (James) with no `time limit reached` / `time_expired`, and ended only by End secure session. Reading: a first attempt at this row launched without `SECURE_TEST_SERVER` and landed on local dev (the launcher's localhost fallback) — check the Your tests list before joining |
 
+
+## MIN-1 — no minimize during a test (2026-10-01)
+
+Pilot report: a student clicked the yellow minimize button during a preview
+sitting and was left on a grey screen until the Mac was restarted. Under a
+real AAC session the Dock is suppressed, so a minimized window has no way
+back. Fix: the main window is built without `.miniaturizable`, and a
+`NSWindow.didMiniaturizeNotification` observer deminiaturizes it as a
+backstop (stderr `window minimized — restoring (MIN-1)`). Rows 1–2 can run
+under simulated lockdown; rows 3–4 need a REAL AAC session.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Button disabled, entry screen.** Launch; leave full screen (green button); look at the traffic lights | Yellow button greyed out; clicking it does nothing | |
+| **Title-bar double-click.** System Settings → Desktop & Dock → "Double-click a window's title bar to" = Minimize; double-click the title bar on the entry screen and on an assessment page | Window stays (or comes straight back); if it flickered, stderr shows `window minimized — restoring (MIN-1)` | |
+| **Real session, minimize attempt.** REAL session on a fleet Mac, attempt open; leave full screen; click the yellow button, then double-click the title bar | Nothing happens; the test stays on screen; no grey screen | |
+| **Workaround on the OLD build (≤ 1.3.5).** REAL session on v1.3.5; leave full screen; minimize; then press Cmd-Q (then, on a second run, Cmd-E) | Confirms what to tell teachers until 1.3.6 reaches the fleet: Cmd-Q / Cmd-E ends the session and returns the Mac without a restart; rejoin resumes with answers saved. If neither works, the advice is "don't minimize" only | |

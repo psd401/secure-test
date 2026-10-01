@@ -493,6 +493,24 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-10-01 — MIN-1: minimize during a test strands the student (client, v1.3.6)
+
+- **Pilot report:** a student previewing with a teacher clicked the yellow
+  minimize button and was left on a grey screen until the Mac was restarted.
+  Cause (read from code): the main window was `.miniaturizable`, nothing
+  handled a minimize, and under a real AAC session the Dock is suppressed —
+  a minimized window has no way back, leaving AAC's grey backdrop. Full
+  screen hides the button, but leaving full screen is never blocked. No
+  check row had ever exercised minimize.
+- **BUILT (not released):** the window is built without `.miniaturizable`;
+  a `didMiniaturizeNotification` observer deminiaturizes it as a backstop
+  (stderr `window minimized — restoring (MIN-1)`). Debug `xcodebuild`
+  green; Core unchanged. Rides the next client release (v1.3.6;
+  `MARKETING_VERSION` not bumped yet).
+- **Rows:** `client/MANUAL-CHECKS.md` "MIN-1 — no minimize during a test",
+  4 rows NOT RUN — row 4 checks Cmd-Q / Cmd-E as the workaround on v1.3.5
+  before that advice goes to teachers; until then, "don't minimize".
+
 ### 2026-09-29 — PowerSchool send live on production; share notifications (row SN)
 
 - **Gradebook push (PowerSchool) LIVE for every teacher with edit access**
