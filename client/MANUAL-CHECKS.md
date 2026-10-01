@@ -1858,3 +1858,32 @@ under simulated lockdown; rows 3–4 need a REAL AAC session.
 | **Title-bar double-click.** System Settings → Desktop & Dock → "Double-click a window's title bar to" = Minimize; double-click the title bar on the entry screen and on an assessment page | Window stays (or comes straight back); if it flickered, stderr shows `window minimized — restoring (MIN-1)` | |
 | **Real session, minimize attempt.** REAL session on a fleet Mac, attempt open; leave full screen; click the yellow button, then double-click the title bar | Nothing happens; the test stays on screen; no grey screen | |
 | **Workaround on the OLD build (≤ 1.3.5).** REAL session on v1.3.5; leave full screen; minimize; then press Cmd-Q (then, on a second run, Cmd-E) | Confirms what to tell teachers until 1.3.6 reaches the fleet: Cmd-Q / Cmd-E ends the session and returns the Mac without a restart; rejoin resumes with answers saved. If neither works, the advice is "don't minimize" only | |
+
+
+## Dictation under the Jamf configuration (2026-10-01)
+
+Re-test of the 2026-08-27 "Dictation key" row (❌ — text landed inside a real
+session; `allowsDictation` is iOS-only, so the app has no knob). The
+mitigation was IT's dictation declaration (DDM, macOS 26.4+). These rows
+measure what the Mac's CURRENT Jamf configuration actually does. Without
+sudo the installed declarations can't be listed from a shell; a read-only
+check on 2026-10-01 found no dictation key in any Managed Preferences
+domain (`com.apple.applicationaccess` carries only Apple Intelligence /
+Private Relay / Safari / screen-capture keys), which proves nothing about a
+DDM declaration — those don't land there. Record WHICH Mac (staff or
+student fleet) and its macOS version on every row: IT may scope the
+declaration to the student fleet only. All session rows need a REAL AAC
+session (Release build, Finder launch) — simulated lockdown proves nothing
+here. A real session breaks DNS for every other process on the Mac
+(finding 10.7), so the teacher side runs from another machine or before /
+after the session.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Declaration visible.** System Settings → General → Device Management → the Jamf profile(s); look for a Restrictions / dictation item | Note what is listed (names only). A dictation item present = the declaration reached this Mac | Not checked 2026-10-01 — the baseline row below answered the question for this Mac |
+| **Baseline outside the app.** Notes; press the dictation key (or Edit → Start Dictation); speak a sentence | Fleet-wide block: no mic / menu item disabled. If text lands, the declaration is absent or not system-wide | ❌ (no block) 2026-10-01 — James's staff Mac, macOS 26.7.1, v1.3.5 Release from `~/Applications`, Jamf-enrolled with the Secure Test managed prefs: dictated text landed in the client's own Enter-a-code field on Your tests, UNLOCKED. No dictation block reaches this Mac. James (2026-10-01): IT planned the dictation declaration for Secure Test but it looks never to have been deployed — so the fleet has no dictation block either, and the in-session rows below are AAC alone |
+| **Real session, short text.** Join a sitting with a short-text and an essay item; once locked, focus the short-text field; press the dictation key; speak | PASS = no mic UI, no text. FAIL = the mic engages and text lands (the 2026-08-27 result). Note whether the mic UI appears without text — the 2026-08-28 "inconsistent" reading | ✅ in part 2026-10-01 — same Mac, REAL AAC session (sitting `RMZZ2A` on `Client rows hand-run 2026-09-08 (copy) (copy)`, demo student): the dictation menu appeared, dictation never started, no text landed. With the Jamf block absent (baseline row), this is AAC on 26.7.1 stopping it — unlike 26.6.2 on 2026-08-27, where text landed. ONE run, and one of the 2026-08-28 runs looked identical before the 2026-08-27 failure was reproduced; not a close of the gap until repeated and seen on a student Mac |
+| **Real session, essay.** Same session; focus the essay; dictation key; speak; then try Edit → Start Dictation if the menu bar is reachable | As above; record the menu path separately | ✅ in part 2026-10-01 — same session: menu appeared, dictation never started, no text. Edit → Start Dictation is NOT reachable: the Edit menu is unavailable once AAC lockdown begins, so the dictation key is the only path |
+| **Answer saved.** If any dictated text landed: leave the field (autosave), hand in, read the answer on the per-student results page | Records whether dictated text reaches the server — the construct-hole severity | N/A 2026-10-01 — nothing landed; the results page reads "Not handed in — 0 of 10 answered" for the attempt |
+| **After the session.** Back in Notes after `DID END` | Same result as the baseline row (the session leaves no lasting dictation state) | |
+| **Exempted student (if IT has one).** A Mac or student scoped OUT of the declaration (a speech-to-text accommodation); real session; dictation key in the essay | Text lands — the accommodation path works. Not exercisable until IT names an exempted device | |
