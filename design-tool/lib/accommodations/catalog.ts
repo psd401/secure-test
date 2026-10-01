@@ -126,8 +126,8 @@ const VISIBLE_IDS: ReadonlySet<string> = new Set([
   "tts_test_content",
   "tts_student_responses",
   "tts_for_ela_reading",
-  "tts_spanish",
   "speech_to_text",
+  // tts_spanish: hidden while Spanish is held (docs/speech-tools-design.md D-6).
 ]);
 
 export function isVisibleAccommodation(id: string): boolean {

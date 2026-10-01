@@ -17,7 +17,6 @@ describe("accommodation visibility", () => {
         "speech_to_text",
         "spell_check",
         "tts_for_ela_reading",
-        "tts_spanish",
         "tts_student_responses",
         "tts_test_content",
         "zoom",
