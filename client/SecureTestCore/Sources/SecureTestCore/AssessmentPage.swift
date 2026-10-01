@@ -325,6 +325,16 @@ public enum AssessmentPage {
       -webkit-user-select: text; user-select: text; }
     ::highlight(tts-word) { background-color: var(--accent); color: var(--accent-ink); }
     .tts-word { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+    /* Answer highlight (follow-up, 2026-10-01): the mirror over a field being
+       read aloud. Box, font and wrapping are copied from the field inline;
+       here only what makes it an invisible, inert overlay — transparent text
+       and border, no background, no pointer, its own scroll hidden. It opts in
+       to user-select: text because WebKit paints no ::highlight without it. */
+    .tts-mirror {
+      position: absolute; margin: 0; overflow: hidden; pointer-events: none;
+      color: transparent; background: transparent; border-style: solid; border-color: transparent;
+      -webkit-user-select: text; user-select: text; z-index: 1;
+    }
     /* STT slice 3: "Speak my answer" under a field. The listening state is the
        pressed fill (the accent pair every contrast set defines) and the field
        carries an accent outline; the volatile "Hearing: …" line is soft ink. */
@@ -471,7 +481,10 @@ public enum AssessmentPage {
        wrap, so at zoom 3X the row becomes three stacked lines inside a taller
        bar instead of overflowing the window; `min-width: 0` lets the label
        shrink rather than push the buttons off the edge. */
-    .pager { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60vh; overflow-y: auto; padding: 0.625rem 2.5rem 0.75rem; background: var(--panel); border-top: 1px solid var(--panel-line); }
+    .pager { position: fixed; left: 0; right: 0; bottom: 0; max-height: 60vh; overflow-y: auto; padding: 0.625rem 2.5rem 0.75rem; background: var(--panel); border-top: 1px solid var(--panel-line);
+      /* Answer highlight: above the read-aloud mirror (z-index 1), so a field
+         scrolled under the bar never shows its highlighted word through it. */
+      z-index: 2; }
     .pager-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
     .pager-row button { font: inherit; padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }
     .pager-row button:disabled { opacity: .4; }
@@ -1265,15 +1278,24 @@ public enum AssessmentPage {
           ttsMarked = seg.el;
           return;
         }
-        if (!seg.node) return;
+        // A student's answer (`seg.field`, slice 2): the range goes into the
+        // mirror over that field — offsets are into the field's value, which
+        // is the mirror's one text node.
+        var node = seg.node;
+        if (seg.field) {
+          var mirror = ttsMirrorFor(seg.field);
+          node = mirror ? mirror.text : null;
+        }
+        if (!node) return;
         var start = seg.kind === 'math' ? seg.start : seg.start + ttsRawOffset(seg.raw, offset);
         var end = seg.kind === 'math' ? seg.end : seg.start + ttsRawOffset(seg.raw, offset + length);
         try {
           if (typeof Highlight !== 'function' || typeof CSS === 'undefined' || !CSS || !CSS.highlights) return;
           var range = document.createRange();
-          range.setStart(seg.node, start);
-          range.setEnd(seg.node, end);
+          range.setStart(node, start);
+          range.setEnd(node, end);
           CSS.highlights.set('tts-word', new Highlight(range));
+          if (seg.field) ttsMirrorReveal(range);
         } catch (e) {}
       }
 
@@ -1285,6 +1307,117 @@ public enum AssessmentPage {
       function ttsRepaint(el) {
         if (!el || !el.style) return;
         el.style.filter = el.style.filter ? '' : 'opacity(1)';
+      }
+
+      // Answer highlight (follow-up, James 2026-10-01): a CSS Custom Highlight
+      // cannot reach inside an <input> / <textarea> — their text is not in the
+      // DOM — so "Read my answer" lays a MIRROR over the field being read: a
+      // div with the field's box, font and wrapping, holding the value as one
+      // text node, its own text transparent so only the highlighted word
+      // paints (the ::highlight rule gives that word the accent pair, drawn
+      // over the field's own copy of it). aria-hidden, pointer-events: none,
+      // never focusable, never posted, never written back: the field is
+      // untouched. One mirror at a time; a table moves it from cell to cell.
+      var ttsMirror = null;   // { field, el, text, onScroll }
+
+      var TTS_MIRROR_STYLE = [
+        'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch',
+        'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'textIndent', 'textTransform',
+        'tabSize', 'boxSizing',
+        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'
+      ];
+
+      // Puts the mirror over the field again and copies its scroll — on every
+      // word, so a page scroll, a resize or the student scrolling the essay is
+      // followed at the next word without a listener of its own.
+      function ttsMirrorPlace() {
+        var m = ttsMirror;
+        if (!m) return;
+        var field = m.field, style = m.el.style;
+        if (typeof field.getBoundingClientRect === 'function') {
+          var rect = field.getBoundingClientRect();
+          var sx = typeof window.scrollX === 'number' ? window.scrollX : 0;
+          var sy = typeof window.scrollY === 'number' ? window.scrollY : 0;
+          style.left = (rect.left + sx) + 'px';
+          style.top = (rect.top + sy) + 'px';
+          style.width = rect.width + 'px';
+          style.height = rect.height + 'px';
+        }
+        // A classic (always-shown) scrollbar narrows the textarea's text
+        // column; widen the mirror's right padding by the same amount so its
+        // lines wrap where the field's do. Zero with macOS overlay scrollbars.
+        if (typeof field.offsetWidth === 'number' && typeof field.clientWidth === 'number' && m.padRight) {
+          var borders = (parseFloat(m.borderLeft) || 0) + (parseFloat(m.borderRight) || 0);
+          var bar = Math.max(0, field.offsetWidth - field.clientWidth - borders);
+          style.paddingRight = 'calc(' + m.padRight + ' + ' + bar + 'px)';
+        }
+        if (typeof field.scrollTop === 'number') m.el.scrollTop = field.scrollTop;
+        if (typeof field.scrollLeft === 'number') m.el.scrollLeft = field.scrollLeft;
+      }
+
+      function ttsMirrorFor(field) {
+        if (ttsMirror && ttsMirror.field === field) {
+          ttsMirrorPlace();
+          return ttsMirror;
+        }
+        ttsMirrorRemove();
+        if (!document.body) return null;
+        var el = document.createElement('div');
+        el.className = 'tts-mirror';
+        el.setAttribute('aria-hidden', 'true');
+        var computed = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(field) : null;
+        if (computed) {
+          TTS_MIRROR_STYLE.forEach(function (name) { el.style[name] = computed[name]; });
+        }
+        // A textarea wraps; an input is one line that scrolls sideways.
+        var multiLine = String(field.tagName || '').toLowerCase() === 'textarea';
+        el.style.whiteSpace = multiLine ? 'pre-wrap' : 'pre';
+        el.style.overflowWrap = multiLine ? 'break-word' : 'normal';
+        var text = document.createTextNode(String(field.value === undefined || field.value === null ? '' : field.value));
+        el.appendChild(text);
+        document.body.appendChild(el);
+        ttsMirror = {
+          field: field, el: el, text: text, onScroll: null,
+          padRight: computed ? computed.paddingRight : null,
+          borderLeft: computed ? computed.borderLeftWidth : null,
+          borderRight: computed ? computed.borderRightWidth : null
+        };
+        // The student scrolling the field mid-read moves the mirror with it.
+        if (typeof field.addEventListener === 'function') {
+          ttsMirror.onScroll = function () { ttsMirrorPlace(); };
+          field.addEventListener('scroll', ttsMirror.onScroll);
+        }
+        ttsMirrorPlace();
+        return ttsMirror;
+      }
+
+      function ttsMirrorRemove() {
+        var m = ttsMirror;
+        if (!m) return;
+        ttsMirror = null;
+        if (m.onScroll && typeof m.field.removeEventListener === 'function') {
+          m.field.removeEventListener('scroll', m.onScroll);
+        }
+        if (m.el.parentNode) m.el.parentNode.removeChild(m.el);
+      }
+
+      // A long essay: the spoken word below (or above) the visible part of the
+      // box scrolls the box so it shows, and the mirror follows. Textareas
+      // only — a single-line input is not scrolled for the reader.
+      function ttsMirrorReveal(range) {
+        var m = ttsMirror;
+        if (!m || String(m.field.tagName || '').toLowerCase() !== 'textarea') return;
+        if (!range || typeof range.getBoundingClientRect !== 'function') return;
+        if (typeof m.el.getBoundingClientRect !== 'function') return;
+        var word = range.getBoundingClientRect();
+        var box = m.el.getBoundingClientRect();
+        var delta = 0;
+        if (word.bottom > box.bottom) delta = word.bottom - box.bottom + (word.bottom - word.top);
+        else if (word.top < box.top) delta = word.top - box.top - (word.bottom - word.top);
+        if (delta === 0) return;
+        m.field.scrollTop = Math.max(0, m.field.scrollTop + delta);
+        m.el.scrollTop = m.field.scrollTop;
       }
 
       function ttsPaint(target) {
@@ -1311,6 +1444,7 @@ public enum AssessmentPage {
         ttsActive = null;
         ttsPost({ action: 'stop' });
         ttsClearHighlight();
+        ttsMirrorRemove();
         ttsPaint(target);
       }
 
@@ -1326,6 +1460,9 @@ public enum AssessmentPage {
         var id = target.id + ':' + TTS_SEQ;
         if (!ttsPost({ action: 'speak', id: id, rate: TTS_RATE, segments: wire })) return;
         ttsActive = { id: id, target: target, segments: segs, paused: false };
+        // Answer highlight: the mirror goes up with the reading for a single
+        // field (a table's moves to each cell as its words arrive).
+        if (target.field) ttsMirrorFor(target.field);
         ttsPaint(target);
       }
 
@@ -1353,6 +1490,9 @@ public enum AssessmentPage {
         var target = {
           id: 'tts-' + TTS_SEQ, el: outline || el, play: play, stop: stop, label: label,
           idle: field ? 'Read my answer' : 'Speak',
+          // Answer highlight: the one input / textarea a mirror goes over (a
+          // table's bar names the table, and gets its mirror per cell).
+          field: field && /^(input|textarea)$/i.test(String(field.tagName || '')) ? field : null,
           collect: typeof collect === 'function' ? collect : function () { return ttsSegments(el); }
         };
         if (field) {
@@ -1394,12 +1534,35 @@ public enum AssessmentPage {
       // command, `^` or `_` (MATH_MARKER_RE) — is read whole through the math
       // mapper; anything else is plain text, which covers the keypad's Unicode
       // symbols (× ≤ ° π …) — the voice says those itself.
-      function ttsTypedSegments(text) {
+      //
+      // Answer highlight: `field` (when given) and each segment's `start` /
+      // `raw` say where in the field's value the segment sits, so a word maps
+      // into the mirror; a value read whole as one formula is highlighted
+      // whole, as formulas are elsewhere.
+      function ttsTypedSegments(text, field) {
         var value = String(text === undefined || text === null ? '' : text);
         var segs = mathSegments(value);
-        if (segs.some(function (seg) { return seg.math; })) return ttsLoose(value);
-        if (MATH_MARKER_RE.test(value)) return [{ kind: 'math', tex: value }];
-        return [ttsSay(value)];
+        if (segs.some(function (seg) { return seg.math; })) {
+          var out = [];
+          var at = 0;
+          segs.forEach(function (seg) {
+            if (seg.math) {
+              var open = seg.text.slice(0, 2) === '$$' ? 2 : 1;
+              out.push({
+                kind: 'math', tex: seg.text.slice(open, seg.text.length - open),
+                field: field, start: at, end: at + seg.text.length
+              });
+            } else {
+              out.push({ kind: 'text', text: seg.text.replace(/\\\$/g, '$'), raw: seg.text, field: field, start: at });
+            }
+            at += seg.text.length;
+          });
+          return out;
+        }
+        if (MATH_MARKER_RE.test(value)) {
+          return [{ kind: 'math', tex: value, field: field, start: 0, end: value.length }];
+        }
+        return [{ kind: 'text', text: value, raw: value, field: field, start: 0 }];
       }
 
       function ttsBlank(text) {
@@ -1409,15 +1572,16 @@ public enum AssessmentPage {
       // "Read my answer" beside one field. Reads the field's value AT THE PRESS
       // — never a copy taken earlier — and touches nothing: no value, no
       // autosave baseline, no dirty flag (it never calls oninput / onchange).
-      // While it reads, the FIELD is outlined; there is no per-word highlight,
-      // because a CSS Custom Highlight range cannot reach inside an <input> /
-      // <textarea> (their text is not in the DOM). Typing in the field being
+      // While it reads, the FIELD is outlined and the spoken word is
+      // highlighted in a mirror laid over it (ttsMirrorFor — a CSS Custom
+      // Highlight range cannot reach inside an <input> / <textarea>, their
+      // text is not in the DOM). Typing in the field being
       // read stops the reading: its `oninput` is chained here, AFTER
       // textAutosave, so the autosave still runs on every keystroke.
       function ttsAnswerBar(field, collect) {
         var bar = ttsBar(field, 'your answer', collect || function () {
           var value = field.value;
-          return ttsBlank(value) ? [ttsSay('No answer yet.')] : ttsTypedSegments(value);
+          return ttsBlank(value) ? [ttsSay('No answer yet.')] : ttsTypedSegments(value, field);
         }, field, field);
         ttsStopWhenTyping(field);
         return bar;
@@ -1646,6 +1810,7 @@ public enum AssessmentPage {
         if (!active) return;
         ttsActive = null;
         ttsClearHighlight();
+        ttsMirrorRemove();
         ttsPaint(active.target);
       }
       window.__secureTestSpeech = {
@@ -1663,6 +1828,8 @@ public enum AssessmentPage {
           if (!active) return;
           ttsHighlight(active.segments[segment], offset, length);
           ttsRepaint(active.target.el);
+          // The same stale-paint fix, on the mirror carrying an answer's word.
+          if (ttsMirror) ttsRepaint(ttsMirror.el);
         },
         finished: ttsEnded,
         cancelled: ttsEnded
@@ -3582,7 +3749,7 @@ public enum AssessmentPage {
             inputs.forEach(function (entry) {
               if (ttsBlank(entry.input.value)) return;
               out.push(ttsSay(entry.input.__ttsName + ': '));
-              out = out.concat(ttsTypedSegments(entry.input.value));
+              out = out.concat(ttsTypedSegments(entry.input.value, entry.input));
               out.push(ttsSay('. '));
             });
             return out.length ? out : [ttsSay('No answer yet.')];
