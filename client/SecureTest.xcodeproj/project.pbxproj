@@ -295,6 +295,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				/* Overrides the project-level YES for THIS TARGET ONLY, and only
 				   for BUILD-TIME script phases - it has nothing to do with
 				   ENABLE_APP_SANDBOX above, which still ships the app sandbox.
@@ -311,6 +312,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -366,6 +369,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				/* Overrides the project-level YES for THIS TARGET ONLY, and only
 				   for BUILD-TIME script phases - it has nothing to do with
 				   ENABLE_APP_SANDBOX above, which still ships the app sandbox.
@@ -382,6 +386,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (

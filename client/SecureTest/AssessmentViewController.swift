@@ -40,6 +40,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// Speak / Pause / Resume / Stop. The page sends the block's spoken form;
     /// the host owns the voice (`SpeechReader`) and calls back per word.
     static let ttsChannel = "tts"
+    /// Speech-to-text slice 3: the page's "Speak my answer" (listen / stop).
+    /// The host owns the microphone (`SpeechListener`) and calls back with the
+    /// live line and each final phrase.
+    static let sttChannel = "stt"
 
     let view: NSView
     private let webView: LockedDownWebView
@@ -52,6 +56,12 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// TTS slice 1: built on the first Speak, so a student without the
     /// accommodation never has a synthesizer at all.
     private var speechReader: SpeechReader?
+    /// STT slice 3: what the pre-flight decided for this attempt — `.off`
+    /// unless the bundle grants `speech_to_text`. The page is built with it,
+    /// and the `stt` channel is refused unless it is `.ready`.
+    private(set) var speechToText: SpeechToTextAvailability = .off
+    /// Built on the first "Speak my answer".
+    private var speechListener: SpeechListener?
     /// On-demand peek: the student-facing notice strip (decision 6.6). The
     /// state is Core's `PeekNotice` (finding 8.1: dismissable, re-shown by
     /// every later peek); the strip below mirrors it — one label plus a
@@ -112,6 +122,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// Kept so later slices can resolve an item id back to the item it answers
     /// (word caps, required-item checks) without re-parsing the payload.
     private(set) var bundle: DeliveryBundle?
+    /// When the server bundle arrived. The time limit counts from HERE
+    /// (`DeliveryBundle.deadline(receivedAt:)`), not from the lockdown begin:
+    /// the STT pre-flight (slice 3, up to 20 s) sits between the two, and a
+    /// countdown started after it would run up to 20 s past the server's
+    /// deadline, eating the 30 s write grace (James, 2026-10-01: preparation
+    /// time comes out of the student's time).
+    private(set) var bundleReceivedAt: Date?
 
     /// Slice 69: the clipboard policy lives on the bundle, so the host cannot
     /// know it until the bundle arrives. Called on the main actor once it has.
@@ -171,6 +188,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     func flushPendingInput(then done: @escaping @MainActor () -> Void) {
         // TTS slice 1: every non-hand-in end comes through here first.
         stopSpeech(reason: "session ending")
+        stopListening(reason: "session ending")
         webView.evaluateJavaScript(
             "window.__secureTestFlushInput ? window.__secureTestFlushInput() : false;"
         ) { _, _ in
@@ -185,6 +203,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         guard !isRetired else { return }
         isRetired = true
         stopSpeech(reason: "attempt screen torn down")
+        stopListening(reason: "attempt screen torn down")
         webView.stopLoading()
         log("assessment controller retired — no further page loads")
     }
@@ -259,6 +278,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         controller.add(self, name: Self.withdrawChannel)
         controller.add(self, name: Self.timerChannel)
         controller.add(self, name: Self.ttsChannel)
+        controller.add(self, name: Self.sttChannel)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         magnificationObservation = webView.observe(\.magnification, options: [.new]) {
@@ -301,8 +321,27 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                         return
                     }
                     self.bundle = bundle
+                    self.bundleReceivedAt = Date()
                     self.log("bundle fetched: \(bundle.items.count) items")
                     self.log("tts: \(TextToSpeechScope(accommodations: bundle.accommodations).logDescription)")
+                    // STT slice 3 (PoC-A finding #16): the microphone and
+                    // speech-recognition prompts and the transcriber's assets
+                    // are settled HERE — after the bundle says the student is
+                    // granted `speech_to_text`, and before `onBundleLoaded`,
+                    // which is what begins lockdown. A first prompt inside the
+                    // session would be hidden behind the lockout and hang.
+                    // Capped (`SpeechToText.preflightBudget`); any outcome
+                    // other than ready proceeds without speech-to-text. A
+                    // student without the grant skips this entirely, so their
+                    // begin sequence is unchanged.
+                    if SpeechToText.isGranted(bundle.accommodations) {
+                        let report = await SpeechPreflight.run(log: self.log)
+                        self.speechToText = report.availability
+                        guard !self.isRetired else {
+                            self.log("stt pre-flight completed after the attempt screen went away — discarded")
+                            return
+                        }
+                    }
                     self.onBundleLoaded?(bundle)
                     // C-1: `onBundleLoaded` is what begins lockdown, and the
                     // AAC begin() transition resizes the window — so build the
@@ -341,7 +380,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                             return
                         }
                     }
-                    self.loadHostPage(AssessmentPage.html(title: bundle.title, bundleJSON: json))
+                    self.loadHostPage(AssessmentPage.html(
+                        title: bundle.title, bundleJSON: json, speechToText: self.speechToText))
                 } catch {
                     // Refusing beats rendering a partial test: a student handed
                     // fewer items than assigned has no way to know.
@@ -707,6 +747,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             handleSpeech(message.body)
             return
         }
+        if message.name == Self.sttChannel {
+            handleDictation(message.body)
+            return
+        }
         guard message.name == Self.responseChannel else {
             blocked("message on unexpected channel", detail: message.name)
             return
@@ -807,6 +851,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     private func handleSubmit() {
         // TTS slice 1: the page stopped its own reading on Finish; make sure.
         stopSpeech(reason: "hand-in")
+        stopListening(reason: "hand-in")
         guard case .server(let client, _, let attemptID) = source else {
             log("submit ignored: no server session")
             return
@@ -884,6 +929,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
         do {
             let command = try SpeechCommand.decode(fromMessageBody: body)
+            // STT slice 3: never speaking and listening at once.
+            if case .speak = command { stopListening(reason: "read-aloud started") }
             let reader = speechReader ?? SpeechReader(log: log) { [weak self] script in
                 self?.webView.evaluateJavaScript(script, completionHandler: nil)
             }
@@ -898,6 +945,36 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// screen — hand-in, a session end, the teardown, a quit.
     func stopSpeech(reason: String) {
         speechReader?.stop(reason: reason)
+    }
+
+    // MARK: speech-to-text (slice 3)
+
+    /// The page's `stt` channel. Refused unless this attempt's pre-flight came
+    /// back ready (finding #16, rule 2: the engine never starts inside a
+    /// session on a permission that was not already granted). The page draws
+    /// no control otherwise, so a message here is a renderer bug.
+    private func handleDictation(_ body: Any) {
+        guard speechToText == .ready else {
+            blocked("stt message without a ready pre-flight")
+            return
+        }
+        do {
+            let command = try DictationCommand.decode(fromMessageBody: body)
+            if case .listen = command { stopSpeech(reason: "listening started") }
+            let listener = speechListener ?? SpeechListener(log: log) { [weak self] script in
+                self?.webView.evaluateJavaScript(script, completionHandler: nil)
+            }
+            speechListener = listener
+            listener.handle(command)
+        } catch {
+            blocked("malformed stt message", detail: "\(error)")
+        }
+    }
+
+    /// Turns the microphone off, if it is on. Called beside `stopSpeech` on
+    /// every way off the attempt screen.
+    func stopListening(reason: String) {
+        speechListener?.stop(reason: reason)
     }
 
     // MARK: drawing uploads

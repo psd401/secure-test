@@ -5,5 +5,6 @@
 # com.apple.developer.team-identifier) are checked by step 2b, not here.
 com.apple.developer.automatic-assessment-configuration
 com.apple.security.app-sandbox
+com.apple.security.device.audio-input
 com.apple.security.files.user-selected.read-only
 com.apple.security.network.client

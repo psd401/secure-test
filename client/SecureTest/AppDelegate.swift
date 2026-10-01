@@ -567,7 +567,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.beginLockdown()
                 // Time limit (D-2): the deadline is computed from the bundle's
                 // own two instants at RECEIPT — `ends_at − server_now` added to
-                // this Mac's now — so a skewed clock counts the right number of
+                // this Mac's clock when the bundle arrived (before any STT
+                // pre-flight) — so a skewed clock counts the right number of
                 // seconds. Absent on an assessment with no limit, and on the
                 // offline path, where there is no attempt to run out.
                 self?.startCountdownIfNeeded(for: bundle)
@@ -677,7 +678,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startCountdownIfNeeded(for bundle: DeliveryBundle) {
         countdown?.stop()
         countdown = nil
-        guard let deadline = bundle.deadline() else { return }
+        guard let deadline = bundle.deadline(receivedAt: controller?.bundleReceivedAt ?? Date()) else { return }
         Self.log("time limit: \(Int(deadline.timeIntervalSinceNow))s left on this attempt")
         startCountdown(deadline: deadline)
     }
@@ -1218,6 +1219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // TTS slice 1: the read-aloud stops with the first quit request, not
         // after the session's end round trip.
         controller?.stopSpeech(reason: "quit")
+        controller?.stopListening(reason: "quit")
         guard let lockdown, lockdown.isActive, !terminatingAfterLockdown else {
             return .terminateNow
         }

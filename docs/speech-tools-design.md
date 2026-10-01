@@ -176,3 +176,32 @@ harness), not the shipping client, so nothing half-built rides a release.
   field being read stops it, as do the slice-1 stops. `MathSpeech` gained
   "λ". Rows: `client/MANUAL-CHECKS.md` "Text-to-speech — student responses
   (slice 2, 2026-10-01)", none run.
+- **§Progress — slice 3 (STT) BUILT 2026-10-01, not committed, rows NOT
+  RUN.** Pre-flight (PoC-A finding #16): in `AssessmentViewController`'s
+  server fetch Task, after the bundle is fetched and BEFORE `onBundleLoaded`
+  (which begins lockdown) — only when `SpeechToText.isGranted` — `SpeechPreflight`
+  requests the microphone, then speech recognition, checks
+  `SpeechTranscriber` (en-US) and installs its assets; capped at 20 s, any
+  other outcome than ready proceeds without STT; students without the grant
+  skip it, so their begin sequence is unchanged. The result
+  (`SpeechToTextPreflight.availability` → `STT_STATE`) builds the page: `ready`
+  draws "Speak my answer" under short text, essay and E12 outline (tables not
+  in v1); `unavailable` draws a notice. App: `SpeechListener`
+  (`SpeechAnalyzer` + `SpeechTranscriber`, `AVAudioEngine` tap → converter,
+  the spike's code) behind a new `stt` channel, refused unless ready and
+  started only on already-authorized permissions; 60 s cap, 10 s silence
+  stop. Core: grant, pre-flight outcome, `DictationTranscript` (volatile shown
+  as "Hearing: …", final phrases spaced / capitalised against the caret's
+  context), `DictationTimeout`, channel codecs. The page inserts each final
+  phrase at the caret and runs the field's own `oninput` (preview, word
+  count, autosave as for typing), saves on stop, stops on typing in the
+  field, page turn, Finish, read-aloud starting; the host stops on every
+  session end, teardown and quit, and stops read-aloud when listening starts.
+  Entitlement `com.apple.security.device.audio-input` (via
+  `ENABLE_RESOURCE_ACCESS_AUDIO_INPUT`, also in
+  `client/expected-entitlements.txt`), both usage strings. The time limit
+  counts from the bundle's ARRIVAL, before the pre-flight (James,
+  2026-10-01, option b): preparation time comes out of the student's time
+  (up to 20 s, in practice only on first use on a Mac), so the client's zero
+  matches the server's deadline and the full 30 s write grace stays intact. Rows: `client/MANUAL-CHECKS.md`
+  "Speech-to-text (slice 3, 2026-10-01)", none run.

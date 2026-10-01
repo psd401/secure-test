@@ -29,12 +29,17 @@ public enum AssessmentPage {
     ///     is a field of those bytes, so no caller has to learn a new argument
     ///     for the page to honour a student's settings. Passing the map
     ///     explicitly is for tests.
+    ///   - speechToText: STT slice 3. What the host's pre-flight (run before
+    ///     lockdown, only for a student granted `speech_to_text`) came back
+    ///     with; the page draws the "Speak my answer" control only for
+    ///     `.ready`. Every caller without a pre-flight leaves it `.off`.
     public static func html(
         title: String,
         bundleJSON: String,
         offline: Bool = false,
         katex: KatexBundle.Assets = KatexBundle.shared,
-        accommodations: [String: String]? = nil
+        accommodations: [String: String]? = nil,
+        speechToText: SpeechToTextAvailability = .off
     ) -> String {
         let accommodations = accommodations ?? accommodationsIn(bundleJSON)
         return PageShell.document(
@@ -51,6 +56,9 @@ public enum AssessmentPage {
                 // TTS slice 1: which blocks carry a Speak control, resolved in
                 // Swift from the same map (`TextToSpeechScope`).
                 TextToSpeechScope(accommodations: accommodations).pageScript,
+                // STT slice 3: the pre-flight's result, decided by the host
+                // before lockdown; `.off` for every student not granted it.
+                speechToText.pageScript,
                 KatexBundle.macrosScript,
                 rendererScript,
             ],
@@ -311,6 +319,21 @@ public enum AssessmentPage {
     .tts-reading { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
     ::highlight(tts-word) { background-color: var(--accent); color: var(--accent-ink); }
     .tts-word { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+    /* STT slice 3: "Speak my answer" under a field. The listening state is the
+       pressed fill (the accent pair every contrast set defines) and the field
+       carries an accent outline; the volatile "Hearing: …" line is soft ink. */
+    .stt-bar { margin: 0 0 0.5rem; }
+    .stt-toggle {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .stt-toggle.listening { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .stt-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .stt-hearing { margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--ink-soft); font-style: italic; }
+    .stt-hearing[hidden] { display: none; }
+    .stt-listening { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .stt-notice { margin: 0 0 1rem; font-size: 0.875rem; color: var(--warn); }
     /* C-4 / D-7 (2026-09-09, docs/multi-source-stimulus-design.md): a picture in
        a stem, a stimulus or a source opens full-window on click, Enter or Space
        — a chart imported from a PDF prints at a size nobody can read. The scrim
@@ -1276,6 +1299,8 @@ public enum AssessmentPage {
 
       function ttsSpeak(target) {
         ttsStop();
+        // STT slice 3: never speaking and listening at once.
+        sttStop();
         var segs = target.collect();
         var wire = segs.map(function (seg) {
           return seg.kind === 'math' ? { kind: 'math', tex: seg.tex } : { kind: 'text', text: seg.text };
@@ -1387,6 +1412,184 @@ public enum AssessmentPage {
           if (ttsActive && ttsActive.target.el === field) ttsStop();
           if (typeof prior === 'function') return prior.call(field, event);
         };
+      }
+
+      // Speech-to-text slice 3 (docs/speech-tools-design.md, D-2 = B, D-3).
+      // "Speak my answer" under each short text, essay and E12 outline — only
+      // when the host says the pre-flight it ran BEFORE lockdown came back
+      // ready (STT_STATE, from `SpeechToTextAvailability`): microphone and
+      // recognition already allowed, the transcriber's assets on this Mac.
+      // 'unavailable' draws no control and one notice; 'off' (not granted, or
+      // a page without the constant) draws nothing at all. Tables are not in
+      // v1.
+      //
+      // The host owns the microphone and the recognizer and decides the
+      // spacing of each phrase (`DictationTranscript`, Core); the page sends
+      // where the caret is, shows the volatile "Hearing: …" line, and puts each
+      // final phrase into the field at the caret — then runs the field's own
+      // `oninput`, so the preview, the word count and the autosave behave
+      // exactly as if the phrase had been typed. One field listens at a time,
+      // and never while read-aloud is speaking.
+      var STT = typeof STT_STATE === 'string' ? STT_STATE : 'off';
+      var STT_SEQ = 0;
+      // { id, ctl, at, end } while a field listens — `at` / `end` are the
+      // insertion point, kept here rather than read back from the caret, so the
+      // host's spacing (decided against the text it was told was before it)
+      // stays true.
+      var sttActive = null;
+      // The last field to stop, still taking the phrases the recognizer
+      // finalizes after Stop until the host says `stopped`.
+      var sttFinishing = null;
+      // Set while the page itself runs a field's oninput after an insertion,
+      // so that insertion is not mistaken for the student typing.
+      var sttInserting = false;
+
+      function sttPost(body) {
+        try {
+          window.webkit.messageHandlers.stt.postMessage(body);
+          return true;
+        } catch (e) {
+          console.log('stt post failed: ' + (e && e.message));
+          return false;
+        }
+      }
+
+      function sttPaint(ctl) {
+        var on = !!(sttActive && sttActive.ctl === ctl);
+        ctl.button.textContent = on ? 'Stop listening' : 'Speak my answer';
+        ctl.button.setAttribute('aria-pressed', on ? 'true' : 'false');
+        ttsClass(ctl.button, 'listening', on);
+        ttsClass(ctl.field, 'stt-listening', on);
+        if (!on) ctl.hearing.textContent = '';
+        if (on) ctl.hearing.removeAttribute('hidden');
+        else ctl.hearing.setAttribute('hidden', '');
+      }
+
+      // Stops listening, page side and host side. The phrase the recognizer
+      // is still finalizing may arrive after this and is still inserted
+      // (sttFinishing). Called on a page turn, Finish, read-aloud starting,
+      // typing in the field, and the button; the host also stops on its own
+      // on every session end. Saves the field: an inserted phrase is not a
+      // keystroke, so no `change` will follow it on blur.
+      function sttStop() {
+        if (!sttActive) return;
+        var active = sttActive;
+        sttActive = null;
+        sttFinishing = active;
+        sttPost({ action: 'stop' });
+        sttPaint(active.ctl);
+        flushAllText();
+      }
+
+      function sttStart(ctl) {
+        sttStop();
+        ttsStop();
+        var field = ctl.field;
+        var value = String(field.value === undefined || field.value === null ? '' : field.value);
+        var at = typeof field.selectionStart === 'number' ? field.selectionStart : value.length;
+        var end = typeof field.selectionEnd === 'number' ? field.selectionEnd : at;
+        if (at > end) { var swap = at; at = end; end = swap; }
+        STT_SEQ += 1;
+        var id = 'stt-' + STT_SEQ;
+        var sent = sttPost({
+          action: 'listen', id: id,
+          before: value.slice(Math.max(0, at - 16), at),
+          after: value.slice(end, end + 1),
+          single_line: String(field.tagName || '').toLowerCase() === 'input'
+        });
+        if (!sent) return;
+        sttActive = { id: id, ctl: ctl, at: at, end: end };
+        sttFinishing = null;
+        sttPaint(ctl);
+      }
+
+      function sttFor(id) {
+        if (sttActive && sttActive.id === id) return sttActive;
+        if (sttFinishing && sttFinishing.id === id) return sttFinishing;
+        return null;
+      }
+
+      // One final phrase into the field: the selection the student had (the
+      // first time) or the end of the last phrase, replaced by `text` exactly
+      // as the host spaced it; then the field's own input path.
+      function sttInsert(state, text) {
+        var field = state.ctl.field;
+        var value = String(field.value === undefined || field.value === null ? '' : field.value);
+        var at = Math.min(state.at, value.length);
+        var end = Math.min(Math.max(state.end, at), value.length);
+        field.value = value.slice(0, at) + text + value.slice(end);
+        state.at = at + text.length;
+        state.end = state.at;
+        if (typeof field.setSelectionRange === 'function') field.setSelectionRange(state.at, state.at);
+        sttInserting = true;
+        try {
+          if (typeof field.oninput === 'function') field.oninput({ type: 'input' });
+        } finally {
+          sttInserting = false;
+        }
+      }
+
+      window.__secureTestDictation = {
+        started: function () {},
+        hearing: function (id, text) {
+          if (!sttActive || sttActive.id !== id) return;
+          sttActive.ctl.hearing.textContent = text ? 'Hearing: ' + text : '';
+        },
+        insert: function (id, text) {
+          var state = sttFor(id);
+          if (state && typeof text === 'string' && text) sttInsert(state, text);
+        },
+        // The host stopped (Stop, 60 s, silence, an error) and has delivered
+        // every final phrase.
+        stopped: function (id) {
+          if (sttActive && sttActive.id === id) {
+            var active = sttActive;
+            sttActive = null;
+            sttPaint(active.ctl);
+          }
+          if (sttFinishing && sttFinishing.id === id) sttFinishing = null;
+          flushAllText();
+        }
+      };
+
+      // The control for one field: the toggle and its "Hearing: …" line.
+      function sttControl(field) {
+        var wrap = document.createElement('div');
+        wrap.className = 'stt-bar';
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'stt-toggle';
+        var hearing = document.createElement('p');
+        hearing.className = 'stt-hearing';
+        // Rewritten many times a second while a phrase firms up; announcing
+        // each rewrite would talk over the student.
+        hearing.setAttribute('aria-live', 'off');
+        var ctl = { field: field, button: button, hearing: hearing };
+        // Slice 2's rule: a pointer press keeps focus (and the caret) in the
+        // field — a blur would fire `change` and move the insertion point.
+        button.onpointerdown = function (e) {
+          if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        };
+        button.onclick = function () {
+          if (sttActive && sttActive.ctl === ctl) sttStop();
+          else sttStart(ctl);
+        };
+        // Typing in the listening field stops listening — the student has
+        // taken over. Chained after textAutosave, which still runs.
+        var prior = field.oninput;
+        field.oninput = function (event) {
+          if (!sttInserting && sttActive && sttActive.ctl === ctl) sttStop();
+          if (typeof prior === 'function') return prior.call(field, event);
+        };
+        wrap.appendChild(button);
+        wrap.appendChild(hearing);
+        sttPaint(ctl);
+        return wrap;
+      }
+
+      // Puts `node` straight after `field` in the field's parent.
+      function afterField(field, node) {
+        field.parentNode.insertBefore(node, field.nextSibling);
       }
 
       // The page-wide speed, three steps. Applies from the next Speak — a rate
@@ -1896,6 +2099,10 @@ public enum AssessmentPage {
         }
         // After the restore, so the saved text is the baseline (D-3).
         textAutosave(input, sendShortText);
+        // STT slice 3 then TTS slice 2, each straight after the field — so
+        // the order is field, Read my answer, Speak my answer, then the hint
+        // and preview.
+        if (STT === 'ready') afterField(input, sttControl(input));
         // TTS slice 2: under the field, above its hint and preview.
         if (TTS.responses === true) wrap.insertBefore(ttsAnswerBar(input), input.nextSibling);
         return wrap;
@@ -1993,6 +2200,8 @@ public enum AssessmentPage {
         // After the restore, so the saved text is the baseline (D-3). The
         // word counter's own `oninput` is chained, not replaced.
         textAutosave(area, sendEssay);
+        // STT slice 3: under the box (after Read my answer), above its count.
+        if (STT === 'ready') afterField(area, sttControl(area));
         // TTS slice 2: under the box, above its word count.
         if (TTS.responses === true) wrap.insertBefore(ttsAnswerBar(area), area.nextSibling);
 
@@ -3434,6 +3643,8 @@ public enum AssessmentPage {
           button.disabled = true;
           // TTS slice 1: handing in ends the reading (the host stops too).
           ttsStop();
+          // STT slice 3: and the listening, saving what it inserted.
+          sttStop();
           // Auto-save flush point (D-8), BEFORE the submit goes: a drawing
           // changed in the last five seconds would otherwise be handed in
           // unsaved. The host's upload gate is the other half — it holds the
@@ -3591,6 +3802,15 @@ public enum AssessmentPage {
       // TTS slice 1: one speed control for the page, under the heading with
       // the time strip, so it stays put through every page turn.
       if (TTS_ON) root.appendChild(ttsRateControl());
+      // STT slice 3: the pre-flight before lockdown did not come back ready
+      // for a student who is granted speech-to-text.
+      if (STT === 'unavailable') {
+        var sttNotice = document.createElement('p');
+        sttNotice.className = 'stt-notice';
+        sttNotice.setAttribute('role', 'status');
+        sttNotice.textContent = 'Speech-to-text isn\u2019t available on this Mac \u2014 tell your teacher.';
+        root.appendChild(sttNotice);
+      }
       var setAtFirst = {};   // item id → set that opens there
       var setOfItem = {};    // item id → set it belongs to
       var indexOf = {};
@@ -3770,6 +3990,8 @@ public enum AssessmentPage {
           area.appendChild(ta);
           // TTS slice 2: the outline is the student's own writing too.
           if (TTS.responses === true) area.appendChild(ttsAnswerBar(ta));
+          // STT slice 3: and can be dictated.
+          if (STT === 'ready') area.appendChild(sttControl(ta));
           area.appendChild(status);
           block.appendChild(area);
         }
@@ -4085,6 +4307,8 @@ public enum AssessmentPage {
           flushAllDrawings();
           // TTS slice 1: what was being read leaves the screen with its page.
           ttsStop();
+          // STT slice 3: so does the field that was listening.
+          sttStop();
           at = n;
           pages.forEach(function (page, i) {
             if (i === n) page.el.removeAttribute('hidden');

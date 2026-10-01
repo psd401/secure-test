@@ -1955,3 +1955,47 @@ lockdown; the last needs a REAL AAC session.
 | **Keyboard + contrast.** Keyboard navigation OFF, `color_contrast` = Yellow on Black, `zoom` = 2.5X: Tab from the field to Read my answer, Space, Tab to Stop, Space | Every control reachable and ringed; the field outline is visible in the contrast set; nothing clipped at 2.5X | |
 | **Stops.** Read an answer, then: turn the page; Finish and hand in | The voice stops each time | |
 | **Real session.** REAL AAC session (Release build, Finder launch), `tts_student_responses` = On: type an essay sentence and a keypad fraction; Read my answer on each; then let the time limit run out (or the teacher Close) mid-reading | Audible inside the locked session; the voice stops at once on the end path and does not continue over the sheet; on resume the typed answers are intact (reading changed nothing) | |
+
+
+## Speech-to-text (slice 3, 2026-10-01)
+
+`docs/speech-tools-design.md` slice 3 (D-2 on-device `SpeechAnalyzer` /
+`SpeechTranscriber`, D-3 prompt only for granted students before lockdown;
+PoC-A RESULTS finding #16). For a student whose bundle grants
+`speech_to_text`, the client asks for the microphone and speech recognition
+and installs the transcriber's assets AFTER the bundle arrives and BEFORE the
+secure session begins (stderr `stt: pre-flight mic=… recognition=…
+transcriber=… assets=… → ready|unavailable`; capped at 20 s). Only `ready`
+draws "Speak my answer" under short text, essay and the E12 outline (not
+tables in v1); anything else shows "Speech-to-text isn't available on this
+Mac — tell your teacher." and no control. A student not granted it never sees
+a prompt. Unit tests cover the gating, the pre-flight outcome, the phrase
+spacing, the auto-stop and the page in JavaScriptCore; nothing below has been
+run. Microphone state between rows: `tccutil reset Microphone
+net.psd401.securetest.client` and `tccutil reset SpeechRecognition
+net.psd401.securetest.client` start a Mac fresh. Launch from Finder (`open`),
+not Terminal — a Terminal launch charges the microphone request to Terminal
+(finding #16). Fixture: a paged assessment with a short text, an essay, an
+E12 set with an inline outline, a table, and a multiple-choice stem for the
+TTS row.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Time limit counts from the bundle's arrival.** Timed fixture, granted student, first launch on a Mac (`tccutil reset` both): leave the first prompt open ~10 s before Allow | stderr `time limit: Ns left` is the full limit MINUS the preparation time (not the full limit); at the end the client's "Time is up." lands within a second or two of the server's deadline (the Monitor's row), and the last answer saves (30 s write grace intact) | |
+| **Granted, first launch.** Reset both permissions; `speech_to_text` = On; join under simulated lockdown | After the bundle loads and BEFORE the session starts: the microphone prompt, then the speech-recognition prompt; Allow both; stderr `stt: pre-flight … → ready`; the test opens with "Speak my answer" under the short text, essay and outline, none under the table | |
+| **Already granted.** Rejoin the same attempt | No prompt; pre-flight `→ ready` in about a second (asset check only); the controls are there | |
+| **Denied.** Reset; join; Don't Allow the microphone | The test still opens, no control anywhere, the notice "Speech-to-text isn't available on this Mac — tell your teacher." under the heading; stderr `mic=denied … → unavailable`. Later joins show the notice again until the permission is turned on in System Settings | |
+| **Not granted.** `speech_to_text` = Off (or no row); permissions reset | No prompt at any point, no control, no notice; stderr has NO `stt: pre-flight` line — the begin sequence is unchanged | |
+| **Prompt left open.** Reset; join; leave the microphone prompt unanswered for 20 s | The session begins anyway after ~20 s (`TIMED OUT → unavailable`), the notice shows, the test works; answering the prompt later does not start anything | |
+| **Asset download, fresh Mac.** On a Mac (or user) that has never used dictation / speech: granted student, first join | stderr `stt: transcriber assets downloading` before the session; `→ ready` if it finishes within the 20 s budget, otherwise `→ unavailable` with the notice (rejoin later: ready). Note the time it took | |
+| **Dictate into short text.** Click in the short text, "Speak my answer", say a short phrase, then "Stop listening" | While speaking "Hearing: …" shows the words firming up; the final phrase lands at the caret with a capital at the start of the field; the math preview updates; the button and the field show the listening state (accent fill / outline) while on | |
+| **Dictate into essay and outline.** Type "The result was", dictate "higher than expected", then dictate a second sentence; repeat in the outline | "The result was higher than expected." with one space between (no double, no missing); the second sentence starts with a capital after the full stop; the word count updates; same in the outline | |
+| **Autosave after dictation.** Dictate into the essay, wait 6 s without touching anything; check the Monitor / per-student page | The dictated text is saved (as typed text would be) without leaving the field; also saved at once on Stop listening | |
+| **One at a time.** Listening in the essay, press Speak my answer under the short text | The essay stops (button back to Speak my answer), the short text listens | |
+| **TTS / STT exclusion.** `tts_test_content` = Items and `tts_student_responses` = On as well: Speak a question, then press Speak my answer; then while listening press Speak / Read my answer | Starting to listen stops the voice at once; starting to read stops the listening; never both | |
+| **Auto-stop.** Start listening and say nothing for 10 s; then start and talk continuously for over a minute | Stops on its own after ~10 s of silence (stderr `stt: stopped (silence)`); stops at 60 s however much is said (`(max)`); whatever was finalized is in the field | |
+| **Stops.** Listening, then in turn: type a key in the field; turn the page; Finish and hand in | Each stops the listening (stderr `stt: stopped (…)`), and what was dictated before is in the field / handed in | |
+| **Keyboard.** Keyboard navigation OFF: Tab to Speak my answer, Space, speak, Space | Reached and ringed; dictated text goes where the caret was in the field | |
+| **Real session, ready.** REAL AAC session (Release build from Finder, already granted from a row above): dictate a sentence into the essay and a phrase into the short text; hand in | Text lands inside the locked session with no prompt and no network; the handed-in answers on the per-student page carry the dictated text; stderr has the lengths only, never the words | |
+| **Real session, end paths.** REAL AAC session, listening in the essay, then in separate runs: the time limit reaches zero, the teacher Closes the session, Cmd-E, Cmd-Q | The microphone stops at once on each (the menu-bar microphone indicator goes away; stderr `stt: stopped (session ending)` / `(attempt screen torn down)` / `(quit)`); the dictated text up to that point is saved | |
+| **Real session, first prompt never inside.** Reset both permissions; REAL AAC session for a granted student | Both prompts appear BEFORE the screen locks (finding #16's hang cannot happen); if they are dismissed, the session starts without speech-to-text and the notice shows | |
