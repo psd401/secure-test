@@ -205,3 +205,17 @@ harness), not the shipping client, so nothing half-built rides a release.
   (up to 20 s, in practice only on first use on a Mac), so the client's zero
   matches the server's deadline and the full 30 s write grace stays intact. Rows: `client/MANUAL-CHECKS.md`
   "Speech-to-text (slice 3, 2026-10-01)", none run.
+
+## Follow-ups (from the 2026-10-01 sitting)
+
+- **Highlight words in a student's answer** (James, 2026-10-01). "Read my
+  answer" outlines the field but cannot highlight the spoken word: a CSS
+  highlight range does not reach inside an `<input>` / `<textarea>`. A
+  mirror element laid over the field (same font, padding, wrapping, scroll)
+  carrying the highlight would do it; unbuilt.
+- Rows still open: order / match / table options, Stimuli-only, Off, ELA
+  reading, keyboard-only, contrast + zoom, every stop path, the prose-dollar
+  and fallback math reads, denied / prompt-left-open / asset download on a
+  fresh Mac, the time-limit row on a FRESH attempt, and the real-session
+  end paths.
+
