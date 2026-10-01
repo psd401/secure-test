@@ -148,6 +148,29 @@ unset DATABASE_URL SECRET
 (The `!` shell in Claude Code runs each line in a fresh shell, so exported
 variables do not survive between lines there — use a normal terminal.)
 
+### Speech-to-text pre-flight outcomes (read-only)
+
+How often the client's speech-to-text pre-flight comes back ready, per day
+(`docs/speech-tools-design.md` §Progress, 2026-10-01). Counts only — no
+attempt, student or sitting column is selected. Write it to a file (change
+`14` for a longer window) and run `scripts/query-aurora.sh <file.sql>`:
+
+```sql
+select (at at time zone 'America/Los_Angeles')::date as day,
+       coalesce(detail->>'outcome', '(none)') as outcome,
+       coalesce(detail->>'step', '') as step,
+       count(*) as events
+from attempt_events
+where kind = 'speech_preflight'
+  and at >= now() - interval '14 days'
+group by 1, 2, 3
+order by 1 desc, 2, 3;
+```
+
+Each join by a student granted `speech_to_text` posts one row, so a student
+who rejoins counts twice; `denied` + `microphone` is the one a teacher can
+fix (System Settings → Privacy & Security → Microphone, before the test).
+
 ## Tear down
 
 ```bash

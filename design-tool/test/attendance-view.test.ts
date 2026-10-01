@@ -10,6 +10,7 @@ import {
   eventLabel,
   practiceHasAttempt,
   practiceStatusLine,
+  speechToTextNote,
   statusLabel,
   studentState,
   type AttendanceRow,
@@ -328,5 +329,30 @@ describe("practiceHasAttempt (docs/practice-sitting-design.md, D-5/D-6)", () => 
 
   test("submitted with an attempt: enabled", () => {
     expect(practiceHasAttempt(row({ status: "submitted", attempt_id: "a" }))).toBe(true);
+  });
+});
+
+// Speech-to-text failure visibility (2026-10-01): the Monitor row's note.
+describe("speechToTextNote", () => {
+  test("a joined row whose pre-flight was not ready gets the note", () => {
+    expect(speechToTextNote({ status: "in_progress", speech_to_text_unavailable: true })).toBe(
+      "Speech-to-text unavailable on this Mac",
+    );
+    expect(speechToTextNote({ status: "submitted", speech_to_text_unavailable: true })).toBe(
+      "Speech-to-text unavailable on this Mac",
+    );
+  });
+
+  test("no note when ready, absent, or not this sitting's attempt", () => {
+    expect(speechToTextNote({ status: "in_progress", speech_to_text_unavailable: false })).toBeNull();
+    expect(speechToTextNote({ status: "in_progress" })).toBeNull();
+    expect(speechToTextNote({ status: "not_joined", speech_to_text_unavailable: true })).toBeNull();
+    expect(
+      speechToTextNote({ status: "submitted_earlier", speech_to_text_unavailable: true }),
+    ).toBeNull();
+  });
+
+  test("the event kind has plain words for the monitor's label", () => {
+    expect(eventLabel("speech_preflight")).toBe("Speech-to-text checked");
   });
 });

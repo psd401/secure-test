@@ -46,6 +46,29 @@ function clientErrorText(detail: Record<string, unknown> | null | undefined): st
   return `The app hit a problem: ${kind}`;
 }
 
+/**
+ * Speech-to-text (docs/speech-tools-design.md §Progress, 2026-10-01): the
+ * pre-flight's outcome in a teacher's words. The events route stores only
+ * `{ outcome, step? }` from closed lists; anything unreadable says
+ * "unavailable" plainly rather than guessing a cause.
+ */
+export function speechPreflightText(detail: Record<string, unknown> | null | undefined): string {
+  const outcome = detail?.outcome;
+  const step = detail?.step;
+  if (outcome === "ready") return "Speech-to-text ready";
+  const prefix = "Speech-to-text unavailable";
+  if (outcome === "denied") {
+    if (step === "microphone") return `${prefix} — microphone permission denied`;
+    if (step === "recognition") return `${prefix} — speech recognition permission denied`;
+    return `${prefix} — permission denied`;
+  }
+  if (outcome === "timed_out") return `${prefix} — timed out while preparing`;
+  if (outcome === "unavailable" && step === "assets")
+    return `${prefix} — could not finish setting up on this Mac`;
+  if (outcome === "unavailable") return `${prefix} — not supported on this Mac`;
+  return prefix;
+}
+
 /** The one-event sentences. Unknown kinds fall back to the monitor's label. */
 function lineText(event: TimelineEvent): string {
   switch (event.kind) {
@@ -63,6 +86,8 @@ function lineText(event: TimelineEvent): string {
       return "Back in the test";
     case "client_error":
       return clientErrorText(event.detail);
+    case "speech_preflight":
+      return speechPreflightText(event.detail);
     case "deadline_extended":
       // Remove time limit (2026-09-24): the same event kind carries the
       // teacher's "No time limit" as `detail.no_limit`. It has no `ends_at`,

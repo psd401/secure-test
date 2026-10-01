@@ -64,6 +64,15 @@ describe("formatIntegrityLine", () => {
     expect(formatIntegrityLine([{ kind: "quit" }])).toBe("Quit the app");
   });
 
+  test("speech_preflight is tolerated in input but never printed (2026-10-01)", () => {
+    // A setup check, not an integrity event; a count cannot say how it came
+    // out, so the per-student timeline carries it instead.
+    expect(formatIntegrityLine([{ kind: "speech_preflight" }])).toBe(NO_EVENTS);
+    expect(
+      formatIntegrityLine([{ kind: "speech_preflight" }, { kind: "focus_loss" }]),
+    ).toBe("Left the test window");
+  });
+
   test("focus_regained is tolerated in input but never printed (P5-2)", () => {
     // Alone, it produces no line at all rather than a redundant
     // "Came back to the test window" sentence.

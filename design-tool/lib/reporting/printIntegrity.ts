@@ -81,6 +81,9 @@ const KIND_ORDER = [
 
 export const NO_EVENTS = "No integrity events";
 
+/** Kinds counted but never printed (see `integrityPhrases`). */
+const NOT_PRINTED: ReadonlySet<string> = new Set(["focus_regained", "speech_preflight"]);
+
 export function countByKind(
   events: ReadonlyArray<{ kind: string }>,
 ): Map<string, number> {
@@ -95,9 +98,12 @@ export function integrityPhrases(
 ): string[] {
   const counts = countByKind(events);
   // P5-2: focus_regained is tolerated (counted, never throws) but never
-  // printed — it only duplicates the paired focus_loss count.
+  // printed — it only duplicates the paired focus_loss count. Speech-to-text's
+  // `speech_preflight` (2026-10-01) is skipped the same way: it is a setup
+  // check, not an integrity event, and a count cannot say how it came out —
+  // the per-student page's timeline says that in words.
   const kinds = [...counts.keys()]
-    .filter((kind) => kind !== "focus_regained")
+    .filter((kind) => !NOT_PRINTED.has(kind))
     .sort((a, b) => {
       const ia = KIND_ORDER.indexOf(a);
       const ib = KIND_ORDER.indexOf(b);

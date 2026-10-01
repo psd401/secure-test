@@ -133,6 +133,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// Slice 69: the clipboard policy lives on the bundle, so the host cannot
     /// know it until the bundle arrives. Called on the main actor once it has.
     var onBundleLoaded: ((DeliveryBundle) -> Void)?
+    /// STT failure visibility (2026-10-01): the pre-flight's report, once per
+    /// load, only for a student granted `speech_to_text`. The host posts it
+    /// as a `speech_preflight` attempt event.
+    var onSpeechPreflight: ((SpeechToTextPreflight) -> Void)?
     /// AAC-1: fires after the server CONFIRMS the hand-in. The host ends the
     /// assessment session here — hand-in returns the Mac to the student.
     var onHandedIn: (() -> Void)?
@@ -337,6 +341,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     if SpeechToText.isGranted(bundle.accommodations) {
                         let report = await SpeechPreflight.run(log: self.log)
                         self.speechToText = report.availability
+                        // Failure visibility (2026-10-01): one
+                        // `speech_preflight` event, whatever the outcome, so
+                        // the teacher's Monitor can say when it was not ready.
+                        self.onSpeechPreflight?(report)
                         guard !self.isRetired else {
                             self.log("stt pre-flight completed after the attempt screen went away — discarded")
                             return

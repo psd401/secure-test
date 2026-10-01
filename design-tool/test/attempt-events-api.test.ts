@@ -147,6 +147,7 @@ async function attendance(sessionId: string) {
       ps_id: string;
       last_activity_at: string | null;
       last_event: { kind: string; at: string } | null;
+      speech_to_text_unavailable: boolean;
       alert: { kind: string; at: string } | null;
     }[];
   };
@@ -376,6 +377,75 @@ describe("the client_error kind", () => {
 
     const ada = (await attendance(sitting.id)).rows.find((r) => r.ps_id === STUDENT.ps_id)!;
     expect(ada.alert?.kind).toBe("client_error");
+  });
+});
+
+// Speech-to-text failure visibility (docs/speech-tools-design.md §Progress,
+// 2026-10-01): the client's pre-flight outcome, posted once per join for a
+// granted student; the Monitor shows a note when the newest one is not ready.
+describe("the speech_preflight kind", () => {
+  test("is accepted; detail keeps { outcome, step } from the closed lists only", async () => {
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+
+    principal = studentPrincipal(STUDENT.email);
+    const res = await postEvent(attempt.id, {
+      kind: "speech_preflight",
+      detail: { outcome: "denied", step: "microphone", transcript: "never kept" },
+    });
+    expect(res.status).toBe(201);
+    expect(
+      (
+        await postEvent(attempt.id, {
+          kind: "speech_preflight",
+          detail: { outcome: "made_up", step: "elsewhere" },
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (await postEvent(attempt.id, { kind: "speech_preflight", detail: { outcome: "ready", step: "assets" } }))
+        .status,
+    ).toBe(201);
+
+    const stored = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id))
+      .orderBy(attempt_events.at, attempt_events.id);
+    expect(stored.map((r) => r.detail)).toEqual([
+      { outcome: "denied", step: "microphone" },
+      { outcome: "unavailable" },
+      { outcome: "ready" },
+    ]);
+  });
+
+  test("the Monitor flags the row by the NEWEST pre-flight, and it is not an alert", async () => {
+    const assessment = await seedAssessment();
+    const sitting = await createSitting(assessment.id);
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { sessionId: sitting.id });
+
+    const row = async () =>
+      (await attendance(sitting.id)).rows.find((r) => r.ps_id === STUDENT.ps_id)!;
+    expect((await row()).speech_to_text_unavailable).toBe(false);
+
+    principal = studentPrincipal(STUDENT.email);
+    expect(
+      (await postEvent(attempt.id, { kind: "speech_preflight", detail: { outcome: "timed_out" } }))
+        .status,
+    ).toBe(201);
+    expect((await postEvent(attempt.id, { kind: "lockdown_begin" })).status).toBe(201);
+    let ada = await row();
+    expect(ada.speech_to_text_unavailable).toBe(true);
+    expect(ada.alert).toBeNull();
+
+    // A rejoin's pre-flight that came back ready clears it.
+    principal = studentPrincipal(STUDENT.email);
+    expect(
+      (await postEvent(attempt.id, { kind: "speech_preflight", detail: { outcome: "ready" } }))
+        .status,
+    ).toBe(201);
+    ada = await row();
+    expect(ada.speech_to_text_unavailable).toBe(false);
   });
 });
 

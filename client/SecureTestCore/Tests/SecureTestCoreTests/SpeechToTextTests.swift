@@ -52,6 +52,44 @@ final class SpeechToTextTests: XCTestCase {
         XCTAssertEqual(SpeechToTextPreflight(timedOut: true).availability, .unavailable)
     }
 
+    // MARK: - The teacher's event (2026-10-01)
+
+    func testEventOutcomeNamesTheFirstStepThatFailed() {
+        XCTAssertEqual(allReady.eventDetail, ["outcome": "ready"])
+        XCTAssertEqual(
+            SpeechToTextPreflight(microphone: .denied).eventDetail,
+            ["outcome": "denied", "step": "microphone"])
+        XCTAssertEqual(
+            SpeechToTextPreflight(microphone: .notDetermined).eventDetail,
+            ["outcome": "denied", "step": "microphone"], "an unanswered prompt is not a grant")
+        XCTAssertEqual(
+            SpeechToTextPreflight(microphone: .authorized, recognition: .restricted).eventDetail,
+            ["outcome": "denied", "step": "recognition"])
+        XCTAssertEqual(
+            SpeechToTextPreflight(
+                microphone: .authorized, recognition: .authorized, transcriberAvailable: false
+            ).eventDetail,
+            ["outcome": "unavailable", "step": "transcriber"])
+        var r = allReady; r.assetsInstalled = false; r.failure = "assets_Error"
+        XCTAssertEqual(r.eventDetail, ["outcome": "unavailable", "step": "assets"])
+        XCTAssertEqual(
+            SpeechToTextPreflight(timedOut: true).eventDetail, ["outcome": "timed_out"])
+        r = allReady; r.timedOut = true
+        XCTAssertEqual(r.eventDetail, ["outcome": "timed_out"], "out of time wins over the steps")
+    }
+
+    func testEventOutcomeWithNoAnsweredStepIsUnavailableWithoutAStep() {
+        XCTAssertEqual(SpeechToTextPreflight().eventDetail, ["outcome": "unavailable"])
+        var r = allReady; r.assetsInstalled = nil
+        XCTAssertEqual(r.eventDetail, ["outcome": "unavailable"])
+    }
+
+    func testEventDetailCarriesNoErrorText() {
+        var r = allReady; r.assetsInstalled = false; r.failure = "assets_SomethingWithDetail"
+        XCTAssertEqual(Set(r.eventDetail.keys), ["outcome", "step"])
+        XCTAssertFalse(r.eventDetail.values.contains { $0.contains("Something") })
+    }
+
     func testLogLine() {
         XCTAssertEqual(
             allReady.logDescription,

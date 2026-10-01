@@ -344,6 +344,13 @@
       "when": 1790707512956,
       "tag": "0048_access_grant_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790896517524,
+      "tag": "0049_speech_preflight_event",
+      "breakpoints": true
     }
   ]
 }

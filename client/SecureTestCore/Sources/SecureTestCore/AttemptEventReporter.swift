@@ -30,6 +30,12 @@ public enum AttemptEventKind: String, CaseIterable, Sendable {
     /// timeline that explains the exit. Detail is `{ via }` — "peek" (the 5 s
     /// poll saw it) or "write" (an answer was refused 409 `sitting_closed`).
     case sittingClosed = "sitting_closed"
+    /// Speech-to-text failure visibility (docs/speech-tools-design.md
+    /// §Progress, 2026-10-01): the STT pre-flight's outcome, posted once per
+    /// join and only for a student granted `speech_to_text`. Detail is
+    /// `SpeechToTextPreflight.eventDetail` — `{ outcome, step? }`, never a
+    /// transcript. The Monitor shows a note when the newest one is not ready.
+    case speechPreflight = "speech_preflight"
 }
 
 /// Slice 92: fire-and-forget event reporting for the teacher monitor.
@@ -67,6 +73,9 @@ public final class AttemptEventReporter: @unchecked Sendable {
         // Row CS: same reason as timeExpired — the one event that explains why
         // a student's session ended with an unfinished attempt.
         .sittingClosed,
+        // STT: posted once, before begin(); the teacher's only sign that a
+        // student's "Speak my answer" never appeared.
+        .speechPreflight,
     ]
     private static let maxAttempts = 4
 

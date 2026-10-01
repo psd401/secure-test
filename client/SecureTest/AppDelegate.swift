@@ -578,6 +578,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.openPageLoadGate()
             }
         }
+        // STT failure visibility (2026-10-01): the pre-flight's outcome goes
+        // to the teacher as one `speech_preflight` event — `{ outcome, step? }`
+        // only. The offline path has no reporter, so it stays silent.
+        controller.onSpeechPreflight = { [weak self] report in
+            self?.eventReporter?.report(.speechPreflight, detail: report.eventDetail)
+        }
         controller.onBackToTests = { [weak self] in
             Self.log("back to your tests pressed (in-page) — leaving the attempt screen")
             self?.showEntry()

@@ -91,6 +91,47 @@ public struct SpeechToTextPreflight: Equatable, Sendable {
         return .ready
     }
 
+    /// The `speech_preflight` attempt event's `outcome` (2026-10-01): what the
+    /// teacher's Monitor and timeline are told. Mirrors the server's
+    /// `SPEECH_PREFLIGHT_OUTCOMES`.
+    public enum EventOutcome: String, Equatable, Sendable {
+        case ready
+        case denied
+        case timedOut = "timed_out"
+        case unavailable
+    }
+
+    /// … and its `step`: the first step that did not answer yes. Mirrors the
+    /// server's `SPEECH_PREFLIGHT_STEPS`.
+    public enum Step: String, Equatable, Sendable {
+        case microphone, recognition, transcriber, assets
+    }
+
+    /// The report as the teacher should read it. The steps run in order and
+    /// stop at the first no, so the first one that is not a yes is the cause.
+    /// A permission that was not granted (denied, restricted, or a prompt
+    /// left unanswered) is `denied`; a transcriber or asset failure is
+    /// `unavailable`; the budget running out is `timed_out` — the timeout's
+    /// report carries no steps, so it has no `step` either.
+    public var eventOutcome: (outcome: EventOutcome, step: Step?) {
+        if availability == .ready { return (.ready, nil) }
+        if timedOut { return (.timedOut, nil) }
+        if let microphone, microphone != .authorized { return (.denied, .microphone) }
+        if let recognition, recognition != .authorized { return (.denied, .recognition) }
+        if transcriberAvailable == false { return (.unavailable, .transcriber) }
+        if assetsInstalled == false || failure != nil { return (.unavailable, .assets) }
+        return (.unavailable, nil)
+    }
+
+    /// The `speech_preflight` event's detail: `{ outcome, step? }` and nothing
+    /// else — no error text, nothing about the student, no transcript.
+    public var eventDetail: [String: String] {
+        let (outcome, step) = eventOutcome
+        var detail = ["outcome": outcome.rawValue]
+        if let step { detail["step"] = step.rawValue }
+        return detail
+    }
+
     /// One auditable line for the host log.
     public var logDescription: String {
         "mic=\(microphone?.rawValue ?? "-") recognition=\(recognition?.rawValue ?? "-")"

@@ -55,6 +55,9 @@ export interface AttendanceRow {
   /** Safeguarding alerts slice 2: open alerts on this row's attempt. Only the
    * Monitor's attendance route sends it; absent = 0. */
   safeguarding_open?: number;
+  /** Speech-to-text failure visibility (2026-10-01): the attempt's newest
+   * speech-to-text pre-flight did not come back ready. Absent = false. */
+  speech_to_text_unavailable?: boolean;
 }
 
 export interface AttendancePayload {
@@ -127,6 +130,17 @@ export function earlierSessionNote(
     : "Handed in in an earlier session";
 }
 
+/** The Monitor row's speech-to-text note (2026-10-01), or null. Pure so it
+ * can be tested without a DOM. Shown on joined rows of THIS sitting only. */
+export const SPEECH_TO_TEXT_UNAVAILABLE_NOTE = "Speech-to-text unavailable on this Mac";
+export function speechToTextNote(
+  r: Pick<AttendanceRow, "status"> &
+    Partial<Pick<AttendanceRow, "speech_to_text_unavailable">>,
+): string | null {
+  if (r.status === "not_joined" || r.status === "submitted_earlier") return null;
+  return r.speech_to_text_unavailable ? SPEECH_TO_TEXT_UNAVAILABLE_NOTE : null;
+}
+
 /** Slice 91: teacher-facing words for a client event kind. Unknown kinds
  * (a newer server than this bundle) fall back to the raw kind. */
 export function eventLabel(kind: string): string {
@@ -162,6 +176,11 @@ export function eventLabel(kind: string): string {
     // Not a hand-in — the attempt is still in progress and resumable.
     case "sitting_closed":
       return "Session closed by the teacher — returned to Your tests";
+    // Speech-to-text (docs/speech-tools-design.md): the client's pre-flight
+    // outcome. The outcome is on the row's detail; the timeline says it in
+    // full (`speechPreflightText` in lib/reporting/timeline.ts).
+    case "speech_preflight":
+      return "Speech-to-text checked";
     case "teacher_hand_in":
       return "Handed in by the teacher";
     // Teacher-granted extra time: the deadline was replaced with a later one.

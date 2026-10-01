@@ -3,7 +3,7 @@
 // (America/Los_Angeles); September instants are UTC-7.
 import { describe, expect, test } from "bun:test";
 import { ATTEMPT_EVENT_KINDS } from "../db/schema";
-import { buildTimeline, durationLabel } from "../lib/reporting/timeline";
+import { buildTimeline, durationLabel, speechPreflightText } from "../lib/reporting/timeline";
 
 const at = (hhmmss: string) => `2026-09-07T${hhmmss}Z`;
 
@@ -254,5 +254,48 @@ describe("durationLabel", () => {
     expect(durationLabel(59_000)).toBe("59 sec");
     expect(durationLabel(60_000)).toBe("1 min");
     expect(durationLabel(150_000)).toBe("3 min");
+  });
+});
+
+// Speech-to-text failure visibility (docs/speech-tools-design.md §Progress,
+// 2026-10-01): the pre-flight's outcome in a teacher's words.
+describe("buildTimeline — speech_preflight", () => {
+  const line = (detail: Record<string, unknown> | null) =>
+    buildTimeline([{ kind: "speech_preflight", at: at("21:14:00"), detail }])[0]!.text;
+
+  test("ready", () => {
+    expect(line({ outcome: "ready" })).toBe("Speech-to-text ready 2:14 PM");
+  });
+
+  test("denied names the permission when the step says which", () => {
+    expect(line({ outcome: "denied", step: "microphone" })).toBe(
+      "Speech-to-text unavailable — microphone permission denied 2:14 PM",
+    );
+    expect(line({ outcome: "denied", step: "recognition" })).toBe(
+      "Speech-to-text unavailable — speech recognition permission denied 2:14 PM",
+    );
+    expect(speechPreflightText({ outcome: "denied" })).toBe(
+      "Speech-to-text unavailable — permission denied",
+    );
+  });
+
+  test("timed out, not supported, and the assets step", () => {
+    expect(line({ outcome: "timed_out" })).toBe(
+      "Speech-to-text unavailable — timed out while preparing 2:14 PM",
+    );
+    expect(line({ outcome: "unavailable", step: "transcriber" })).toBe(
+      "Speech-to-text unavailable — not supported on this Mac 2:14 PM",
+    );
+    expect(speechPreflightText({ outcome: "unavailable" })).toBe(
+      "Speech-to-text unavailable — not supported on this Mac",
+    );
+    expect(speechPreflightText({ outcome: "unavailable", step: "assets" })).toBe(
+      "Speech-to-text unavailable — could not finish setting up on this Mac",
+    );
+  });
+
+  test("a row without a readable outcome says unavailable, never a raw value", () => {
+    expect(line(null)).toBe("Speech-to-text unavailable 2:14 PM");
+    expect(speechPreflightText({ outcome: "nonsense" })).toBe("Speech-to-text unavailable");
   });
 });

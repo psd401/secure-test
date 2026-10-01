@@ -76,6 +76,7 @@ import {
   deadlineNote,
   eventLabel,
   earlierSessionNote,
+  speechToTextNote,
   idleFor,
   pruneSelection,
   selectAllState,
@@ -649,6 +650,7 @@ function StudentRow({
   // attempt of this sitting's to progress, poll or act on.
   const earlier = r.status === "submitted_earlier";
   const earlierNote = earlierSessionNote(r);
+  const speechNote = speechToTextNote(r);
   return (
     <TableRow
       className={cn(
@@ -726,6 +728,12 @@ function StudentRow({
             <span className="text-xs text-muted-foreground">
               {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
             </span>
+          ) : null}
+          {/* Speech-to-text (2026-10-01): the pre-flight on the student's
+              Mac did not come back ready, so they have no "Speak my
+              answer". A note, not an alert — nothing to act on mid-test. */}
+          {speechNote ? (
+            <span className="text-xs text-muted-foreground">{speechNote}</span>
           ) : null}
           {r.alert && current ? (
             <span className="text-xs text-danger-foreground">

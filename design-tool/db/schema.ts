@@ -814,6 +814,14 @@ export const ATTEMPT_EVENT_KINDS = [
   // stays in progress and resumable through a later sitting. Client-written,
   // the way `lockdown_end` is; this row is how the timeline explains the exit.
   "sitting_closed",
+  // Speech-to-text failure visibility (docs/speech-tools-design.md §Progress,
+  // 2026-10-01): the client's STT pre-flight outcome for a student granted
+  // `speech_to_text`, posted once before the secure session begins. `detail`
+  // is { outcome, step? } — outcome one of `SPEECH_PREFLIGHT_OUTCOMES`, step
+  // one of `SPEECH_PREFLIGHT_STEPS`; the events route keeps nothing else.
+  // Never a transcript. Not an alert: the Monitor shows a quiet note when the
+  // newest one is not `ready`.
+  "speech_preflight",
   // D-1/A: the teacher forced the submission through the hand-in route.
   // Server-written only; see CLIENT_ATTEMPT_EVENT_KINDS below.
   "teacher_hand_in",
@@ -874,6 +882,12 @@ export const CLIENT_ATTEMPT_EVENT_KINDS = ATTEMPT_EVENT_KINDS.filter(
 // later event (focus_regained) clears; the rest stay alerts for the attempt's
 // lifetime — a quit or a broken lockdown is not undone by anything that
 // happens afterwards.
+/** `speech_preflight` detail: the pre-flight's outcome, and which step failed. */
+export const SPEECH_PREFLIGHT_OUTCOMES = ["ready", "denied", "timed_out", "unavailable"] as const;
+export type SpeechPreflightOutcome = (typeof SPEECH_PREFLIGHT_OUTCOMES)[number];
+export const SPEECH_PREFLIGHT_STEPS = ["microphone", "recognition", "transcriber", "assets"] as const;
+export type SpeechPreflightStep = (typeof SPEECH_PREFLIGHT_STEPS)[number];
+
 export const ALERT_EVENT_KINDS = [
   "quit",
   "emergency_exit",
@@ -900,7 +914,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed')`,
     ),
   }),
 );

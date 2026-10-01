@@ -116,6 +116,12 @@ export interface AttendanceRow {
   /** Slice 91: the newest still-active alert event, or null when calm — see
    * `activeAlert` for what "active" means per kind. */
   alert: AttendanceEvent | null;
+  /** Speech-to-text failure visibility (2026-10-01): the attempt's newest
+   * `speech_preflight` event says speech-to-text could not be prepared on the
+   * student's Mac — see `speechToTextUnavailable`. False with no such event
+   * (a student without the grant never sends one), and on a row with no
+   * attempt of this sitting's. */
+  speech_to_text_unavailable: boolean;
 }
 
 export interface Attendance {
@@ -212,6 +218,26 @@ export function activeAlert(events: AttendanceEvent[]): AttendanceEvent | null {
     if (e.kind === "focus_loss" && !regained) return e;
   }
   return null;
+}
+
+/**
+ * Speech-to-text failure visibility (docs/speech-tools-design.md §Progress,
+ * 2026-10-01): true when the NEWEST `speech_preflight` event's outcome is
+ * anything but `ready`. Newest wins because each join runs the pre-flight
+ * again — a student who allowed the microphone and rejoined is fine now. A
+ * row without a readable outcome counts as unavailable, the same reading the
+ * events route stores for one.
+ */
+export function speechToTextUnavailable(
+  events: ReadonlyArray<{ kind: string; detail?: unknown }>,
+): boolean {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.kind !== "speech_preflight") continue;
+    const detail = e.detail as { outcome?: unknown } | null | undefined;
+    return detail?.outcome !== "ready";
+  }
+  return false;
 }
 
 export async function attendanceForSitting(
@@ -337,12 +363,14 @@ export async function attendanceForSitting(
   // ties, since rows are only ever appended). Small by construction — one
   // room's attempts, and the client reports state changes, not a stream.
   const eventsByAttempt = new Map<string, AttendanceEvent[]>();
+  const speechUnavailable = new Set<string>();
   if (joined.length > 0) {
     const rows = await db
       .select({
         attempt_id: attempt_events.attempt_id,
         kind: attempt_events.kind,
         at: attempt_events.at,
+        detail: attempt_events.detail,
       })
       .from(attempt_events)
       .where(
@@ -356,6 +384,18 @@ export async function attendanceForSitting(
       const list = eventsByAttempt.get(r.attempt_id) ?? [];
       list.push({ kind: r.kind as AttemptEventKind, at: r.at });
       eventsByAttempt.set(r.attempt_id, list);
+    }
+    // Speech-to-text: rows are oldest first, so the newest pre-flight per
+    // attempt is the last one seen.
+    const preflights = new Map<string, { kind: string; detail: unknown }[]>();
+    for (const r of rows) {
+      if (r.kind !== "speech_preflight") continue;
+      const list = preflights.get(r.attempt_id) ?? [];
+      list.push(r);
+      preflights.set(r.attempt_id, list);
+    }
+    for (const [attemptId, list] of preflights) {
+      if (speechToTextUnavailable(list)) speechUnavailable.add(attemptId);
     }
   }
 
@@ -433,6 +473,7 @@ export async function attendanceForSitting(
       timed: hit ? timedOf(hit) : earlier ? timedOf(earlier) : false,
       passed_back_waiting: !hit && passedBackWaiting.has(psId),
       time_limit_removed: hit ? removedOf(hit) : false,
+      speech_to_text_unavailable: hit ? speechUnavailable.has(hit.attempt.id) : false,
     });
   }
   for (const [key, hit] of byKey) {
@@ -456,6 +497,7 @@ export async function attendanceForSitting(
       timed: timedOf(hit),
       passed_back_waiting: false,
       time_limit_removed: removedOf(hit),
+      speech_to_text_unavailable: speechUnavailable.has(hit.attempt.id),
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -488,6 +530,7 @@ export async function attendanceForSitting(
         timed: false,
         passed_back_waiting: false,
         time_limit_removed: false,
+        speech_to_text_unavailable: false,
       });
     }
   }

@@ -5,6 +5,8 @@ import { getDb } from "@/db/client";
 import {
   CLIENT_ATTEMPT_EVENT_KINDS,
   OBSERVABILITY_TEXT_MAX,
+  SPEECH_PREFLIGHT_OUTCOMES,
+  SPEECH_PREFLIGHT_STEPS,
   attempt_events
 } from "@/db/schema";
 import { truncate } from "@/lib/log";
@@ -33,6 +35,7 @@ function normaliseDetail(
   kind: string,
   detail: Record<string, unknown> | undefined,
 ): Record<string, unknown> | null {
+  if (kind === "speech_preflight") return speechPreflightDetail(detail);
   if (kind !== "client_error") return detail ?? null;
   const errorKind = typeof detail?.kind === "string" ? detail.kind.slice(0, 120) : "unknown";
   const message =
@@ -40,6 +43,25 @@ function normaliseDetail(
       ? truncate(detail.message, OBSERVABILITY_TEXT_MAX)
       : "";
   return { kind: errorKind, message };
+}
+
+/**
+ * Speech-to-text failure visibility (docs/speech-tools-design.md §Progress,
+ * 2026-10-01): `speech_preflight` keeps `{ outcome, step? }` and nothing else,
+ * each from its closed list. An outcome off the list is stored as
+ * `unavailable` (the safe reading — the Monitor then shows the note) and an
+ * unknown step is dropped; the rest of the bag never reaches a teacher.
+ */
+function speechPreflightDetail(
+  detail: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const outcome = (SPEECH_PREFLIGHT_OUTCOMES as readonly unknown[]).includes(detail?.outcome)
+    ? (detail!.outcome as string)
+    : "unavailable";
+  const step = (SPEECH_PREFLIGHT_STEPS as readonly unknown[]).includes(detail?.step)
+    ? (detail!.step as string)
+    : null;
+  return step && outcome !== "ready" ? { outcome, step } : { outcome };
 }
 
 /**

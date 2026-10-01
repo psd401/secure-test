@@ -167,6 +167,8 @@ final class AttemptEventReporterTests: XCTestCase {
                 // Row CS (D-1 / D-5). Client-postable, like `time_expired`
                 // and unlike `teacher_hand_in`.
                 "sitting_closed",
+                // STT failure visibility (2026-10-01), migration 0049.
+                "speech_preflight",
             ]
         )
     }
@@ -179,5 +181,14 @@ extension AttemptEventReporterTests {
     func testSittingClosedIsRetriedLikeTheRestOfTheLifecycle() {
         XCTAssertEqual(AttemptEventKind.sittingClosed.rawValue, "sitting_closed")
         XCTAssertTrue(AttemptEventReporter.retriedKinds.contains(.sittingClosed))
+    }
+}
+
+extension AttemptEventReporterTests {
+    /// STT failure visibility: the wire name, and it is retried — it is the
+    /// teacher's only sign that speech-to-text never reached the student.
+    func testSpeechPreflightIsRetried() {
+        XCTAssertEqual(AttemptEventKind.speechPreflight.rawValue, "speech_preflight")
+        XCTAssertTrue(AttemptEventReporter.retriedKinds.contains(.speechPreflight))
     }
 }
