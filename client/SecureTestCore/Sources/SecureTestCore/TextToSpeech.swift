@@ -15,6 +15,9 @@ import Foundation
 ///     direction for a support the student is entitled to.
 ///   - `tts_for_ela_reading` — no TIDE value at all, so a teacher's "On"; D-5
 ///     treats it as stimulus read-aloud, unioned with the above.
+///   - `tts_student_responses` (slice 2) — TIDE's "Text-to-Speech (Student
+///     Responses)", Off / On: a "Read my answer" control beside each field the
+///     student types into. Independent of the two above.
 ///
 /// Off-ish values ("Off", "None (Default)", …) are dropped by the server before
 /// the bundle is built (`isEnabledValue` in `effective.ts`); the same check is
@@ -26,15 +29,20 @@ public struct TextToSpeechScope: Equatable, Sendable {
     /// A Speak control on every stimulus / passage introduction and every
     /// labelled source.
     public let stimuli: Bool
+    /// Slice 2: a "Read my answer" control beside every short-text, essay,
+    /// outline and table field.
+    public let responses: Bool
 
     static let testContentTool = "tts_test_content"
     static let elaReadingTool = "tts_for_ela_reading"
+    static let responsesTool = "tts_student_responses"
 
     public static let off = TextToSpeechScope(items: false, stimuli: false)
 
-    public init(items: Bool, stimuli: Bool) {
+    public init(items: Bool, stimuli: Bool, responses: Bool = false) {
         self.items = items
         self.stimuli = stimuli
+        self.responses = responses
     }
 
     public init(accommodations: [String: String]) {
@@ -55,21 +63,23 @@ public struct TextToSpeechScope: Equatable, Sendable {
         if accommodations[Self.elaReadingTool].flatMap(PageAccommodations.enabledValue) != nil {
             stimuli = true
         }
-        self.init(items: items, stimuli: stimuli)
+        let responses = accommodations[Self.responsesTool].flatMap(PageAccommodations.enabledValue) != nil
+        self.init(items: items, stimuli: stimuli, responses: responses)
     }
 
-    public var isEnabled: Bool { items || stimuli }
+    /// Any read-aloud at all — what the host checks before it speaks.
+    public var isEnabled: Bool { items || stimuli || responses }
 
     /// The constant the renderer reads, emitted beside `BUNDLE` and `OFFLINE`.
     /// A page without it (the test harness, an older host) has no Speak
     /// controls at all.
     public var pageScript: String {
-        "const TTS_SCOPE = { items: \(items), stimuli: \(stimuli) };"
+        "const TTS_SCOPE = { items: \(items), stimuli: \(stimuli), responses: \(responses) };"
     }
 
     /// One line for the host log.
     public var logDescription: String {
-        "items=\(items) stimuli=\(stimuli)"
+        "items=\(items) stimuli=\(stimuli) responses=\(responses)"
     }
 }
 

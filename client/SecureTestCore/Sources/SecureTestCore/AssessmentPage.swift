@@ -1019,7 +1019,7 @@ public enum AssessmentPage {
       // every word, which the page highlights. One utterance at a time: a second
       // Speak stops the first.
       var TTS = (typeof TTS_SCOPE === 'object' && TTS_SCOPE) ? TTS_SCOPE : { items: false, stimuli: false };
-      var TTS_ON = TTS.items === true || TTS.stimuli === true;
+      var TTS_ON = TTS.items === true || TTS.stimuli === true || TTS.responses === true;
       var TTS_RATE = 'normal';
       var TTS_SEQ = 0;
       // { id, target, segments, paused } while something is being read.
@@ -1252,10 +1252,10 @@ public enum AssessmentPage {
         if (!target) return;
         var mine = ttsActive && ttsActive.target === target;
         var paused = mine && ttsActive.paused;
-        target.play.textContent = mine ? (paused ? 'Resume' : 'Pause') : 'Speak';
+        target.play.textContent = mine ? (paused ? 'Resume' : 'Pause') : target.idle;
         target.play.setAttribute('aria-label', mine
           ? (paused ? 'Resume reading ' : 'Pause reading ') + target.label
-          : 'Speak ' + target.label);
+          : (target.idle === 'Speak' ? 'Speak ' + target.label : target.idle));
         if (mine) target.stop.removeAttribute('hidden');
         else target.stop.setAttribute('hidden', '');
         ttsClass(target.el, 'tts-reading', !!mine);
@@ -1292,7 +1292,9 @@ public enum AssessmentPage {
       // which the caller places just above the block. `collect`, when given,
       // replaces "the block's own segments" (a question reads its options too)
       // and `outline` is what carries the reading outline (default `el`).
-      function ttsBar(el, label, collect, outline) {
+      // `field` (slice 2) makes it a "Read my answer" control for that input
+      // or textarea — see ttsAnswerBar.
+      function ttsBar(el, label, collect, outline, field) {
         var bar = document.createElement('div');
         bar.className = 'tts-bar';
         bar.setAttribute('role', 'group');
@@ -1308,8 +1310,20 @@ public enum AssessmentPage {
         TTS_SEQ += 1;
         var target = {
           id: 'tts-' + TTS_SEQ, el: outline || el, play: play, stop: stop, label: label,
+          idle: field ? 'Read my answer' : 'Speak',
           collect: typeof collect === 'function' ? collect : function () { return ttsSegments(el); }
         };
+        if (field) {
+          // A pointer press must not take focus out of the field: a blur would
+          // fire its `change` (a post) and lose the caret — the keypad's rule
+          // (D-3.1). Keyboard activation has already left the field, as any
+          // Tab does.
+          var keepFocus = function (e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          };
+          play.onpointerdown = keepFocus;
+          stop.onpointerdown = keepFocus;
+        }
         play.onclick = function () {
           if (ttsActive && ttsActive.target === target) {
             ttsActive.paused = !ttsActive.paused;
@@ -1319,15 +1333,60 @@ public enum AssessmentPage {
           }
           ttsSpeak(target);
         };
-        stop.onclick = function () {
+        stop.onclick = function (event) {
           ttsStop();
-          // The Stop button hides itself; the keyboard goes back to Speak.
+          // The Stop button hides itself; the keyboard goes back to Speak. A
+          // pointer press beside a field leaves focus where it was (above).
+          if (field && event && event.detail > 0) return;
           if (typeof play.focus === 'function') play.focus();
         };
         bar.appendChild(play);
         bar.appendChild(stop);
         ttsPaint(target);
         return bar;
+      }
+
+      // Slice 2 (`tts_student_responses`): the spoken form of what the student
+      // TYPED. A value carrying `$…$` is split by the page's one tokenizer (so
+      // `$5` stays money, C-2 / M-1); one carrying the keypad's LaTeX — a
+      // command, `^` or `_` (MATH_MARKER_RE) — is read whole through the math
+      // mapper; anything else is plain text, which covers the keypad's Unicode
+      // symbols (× ≤ ° π …) — the voice says those itself.
+      function ttsTypedSegments(text) {
+        var value = String(text === undefined || text === null ? '' : text);
+        var segs = mathSegments(value);
+        if (segs.some(function (seg) { return seg.math; })) return ttsLoose(value);
+        if (MATH_MARKER_RE.test(value)) return [{ kind: 'math', tex: value }];
+        return [ttsSay(value)];
+      }
+
+      function ttsBlank(text) {
+        return String(text === undefined || text === null ? '' : text).trim().length === 0;
+      }
+
+      // "Read my answer" beside one field. Reads the field's value AT THE PRESS
+      // — never a copy taken earlier — and touches nothing: no value, no
+      // autosave baseline, no dirty flag (it never calls oninput / onchange).
+      // While it reads, the FIELD is outlined; there is no per-word highlight,
+      // because a CSS Custom Highlight range cannot reach inside an <input> /
+      // <textarea> (their text is not in the DOM). Typing in the field being
+      // read stops the reading: its `oninput` is chained here, AFTER
+      // textAutosave, so the autosave still runs on every keystroke.
+      function ttsAnswerBar(field, collect) {
+        var bar = ttsBar(field, 'your answer', collect || function () {
+          var value = field.value;
+          return ttsBlank(value) ? [ttsSay('No answer yet.')] : ttsTypedSegments(value);
+        }, field, field);
+        ttsStopWhenTyping(field);
+        return bar;
+      }
+
+      function ttsStopWhenTyping(field) {
+        var prior = field.oninput;
+        field.oninput = function (event) {
+          if (ttsActive && ttsActive.target.el === field) ttsStop();
+          if (typeof prior === 'function') return prior.call(field, event);
+        };
       }
 
       // The page-wide speed, three steps. Applies from the next Speak — a rate
@@ -1837,6 +1896,8 @@ public enum AssessmentPage {
         }
         // After the restore, so the saved text is the baseline (D-3).
         textAutosave(input, sendShortText);
+        // TTS slice 2: under the field, above its hint and preview.
+        if (TTS.responses === true) wrap.insertBefore(ttsAnswerBar(input), input.nextSibling);
         return wrap;
       }
 
@@ -1932,6 +1993,8 @@ public enum AssessmentPage {
         // After the restore, so the saved text is the baseline (D-3). The
         // word counter's own `oninput` is chained, not replaced.
         textAutosave(area, sendEssay);
+        // TTS slice 2: under the box, above its word count.
+        if (TTS.responses === true) wrap.insertBefore(ttsAnswerBar(area), area.nextSibling);
 
         if (item.rubric) wrap.appendChild(rubricNode(item.rubric));
         return wrap;
@@ -3267,6 +3330,9 @@ public enum AssessmentPage {
             var rowName = stripEmphasis(r.label || '').trim() || ('Row ' + (ri + 1));
             var colName = stripEmphasis(c.label || '').trim() || ('Column ' + (ci + 1));
             input.setAttribute('aria-label', rowName + ', ' + colName);
+            // TTS slice 2: "Row <row header>, <column header>" — a label-less
+            // row is already "Row n".
+            input.__ttsName = (/^Row \d+$/.test(rowName) ? rowName : 'Row ' + rowName) + ', ' + colName;
             input.onchange = emit;
             // Autosave per cell; the send is the whole grid, as `change` is.
             // The cell's value was restored above, so it is the baseline.
@@ -3279,6 +3345,29 @@ public enum AssessmentPage {
         });
         table.appendChild(tbody);
         wrap.appendChild(table);
+        // TTS slice 2: ONE control for the table, reading the filled cells in
+        // reading order and skipping the empty ones. No single field to
+        // outline, so the table carries it; typing in any cell stops it.
+        if (TTS.responses === true) {
+          var tableBar = ttsBar(table, 'your answer', function () {
+            var out = [];
+            inputs.forEach(function (entry) {
+              if (ttsBlank(entry.input.value)) return;
+              out.push(ttsSay(entry.input.__ttsName + ': '));
+              out = out.concat(ttsTypedSegments(entry.input.value));
+              out.push(ttsSay('. '));
+            });
+            return out.length ? out : [ttsSay('No answer yet.')];
+          }, table, table);
+          inputs.forEach(function (entry) {
+            var prior = entry.input.oninput;
+            entry.input.oninput = function (event) {
+              if (ttsActive && ttsActive.target.el === table) ttsStop();
+              if (typeof prior === 'function') return prior.call(entry.input, event);
+            };
+          });
+          wrap.appendChild(tableBar);
+        }
         return wrap;
       }
 
@@ -3679,6 +3768,8 @@ public enum AssessmentPage {
           // After the prefill above, so the saved outline is the baseline.
           textAutosave(ta, sendOutline);
           area.appendChild(ta);
+          // TTS slice 2: the outline is the student's own writing too.
+          if (TTS.responses === true) area.appendChild(ttsAnswerBar(ta));
           area.appendChild(status);
           block.appendChild(area);
         }

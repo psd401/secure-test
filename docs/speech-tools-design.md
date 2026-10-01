@@ -160,3 +160,19 @@ harness), not the shipping client, so nothing half-built rides a release.
   never read (that is `tts_student_responses`, slice 2).
   Rows: `client/MANUAL-CHECKS.md` "Text-to-speech — test content (slice 1,
   2026-10-01)", none run.
+- **§Progress — slice 2 (TTS student responses) BUILT 2026-10-01, not
+  committed, rows NOT RUN.** `TextToSpeechScope.responses` from
+  `tts_student_responses` (same off-value rule; the host's `tts` refusal
+  passes when any of items / stimuli / responses is granted). Page: "Read my
+  answer" (the slice-1 bar) under every short text, essay, E12 outline and
+  one per table; reads the field's value at the press — `$…$` split by the
+  page tokenizer, a value with keypad LaTeX (a command, `^`, `_`) sent whole
+  to `MathSpeech`, otherwise plain text (so "$5" is money); an empty field
+  says "No answer yet."; a table reads "Row <row>, <column>: <value>." for
+  filled cells only. The field (or table) is outlined while read — no word
+  highlight, a CSS highlight range cannot reach inside an input. Reading
+  never touches the value, the autosave baseline or dirty state, and a
+  pointer press keeps focus in the field (the keypad's rule); typing in the
+  field being read stops it, as do the slice-1 stops. `MathSpeech` gained
+  "λ". Rows: `client/MANUAL-CHECKS.md` "Text-to-speech — student responses
+  (slice 2, 2026-10-01)", none run.

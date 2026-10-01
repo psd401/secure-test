@@ -107,7 +107,7 @@ public enum MathSpeech {
         "(": "open paren", ")": "close paren", "[": "open bracket", "]": "close bracket",
         "|": "bar", "!": "factorial", "'": "prime", ":": "to", "%": "percent",
         "°": "degrees", "π": "pi", "θ": "theta", "α": "alpha", "β": "beta",
-        "γ": "gamma", "μ": "mu", "σ": "sigma", "Δ": "capital delta",
+        "γ": "gamma", "λ": "lambda", "μ": "mu", "σ": "sigma", "Δ": "capital delta",
         "Σ": "capital sigma", "Ω": "capital omega", "∞": "infinity", ",": ",",
     ]
 

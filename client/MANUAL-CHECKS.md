@@ -1924,3 +1924,34 @@ REAL AAC session.
 | **Math read aloud.** Speak the `$`-math stem (e.g. `x^2 + \frac{1}{2}`), a prose-dollar stem, and a stem with math outside the subset (e.g. `\int_0^1 x\,dx`) | "x squared plus 1 over 2" with the formula outlined while it is spoken; "$57,600" read as money; the unsupported formula read as "math expression" and the words around it read normally | |
 | **Stops.** Speak, then: turn the page (Next / strip); Speak, switch source tab; Speak, Finish and hand in | The voice stops on the page turn, on the tab change and on Finish; stderr `tts: stopped (…)` each time | |
 | **Real session.** REAL AAC session (Release build, Finder launch), Stimuli+Items. Speak a stem and a source, pause / resume once; then Speak and let each end path happen in turn: time limit reaches zero, teacher Closes the session, Cmd-E, Cmd-Q | Audible inside the locked session with the highlight moving; the voice stops at once on every end path (stderr `tts: stopped (session ending)` / `(attempt screen torn down)` / `(quit)`), never continuing over the "Time is up." / session-ended sheet | |
+
+
+## Text-to-speech — student responses (slice 2, 2026-10-01)
+
+`docs/speech-tools-design.md` slice 2: `tts_student_responses` = On puts a
+"Read my answer" control (the slice-1 Speak / Pause-Resume / Stop bar) under
+every field the student types into — short text, essay, the E12 outline
+writing area, and one per table. It reads the field's value at the moment of
+the press; keypad LaTeX goes through the math mapper; the FIELD is outlined
+while it reads (no word highlight inside a field); typing in that field stops
+it. Unit tests cover the gating, what is read and the stops in
+JavaScriptCore; nothing below has been run. Fixture: a short text with a `$`
+stem (keypad open), an essay, a table with row and column labels, an E12 set
+with an inline outline, and a multiple choice. Stderr after the bundle loads
+reads `tts: items=… stimuli=… responses=true`. Rows 1–10 run under simulated
+lockdown; the last needs a REAL AAC session.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Responses only.** `tts_student_responses` = On, `tts_test_content` off | "Read my answer" under the short text, the essay, the outline and the table; no Speak on any stem, passage or source; the speed control shows | |
+| **Off.** `tts_student_responses` = Off (and content TTS off) | No Read my answer, no speed control; stderr `responses=false` | |
+| **With content TTS.** `tts_test_content` = Stimuli+Items as well | Speak on stems / passage / sources AND Read my answer on the fields; one reading at a time across both | |
+| **Current value.** Type an answer in the short text; click Read my answer; change it; click again | Reads exactly what is in the field each time, never an older copy | |
+| **Empty.** Read my answer on an untouched essay | "No answer yet." | |
+| **Math answer.** In the short text use the keypad: Fraction (1 over 2) then type ` + x^2`; Read my answer. Then type `It costs $5`; read again | "1 over 2 plus x squared"; then "It costs 5 dollars" (money, not math). An expression the mapper cannot read says "math expression" | |
+| **Table.** Fill two cells (one row 1, one row 2), leave the rest empty; Read my answer under the table | "Row <row label>, <column label>: <value>." for the two filled cells only, in reading order | |
+| **Field untouched.** Type in the essay, then click (pointer) Read my answer while the caret is in the box; after it ends, keep typing | The caret stays in the box where it was; no extra "Saved" / post at the press; typing continues normally and autosaves as before; the box is outlined while read and the outline clears at the end | |
+| **Typing stops it.** Read my answer on the essay; type a letter into the essay mid-sentence. Then read the essay and type into the short text | The voice stops at the first keystroke in the field being read; typing in a DIFFERENT field does not stop it | |
+| **Keyboard + contrast.** Keyboard navigation OFF, `color_contrast` = Yellow on Black, `zoom` = 2.5X: Tab from the field to Read my answer, Space, Tab to Stop, Space | Every control reachable and ringed; the field outline is visible in the contrast set; nothing clipped at 2.5X | |
+| **Stops.** Read an answer, then: turn the page; Finish and hand in | The voice stops each time | |
+| **Real session.** REAL AAC session (Release build, Finder launch), `tts_student_responses` = On: type an essay sentence and a keypad fraction; Read my answer on each; then let the time limit run out (or the teacher Close) mid-reading | Audible inside the locked session; the voice stops at once on the end path and does not continue over the sheet; on resume the typed answers are intact (reading changed nothing) | |

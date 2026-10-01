@@ -63,26 +63,37 @@ final class TextToSpeechTests: XCTestCase {
             TextToSpeechScope(items: true, stimuli: true))
     }
 
-    /// Neither student-response read-aloud (slice 2) nor Spanish (held, D-6)
-    /// opens anything in this slice.
-    func testOtherSpeechToolsDoNotOpenContentReadAloud() {
+    /// Neither Spanish (held, D-6) nor speech-to-text opens any read-aloud.
+    func testOtherSpeechToolsDoNotOpenReadAloud() {
         XCTAssertEqual(
-            TextToSpeechScope(accommodations: ["tts_student_responses": "On", "tts_spanish": "On", "speech_to_text": "On"]),
+            TextToSpeechScope(accommodations: ["tts_spanish": "On", "speech_to_text": "On"]),
             .off)
+    }
+
+    /// Slice 2: student-response read-aloud is its own flag, and on its own
+    /// opens neither stems nor stimuli.
+    func testStudentResponses() {
+        let scope = TextToSpeechScope(accommodations: ["tts_student_responses": "On"])
+        XCTAssertEqual(scope, TextToSpeechScope(items: false, stimuli: false, responses: true))
+        XCTAssertTrue(scope.isEnabled, "the host lets a Read my answer through")
+        XCTAssertEqual(TextToSpeechScope(accommodations: ["tts_student_responses": "Off"]), .off)
+        XCTAssertEqual(
+            TextToSpeechScope(accommodations: ["tts_test_content": "Items", "tts_student_responses": "on"]),
+            TextToSpeechScope(items: true, stimuli: false, responses: true))
     }
 
     func testPageScript() {
         XCTAssertEqual(
             TextToSpeechScope(items: true, stimuli: false).pageScript,
-            "const TTS_SCOPE = { items: true, stimuli: false };")
+            "const TTS_SCOPE = { items: true, stimuli: false, responses: false };")
     }
 
     func testThePageCarriesTheScopeFromTheBundle() {
         let json = #"{"test_id":"t","title":"t","items":[],"accommodations":{"tts_test_content":"Stimuli"}}"#
         let html = AssessmentPage.html(title: "t", bundleJSON: json, katex: .init(css: "", js: "", autoRender: "", missing: []))
-        XCTAssertTrue(html.contains("const TTS_SCOPE = { items: false, stimuli: true };"))
+        XCTAssertTrue(html.contains("const TTS_SCOPE = { items: false, stimuli: true, responses: false };"))
         let none = AssessmentPage.html(title: "t", bundleJSON: #"{"test_id":"t","title":"t","items":[]}"#, katex: .init(css: "", js: "", autoRender: "", missing: []))
-        XCTAssertTrue(none.contains("const TTS_SCOPE = { items: false, stimuli: false };"))
+        XCTAssertTrue(none.contains("const TTS_SCOPE = { items: false, stimuli: false, responses: false };"))
     }
 
     // MARK: - Rate
