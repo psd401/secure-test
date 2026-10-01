@@ -265,11 +265,11 @@ public enum PageAccommodations {
     }
 
     /// The same off-ish set the server uses, so a row that slipped through
-    /// cannot theme the page.
+    /// cannot theme the page. `TextToSpeechScope` reads the same rule.
     private static let disabledValues: Set<String> =
         ["", "off", "none", "none (default)", "default"]
 
-    private static func enabledValue(_ raw: String) -> String? {
+    static func enabledValue(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return disabledValues.contains(trimmed.lowercased()) ? nil : trimmed
     }

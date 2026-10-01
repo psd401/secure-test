@@ -36,7 +36,8 @@ public enum AssessmentPage {
         katex: KatexBundle.Assets = KatexBundle.shared,
         accommodations: [String: String]? = nil
     ) -> String {
-        PageShell.document(
+        let accommodations = accommodations ?? accommodationsIn(bundleJSON)
+        return PageShell.document(
             title: title,
             styles: [katex.css, itemStyles],
             scripts: [
@@ -47,6 +48,9 @@ public enum AssessmentPage {
                 katex.js,
                 "const BUNDLE = \(JSONEmbedding.escapeForScriptElement(bundleJSON));",
                 "const OFFLINE = \(offline);",
+                // TTS slice 1: which blocks carry a Speak control, resolved in
+                // Swift from the same map (`TextToSpeechScope`).
+                TextToSpeechScope(accommodations: accommodations).pageScript,
                 KatexBundle.macrosScript,
                 rendererScript,
             ],
@@ -54,7 +58,7 @@ public enum AssessmentPage {
             <h1>\(HTMLEscape.text(title))</h1>
             <div id="items"></div>
             """,
-            accommodations: accommodations ?? accommodationsIn(bundleJSON)
+            accommodations: accommodations
         )
     }
 
@@ -287,6 +291,26 @@ public enum AssessmentPage {
     }
     .layout-toggle button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     .layout-toggle button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* TTS slice 1 (docs/speech-tools-design.md): the Speak control above a stem,
+       a passage or a source, and the page's one speed control. The
+       .layout-toggle treatment — tokens and rem only — so the eight contrast
+       sets and the nine zoom levels reach both for free. The block being read
+       carries an accent outline; the word being spoken is a CSS Custom
+       Highlight (text) or the .tts-word class (a formula or a picture), filled
+       with the accent pair every contrast set defines at the body ratio. */
+    .tts-bar, .tts-rate { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem; }
+    .tts-rate-label { font-size: 0.8125rem; color: var(--ink-soft); }
+    .tts-bar button, .tts-rate button {
+      font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .tts-bar button[hidden] { display: none; }
+    .tts-rate button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .tts-bar button:focus-visible, .tts-rate button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .tts-reading { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+    ::highlight(tts-word) { background-color: var(--accent); color: var(--accent-ink); }
+    .tts-word { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
     /* C-4 / D-7 (2026-09-09, docs/multi-source-stimulus-design.md): a picture in
        a stem, a stimulus or a source opens full-window on click, Enter or Space
        — a chart imported from a PDF prints at a size nobody can read. The scrim
@@ -979,6 +1003,389 @@ public enum AssessmentPage {
         }
         return frag;
       }
+
+      // Text-to-speech slice 1 (docs/speech-tools-design.md, D-1 / D-4 / D-5).
+      // A Speak control on each block the student's `tts_test_content` /
+      // `tts_for_ela_reading` value covers — question stems for Items, stimulus
+      // introductions and sources for Stimuli — resolved in Swift
+      // (`TextToSpeechScope`) and handed in as TTS_SCOPE. The page disables
+      // text selection outside inputs by design, so there is no select-to-speak:
+      // the control belongs to the block.
+      //
+      // The voice is the host's (AVSpeechSynthesizer); the page sends the
+      // block's SPOKEN form over the `tts` channel — each text node verbatim and
+      // each rendered formula as its TeX, never markup — and the host calls
+      // back through `window.__secureTestSpeech` with the segment and offset of
+      // every word, which the page highlights. One utterance at a time: a second
+      // Speak stops the first.
+      var TTS = (typeof TTS_SCOPE === 'object' && TTS_SCOPE) ? TTS_SCOPE : { items: false, stimuli: false };
+      var TTS_ON = TTS.items === true || TTS.stimuli === true;
+      var TTS_RATE = 'normal';
+      var TTS_SEQ = 0;
+      // { id, target, segments, paused } while something is being read.
+      var ttsActive = null;
+      // The formula or picture carrying the word class, so it can be cleared.
+      var ttsMarked = null;
+      var TTS_SKIP_TAGS = {
+        textarea: true, input: true, select: true, script: true, style: true, canvas: true, button: true
+      };
+
+      function ttsClass(el, cls, on) {
+        var list = String(el.className || '').split(' ').filter(function (c) { return c && c !== cls; });
+        if (on) list.push(cls);
+        el.className = list.join(' ');
+      }
+
+      function ttsPost(body) {
+        try {
+          window.webkit.messageHandlers.tts.postMessage(body);
+          return true;
+        } catch (e) {
+          console.log('tts post failed: ' + (e && e.message));
+          return false;
+        }
+      }
+
+      // `\$` is spoken as `$`; a word's offset in the spoken text is mapped back
+      // to the text node's own characters. After the math pass no `\$` is left
+      // in the page, so this only matters where that pass did not run.
+      function ttsRawOffset(raw, cleanPos) {
+        var clean = 0;
+        for (var i = 0; i < raw.length; i++) {
+          if (clean === cleanPos) return i;
+          if (raw.charAt(i) === '\\' && raw.charAt(i + 1) === '$') continue;
+          clean += 1;
+        }
+        return raw.length;
+      }
+
+      // The block as segments, in reading order. A rendered formula is read
+      // from the TeX the math pass kept on its span (`__tex` — ME-3 removed the
+      // annotation that used to carry it, and must stay removed for
+      // VoiceOver); a formula the pass did NOT render is still `$…$` in a text
+      // node and is split out with the page's one tokenizer, so a prose dollar
+      // (`$57,600`, C-2 / M-1) stays prose. A picture reads its alt text. The
+      // Speak control, buttons and fields inside the block are skipped.
+      function ttsSegments(el) {
+        var segs = [];
+        (function walk(node) {
+          var kids = node.childNodes || [];
+          // The test harness's DOM keeps `textContent =` text off the child
+          // list (a real DOM makes it a text node, read below); said, but
+          // without a node to highlight.
+          if (kids.length === 0 && node.nodeType === 1 && node.textContent) {
+            segs.push({ kind: 'text', text: String(node.textContent) });
+            return;
+          }
+          for (var i = 0; i < kids.length; i++) {
+            var n = kids[i];
+            if (n.nodeType === 3) {
+              var raw = n.textContent || '';
+              var at = 0;
+              mathSegments(raw).forEach(function (seg) {
+                if (seg.math) {
+                  var open = seg.text.slice(0, 2) === '$$' ? 2 : 1;
+                  segs.push({
+                    kind: 'math', tex: seg.text.slice(open, seg.text.length - open),
+                    node: n, start: at, end: at + seg.text.length
+                  });
+                } else {
+                  segs.push({ kind: 'text', text: seg.text.replace(/\\\$/g, '$'), raw: seg.text, node: n, start: at });
+                }
+                at += seg.text.length;
+              });
+            } else if (n.nodeType === 1) {
+              if (typeof n.__tex === 'string') {
+                segs.push({ kind: 'math', tex: n.__tex, el: n });
+                continue;
+              }
+              var tag = String(n.nodeName || '').toLowerCase();
+              if (TTS_SKIP_TAGS[tag] === true) continue;
+              if ((' ' + (n.className || '') + ' ').indexOf(' tts-bar ') !== -1) continue;
+              if (tag === 'img') {
+                if (n.alt) segs.push({ kind: 'text', text: ' Picture: ' + n.alt + '. ', el: n });
+                continue;
+              }
+              walk(n);
+            }
+          }
+        })(el);
+        return segs;
+      }
+
+      // Every descendant of `node` carrying class `cls`, in document order.
+      function ttsFind(node, cls, out) {
+        out = out || [];
+        var kids = (node && node.childNodes) || [];
+        for (var i = 0; i < kids.length; i++) {
+          var n = kids[i];
+          if (n.nodeType !== 1) continue;
+          if ((' ' + (n.className || '') + ' ').indexOf(' ' + cls + ' ') !== -1) out.push(n);
+          ttsFind(n, cls, out);
+        }
+        return out;
+      }
+
+      // Words the page adds between the parts it reads ("Choice 2,"). No
+      // node, so nothing is highlighted while they are spoken.
+      function ttsSay(text) { return { kind: 'text', text: text }; }
+
+      // Plain text that is not on the page as a node (a match option lives
+      // inside a <select>): still split for math, never highlighted.
+      function ttsLoose(text) {
+        return mathSegments(String(text || '')).map(function (seg) {
+          if (!seg.math) return ttsSay(seg.text.replace(/\\\$/g, '$'));
+          var open = seg.text.slice(0, 2) === '$$' ? 2 : 1;
+          return { kind: 'math', tex: seg.text.slice(open, seg.text.length - open) };
+        });
+      }
+
+      // James (2026-10-01): with Items read-aloud the question's ONE Speak
+      // reads the stem and then the options as the page shows them — the
+      // option TEXT only, never what the student picked, typed or arranged as
+      // an answer state (reading the student's own response is
+      // `tts_student_responses`, slice 2). Built from the answer block's DOM at
+      // the moment Speak is pressed, so an order item reads its current
+      // on-screen order and the highlight follows into each option. Short
+      // text, essay, drawing and hotspot (its regions have no visible text)
+      // add nothing.
+      function ttsOptionSegments(item, answer) {
+        var out = [];
+        if (!answer || !item) return out;
+        var type = item.type;
+        if (type === 'multiple_choice_single' || type === 'multiple_choice_multi') {
+          // The page shows no letters, so the choices are numbered.
+          ttsFind(answer, 'choice').forEach(function (label, i) {
+            out.push(ttsSay(' Choice ' + (i + 1) + ', '));
+            out = out.concat(ttsSegments(label));
+            out.push(ttsSay('. '));
+          });
+        } else if (type === 'order') {
+          var labels = ttsFind(answer, 'order-label');
+          if (labels.length) out.push(ttsSay(' Items to put in order: '));
+          labels.forEach(function (label) {
+            out = out.concat(ttsSegments(label));
+            out.push(ttsSay('. '));
+          });
+        } else if (type === 'match') {
+          var lefts = ttsFind(answer, 'match-left');
+          if (lefts.length) out.push(ttsSay(' Match: '));
+          lefts.forEach(function (left) {
+            out = out.concat(ttsSegments(left));
+            out.push(ttsSay(', '));
+          });
+          // Every row's <select> offers the same options; read them once,
+          // without the "Choose…" placeholder.
+          var select = null;
+          (function findSelect(node) {
+            var kids = (node && node.childNodes) || [];
+            for (var i = 0; i < kids.length && !select; i++) {
+              if (String(kids[i].nodeName || '').toLowerCase() === 'select') select = kids[i];
+              else if (kids[i].nodeType === 1) findSelect(kids[i]);
+            }
+          })(answer);
+          var options = select
+            ? Array.prototype.filter.call(select.childNodes || [], function (o) { return o.value !== ''; })
+            : [];
+          if (options.length) out.push(ttsSay(' Options: '));
+          options.forEach(function (option) {
+            out = out.concat(ttsLoose(option.textContent));
+            out.push(ttsSay(', '));
+          });
+        } else if (type === 'table') {
+          // Header cells only — column headers, then each row's label; the
+          // input cells are the answer and are never read.
+          var heads = [];
+          (function findHeads(node) {
+            var kids = (node && node.childNodes) || [];
+            for (var i = 0; i < kids.length; i++) {
+              if (kids[i].nodeType !== 1) continue;
+              if (String(kids[i].nodeName || '').toLowerCase() === 'th') heads.push(kids[i]);
+              else findHeads(kids[i]);
+            }
+          })(answer);
+          var spoken = heads.filter(function (th) { return String(th.textContent || '').trim(); });
+          if (spoken.length) out.push(ttsSay(' Table: '));
+          spoken.forEach(function (th) {
+            out = out.concat(ttsSegments(th));
+            out.push(ttsSay(', '));
+          });
+        }
+        return out;
+      }
+
+      function ttsClearHighlight() {
+        if (ttsMarked) {
+          ttsClass(ttsMarked, 'tts-word', false);
+          ttsMarked = null;
+        }
+        try {
+          if (typeof CSS !== 'undefined' && CSS && CSS.highlights) CSS.highlights.delete('tts-word');
+        } catch (e) {}
+      }
+
+      // The word being spoken. Text is marked with a CSS Custom Highlight — a
+      // Range over the text node, so nothing in the DOM changes (the peek frame,
+      // the math pass and the restore all see the same tree). A formula or a
+      // picture is marked whole, with a class.
+      function ttsHighlight(seg, offset, length) {
+        ttsClearHighlight();
+        if (!seg) return;
+        if (seg.el) {
+          ttsClass(seg.el, 'tts-word', true);
+          ttsMarked = seg.el;
+          return;
+        }
+        if (!seg.node) return;
+        var start = seg.kind === 'math' ? seg.start : seg.start + ttsRawOffset(seg.raw, offset);
+        var end = seg.kind === 'math' ? seg.end : seg.start + ttsRawOffset(seg.raw, offset + length);
+        try {
+          if (typeof Highlight !== 'function' || typeof CSS === 'undefined' || !CSS || !CSS.highlights) return;
+          var range = document.createRange();
+          range.setStart(seg.node, start);
+          range.setEnd(seg.node, end);
+          CSS.highlights.set('tts-word', new Highlight(range));
+        } catch (e) {}
+      }
+
+      function ttsPaint(target) {
+        if (!target) return;
+        var mine = ttsActive && ttsActive.target === target;
+        var paused = mine && ttsActive.paused;
+        target.play.textContent = mine ? (paused ? 'Resume' : 'Pause') : 'Speak';
+        target.play.setAttribute('aria-label', mine
+          ? (paused ? 'Resume reading ' : 'Pause reading ') + target.label
+          : 'Speak ' + target.label);
+        if (mine) target.stop.removeAttribute('hidden');
+        else target.stop.setAttribute('hidden', '');
+        ttsClass(target.el, 'tts-reading', !!mine);
+      }
+
+      // Stops whatever is being read, page side and host side. Called on a
+      // page turn, a source-tab change and Finish; the host also stops on its
+      // own on every session end, so a page that never gets the chance (the
+      // view torn down) still goes quiet.
+      function ttsStop() {
+        if (!ttsActive) return;
+        var target = ttsActive.target;
+        ttsActive = null;
+        ttsPost({ action: 'stop' });
+        ttsClearHighlight();
+        ttsPaint(target);
+      }
+
+      function ttsSpeak(target) {
+        ttsStop();
+        var segs = target.collect();
+        var wire = segs.map(function (seg) {
+          return seg.kind === 'math' ? { kind: 'math', tex: seg.tex } : { kind: 'text', text: seg.text };
+        });
+        TTS_SEQ += 1;
+        var id = target.id + ':' + TTS_SEQ;
+        if (!ttsPost({ action: 'speak', id: id, rate: TTS_RATE, segments: wire })) return;
+        ttsActive = { id: id, target: target, segments: segs, paused: false };
+        ttsPaint(target);
+      }
+
+      // `el` is the block that is read; `label` finishes "Speak …" for the
+      // accessible name ("the question", "source B"). Returns the control,
+      // which the caller places just above the block. `collect`, when given,
+      // replaces "the block's own segments" (a question reads its options too)
+      // and `outline` is what carries the reading outline (default `el`).
+      function ttsBar(el, label, collect, outline) {
+        var bar = document.createElement('div');
+        bar.className = 'tts-bar';
+        bar.setAttribute('role', 'group');
+        bar.setAttribute('aria-label', 'Read aloud');
+        var play = document.createElement('button');
+        play.type = 'button';
+        play.className = 'tts-play';
+        var stop = document.createElement('button');
+        stop.type = 'button';
+        stop.className = 'tts-stop';
+        stop.textContent = 'Stop';
+        stop.setAttribute('aria-label', 'Stop reading ' + label);
+        TTS_SEQ += 1;
+        var target = {
+          id: 'tts-' + TTS_SEQ, el: outline || el, play: play, stop: stop, label: label,
+          collect: typeof collect === 'function' ? collect : function () { return ttsSegments(el); }
+        };
+        play.onclick = function () {
+          if (ttsActive && ttsActive.target === target) {
+            ttsActive.paused = !ttsActive.paused;
+            ttsPost({ action: ttsActive.paused ? 'pause' : 'resume' });
+            ttsPaint(target);
+            return;
+          }
+          ttsSpeak(target);
+        };
+        stop.onclick = function () {
+          ttsStop();
+          // The Stop button hides itself; the keyboard goes back to Speak.
+          if (typeof play.focus === 'function') play.focus();
+        };
+        bar.appendChild(play);
+        bar.appendChild(stop);
+        ttsPaint(target);
+        return bar;
+      }
+
+      // The page-wide speed, three steps. Applies from the next Speak — a rate
+      // change cannot reach an utterance already handed to the synthesizer.
+      function ttsRateControl() {
+        var group = document.createElement('div');
+        group.className = 'tts-rate';
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', 'Reading speed');
+        var label = document.createElement('span');
+        label.className = 'tts-rate-label';
+        label.textContent = 'Reading speed:';
+        group.appendChild(label);
+        var buttons = [];
+        var paint = function () {
+          buttons.forEach(function (b) {
+            b.button.setAttribute('aria-pressed', b.rate === TTS_RATE ? 'true' : 'false');
+          });
+        };
+        [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']].forEach(function (pair) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = pair[1];
+          button.onclick = function () { TTS_RATE = pair[0]; paint(); };
+          buttons.push({ rate: pair[0], button: button });
+          group.appendChild(button);
+        });
+        paint();
+        return group;
+      }
+
+      // Host → page. `id` is the utterance id the page sent with `speak`, so a
+      // late callback for an utterance already replaced is ignored.
+      function ttsCurrent(id) { return ttsActive && ttsActive.id === id ? ttsActive : null; }
+      function ttsEnded(id) {
+        var active = ttsCurrent(id);
+        if (!active) return;
+        ttsActive = null;
+        ttsClearHighlight();
+        ttsPaint(active.target);
+      }
+      window.__secureTestSpeech = {
+        started: function () {},
+        paused: function (id) {
+          var active = ttsCurrent(id);
+          if (active) { active.paused = true; ttsPaint(active.target); }
+        },
+        resumed: function (id) {
+          var active = ttsCurrent(id);
+          if (active) { active.paused = false; ttsPaint(active.target); }
+        },
+        word: function (id, segment, offset, length) {
+          var active = ttsCurrent(id);
+          if (active) ttsHighlight(active.segments[segment], offset, length);
+        },
+        finished: ttsEnded,
+        cancelled: ttsEnded
+      };
 
       function choiceList(item, multi) {
         var wrap = document.createElement('div');
@@ -2936,6 +3343,8 @@ public enum AssessmentPage {
 
         button.onclick = function () {
           button.disabled = true;
+          // TTS slice 1: handing in ends the reading (the host stops too).
+          ttsStop();
           // Auto-save flush point (D-8), BEFORE the submit goes: a drawing
           // changed in the last five seconds would otherwise be handed in
           // unsaved. The host's upload gate is the other half — it holds the
@@ -3090,6 +3499,9 @@ public enum AssessmentPage {
         offlineNotice.textContent = 'Offline mode: answers are not saved to a server.';
         root.appendChild(offlineNotice);
       }
+      // TTS slice 1: one speed control for the page, under the heading with
+      // the time strip, so it stays put through every page turn.
+      if (TTS_ON) root.appendChild(ttsRateControl());
       var setAtFirst = {};   // item id → set that opens there
       var setOfItem = {};    // item id → set it belongs to
       var indexOf = {};
@@ -3148,6 +3560,9 @@ public enum AssessmentPage {
           // enlarged view — "Source B — <alt>" — because that is what tells the
           // student which document the chart came out of.
           body.appendChild(textWithAssets(source.text, { caption: source.label }));
+          // TTS slice 1: each source is read on its own, its control inside the
+          // panel so it hides with it.
+          if (TTS.stimuli === true) panel.appendChild(ttsBar(body, 'source ' + source.label));
           panel.appendChild(body);
           panels.push(panel);
         });
@@ -3181,7 +3596,11 @@ public enum AssessmentPage {
           tab.setAttribute('id', 'source-tab-' + set.id + '-' + i);
           tab.setAttribute('aria-controls', 'source-' + set.id + '-' + i);
           tab.textContent = source.label;
-          tab.onclick = function () { select(i); };
+          tab.onclick = function () {
+            // TTS slice 1: the source being read is about to be hidden.
+            if (i !== open) ttsStop();
+            select(i);
+          };
           tabs.push(tab);
           strip.appendChild(tab);
         });
@@ -3196,6 +3615,7 @@ public enum AssessmentPage {
           else if (event.key === 'End') next = tabs.length - 1;
           else return;
           if (typeof event.preventDefault === 'function') event.preventDefault();
+          if (next !== open) ttsStop();
           select(next);
           if (typeof tabs[next].focus === 'function') tabs[next].focus();
         };
@@ -3219,6 +3639,11 @@ public enum AssessmentPage {
         // C-4: content, so it enlarges. No caption of its own — the alt text
         // the teacher wrote is all there is to say about it.
         body.appendChild(textWithAssets(set.stimulus, { caption: '' }));
+        // TTS slice 1: the introduction is read on its own; a set that is
+        // only sources has no introduction to read.
+        if (TTS.stimuli === true && typeof set.stimulus === 'string' && set.stimulus.trim()) {
+          block.appendChild(ttsBar(body, 'the passage'));
+        }
         block.appendChild(body);
         // Slice 4: the introduction on top, the sources beneath it — under
         // every layout, since side_by_side only changes where the block goes.
@@ -3267,6 +3692,15 @@ public enum AssessmentPage {
         stem.className = 'stem';
         // C-4: a stem's picture enlarges too, under its own alt text.
         stem.appendChild(textWithAssets(item.stem, { caption: '' }));
+        // TTS slice 1: the control sits above the stem, outside what is read.
+        // One Speak reads the stem and then the options (`answer` is read when
+        // Speak is pressed, by which time it exists); the whole question
+        // carries the reading outline.
+        if (TTS.items === true) {
+          wrap.appendChild(ttsBar(stem, 'the question', function () {
+            return ttsSegments(stem).concat(ttsOptionSegments(item, answer));
+          }, wrap));
+        }
         wrap.appendChild(stem);
         var answer = answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
@@ -3558,6 +3992,8 @@ public enum AssessmentPage {
           // block, not only this page's — a hook with nothing dirty is a no-op,
           // and the pager does not know which page a drawing sits on.
           flushAllDrawings();
+          // TTS slice 1: what was being read leaves the screen with its page.
+          ttsStop();
           at = n;
           pages.forEach(function (page, i) {
             if (i === n) page.el.removeAttribute('hidden');
@@ -3672,6 +4108,10 @@ public enum AssessmentPage {
             // source as an annotation; VoiceOver reading a stem or choice would
             // meet it exactly as it did in the answer preview.
             stripTexAnnotations(span);
+            // TTS slice 1: what the read-aloud speaks for this formula (D-4).
+            // An expando, not an attribute — nothing reaches the accessibility
+            // tree, which is what ME-3 removed the annotation to keep clean.
+            span.__tex = tex;
             frag.appendChild(span);
           } catch (e) {
             // throwOnError keeps parse errors red rather than thrown, but a

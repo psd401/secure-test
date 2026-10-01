@@ -134,3 +134,29 @@ harness), not the shipping client, so nothing half-built rides a release.
   works? Needs the Spanish voice / model on the fleet either way.
 - **D-7** Ask IT for a dictation block for non-entitled students? Today AAC
   appears to stop dictation on its own; revisit after S-3.
+
+## Progress
+
+- **§Progress — slice 1 (TTS test content) BUILT 2026-10-01, not committed,
+  rows NOT RUN.** Core: `TextToSpeechScope` (Items → stems, Stimuli →
+  passage introductions + sources, Stimuli+Items or any other enabled value →
+  both, `tts_for_ela_reading` → sources/passages, off-ish values off),
+  `SpeechScript` (segments → the spoken string, word ranges back to segment +
+  UTF-16 offset), `SpeechCommand` / `SpeechCallback` (the `tts` channel both
+  ways), `MathSpeech` (LaTeX subset → words, whole-expression fallback
+  "math expression"). Page: Speak / Pause / Resume / Stop per block, one
+  page-wide speed (applies from the next Speak), word highlight via the CSS
+  Custom Highlight API (formulas and pictures marked whole), stop on page
+  turn, source-tab change and Finish; the math pass keeps each formula's TeX
+  on its span as an expando (ME-3's annotation strip unchanged). App:
+  `SpeechReader` (default en-US voice) behind the `tts` channel in
+  `AssessmentViewController`, refused without the accommodation; stopped on
+  hand-in, every session end (`flushPendingInput`), teardown (`retire`) and
+  quit. Items (James, 2026-10-01): one Speak reads the stem AND its options —
+  MC choices numbered "Choice 1, …" (the page shows no letters), order
+  entries in their current on-screen order, match prompts then the options
+  once, table header cells (never input cells); short text / essay / drawing
+  / hotspot read the stem only; the student's selection or typed answer is
+  never read (that is `tts_student_responses`, slice 2).
+  Rows: `client/MANUAL-CHECKS.md` "Text-to-speech — test content (slice 1,
+  2026-10-01)", none run.

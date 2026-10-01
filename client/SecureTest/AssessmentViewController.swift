@@ -36,6 +36,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// own strip; this tells the host to stop pushing text into it. Nothing
     /// else rides this channel — the clock itself is the host's.
     static let timerChannel = "timer"
+    /// Text-to-speech slice 1 (`docs/speech-tools-design.md`): the page's
+    /// Speak / Pause / Resume / Stop. The page sends the block's spoken form;
+    /// the host owns the voice (`SpeechReader`) and calls back per word.
+    static let ttsChannel = "tts"
 
     let view: NSView
     private let webView: LockedDownWebView
@@ -45,6 +49,9 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// is still out. The page flushes its dirty drawings when Finish is
     /// pressed; this is what keeps the submit from overtaking them.
     private let uploadGate = UploadGate()
+    /// TTS slice 1: built on the first Speak, so a student without the
+    /// accommodation never has a synthesizer at all.
+    private var speechReader: SpeechReader?
     /// On-demand peek: the student-facing notice strip (decision 6.6). The
     /// state is Core's `PeekNotice` (finding 8.1: dismissable, re-shown by
     /// every later peek); the strip below mirrors it — one label plus a
@@ -162,6 +169,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// is written before anything is sent, so the trip home loses nothing
     /// that reached it.
     func flushPendingInput(then done: @escaping @MainActor () -> Void) {
+        // TTS slice 1: every non-hand-in end comes through here first.
+        stopSpeech(reason: "session ending")
         webView.evaluateJavaScript(
             "window.__secureTestFlushInput ? window.__secureTestFlushInput() : false;"
         ) { _, _ in
@@ -175,6 +184,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     func retire() {
         guard !isRetired else { return }
         isRetired = true
+        stopSpeech(reason: "attempt screen torn down")
         webView.stopLoading()
         log("assessment controller retired — no further page loads")
     }
@@ -248,6 +258,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         controller.add(self, name: Self.homeChannel)
         controller.add(self, name: Self.withdrawChannel)
         controller.add(self, name: Self.timerChannel)
+        controller.add(self, name: Self.ttsChannel)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         magnificationObservation = webView.observe(\.magnification, options: [.new]) {
@@ -291,6 +302,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     }
                     self.bundle = bundle
                     self.log("bundle fetched: \(bundle.items.count) items")
+                    self.log("tts: \(TextToSpeechScope(accommodations: bundle.accommodations).logDescription)")
                     self.onBundleLoaded?(bundle)
                     // C-1: `onBundleLoaded` is what begins lockdown, and the
                     // AAC begin() transition resizes the window — so build the
@@ -691,6 +703,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             onTimerDismissed?()
             return
         }
+        if message.name == Self.ttsChannel {
+            handleSpeech(message.body)
+            return
+        }
         guard message.name == Self.responseChannel else {
             blocked("message on unexpected channel", detail: message.name)
             return
@@ -789,6 +805,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// student's answers exist in exactly one place that survives a crash, and
     /// that place is this machine.
     private func handleSubmit() {
+        // TTS slice 1: the page stopped its own reading on Finish; make sure.
+        stopSpeech(reason: "hand-in")
         guard case .server(let client, _, let attemptID) = source else {
             log("submit ignored: no server session")
             return
@@ -850,6 +868,36 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             "window.__secureTestSubmitResult(\(ok));",
             completionHandler: nil
         )
+    }
+
+    // MARK: text-to-speech (slice 1)
+
+    /// The page's `tts` channel. Refused unless this student's bundle grants
+    /// read-aloud: the page draws no control without it, so a message here
+    /// without the grant is a renderer bug, and the host does not speak for a
+    /// student the server did not entitle. The offline path has no bundle in
+    /// hand and reads the page's own grant, which came from the same file.
+    private func handleSpeech(_ body: Any) {
+        if let bundle, !TextToSpeechScope(accommodations: bundle.accommodations).isEnabled {
+            blocked("tts message without the accommodation")
+            return
+        }
+        do {
+            let command = try SpeechCommand.decode(fromMessageBody: body)
+            let reader = speechReader ?? SpeechReader(log: log) { [weak self] script in
+                self?.webView.evaluateJavaScript(script, completionHandler: nil)
+            }
+            speechReader = reader
+            reader.handle(command)
+        } catch {
+            blocked("malformed tts message", detail: "\(error)")
+        }
+    }
+
+    /// Silences the read-aloud, if any. Called on every way off the attempt
+    /// screen — hand-in, a session end, the teardown, a quit.
+    func stopSpeech(reason: String) {
+        speechReader?.stop(reason: reason)
     }
 
     // MARK: drawing uploads

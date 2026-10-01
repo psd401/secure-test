@@ -1215,6 +1215,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !terminatingAfterLockdown, eventReporter != nil, !attemptHandedIn {
             eventReporter?.report(.quit, detail: ["via": "terminate"])
         }
+        // TTS slice 1: the read-aloud stops with the first quit request, not
+        // after the session's end round trip.
+        controller?.stopSpeech(reason: "quit")
         guard let lockdown, lockdown.isActive, !terminatingAfterLockdown else {
             return .terminateNow
         }

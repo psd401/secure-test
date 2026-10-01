@@ -148,6 +148,11 @@ final class RendererHarness {
         try messages(on: "__timerDismissals")
     }
 
+    /// TTS slice 1: Speak / Pause / Resume / Stop, in order.
+    func postedSpeech() throws -> [[String: Any]] {
+        try messages(on: "__tts")
+    }
+
     private func messages(on global: String) throws -> [[String: Any]] {
         let json = try eval("JSON.stringify(\(global))").toString() ?? "[]"
         let parsed = try JSONSerialization.jsonObject(with: Data(json.utf8))
@@ -384,6 +389,7 @@ final class RendererHarness {
     var __submits = [];
     var __withdrawals = [];
     var __timerDismissals = [];
+    var __tts = [];
 
     var __root = __node('div');
     __root.id = 'items';
@@ -441,6 +447,10 @@ final class RendererHarness {
           // text into a strip nobody can see.
           timer: {
             postMessage: function (body) { __timerDismissals.push(body); }
+          },
+          // TTS slice 1: the read-aloud's own channel.
+          tts: {
+            postMessage: function (body) { __tts.push(body); }
           }
         }
       }

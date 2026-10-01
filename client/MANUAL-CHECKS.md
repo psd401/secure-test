@@ -1887,3 +1887,40 @@ after the session.
 | **Answer saved.** If any dictated text landed: leave the field (autosave), hand in, read the answer on the per-student results page | Records whether dictated text reaches the server — the construct-hole severity | N/A 2026-10-01 — nothing landed; the results page reads "Not handed in — 0 of 10 answered" for the attempt |
 | **After the session.** Back in Notes after `DID END` | Same result as the baseline row (the session leaves no lasting dictation state) | |
 | **Exempted student (if IT has one).** A Mac or student scoped OUT of the declaration (a speech-to-text accommodation); real session; dictation key in the essay | Text lands — the accommodation path works. Not exercisable until IT names an exempted device | |
+
+
+## Text-to-speech — test content (slice 1, 2026-10-01)
+
+`docs/speech-tools-design.md` slice 1 (D-1 `AVSpeechSynthesizer`, D-4 the
+LaTeX-to-words mapper, D-5 `tts_for_ela_reading` = stimulus read-aloud, D-6
+English only). A Speak control above each block the student's value covers;
+Speak / Pause / Resume / Stop per block, one page-wide speed (Slow / Normal /
+Fast, applied from the NEXT Speak), the spoken word highlighted. Unit tests
+cover the value mapping, the math mapper, the word-range mapping and the
+page's controls in JavaScriptCore; nothing below has been run. Set the value
+on the student's Accommodations row (or the assessment's per-student
+override) and check the client's stderr for `tts: items=… stimuli=…` after
+the bundle loads. Fixture: a paged assessment with a `$`-math stem (start the
+math with a letter — M-1), a stem with a prose dollar (`$57,600`), a stem with
+a picture, an inline set with an introduction and two sources, a multiple
+choice (one choice with math), an order, a match, a table with header labels,
+and an essay. Rows 1–13 run under simulated lockdown; the last row needs a
+REAL AAC session.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Items.** `tts_test_content` = Items; join | A Speak button above every question stem; none on the passage or the sources; "Reading speed: Slow Normal Fast" under the heading, Normal pressed | |
+| **Items read the options.** Speak each question: multiple choice, order, match, table, essay | MC: the stem, then "Choice 1, … Choice 2, …" in order (math in a choice read through the mapper). Order: "Items to put in order:" then the entries as they sit on screen — move one and Speak again, the new order is read. Match: the left prompts, then "Options:" and each option once, no "Choose…". Table: the column and row header text, never a typed cell. Essay: the stem only. Nothing says "selected" and no chosen / typed answer is read; the whole question is outlined while it is read | |
+| **Stimuli.** = Stimuli; rejoin | Speak above the passage introduction and inside each source panel (the second appears when its tab is opened); none on the stems | |
+| **Both.** = Stimuli+Items, then a hand-typed On | Speak on stems AND passage / sources, both times | |
+| **Off.** = None (Default) (or the row removed) | No Speak button and no speed control anywhere; stderr `tts: items=false stimuli=false` | |
+| **ELA reading.** `tts_test_content` off, `tts_for_ela_reading` = On | Speak on the passage and the sources only | |
+| **Play / pause / stop.** Speak a long stem; Pause; Resume; Stop | Audible en-US voice; the button reads Pause → Resume → Pause; Stop appears only while reading; after Stop the voice stops at once, the button reads Speak and has the keyboard focus | |
+| **One at a time.** Speak one stem, then Speak a source mid-sentence | The first voice stops at once and the second starts; only one block outlined | |
+| **Speed.** Slow, Speak; Fast, Speak the same stem | Audibly slower, then faster; a change mid-sentence applies from the next Speak | |
+| **Word highlight.** Speak a stem with bold text, a multiple-choice question and a source | Each word is filled with the accent colour as it is spoken, in step with the voice, through the bold word and on into each choice's text (the "Choice 1," words themselves are not highlighted; match options inside the drop-down are not highlighted); the block being read carries an accent outline; both clear when it ends | |
+| **Keyboard only.** No mouse: Tab to the speed buttons and a Speak button; Space / Return to Speak, Pause, Resume; Tab to Stop and press it | Every control is reached with macOS Keyboard navigation OFF and shows a focus ring; focus returns to Speak after Stop | |
+| **Contrast + zoom.** `color_contrast` = Yellow on Blue and `zoom` = 2.5X (one sitting); then Reverse Contrast | Buttons, the pressed speed, the outline and the word highlight are legible in each set; nothing clipped or overlapping at 2.5X | |
+| **Math read aloud.** Speak the `$`-math stem (e.g. `x^2 + \frac{1}{2}`), a prose-dollar stem, and a stem with math outside the subset (e.g. `\int_0^1 x\,dx`) | "x squared plus 1 over 2" with the formula outlined while it is spoken; "$57,600" read as money; the unsupported formula read as "math expression" and the words around it read normally | |
+| **Stops.** Speak, then: turn the page (Next / strip); Speak, switch source tab; Speak, Finish and hand in | The voice stops on the page turn, on the tab change and on Finish; stderr `tts: stopped (…)` each time | |
+| **Real session.** REAL AAC session (Release build, Finder launch), Stimuli+Items. Speak a stem and a source, pause / resume once; then Speak and let each end path happen in turn: time limit reaches zero, teacher Closes the session, Cmd-E, Cmd-Q | Audible inside the locked session with the highlight moving; the voice stops at once on every end path (stderr `tts: stopped (session ending)` / `(attempt screen torn down)` / `(quit)`), never continuing over the "Time is up." / session-ended sheet | |
