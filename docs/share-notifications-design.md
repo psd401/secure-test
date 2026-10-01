@@ -90,3 +90,10 @@ outside the dashboard.
   production access (`ProductionAccessEnabled: true`) — no sandbox-exit
   request needed. Next: identity verifies → two-address test (row 329),
   telling IT when.
+- 2026-10-01: IT added the three DKIM CNAMEs in the `.ai` zone; SES
+  verified the identity at 11:49 PT (DKIM `SUCCESS`). Direct delivery test
+  (AWS CLI, plain text, two staff addresses) sent 11:49 — arrived in the
+  inbox, not spam. Row 329 ✅: a real share sent one email from the no-reply
+  sender with Reply-To = the owner, link opened the home page. The co-teach
+  email is not yet exercised.
+  Email is live for shares; the safeguarding email slice is unblocked.

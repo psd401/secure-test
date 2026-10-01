@@ -1103,7 +1103,7 @@ recipient), fixtures created through the API and deleted after.
 | 326 | Recipient's home | **New** on A's "Shared with you" card and on B's "Shared with you as co-teacher" row | ✅ 2026-09-29 |
 | 327 | Recipient opens B's editor, returns home | B's **New** is gone; `access_grants.seen_at` set | ✅ 2026-09-29 |
 | 328 | Recipient adds A | The card is gone; the copy is in the list (no New — it is their own row) | ✅ 2026-09-29 |
-| 329 | The share / co-teach email arrives (`EMAIL_PROVIDER=ses`, after SES) | One email per event from the no-reply sender, Reply-To = the owner; share links to the home page, co-teach to the editor | NOT RUN (waits on SES, slice 3) |
+| 329 | The share / co-teach email arrives (`EMAIL_PROVIDER=ses`, after SES) | One email per event from the no-reply sender, Reply-To = the owner; share links to the home page, co-teach to the editor | ✅ 2026-10-01 on the origin (rev 64): a share to a colleague sent one email from the no-reply sender with Reply-To = the owner (James). the link opened the home page; co-teach email not exercised |
 
 **Reading SN-1 (2026-09-29):** the main checkout's first `bun run dev`
 after the merge answered 500 on both routes — `@aws-sdk/client-sesv2` was
