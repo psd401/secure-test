@@ -1141,8 +1141,8 @@ shows. Row numbers continue from 339; renumber if another section landed first.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 340 | Monitor, a granted student whose pre-flight was denied / timed out (the client row "Teacher sees a denied run") | The row shows "Speech-to-text unavailable on this Mac" as a small grey note beside the status badge; the row is NOT marked Needs attention and the alert tile count does not change | NOT RUN |
+| 340 | Monitor, a granted student whose pre-flight was denied / timed out (the client row "Teacher sees a denied run") | The row shows "Speech-to-text unavailable on this Mac" as a small grey note beside the status badge; the row is NOT marked Needs attention and the alert tile count does not change | ✅ 2026-10-01 (origin rev 67; Release client, sitting SKRKS9: denied then timed-out joins → the note on the row) |
 | 341 | Same student rejoins after allowing the microphone (pre-flight ready) | The note disappears on the next poll | NOT RUN |
-| 342 | The per-student results page for that attempt | The timeline reads "Speech-to-text unavailable — microphone permission denied <time>" and, after the rejoin, "Speech-to-text ready <time>"; no raw `speech_preflight` text anywhere | NOT RUN |
+| 342 | The per-student results page for that attempt | The timeline reads "Speech-to-text unavailable — microphone permission denied <time>" and, after the rejoin, "Speech-to-text ready <time>"; no raw `speech_preflight` text anywhere | ✅ in part 2026-10-01 (origin rev 67) — "Speech-to-text ready", "… unavailable — microphone permission denied", "… timed out while preparing" listed in order; the ready-after-denied rejoin half not run |
 | 343 | **Print student work** / the print report for the same section | No speech-to-text phrase in the Integrity line; a student whose only events are pre-flights reads "No integrity events" | NOT RUN |
 | 344 | A student not granted `speech_to_text` | No note on the Monitor and no speech-to-text line on the timeline | NOT RUN |

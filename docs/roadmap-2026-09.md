@@ -869,3 +869,23 @@ Side: design tool, both XS.
   print `multiple_choice_single`, `short_text`, `essay` where the rest of
   the editor says Multiple choice / Short answer / Essay. Proposal: reuse
   the editor's type labels on the proposal cards.
+
+## Speech tools — open considerations (James, 2026-10-01) — not decisions, nothing built
+
+Raised after the Release-build sitting of the read-aloud / speech-to-text
+work (`docs/speech-tools-design.md`). To weigh with beta feedback, not to
+solve now:
+
+- **Speed and voice controls could be better.** Today: one page-wide Slow /
+  Normal / Fast group and the Mac's default en-US voice (compact quality
+  only on the fleet). A finer speed control and a choice of voice (which
+  may need enhanced voices pushed to the fleet) are candidates.
+- **Change speed without starting over.** A speed change applies from the
+  next Speak; the student has to Stop and Speak again. Applying it to the
+  rest of the current reading (re-queue from the current word) is a
+  candidate.
+- **Start reading from a chosen point in a passage.** Speak always reads a
+  block from its start; a student cannot begin mid-passage (the page
+  disables text selection outside inputs by design). Click-a-word-to-start
+  or per-paragraph Speak controls are candidates.
+

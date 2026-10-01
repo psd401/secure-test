@@ -261,3 +261,8 @@ harness), not the shipping client, so nothing half-built rides a release.
   `client/MANUAL-CHECKS.md` "Speech-to-text (slice 3, 2026-10-01)" (last two)
   and `docs/design-tool-manual-checks.md` 340–344. Ships with the next client
   release; older clients post nothing, so their rows never show the note.
+- **Open considerations (James, 2026-10-01)** — speed / voice controls,
+  changing speed mid-reading, starting from a chosen point in a passage:
+  recorded in `docs/roadmap-2026-09.md` "Speech tools — open
+  considerations"; not decisions.
+
