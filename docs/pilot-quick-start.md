@@ -1,7 +1,7 @@
-# Secure Test — pilot quick-start
+# Secure Test — open-beta quick-start
 
-For the teachers and students in the first classroom pilot (from
-2026-09-17, on **2026 AP Seminar EOC B v2**). One page each: what to do, in the order you do it, and the
+For the teachers and students in the open beta (a whole school, following
+the first classroom pilot of 2026-09-17 on **2026 AP Seminar EOC B v2**). One page each: what to do, in the order you do it, and the
 things that look wrong but aren't. Written against client v1.3.3 and the
 design tool as deployed 2026-09-15. Nothing here needs IT on the day;
 the student Macs already carry the app and its configuration profile.
@@ -12,9 +12,9 @@ page you were on.
 
 ---
 
-## Teacher — the pilot assessment
+## Teacher — the first shared assessment
 
-The pilot uses **2026 AP Seminar EOC B v2**, already shared with you. Its
+The first pilot used **2026 AP Seminar EOC B v2**, already shared with you. Its
 reading layout is set (sources beside the question, one question at a
 time) and its rubric is attached.
 
@@ -25,11 +25,11 @@ time) and its rubric is attached.
 3. Open the copy. It arrives as a **Draft**. Look it over (*Show preview*
    renders it as the student will see it, minus the lockdown), then press
    **Publish**. Only a Published assessment can start a test session.
-4. **Time limit** (Settings) is set to 55 minutes for the pilot. It is
+4. **Time limit** (Settings) was set to 55 minutes for the pilot. It is
    counted per student from the moment they open the test. See "Three
    clocks" below before you start a session.
 
-## Teacher — building your own (after the pilot)
+## Teacher — building your own
 
 1. **Build or import.** *New assessment* for a blank one; *Import items from
    PDF* inside an assessment to read a paper test (it proposes questions and
@@ -50,6 +50,25 @@ time) and its rubric is attached.
    Draft copy — "(copy)" — with the questions, sources, accommodations and
    settings; results and test sessions are not copied. Use it for a second
    period's version or before a big edit.
+
+## Read-aloud and speech-to-text (client v1.3.6 and later)
+
+- **Grant it.** On the assessment's **Accommodations** tab, allow the tools
+  (Text-to-Speech Test Content / Student Responses / ELA Reading,
+  Speech-to-Text); then grant each to the students who need it on the
+  **Student accommodations** tab or the **Students** page. TIDE imports set
+  them too. The list shows only tools the app delivers.
+- **Students see** *Speak* on questions, passages and sources, *Read my
+  answer* under their typing, and *Speak my answer* on short answers and
+  essays.
+- **First time on a Mac:** a student granted Speech-to-Text is asked for
+  microphone and speech-recognition permission before the test locks and
+  must press **Allow** (IT cannot pre-approve the microphone). Have them
+  join once before test day. If they decline, the test works and says
+  "Speech-to-text isn't available on this Mac — tell your teacher."
+- **Limits:** English only; no speech-to-text in tables; math is read as
+  words ("math expression" for anything unusual). Nothing is recorded or
+  sent; the voice stays on the Mac.
 
 ## Teacher — practise on your own Mac
 
@@ -237,7 +256,7 @@ its own.
 - **A dollar amount like $57,600 in a passage.** Renders as plain text; a
   `$` before a digit is never math.
 
-## Not in this pilot
+## Not in this open beta
 
 - Sending scores to Schoology (PowerSchool is available; a CSV works for
   anything else).

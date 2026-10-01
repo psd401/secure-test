@@ -212,10 +212,52 @@ harness), not the shipping client, so nothing half-built rides a release.
   answer" outlines the field but cannot highlight the spoken word: a CSS
   highlight range does not reach inside an `<input>` / `<textarea>`. A
   mirror element laid over the field (same font, padding, wrapping, scroll)
-  carrying the highlight would do it; unbuilt.
+  carrying the highlight would do it. **BUILT 2026-10-01, not committed,
+  row "Answer word highlight" NOT RUN** — see §Progress.
 - Rows still open: order / match / table options, Stimuli-only, Off, ELA
   reading, keyboard-only, contrast + zoom, every stop path, the prose-dollar
   and fallback math reads, denied / prompt-left-open / asset download on a
   fresh Mac, the time-limit row on a FRESH attempt, and the real-session
   end paths.
-
+- **§Progress — answer word highlight (follow-up) BUILT 2026-10-01, not
+  committed, row NOT RUN.** While "Read my answer" reads, a mirror `div`
+  (`ttsMirrorFor`) is laid over the field — or over the table cell whose
+  value is being spoken — in page coordinates, copying the field's computed
+  font, line-height, spacing, text-align, padding, border widths and
+  box-sizing, `pre-wrap` for a textarea / `pre` for an input, and its
+  scroll; it holds the value as one text node with transparent text,
+  `aria-hidden`, `pointer-events: none`, `user-select: text` (the c7848ad
+  rule). Each word callback maps the slice-2 segment (now carrying the field
+  and its offset into the value) to a Range in that node; a value read whole
+  through `MathSpeech` is highlighted whole. The mirror is re-placed on every
+  word and on the field's own scroll; in a textarea the field scrolls to
+  keep the spoken word in view (single-line inputs are not scrolled). The
+  c7848ad `ttsRepaint` toggle runs on the mirror too. Removed on finish,
+  Stop and every stop path (typing in the field stops reading). The pager
+  gained `z-index: 2` so it covers the mirror. Known limits: inside a
+  scrolling column (`side_by_side`) the mirror is not clipped to the column
+  and follows a column scroll only at the next word; the mirror's text is
+  the value at the press (a keypad insertion mid-read is not followed).
+- **§Progress — failure visibility BUILT 2026-10-01, not committed, rows NOT
+  RUN.** A failed pre-flight was visible only to the student ("…tell your
+  teacher"). Now the client posts one `speech_preflight` attempt event per
+  join for a granted student, whatever the outcome — detail
+  `{ outcome: ready | denied | timed_out | unavailable, step?: microphone |
+  recognition | transcriber | assets }` from
+  `SpeechToTextPreflight.eventDetail` (Core, unit-tested: the first step
+  that did not answer yes; a permission not granted = `denied`, transcriber
+  / assets = `unavailable`, the budget = `timed_out` with no step), through
+  the retrying `AttemptEventReporter`; never a transcript or error text.
+  Server: client-postable kind + **migration 0049** (kind CHECK); the events
+  route keeps only `{ outcome, step }` from closed lists (unknown outcome →
+  `unavailable`). Monitor: `speech_to_text_unavailable` on the attendance
+  row from the NEWEST pre-flight (a ready rejoin clears it) → grey note
+  "Speech-to-text unavailable on this Mac" — a note, not an alert. Timeline:
+  "Speech-to-text ready" / "Speech-to-text unavailable — microphone
+  permission denied" / "… timed out while preparing" / "… not supported on
+  this Mac". The print Integrity line skips the kind (a count cannot say how
+  it came out). Usage: `design-tool/infra/README.md` "Speech-to-text
+  pre-flight outcomes" (read-only, counts per day / outcome). Rows:
+  `client/MANUAL-CHECKS.md` "Speech-to-text (slice 3, 2026-10-01)" (last two)
+  and `docs/design-tool-manual-checks.md` 340–344. Ships with the next client
+  release; older clients post nothing, so their rows never show the note.

@@ -1111,3 +1111,38 @@ recipient), fixtures created through the API and deleted after.
 after the merge answered 500 on both routes — `@aws-sdk/client-sesv2` was
 not installed there yet. A root `bun install` fixed it; the image installs
 its own dependencies.
+
+## Speech tools — preview controls and help topic (2026-10-01)
+
+`docs/speech-tools-design.md` slice 4. The render logic is covered by
+`test/preview-render.test.ts` ("preview — speech controls"); these rows are
+what only the browser shows. Row numbers continue from 331; renumber if another section landed first.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 332 | An assessment with `tts_test_content` allowed: **Show preview** | A grey inert **Speak** control above every question stem and on each passage / source block; the yellow note "Read-aloud / speech-to-text controls appear only for students granted them." under the preview banner; the controls do nothing when clicked | NOT RUN |
+| 333 | Only `tts_for_ela_reading` allowed | **Speak** on passages and sources only, none above plain questions | NOT RUN |
+| 334 | Only `tts_student_responses` allowed | **Read my answer** under short-text, essay and table fields; no Speak | NOT RUN |
+| 335 | Only `speech_to_text` allowed | **Speak my answer** under short-text and essay fields, not tables | NOT RUN |
+| 336 | None of the four allowed | No speech controls and no extra note | NOT RUN |
+| 337 | Any of the four allowed: the print view (`Print` / `?print`) | No speech controls and no note on paper | NOT RUN |
+| 338 | `/help.html` (signed out is fine) | Topic 11 "Read-aloud and speech-to-text" appears in the contents list and the phone jump menu; steps read correctly; the **Send feedback** button in the callout opens the feedback dialog; no picture yet (one is still to capture) | NOT RUN |
+| 339 | `/roadmap.html` | Hero reads "…to an open beta"; the Ahead tab lists "Read-aloud and speech-to-text for students" first, then "Run the open beta and gather feedback" | NOT RUN |
+
+## Speech-to-text failure visibility (2026-10-01)
+
+`docs/speech-tools-design.md` §Progress "failure visibility". The client
+posts one `speech_preflight` event (`{ outcome, step? }`) per join for a
+student granted `speech_to_text` (**migration 0049** widens the kind CHECK).
+The derivation and wording are unit-tested (`test/attempt-events-api.test.ts`,
+`test/attendance-view.test.ts`, `test/reporting-timeline.test.ts`,
+`test/reporting-print-helpers.test.ts`); these rows are what only the browser
+shows. Row numbers continue from 339; renumber if another section landed first.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 340 | Monitor, a granted student whose pre-flight was denied / timed out (the client row "Teacher sees a denied run") | The row shows "Speech-to-text unavailable on this Mac" as a small grey note beside the status badge; the row is NOT marked Needs attention and the alert tile count does not change | NOT RUN |
+| 341 | Same student rejoins after allowing the microphone (pre-flight ready) | The note disappears on the next poll | NOT RUN |
+| 342 | The per-student results page for that attempt | The timeline reads "Speech-to-text unavailable — microphone permission denied <time>" and, after the rejoin, "Speech-to-text ready <time>"; no raw `speech_preflight` text anywhere | NOT RUN |
+| 343 | **Print student work** / the print report for the same section | No speech-to-text phrase in the Integrity line; a student whose only events are pre-flights reads "No integrity events" | NOT RUN |
+| 344 | A student not granted `speech_to_text` | No note on the Monitor and no speech-to-text line on the timeline | NOT RUN |

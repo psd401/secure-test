@@ -174,17 +174,50 @@ function displayOrder(itemId: string, entries: SequenceEntry[]): SequenceEntry[]
     .sort((a, b) => fnv1a(itemId + a.id) - fnv1a(itemId + b.id));
 }
 
+// docs/speech-tools-design.md slice 4: which speech controls the assessment
+// ALLOWS. The preview has no student, so it shows what a granted student could
+// see; the controls are inert like the Tier-1 toolbar (no script, strict CSP).
+interface SpeechPreview {
+  items: boolean; // tts_test_content: Speak above each question
+  stimuli: boolean; // tts_test_content or tts_for_ela_reading: Speak on passages / sources
+  responses: boolean; // tts_student_responses: Read my answer under typed fields
+  dictation: boolean; // speech_to_text: Speak my answer under short text / essay
+}
+
+const NO_SPEECH: SpeechPreview = { items: false, stimuli: false, responses: false, dictation: false };
+
+function speechFor(allowed: readonly string[]): SpeechPreview {
+  const a = new Set(allowed);
+  return {
+    items: a.has("tts_test_content"),
+    stimuli: a.has("tts_test_content") || a.has("tts_for_ela_reading"),
+    responses: a.has("tts_student_responses"),
+    dictation: a.has("speech_to_text"),
+  };
+}
+
+function speechBar(...labels: string[]): string {
+  if (labels.length === 0) return "";
+  const buttons = labels
+    .map((l) => `<span class="tool-btn speech-btn" role="button" aria-disabled="true">${l}</span>`)
+    .join("");
+  return `<div class="speech-bar">${buttons}</div>`;
+}
+
 function renderItem(
   item: PreviewItem,
   index: number,
   resolved: Map<string, ResolvedAsset>,
   printMode: boolean,
+  speech: SpeechPreview = NO_SPEECH,
 ): string {
   // renderItemContent HTML-escapes its own non-math, non-image text, so
   // we can drop the result straight into innerHTML-equivalent positions
   // without double-escaping.
   const stemHtml = renderItemContent(item.stem, resolved);
-  const heading = `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>`;
+  const heading =
+    (speech.items ? speechBar("Speak") : "") +
+    `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>`;
 
   let body = "";
   if (
@@ -374,7 +407,18 @@ function renderItem(
     assertNever(item.type, "renderItem: unhandled item type");
   }
 
-  return `<div class="item">${heading}${body}</div>`;
+  // Typed-response fields: Read my answer (also a table) / Speak my answer
+  // (short text and essay only — no speech-to-text in tables).
+  const typed = item.type === "short_text" || item.type === "essay";
+  const answerBar =
+    typed || item.type === "table"
+      ? speechBar(
+          ...(speech.responses ? ["Read my answer"] : []),
+          ...(speech.dictation && typed ? ["Speak my answer"] : []),
+        )
+      : "";
+
+  return `<div class="item">${heading}${body}${answerBar}</div>`;
 }
 
 export interface RenderOptions {
@@ -396,6 +440,7 @@ function renderStimulus(
   firstIndex: number,
   lastIndex: number,
   resolved: Map<string, ResolvedAsset>,
+  speech: SpeechPreview = NO_SPEECH,
 ): string {
   const range =
     firstIndex === lastIndex
@@ -416,6 +461,7 @@ function renderStimulus(
       return (
         `<section class="source" aria-labelledby="${escapeHtml(headingId)}">` +
         `<h3 id="${escapeHtml(headingId)}" class="source-label">${escapeHtml(src.label)}</h3>` +
+        (speech.stimuli ? speechBar("Speak") : "") +
         `<div class="source-body">${text}</div>` +
         `</section>`
       );
@@ -428,6 +474,7 @@ function renderStimulus(
   return (
     `<section class="stimulus stimulus-${set.layout}" aria-label="Stimulus for ${escapeHtml(range)}">` +
     `<p class="stimulus-label">${escapeHtml(range)}</p>` +
+    (speech.stimuli && (lead || set.source) ? speechBar("Speak") : "") +
     `<div class="stimulus-body">${body}</div>` +
     sourcesHtml +
     `</section>`
@@ -456,13 +503,14 @@ export function renderAssessmentHtml(
     setByFirstItem.set(ordered[Math.min(...indices)]!.id, set);
     lastIndexOfSet.set(set.id, Math.max(...indices));
   }
+  const speech = printMode ? NO_SPEECH : speechFor(assessment.allowed_accommodations);
   const itemsHtml = ordered
     .map((item, idx) => {
       const set = setByFirstItem.get(item.id);
       const opener = set
-        ? renderStimulus(set, idx, lastIndexOfSet.get(set.id) ?? idx, resolvedAssets)
+        ? renderStimulus(set, idx, lastIndexOfSet.get(set.id) ?? idx, resolvedAssets, speech)
         : "";
-      return opener + renderItem(item, idx, resolvedAssets, printMode);
+      return opener + renderItem(item, idx, resolvedAssets, printMode, speech);
     })
     .join("");
   // Banner + Tier-1 toolbar are teacher-facing; omit them on a paper test.
@@ -471,7 +519,10 @@ export function renderAssessmentHtml(
     : renderAccommodationsToolbar(assessment.allowed_accommodations);
   const bannerHtml = printMode
     ? ""
-    : `<div class="preview-banner">Preview — students do not see this banner.</div>`;
+    : `<div class="preview-banner">Preview — students do not see this banner.</div>` +
+      (speech.items || speech.stimuli || speech.responses || speech.dictation
+        ? `<div class="preview-banner">Read-aloud / speech-to-text controls appear only for students granted them.</div>`
+        : "");
 
   return `<!doctype html>
 <html lang="en"><head>
@@ -523,6 +574,8 @@ export function renderAssessmentHtml(
     .math-error { color: #cc0000; background: #ffeeee; padding: 0 4px; border-radius: 2px; font-family: monospace; }
     .image-missing { color: #cc0000; background: #ffeeee; padding: 0 4px; border-radius: 2px; font-family: monospace; font-size: 12px; }
     .item-image { max-width: 100%; max-height: 360px; height: auto; display: block; margin: 8px 0; border: 1px solid #eee; border-radius: 4px; }
+    .speech-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+    .item > .speech-bar:not(:first-child) { margin: 8px 0 0; }
     .accommodations-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 8px 10px; background: #f5f7fb; border: 1px solid #d6dce8; border-radius: 4px; }
     .tool-btn { display: inline-block; padding: 4px 10px; font-size: 12px; line-height: 1.4; background: #ffffff; border: 1px solid #c2c8d4; border-radius: 3px; color: #3a3f4a; cursor: default; user-select: none; }
     /* Print/PDF affordances (slice 34) — blank space for paper answers. */

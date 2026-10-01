@@ -415,6 +415,26 @@
       </div>
     </section>
 
+    <section class="topic" id="speech" data-title="Read-aloud and speech-to-text">
+      <header><span class="n" aria-hidden="true">11</span><h2>Read-aloud and speech-to-text</h2></header>
+      <p class="lead">Give a student a voice that reads the test aloud, reads their answer back, or types what they say. Each is granted per student.</p>
+      <div class="topic-body wide">
+        <div>
+          <ol class="steps">
+            <li>On the assessment's <b class="ui">Accommodations</b> tab, tick the tools this test allows: <b class="ui">Text-to-Speech (Test Content)</b>, <b class="ui">Text-to-Speech (Student Responses)</b>, <b class="ui">TTS for ELA Reading</b> and <b class="ui">Speech-to-Text</b>. The list shows only the tools the app delivers today.</li>
+            <li>Grant each tool to the students who need it: on the <b class="ui">Student accommodations</b> tab or the <b class="ui">Students</b> page. A TIDE import sets them too. A student with no grant sees nothing new.</li>
+            <li>A granted student sees <b class="ui">Speak</b> buttons on questions, passages and sources (which of those depends on the <b class="ui">Items</b> / <b class="ui">Stimuli</b> value), <b class="ui">Read my answer</b> under what they have typed, and <b class="ui">Speak my answer</b> to dictate into a short answer or essay.</li>
+            <li>The <b class="ui">first time on each Mac</b>, a student granted Speech-to-Text is asked for microphone and speech-recognition permission before the test locks, and must press <b class="ui">Allow</b>. IT cannot approve the microphone ahead of time, so have those students open Secure Test and join once before test day.</li>
+            <li>If they press Don't Allow, the test still works and the student sees "Speech-to-text isn't available on this Mac. Tell your teacher." You will also see a note on the Monitor. Allow it in System Settings, under Privacy &amp; Security, then rejoin.</li>
+            <li><b class="ui">Show preview</b> shows inert Speak controls so you can see where they go; they appear for a student only if granted.</li>
+          </ol>
+          <p class="note">Voices stay on the Mac: nothing is recorded or sent anywhere. Limits for now: English only; no speech-to-text inside tables; math is read as words, and anything unusual as "math expression".</p>
+          <div class="tip"><strong>Feedback wanted:</strong> how do the voices sound on your students' Macs, and is anything missing? <b class="ui">Send feedback</b>, top right of every page, tells the project team.</div>
+        </div>
+        <!-- TODO: picture still to capture (from the demo DB, per docs/help-capture.md): the Accommodations tab with the speech tools ticked. -->
+      </div>
+    </section>
+
     <section class="topic" id="looks-wrong" data-title="Looks wrong but isn't" data-extra>
       <header><h2>Things that look wrong but aren't</h2></header>
       <dl class="faq">
@@ -468,7 +488,7 @@
 </dialog>
 
 <script>
-const UPDATED = "2026-09-29";
+const UPDATED = "2026-10-01";
 document.getElementById("updated").textContent =
   new Date(UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 

@@ -245,7 +245,7 @@
 
 <section class="hero">
   <div class="eyebrow">Peninsula School District</div>
-  <h1>From a one-day experiment to a district pilot</h1>
+  <h1>From a one-day experiment to an open beta</h1>
   <p class="lede">Secure Test locks a student's Mac for the length of a test, and gives teachers a web tool to build, run, monitor and score those tests. It is built in the open by the district's Research &amp; Assessment office.</p>
   <div class="stats" id="stats"></div>
 </section>
@@ -264,8 +264,8 @@
       </div>
       <aside>
         <div class="panel">
-          <h2>Questions for the pilot</h2>
-          <p>Deliberately not built until pilot teachers and students tell us they are wanted.</p>
+          <h2>Questions for the beta</h2>
+          <p>Deliberately not built until beta teachers and students tell us they are wanted.</p>
           <ul id="pilot-questions"></ul>
         </div>
         <div class="panel">
@@ -371,7 +371,8 @@ const JOURNEY = [
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
   { title: "Email from the app", text: "Safeguarding alerts reach the teacher's inbox, and colleagues get an email when a test is shared with them.", wait: "IT + AWS email setup" },
-  { title: "Finish the pilot and gather feedback", text: "Teacher and student feedback rounds; the questions at right are part of it." },
+  { title: "Read-aloud and speech-to-text for students", text: "Built; ships with the next student-app release. Questions and passages read aloud, students\u2019 own answers read back, and answers dictated by voice \u2014 for the students a teacher grants them to. Voices stay on the Mac." },
+  { title: "Run the open beta and gather feedback", text: "Users across one school. Teacher and student feedback rounds; the questions at right are part of it." },
   { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
   { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
   { title: "Staging environment and automated deploys", text: "A practice copy of the system, and deploys that no longer run from one laptop." },

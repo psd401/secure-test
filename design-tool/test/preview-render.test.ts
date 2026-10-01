@@ -899,3 +899,82 @@ describe("renderAssessmentHtml: table (E3)", () => {
     expect(html).toContain('class="fill-table fill-table-print"');
   });
 });
+
+describe("preview — speech controls (speech-tools slice 4)", () => {
+  const count = (html: string, label: string) =>
+    html.split(`aria-disabled="true">${label}</span>`).length - 1;
+  const withAcc = (ids: string[]) => ({ ...assessment, allowed_accommodations: ids });
+  const essay: PreviewItem = {
+    id: "e1", position: 3, type: "essay", stem: "Discuss.", choices: [],
+    correct_choice_ids: [], correct_answer: null,
+  };
+  const table: PreviewItem = {
+    id: "t1", position: 4, type: "table", stem: "Fill.", choices: [],
+    correct_choice_ids: [], correct_answer: null,
+    columns: [{ id: "c1", label: "A" }], rows: [{ id: "r1", label: "x" }],
+  };
+  const all = [...items, essay, table];
+
+  test("nothing allowed: no controls, no note", () => {
+    const html = renderAssessmentHtml(assessment, all);
+    expect(count(html, "Speak")).toBe(0);
+    expect(count(html, "Read my answer")).toBe(0);
+    expect(count(html, "Speak my answer")).toBe(0);
+    expect(html).not.toContain("controls appear only for students granted them");
+  });
+
+  test("tts_test_content: a Speak above every stem, plus the note", () => {
+    const html = renderAssessmentHtml(withAcc(["tts_test_content"]), all);
+    expect(count(html, "Speak")).toBe(all.length);
+    expect(html).toContain("Read-aloud / speech-to-text controls appear only for students granted them.");
+    // Above the stem, inert (no script).
+    expect(html.indexOf('<div class="speech-bar">')).toBeLessThan(html.indexOf('<p class="stem">'));
+    expect(html).not.toContain("<script");
+  });
+
+  test("tts_test_content: Speak on a stimulus and each source", () => {
+    const html = renderAssessmentHtml(withAcc(["tts_test_content"]), items, new Map(), {
+      itemSets: [{
+        id: "s1", stimulus: "Read this.", layout: "inline",
+        sources: [{ label: "Source A", text: "One" }, { label: "Source B", text: "Two" }],
+        item_ids: ["i1"],
+      }],
+    });
+    // 3 stems + 1 stimulus intro + 2 sources
+    expect(count(html, "Speak")).toBe(items.length + 3);
+  });
+
+  test("tts_for_ela_reading: Speak on stimuli only, not stems", () => {
+    const html = renderAssessmentHtml(withAcc(["tts_for_ela_reading"]), items, new Map(), {
+      itemSets: [{
+        id: "s1", stimulus: "Read this.", layout: "inline",
+        sources: [{ label: "Source A", text: "One" }], item_ids: ["i1"],
+      }],
+    });
+    expect(count(html, "Speak")).toBe(2);
+    expect(html.indexOf('class="speech-bar"')).toBeGreaterThan(html.indexOf("stimulus-label"));
+  });
+
+  test("tts_student_responses: Read my answer under short text, essay and table", () => {
+    const html = renderAssessmentHtml(withAcc(["tts_student_responses"]), all);
+    expect(count(html, "Read my answer")).toBe(3);
+    expect(count(html, "Speak")).toBe(0);
+  });
+
+  test("speech_to_text: Speak my answer under short text and essay, not table", () => {
+    const html = renderAssessmentHtml(withAcc(["speech_to_text"]), all);
+    expect(count(html, "Speak my answer")).toBe(2);
+    expect(count(html, "Read my answer")).toBe(0);
+  });
+
+  test("print mode carries no speech controls or note", () => {
+    const html = renderAssessmentHtml(
+      withAcc(["tts_test_content", "tts_student_responses", "speech_to_text"]),
+      all,
+      new Map(),
+      { printMode: true },
+    );
+    expect(html).not.toContain('role="button"');
+    expect(html).not.toContain("controls appear only for students granted them");
+  });
+});
