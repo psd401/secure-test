@@ -267,3 +267,9 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
   (adkim / aspf relaxed); the parent `.ai` zone has no DMARC record, so
   this is the only policy. DKIM aligns (no custom MAIL FROM — SPF does not
   align and need not). Aggregate reports not set up.
+- 2026-10-01: slice 4 DEPLOYED — rev 65 (`0c5449e`), health stamp = HEAD,
+  no migration. Rows 330 ✅ / 331 ◐ on the origin the same afternoon (demo
+  student, Debug client, simulated lockdown — screening and email are
+  server-side): both alerts written within seconds, both emails arrived as
+  specified. The maintainer CC is not yet seen on a real alert (the owner
+  was the CC address, so it deduplicated).
