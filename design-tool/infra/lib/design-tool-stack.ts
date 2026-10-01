@@ -294,6 +294,7 @@ export class DesignToolStack extends cdk.Stack {
       domainName: props.domainName,
       adminEmails: props.adminEmails ?? "",
       notifyTopic,
+      safeguardingCcEmails: props.notifyEmail,
     });
   }
 }

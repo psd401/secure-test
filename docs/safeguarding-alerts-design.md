@@ -81,7 +81,7 @@ must be a substring of the response (checked in code; dropped if not).
    anyway" route flag. Tests with the mock provider.
 2. Teacher UI: badges, panel, Acknowledge, Score with AI anyway.
 3. Rows (hand-run with fixture text written for the purpose).
-4. Email through SES — waits on D-5.
+4. Email through SES — BUILT 2026-10-01 (see Progress).
 5. Guardrail content filters on the essay input to Detect (AWS console) —
    optional, replaces the code-side `inputMode: "record"` once confirmed.
 
@@ -244,3 +244,26 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
   screening is off). **10.1 (James): screen the pilot backlog** — the 14-day
   window covers every pilot hand-in since 2026-09-17, so the first hours
   after the deploy can raise alerts on last week's work.
+- **Slice 4 (email) BUILT 2026-10-01, not deployed.** SES went live the same
+  day (`docs/share-notifications-design.md`). Decisions (James): 6.1 the
+  email names the kind of concern; 6.2 recipients = the assessment owner +
+  the teacher who ran the attempt's sitting (`test_sessions.owner_email` —
+  the co-teacher when they ran it), deduplicated, NOT every co-teacher (they
+  keep the badge); 6.3 CC = the `notifyEmail` context key, passed as
+  `SAFEGUARDING_CC_EMAILS`; 6.4 no `[Urgent]` prefix. `lib/email/safeguardingNotifications.ts`
+  (pure builder + a send that never throws; no Reply-To, so replies go to
+  no-reply; link = `OIDC_REDIRECT_URI` origin + the per-student results
+  page); `screenOne` sends one email per answer that gained a NEW alert row
+  (both kinds on one answer share it; an open duplicate sends nothing; the
+  hand-in, the hourly retry and the lazy pre-score screen all go through
+  it; already-written alerts never email). No teacher address → the CC
+  becomes the To; neither → `safeguarding_email_no_recipient` (warn). A
+  failed send → `safeguarding_email_failed` at ERROR (trips the server-error
+  alarm), no retry, the alert and the screening stand. `EmailMessage.to`
+  takes several addresses and gains `cc`. Tests: 6 new in
+  `test/safeguarding-screening.test.ts`; design-tool 2424 pass, typecheck
+  clean, infra synth shows the env var. Rows 330–331 NOT RUN.
+- 2026-10-01: IT published `_dmarc.securetest.psd401.ai` at p=quarantine
+  (adkim / aspf relaxed); the parent `.ai` zone has no DMARC record, so
+  this is the only policy. DKIM aligns (no custom MAIL FROM — SPF does not
+  align and need not). Aggregate reports not set up.

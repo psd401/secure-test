@@ -63,6 +63,10 @@ export interface AppServiceProps {
    * NOTIFY_TOPIC_ARN, and the target for every alarm this construct
    * creates. */
   readonly notifyTopic: sns.ITopic;
+  /** Safeguarding alerts slice 4: CC'd on every alert email while the pilot
+   * lasts — the maintainer address the `notifyEmail` context key already
+   * holds (James, 2026-10-01). "" = nobody. */
+  readonly safeguardingCcEmails: string;
 }
 
 /** Name of the James-created app secret (slice 3). Keys:
@@ -258,6 +262,8 @@ export class AppService extends Construct {
       // sender's domain identity.
       EMAIL_PROVIDER: "ses",
       EMAIL_FROM: `no-reply@${props.domainName}`,
+      // Safeguarding alerts slice 4: the maintainer's CC on alert emails.
+      SAFEGUARDING_CC_EMAILS: props.safeguardingCcEmails,
     };
     if (props.oidcWebClientId) {
       environment.OIDC_CLIENT_ID = props.oidcWebClientId;

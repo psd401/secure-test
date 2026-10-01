@@ -35,7 +35,10 @@ export const sesProvider: EmailSender = {
     await sesClient().send(
       new SendEmailCommand({
         FromEmailAddress: fromAddress(),
-        Destination: { ToAddresses: [message.to] },
+        Destination: {
+          ToAddresses: [message.to].flat(),
+          CcAddresses: message.cc && message.cc.length > 0 ? message.cc : undefined,
+        },
         ReplyToAddresses: message.replyTo ? [message.replyTo] : undefined,
         Content: {
           Simple: {

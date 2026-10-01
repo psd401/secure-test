@@ -11,6 +11,7 @@ import {
   type SafeguardingAlertInsert,
   type SafeguardingAlertKind,
 } from "@/db/schema";
+import { sendSafeguardingEmail } from "@/lib/email/safeguardingNotifications";
 import { log, truncate } from "@/lib/log";
 import { getGuardrailProvider } from "@/lib/safeguarding/provider";
 import type { GuardrailProvider } from "@/lib/safeguarding/types";
@@ -271,6 +272,7 @@ async function screenOne(
   }
 
   let written = 0;
+  const writtenKinds: SafeguardingAlertKind[] = [];
   try {
     for (const row of inserts) {
       if (await hasOpenAlert(db, response.id, row.kind as SafeguardingAlertKind)) {
@@ -278,6 +280,17 @@ async function screenOne(
       }
       await db.insert(safeguarding_alerts).values(row);
       written++;
+      writtenKinds.push(row.kind as SafeguardingAlertKind);
+    }
+    // Slice 4: one email per answer with a NEW alert row (an open duplicate
+    // skipped above sends nothing). Best effort — never throws.
+    if (writtenKinds.length > 0) {
+      await sendSafeguardingEmail(db, {
+        attemptId: attempt.id,
+        assessmentId: attempt.assessment_id,
+        responseId: response.id,
+        kinds: writtenKinds,
+      });
     }
     if (ok) {
       await db

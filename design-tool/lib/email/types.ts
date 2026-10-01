@@ -5,7 +5,10 @@
 // implementation, selected by env.
 
 export interface EmailMessage {
-  to: string;
+  /** One address, or several on one message (a safeguarding alert's teachers). */
+  to: string | string[];
+  /** Copied recipients (the maintainer on safeguarding alerts during the pilot). */
+  cc?: string[];
   /** Where a reply goes — the teacher who acted, not the no-reply sender (D-3). */
   replyTo?: string;
   subject: string;
