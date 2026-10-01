@@ -520,6 +520,9 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
   PASS. No production write yet — one pilot teacher asked to send and
   verify in PowerTeacher Pro. Record: `docs/gradebook-push-design.md`
   §Progress. Schoology (slice 3) still held.
+  **Update 2026-10-01 (James):** the pilot teacher's first production
+  send landed and was verified in PowerTeacher Pro; IT confirmed outside
+  collab.
 - **Row SN — share notifications** (pilot-teacher request): New badge on
   share offers + unopened co-teach rows (migration 0048) live; the email
   is built behind `lib/email/` and dark until SES. IT ask sent

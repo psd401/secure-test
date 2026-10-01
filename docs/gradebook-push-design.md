@@ -638,3 +638,8 @@ pages: `/help.html` (Send to gradebook steps + three FAQ entries),
 `/roadmap.html` (milestone; Schoology is the next gradebook item),
 `docs/pilot-quick-start.md`. The first production send is still pending
 the pilot teacher.
+
+**2026-10-01 — first production send DONE (reported by James).** The pilot
+teacher sent scores to PowerSchool production and verified them in
+PowerTeacher Pro. Confirmed with IT outside collab, so thread `54f59626…`
+(left archived) has no closing message. No new findings reported.
