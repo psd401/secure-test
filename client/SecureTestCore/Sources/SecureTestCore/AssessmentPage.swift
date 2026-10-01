@@ -316,7 +316,13 @@ public enum AssessmentPage {
     .tts-bar button[hidden] { display: none; }
     .tts-rate button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
     .tts-bar button:focus-visible, .tts-rate button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-    .tts-reading { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+    /* Hand-run 2026-10-01: WebKit paints no ::highlight inside user-select:
+       none, and PageShell sets none on everything outside inputs — so the
+       spoken word never showed. The block being read opts back in for as long
+       as it is read (probed in Safari: one range, block set to text, only the
+       word paints). Selection is possible in that block while it is read. */
+    .tts-reading { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px;
+      -webkit-user-select: text; user-select: text; }
     ::highlight(tts-word) { background-color: var(--accent); color: var(--accent-ink); }
     .tts-word { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
     /* STT slice 3: "Speak my answer" under a field. The listening state is the
@@ -1271,6 +1277,16 @@ public enum AssessmentPage {
         } catch (e) {}
       }
 
+      // Hand-run 2026-10-01: WebKit left the previous word painted after the
+      // highlight moved on (the stem's last words, each choice in turn) — a
+      // repaint it never invalidated. Reproduced in Safari against this page
+      // and cleared by forcing the block being read to repaint: toggling a
+      // no-op filter after every word does that.
+      function ttsRepaint(el) {
+        if (!el || !el.style) return;
+        el.style.filter = el.style.filter ? '' : 'opacity(1)';
+      }
+
       function ttsPaint(target) {
         if (!target) return;
         var mine = ttsActive && ttsActive.target === target;
@@ -1282,6 +1298,7 @@ public enum AssessmentPage {
         if (mine) target.stop.removeAttribute('hidden');
         else target.stop.setAttribute('hidden', '');
         ttsClass(target.el, 'tts-reading', !!mine);
+        if (!mine && target.el.style) target.el.style.filter = '';
       }
 
       // Stops whatever is being read, page side and host side. Called on a
@@ -1643,7 +1660,9 @@ public enum AssessmentPage {
         },
         word: function (id, segment, offset, length) {
           var active = ttsCurrent(id);
-          if (active) ttsHighlight(active.segments[segment], offset, length);
+          if (!active) return;
+          ttsHighlight(active.segments[segment], offset, length);
+          ttsRepaint(active.target.el);
         },
         finished: ttsEnded,
         cancelled: ttsEnded
