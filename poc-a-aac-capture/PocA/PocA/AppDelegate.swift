@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         allowsCalculator: ProcessInfo.processInfo.arguments.contains("--allow-calculator")
     )
     private let capture = ScreenCaptureService()
+    private let speech = SpeechProbe()
     private var sigterm: DispatchSourceSignal?
 
     static func main() {
@@ -121,7 +122,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         snapshotButton.frame = NSRect(x: 472, y: 432, width: 232, height: 32)
         content.addSubview(snapshotButton)
 
-        let scroll = NSScrollView(frame: NSRect(x: 16, y: 16, width: 688, height: 400))
+        // Speech spikes S-1 / S-2 (docs/speech-tools-design.md): Prepare before
+        // Enter Assessment, then Speak / Listen inside the session.
+        let speechButtons: [(String, Selector)] = [
+            ("Prepare Speech", #selector(prepareSpeech)),
+            ("Speak", #selector(speakSample)),
+            ("Listen (Analyzer)", #selector(listenAnalyzer)),
+            ("Listen (SFSpeech)", #selector(listenSFSpeech)),
+        ]
+        for (i, (title, action)) in speechButtons.enumerated() {
+            let b = NSButton(title: title, target: self, action: action)
+            b.frame = NSRect(x: 16 + CGFloat(i) * 172, y: 392, width: 164, height: 32)
+            content.addSubview(b)
+        }
+
+        let scroll = NSScrollView(frame: NSRect(x: 16, y: 16, width: 688, height: 368))
         scroll.hasVerticalScroller = true
         logView = NSTextView(frame: scroll.bounds)
         logView.isEditable = false
@@ -136,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         session.onLog = { [weak self] in self?.log($0) }
         capture.onLog = { [weak self] in self?.log($0) }
+        speech.onLog = { [weak self] in self?.log($0) }
         session.onStateChange = { [weak self] in self?.render(state: $0) }
         session.onTick = { [weak self] in self?.renderCountdown($0) }
         session.onWatchdogEscalation = { NSApp.terminate(nil) }
@@ -296,6 +312,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func prepareSpeech() { speech.prepare() }
+    @objc private func speakSample() { speech.speak() }
+    @objc private func listenAnalyzer() { speech.listenWithAnalyzer() }
+    @objc private func listenSFSpeech() { speech.listenWithSFSpeech() }
+
     @objc private func snapshotWindow() {
         guard let view = window.contentView else {
             log("Snapshot: FAILED — no content view.")
@@ -313,9 +334,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(timestamp)] \(msg)\n"
         FileHandle.standardError.write(Data(line.utf8))
+        Self.appendToLogFile(line)
         DispatchQueue.main.async { [weak self] in
             self?.logView.textStorage?.append(NSAttributedString(string: line))
             self?.logView.scrollToEndOfDocument(nil)
+        }
+    }
+
+    /// A Finder launch has no stderr. The speech spike (2026-10-01) must be
+    /// launched from Finder — TCC attributes a Terminal-launched app's
+    /// microphone request to the terminal — so the log also lands in the
+    /// sandbox container: ~/Library/Containers/net.psd401.securetest.PocA/
+    /// Data/Library/Application Support/PocA/poca.log
+    private static let logFileURL: URL? = {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("PocA", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("poca.log")
+    }()
+
+    private static func appendToLogFile(_ line: String) {
+        guard let url = logFileURL else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: url)
         }
     }
 

@@ -493,6 +493,48 @@ configuration (it will be waiting on the desktop afterward), and treat "the
 session ended" as a moment when previously hidden windows can appear over the
 client's own — end-of-session UI should not assume it is frontmost.
 
+### 16. Speech inside a session — TTS and on-device STT work; the mic prompt must come before `begin()`
+
+Spikes S-1 / S-2 of `docs/speech-tools-design.md`, 2026-10-01, macOS 26.7.1,
+James's staff Mac, Debug build launched from Finder via `open` (a Terminal
+launch would charge the microphone request to Terminal). New `SpeechProbe`
++ four buttons; log in the container (`poca.log`).
+
+- **Unlocked baseline.** Prepare Speech: microphone prompt and
+  speech-recognition prompt both appeared and were allowed;
+  `SpeechTranscriber` en-US reported supported + installed, yet
+  `AssetInventory` still asked for a download, which took 5 s. Voices: 59
+  en / es, all compact (`quality=1`) — enhanced voices would need a push
+  from IT; es-MX Paulina is present.
+- **Inside a real session** (`DID BEGIN` 21:21:28 → `DID END` 21:22:05):
+  - `AVSpeechSynthesizer` (Samantha, compact) — didStart, 14 word-range
+    callbacks, didFinish. Whether the audio was audible was not reported
+    in the log; the callbacks prove the synthesizer ran.
+  - `SpeechAnalyzer` / `SpeechTranscriber` — mic delivered 81 buffers
+    (48 kHz converted to 16 kHz); "Testing, testing, here's a test." with
+    live partials and punctuation.
+  - `SFSpeechRecognizer` (`requiresOnDeviceRecognition`) — the same words
+    as partials, no punctuation; its FINAL came back **empty**, unlocked
+    and locked alike — a client keeping the last partial would be needed.
+  - AAC left the app's own network on (`allowsNetworkAccess = true`);
+    recognition is on-device regardless. A Prepare pressed inside the
+    session: no prompt (already granted); the asset request again said
+    "download needed" and finished in 0 s.
+- **Run B — first microphone request inside a session.** After
+  `tccutil reset Microphone`, Enter Assessment then Listen (Analyzer) with
+  no Prepare: the analyzer logged `start` and nothing more — **the
+  microphone dialog was hidden behind the lockout** and was waiting on
+  screen when the session ended (James). The recognition call hung
+  waiting for it.
+
+**Consequences for the client** (design note D-3 holds): request the
+microphone (and speech recognition) after join and **before** `begin()`,
+only for students granted `speech_to_text`; inside a session, show the mic
+button only when the status is already `authorized` — never call the
+engine on `notDetermined`, it hangs on an invisible prompt; install the
+transcriber assets before `begin()` too. Prefer `SpeechAnalyzer` (macOS 26,
+fleet floor 26.4) over `SFSpeechRecognizer`.
+
 ## What blocks the original question
 
 Nothing. Measured 2026-08-27: capture runs but is redacted (#13), an
