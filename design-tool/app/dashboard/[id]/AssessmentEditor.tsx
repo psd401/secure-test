@@ -66,6 +66,8 @@ import { SequenceEditor } from "./SequenceEditor";
 import { HotspotEditor } from "./HotspotEditor";
 import { TableEditor } from "./TableEditor";
 import { createAutosave } from "@/lib/autosave";
+import { StandardsTagInput } from "@/components/app/StandardsTagInput";
+import { normalizeStandards } from "@/lib/standards/tags";
 
 // UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
 // and deep links land on the same panel. Param values are stable; the labels
@@ -139,6 +141,9 @@ interface ItemView {
   exact_form: boolean | null;
   // Slice 36: null = type default (MC/short_text/match auto, essay human).
   scoring_method: ScoringMethod | null;
+  // BG slice 2: standards tags (`scheme:code` or the teacher's own text);
+  // every type, [] when none.
+  standards: string[];
 }
 
 interface AssessmentView {
@@ -275,6 +280,7 @@ interface ItemRow {
     exact_form?: boolean | null;
     scoring_method?: ScoringMethod | null;
   } | null;
+  standards?: string[] | null;
 }
 
 // Same flattening as app/dashboard/[id]/page.tsx, so a row the API hands
@@ -306,6 +312,7 @@ function rowToView(r: ItemRow): ItemView {
     cell_keys: r.config?.cell_keys ?? null,
     exact_form: r.config?.exact_form ?? null,
     scoring_method: r.config?.scoring_method ?? null,
+    standards: r.standards ?? [],
   };
 }
 
@@ -393,7 +400,9 @@ const OSPI_TIER_ORDER: OspiTier[] = ["universal", "designated", "accommodation"]
 // 2026-09-01: while published, the item PATCH route admits edits that touch
 // nothing but the answer key. Mirror that here so "Save question" lights up
 // for exactly those edits (the server is still the authority).
-const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids"]);
+// BG slice 2 (14.1): standards tags save through the same door — the server's
+// isAnswerKeyOnlyPatch admits them while published.
+const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards"]);
 function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean {
   if (!before) return false;
   const b = before as unknown as Record<string, unknown>;
@@ -428,6 +437,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "short_text") {
@@ -454,6 +464,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "match") {
@@ -483,6 +494,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "order") {
@@ -512,6 +524,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "hotspot") {
@@ -538,6 +551,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "drawing_upload") {
@@ -564,6 +578,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   if (type === "table") {
@@ -597,6 +612,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       cell_keys: null,
       exact_form: null,
       scoring_method: null,
+      standards: [],
     };
   }
   return {
@@ -625,6 +641,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
     cell_keys: null,
     exact_form: null,
     scoring_method: null,
+    standards: [],
   };
 }
 
@@ -786,6 +803,9 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // status instead: inputs unlock only once the draft save actually lands and
   // router.refresh() brings back the new row.
   const isLocked = assessment.status === "published";
+  // BG slice 2: every tag used on this assessment, offered first in each
+  // question's picker so one test stays consistent.
+  const usedStandards = useMemo(() => normalizeStandards(items.flatMap((i) => i.standards)), [items]);
   const [shareOpen, setShareOpen] = useState(false);
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -1208,6 +1228,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     // Review fix (2026-08-14): PATCH omission now PRESERVES the stored
     // method server-side, so "Type default" must clear via explicit null.
     body.scoring_method = item.scoring_method;
+    // BG slice 2: always sent whole — an empty list clears the tags.
+    body.standards = item.standards;
     setItemError(item.id, null);
     setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saving" } }));
     try {
@@ -1599,8 +1621,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         <Alert variant="warning">
           <AlertTitle>Published — locked so a running test can&apos;t change.</AlertTitle>
           <AlertDescription>
-            Unpublish to edit. Answer keys can still be changed here; responses
-            already scored keep their scores.
+            Unpublish to edit. Answer keys and standards can still be changed
+            here; responses already scored keep their scores.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -2484,6 +2506,12 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </div>
                   <MathPreview text={item.stem} />
                 </label>
+
+                <StandardsTagInput
+                  value={item.standards}
+                  onChange={(standards) => updateItem(item.id, (i) => ({ ...i, standards }))}
+                  suggestions={usedStandards}
+                />
 
                 {item.type === "match" ? (
                   <div className="mt-3">

@@ -116,6 +116,10 @@ const NO_OWNED_ROW = new Map<string, string>([
   ],
   [join("roster", "sections"), "roster read, keyed on the caller's email"],
   [join("roster", "students"), "roster read, keyed on the caller's email"],
+  // BG slice 2: the standards catalog is shipped reference data, the same for
+  // every teacher — nothing owned to authorize.
+  [join("standards"), "catalog search: shipped reference data, no owned row"],
+  [join("standards", "lookup"), "catalog lookup: shipped reference data, no owned row"],
   [
     join("accommodations", "import"),
     "TIDE import into the caller's own overlay rows",

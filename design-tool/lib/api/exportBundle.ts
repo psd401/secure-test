@@ -84,9 +84,14 @@ export async function buildExportBundle(
     // Slice 36: scoring_method rides the bundle on every type — emitted
     // only when the teacher picked explicitly, keeping older bundles
     // byte-stable (same convention as the essay config fields).
-    const scoring = row.config?.scoring_method
-      ? { scoring_method: row.config.scoring_method }
-      : {};
+    // BG slice 2: standards tags ride with it, under the same rule — emitted
+    // only when the item has any, so an untagged item's bundle is unchanged.
+    // Spread into `scoring` so every type's branch carries them.
+    const tags = Array.isArray(row.standards) ? row.standards : [];
+    const scoring = {
+      ...(row.config?.scoring_method ? { scoring_method: row.config.scoring_method } : {}),
+      ...(tags.length > 0 ? { standards: tags } : {}),
+    };
     const type = row.type as ItemType;
     switch (type) {
       case "multiple_choice_single":

@@ -108,6 +108,21 @@ describe("ItemSchema discriminated union", () => {
     ).toBe(false);
   });
 
+  test("standards ride every type, optional, ≤ 10 entries of 1–80 chars (BG slice 2)", () => {
+    const tagged = ItemSchema.parse({
+      type: "essay",
+      id: "qe",
+      stem: "s",
+      standards: ["wa2026:ELA.7.W.1", "Local target"],
+    });
+    expect(tagged.standards).toEqual(["wa2026:ELA.7.W.1", "Local target"]);
+    expect(ItemSchema.parse({ type: "short_text", id: "q", stem: "s" }).standards).toBeUndefined();
+    const base = { type: "short_text", id: "q", stem: "s" };
+    expect(ItemSchema.safeParse({ ...base, standards: Array(11).fill("x") }).success).toBe(false);
+    expect(ItemSchema.safeParse({ ...base, standards: ["x".repeat(81)] }).success).toBe(false);
+    expect(ItemSchema.safeParse({ ...base, standards: [""] }).success).toBe(false);
+  });
+
   test("essay parses with stem only (metadata optional)", () => {
     const parsed = ItemSchema.parse({
       type: "essay",

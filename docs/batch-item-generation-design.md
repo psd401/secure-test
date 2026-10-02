@@ -253,7 +253,27 @@ What "ship both and associate them" looks like:
    no crosswalk links). URL, checksums and the NGSS terms are in
    `SOURCES.md` (Sonnet 5 / medium).
 2. Tags: schema field + migration + editor picker / custom entry +
-   bundle round trip + tests (Sonnet 5 / medium).
+   bundle round trip + tests (Sonnet 5 / medium). BUILT 2026-10-02:
+   migration `0050_item_standards` (`items.standards jsonb not null
+   default '[]'`); optional `standards` on `baseItem` in the teacher
+   bundle (≤ 10 × 1–80 chars, emitted only when non-empty; the delivery
+   schema strips it); `StandardsField` on the create / update bodies
+   (trim, drop empties, dedupe in order, then the limits → 400; any string
+   accepted; PATCH omission preserves) persisted by the items, CSV import
+   and bundle-import paths, so duplicate / share carry them; **tags stay
+   editable while Published** (14.1, James 2026-10-02 — they never reach
+   the student; `isAnswerKeyOnlyPatch` admits them beside the key). `GET /api/standards`
+   (`q`, `subject`, `grade_band`, `scheme` filter, `prefer` order,
+   `course`, `limit` ≤ 50 → `{ results, exact, facets }` — a hit in the
+   other scheme brings its preferred-scheme counterparts along at its
+   rank; `exact` = the tag a bare code resolves to in exactly one scheme)
+   and `GET /api/standards/lookup?tags=` (≤ 20), staff only, through
+   server-only `lib/standards/search.ts`; client-safe helpers in
+   `lib/standards/tags.ts`; editor field `components/app/StandardsTagInput.tsx`
+   (chips, debounced combobox, used-on-this-assessment first, subject /
+   grade / HS course / 2026-or-2011 filters remembered per browser).
+   Tests: `item-standards`, `standards-api` (incl. the no-catalog-in-a-
+   client-file guard), `standards-tag-input`; rows 345–357 unrun.
 3. Batch route + provider method + mock + per-item validation + guardrail
    + tests (Opus 5 / medium).
 4. Dialog + proposal list reuse (Sonnet 5 / medium).

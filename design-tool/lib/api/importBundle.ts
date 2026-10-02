@@ -15,6 +15,7 @@ import { ALLOWED_SCORING_METHODS } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
+import { normalizeStandards } from "@/lib/standards/tags";
 
 // Slice 36: the bundle layer is permissive (wire schema carries any
 // scoring_method on any type); import is the chokepoint. Keep the method
@@ -298,6 +299,9 @@ export async function importBundleForOwner(
             // Empty by default; the essay branch overrides (slice 32). Set on
             // every row so the multi-row insert has a uniform column shape.
             config: {} as ItemConfig,
+            // BG slice 2: tags as the bundle carries them (the wire schema
+            // already capped them); a code this catalog lacks stays as text.
+            standards: normalizeStandards(it.standards ?? []),
           };
           if (it.type === "multiple_choice_single") {
             return {

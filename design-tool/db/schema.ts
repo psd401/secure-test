@@ -272,6 +272,14 @@ export const items = pgTable(
       .$type<ItemConfig>()
       .notNull()
       .default(sql`'{}'::jsonb`),
+    // BG slice 2 (docs/batch-item-generation-design.md, D-1): optional
+    // standards tags — `scheme:code` for a catalog pick, anything else is a
+    // teacher's own designation. ≤ 10, ≤ 80 chars each (lib/api/items.ts).
+    // Teacher bundle only; the delivery bundle never carries them.
+    standards: jsonb("standards")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

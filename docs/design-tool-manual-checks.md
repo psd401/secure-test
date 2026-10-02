@@ -1146,3 +1146,28 @@ shows. Row numbers continue from 339; renumber if another section landed first.
 | 342 | The per-student results page for that attempt | The timeline reads "Speech-to-text unavailable — microphone permission denied <time>" and, after the rejoin, "Speech-to-text ready <time>"; no raw `speech_preflight` text anywhere | ✅ in part 2026-10-01 (origin rev 67) — "Speech-to-text ready", "… unavailable — microphone permission denied", "… timed out while preparing" listed in order; the ready-after-denied rejoin half not run |
 | 343 | **Print student work** / the print report for the same section | No speech-to-text phrase in the Integrity line; a student whose only events are pre-flights reads "No integrity events" | ✅ in part 2026-10-01 — Print student work for the in-progress attempt shows no speech-to-text phrase (only the question text). The print report shows only handed-in attempts, so its Integrity line was not checked. Finding (cosmetic): the work packet's question list shows "x^2" raw and "\frac{1}{2}" as "12" in the Q2 / Q3 stem excerpts |
 | 344 | A student not granted `speech_to_text` | No note on the Monitor and no speech-to-text line on the timeline | ⏭ 2026-10-01 — not exercisable: the only student with recent attempts is granted speech-to-text on every fixture; needs a second student |
+
+## Standards tags on items (BG slice 2, 2026-10-02)
+
+`docs/batch-item-generation-design.md` slice 2. The write boundary, the
+bundle round trip and the routes are covered by `test/item-standards.test.ts`,
+`test/standards-api.test.ts` and `test/standards-tag-input.test.tsx`; these
+rows are what only the browser shows. Local dev needs migration 0050
+(`bun --env-file=.env.local db/migrate.ts`). Row numbers continue from 344;
+renumber if another section landed first.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 345 | Draft assessment, any question: in **Standards** set Subject = Math, Grade 7, type `proportional`, arrow down to a 2026 result, Enter | The list shows code + text with a second line "2011: …"; Enter adds a chip reading the code WITHOUT `wa2026:` plus a short text; hovering the chip shows the full text; the card shows "Unsaved changes" until Save | NOT RUN |
+| 346 | Switch "2026 codes first" → "2011 codes first", search `7.RP.A.2`, then `proportional` again | `7.RP.A.2` is listed first with "2026: M.7.R.RP.2" under it; with 2026 first the order flips (M.7.R.RP.2 first, "2011: 7.RP.A.2" under it); the choice survives a reload | NOT RUN |
+| 347 | Type `Unit 3 learning target B`, Enter with nothing highlighted | A chip with exactly the typed text (no code styling difference needed), no catalog text | NOT RUN |
+| 348 | Type the bare code `M.7.R.RP.2` (or `MS-PS1-2`), Enter with nothing highlighted | The chip is the catalog entry (code + its text), not plain custom text — the saved tag is `wa2026:M.7.R.RP.2` / `ngss:MS-PS1-2` (check the item GET or an export) | NOT RUN |
+| 349 | Click × on a chip, Save | The chip goes; after reload it stays gone | NOT RUN |
+| 350 | Add tags until the question has 10 | The input disables and the hint reads "10 standards — the most a question can carry…"; removing one re-enables it | NOT RUN |
+| 351 | With tags on two questions, Save, reload; then **Duplicate**; then Export and import the bundle | Tags and their order survive reload, the copy carries them, and the imported assessment carries them; a question with no tags has no `standards` key in the exported JSON | NOT RUN |
+| 352 | Focus the empty Standards input on a third question | Tags already used on this assessment are listed first, marked "Used on this assessment", and exclude the ones this question already has | NOT RUN |
+| 353 | Subject Math, Grade HS, Course GEO, empty search | The course select appears only for Math + HS; the results are geometry-course standards only; changing Subject clears grade and course | NOT RUN |
+| 354 | Subject Science, Grade MS, search `chemical` | NGSS performance expectations (`MS-PS1-…`), no "codes first" select for science, no counterpart line | NOT RUN |
+| 355 | Keyboard only: Tab into the input, arrows through the list, Escape, Tab to a chip's × and press Space | The highlight moves (wrapping back to "nothing highlighted"), Escape closes the list, Space on × removes the chip; VoiceOver announces the combobox and option count | NOT RUN |
+| 356 | Publish the assessment with tags on a question; add one tag and remove another (14.1, James 2026-10-02: tags stay editable while Published) | The picker stays usable; Save question enables on the tag change alone and saves; reload shows the new tags; editing the stem in the same card still keeps Save disabled; a crafted PATCH changing the stem answers 409 `assessment_published_editing_locked` | NOT RUN |
+| 357 | A student opens the tagged assessment (or GET `/api/assessments/<id>/delivery` with a minted student token) | No `standards` key and no tag text anywhere in the delivery JSON; the client shows nothing new | NOT RUN |

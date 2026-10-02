@@ -107,6 +107,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         correct_answer:
           "correct_answer" in item ? (item.correct_answer ?? null) : null,
         config: itemConfigForWrite(item),
+        standards: item.standards ?? [],
       };
     });
     const rows = await tx.insert(items).values(values).returning({ id: items.id });

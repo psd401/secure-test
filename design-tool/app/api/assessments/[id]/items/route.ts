@@ -83,6 +83,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         correct_choice_ids: body.correct_choice_ids,
         correct_answer: body.correct_answer ?? null,
         config: itemConfigForWrite(body),
+        standards: body.standards ?? [],
       })
       .returning();
     await tx

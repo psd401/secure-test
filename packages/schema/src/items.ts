@@ -13,10 +13,19 @@ export const ChoiceSchema = z.object({
 // execution semantics of ai vs hybrid are pinned in slices 38/39.
 export const ScoringMethodSchema = z.enum(["auto", "ai", "human", "hybrid"]);
 
+// BG slice 2 (design-tool docs/batch-item-generation-design.md, D-1):
+// optional standards tags — `scheme:code` (`wa2026:M.7.R.RP.2`) for a pick
+// from the shipped catalog, anything else a teacher's own designation, kept
+// as typed (a code from a catalog this side doesn't know is still just a
+// string). Absent = no tags, and the exporter emits the field only when
+// non-empty, which keeps every bundle written before this byte-stable. Rides
+// the TEACHER bundle only: tags are authoring metadata, and ADR 0016 keeps
+// the delivery bundle to what the student needs.
 const baseItem = {
   id: z.string().min(1),
   stem: z.string(),
   scoring_method: ScoringMethodSchema.optional(),
+  standards: z.array(z.string().min(1).max(80)).max(10).optional(),
 };
 
 export const SingleSelectMCItemSchema = z.object({

@@ -1,0 +1,1 @@
+ALTER TABLE "items" ADD COLUMN "standards" jsonb DEFAULT '[]'::jsonb NOT NULL;

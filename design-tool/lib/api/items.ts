@@ -6,12 +6,37 @@ import {
   type ScoringMethod,
 } from "@secure-test/schema";
 import { ITEM_TYPES, type ItemConfig, type ItemType } from "@/db/schema";
+import {
+  MAX_STANDARDS,
+  MAX_STANDARD_LENGTH,
+  normalizeStandards,
+} from "@/lib/standards/tags";
 
 export const ChoiceShape = z.object({
   id: z.string().min(1).max(64),
   text: z.string().max(2000),
 });
 export type Choice = z.infer<typeof ChoiceShape>;
+
+// BG slice 2 (docs/batch-item-generation-design.md, D-1): standards tags,
+// stored in their own column (not config). The server normalizes — trim, drop
+// empties, dedupe keeping order — and only then applies the limits, so a
+// duplicate never counts toward the ten. ANY string is accepted: a catalog
+// pick is `scheme:code`, and a code this catalog does not know (another
+// version, another state) is kept as typed. On PATCH, omitted = preserve the
+// stored tags; an array (even empty) replaces them.
+export const StandardsField = z
+  .array(z.string())
+  .transform(normalizeStandards)
+  .pipe(
+    z
+      .array(
+        z
+          .string()
+          .max(MAX_STANDARD_LENGTH, `each standard must be at most ${MAX_STANDARD_LENGTH} characters`),
+      )
+      .max(MAX_STANDARDS, `at most ${MAX_STANDARDS} standards per item`),
+  );
 
 const BaseItemFields = {
   stem: z.string().min(1).max(10000),
@@ -21,6 +46,7 @@ const BaseItemFields = {
   // silently reverted a teacher's 'human' pick to 'auto' on any partial
   // PATCH.) Cross-field rules live in the superRefine on the union below.
   scoring_method: ScoringMethodSchema.nullable().optional(),
+  standards: StandardsField.optional(),
 };
 
 // Answer keys are OPTIONAL at write time (James, 2026-09-01). The prod

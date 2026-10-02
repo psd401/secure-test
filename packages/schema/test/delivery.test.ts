@@ -139,6 +139,16 @@ describe("DeliveryItemSchema", () => {
     expect(parsed).not.toHaveProperty("scoring_method");
   });
 
+  test("strips standards tags (teacher bundle only, BG slice 2)", () => {
+    const parsed = DeliveryItemSchema.parse({
+      type: "short_text",
+      id: "i3",
+      stem: "s",
+      standards: ["wa2026:M.7.R.RP.2"],
+    });
+    expect(parsed).not.toHaveProperty("standards");
+  });
+
   test("match has no field that pairs a left to its right", () => {
     const parsed = DeliveryItemSchema.parse({
       type: "match",

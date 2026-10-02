@@ -89,7 +89,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
         error: "assessment_published_editing_locked",
         hint:
           "While published, only the answer key (correct choice, correct answer, " +
-          "hotspot region) can change. Set status: 'draft' on the parent " +
+          "hotspot region) and the standards tags can change. Set status: 'draft' on the parent " +
           "assessment for other edits.",
       },
       { status: 409 },
@@ -113,6 +113,9 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       correct_choice_ids: body.correct_choice_ids,
       correct_answer: body.correct_answer ?? null,
       config: itemConfigForWrite(body, owned.item.config),
+      // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
+      // older caller must not wipe them); an array replaces them.
+      ...(body.standards !== undefined ? { standards: body.standards } : {}),
       updated_at: new Date(),
     })
     .where(eq(items.id, itemId))

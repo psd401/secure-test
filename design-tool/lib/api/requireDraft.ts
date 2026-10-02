@@ -49,7 +49,8 @@ function stable(v: unknown): string {
  * them, the readiness checklist flags them) and the teacher fills the key
  * in later — so the publish lock admits a PATCH whose only deltas are
  * correct_choice_ids / correct_answer / hotspot correct_region_ids / table
- * cell_keys (E3). Stem, choices, and every other config field must be
+ * cell_keys (E3), plus the standards tags (BG slice 2 — authoring
+ * metadata, never delivered). Stem, choices, and every other config field must be
  * byte-identical to what is stored, so nothing student-facing can change
  * through this door. Auto
  * scoring picks the key up on its next run for still-unscored responses;
@@ -60,6 +61,10 @@ export function isAnswerKeyOnlyPatch(body: UpdateItemBody, item: ItemRow): boole
   if (body.type !== item.type) return false;
   if (body.stem !== item.stem) return false;
   if (stable(body.choices) !== stable(item.choices ?? [])) return false;
+  // BG slice 2 (James, 2026-10-02, 14.1): standards tags pass the lock too —
+  // they never reach the student (ADR 0016), and teachers tag a test after
+  // it has run. `standards` is its own column, not config, so the config
+  // comparison below never sees it.
   const {
     correct_region_ids: _next,
     cell_keys: _nextCells,
