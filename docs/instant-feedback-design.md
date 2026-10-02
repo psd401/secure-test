@@ -134,10 +134,10 @@ Decided 2026-10-02 (James): 9.1 → no "See my results" in v1 (feedback is
 seen once, at hand-in); 9.2 → D-6 (no feedback after teacher / time-out
 hand-ins); 9.3 → D-4 (teacher release).
 
-- **9.4** Confirm the D-4 consequence: answers released after some
-  students handed in reach only later hand-ins in the app; earlier
-  students get them from the teacher. Acceptable, or bring "See my
-  results" into v1?
+- None open. **9.4 accepted for now (James, 2026-10-02):** answers
+  released after some students handed in reach only later hand-ins in the
+  app; earlier students get them from the teacher. "See my results" is
+  the follow-up if teachers ask for more.
 
 ## Progress
 
