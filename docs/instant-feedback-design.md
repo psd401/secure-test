@@ -66,24 +66,30 @@ turn answers on after the last period.
   never hold a Mac in lockdown).
 - Answers render with the same KaTeX / image rules as the test.
 - Read-aloud follows the student's TTS accommodation.
-- Not shown on a teacher's Hand in / Hand in everyone or a time-out
-  hand-in — the student is not at the screen for it; see 9.2.
+- **D-6 (James, 9.2): not shown on a teacher's Hand in / Hand in
+  everyone or a time-out hand-in** — the student is not at the screen for
+  it, and with no "See my results" (9.1) it is never shown later.
 
 ### Interactions (D-3 … D-5)
 
 - **D-3 (James): pass back turns feedback off for that student, for now.**
   An attempt with `pass_back_count > 0` gets no feedback on re-hand-in.
-- **D-4 when (James unsure — recommendation):** the leak risk is the KEY,
-  not the score. Recommend:
-  - `score` and `right_wrong` show **at hand-in**;
-  - `answers` shows at hand-in **only once no other sitting of this
-    assessment is open or scheduled** — otherwise the student sees right
-    / wrong and "Correct answers will be available after every class has
-    taken the test." The teacher can also turn `answers` on later; the
-    student then sees it from Your tests (needs 9.1).
-  - Alternative: a per-assessment "show answers at hand-in" vs "after I
-    release them" choice. Simpler to build, puts the judgment on the
-    teacher.
+- **D-4 (James, 9.3): the teacher releases answers.** At the `answers`
+  level a second setting chooses **"Show correct answers: at hand-in |
+  after I release them"** (default: after I release them). Until the
+  teacher presses **Release answers** (Settings tab and the results page;
+  a status-only PATCH, allowed while Published; stamps
+  `assessments.answers_released_at`), a hand-in shows right / wrong plus
+  "Correct answers will be available after every class has taken the
+  test." `score` and `right_wrong` always show at hand-in.
+- **Consequence of D-4 + 9.1 = no "See my results" (James, 9.1):** a
+  student who handed in BEFORE the release never sees the answers in the
+  app — release affects later hand-ins only. The teacher reviews the
+  answers in class or prints them (the work packet with the key page). The
+  hint copy therefore reads "Your teacher will go over the correct
+  answers." rather than promising they will appear. If teachers want
+  released answers to reach earlier students, that is the "See my
+  results" follow-up (9.1 reopened later).
 - **D-5 feedback is a snapshot.** What the student saw is recorded as a
   `feedback_shown` attempt event (`detail`: level, earned, max). A later
   Change score or rescoring does not notify the student (v1); the
@@ -103,17 +109,19 @@ with points.
   seconds of hand-in, outside the lockdown.
 - No key reaches a student before the teacher's chosen moment (test: the
   submit response for `score` / `right_wrong` carries no `correct_answer`;
-  for `answers` with another sitting open, neither).
+  for `answers` + `on_release` before Release, neither).
 - The score the student sees equals the results matrix's auto-scored
   total at that moment (test).
 - Older clients keep working (they ignore `feedback`).
 
 ## Slices
 
-1. Server: setting + migration, feedback builder (pure, tested), submit
-   response, `feedback_shown` event kind, D-4 sitting check (Opus 5 /
-   medium).
-2. Teacher UI: Settings select + help text; timeline line (Sonnet 5 /
+1. Server: `student_feedback` + `answers_release` (`at_hand_in` |
+   `on_release`) + `answers_released_at` (one migration), release PATCH,
+   feedback builder (pure, tested), submit response, `feedback_shown`
+   event kind (Opus 5 / medium).
+2. Teacher UI: Settings select + answers-release choice + Release answers
+   (Settings tab + results page) + help text; timeline line (Sonnet 5 /
    medium).
 3. Client: decode, feedback page after `DID END`, Done → Your tests,
    VoiceOver + contrast sets (Opus 5 / medium) → client release.
@@ -122,11 +130,14 @@ with points.
 
 ## Open questions
 
-- **9.1** "See my results" on Your tests for a handed-in attempt (needed
-  if answers are released later) — in v1 or a follow-up?
-- **9.2** Show feedback the next time the student opens the app after a
-  teacher / time-out hand-in?
-- **9.3** D-4: recommended rule, or the teacher's "release answers" choice?
+Decided 2026-10-02 (James): 9.1 → no "See my results" in v1 (feedback is
+seen once, at hand-in); 9.2 → D-6 (no feedback after teacher / time-out
+hand-ins); 9.3 → D-4 (teacher release).
+
+- **9.4** Confirm the D-4 consequence: answers released after some
+  students handed in reach only later hand-ins in the app; earlier
+  students get them from the teacher. Acceptable, or bring "See my
+  results" into v1?
 
 ## Progress
 
