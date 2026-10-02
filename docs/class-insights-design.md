@@ -48,9 +48,15 @@ Server-built, deterministic, the only thing the model sees:
   with the keyed choice), short-text answer clusters (top distinct
   answers with counts), essay criterion-level distributions.
 - Per student (pseudonymous `S1…Sn`, D-1): total, per-item points, per-tag
-  percent, essay criterion levels + the scorer's rationale, ≤ 300 words of
-  each essay / short answer when the teacher asks for writing evidence.
-- Scope: the results page's current section filter; handed-in attempts
+  percent, essay criterion levels + the scorer's rationale.
+- **D-6 (James, 9.2): students' own words are NOT in the default pack.**
+  The report runs on scores, analytics and the scorer's rationale. A chat
+  turn that needs the writing (the teacher asks about an item or a
+  student's work) pulls ≤ 300 words of the relevant answers for that turn
+  only; the turn records which answers it read.
+- Scope (**D-7, James, 9.3: one section filter per report in v1**;
+  section comparison may come later): the results page's current section
+  filter; handed-in attempts
   with final scores only; a header line "N responses not yet scored —
   scores them first for a complete picture" when any are unscored (D-2:
   generate anyway, say so).
@@ -83,7 +89,10 @@ come from the pack, not the model**: the model refers to a figure by key
 (`{item:3.p_value}`) and the server fills it; a claim citing a key that
 does not exist is dropped. Output is structured JSON validated with Zod.
 
-Stored per (assessment, section filter): the report JSON, the pack's hash,
+**D-8 (James, 9.4): no print page in v1 — "Copy" puts the report on the
+clipboard as plain text with names**, preceded by a line "Teacher-only:
+names students; not for families." Stored per (assessment, section
+filter): the report JSON, the pack's hash,
 model id, prompt version. When scores change after generation (new
 finals, Change score, pass back) the hash no longer matches and the page
 says "Results have changed since this was written — Regenerate".
@@ -95,7 +104,7 @@ report). Every turn: guardrail input + output, `ai_usage`, pseudonyms in /
 names out, the same citation rule. Suggested starters ("Why did item 4 go
 badly?", "Group students for Thursday's reteach").
 
-- **D-4 (James leaning): persist the conversation per assessment.** The
+- **D-4 (James, 2026-10-02): persist the conversation per assessment.** The
   downsides, and how the design answers each:
   - **It is a record about named students.** Stored with pseudonyms
     only, names swapped in at render — but it is still a student record
@@ -104,9 +113,9 @@ badly?", "Group students for Thursday's reteach").
   - **It goes stale.** Answers from before a score change keep quoting
     old numbers. → The pack hash is stored per turn; turns from an older
     pack are shown greyed with "based on earlier results".
-  - **Who sees it.** Per teacher, or shared with co-teachers? →
-    Recommend **per teacher** (each co-teacher has their own thread);
-    sharing a conversation is a later feature.
+  - **Who sees it.** **D-5 (James, 9.1): per teacher** — each
+    co-teacher has their own thread; the report itself is shared.
+    Sharing a conversation is a later feature.
   - **Cost and context growth.** Long threads re-send history. → Cap at
     40 turns per thread; older turns summarized server-side.
   - **Deleted attempts.** A pseudonym whose attempt was deleted renders
@@ -140,9 +149,9 @@ spend per teacher.
    + tests (Opus 5 / medium).
 2. Report: provider method, Zod schema, citation/number fill, storage
    (migration: `class_insight_reports`), staleness hash (Opus 5 / medium).
-3. Report UI on the results page + rating (Sonnet 5 / medium).
+3. Report UI on the results page + rating + Copy (Sonnet 5 / medium).
 4. Chat: migration (`class_insight_threads`, `…_turns`), route, guardrail,
-   per-teacher scope, cap + summary (Opus 5 / medium).
+   per-teacher scope, on-demand answer pull (D-6), cap + summary (Opus 5 / medium).
 5. Chat UI (Sonnet 5 / medium).
 6. Teacher rows; Bedrock evidence on the `_demo` database.
 
@@ -151,11 +160,13 @@ Design tool only; no client change. Most useful after row BG slice 1
 
 ## Open questions
 
-- **9.1** Co-teachers: own thread each (recommended) or one shared?
-- **9.2** Include the student's own words in the pack by default, or only
-  when the teacher asks a writing question in the chat?
-- **9.3** Compare sections ("period 2 vs period 5") in v1?
-- **9.4** Export the report (print / copy) — teacher-only print page?
+Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
+(words only on demand); 9.3 → D-7 (one section, comparison maybe later);
+9.4 → D-8 (copy to clipboard only). D-4 persist the chat — confirmed.
+
+- None open. Retention (kept while the assessment exists, teacher can
+  delete a thread) stands as written unless the district's records
+  guidance says otherwise.
 
 ## Progress
 
