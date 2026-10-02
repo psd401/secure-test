@@ -43,20 +43,38 @@ are recommendations. **§Progress says what is built** (nothing yet).
   `baseItem` in `packages/schema/src/items.ts` (teacher bundle, optional,
   emitted only when non-empty so older bundles stay byte-stable) and a
   `standards jsonb not null default '[]'` column on `items` (one
-  migration). Free text, ≤ 10 per item, ≤ 80 chars each — a code
-  (`CCSS.MATH.CONTENT.7.RP.A.2`), a short objective ("I can identify
-  claims in a source"), or both. No standards database in v1 (see 9.1).
-- Editor: a tag input under the stem on every item type; existing tags on
-  the assessment are offered as suggestions so one test stays consistent.
-  Export / import / duplicate / share carry them (they ride the bundle).
+  migration). ≤ 10 per item, ≤ 80 chars each. Each entry is either a
+  code from the shipped catalog (D-1a) or a teacher's own designation.
+- **D-1a (James, 9.1): a shipped WA standards picker, plus custom.** v1
+  catalog = the standards Washington adopted that have published code
+  lists: CCSS Mathematics, CCSS ELA / Literacy, NGSS. Stored in the repo as
+  JSON (`design-tool/lib/standards/*.json`: `{ code, subject, grade,
+  domain, text }`), loaded server-side, never in a bundle. The picker
+  searches code and text, filtered by subject + grade (assessments have
+  no subject / grade field; the teacher's last filter is remembered per
+  browser). A picked entry stores the CODE; the editor and reports show
+  the code with its text looked up from the catalog.
+- **Custom designation (James, 9.1):** anything not in the catalog —
+  local learning targets, other subjects (social studies, CTE, arts,
+  world languages), AP course skills — is typed as free text and stored
+  as is. A custom entry that exactly matches a catalog code is treated
+  as that code. No difference in storage (9.2 = plain list).
+- Editor: the picker + free-text entry under the stem on every item
+  type; tags already used on the assessment are offered first so one test
+  stays consistent. Export / import / duplicate / share carry them (they
+  ride the bundle); an imported code missing from this catalog shows as
+  custom text.
 - **D-2 (James): AI may suggest tags for untagged items — never applies
   them.** "Suggest standards" on the Items tab: the teacher pastes or
   uploads the standards list for this unit (or leaves it blank for
   free-form objectives); the model proposes up to three tags per
   untagged item with a one-line reason; each proposal is an Accept /
-  Dismiss chip on the item card. Accepted tags are ordinary tags; nothing
-  records that a tag was suggested (recommendation — revisit if teachers
-  want to filter on it). Guardrail surface `tag-suggest`.
+  Dismiss chip on the item card. The candidate list is the catalog slice
+  the teacher filtered to (subject + grade), optionally narrowed by a
+  pasted unit list or custom targets; a proposed code not in the catalog
+  is dropped. **D-2a (James, 9.2): accepted tags are ordinary tags —
+  nothing records that a tag was suggested.** Guardrail surface
+  `tag-suggest`.
 
 ### Batch generation (D-3 … D-6)
 
@@ -85,7 +103,13 @@ are recommendations. **§Progress says what is built** (nothing yet).
   guardrail input check runs on the teacher's `notes` + extracted text.
 - **D-5 every generated item carries the batch's tags** (the requested
   standards / objective), editable before Add — this is how batch
-  generation feeds class insights without a second step.
+  generation feeds class insights without a second step. The dialog's
+  target uses the same picker + custom entry; a picked code sends its
+  catalog text to the model so it writes to the standard, not the code.
+- **D-7 (James, 9.3): v1 types = the four generable ones** (MC single,
+  MC multi, short text, essay); **match next** as its own slice
+  (prompt shape + a proposal card that shows the pairs, keyed by
+  structure); order and table after that, if asked for.
 - **D-6 keys are marked for review.** Each card shows the proposed key
   with "Check the key" until the teacher opens it; Add saves the item as
   is (same as PDF import). Essay proposals may carry a proposed rubric
@@ -112,24 +136,32 @@ are recommendations. **§Progress says what is built** (nothing yet).
 ## Slices
 
 0. This note.
-1. Tags: schema field + migration + editor input + bundle round trip +
-   tests (Sonnet 5 / medium).
-2. Batch route + provider method + mock + per-item validation + guardrail
+1. Standards catalog: source the CCSS-M / ELA / NGSS code lists (9.4),
+   a build script that writes the JSON, a lookup module + tests
+   (Sonnet 5 / medium).
+2. Tags: schema field + migration + editor picker / custom entry +
+   bundle round trip + tests (Sonnet 5 / medium).
+3. Batch route + provider method + mock + per-item validation + guardrail
    + tests (Opus 5 / medium).
-3. Dialog + proposal list reuse (Sonnet 5 / medium).
-4. Suggest standards (route + chips) (Sonnet 5 / medium).
-5. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
+4. Dialog + proposal list reuse (Sonnet 5 / medium).
+5. Suggest standards (route + chips) (Sonnet 5 / medium).
+6. Match in a batch (Opus 5 / medium).
+7. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
    run on a hand-built resource (no teacher PDF in the repo).
 
 Design tool only; no client change.
 
 ## Open questions
 
-- **9.1** Standards list source: teacher-pasted only, or ship the WA
-  CCSS-M / ELA / NGSS codes as a picker later?
-- **9.2** Record "suggested by AI" on accepted tags?
-- **9.3** Allow table / match / order in the batch, or the four
-  generable types only (recommended for v1)?
+Decided 2026-10-02 (James): 9.1 → D-1a (shipped picker + custom);
+9.2 → D-2a (plain list); 9.3 → D-7 (four types, match next).
+
+- **9.4** Catalog source and terms: the CCSS public license and NGSS's
+  terms of use both allow non-commercial educational use with attribution
+  — confirm before slice 1; machine-readable lists are available from
+  the CASE Network / the publishers' sites (pick one, record it here).
+- **9.5** Other WA subjects (social studies, health / PE, arts, CTE) in
+  a later catalog, or custom-only?
 
 ## Progress
 
