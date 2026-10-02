@@ -67,7 +67,7 @@ are recommendations. **§Progress says what is built** (nothing yet).
 - **Picker.** Searches code and text across schemes, filtered by subject
   + grade band (assessments have no subject / grade field; the teacher's
   last filter is remembered per browser). The 2011 ↔ 2026 association is
-  6.1 below.
+  D-1c (§Crosswalk).
 - **Custom designation (James, 9.1):** anything not in the catalog —
   local learning targets, other subjects (social studies, CTE, arts,
   world languages), AP course skills — is typed as free text and stored
@@ -147,7 +147,7 @@ are recommendations. **§Progress says what is built** (nothing yet).
   Superintendent of Public Instruction, K–12 Learning Standards (2026),
   CC BY." Confirm the license wording in the xlsx files themselves in
   slice 1 (the research read it from the PDFs).
-- **2011 CCSS text, if shipped (6.1):** the CCSS public license allows
+- **2011 CCSS text (shipped, D-1c):** the CCSS public license allows
   copying and display "for purposes that support the Common Core State
   Standards Initiative", with the notice "© Copyright 2010. National
   Governors Association Center for Best Practices and Council of Chief
@@ -175,7 +175,7 @@ are recommendations. **§Progress says what is built** (nothing yet).
   adds priority standards and topic tags) would become a `wa20xx`
   science scheme the same way.
 
-## Crosswalk (6.1 proposal — both schemes, associated)
+## Crosswalk (D-1c, James 2026-10-02 — both schemes, associated)
 
 Codes below are illustrative; slice 1 reads the real pairs from OSPI.
 
@@ -205,7 +205,7 @@ What "ship both and associate them" looks like:
   a link table to rebuild if OSPI revises the crosswalk, and the
   one-to-many cases need a test fixture each. Size is small (a few
   thousand entries in total).
-- **Simpler alternative:** ship 2026 only and use the crosswalk as a
+- **Rejected alternative:** ship 2026 only and use the crosswalk as a
   search ALIAS (typing a 2011 code finds the 2026 entry, which is what is
   stored) — no 2011 text, no `ccss2010` tags, no CCSS-license question;
   the cost is that a teacher cannot keep a 2011 code on an item.
@@ -225,7 +225,7 @@ What "ship both and associate them" looks like:
 
 0. This note.
 1. Standards catalog: a build script that reads OSPI's two 2026 xlsx
-   files (+ the crosswalk, per 6.1) and the NGSS performance expectations
+   files (+ the crosswalk, D-1c), the 2011 CCSS text, and the NGSS performance expectations
    and writes the JSON; a lookup module + tests (Sonnet 5 / medium). The
    source files are downloaded by the script, not committed.
 2. Tags: schema field + migration + editor picker / custom entry +
@@ -246,10 +246,13 @@ Decided 2026-10-02 (James): 9.1 → D-1a (shipped picker + custom);
 9.2 → D-2a (plain list); 9.3 → D-7 (four types, match next).
 
 - **9.4 answered 2026-10-02** (research; §Catalog sources).
-- **6.1** How the 2011 CCSS codes relate to the 2026 Washington codes —
-  proposal in §Crosswalk, awaiting James.
-- **9.5** Other WA subjects (social studies, health / PE, arts, CTE) in
-  a later catalog, or custom-only?
+- **6.1 decided (James, 2026-10-02) → D-1c: ship both schemes, linked
+  through the crosswalk** as §Crosswalk describes.
+- **9.5 decided (James, 2026-10-02) → D-1d: other WA subjects get a
+  catalog later; custom designations until then.** CASE is the first
+  source to check when that happens.
+
+None open.
 
 ## Progress
 
