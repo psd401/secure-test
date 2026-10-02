@@ -1,0 +1,133 @@
+# Instant feedback at hand-in (roadmap row IF)
+
+Design note, 2026-10-02. Trigger: open-beta teacher feedback — "the
+ability to turn on instant feedback for deterministically scored items
+when students hand in their tests." Decisions marked **D-n**; James's
+answers of 2026-10-02 are recorded as decided, the rest are
+recommendations. **§Progress says what is built** (nothing yet).
+
+## Relation to the roadmap
+
+- **Builds on D-6 (auto-score on submit)**: `POST
+  /api/attempts/[attemptId]/submit` already runs `runAutoScoringPass`
+  before it answers, so the deterministic scores exist when the client
+  hears back.
+- **ADR 0016 holds**: the delivery bundle still carries no key. Feedback
+  is a separate, post-submit server response; correct answers leave the
+  server only after hand-in, and only when the teacher chose that level.
+- **Touches pass back (U-7)**: a passed-back student who saw right / wrong
+  could fix exactly those answers. D-3 below.
+- **Touches Change score (U-10) and E11** (rescoring after a key change,
+  undecided): what a student saw can go stale. D-5 below.
+- **Distinct from `rubric.student_visibility.with_feedback`** (row R),
+  which governs the family-facing print page for essays. This note is
+  about auto-scored items in the client.
+- **Both sides: a client release.** Older clients ignore the new field.
+
+## What exists that this stands on
+
+- Auto-scored types: MC single / multi, short text (numeric equivalence,
+  `exact_form`), match, order, hotspot, table cells. Essays, drawings and
+  keyless items are not auto-scored.
+- The client's hand-in (`AssessmentViewController.handleSubmit`): flush →
+  `client.submit` → spool cleared → `onHandedIn` → the host ends the AAC
+  session and returns to Your tests.
+- Assessment settings: `time_limit`, allow flags, `student_layout`; a
+  Published assessment locks its settings except status-only PATCHes.
+
+## Design
+
+### The setting (D-1)
+
+`assessments.student_feedback`: `off` (default) | `score` | `right_wrong`
+| `answers`. Settings tab, a select with one line under each:
+
+- **Score only** — "You scored 14 of 18 on the questions scored right
+  away. Your teacher will score 2 more."
+- **Right / wrong** — score + a per-question ✓ / ✗ / "scored by your
+  teacher" list, with the student's own answer shown.
+- **Correct answers** — right / wrong + the key for each missed item
+  (MC choice text, short-text key, match pairs, order, table cells).
+
+**D-1 (James): all three levels in v1.** Changeable while Published (a
+status-only-style PATCH, like archive) because a teacher may want to
+turn answers on after the last period.
+
+### Delivery (D-2)
+
+- The submit response gains `feedback` when the setting is not `off`:
+  `{ level, earned, max_auto, pending_count, items?: [{ item_id, number,
+  result: "correct" | "partial" | "incorrect" | "pending", earned, max,
+  your_answer, correct_answer? }] }` — built from the FINAL scores just
+  written; `correct_answer` only at `answers`.
+- The client shows it **after `DID END`**, on a feedback page in the
+  normal (unlocked) window with a Done button back to Your tests — not
+  inside the lockdown (the session must end promptly; a slow render must
+  never hold a Mac in lockdown).
+- Answers render with the same KaTeX / image rules as the test.
+- Read-aloud follows the student's TTS accommodation.
+- Not shown on a teacher's Hand in / Hand in everyone or a time-out
+  hand-in — the student is not at the screen for it; see 9.2.
+
+### Interactions (D-3 … D-5)
+
+- **D-3 (James): pass back turns feedback off for that student, for now.**
+  An attempt with `pass_back_count > 0` gets no feedback on re-hand-in.
+- **D-4 when (James unsure — recommendation):** the leak risk is the KEY,
+  not the score. Recommend:
+  - `score` and `right_wrong` show **at hand-in**;
+  - `answers` shows at hand-in **only once no other sitting of this
+    assessment is open or scheduled** — otherwise the student sees right
+    / wrong and "Correct answers will be available after every class has
+    taken the test." The teacher can also turn `answers` on later; the
+    student then sees it from Your tests (needs 9.1).
+  - Alternative: a per-assessment "show answers at hand-in" vs "after I
+    release them" choice. Simpler to build, puts the judgment on the
+    teacher.
+- **D-5 feedback is a snapshot.** What the student saw is recorded as a
+  `feedback_shown` attempt event (`detail`: level, earned, max). A later
+  Change score or rescoring does not notify the student (v1); the
+  per-student page's timeline shows what was shown, so a teacher can
+  explain a difference.
+
+### Mixed tests
+
+`pending_count` counts essays, drawings, keyless and `ai` / `hybrid`
+items; the score line always says how many the teacher still scores.
+Partial-credit items (multi-select, match, table) show "partly right"
+with points.
+
+## Success looks like
+
+- A teacher turns it on in one control; students see their result within
+  seconds of hand-in, outside the lockdown.
+- No key reaches a student before the teacher's chosen moment (test: the
+  submit response for `score` / `right_wrong` carries no `correct_answer`;
+  for `answers` with another sitting open, neither).
+- The score the student sees equals the results matrix's auto-scored
+  total at that moment (test).
+- Older clients keep working (they ignore `feedback`).
+
+## Slices
+
+1. Server: setting + migration, feedback builder (pure, tested), submit
+   response, `feedback_shown` event kind, D-4 sitting check (Opus 5 /
+   medium).
+2. Teacher UI: Settings select + help text; timeline line (Sonnet 5 /
+   medium).
+3. Client: decode, feedback page after `DID END`, Done → Your tests,
+   VoiceOver + contrast sets (Opus 5 / medium) → client release.
+4. Rows: teacher rows + client rows (one real AAC session for the
+   after-`DID END` ordering).
+
+## Open questions
+
+- **9.1** "See my results" on Your tests for a handed-in attempt (needed
+  if answers are released later) — in v1 or a follow-up?
+- **9.2** Show feedback the next time the student opens the app after a
+  teacher / time-out hand-in?
+- **9.3** D-4: recommended rule, or the teacher's "release answers" choice?
+
+## Progress
+
+Nothing built.
