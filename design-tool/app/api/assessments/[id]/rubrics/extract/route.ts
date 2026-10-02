@@ -18,7 +18,11 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { runGuarded, type GuardedOutcome } from "@/lib/safeguarding/guard";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
-import type { ConverseDocumentFormat } from "@/lib/ai/bedrockConverse";
+import {
+  ALLOWED_UPLOADS as ALLOWED,
+  MAX_UPLOAD_BYTES as MAX_BYTES,
+  allowedUploadFor as allowedFor,
+} from "@/lib/ai/documentUpload";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,41 +36,6 @@ interface RouteContext {
 // "rubric-extract"): the text is screened before the model runs (skipped on
 // the PDF / DOCX document path, where no pre-model text exists), the
 // proposed criterion names + descriptors after.
-
-/** A rubric is one to three pages; 25 MiB is the item importer's cap. */
-const MAX_BYTES = 5 * 1024 * 1024;
-
-/**
- * D-1: PDF and DOCX ride to the model as Converse document blocks (the
- * table layout is what makes them readable); Markdown and plain text are
- * already structured, so they are decoded and sent as text — which also
- * lets the guardrail's input stage run on them.
- */
-const ALLOWED: {
-  ext: string;
-  format: ConverseDocumentFormat;
-  mimes: string[];
-  as: "document" | "text";
-}[] = [
-  { ext: "pdf", format: "pdf", mimes: ["application/pdf"], as: "document" },
-  {
-    ext: "docx",
-    format: "docx",
-    mimes: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-    as: "document",
-  },
-  { ext: "md", format: "md", mimes: ["text/markdown", "text/x-markdown"], as: "text" },
-  { ext: "txt", format: "txt", mimes: ["text/plain"], as: "text" },
-];
-
-function allowedFor(file: File): (typeof ALLOWED)[number] | null {
-  const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
-  const byExt = ALLOWED.find((a) => a.ext === ext);
-  if (byExt) return byExt;
-  // A browser that sends no filename extension still sends a type.
-  const mime = (file.type || "").split(";")[0]!.trim().toLowerCase();
-  return ALLOWED.find((a) => a.mimes.includes(mime)) ?? null;
-}
 
 const TextBody = z.object({ text: z.string().min(1).max(MAX_RUBRIC_TEXT_CHARS) });
 

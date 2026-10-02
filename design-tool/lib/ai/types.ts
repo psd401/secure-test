@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { CreateItemBody } from "@/lib/api/items";
+import type { ConverseDocument } from "@/lib/ai/bedrockConverse";
+import { MAX_RUBRIC_TEXT_CHARS } from "@/lib/ai/rubricExtractor/types";
+import { CreateItemBody, StandardsField } from "@/lib/api/items";
 
 // Slice 47: pinned list instead of z.enum(ITEM_TYPES) so new item types
 // don't silently become AI-generable. match/order/hotspot/drawing (and future
@@ -26,6 +28,122 @@ export const GenerateItemRequest = z.object({
 });
 export type GenerateItemRequest = z.infer<typeof GenerateItemRequest>;
 
+// BG slice 3 (docs/batch-item-generation-design.md, D-3 … D-7): batch
+// generation. D-7 names FOUR types for v1 — the three above plus essay. The
+// single-item list stays at three (E18: its providers have no essay shape);
+// the batch prompt carries an essay shape of its own, without a rubric (D-6).
+export const BATCH_GENERABLE_ITEM_TYPES = [
+  ...AI_GENERABLE_ITEM_TYPES,
+  "essay",
+] as const;
+export type BatchGenerableItemType = (typeof BATCH_GENERABLE_ITEM_TYPES)[number];
+
+/** D-3: at most ten proposals per call. */
+export const MAX_BATCH_COUNT = 10;
+export const MAX_BATCH_OBJECTIVE_CHARS = 500;
+export const MAX_BATCH_NOTES_CHARS = 2000;
+/** Pasted source material: the rubric upload's text cap (D-4). */
+export const MAX_BATCH_RESOURCE_CHARS = MAX_RUBRIC_TEXT_CHARS;
+
+export const BATCH_DIFFICULTIES = ["mixed", "easier", "on_level", "harder"] as const;
+export type BatchDifficulty = (typeof BATCH_DIFFICULTIES)[number];
+
+const TypeCount = z.number().int().min(0).max(MAX_BATCH_COUNT).optional();
+
+/** A per-type count map; strict, so a structural type (match, …) is a 400. */
+export const BatchTypeCounts = z
+  .object({
+    multiple_choice_single: TypeCount,
+    multiple_choice_multi: TypeCount,
+    short_text: TypeCount,
+    essay: TypeCount,
+  })
+  .strict();
+export type BatchTypeCounts = z.infer<typeof BatchTypeCounts>;
+
+// Blank optional text reads as absent, so "objective": "  " is no focus.
+const OptionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => (v ? v : undefined));
+
+/**
+ * The JSON body. A PDF / DOCX resource arrives as a multipart `file` beside
+ * this body (sent as the `request` form field), so the "at least one of
+ * target / resource / notes" rule is `hasBatchFocus`, which the route applies
+ * once it knows whether a file came with the request.
+ */
+export const GenerateItemsRequest = z
+  .object({
+    assessment_id: z.string().uuid(),
+    count: z.number().int().min(1).max(MAX_BATCH_COUNT),
+    types: z.union([z.literal("mix"), BatchTypeCounts]).default("mix"),
+    target: z
+      .object({
+        standards: StandardsField.optional(),
+        objective: OptionalText(MAX_BATCH_OBJECTIVE_CHARS),
+      })
+      .optional(),
+    difficulty: z.enum(BATCH_DIFFICULTIES).default("mixed"),
+    notes: OptionalText(MAX_BATCH_NOTES_CHARS),
+    resource: z
+      .object({ text: z.string().trim().min(1).max(MAX_BATCH_RESOURCE_CHARS) })
+      .optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.types === "mix") return;
+    const sum = Object.values(v.types).reduce<number>((a, n) => a + (n ?? 0), 0);
+    if (sum !== v.count) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["types"],
+        message: `type counts sum to ${sum}, not count (${v.count})`,
+      });
+    }
+  });
+export type GenerateItemsRequest = z.infer<typeof GenerateItemsRequest>;
+
+/** At least one of a standard, an objective, a resource or notes. */
+export function hasBatchFocus(req: GenerateItemsRequest, hasFile: boolean): boolean {
+  return (
+    hasFile ||
+    req.resource !== undefined ||
+    req.notes !== undefined ||
+    req.target?.objective !== undefined ||
+    (req.target?.standards?.length ?? 0) > 0
+  );
+}
+
+/** A requested tag, resolved for the prompt (lib/ai/itemBatchCore.ts). */
+export interface TargetStandard {
+  /** As stored on the item: `wa2026:M.7.R.RP.2`, or a custom designation. */
+  tag: string;
+  /** Shown to the model: the code without its scheme, or the custom text. */
+  code: string;
+  /** Catalog label ("Washington 2026") or null for a custom designation. */
+  framework: string | null;
+  /** Catalog text; null when the catalog does not know the tag. */
+  text: string | null;
+  /** NGSS clarification + boundary, or a 2011 tag's linked 2026 standards. */
+  extra: string[];
+}
+
+/** What the route hands a provider: the request, resolved. */
+export interface BatchGenerateInput {
+  count: number;
+  types: "mix" | BatchTypeCounts;
+  standards: TargetStandard[];
+  objective?: string;
+  difficulty: BatchDifficulty;
+  notes?: string;
+  resource?: { text: string } | { document: ConverseDocument };
+  /** Stems already on the assessment, truncated and capped. */
+  existingStems: string[];
+}
+
 // The provider returns a payload that is shaped identically to a
 // CreateItemBody. We keep the discriminated union as the source of truth
 // for what is acceptable so any future provider impl (Anthropic, OpenAI,
@@ -47,4 +165,10 @@ export interface ItemGeneratorProvider {
     req: GenerateItemRequest,
     ownerSub?: string,
   ): Promise<GenerateItemResult>;
+  /**
+   * BG slice 3: one call, up to ten items. Returns the model's array RAW —
+   * `validateBatchProposals` (lib/ai/itemBatchCore.ts) is the one place an
+   * element becomes a CreateItemBody, so one malformed element drops alone.
+   */
+  generateItems(input: BatchGenerateInput, ownerSub?: string): Promise<unknown[]>;
 }

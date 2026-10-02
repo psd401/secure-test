@@ -5,8 +5,10 @@ import {
   itemSystemBlocks,
   parseItemText,
 } from "./itemGenCore";
+import { BATCH_MAX_TOKENS, BATCH_SYSTEM_PROMPT, buildBatchUserText, parseBatchArray } from "./itemBatchCore";
 import { extractFirstText, wrapProviderError } from "./sdkResponse";
 import type {
+  BatchGenerateInput,
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
@@ -45,5 +47,52 @@ export const anthropicItemProvider: ItemGeneratorProvider = {
     }
 
     return parseItemText(extractFirstText(response.content, "anthropic"), "anthropic");
+  },
+
+  // BG slice 3. The Messages API reads a PDF as a base64 document block; it
+  // has no DOCX block, so a DOCX resource is refused on this (dev-only) path —
+  // Bedrock is the deployed provider and reads both.
+  async generateItems(input: BatchGenerateInput): Promise<unknown[]> {
+    const client = anthropicClient("AI_PROVIDER=anthropic");
+    const model = process.env.ANTHROPIC_ITEM_MODEL ?? DEFAULT_MODEL;
+    const doc = input.resource && "document" in input.resource ? input.resource.document : undefined;
+    if (doc && (doc.format ?? "pdf") !== "pdf") {
+      throw new Error(`anthropic_document_format_unsupported: ${doc.format}`);
+    }
+
+    let response;
+    try {
+      response = await client.messages.create({
+        model,
+        max_tokens: BATCH_MAX_TOKENS,
+        system: BATCH_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...(doc
+                ? [
+                    {
+                      type: "document" as const,
+                      source: {
+                        type: "base64" as const,
+                        media_type: "application/pdf" as const,
+                        data: Buffer.from(doc.bytes).toString("base64"),
+                      },
+                    },
+                  ]
+                : []),
+              { type: "text" as const, text: buildBatchUserText(input) },
+            ],
+          },
+        ],
+      });
+    } catch (err) {
+      wrapProviderError(err, "anthropic");
+    }
+
+    return parseBatchArray(extractFirstText(response.content, "anthropic"), "anthropic", {
+      truncated: response.stop_reason === "max_tokens",
+    });
   },
 };

@@ -1,4 +1,7 @@
+import { planTypes } from "./itemBatchCore";
 import type {
+  BatchGenerateInput,
+  BatchGenerableItemType,
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
@@ -68,4 +71,43 @@ export const mockProvider: ItemGeneratorProvider = {
       correct_answer: null,
     };
   },
+
+  // BG slice 3: deterministic proposals honoring count + types. The stem names
+  // the batch's focus (objective, else the standards, else the resource) so a
+  // reviewer sees what was asked for. Two test hooks in `notes`, like the
+  // rubric mock's markers: MOCK_MALFORMED breaks the first element,
+  // MOCK_ALL_MALFORMED breaks every one.
+  async generateItems(input: BatchGenerateInput): Promise<unknown[]> {
+    const focus =
+      input.objective ??
+      (input.standards.length > 0
+        ? input.standards.map((s) => s.code).join(", ")
+        : input.resource
+          ? "the source material"
+          : "the teacher's notes");
+    const notes = input.notes ?? "";
+    const all = notes.includes("MOCK_ALL_MALFORMED");
+    const first = notes.includes("MOCK_MALFORMED");
+    return planTypes(input.count, input.types).map((type, i) => {
+      if (all || (first && i === 0)) return { type, stem: "" };
+      return mockBatchItem(type, `Question ${i + 1} on ${focus}`);
+    });
+  },
 };
+
+function mockBatchItem(type: BatchGenerableItemType, stem: string): GenerateItemResult {
+  const choices = ["a", "b", "c", "d"].map((id) => ({
+    id,
+    text: `Option ${id.toUpperCase()} — drafted by AI; review before saving.`,
+  }));
+  if (type === "multiple_choice_single") {
+    return { type, stem, choices, correct_choice_ids: ["a"], correct_answer: null };
+  }
+  if (type === "multiple_choice_multi") {
+    return { type, stem, choices, correct_choice_ids: ["a", "b"], correct_answer: null };
+  }
+  if (type === "short_text") {
+    return { type, stem, choices: [], correct_choice_ids: [], correct_answer: "answer" };
+  }
+  return { type, stem, choices: [], correct_choice_ids: [], correct_answer: null };
+}

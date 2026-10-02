@@ -359,6 +359,7 @@ describe("ownership enforcement across every teacher route", () => {
     const nonAccess403 = new Map<string, string>([
       [join("auth", "exchange"), "the email's domain is not a district domain"],
       [join("ai", "generate-item"), "llm_authoring_disabled on the assessment"],
+      [join("ai", "generate-items"), "llm_authoring_disabled on the assessment (BG slice 3)"],
     ]);
     const wrong: string[] = [];
     for (const { path, source } of staffRoutes) {

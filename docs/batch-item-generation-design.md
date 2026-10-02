@@ -275,7 +275,45 @@ What "ship both and associate them" looks like:
    Tests: `item-standards`, `standards-api` (incl. the no-catalog-in-a-
    client-file guard), `standards-tag-input`; rows 345–357 unrun.
 3. Batch route + provider method + mock + per-item validation + guardrail
-   + tests (Opus 5 / medium).
+   + tests (Opus 5 / medium). BUILT 2026-10-02, no migration:
+   `POST /api/ai/generate-items` (`app/api/ai/generate-items/route.ts`) —
+   staff, `edit`, `allow_llm_authoring` (403 `llm_authoring_disabled`);
+   body `GenerateItemsRequest` in `lib/ai/types.ts` (count 1–10; `types`
+   `"mix"` or a strict per-type map summing to count; `target.standards`
+   through the items' `StandardsField`, `target.objective` ≤ 500; `difficulty`
+   default `mixed`; `notes` ≤ 2000; `resource.text` ≤ the rubric text cap;
+   blank text = absent; at least one of target / resource / notes) → 200
+   `{ ok, proposals, requested, dropped, provider }`, nothing written.
+   Prompt, tag resolution, array parse and per-element validation in
+   `lib/ai/itemBatchCore.ts`: a catalog tag sends code + text (NGSS adds
+   clarification + boundary; a 2011 tag adds its linked 2026 text, per
+   §Crosswalk), a custom tag matching exactly one catalog code reads as it,
+   other custom tags go as written; existing stems ≤ 40 × 200 chars; pasted
+   source wrapped in `<source_material>` (a closing tag inside is
+   neutralised). Each element is validated alone against `CreateItemBody`
+   after `standards` / `rubric` / `rubric_id` / `scoring_method` are
+   stripped (D-5, D-6); off-type elements drop; kept ones get the request's
+   normalized tags; `dropped` = requested − kept; zero kept → 502
+   `provider_failed`. Provider method `generateItems` on the mock
+   (deterministic; `MOCK_MALFORMED` / `MOCK_ALL_MALFORMED` note hooks),
+   Bedrock (one `converseTextWithMeta` turn, 8000 max tokens, document
+   block for PDF / DOCX, `ai_usage` surface `item-gen`) and Anthropic (PDF
+   as a base64 document; DOCX refused on that dev path). Guardrail surface
+   `item-gen` (the `guardrail_events` CHECK pins the surfaces; a new value
+   would need a migration): input = notes + objective + resource text (no
+   input stage for standards alone or a PDF / DOCX), output = every kept
+   proposal. **Accepted for now (James, 2026-10-02, 20.2):** an uploaded
+   PDF / DOCX reaches the model without an input guardrail check, because
+   the server never extracts its text; the output check still covers every
+   proposal. Closing it = server-side text extraction before the guardrail. Tests `item-batch-core` (16) + `ai-generate-items` (16).
+   **Deviations:** (a) the resource is a multipart `file` beside a
+   `request` JSON field — the rubric upload's shape, types (PDF / DOCX as
+   documents, Markdown / text decoded) and 5 MiB cap, now shared through
+   `lib/ai/documentUpload.ts` — not `{ upload_id }` through the asset
+   store; (b) `AI_GENERABLE_ITEM_TYPES` stays at three for the single-item
+   generator (E18), and a separate `BATCH_GENERABLE_ITEM_TYPES` adds essay
+   for D-7; (c) no Draft check, matching the single-item route (Add is
+   what writes).
 4. Dialog + proposal list reuse (Sonnet 5 / medium).
 5. Suggest standards (route + chips) (Sonnet 5 / medium).
 6. Match in a batch (Opus 5 / medium).

@@ -1,12 +1,14 @@
 import type { Tool } from "@aws-sdk/client-bedrock-runtime";
 import { AI_GENERABLE_ITEM_TYPES } from "@/lib/ai/types";
-import { converseTool } from "./bedrockConverse";
+import { converseTextWithMeta, converseTool } from "./bedrockConverse";
+import { BATCH_MAX_TOKENS, BATCH_SYSTEM_PROMPT, buildBatchUserText, parseBatchArray } from "./itemBatchCore";
 import {
   ITEM_MAX_TOKENS,
   ITEM_SYSTEM_PROMPT,
   buildUserText,
 } from "./itemGenCore";
 import type {
+  BatchGenerateInput,
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
@@ -141,5 +143,24 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
       ownerSub,
     });
     return normalizeItem(input);
+  },
+
+  // BG slice 3: one plain-text Converse turn for the whole batch. Not
+  // tool-forced: the reply is an array of up to ten items, parsed tolerantly
+  // and validated element by element by the route (validateBatchProposals).
+  // A PDF / DOCX resource rides as a document block (D-4).
+  async generateItems(input: BatchGenerateInput, ownerSub?: string): Promise<unknown[]> {
+    const doc = input.resource && "document" in input.resource ? input.resource.document : undefined;
+    const { text, stopReason } = await converseTextWithMeta({
+      modelId: process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL,
+      systemText: BATCH_SYSTEM_PROMPT,
+      userText: buildBatchUserText(input),
+      maxTokens: BATCH_MAX_TOKENS,
+      ...(doc ? { document: doc } : {}),
+      errPrefix: "bedrock",
+      surface: "item-gen",
+      ownerSub,
+    });
+    return parseBatchArray(text, "bedrock", { truncated: stopReason === "max_tokens" });
   },
 };
