@@ -51,7 +51,7 @@ time) and its rubric is attached.
    settings; results and test sessions are not copied. Use it for a second
    period's version or before a big edit.
 
-## Read-aloud and speech-to-text (client v1.3.6 and later)
+## Read-aloud and speech-to-text (client v1.4.0 and later)
 
 - **Grant it.** On the assessment's **Accommodations** tab, allow the tools
   (Text-to-Speech Test Content / Student Responses / ELA Reading,

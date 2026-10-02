@@ -493,7 +493,7 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
-### 2026-10-01 — MIN-1: minimize during a test strands the student (client, v1.3.6)
+### 2026-10-01 — MIN-1: minimize during a test strands the student (client, v1.4.0)
 
 - **Pilot report:** a student previewing with a teacher clicked the yellow
   minimize button and was left on a grey screen until the Mac was restarted.
@@ -505,7 +505,7 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 - **BUILT (not released):** the window is built without `.miniaturizable`;
   a `didMiniaturizeNotification` observer deminiaturizes it as a backstop
   (stderr `window minimized — restoring (MIN-1)`). Debug `xcodebuild`
-  green; Core unchanged. Rides the next client release (v1.3.6;
+  green; Core unchanged. Rides the next client release (v1.4.0 — renamed from 1.3.6 on 2026-10-01;
   `MARKETING_VERSION` not bumped yet).
 - **Rows:** `client/MANUAL-CHECKS.md` "MIN-1 — no minimize during a test",
   4 rows NOT RUN — row 4 checks Cmd-Q / Cmd-E as the workaround on v1.3.5
