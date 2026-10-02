@@ -2,7 +2,7 @@
 // module (lib/standards/catalog.ts). docs/batch-item-generation-design.md.
 
 export type StandardScheme = "wa2026" | "ccss2010" | "ngss";
-export type StandardSubject = "math" | "ela";
+export type StandardSubject = "math" | "ela" | "science";
 
 export type StandardCourse = {
   course: string;
@@ -24,6 +24,12 @@ export type StandardEntry = {
   new_in_2026?: boolean;
   /** HS math wa2026 only: one row per course the standard appears in. */
   courses?: StandardCourse[];
+  /** ngss only: the bracketed "Clarification Statement" of the performance expectation. */
+  clarification?: string;
+  /** ngss only: the bracketed "Assessment Boundary". */
+  assessment_boundary?: string;
+  /** ngss only: marked with an asterisk in the PDF (integrates engineering). */
+  engineering?: boolean;
 };
 
 export type CrosswalkPair = { ccss2010: string; wa2026: string };

@@ -1,9 +1,11 @@
-// Pure transform from OSPI's two 2026 adoption workbooks to the catalog and
+// Pure transform from OSPI's two 2026 adoption workbooks (plus the NGSS
+// intermediate JSON that scripts/extract-ngss.ts wrote) to the catalog and
 // crosswalk JSON (docs/batch-item-generation-design.md §Catalog sources). The
 // script scripts/build-standards.ts is a thin wrapper that reads the files,
 // checks their checksums and writes the output; the test re-runs this in
 // memory and compares it to the committed JSON.
 import ExcelJS from "exceljs";
+import type { NgssEntry } from "./ngss";
 import type { CrosswalkPair, StandardEntry } from "./types";
 
 type Cell = ExcelJS.CellValue;
@@ -77,7 +79,15 @@ const CCSS_ELA_DOMAINS: Record<string, string> = {
 // pairs are dropped rather than guessed at; any other unknown code fails the build.
 const UNKNOWN_2026_CODES = new Set(["ELA.11-12.R.5"]);
 
-const GRADE_ORDER = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9-10", "11-12", "HS"];
+const GRADE_ORDER = ["K", "1", "2", "3", "4", "5", "6", "7", "8", "9-10", "11-12", "K-2", "3-5", "MS", "HS"];
+
+// NGSS discipline (the PS / LS / ESS / ETS in "MS-PS1-2") -> the domain name.
+const NGSS_DOMAINS: Record<string, string> = {
+  PS: "Physical Science",
+  LS: "Life Science",
+  ESS: "Earth and Space Science",
+  ETS: "Engineering Design",
+};
 
 function raw(value: Cell): string {
   if (value === null || value === undefined) return "";
@@ -179,6 +189,9 @@ function entry(e: StandardEntry): StandardEntry {
   };
   if (e.priority !== undefined) out.priority = e.priority;
   if (e.new_in_2026 !== undefined) out.new_in_2026 = e.new_in_2026;
+  if (e.clarification !== undefined) out.clarification = e.clarification;
+  if (e.assessment_boundary !== undefined) out.assessment_boundary = e.assessment_boundary;
+  if (e.engineering !== undefined) out.engineering = e.engineering;
   if (e.courses) {
     out.courses = e.courses.map((c) =>
       c.text === undefined
@@ -340,9 +353,36 @@ function elaCrosswalk(wb: ExcelJS.Workbook) {
   return { ccss: [...ccss.values()], pairs };
 }
 
+/** NGSS performance expectations from the committed intermediate JSON (no crosswalk links). */
+function ngssEntries(json: string): StandardEntry[] {
+  const list = JSON.parse(json) as NgssEntry[];
+  const seen = new Set<string>();
+  return list.map((p) => {
+    const m = /^(K-2|3-5|MS|HS|K|[1-5])-(PS|LS|ESS|ETS)\d-\d$/.exec(p.code);
+    if (!m) throw new Error(`NGSS: unexpected code ${p.code}`);
+    if (seen.has(p.code)) throw new Error(`NGSS: duplicate code ${p.code}`);
+    seen.add(p.code);
+    if (!p.text) throw new Error(`NGSS ${p.code}: empty text`);
+    const e: StandardEntry = {
+      scheme: "ngss",
+      code: p.code,
+      subject: "science",
+      grade_band: m[1]!,
+      domain: NGSS_DOMAINS[m[2]!]!,
+      text: p.text,
+    };
+    if (p.clarification !== undefined) e.clarification = p.clarification;
+    if (p.assessment_boundary !== undefined) e.assessment_boundary = p.assessment_boundary;
+    if (p.engineering) e.engineering = true;
+    return e;
+  });
+}
+
 export async function buildStandards(files: {
   math: ArrayBuffer | Uint8Array;
   ela: ArrayBuffer | Uint8Array;
+  /** Text of sources/ngss-performance-expectations.json. */
+  ngss: string;
 }): Promise<StandardsBuild> {
   const load = async (data: ArrayBuffer | Uint8Array) => {
     const wb = new ExcelJS.Workbook();
@@ -354,7 +394,7 @@ export async function buildStandards(files: {
   const mc = mathCrosswalk(math);
   const ec = elaCrosswalk(ela);
   const catalog = sortCatalog(
-    [...mathWa2026(math), ...elaWa2026(ela), ...mc.ccss, ...ec.ccss].map(entry),
+    [...mathWa2026(math), ...elaWa2026(ela), ...mc.ccss, ...ec.ccss, ...ngssEntries(files.ngss)].map(entry),
   );
 
   const seen = new Set<string>();

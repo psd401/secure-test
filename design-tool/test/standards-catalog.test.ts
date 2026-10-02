@@ -31,7 +31,8 @@ describe("catalog counts", () => {
     expect(count("wa2026", "ela")).toBe(297);
     expect(count("ccss2010", "math")).toBe(385);
     expect(count("ccss2010", "ela")).toBe(868);
-    expect(catalog.length).toBe(1974);
+    expect(count("ngss", "science")).toBe(208);
+    expect(catalog.length).toBe(2182);
   });
 
   test("crosswalk size and endpoints", () => {
@@ -199,6 +200,7 @@ describe("build", () => {
     const built = await buildStandards({
       math: read("math26-final-adoption-spreadsheet.xlsx"),
       ela: read("ela26-final-adoption-spreadsheet.xlsx"),
+      ngss: read("ngss-performance-expectations.json").toString("utf8"),
     });
     expect(serialize(built.catalog)).toBe(readFileSync(join(dir, "catalog.json"), "utf8"));
     expect(serialize(built.crosswalk)).toBe(readFileSync(join(dir, "crosswalk.json"), "utf8"));

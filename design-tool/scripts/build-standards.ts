@@ -1,10 +1,11 @@
 // Builds lib/standards/catalog.json and crosswalk.json from OSPI's two 2026
-// adoption workbooks (docs/batch-item-generation-design.md, slice 1).
+// adoption workbooks and the NGSS intermediate JSON (docs/batch-item-generation-design.md, slice 1).
 //
 //   bun run standards:build
 //
-// The workbooks are committed in lib/standards/sources/ (SOURCES.md has the
-// URLs and versions). Each file's sha256 is checked first: to take a new OSPI
+// The workbooks and the NGSS JSON are committed in lib/standards/sources/
+// (SOURCES.md has the URLs and versions; the NGSS JSON comes from
+// `bun run standards:extract-ngss <AllDCI.pdf>`). Each file's sha256 is checked first: to take a new OSPI
 // release, replace the file, update the constant here and the table in
 // SOURCES.md, run this, and review the JSON diff.
 import { createHash } from "node:crypto";
@@ -24,6 +25,11 @@ const SOURCES = [
     file: "sources/ela26-final-adoption-spreadsheet.xlsx",
     sha256: "d4a8f63b00d2359ac30185b7585181d9336997d1b0b749c0873007f19b7a3ced",
   },
+  {
+    key: "ngss",
+    file: "sources/ngss-performance-expectations.json",
+    sha256: "4d01ee0dd655a7eda84ed02e48fd153df8095eb47f04dfda8869b5e97c3f8c7a",
+  },
 ] as const;
 
 const data: Record<string, Buffer> = {};
@@ -40,6 +46,7 @@ for (const s of SOURCES) {
 const { catalog, crosswalk } = await buildStandards({
   math: data.math!,
   ela: data.ela!,
+  ngss: data.ngss!.toString("utf8"),
 });
 writeFileSync(join(DIR, "catalog.json"), serialize(catalog));
 writeFileSync(join(DIR, "crosswalk.json"), serialize(crosswalk));

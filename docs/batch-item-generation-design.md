@@ -242,8 +242,15 @@ What "ship both and associate them" looks like:
    sha256. It writes `catalog.json` + `crosswalk.json` (the crosswalk
    sheets also supply the 2011 CCSS text); lookup module + tests (Sonnet 5
    / medium).
-1b. NGSS performance expectations (code + text), extracted from the
-   official PDF. The PDF is not committed; its URL + checksum go in
+1b. NGSS performance expectations (code + text + clarification +
+   assessment boundary + engineering flag), extracted from the official
+   PDF in two steps so CI stays reproducible. BUILT: the PDF (9.97 MB) is
+   not committed; `bun run standards:extract-ngss <pdf>` verifies its
+   sha256 and writes the committed intermediate
+   `sources/ngss-performance-expectations.json` (208 entries; pure parser
+   `lib/standards/ngss.ts`), and `bun run standards:build` reads that JSON
+   (sha256 checked) into `catalog.json` (scheme `ngss`, subject `science`,
+   no crosswalk links). URL, checksums and the NGSS terms are in
    `SOURCES.md` (Sonnet 5 / medium).
 2. Tags: schema field + migration + editor picker / custom entry +
    bundle round trip + tests (Sonnet 5 / medium).
@@ -292,7 +299,14 @@ None open.
   per course → optional `courses[].text`. Reading for slice 2: the
   catalog JSON is ~950 KB — keep `lib/standards/catalog.ts` server-only
   (search through a route), never import it into a client component.
-- Slice 1b (NGSS) checked, not built: `AllDCI.pdf` (9.97 MB, sha256
-  `79e26e42…`) extracts with `unpdf` to 208 distinct performance
-  expectations, each `CODE. statement` + bracketed clarification /
-  assessment boundary.
+- **Slice 1b BUILT 2026-10-02:** 208 NGSS performance expectations
+  (K 10, 1: 9, 2: 11, 3: 15, 4: 14, 5: 13, K-2 3, 3-5 3, MS 59, HS 71;
+  176 with a clarification, 126 with an assessment boundary, 29 engineering
+  `*` flags) via `scripts/extract-ngss.ts` → committed
+  `sources/ngss-performance-expectations.json` → the build; catalog now
+  2182 entries / ~990 KB; 37 standards tests. PDF quirks handled and
+  tested: tags wrapped mid-word, a misspelled "Clarification Steatement"
+  (HS-PS1-2), and stray spaces inside words on two pages (MS-LS3,
+  MS-ESS1), repaired by joining fragments into words seen on undamaged
+  pages (one-word extra list: "Punnett"); a scan of the repaired entries
+  found only real words.
