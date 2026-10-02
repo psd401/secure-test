@@ -45,15 +45,29 @@ are recommendations. **§Progress says what is built** (nothing yet).
   `standards jsonb not null default '[]'` column on `items` (one
   migration). ≤ 10 per item, ≤ 80 chars each. Each entry is either a
   code from the shipped catalog (D-1a) or a teacher's own designation.
-- **D-1a (James, 9.1): a shipped WA standards picker, plus custom.** v1
-  catalog = the standards Washington adopted that have published code
-  lists: CCSS Mathematics, CCSS ELA / Literacy, NGSS. Stored in the repo as
-  JSON (`design-tool/lib/standards/*.json`: `{ code, subject, grade,
-  domain, text }`), loaded server-side, never in a bundle. The picker
-  searches code and text, filtered by subject + grade (assessments have
-  no subject / grade field; the teacher's last filter is remembered per
-  browser). A picked entry stores the CODE; the editor and reports show
-  the code with its text looked up from the catalog.
+- **D-1a (James, 9.1): a shipped WA standards picker, plus custom.**
+  Revised 2026-10-02 after the 9.4 research: Washington adopted REVISED
+  math and ELA standards in 2026 (explore in 2026–27, required with
+  students in 2027–28) with new codes (`M.7.DA.DS.1`, `ELA.1.R.1`), so
+  the catalog is built from OSPI's files, not the 2011 CCSS (sources and
+  terms in §Catalog sources). Science = NGSS performance expectations
+  (Washington's science standards are the NGSS; a 2024 OSPI draft
+  revision has no adopted version yet).
+- **Catalog shape.** Repo JSON under `design-tool/lib/standards/`, loaded
+  server-side, never in a bundle: `{ scheme, code, subject, grade_band,
+  domain, text, priority? }`. `scheme` = `wa2026` | `ccss2010` | `ngss`
+  (a code is only unique within its scheme, and the 2027–28 changeover
+  means two schemes coexist). `grade_band` not `grade`: HS math has no
+  grade and NGSS uses `K-2` / `MS` / `HS` bands alongside single grades.
+  OSPI's PRIORITY flag is kept for the picker.
+- **Stored tag form.** A picked entry stores `scheme:code`
+  (`wa2026:M.7.DA.DS.1`); the editor shows the code without the scheme
+  prefix plus its text; a custom designation is stored as typed (no
+  prefix). The plain-list decision (9.2) holds — still `string[]`.
+- **Picker.** Searches code and text across schemes, filtered by subject
+  + grade band (assessments have no subject / grade field; the teacher's
+  last filter is remembered per browser). The 2011 ↔ 2026 association is
+  6.1 below.
 - **Custom designation (James, 9.1):** anything not in the catalog —
   local learning targets, other subjects (social studies, CTE, arts,
   world languages), AP course skills — is typed as free text and stored
@@ -122,6 +136,80 @@ are recommendations. **§Progress says what is built** (nothing yet).
 - Avoid duplicates: the prompt includes the stems already on the
   assessment (truncated) and asks for distinct items.
 
+## Catalog sources (9.4, researched 2026-10-02)
+
+- **Math + ELA — OSPI 2026 adoption spreadsheets** (math and ELA final
+  adoption `.xlsx`, linked from OSPI's Mathematics / ELA Standards pages):
+  Washington's own codes, a crosswalk column to the 2011 CCSS codes, the
+  PRIORITY flag. OSPI's standards documents carry a Creative Commons
+  Attribution license. Attribution (shown in project docs and the
+  picker's footer): "Adapted from the Washington Office of
+  Superintendent of Public Instruction, K–12 Learning Standards (2026),
+  CC BY." Confirm the license wording in the xlsx files themselves in
+  slice 1 (the research read it from the PDFs).
+- **2011 CCSS text, if shipped (6.1):** the CCSS public license allows
+  copying and display "for purposes that support the Common Core State
+  Standards Initiative", with the notice "© Copyright 2010. National
+  Governors Association Center for Best Practices and Council of Chief
+  State School Officers. All rights reserved." It is narrower than CC BY
+  and a secondary source says it bars alteration — ship the text
+  verbatim, notice in project docs.
+- **Science — NGSS performance expectations** (code + text) from
+  nextgenscience.org. NGSS's terms let "states, districts, schools,
+  teachers and non-profit education entities" copy, adapt and rearrange
+  any part. Copyright National Academies Press; the trademark is
+  WestEd's (since 2020). **D-1b (James, 6.2): the WestEd trademark notice
+  goes in project docs (a `NOTICE` / README section), not on the
+  teacher's screen.** Notice text for the docs: "Next Generation Science
+  Standards is a registered trademark of WestEd. Neither WestEd nor the
+  lead states and partners that developed the Next Generation Science
+  Standards were involved in the production of this product, and do not
+  endorse it." (Reading for the record: the terms ask third parties using
+  the trademark to show it at first prominent use; James's call is that
+  the district's own tool does not need it on screen.)
+- **Not used:** 1EdTech CASE Network (free registration for downloads;
+  per-framework licenses unverified), Common Standards Project (API key;
+  last README update 2015), ASN / D2L (data license unclear). Revisit
+  CASE if more subjects are added (9.5).
+- **Watch:** an adopted Washington science revision (OSPI's 2024 draft
+  adds priority standards and topic tags) would become a `wa20xx`
+  science scheme the same way.
+
+## Crosswalk (6.1 proposal — both schemes, associated)
+
+Codes below are illustrative; slice 1 reads the real pairs from OSPI.
+
+What "ship both and associate them" looks like:
+
+- **Two catalogs, one link table.** `wa2026` and `ccss2010` entries with
+  their own text; `crosswalk.json` = pairs `{ wa2026, ccss2010 }` built
+  from OSPI's crosswalk column. Many-to-many: a revision can split one
+  CCSS standard into two, merge two into one, add a standard with no
+  CCSS root (the four new math domains) or drop one.
+- **Picker.** Typing `7.RP.A.2` finds the CCSS entry AND its linked 2026
+  entries; each result shows its counterpart on a second line ("2026:
+  M.7.R.RP.2" / "2011: 7.RP.A.2"). A **scheme preference** (2011 / 2026,
+  remembered per browser, default 2026) decides which is listed first —
+  teachers who still plan in CCSS this year pick 2011 and see the 2026
+  code alongside.
+- **Storage.** The tag stores exactly what the teacher picked; nothing is
+  rewritten. A 2011 tag stays a 2011 tag after 2027–28.
+- **Reading (class insights, reports).** Grouping resolves to 2026: a
+  `ccss2010` tag with exactly one 2026 link is counted under that 2026
+  standard and shown as "M.7.R.RP.2 (tagged as 7.RP.A.2)"; a tag with
+  several links or none is grouped under its own code. No guessing.
+- **Batch generation / Suggest standards.** Prompts use the 2026 text
+  when a 2026 code is linked (it is what students will be held to); the
+  suggestion list is drawn from the preferred scheme.
+- **Cost.** Two texts to load (the CCSS text under its narrower license),
+  a link table to rebuild if OSPI revises the crosswalk, and the
+  one-to-many cases need a test fixture each. Size is small (a few
+  thousand entries in total).
+- **Simpler alternative:** ship 2026 only and use the crosswalk as a
+  search ALIAS (typing a 2011 code finds the 2026 entry, which is what is
+  stored) — no 2011 text, no `ccss2010` tags, no CCSS-license question;
+  the cost is that a teacher cannot keep a 2011 code on an item.
+
 ## Success looks like
 
 - A teacher gets 10 tagged, distinct, on-target drafts in one round trip
@@ -136,9 +224,10 @@ are recommendations. **§Progress says what is built** (nothing yet).
 ## Slices
 
 0. This note.
-1. Standards catalog: source the CCSS-M / ELA / NGSS code lists (9.4),
-   a build script that writes the JSON, a lookup module + tests
-   (Sonnet 5 / medium).
+1. Standards catalog: a build script that reads OSPI's two 2026 xlsx
+   files (+ the crosswalk, per 6.1) and the NGSS performance expectations
+   and writes the JSON; a lookup module + tests (Sonnet 5 / medium). The
+   source files are downloaded by the script, not committed.
 2. Tags: schema field + migration + editor picker / custom entry +
    bundle round trip + tests (Sonnet 5 / medium).
 3. Batch route + provider method + mock + per-item validation + guardrail
@@ -156,10 +245,9 @@ Design tool only; no client change.
 Decided 2026-10-02 (James): 9.1 → D-1a (shipped picker + custom);
 9.2 → D-2a (plain list); 9.3 → D-7 (four types, match next).
 
-- **9.4** Catalog source and terms: the CCSS public license and NGSS's
-  terms of use both allow non-commercial educational use with attribution
-  — confirm before slice 1; machine-readable lists are available from
-  the CASE Network / the publishers' sites (pick one, record it here).
+- **9.4 answered 2026-10-02** (research; §Catalog sources).
+- **6.1** How the 2011 CCSS codes relate to the 2026 Washington codes —
+  proposal in §Crosswalk, awaiting James.
 - **9.5** Other WA subjects (social studies, health / PE, arts, CTE) in
   a later catalog, or custom-only?
 
