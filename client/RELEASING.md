@@ -194,6 +194,27 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.4.0 — 2026-10-01** (built from `5dd8d32726f8`, tag on `main`;
+  renamed from 1.3.6 the same day — a feature release): read-aloud for
+  test content and for students' own answers (word highlight, incl. inside
+  answers), on-device speech-to-text with the pre-lockdown permission
+  pre-flight and the `speech_preflight` event, and MIN-1 (no minimize).
+  First release with `com.apple.security.device.audio-input` (in
+  `expected-entitlements.txt`). psd-sign 0.6.1: pre-flight (clean tree,
+  HEAD = `origin/main`, 1.4.0 > v1.3.5), archive-only Developer ID +
+  hardened runtime (no re-sign), all seven entitlements present, profile
+  "SecureTest Developer ID" (expires 2044), `PSDBuildCommit` = HEAD, pkg
+  Installer-signed (`net.psd401.securetest.client`), `/releases/latest`
+  → v1.4.0, asset sha256 `da20190b…acb799` = the Desktop pkg.
+  **NOT NOTARIZED — deliberate deviation:** Apple's notary service
+  answered every submission with HTTP 403 "A required agreement is missing
+  or has expired"; IT opened a ticket with Apple and confirmed that the
+  Jamf / AutoPkg install path does not need notarization (no quarantine
+  flag, so no Gatekeeper notarization check). Browser downloads are
+  blocked until notarized; the release notes say so. **Follow-up:** when
+  Apple's service accepts submissions, notarize the SAME pkg (and app)
+  WITHOUT stapling or replacing the asset — Gatekeeper checks the ticket
+  online, and AutoPkg has already pulled the file.
 - **v1.3.5 — 2026-09-24** (built from `0082272bd4fe`, tag on `main`): the
   EX-1 client (a teacher-moved deadline restarts the running countdown),
   the No-time-limit client half (the peek poll's `time_limit_removed`
