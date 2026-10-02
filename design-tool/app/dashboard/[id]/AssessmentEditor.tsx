@@ -67,6 +67,7 @@ import { HotspotEditor } from "./HotspotEditor";
 import { TableEditor } from "./TableEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
+import { GenerateQuestionsDialog } from "@/components/app/GenerateQuestionsDialog";
 import { normalizeStandards } from "@/lib/standards/tags";
 
 // UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
@@ -1960,6 +1961,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             >
               {aiPanelOpen ? "Close AI panel" : "Generate with AI"}
             </Button>
+          ) : null}
+          {assessment.allow_llm_authoring && !isLocked ? (
+            <GenerateQuestionsDialog
+              assessmentId={assessment.id}
+              usedStandards={usedStandards}
+              onAdded={reloadFromServer}
+            />
           ) : null}
         </div>
 

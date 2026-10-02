@@ -314,7 +314,27 @@ What "ship both and associate them" looks like:
    generator (E18), and a separate `BATCH_GENERABLE_ITEM_TYPES` adds essay
    for D-7; (c) no Draft check, matching the single-item route (Add is
    what writes).
-4. Dialog + proposal list reuse (Sonnet 5 / medium).
+4. Dialog + proposal list reuse (Sonnet 5 / medium). BUILT 2026-10-02, no
+   migration, no API change: `components/app/GenerateQuestionsDialog.tsx`
+   (entry button beside "Generate with AI", same `allow_llm_authoring` +
+   not-locked gate; the editor mounts it with `usedStandards` and
+   `reloadFromServer`) over the pure `lib/ai/batchForm.ts` (validation incl.
+   the type-count sum and the at-least-one rule, the JSON / multipart request,
+   error copy, "Check the key", sequential Add all; limits mirrored from
+   `lib/ai/types.ts` and guarded by a test, since that module is server-side).
+   Reused: `StandardsTagInput` as is, the rubric upload's file accept list and
+   Dialog pattern, `chipLabel` + `/api/standards/lookup` for the card chips,
+   `MathPreview` and `cardText` for the stem, the PDF import's Add body (the
+   proposal posted to the items route unchanged, `standards` included).
+   **Deviations:** (a) the PDF-import cards are one-line previews with no
+   edit, so the card is new (full stem, choices, tags, a "Show the key"
+   disclosure) and has **no inline edit before Add** — the teacher edits the
+   saved question; (b) "Check the key" clears when the card's key disclosure is
+   opened (there is no edit to clear it), and the "(correct)" mark on a choice
+   appears only then; essays have no key and no badge; (c) the dialog keeps its
+   proposals and form values across close / reopen (Discard all is the explicit
+   drop), and Generate again does not keep a chosen file (a browser file input
+   cannot be refilled). Tests `batch-form` (19); rows 358–371 unrun.
 5. Suggest standards (route + chips) (Sonnet 5 / medium).
 6. Match in a batch (Opus 5 / medium).
 7. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
@@ -357,6 +377,24 @@ None open.
   per course → optional `courses[].text`. Reading for slice 2: the
   catalog JSON is ~950 KB — keep `lib/standards/catalog.ts` server-only
   (search through a route), never import it into a client component.
+- **Slices 3 + 4 (2026-10-02):** slice 3 (`451d16e`) DEPLOYED with
+  rev 70 (`025e7d5`, the route only — nothing called it yet). Slice 4
+  built in an isolated worktree, brought over and checked in the browser
+  on local dev (`_demo` roster, Bedrock): gate (no button with AI
+  authoring off), Generate disabled + status line while empty, one
+  standard × 5 Mix → "5 questions ready" (MC single, MC multi, short
+  text with KaTeX, essay), "Check the key" on the four keyed cards and
+  cleared by Show the key, Add (card leaves, editor count 5 → 6, tag
+  carried), Discard, Add all (3, in order, all tagged), essay without a
+  rubric, form values kept after the list empties and across close /
+  reopen. Two fixes made during that check: Escape in the dialog's
+  standards picker with its list open closed the whole dialog (Radix
+  listens in the capture phase) — `onEscapeKeyDown` now ignores an
+  Escape from an expanded combobox; the dialog stayed at `sm:max-w-lg`
+  because the primitive's class won over `max-w-2xl`, scrolling sideways
+  by 33 px — now `sm:max-w-2xl` + `overflow-x-hidden`. Reading, not
+  fixed: answer choices show raw LaTeX (`$CO_2$`) while the stem gets a
+  rendered preview. Rows 358–371 open for the origin.
 - **Slice 2 BUILT 2026-10-02 (`a3d0633`, not deployed — migration 0050):**
   optional standards tags on items, the editor picker, the two staff
   routes, bundles carry tags, tags editable while Published (14.1).
