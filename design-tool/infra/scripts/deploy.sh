@@ -7,7 +7,12 @@
 #      HEAD and /api/health reports it — an unpushed deploy is untraceable),
 #      AWS creds valid (SSO login opens a browser, so it stays a human step),
 #      colima running (it does not come back after a reboot; the image build
-#      fails with "failed to connect to the docker API" otherwise).
+#      fails with "failed to connect to the docker API" otherwise), and
+#      packages/schema/dist rebuilt from HEAD (2026-10-02: the design tool
+#      consumes the schema package through its gitignored dist, the Dockerfile
+#      copies packages/ as-is, so a fresh worktree failed the image build with
+#      "Can't resolve '@secure-test/schema'" — and a stale dist in an old
+#      checkout would ship silently).
 #   2. what is live now: /api/health's commit, and whether this deploy carries
 #      new migration files (a diff between two commits, not a guess). DS-2: a
 #      deploy that does is refused on weekdays 07:00–15:30 America/Los_Angeles
@@ -73,6 +78,12 @@ echo "AWS creds OK"
 
 colima status >/dev/null 2>&1 || fail "colima is not running — run: colima start"
 echo "colima OK"
+
+[ -d "$REPO/node_modules" ] || fail "node_modules missing — run: bun install (repo root)"
+(cd "$REPO/packages/schema" && bun run build >/dev/null) \
+  || fail "packages/schema build failed — run: cd packages/schema && bun run build"
+[ -f "$REPO/packages/schema/dist/index.js" ] || fail "packages/schema/dist/index.js missing after the build"
+echo "packages/schema dist rebuilt"
 
 [ -f "$INFRA/cdk.context.json" ] || fail "$INFRA/cdk.context.json missing (copy the .example and fill it)"
 ORIGIN="https://$(jq -r '.domainName' "$INFRA/cdk.context.json")"
