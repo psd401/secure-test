@@ -15,7 +15,8 @@
     "db:migrate": "bun run db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "vendor:katex-css": "bun scripts/vendor-katex-css.mjs",
-    "roster:health": "bun scripts/roster-health.ts"
+    "roster:health": "bun scripts/roster-health.ts",
+    "standards:build": "bun scripts/build-standards.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",

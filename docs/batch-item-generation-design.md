@@ -177,7 +177,18 @@ are recommendations. **§Progress says what is built** (nothing yet).
 
 ## Crosswalk (D-1c, James 2026-10-02 — both schemes, associated)
 
-Codes below are illustrative; slice 1 reads the real pairs from OSPI.
+Codes below are illustrative; slice 1 read the real pairs from OSPI.
+
+**Measured on the 2026-10-02 files (slice 1).** Math is strictly 1:1: 384
+of 385 CCSS math codes link to exactly one 2026 code, 40 2026 standards are
+new, one CCSS standard (7.NS.A.3) is dropped, none splits. ELA is not: a
+crosswalk row's 2026 cell can name several codes (217 cells), so 213 CCSS
+ELA standards link to more than one 2026 standard (splits), 177 2026
+standards absorb more than one CCSS standard (merges), and 24 CCSS
+standards are dropped. (A first count that took each cell as one string
+saw merges only; splitting the cells shows both directions.)
+`resolveForReporting` is unambiguous for every math tag and every ELA tag
+with one link; the split ELA tags stay under their own code, as designed.
 
 What "ship both and associate them" looks like:
 
@@ -224,10 +235,16 @@ What "ship both and associate them" looks like:
 ## Slices
 
 0. This note.
-1. Standards catalog: a build script that reads OSPI's two 2026 xlsx
-   files (+ the crosswalk, D-1c), the 2011 CCSS text, and the NGSS performance expectations
-   and writes the JSON; a lookup module + tests (Sonnet 5 / medium). The
-   source files are downloaded by the script, not committed.
+1. Standards catalog, math + ELA: a build script
+   (`design-tool/scripts/build-standards.ts`) that reads OSPI's two 2026
+   xlsx files, committed in `design-tool/lib/standards/sources/` with
+   `SOURCES.md` (URLs, versions, licenses); the build verifies each file's
+   sha256. It writes `catalog.json` + `crosswalk.json` (the crosswalk
+   sheets also supply the 2011 CCSS text); lookup module + tests (Sonnet 5
+   / medium).
+1b. NGSS performance expectations (code + text), extracted from the
+   official PDF. The PDF is not committed; its URL + checksum go in
+   `SOURCES.md` (Sonnet 5 / medium).
 2. Tags: schema field + migration + editor picker / custom entry +
    bundle round trip + tests (Sonnet 5 / medium).
 3. Batch route + provider method + mock + per-item validation + guardrail
@@ -248,6 +265,10 @@ Decided 2026-10-02 (James): 9.1 → D-1a (shipped picker + custom);
 - **9.4 answered 2026-10-02** (research; §Catalog sources).
 - **6.1 decided (James, 2026-10-02) → D-1c: ship both schemes, linked
   through the crosswalk** as §Crosswalk describes.
+- **10.3 decided (James, 2026-10-02): HS math keeps its course as a picker filter.**
+  The 160 HS math standards are one catalog entry each with
+  `courses: [{ course, priority }]` (INT 1-3, GEO, ALG 1-2, HS-3rd Cr+);
+  `search(..., { course })` filters on it.
 - **9.5 decided (James, 2026-10-02) → D-1d: other WA subjects get a
   catalog later; custom designations until then.** CASE is the first
   source to check when that happens.
@@ -256,4 +277,22 @@ None open.
 
 ## Progress
 
-Nothing built.
+- **Slice 1 BUILT 2026-10-02 (not deployed — nothing reads it yet):** math
+  + ELA catalog from OSPI's committed workbooks
+  (`design-tool/lib/standards/sources/` + `SOURCES.md`, sha256 checked by
+  the build), `catalog.json` (1974 entries: wa2026 math 424 / ELA 297,
+  ccss2010 math 385 / ELA 868; 859 KB) + `crosswalk.json` (1500 pairs),
+  `lib/standards/{types,build,catalog}.ts`, `scripts/build-standards.ts`
+  (`bun run standards:build`), `test/standards-catalog.test.ts` (22 tests,
+  incl. an in-memory rebuild compared byte for byte with the committed
+  JSON). Two OSPI crosswalk typos handled and recorded in `SOURCES.md`
+  (`ELA 11-12.W.3` read as `ELA.11-12.W.3`; six pairs citing the
+  non-existent `ELA.11-12.R.5` dropped by an explicit allowlist — any
+  other unknown code fails the build). 22 HS math standards are worded
+  per course → optional `courses[].text`. Reading for slice 2: the
+  catalog JSON is ~950 KB — keep `lib/standards/catalog.ts` server-only
+  (search through a route), never import it into a client component.
+- Slice 1b (NGSS) checked, not built: `AllDCI.pdf` (9.97 MB, sha256
+  `79e26e42…`) extracts with `unpdf` to 208 distinct performance
+  expectations, each `CODE. statement` + bracketed clarification /
+  assessment boundary.
