@@ -49,6 +49,12 @@ export function chipLabel(
   tag: string,
   entry: { code: string; text: string } | null | undefined,
 ): ChipLabel {
+  // undefined = the lookup has not answered yet: show the code without its
+  // scheme prefix, so the chip does not flash `ngss:HS-LS1-5` first.
+  if (entry === undefined && tagScheme(tag) !== null) {
+    const code = tag.slice(tag.indexOf(":") + 1);
+    return { code, text: null, title: code };
+  }
   if (!entry) return { code: tag, text: null, title: tag };
   return { code: entry.code, text: shortText(entry.text), title: `${entry.code} — ${entry.text}` };
 }

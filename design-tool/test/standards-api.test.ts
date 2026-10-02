@@ -108,6 +108,17 @@ describe("GET /api/standards", () => {
     expect(body.results.length).toBeGreaterThan(0);
     expect(body.exact).toBeNull();
   });
+
+  test("within text matches, a standard about the query beats a late mention", async () => {
+    // HS-LS1-5's statement starts with photosynthesis; ELA.5.L.3 arrives as the
+    // 2026 counterpart of L.5.4b, which only names it in a vocabulary example
+    // near its end. prefer=wa2026 is the editor's default.
+    const body = (await (await searchRoute("q=photosynthesis&prefer=wa2026")).json()) as SearchBody;
+    const codes = body.results.map((r) => r.code);
+    expect(codes).toContain("HS-LS1-5");
+    expect(codes).toContain("ELA.5.L.3");
+    expect(codes.indexOf("HS-LS1-5")).toBeLessThan(codes.indexOf("ELA.5.L.3"));
+  });
 });
 
 describe("GET /api/standards/lookup", () => {
@@ -152,6 +163,9 @@ describe("pure helpers", () => {
     expect(label.text!.endsWith("…")).toBe(true);
     expect(label.title.startsWith("M.7.R.RP.2 — ")).toBe(true);
     expect(chipLabel("ccss2020:X.Y", null)).toEqual({ code: "ccss2020:X.Y", text: null, title: "ccss2020:X.Y" });
+    // Lookup not answered yet: the code without its prefix, never `ngss:…`.
+    expect(chipLabel("ngss:HS-LS1-5", undefined)).toEqual({ code: "HS-LS1-5", text: null, title: "HS-LS1-5" });
+    expect(chipLabel("Unit 3 target", undefined)).toEqual({ code: "Unit 3 target", text: null, title: "Unit 3 target" });
     expect(shortText("short")).toBe("short");
     expect(schemeLabel("ccss2010")).toBe("2011");
     expect(schemeLabel("wa2026")).toBe("2026");

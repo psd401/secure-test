@@ -319,6 +319,17 @@ None open.
   per course → optional `courses[].text`. Reading for slice 2: the
   catalog JSON is ~950 KB — keep `lib/standards/catalog.ts` server-only
   (search through a route), never import it into a client component.
+- **Slice 2 BUILT 2026-10-02 (`a3d0633`, not deployed — migration 0050):**
+  optional standards tags on items, the editor picker, the two staff
+  routes, bundles carry tags, tags editable while Published (14.1).
+  Verified in the browser on local dev (`_demo` roster). Follow-up fixes
+  the same day after that check: a chip no longer flashes the raw
+  `scheme:code` before its lookup answers; question cards share one
+  lookup per tag (it was one per card, twice under Strict Mode) and every
+  picker re-renders when it lands; within text matches an earlier match
+  ranks first (`photosynthesis` lists the NGSS standards above a grade 5
+  vocabulary standard that names it in an example). Hand-run rows 345–357
+  open for the origin.
 - **Slice 1b BUILT 2026-10-02:** 208 NGSS performance expectations
   (K 10, 1: 9, 2: 11, 3: 15, 4: 14, 5: 13, K-2 3, 3-5 3, MS 59, HS 71;
   176 with a clarification, 126 with an assessment boundary, 29 engineering

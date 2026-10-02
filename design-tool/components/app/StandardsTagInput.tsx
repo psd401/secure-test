@@ -89,6 +89,9 @@ function subscribePrefs(listener: () => void) {
 
 const entryCache = new Map<string, LookupEntry>();
 const inFlight = new Set<string>();
+// Every mounted picker re-renders when any lookup lands — a card whose tags a
+// sibling fetched needs the chip text too.
+const lookupListeners = new Set<() => void>();
 let facetsPromise: Promise<SearchResponse["facets"] | null> | null = null;
 
 function loadFacets() {
@@ -129,6 +132,13 @@ export function StandardsTagInput({ value, onChange, suggestions, disabled }: Pr
   const [facets, setFacets] = useState<SearchResponse["facets"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, setLookupTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setLookupTick((n) => n + 1);
+    lookupListeners.add(bump);
+    return () => {
+      lookupListeners.delete(bump);
+    };
+  }, []);
   const searchSeq = useRef(0);
   const atMax = value.length >= MAX_STANDARDS;
 
@@ -142,14 +152,21 @@ export function StandardsTagInput({ value, onChange, suggestions, disabled }: Pr
     };
   }, []);
 
-  // Chip text for catalog tags (this item's and the suggestions).
-  const wanted = [...value, ...suggestions].filter(
+  // Chip text for catalog tags (this item's and the suggestions), deduped.
+  const wanted = [...new Set([...value, ...suggestions])].filter(
     (t) => tagScheme(t) !== null && !entryCache.has(t) && !inFlight.has(t),
   );
   const wantedKey = wanted.join(",");
   useEffect(() => {
     if (!wantedKey) return;
-    const tags = wantedKey.split(",").slice(0, 20);
+    // Re-check at effect time: every card on the page renders before any of
+    // their effects run, so a sibling (or Strict Mode's second run) may have
+    // claimed these tags already — the module-level cache is shared.
+    const tags = wantedKey
+      .split(",")
+      .filter((t) => !entryCache.has(t) && !inFlight.has(t))
+      .slice(0, 20);
+    if (tags.length === 0) return;
     for (const t of tags) inFlight.add(t);
     void fetch(`/api/standards/lookup?tags=${encodeURIComponent(tags.join(","))}`)
       .then((r) => (r.ok ? (r.json() as Promise<{ entries: Record<string, LookupEntry> }>) : null))
@@ -161,7 +178,7 @@ export function StandardsTagInput({ value, onChange, suggestions, disabled }: Pr
       })
       .finally(() => {
         for (const t of tags) inFlight.delete(t);
-        setLookupTick((n) => n + 1);
+        for (const notify of lookupListeners) notify();
       });
   }, [wantedKey]);
 

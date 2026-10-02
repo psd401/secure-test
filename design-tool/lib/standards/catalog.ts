@@ -94,28 +94,37 @@ export type SearchOptions = {
 
 const norm = (s: string) => s.toLowerCase();
 
-/** Case-insensitive match on code and text; code matches rank first (exact, prefix, substring). */
+/**
+ * Case-insensitive match on code and text; code matches rank first (exact,
+ * prefix, substring). Within the text tier an earlier match ranks first, so a
+ * standard ABOUT the query beats one that mentions it in a late example
+ * ("photosynthesis" → HS-LS1-5 before a vocabulary standard's "(e.g. …
+ * photosynthesis)").
+ */
 export function search(query: string, options: SearchOptions = {}): StandardEntry[] {
   const q = norm(query.trim());
   const limit = options.limit ?? 50;
-  const ranked: { entry: StandardEntry; rank: number; order: number }[] = [];
+  const ranked: { entry: StandardEntry; rank: number; pos: number; order: number }[] = [];
   CATALOG.forEach((entry, order) => {
     if (options.subject && entry.subject !== options.subject) return;
     if (options.gradeBand && entry.grade_band !== options.gradeBand) return;
     if (options.scheme && entry.scheme !== options.scheme) return;
     if (options.course && !entry.courses?.some((c) => c.course === options.course)) return;
     let rank = 3;
+    let pos = 0;
     if (q) {
       const code = norm(entry.code);
       if (code === q) rank = 0;
       else if (code.startsWith(q)) rank = 1;
       else if (code.includes(q)) rank = 2;
-      else if (norm(entry.text).includes(q)) rank = 3;
-      else return;
+      else {
+        pos = norm(entry.text).indexOf(q);
+        if (pos < 0) return;
+      }
     }
-    ranked.push({ entry, rank, order });
+    ranked.push({ entry, rank, pos, order });
   });
-  ranked.sort((a, b) => a.rank - b.rank || a.order - b.order);
+  ranked.sort((a, b) => a.rank - b.rank || a.pos - b.pos || a.order - b.order);
   return ranked.slice(0, limit).map((r) => r.entry);
 }
 
