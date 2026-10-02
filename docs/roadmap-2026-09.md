@@ -870,6 +870,14 @@ Side: design tool, both XS.
   the editor says Multiple choice / Short answer / Essay. Proposal: reuse
   the editor's type labels on the proposal cards.
 
+## Finding WP-1 — work-packet stem excerpts show raw LaTeX (2026-10-01) — design-tool, nothing built
+
+Found on row 343: Print student work's question list shortens each stem
+to an excerpt, and the excerpt shows `x^2` raw and `\frac{1}{2}` as "12"
+(the earlier excerpt fix covered symbols, not `^` or `\frac`). The page
+body renders the math correctly. Cosmetic; fix where the excerpt is built
+(read math the way MathSpeech-style plain text does, e.g. "1/2", "x²").
+
 ## Speech tools — open considerations (James, 2026-10-01) — not decisions, nothing built
 
 Raised after the Release-build sitting of the read-aloud / speech-to-text
