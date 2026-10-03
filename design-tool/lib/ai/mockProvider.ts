@@ -1,5 +1,6 @@
 import { planTypes } from "./itemBatchCore";
 import type { ClassInsightsPackInput } from "@/lib/insights/report";
+import type { ClassInsightsChatInput } from "@/lib/insights/chat";
 import type {
   BatchGenerateInput,
   BatchGenerableItemType,
@@ -123,7 +124,50 @@ export const mockProvider: ItemGeneratorProvider = {
   async generateClassInsights(pack: ClassInsightsPackInput): Promise<unknown> {
     return mockClassInsights(pack);
   },
+
+  async classInsightsChat(input: ClassInsightsChatInput): Promise<unknown> {
+    return mockClassInsightsChat(input);
+  },
 };
+
+// Class insights slice 4: a deterministic chat reply from the pack's real
+// keys, so it survives the fill. Hooks in the teacher's MESSAGE:
+// MOCK_MALFORMED throws as an unparseable reply would (→ 502); MOCK_INVENTED
+// writes a digit of its own (→ refused, 502); MOCK_BLOCK_REPLY puts the mock
+// guardrail's sentinel in the reply (→ output block; the message itself does
+// not trip the input check).
+export function mockClassInsightsChat(input: ClassInsightsChatInput): unknown {
+  const { pack, message } = input;
+  if (message.includes("MOCK_MALFORMED")) throw new Error("mock_returned_invalid_json");
+  if (message.includes("MOCK_INVENTED")) return { text: "Seven students missed it: 7 of them." };
+  if (message.includes("MOCK_BLOCK_REPLY")) return { text: "Mock: BLOCKME" };
+
+  const labels = new Set(pack.assessment.items.map((i) => i.label));
+  const q = [...message.matchAll(/\bQ(\d+)\b/g)].map((m) => `Q${m[1]}`).find((l) => labels.has(l));
+  const studentIds = new Set(pack.students.map((s) => s.id));
+  const s = [...message.matchAll(/\bS(\d+)\b/g)].map((m) => `S${m[1]}`).find((l) => studentIds.has(l));
+
+  const parts: string[] = [];
+  const figures: string[] = [];
+  if (q && pack.figures[`item.${q}.p_value`] !== undefined) {
+    parts.push(`On ${q} the class averaged {item.${q}.p_value} of the points.`);
+    figures.push(`item.${q}.p_value`);
+  } else if (q) {
+    parts.push(`There are no scored results for ${q} yet.`);
+  }
+  if (s) {
+    parts.push(`${s} earned {student.${s}.total} of {student.${s}.max} points.`);
+    figures.push(`student.${s}.total`, `student.${s}.max`);
+  }
+  const readers = [...new Set(input.answers.map((a) => a.student))];
+  if (readers.length > 0) parts.push(`I read the answers from ${readers.join(" and ")}.`);
+  if (parts.length === 0) parts.push("The evidence pack cannot answer that; ask about a question or a student.");
+  return {
+    text: parts.join("\n"),
+    citations: { items: q ? [q] : [], students: [...new Set([...(s ? [s] : []), ...readers])] },
+    figures,
+  };
+}
 
 // Class insights slice 2: a deterministic report built ONLY from keys the pack
 // actually has, so it always survives `fillReport`. Three hooks in the

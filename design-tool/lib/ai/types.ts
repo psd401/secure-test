@@ -3,6 +3,7 @@ import type { ConverseDocument } from "@/lib/ai/bedrockConverse";
 import { MAX_RUBRIC_TEXT_CHARS } from "@/lib/ai/rubricExtractor/types";
 import { CreateItemBody, StandardsField } from "@/lib/api/items";
 import type { ClassInsightsPackInput } from "@/lib/insights/report";
+import type { ClassInsightsChatInput } from "@/lib/insights/chat";
 
 // Slice 47: pinned list instead of z.enum(ITEM_TYPES) so new item types
 // don't silently become AI-generable. match/order/hotspot/drawing (and future
@@ -242,4 +243,11 @@ export interface ItemGeneratorProvider {
    * checked, filled or dropped.
    */
   generateClassInsights(pack: ClassInsightsPackInput, ownerSub?: string): Promise<unknown>;
+  /**
+   * Class insights slice 4: one chat turn — the pack (no hash, thread
+   * numbering), the stored report's claims, recent history, any pulled
+   * answers and the teacher's message, all pseudonymized. Returns the reply
+   * object RAW; `fillSingleClaim` (lib/insights/report.ts) checks and fills it.
+   */
+  classInsightsChat(input: ClassInsightsChatInput, ownerSub?: string): Promise<unknown>;
 }

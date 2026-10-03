@@ -7,7 +7,12 @@
 import { CLASS_INSIGHT_SECTION_ALL } from "@/db/schema";
 import { chipLabel } from "@/lib/standards/tags";
 import { NO_SECTION_FILTER } from "./evidencePack";
-import { REPORT_SECTIONS, type ClassInsightsReport, type ReportSection } from "./report";
+import {
+  REPORT_SECTIONS,
+  type ClassInsightsReport,
+  type FilledClaim,
+  type ReportSection,
+} from "./report";
 
 /** What a pseudonym renders as once its attempt is gone (D-4). */
 export const GONE_STUDENT = "a student no longer in these results";
@@ -43,7 +48,11 @@ export interface RenderContext {
   tagLookup?: Record<string, { code: string; text: string } | null>;
 }
 
-export function renderReport(report: ClassInsightsReport, ctx: RenderContext): RenderedReport {
+/** One stored claim (or, slice 4, one chat turn) → what a teacher reads. */
+export function renderClaim(
+  claim: Pick<FilledClaim, "text" | "citations" | "figures">,
+  ctx: RenderContext,
+): RenderedClaim {
   const student = (pseudonym: string) => {
     const attemptId = ctx.pseudonyms[pseudonym] ?? null;
     const name = attemptId ? ctx.nameByAttempt.get(attemptId) : undefined;
@@ -58,23 +67,26 @@ export function renderReport(report: ClassInsightsReport, ctx: RenderContext): R
       ? { label, item_id: null }
       : { label: `Q${position + 1}`, item_id: itemId };
   };
+  return {
+    text: claim.text.replace(/\[\[([QS]\d+)\]\]/g, (_, label: string) =>
+      label.startsWith("S") ? student(label).name : item(label).label,
+    ),
+    citations: {
+      items: claim.citations.items.map(item),
+      tags: claim.citations.tags.map((tag) => {
+        const chip = chipLabel(tag, ctx.tagLookup?.[tag] ?? null);
+        return { tag, code: chip.code, text: chip.text };
+      }),
+      students: claim.citations.students.map(student),
+    },
+    figures: claim.figures,
+  };
+}
 
+export function renderReport(report: ClassInsightsReport, ctx: RenderContext): RenderedReport {
   const out = {} as RenderedReport;
   for (const section of REPORT_SECTIONS) {
-    out[section] = (report[section] ?? []).map((claim) => ({
-      text: claim.text.replace(/\[\[([QS]\d+)\]\]/g, (_, label: string) =>
-        label.startsWith("S") ? student(label).name : item(label).label,
-      ),
-      citations: {
-        items: claim.citations.items.map(item),
-        tags: claim.citations.tags.map((tag) => {
-          const chip = chipLabel(tag, ctx.tagLookup?.[tag] ?? null);
-          return { tag, code: chip.code, text: chip.text };
-        }),
-        students: claim.citations.students.map(student),
-      },
-      figures: claim.figures,
-    }));
+    out[section] = (report[section] ?? []).map((claim) => renderClaim(claim, ctx));
   }
   return out;
 }

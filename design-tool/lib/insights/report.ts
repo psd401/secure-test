@@ -57,13 +57,19 @@ const RawReportSchema = z.object({
 
 const CitationList = z.array(z.string().trim().min(1)).max(MAX_CITATIONS).optional();
 
-export const ClaimSchema = z.object({
-  text: z.string().trim().min(1).max(MAX_CLAIM_TEXT),
-  citations: z
-    .object({ items: CitationList, tags: CitationList, students: CitationList })
-    .optional(),
-  figures: z.array(z.string().trim().min(1)).max(MAX_CITATIONS).optional(),
-});
+/** A claim's shape with a text limit — the report's claims and (slice 4) a
+ * chat reply share it; only the limit differs. */
+function claimSchema(maxText: number) {
+  return z.object({
+    text: z.string().trim().min(1).max(maxText),
+    citations: z
+      .object({ items: CitationList, tags: CitationList, students: CitationList })
+      .optional(),
+    figures: z.array(z.string().trim().min(1)).max(MAX_CITATIONS).optional(),
+  });
+}
+
+export const ClaimSchema = claimSchema(MAX_CLAIM_TEXT);
 export type RawClaim = z.infer<typeof ClaimSchema>;
 
 /** A claim after the fill: numbers in, labels as `[[S4]]` / `[[Q3]]`. */
@@ -233,8 +239,8 @@ export function studentsFitClaim(
 }
 
 /** One claim through the rules above; null = dropped. */
-function fillClaim(raw: unknown, ctx: FillContext): FilledClaim | null {
-  const parsed = ClaimSchema.safeParse(raw);
+function fillClaim(raw: unknown, ctx: FillContext, schema = ClaimSchema): FilledClaim | null {
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) return null;
   // CI-1: formatFigure adds the % to a percent key; one the model typed right
   // after the reference ("{item.Q1.p_value}%") would print "75%%".
@@ -336,6 +342,21 @@ export function fillReport(raw: unknown, pack: ClassInsightsPackInput): FillResu
     }
   }
   return { report, dropped };
+}
+
+/**
+ * Class insights slice 4: ONE claim-shaped object (a chat reply) through the
+ * same fill — figure keys filled, the digit rule, unknown labels / keys /
+ * tags refused, `[[S4]]` / `[[Q3]]` markers — with its own text limit. null =
+ * refused. The report's section rules (celebrations' evidence, CI-2's
+ * `studentsFitClaim`) are NOT applied: a chat reply has no section.
+ */
+export function fillSingleClaim(
+  raw: unknown,
+  pack: ClassInsightsPackInput,
+  opts: { maxText: number },
+): FilledClaim | null {
+  return fillClaim(raw, fillContext(pack), claimSchema(opts.maxText));
 }
 
 /** `[[S4]]` → `S4`: the text a guardrail (or a test) reads. */

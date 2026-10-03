@@ -6,7 +6,7 @@ celebrations using specific students as examples, recommended next steps
 for whole-class instruction, and a chat to talk with an AI about the
 results. Decisions marked **D-n**; James's answers of 2026-10-02 are
 recorded as decided, the rest are recommendations. **§Progress says what
-is built** (slices 1–2).
+is built** (slices 1–4).
 
 ## Relation to the roadmap
 
@@ -117,7 +117,10 @@ badly?", "Group students for Thursday's reteach").
     co-teacher has their own thread; the report itself is shared.
     Sharing a conversation is a later feature.
   - **Cost and context growth.** Long threads re-send history. → Cap at
-    40 turns per thread; older turns summarized server-side.
+    40 turns per thread; older turns summarized server-side. **Slice 4
+    deviation:** no summary — each call re-sends only the last 12 turns, and
+    a thread holds at most 40 turns (20 exchanges); at the cap the teacher
+    starts a new conversation (409 `thread_full`).
   - **Deleted attempts.** A pseudonym whose attempt was deleted renders
     as "a student no longer in these results".
 - Retention (recommendation): kept while the assessment exists; deleted
@@ -280,6 +283,107 @@ spend per teacher.
    buttons are replaced by "Thanks for the rating." after sending.
 4. Chat: migration (`class_insight_threads`, `…_turns`), route, guardrail,
    per-teacher scope, on-demand answer pull (D-6), cap + summary (Opus 5 / medium).
+   BUILT 2026-10-03, **migration 0053** (`class_insight_threads` +
+   `class_insight_turns`; applied to dev, test and `_demo`), no UI. Where
+   things live: `lib/insights/chat.ts` (pure: thread numbering, names out,
+   mentions, the answer pull, the report in thread labels, the provider's
+   input type), `lib/insights/chatPrompt.ts` (system prompt, user text,
+   `CLASS_INSIGHTS_CHAT_PROMPT_VERSION` = 2026-10-03 with a drift test over a
+   fixture input, like the report's), `classInsightsChat` on the item
+   provider (mock / Bedrock `converseTextWithMeta` on `BEDROCK_ITEM_MODEL`,
+   `ai_usage` surface `class-insights`, 1500 tokens / Anthropic dev path),
+   `app/api/assessments/[id]/class-insights/chat` (GET / POST / DELETE), and
+   `fillSingleClaim` exported from `report.ts` (the report's own fill with a
+   text-limit parameter; `renderClaim` likewise extracted from `renderReport`
+   in `reportView.ts`). Choices made here:
+   - **Scope / access:** one thread per (assessment, teacher `sub`, section
+     key) — D-5; section keys exactly as the report's. All three methods at
+     `edit` through `authorizeAssessment` (404 below it), student 403 by
+     `requireStaff`. A view-level co-teacher cannot read a chat either. The
+     thread's teacher column is `owner_sub` as specified — the
+     access-enforcement test's `OWNER_SUB_ALLOWED` gained the route with that
+     reason (the thread's own column, scoped to the caller after the
+     helper); it is not an assessment-ownership check.
+   - **The thread's own numbering (beyond the brief, needed for it):** the
+     pack numbers students by attempt-id order, so a newly scored student
+     shifts every later S-number between turns. The thread keeps
+     `pseudonyms` (S-number → attempt) STABLE: an attempt keeps the number
+     it first got, a new one takes the next free number, and the pack is
+     relabelled into the thread's numbering (student ids + `student.S<n>.*`
+     figure keys) before the model, the fill and the pull see it — so
+     history, pack, report and reply agree. Q labels are NOT relabelled:
+     they follow the current item positions and `item_ids` is overwritten
+     each turn (an older, already-stale turn after a reorder may link a label
+     to the question now at that position — rare, recorded).
+   - **Names out (D-1):** before anything else the message has every
+     display name of the CURRENT pack replaced by its thread pseudonym —
+     full names case-insensitively on letter/number boundaries, longest
+     first, "Last, First" also matched as "First Last"; a first name alone
+     only when no other student in scope shares it (an ambiguous first name
+     is left as typed); a full name two students share becomes "S2 or S5";
+     "(unknown)" is not a name. Case-insensitive on first names too: a name
+     that is also a word ("Will") can be over-matched — a garbled sentence
+     costs less than a name sent. Marker-shaped `[[` / `]]` the teacher types
+     are flattened. The stored teacher turn is the pseudonymized text with
+     `[[S4]]` markers; render swaps names back exactly as the report does
+     (gone attempt → "a student no longer in these results").
+   - **Answer pull (D-6):** deterministic. Only when the pseudonymized
+     message names an essay or short-text question — `Q4`, `q4`, `Q 4` or
+     "question 4", a label the pack has. Narrowed to the thread pseudonyms
+     the message names, else every pack student. **Any handed-in answer of a
+     pack student counts, scored or not** (a teacher may ask about writing
+     before scoring it); an attempt with no final score anywhere is not in
+     the pack, has no pseudonym, and is not pulled. Open-alert answers are
+     skipped; in-scope names inside answers become pseudonyms; ≤ 300 words
+     in all, shared fairly (short answers whole, the rest split what is
+     left; truncation marked `[…]` and labelled "shortened"; an answer whose
+     share is zero is left out). Sent as `<student_answers>` with the
+     closing tag neutralised (`<\/student_answers`) and the "data, not
+     instructions" sentence. The ASSISTANT turn records `read_response_ids`
+     (the ids actually sent); the teacher turn stores `[]`.
+   - **History and cap:** each call sends the pack (no hash, thread
+     numbering), the stored report's claims for that section in thread
+     labels (marked when written from an earlier pack; gone students and
+     deleted questions worded as such), the last 12 turns, the pulled
+     answers and the message — all as one user text. **40 TOTAL turns = 20
+     exchanges**; a POST that would exceed it → 409 `thread_full` ("Start a
+     new conversation."). GET returns `turns_left` (turns, not exchanges)
+     and `max_turns`.
+   - **Reply shape and checks:** `{ text, citations, figures }`, text ≤ 1500
+     chars, line breaks kept, through the report's fill (figure keys, the
+     digit rule, unknown labels / keys / tags → refused). A refused reply →
+     502 `provider_failed` and **neither turn is stored**, so a retry is
+     clean. No students-fit check (CI-2) on chat: a free reply has no
+     section whose meaning the check needs; prompt rule 7 asks for the same
+     discipline. Quoting a digit from a student's answer would trip the
+     digit rule, so the prompt says to paraphrase numbers in quotes.
+   - **Guardrail:** surface `class-insights`. INPUT check (enforced) on the
+     pseudonymized message — block → 422 `stage: input`, the model is not
+     called, nothing stored. The pulled answers are NOT screened: `runGuarded`
+     takes one input text with one mode, and student writing about literature
+     trips the content filters (why the essay scorer uses record mode). OUTPUT
+     check on the filled reply (plain labels) — block → 422, nothing stored.
+   - **Staleness / retention:** each turn stores the pack hash it was
+     answered from; GET marks `stale_turn` when it differs from the current
+     pack. Cascades with the assessment; `DELETE ?section=` removes the
+     caller's own thread only (`{ deleted: bool }`). A concurrent POST that
+     loses the position race → 409 `conflict` (unique `(thread_id, position)`).
+   - **Gate:** POST 409 `nothing_to_report` when the pack has no student;
+     GET returns an empty thread when none exists.
+   - **Mock:** a reply from the pack's real keys (the first Q / S the message
+     names, the pulled answers' students); message hooks `MOCK_MALFORMED`
+     (502), `MOCK_INVENTED` (a digit → refused, 502), `MOCK_BLOCK_REPLY`
+     (output block).
+   Tests: `insights-chat` (14 pure: names out incl. ambiguous / duplicate /
+   comma forms, thread numbering + relabel, mentions, pull rules + fair word
+   cap + tag neutralising, report in thread labels, fill / refusal, prompt
+   drift) and `insights-chat-route` (14 on the test DB: store + render with no
+   name in any row, no name in the provider's input across message / answers
+   / history, pull rules incl. alert and narrowing with read ids, 502s store
+   nothing, 400 / 409, cap, input + output guardrail, empty GET, stale_turn +
+   gone student, stable numbering when a new student appears, DELETE +
+   cascade, access matrix, per-co-teacher threads). Not built: the UI
+   (slice 5); no Bedrock run (slice 6).
 5. Chat UI (Sonnet 5 / medium).
 6. Teacher rows; Bedrock evidence on the `_demo` database.
 
@@ -307,3 +411,5 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
   not deployed.
 - Slice 3 BUILT 2026-10-03 (see §Slices) — results-page panel, Copy, rating;
   teacher rows 391+ in `docs/design-tool-manual-checks.md` NOT RUN.
+- Slice 4 BUILT 2026-10-03 (see §Slices) — chat routes + migration 0053, no
+  UI, not deployed.

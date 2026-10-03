@@ -19,6 +19,12 @@ import {
   CLASS_INSIGHTS_SYSTEM_PROMPT,
   buildClassInsightsUserText,
 } from "@/lib/insights/reportPrompt";
+import type { ClassInsightsChatInput } from "@/lib/insights/chat";
+import {
+  CLASS_INSIGHTS_CHAT_MAX_TOKENS,
+  CLASS_INSIGHTS_CHAT_SYSTEM_PROMPT,
+  buildClassInsightsChatUserText,
+} from "@/lib/insights/chatPrompt";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
@@ -200,6 +206,20 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
       systemText: CLASS_INSIGHTS_SYSTEM_PROMPT,
       userText: buildClassInsightsUserText(pack),
       maxTokens: CLASS_INSIGHTS_MAX_TOKENS,
+      errPrefix: "bedrock",
+      surface: "class-insights",
+      ownerSub,
+    });
+    return parseReportObject(text, "bedrock", { truncated: stopReason === "max_tokens" });
+  },
+
+  // Class insights slice 4: one chat turn, same model and usage surface.
+  async classInsightsChat(input: ClassInsightsChatInput, ownerSub?: string): Promise<unknown> {
+    const { text, stopReason } = await converseTextWithMeta({
+      modelId: process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL,
+      systemText: CLASS_INSIGHTS_CHAT_SYSTEM_PROMPT,
+      userText: buildClassInsightsChatUserText(input),
+      maxTokens: CLASS_INSIGHTS_CHAT_MAX_TOKENS,
       errPrefix: "bedrock",
       surface: "class-insights",
       ownerSub,

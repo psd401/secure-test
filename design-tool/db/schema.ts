@@ -509,7 +509,9 @@ export const GUARDRAIL_SURFACES = [
   // Class insights slice 2 (docs/class-insights-design.md): the class report.
   // OUTPUT only — the input is the server-built evidence pack (no teacher or
   // student free text), so no input check runs; the output check reads the
-  // filled claim text, pseudonyms and all, never a name.
+  // filled claim text, pseudonyms and all, never a name. Slice 4's chat adds
+  // an INPUT check (enforced) on the teacher's pseudonymized message and the
+  // same output check on the filled reply.
   "class-insights",
 ] as const;
 export type GuardrailSurfaceValue = (typeof GUARDRAIL_SURFACES)[number];
@@ -1967,3 +1969,85 @@ export const class_insight_reports = pgTable(
 );
 
 export type ClassInsightReportRow = typeof class_insight_reports.$inferSelect;
+
+// --- Class insights chat (docs/class-insights-design.md, slice 4) ----------
+//
+// One thread per (assessment, teacher, section filter) — D-5: each teacher,
+// co-teachers included, has their own. Like the report, NO name is stored:
+// turns carry `[[S4]]` / `[[Q3]]` markers and the thread keeps `pseudonyms`
+// (S-number → attempt id), which is the thread's OWN stable numbering —
+// extended as new students appear, never renumbered, so history stays
+// consistent when the evidence pack's ordering moves. Deleted with the
+// assessment (D-4 retention) or by the teacher.
+export const CLASS_INSIGHT_TURN_ROLES = ["teacher", "assistant"] as const;
+
+export const class_insight_threads = pgTable(
+  "class_insight_threads",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    /** The teacher whose thread this is (D-5). */
+    owner_sub: text("owner_sub").notNull(),
+    /** As `class_insight_reports.section_key`. */
+    section_key: text("section_key").notNull(),
+    /** `{ "S1": attempt_id, … }` — stable for the thread's life. */
+    pseudonyms: jsonb("pseudonyms").$type<Record<string, string>>().notNull(),
+    /** `{ "Q1": item_id, … }` — as of the latest turn. */
+    item_ids: jsonb("item_ids").$type<Record<string, string>>().notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    assessmentOwnerSectionUnq: uniqueIndex("class_insight_threads_assessment_owner_section_unq").on(
+      t.assessment_id,
+      t.owner_sub,
+      t.section_key,
+    ),
+  }),
+);
+
+export const class_insight_turns = pgTable(
+  "class_insight_turns",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    thread_id: uuid("thread_id")
+      .notNull()
+      .references(() => class_insight_threads.id, { onDelete: "cascade" }),
+    /** 0-based order in the thread; teacher and assistant turns alternate. */
+    position: integer("position").notNull(),
+    role: text("role").notNull(),
+    /** Teacher: the PSEUDONYMIZED message. Assistant: the filled reply. Both
+     * with `[[S4]]` / `[[Q3]]` markers; never a name. */
+    text: text("text").notNull(),
+    citations: jsonb("citations")
+      .$type<{ items: string[]; tags: string[]; students: string[] }>()
+      .notNull()
+      .default(sql`'{"items":[],"tags":[],"students":[]}'::jsonb`),
+    figures: jsonb("figures").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** D-6: the response ids whose words this reply read (assistant turns). */
+    read_response_ids: jsonb("read_response_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** The evidence pack's hash this turn was answered from (stale_turn). */
+    pack_hash: text("pack_hash").notNull(),
+    model_id: text("model_id"),
+    prompt_version: text("prompt_version"),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    threadPositionUnq: uniqueIndex("class_insight_turns_thread_position_unq").on(
+      t.thread_id,
+      t.position,
+    ),
+    roleCheck: check("class_insight_turns_role_check", sql`role IN ('teacher', 'assistant')`),
+  }),
+);
+
+export type ClassInsightThreadRow = typeof class_insight_threads.$inferSelect;
+export type ClassInsightTurnRow = typeof class_insight_turns.$inferSelect;

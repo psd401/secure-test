@@ -372,6 +372,13 @@
       "when": 1791037022594,
       "tag": "0052_class_insight_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1791040436273,
+      "tag": "0053_class_insight_chat",
+      "breakpoints": true
     }
   ]
 }

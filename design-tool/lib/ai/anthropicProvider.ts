@@ -19,6 +19,12 @@ import {
   CLASS_INSIGHTS_SYSTEM_PROMPT,
   buildClassInsightsUserText,
 } from "@/lib/insights/reportPrompt";
+import type { ClassInsightsChatInput } from "@/lib/insights/chat";
+import {
+  CLASS_INSIGHTS_CHAT_MAX_TOKENS,
+  CLASS_INSIGHTS_CHAT_SYSTEM_PROMPT,
+  buildClassInsightsChatUserText,
+} from "@/lib/insights/chatPrompt";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
@@ -140,6 +146,26 @@ export const anthropicItemProvider: ItemGeneratorProvider = {
         max_tokens: CLASS_INSIGHTS_MAX_TOKENS,
         system: CLASS_INSIGHTS_SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildClassInsightsUserText(pack) }],
+      });
+    } catch (err) {
+      wrapProviderError(err, "anthropic");
+    }
+    return parseReportObject(extractFirstText(response.content, "anthropic"), "anthropic", {
+      truncated: response.stop_reason === "max_tokens",
+    });
+  },
+
+  // Class insights slice 4 (dev path): one Messages turn per chat message.
+  async classInsightsChat(input: ClassInsightsChatInput): Promise<unknown> {
+    const client = anthropicClient("AI_PROVIDER=anthropic");
+    const model = process.env.ANTHROPIC_ITEM_MODEL ?? DEFAULT_MODEL;
+    let response;
+    try {
+      response = await client.messages.create({
+        model,
+        max_tokens: CLASS_INSIGHTS_CHAT_MAX_TOKENS,
+        system: CLASS_INSIGHTS_CHAT_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildClassInsightsChatUserText(input) }],
       });
     } catch (err) {
       wrapProviderError(err, "anthropic");

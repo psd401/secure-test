@@ -229,6 +229,13 @@ const OWNER_SUB_ALLOWED = new Map<string, string>([
     join("preview", "[id]"),
     "asset lookup scoped to the assessment's owner so a grantee sees its images",
   ],
+  // Class insights slice 4 (D-5): the chat thread's own column — the teacher
+  // whose thread it is — read and written under the caller's sub after
+  // authorizeAssessment has decided access. Not an assessment ownership check.
+  [
+    join("assessments", "[id]", "class-insights", "chat"),
+    "the thread's own teacher column, scoped to the caller after authorizeAssessment",
+  ],
 ]);
 
 function findRouteFiles(dir: string): string[] {
