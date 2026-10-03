@@ -1334,12 +1334,24 @@ second staff account.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 415 | Settings tab on a Draft: find "Instant feedback at hand-in" under Save settings; open the select | Four options — Off, Score only, Right / wrong, Correct answers — and one line under the current choice (Score only reads "You scored 14 of 18 on the questions scored right away. Your teacher will score 2 more."); "Show correct answers" appears only at Correct answers | NOT RUN |
-| 416 | Change the select (no Save press); reload the page | "Saved <time>" appears at once; the choice is still there after reload | NOT RUN |
-| 417 | Choose Correct answers | A second select "Show correct answers" (After I release them is the default) with the note about Release answers, and a "Release answers" button | NOT RUN |
-| 418 | Publish the assessment, then change the select and the release choice | The rest of the Settings tab is locked, these two stay enabled and each change saves ("Saved <time>"); no "assessment_published_editing_locked" error | NOT RUN |
-| 419 | Press Release answers | A confirm: "Students who hand in from now on will see the correct answers for the questions they missed. Students who already handed in will not see them in the app — go over them in class."; Cancel changes nothing; confirming replaces the button with "Answers released <date time>"; reload keeps it | NOT RUN |
-| 420 | Results page of that assessment (edit level), before and after row 419 | Before: a "Release answers" button in the toolbar (same confirm, page reloads after); after: the quiet "Answers released <date time>" line, no button. At "At hand-in", Right / wrong, Score only or Off: no button | NOT RUN |
-| 421 | Help page (`/help.html`, topic 8) | An "Instant feedback when students hand in" subsection explains the four levels, the release choice, and who sees what | NOT RUN |
+| 415 | Settings tab on a Draft: find "Instant feedback at hand-in" under Save settings; open the select | Four options — Off, Score only, Right / wrong, Correct answers — and one line under the current choice (Score only reads "You scored 14 of 18 on the questions scored right away. Your teacher will score 2 more."); "Show correct answers" appears only at Correct answers | ✅ 2026-10-03 on the origin (rev 81, Claude in Chrome, scratch fixture `IF feedback hand-run 2026-10-03`): four options; Score only's line verbatim; the release choice appears only at Correct answers |
+| 416 | Change the select (no Save press); reload the page | "Saved <time>" appears at once; the choice is still there after reload | ✅ 2026-10-03: "Saved 3:38 PM" on change with no Save press; the server held `score` |
+| 417 | Choose Correct answers | A second select "Show correct answers" (After I release them is the default) with the note about Release answers, and a "Release answers" button | ✅ 2026-10-03: "Show correct answers" (After I release them default) with the release note and a Release answers button — the note's copy is finding IF-1 below |
+| 418 | Publish the assessment, then change the select and the release choice | The rest of the Settings tab is locked, these two stay enabled and each change saves ("Saved <time>"); no "assessment_published_editing_locked" error | ✅ 2026-10-03: after Publish the other 5 Settings controls were disabled, these two stayed enabled and saved ("Saved 3:39 PM"; server `published / answers / at_hand_in`, then back to `on_release`), no lock error |
+| 419 | Press Release answers | A confirm: "Students who hand in from now on will see the correct answers for the questions they missed. Students who already handed in will not see them in the app — go over them in class."; Cancel changes nothing; confirming replaces the button with "Answers released <date time>"; reload keeps it | ✅ 2026-10-03 (from the results page): the confirm text verbatim; Cancel left `answers_released_at` null; Release stamped it and showed "Answers released Oct 3, 3:40 PM"; the Settings tab shows the same line after reload, no button |
+| 420 | Results page of that assessment (edit level), before and after row 419 | Before: a "Release answers" button in the toolbar (same confirm, page reloads after); after: the quiet "Answers released <date time>" line, no button. At "At hand-in", Right / wrong, Score only or Off: no button | ◐ 2026-10-03: before release the toolbar showed Release answers, after it the quiet line and no button; the other levels / At hand-in were not re-checked on the results page (`instant-feedback-ui.test.tsx` covers `canReleaseAnswers`) |
+| 421 | Help page (`/help.html`, topic 8) | An "Instant feedback when students hand in" subsection explains the four levels, the release choice, and who sees what | ◐ 2026-10-03: the subsection explains the four levels, the release choice and who sees it — but its line "a note that the answers will come later" is finding IF-1 |
 | 422 | A co-teacher at view level opens the results page of a Correct answers / After I release them assessment | No Release answers button (the released line appears once released) | NOT RUN |
 | 423 | A co-teacher at edit level uses the Settings control and Release answers | Both work; a view-level grant's hand POST to `release-answers` answers 404 | NOT RUN |
+
+Finding from rows 415–421 (2026-10-03, origin rev 81), proposal:
+
+- **IF-1 (copy, D-4 / 9.1 / 9.4)** — the Settings hint under "Show correct
+  answers" says students "are told the correct answers will be available
+  after every class has taken the test", and the help subsection says they
+  see "a note that the answers will come later". Both promise what the app
+  will not do: a student who handed in before Release never sees the
+  answers in the app, and the server's note to the student is "Your teacher
+  will go over the correct answers." Proposal: both lines say students see
+  right / wrong and are told their teacher will go over the correct answers.
+
