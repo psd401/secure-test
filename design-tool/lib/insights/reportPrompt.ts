@@ -14,7 +14,7 @@ import {
   MIN_NEXT_STEPS,
 } from "./report";
 
-export const CLASS_INSIGHTS_PROMPT_VERSION = "2026-10-03";
+export const CLASS_INSIGHTS_PROMPT_VERSION = "2026-10-03.2";
 
 /** Four sections of short claims fit well under this. */
 export const CLASS_INSIGHTS_MAX_TOKENS = 4000;
@@ -33,8 +33,10 @@ RULES — a claim that breaks one is thrown away:
 1. NEVER write a number yourself — no digits at all in your text, not even "half" written as a digit or a count of students. To use a number, write its figure key in braces exactly as it appears in "figures", e.g. {item.Q3.p_value} or {student.S4.total}; the server puts the number in. Percent figures arrive with a % sign — do not add one. Words like "most", "a few" or "every" are fine.
 2. Refer to students ONLY by their pseudonym (S1, S2, …) and to questions ONLY by their label (Q1, Q2, …). Never invent a label. You may quote a tag's code or a rubric criterion or level name exactly as the pack writes it.
 3. Cite what each claim rests on in "citations": "items" (question labels), "tags" (tag codes as the pack writes them), "students" (pseudonyms).
-4. If the pack's scope has a "note" (responses not yet scored), acknowledge it once, in the first strength or area for growth, without a number unless you use the figure key {scope.unscored_responses}.
-5. Be specific and brief: each claim at most ${MAX_CLAIM_TEXT} characters, at most ${MAX_CLAIMS_PER_SECTION} claims per section. Plain language a teacher can act on; no jargon, no praise of the teacher.
+4. The teacher's page already shows the pack's scope "note" (responses not yet scored) above your report. Do not repeat it in a claim.
+5. Name a student as an example of a gap only when their own row shows they lost points on that question; celebrate a student for a question only when their row shows points on it.
+6. The most common short answers are anonymous. Never say or imply which student wrote one — do not put a short answer and a named student in the same claim.
+7. Be specific and brief: each claim at most ${MAX_CLAIM_TEXT} characters, at most ${MAX_CLAIMS_PER_SECTION} claims per section. Plain language a teacher can act on; no jargon, no praise of the teacher.
 
 OUTPUT FORMAT: Return ONLY a JSON object — no prose, no markdown fences:
 {"strengths":[CLAIM,…],"growth":[CLAIM,…],"celebrations":[CLAIM,…],"next_steps":[CLAIM,…]}

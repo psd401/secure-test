@@ -19,6 +19,7 @@ import {
   reportText,
   type ClassInsightsPackInput,
   type ClassInsightsReport,
+  studentsFitClaim,
 } from "../lib/insights/report";
 import {
   CLASS_INSIGHTS_PROMPT_VERSION,
@@ -249,6 +250,49 @@ describe("fillReport", () => {
   });
 });
 
+describe("CI-1 / CI-2 (Bedrock hand-run 2026-10-03)", () => {
+  test("a % typed after a percent key is not doubled", () => {
+    const { forModel } = built();
+    const key = Object.keys(forModel.figures).find((k) => /p_value$/.test(k))!;
+    const { report } = fillReport(
+      reply({ strengths: [{ text: `The class reached {${key}}% here.`, figures: [key] }] }),
+      forModel,
+    );
+    expect(report.strengths[0]!.text).toBe(`The class reached ${forModel.figures[key]}% here.`);
+  });
+
+  test("growth drops a claim naming a student with full points on every cited question; celebrations drop one naming a student with no points", () => {
+    const { forModel } = built();
+    const cells = forModel.students.flatMap((st) =>
+      st.items.filter((i) => i.points !== null).map((i) => ({ s: st.id, q: i.label, full: i.points! >= i.max_points, zero: i.points === 0 })),
+    );
+    const full = cells.find((c) => c.full)!;
+    const zero = cells.find((c) => c.zero)!;
+    expect(full && zero).toBeTruthy();
+    const { report, dropped } = fillReport(
+      reply({
+        growth: [
+          { text: `${full.s} shows the gap on ${full.q}.`, citations: { items: [full.q], students: [full.s] } },
+          { text: `${zero.s} shows the gap on ${zero.q}.`, citations: { items: [zero.q], students: [zero.s] } },
+        ],
+        celebrations: [
+          { text: `${zero.s} shone on ${zero.q}.`, citations: { items: [zero.q], students: [zero.s] } },
+          { text: `${full.s} shone on ${full.q}.`, citations: { items: [full.q], students: [full.s] } },
+        ],
+      }),
+      forModel,
+    );
+    expect(report.growth.map((c) => c.citations.students)).toEqual([[zero.s]]);
+    expect(report.celebrations.map((c) => c.citations.students)).toEqual([[full.s]]);
+    expect(dropped).toBe(2);
+  });
+
+  test("studentsFitClaim passes claims without both a question and a student", () => {
+    expect(studentsFitClaim("growth", { citations: { items: ["Q1"], tags: [], students: [] } }, new Map())).toBe(true);
+    expect(studentsFitClaim("celebrations", { citations: { items: [], tags: [], students: ["S1"] } }, new Map())).toBe(true);
+  });
+});
+
 describe("parseReportObject", () => {
   test("reads fenced or prose-wrapped JSON; refuses an array or garbage", () => {
     expect(parseReportObject('```json\n{"a":1}\n```', "x")).toEqual({ a: 1 });
@@ -319,11 +363,11 @@ describe("renderReport", () => {
 // stored on every report row, so it must move when the prompt does.
 // The fixture pack is part of the hash, so a change to what the evidence pack
 // carries (slice 1) also asks for a bump — it changes what the model sees.
-const RECORDED_PROMPT_HASH = "8f7f74ef0c6cb880f44eec46180165d4a16641604563a85b998b2a13d863be13";
+const RECORDED_PROMPT_HASH = "611f47173366933b05d31d8c71e127430435ee06482f4208595d406423985780";
 
 describe("CLASS_INSIGHTS_PROMPT_VERSION", () => {
   test("the prompt has not drifted from the recorded version", () => {
-    expect(CLASS_INSIGHTS_PROMPT_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(CLASS_INSIGHTS_PROMPT_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}(\.\d+)?$/);
     const actual = createHash("sha256")
       .update(CLASS_INSIGHTS_SYSTEM_PROMPT)
       .update(" ")

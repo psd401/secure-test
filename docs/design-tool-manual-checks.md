@@ -1262,10 +1262,10 @@ database works). Bedrock rows need `ITEM_PROVIDER=bedrock` locally or the origin
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 391 | Results page of an assessment with scored work, as the owner | A "Class insights" section below the matrix, with the intro line and a "Write class insights" button | NOT RUN |
-| 392 | Write class insights | Button shows a spinner and "Writing…", then four sections (Strengths, Areas for growth, Celebrations, Next steps for the whole class), "Written by AI — check it before you act on it." and a written time | NOT RUN |
-| 393 | Click a Q citation | The page jumps to that question's column header in the matrix | NOT RUN |
-| 394 | Click a student name citation | Opens that student's results page | NOT RUN |
+| 391 | Results page of an assessment with scored work, as the owner | A "Class insights" section below the matrix, with the intro line and a "Write class insights" button | ✅ 2026-10-03 on local dev against the `_demo` DB with `AI_PROVIDER=bedrock` (Claude in Chrome, demo teacher, `Cell Structure Check-in`: 4 handed in, 1 answer unscored) — the origin's hand-run fixtures show no rows because the demo students' one-day roster rows have expired |
+| 392 | Write class insights | Button shows a spinner and "Writing…", then four sections (Strengths, Areas for growth, Celebrations, Next steps for the whole class), "Written by AI — check it before you act on it." and a written time | ◐ 2026-10-03: spinner + "Writing…", 24 s on Bedrock (`ai_usage` class-insights, Sonnet 4.6, 4,086 in / 1,778 out), four sections, the AI line and the time, the unscored note above — but the CONTENT has findings CI-1…CI-4 below |
+| 393 | Click a Q citation | The page jumps to that question's column header in the matrix | ✅ 2026-10-03 by markup: every Q link is `#col-q<n>` and each anchor exists on the matrix header |
+| 394 | Click a student name citation | Opens that student's results page | ✅ 2026-10-03 by markup: each name links to the same per-student page as that student's matrix row |
 | 395 | Pick a section in the filter and Show | The panel shows that section's own report (or the empty state); "All sections" shows the all-sections report | NOT RUN |
 | 396 | Hand in or Change a score, reload | "Results have changed since this was written — Regenerate." appears; Regenerate replaces the report and clears it | NOT RUN |
 | 397 | An assessment with unscored answers | The unscored note shows above the sections | NOT RUN |
@@ -1276,3 +1276,38 @@ database works). Bedrock rows need `ITEM_PROVIDER=bedrock` locally or the origin
 | 402 | Delete a student's attempt after generating | The claim naming them reads "a student no longer in these results", no link | NOT RUN |
 | 403 | An assessment with no scored student, POST by hand | 409 `nothing_to_report`; via the button: "No student has a scored answer yet." | NOT RUN |
 | 404 | Mock `BLOCKME` title / Bedrock guardrail block | "The report was withheld by content safeguards. Try again."; nothing stored | NOT RUN |
+
+Findings from rows 391–394 (2026-10-03, `_demo` DB, Bedrock), proposals —
+rows 395–404 held until they are fixed:
+
+- **CI-1 (bug)** — percentages render "75%%": the fill appends `%` to a
+  percent / p-value key and the model also writes `%` after the reference.
+  Proposal: the fill swallows one `%` written directly after a percent key.
+- **CI-2 (accuracy, named student)** — an Areas-for-growth claim names a
+  student among those who "chose incorrectly" on Q4 although that student
+  earned full points on Q4 (the report's own Celebrations says so). D-3
+  checks numbers, not which students a claim names. Proposal: a
+  deterministic check from the pack — in Areas for growth and Next steps,
+  a claim that cites items AND students is dropped when any cited student
+  earned full points on every cited item; in Celebrations, dropped when a
+  cited student earned no points on a cited item.
+- **CI-3 (prompt)** — the model repeats the unscored note inside the first
+  Strengths claim ("Note: 1 response is not yet scored…") although the panel
+  already shows it. Proposal: the prompt says the note is shown separately.
+- **CI-4 (D-6 spirit)** — "One student wrote 'diffusion' for Q3 … Noah Holt
+  earned no points on Q3" pairs an anonymous short-text cluster with a named
+  student. Proposal: the prompt forbids tying an answer cluster to a named
+  student; the server cannot check this, so it stays a prompt rule.
+
+CI-1…CI-4 BUILT 2026-10-03 (James: fix now): the fill swallows a `%` typed
+after a percent key; `studentsFitClaim` drops a growth / next-step claim
+naming a student with full points on every cited question and a celebration
+naming a student with no points on a cited question; prompt version
+2026-10-03.2 says the scope note is shown separately (rule 4), names a
+student only when their row fits (rule 5), and forbids tying a short answer
+to a named student (rule 6). Re-run on the `_demo` DB with Bedrock (2
+reports, 19–21 s): no "%%", the note not repeated, no short answer beside a
+name, every named student checked against the matrix and fits (the Q4
+celebration names the one student who earned it; the Q4 small group names
+two who scored 0); the server dropped 2 and 1 claims.
+

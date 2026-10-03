@@ -124,6 +124,8 @@ export function parseReportObject(
 // ---------------------------------------------------------------------------
 // Fill
 
+const PERCENT_KEY_THEN_SIGN = /(\{[^{}]*(?:p_value|percent)\s*\})\s?%/g;
+
 /** `{item.Q3.p_value}` → "62%"; means and counts as stored. */
 export function formatFigure(key: string, value: number): string {
   return /(?:p_value|percent)$/.test(key) ? `${value}%` : String(value);
@@ -163,6 +165,8 @@ interface FillContext {
   tagOf: Map<string, string>;
   /** One regex: `{key}` | an allowed string | a Q / S label. */
   token: RegExp;
+  /** CI-2: `S4|Q3` → that student's final points on that question (null = unscored). */
+  points: Map<string, { points: number | null; max: number }>;
 }
 
 function fillContext(pack: ClassInsightsPackInput): FillContext {
@@ -184,14 +188,57 @@ function fillContext(pack: ClassInsightsPackInput): FillContext {
     students: new Set(pack.students.map((s) => s.id)),
     tagOf,
     token: new RegExp(parts.join("|"), "g"),
+    points: new Map(
+      pack.students.flatMap((st) =>
+        st.items.map((i) => [`${st.id}|${i.label}`, { points: i.points, max: i.max_points }] as const),
+      ),
+    ),
   };
+}
+
+/**
+ * CI-2: a claim's named students must fit what it says about the questions it
+ * cites. In "growth" and "next_steps" a cited student who earned full points
+ * on EVERY cited question cannot be an example of the gap; in "celebrations" a
+ * cited student who earned no points on a cited question cannot be celebrated
+ * for it. Claims citing no question, or no student, pass. Unscored (null)
+ * points never fail a claim.
+ */
+export function studentsFitClaim(
+  section: ReportSection,
+  claim: Pick<FilledClaim, "citations">,
+  points: FillContext["points"],
+): boolean {
+  const { items, students } = claim.citations;
+  if (items.length === 0 || students.length === 0) return true;
+  const cell = (s: string, q: string) => points.get(`${s}|${q}`);
+  if (section === "growth" || section === "next_steps") {
+    return students.every(
+      (s) =>
+        !items.every((q) => {
+          const c = cell(s, q);
+          return c !== undefined && c.points !== null && c.points >= c.max;
+        }),
+    );
+  }
+  if (section === "celebrations") {
+    return students.every((s) =>
+      items.every((q) => {
+        const c = cell(s, q);
+        return c === undefined || c.points === null || c.points > 0;
+      }),
+    );
+  }
+  return true;
 }
 
 /** One claim through the rules above; null = dropped. */
 function fillClaim(raw: unknown, ctx: FillContext): FilledClaim | null {
   const parsed = ClaimSchema.safeParse(raw);
   if (!parsed.success) return null;
-  const claim = parsed.data;
+  // CI-1: formatFigure adds the % to a percent key; one the model typed right
+  // after the reference ("{item.Q1.p_value}%") would print "75%%".
+  const claim = { ...parsed.data, text: parsed.data.text.replace(PERCENT_KEY_THEN_SIGN, "$1") };
   // The markers are ours; a model that writes them cannot be told apart.
   if (claim.text.includes("[[") || claim.text.includes("]]")) return null;
 
@@ -284,7 +331,7 @@ export function fillReport(raw: unknown, pack: ClassInsightsPackInput): FillResu
         (section !== "celebrations" ||
           (claim.citations.students.length > 0 &&
             (claim.figures.length > 0 || claim.citations.items.length > 0)));
-      if (claim && evidenced) report[section].push(claim);
+      if (claim && evidenced && studentsFitClaim(section, claim, ctx.points)) report[section].push(claim);
       else dropped++;
     }
   }
