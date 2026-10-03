@@ -16,6 +16,7 @@ import {
   emptyBatchForm,
   hasProposedKey,
   keyText,
+  matchColumns,
   needsKeyCheck,
   parseCount,
   proposalHeader,
@@ -34,7 +35,7 @@ import {
 } from "../lib/ai/types";
 import { MAX_UPLOAD_BYTES } from "../lib/ai/documentUpload";
 import { BATCH_MAX_FILE_BYTES } from "../lib/ai/batchForm";
-import { GenerateQuestionsDialog } from "../components/app/GenerateQuestionsDialog";
+import { GenerateQuestionsDialog, MatchColumns } from "../components/app/GenerateQuestionsDialog";
 
 const ID = "7b0d6f5e-7a39-4f3a-9a52-0d6a3b1c9e11";
 
@@ -92,6 +93,7 @@ describe("validateBatchForm", () => {
           multiple_choice_multi: b,
           short_text: c,
           essay: d,
+          match: "",
         },
       });
     expect(validateBatchForm(counts("2", "1", "1", "1"))).toEqual({});
@@ -141,6 +143,7 @@ describe("buildBatchRequest", () => {
           multiple_choice_multi: "0",
           short_text: "",
           essay: "1",
+          match: "",
         },
         standards: [],
         objective: "  compare ratios ",
@@ -272,5 +275,49 @@ describe("describeAddError", () => {
     expect(describeAddError(404, null)).toContain("no longer available");
     expect(describeAddError(400, { detail: "stem: Required" })).toContain("stem: Required");
     expect(describeAddError(500, null)).toContain("Try again");
+  });
+});
+
+// BG slice 6 (D-7): match by count, keyed by structure.
+describe("match proposals", () => {
+  const match: BatchProposal = {
+    type: "match",
+    stem: "Match each element to its symbol.",
+    pairs: [
+      { id: "p1", left: "Sodium", right: "Na" },
+      { id: "p2", left: "Potassium", right: "K" },
+      { id: "p3", left: "Iron", right: "Fe" },
+    ],
+  };
+
+  test("Matching is a type box; its count joins the sum and the request", () => {
+    const v = form({
+      count: "3",
+      typeMode: "counts",
+      typeCounts: { ...emptyBatchForm().typeCounts, match: "2", essay: "1" },
+    });
+    expect(typeCountSum(v)).toBe(3);
+    expect(validateBatchForm(v)).toEqual({});
+    const body = buildBatchRequest(ID, v);
+    expect(body.types).toEqual({ essay: 1, match: 2 });
+    expect(GenerateItemsRequest.safeParse(body).success).toBe(true);
+  });
+
+  test("the pairing is the key: badge until opened, key reads left → right", () => {
+    expect(hasProposedKey(match)).toBe(true);
+    expect(needsKeyCheck(match, new Set(), "c1")).toBe(true);
+    expect(needsKeyCheck(match, new Set(["c1"]), "c1")).toBe(false);
+    expect(keyText(match)).toEqual(["Sodium → Na", "Potassium → K", "Iron → Fe"]);
+  });
+
+  test("before the key, columns show apart: lefts in order, rights sorted", () => {
+    expect(matchColumns(match)).toEqual({
+      lefts: ["Sodium", "Potassium", "Iron"],
+      rights: ["Fe", "K", "Na"],
+    });
+    const html = renderToStaticMarkup(<MatchColumns proposal={match} />);
+    expect(html).toContain("Right column (sorted)");
+    expect(html.indexOf(">Fe<")).toBeLessThan(html.indexOf(">Na<"));
+    expect(html).not.toContain("→");
   });
 });

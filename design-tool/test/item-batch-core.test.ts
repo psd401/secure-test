@@ -6,6 +6,7 @@ import {
   BATCH_SYSTEM_PROMPT,
   EXISTING_STEMS_MAX,
   EXISTING_STEM_CHARS,
+  MATCH_PROMPT_BLOCK,
   buildBatchUserText,
   capExistingStems,
   parseBatchArray,
@@ -14,6 +15,7 @@ import {
   validateBatchProposals,
 } from "../lib/ai/itemBatchCore";
 import { mockProvider } from "../lib/ai/provider";
+import { CreateItemBody } from "../lib/api/items";
 import { GenerateItemsRequest, hasBatchFocus, type BatchGenerateInput } from "../lib/ai/types";
 import { lookup } from "../lib/standards/catalog";
 
@@ -226,8 +228,12 @@ describe("GenerateItemsRequest", () => {
       GenerateItemsRequest.safeParse({ assessment_id: ID, count: 3, types: { essay: 2 } }).success,
     ).toBe(false);
     expect(
-      GenerateItemsRequest.safeParse({ assessment_id: ID, count: 2, types: { match: 2 } }).success,
+      GenerateItemsRequest.safeParse({ assessment_id: ID, count: 2, types: { order: 2 } }).success,
     ).toBe(false);
+    // BG slice 6: match is requestable by count.
+    expect(
+      GenerateItemsRequest.safeParse({ assessment_id: ID, count: 2, types: { match: 2 } }).success,
+    ).toBe(true);
     const ok = GenerateItemsRequest.parse({ assessment_id: ID, count: 2, types: { essay: 2 } });
     expect(ok.difficulty).toBe("mixed");
   });
@@ -260,5 +266,88 @@ describe("BATCH_SYSTEM_PROMPT", () => {
     // minute", which an exact match would not award to "1.6".
     expect(BATCH_SYSTEM_PROMPT).toContain("A short_text key is the bare answer a student would type");
     expect(BATCH_SYSTEM_PROMPT).toContain('"1.6", not "1.6 pages per minute"');
+  });
+});
+
+// BG slice 6 (D-7): match in a batch — by count only, keyed by structure.
+describe("match in a batch", () => {
+  const MATCH = {
+    type: "match",
+    stem: "Match each element to its symbol.",
+    pairs: [
+      { left: " Sodium ", right: "Na" },
+      { left: "Potassium", right: "K" },
+      { left: "Iron", right: "$\\mathrm{Fe}$" },
+    ],
+  };
+
+  test("the match shape and rules are in the prompt only when match is requested by count", () => {
+    const withMatch = buildBatchUserText({ ...BASE, count: 3, types: { match: 1, short_text: 2 } });
+    expect(withMatch).toContain(MATCH_PROMPT_BLOCK);
+    expect(withMatch).toContain("2 short_text, 1 match");
+    expect(MATCH_PROMPT_BLOCK).toContain("3 to 6 pairs");
+    expect(MATCH_PROMPT_BLOCK).toContain("no two pairs share a left or a right");
+    for (const text of [
+      buildBatchUserText(BASE),
+      buildBatchUserText({ ...BASE, count: 2, types: { essay: 2 } }),
+    ]) {
+      expect(text).not.toContain('"type":"match"');
+      expect(text).not.toMatch(/\bmatch\b/);
+    }
+    expect(BATCH_SYSTEM_PROMPT).not.toContain('"type":"match"');
+  });
+
+  test("a match element validates: pairs numbered p1..pn server-side, text trimmed, tags attached", () => {
+    const out = validateBatchProposals(
+      [{ ...MATCH, pairs: MATCH.pairs.map((p) => ({ ...p, id: "x" })) }],
+      { count: 1, types: { match: 1 }, standards: ["wa2026:M.7.R.RP.2"] },
+    );
+    expect(out.dropped).toBe(0);
+    const p = out.proposals[0] as Record<string, unknown>;
+    expect(p.type).toBe("match");
+    expect(p.pairs).toEqual([
+      { id: "p1", left: "Sodium", right: "Na" },
+      { id: "p2", left: "Potassium", right: "K" },
+      { id: "p3", left: "Iron", right: "$\\mathrm{Fe}$" },
+    ]);
+    expect(p.standards).toEqual(["wa2026:M.7.R.RP.2"]);
+  });
+
+  test("malformed match elements drop: < 2 pairs, a repeated left or right, an empty side", () => {
+    const out = validateBatchProposals(
+      [
+        { ...MATCH, pairs: [{ left: "Sodium", right: "Na" }] },
+        { ...MATCH, pairs: [...MATCH.pairs, { left: "sodium", right: "S" }] },
+        { ...MATCH, pairs: [...MATCH.pairs, { left: "Sulfur", right: "na" }] },
+        { ...MATCH, pairs: [...MATCH.pairs, { left: "Sulfur", right: "  " }] },
+        MATCH,
+      ],
+      { count: 5, types: { match: 5 }, standards: [] },
+    );
+    expect(out.proposals).toHaveLength(1);
+    expect(out.dropped).toBe(4);
+    expect(out.issues[1]).toMatch(/repeat the left text/);
+    expect(out.issues[2]).toMatch(/repeat the right text/);
+  });
+
+  test("under mix a match element drops as off-type, and planTypes never plans match", () => {
+    const out = validateBatchProposals([MATCH, MC], { count: 2, types: "mix", standards: [] });
+    expect(out.proposals.map((p) => p.type)).toEqual(["multiple_choice_single"]);
+    expect(out.issues[0]).toMatch(/"match" was not requested/);
+    expect(planTypes(10, "mix")).not.toContain("match");
+    expect(planTypes(3, { match: 2, essay: 1 })).toEqual(["essay", "match", "match"]);
+  });
+
+  test("the mock's match proposals validate and round-trip CreateItemBody", async () => {
+    const types = { match: 2, multiple_choice_single: 1 };
+    const raw = await mockProvider.generateItems({ ...BASE, count: 3, types, objective: "Elements" });
+    const out = validateBatchProposals(raw, { count: 3, types, standards: [] });
+    expect(out.dropped).toBe(0);
+    const matches = out.proposals.filter((p) => p.type === "match");
+    expect(matches).toHaveLength(2);
+    for (const m of matches) {
+      expect(CreateItemBody.safeParse(m).success).toBe(true);
+      expect((m as { pairs: { id: string }[] }).pairs.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    }
   });
 });

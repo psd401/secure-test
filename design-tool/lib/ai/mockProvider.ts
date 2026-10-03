@@ -134,5 +134,14 @@ function mockBatchItem(type: BatchGenerableItemType, stem: string): GenerateItem
   if (type === "short_text") {
     return { type, stem, choices: [], correct_choice_ids: [], correct_answer: "answer" };
   }
+  if (type === "match") {
+    // BG slice 6: three distinct pairs; no ids — the server numbers them, as
+    // it does for the model's reply.
+    return {
+      type,
+      stem: `${stem}: match each term to its partner.`,
+      pairs: [1, 2, 3].map((n) => ({ left: `Term ${n}`, right: `Partner ${n} — drafted by AI` })),
+    } as unknown as GenerateItemResult;
+  }
   return { type, stem, choices: [], correct_choice_ids: [], correct_answer: null };
 }

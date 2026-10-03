@@ -126,7 +126,7 @@ describe("POST /api/ai/generate-items — validation", () => {
   test.each([
     ["count > 10", { count: 11, notes: "x" }],
     ["type counts not summing to count", { count: 4, types: { essay: 1, short_text: 2 }, notes: "x" }],
-    ["a structural type", { count: 2, types: { match: 2 }, notes: "x" }],
+    ["a structural type match does not cover", { count: 2, types: { order: 2 }, notes: "x" }],
     ["no target, resource or notes", { count: 2, target: { objective: "  " } }],
     ["more than 10 standards", { count: 1, target: { standards: Array.from({ length: 11 }, (_, i) => `t${i}`) } }],
     ["notes over 2000", { count: 1, notes: "x".repeat(2001) }],
@@ -182,6 +182,49 @@ describe("POST /api/ai/generate-items — proposals", () => {
       expect(CreateItemBody.safeParse(p).success).toBe(true);
     }
     expect(await itemCount(a.id)).toBe(before);
+  });
+
+  test("BG slice 6: match by count — pairs numbered, and Add posts it through the items route", async () => {
+    mockSession = { sub: OWNER, role: "staff" };
+    const a = await makeAssessment();
+    const res = await postJson({
+      assessment_id: a.id,
+      count: 3,
+      types: { match: 2, short_text: 1 },
+      target: { standards: ["My target"] },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as OkBody;
+    expect(body.proposals.map((p) => p.type)).toEqual(["short_text", "match", "match"]);
+    const match = body.proposals[1]!;
+    expect((match.pairs as { id: string }[]).map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    expect(match.standards).toEqual(["My target"]);
+    expect(await itemCount(a.id)).toBe(0);
+
+    // Add: the dialog posts the proposal unchanged.
+    const { POST } = await import("../app/api/assessments/[id]/items/route");
+    const added = await POST(
+      new Request(`http://localhost/api/assessments/${a.id}/items`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(match),
+      }),
+      { params: Promise.resolve({ id: a.id }) },
+    );
+    expect(added.status).toBe(201);
+    const [row] = await getDb().select().from(items).where(eq(items.assessment_id, a.id));
+    expect(row!.type).toBe("match");
+    expect((row!.config as { pairs: unknown }).pairs).toEqual(match.pairs);
+  });
+
+  test("mix never yields match", async () => {
+    mockSession = { sub: OWNER, role: "staff" };
+    const a = await makeAssessment();
+    const res = await postJson({ assessment_id: a.id, count: 10, notes: "a mix" });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as OkBody;
+    expect(body.proposals).toHaveLength(10);
+    expect(body.proposals.some((p) => p.type === "match")).toBe(false);
   });
 
   test("a malformed element is dropped and counted, the rest come back", async () => {

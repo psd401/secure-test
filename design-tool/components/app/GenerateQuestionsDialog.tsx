@@ -32,6 +32,7 @@ import {
   describeGenerateError,
   emptyBatchForm,
   keyText,
+  matchColumns,
   needsKeyCheck,
   proposalHeader,
   typeCountSum,
@@ -354,7 +355,13 @@ export function GenerateQuestionsDialog({
                   <p className="text-xs text-muted-foreground">
                     Total: {typeCountSum(values)}
                   </p>
-                ) : null}
+                ) : (
+                  // BG slice 6: the route's "mix" never writes match items.
+                  <p className="text-xs text-muted-foreground">
+                    Mix uses multiple choice, short text and essay. For matching, choose how many
+                    of each.
+                  </p>
+                )}
                 <p
                   role="status"
                   aria-live="polite"
@@ -589,6 +596,7 @@ function ProposalCard({
               ))}
             </ul>
           ) : null}
+          {p.type === "match" && p.pairs ? <MatchColumns proposal={p} /> : null}
           {tags.length > 0 ? (
             <ul className="flex flex-wrap gap-1.5" aria-label="Standards on this question">
               {tags.map((tag) => {
@@ -616,13 +624,34 @@ function ProposalCard({
               }}
             >
               <summary className="cursor-pointer text-xs underline">Show the key</summary>
-              <ul className="mt-1 list-disc pl-5">
-                {key.map((k, i) => (
-                  <li key={i}>
-                    <Rendered text={k} />
-                  </li>
-                ))}
-              </ul>
+              {p.type === "match" && p.pairs ? (
+                // BG slice 6: the pairing is the key — aligned only in here.
+                <table className="mt-1 text-sm">
+                  <tbody>
+                    {p.pairs.map((pair) => (
+                      <tr key={pair.id}>
+                        <td className="py-0.5 pr-2 align-top">
+                          <Rendered text={pair.left} />
+                        </td>
+                        <td aria-hidden className="py-0.5 pr-2 align-top text-muted-foreground">
+                          →
+                        </td>
+                        <td className="py-0.5 align-top">
+                          <Rendered text={pair.right} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <ul className="mt-1 list-disc pl-5">
+                  {key.map((k, i) => (
+                    <li key={i}>
+                      <Rendered text={k} />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </details>
           ) : null}
         </div>
@@ -641,6 +670,30 @@ function ProposalCard({
         </div>
       </div>
     </li>
+  );
+}
+
+// BG slice 6: a match card's body shows the two columns apart (rights sorted,
+// since their stored order is the key); the aligned pairs are in "Show the key".
+export function MatchColumns({ proposal }: { proposal: BatchProposal }) {
+  const { lefts, rights } = matchColumns(proposal);
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+      <ul aria-label="Left column" className="space-y-0.5">
+        {lefts.map((text, i) => (
+          <li key={i}>
+            <Rendered text={text} />
+          </li>
+        ))}
+      </ul>
+      <ul aria-label="Right column (sorted)" className="space-y-0.5">
+        {rights.map((text, i) => (
+          <li key={i}>
+            <Rendered text={text} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

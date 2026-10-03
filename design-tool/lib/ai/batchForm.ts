@@ -16,6 +16,8 @@ export const BATCH_TYPES = [
   "multiple_choice_multi",
   "short_text",
   "essay",
+  // BG slice 6: by count only — "mix" on the route stays the four above.
+  "match",
 ] as const;
 export type BatchType = (typeof BATCH_TYPES)[number];
 
@@ -24,6 +26,8 @@ export const BATCH_TYPE_LABEL: Record<BatchType, string> = {
   multiple_choice_multi: "Multiple choice (select all)",
   short_text: "Short text",
   essay: "Essay",
+  // The editor's own label for the type (AssessmentEditor TYPE_LABEL).
+  match: "Matching",
 };
 
 export const BATCH_DIFFICULTIES = ["mixed", "easier", "on_level", "harder"] as const;
@@ -61,6 +65,7 @@ export function emptyBatchForm(): BatchFormValues {
       multiple_choice_multi: "",
       short_text: "",
       essay: "",
+      match: "",
     },
     standards: [],
     objective: "",
@@ -262,6 +267,8 @@ export interface BatchProposal {
   correct_choice_ids?: string[];
   correct_answer?: string | null;
   standards?: string[];
+  /** Match: the pair list in its correct pairing IS the key. */
+  pairs?: { id: string; left: string; right: string }[];
   [key: string]: unknown;
 }
 
@@ -271,6 +278,8 @@ export function hasProposedKey(p: BatchProposal): boolean {
   if (p.type === "multiple_choice_single" || p.type === "multiple_choice_multi") {
     return (p.correct_choice_ids?.length ?? 0) > 0;
   }
+  // Keyed by structure: the pairing the model proposed is the key to check.
+  if (p.type === "match") return (p.pairs?.length ?? 0) > 0;
   return false;
 }
 
@@ -292,8 +301,25 @@ export function proposalHeader(ready: number, dropped: number): string {
 /** The key as text: a short answer, or the text of each correct choice. */
 export function keyText(p: BatchProposal): string[] {
   if (p.type === "short_text") return p.correct_answer ? [p.correct_answer] : [];
+  if (p.type === "match") return (p.pairs ?? []).map((pair) => `${pair.left} → ${pair.right}`);
   const byId = new Map((p.choices ?? []).map((c) => [c.id, c.text]));
   return (p.correct_choice_ids ?? []).map((id) => byId.get(id) ?? id);
+}
+
+/**
+ * BG slice 6: a match card before its key is opened shows the two columns
+ * apart — lefts in stored order, rights sorted alphabetically — because the
+ * stored right order IS the key. The aligned pairs show only inside "Show the
+ * key" (keyText / the pair list).
+ */
+export function matchColumns(p: BatchProposal): { lefts: string[]; rights: string[] } {
+  const pairs = p.pairs ?? [];
+  return {
+    lefts: pairs.map((pair) => pair.left),
+    rights: pairs
+      .map((pair) => pair.right)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })),
+  };
 }
 
 export type AddAllResult =

@@ -391,7 +391,41 @@ What "ship both and associate them" looks like:
    `readPrefs` / `writePrefs` / `loadFacets` are reused rather than
    duplicated; (b) no "Accept all" per item; (c) the Bedrock call uses the
    item model (`BEDROCK_ITEM_MODEL`).
-6. Match in a batch (Opus 5 / medium).
+6. Match in a batch (Opus 5 / medium). BUILT 2026-10-02, no migration, no
+   new route: `match` joins `BATCH_GENERABLE_ITEM_TYPES` and the strict
+   `BatchTypeCounts` map (`lib/ai/types.ts`), never `AI_GENERABLE_ITEM_TYPES`;
+   **"mix" stays the four types** through a new `BATCH_MIX_ITEM_TYPES` that
+   `planTypes`, the mix prompt line and the mix allow-list read, so a match
+   element under "mix" drops as off-type. Prompt (`lib/ai/itemBatchCore.ts`):
+   the system prompt is unchanged; `MATCH_PROMPT_BLOCK` (the shape, the stem
+   as the instruction naming both columns, 3–6 pairs in correct pairing,
+   one-to-one with no shared left or right, short plain text with no hint at
+   the partner, math in `$...$` like stems and choices, no ids) rides in the
+   user turn only when the per-type map asks for match. Validation:
+   `normalizeMatchElement` numbers every pair `p1..pn` whatever the model sent
+   (the importer's E1 rule applied to all pairs — the model is not asked for
+   ids), trims both sides and drops the element when a left or a right repeats
+   (case-insensitive); fewer than 2 pairs or an empty side is left to
+   `CreateItemBody` (min 2, min(1) text). No upper pair limit beyond the
+   schema's (the prompt asks for 3–6). D-5 / D-6 unchanged: the batch's tags
+   attach, nothing to strip. The output guardrail now screens both sides of
+   every pair (`itemProposalText`, which the single-item route shares). Mock:
+   three distinct pairs without ids per requested match. Dialog: a
+   "Matching" box (the editor's label) in "Choose how many of each", and a
+   one-line hint under Mix that matching is by count; the card shows the stem
+   and, **before the key is opened, the two columns apart — lefts in stored
+   order, rights sorted alphabetically** (`matchColumns` in
+   `lib/ai/batchForm.ts`), because the stored right order IS the key; the
+   aligned pairs show only inside "Show the key" as a left → right table.
+   "Check the key" applies (`hasProposedKey` is true for a match with pairs)
+   and clears on opening, like the other keyed types; Add posts the proposal
+   unchanged, pairs included. Tests: `item-batch-core` +5, `ai-generate-items`
+   +2 (match by count then Add through the items route; mix never yields
+   match), `batch-form` +3, `safeguarding` +1. **Deviations:** (a) the match
+   rules live in the user turn, not the system prompt, so a batch without
+   match never sees the shape; (b) the alphabetically sorted right
+   column can coincide with the key order (a three-pair list sorted by chance)
+   — accepted, the student's copy is shuffled per attempt anyway.
 7. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
    run on a hand-built resource (no teacher PDF in the repo).
 

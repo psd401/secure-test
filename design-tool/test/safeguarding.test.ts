@@ -344,6 +344,20 @@ describe("itemProposalText", () => {
     expect(itemProposalText(item)).toBe("Capital of WA?\nOlympia");
   });
 
+  test("flattens stem + both sides of every pair for a match item (BG slice 6)", () => {
+    const item: CreateItemBody = {
+      type: "match",
+      stem: "Match each element to its symbol.",
+      choices: [],
+      correct_choice_ids: [],
+      pairs: [
+        { id: "p1", left: "Sodium", right: "Na" },
+        { id: "p2", left: "Iron", right: "Fe" },
+      ],
+    };
+    expect(itemProposalText(item)).toBe("Match each element to its symbol.\nSodium\nNa\nIron\nFe");
+  });
+
   // E20: parseItemText blind-casts JSON.parse output, so the static type is a
   // lie at runtime. runGuarded does NOT wrap outputText(), so a TypeError here
   // escaped as a 502 provider_failed instead of the accurate

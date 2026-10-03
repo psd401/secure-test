@@ -32,10 +32,15 @@ export type GenerateItemRequest = z.infer<typeof GenerateItemRequest>;
 // generation. D-7 names FOUR types for v1 — the three above plus essay. The
 // single-item list stays at three (E18: its providers have no essay shape);
 // the batch prompt carries an essay shape of its own, without a rubric (D-6).
-export const BATCH_GENERABLE_ITEM_TYPES = [
+//
+// BG slice 6 (D-7, "match next"): match joins the batch list, but NOT "mix" —
+// a mix stays the four types above, and match comes only when the teacher
+// asks for it by count. Its key is the pair list itself (keyed by structure).
+export const BATCH_MIX_ITEM_TYPES = [
   ...AI_GENERABLE_ITEM_TYPES,
   "essay",
 ] as const;
+export const BATCH_GENERABLE_ITEM_TYPES = [...BATCH_MIX_ITEM_TYPES, "match"] as const;
 export type BatchGenerableItemType = (typeof BATCH_GENERABLE_ITEM_TYPES)[number];
 
 /** D-3: at most ten proposals per call. */
@@ -50,13 +55,14 @@ export type BatchDifficulty = (typeof BATCH_DIFFICULTIES)[number];
 
 const TypeCount = z.number().int().min(0).max(MAX_BATCH_COUNT).optional();
 
-/** A per-type count map; strict, so a structural type (match, …) is a 400. */
+/** A per-type count map; strict, so another structural type (order, …) is a 400. */
 export const BatchTypeCounts = z
   .object({
     multiple_choice_single: TypeCount,
     multiple_choice_multi: TypeCount,
     short_text: TypeCount,
     essay: TypeCount,
+    match: TypeCount,
   })
   .strict();
 export type BatchTypeCounts = z.infer<typeof BatchTypeCounts>;

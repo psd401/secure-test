@@ -4,6 +4,7 @@ import { resolveBareCode } from "@/lib/standards/search";
 import { repairModelJson } from "@/lib/pdfImport/extractCore";
 import {
   BATCH_GENERABLE_ITEM_TYPES,
+  BATCH_MIX_ITEM_TYPES,
   type BatchGenerableItemType,
   type BatchGenerateInput,
   type BatchTypeCounts,
@@ -112,6 +113,7 @@ const TYPE_LABEL: Record<BatchGenerableItemType, string> = {
   multiple_choice_multi: "multiple_choice_multi",
   short_text: "short_text",
   essay: "essay",
+  match: "match",
 };
 
 const DIFFICULTY_LINE: Record<BatchGenerateInput["difficulty"], string> = {
@@ -121,12 +123,12 @@ const DIFFICULTY_LINE: Record<BatchGenerateInput["difficulty"], string> = {
   harder: "harder than grade level (extension)",
 };
 
-/** The types to write, one entry per item, in a stable order. */
+/** The types to write, one entry per item, in a stable order. "mix" never plans match. */
 export function planTypes(count: number, types: "mix" | BatchTypeCounts): BatchGenerableItemType[] {
   if (types === "mix") {
     return Array.from(
       { length: count },
-      (_, i) => BATCH_GENERABLE_ITEM_TYPES[i % BATCH_GENERABLE_ITEM_TYPES.length]!,
+      (_, i) => BATCH_MIX_ITEM_TYPES[i % BATCH_MIX_ITEM_TYPES.length]!,
     );
   }
   const out: BatchGenerableItemType[] = [];
@@ -138,13 +140,30 @@ export function planTypes(count: number, types: "mix" | BatchTypeCounts): BatchG
 
 function typesLine(count: number, types: "mix" | BatchTypeCounts): string {
   if (types === "mix") {
-    return `Item types: choose a sensible mix of ${BATCH_GENERABLE_ITEM_TYPES.join(", ")} for the content.`;
+    return `Item types: choose a sensible mix of ${BATCH_MIX_ITEM_TYPES.join(", ")} for the content.`;
   }
   const parts = BATCH_GENERABLE_ITEM_TYPES.filter((t) => (types[t] ?? 0) > 0).map(
     (t) => `${types[t]} ${TYPE_LABEL[t]}`,
   );
   return `Item types (exactly, ${count} in total): ${parts.join(", ")}.`;
 }
+
+/**
+ * BG slice 6: the match shape and its rules ride in the user turn, and only
+ * when the request asks for match by count — the system prompt keeps the four
+ * "mix" shapes, so a mix (or any batch without match) never sees a match
+ * shape. Pair ids are not asked for: the server numbers them (like the PDF
+ * importer, E1). Math in pairs follows the system prompt's $...$ rule.
+ */
+export const MATCH_PROMPT_BLOCK = `This batch includes match items. A match item has this shape — no choices and no key fields, because the pairs ARE the answer key:
+{"type":"match","stem":"<the instruction>","pairs":[{"left":"...","right":"..."},{"left":"...","right":"..."},{"left":"...","right":"..."}]}
+Match rules:
+- The stem is the instruction, naming both columns: "Match each <left kind> to its <right kind>."
+- 3 to 6 pairs per match item, each written in its correct pairing; the right column is shuffled for the student.
+- One-to-one: every left has exactly one correct right, and no two pairs share a left or a right.
+- Left and right are short plain text: a term, a value or a short phrase. Neither side hints at its partner (no shared key words, no numbers or letters that line them up).
+- Math in pairs goes in $...$ like stems and choices.
+- Do not add ids or any other fields to the pairs.`;
 
 /** Pasted source text must not be able to close its own wrapper early. */
 export function neutraliseSourceTag(text: string): string {
@@ -172,6 +191,10 @@ export function buildBatchUserText(input: BatchGenerateInput): string {
   lines.push(`Write exactly ${input.count} assessment item${input.count === 1 ? "" : "s"}.`);
   lines.push(typesLine(input.count, input.types));
   lines.push(`Difficulty: ${DIFFICULTY_LINE[input.difficulty]}.`);
+  if (input.types !== "mix" && (input.types.match ?? 0) > 0) {
+    lines.push("");
+    lines.push(MATCH_PROMPT_BLOCK);
+  }
 
   if (input.standards.length > 0) {
     lines.push("");
@@ -288,6 +311,39 @@ export interface ValidatedBatch {
 }
 
 /**
+ * BG slice 6: a match element before CreateItemBody. The model is not asked
+ * for pair ids, so every pair is numbered p1..pn — whatever it sent, so ids are
+ * always unique and short (the PDF importer's E1 rule, applied to all pairs).
+ * Left / right text is trimmed. Returns an issue string when the element must
+ * drop: a repeated left or right (case-insensitive) breaks one-to-one, and a
+ * list of fewer than 2 pairs is left for CreateItemBody's min(2) to refuse.
+ */
+export function normalizeMatchElement(candidate: Record<string, unknown>): string | null {
+  if (!Array.isArray(candidate.pairs)) return null; // CreateItemBody reports it
+  const pairs = (candidate.pairs as unknown[]).map((p, i) => {
+    if (!p || typeof p !== "object") return p;
+    const pair = p as { left?: unknown; right?: unknown };
+    return {
+      id: `p${i + 1}`,
+      left: typeof pair.left === "string" ? pair.left.trim() : pair.left,
+      right: typeof pair.right === "string" ? pair.right.trim() : pair.right,
+    };
+  });
+  candidate.pairs = pairs;
+  for (const side of ["left", "right"] as const) {
+    const seen = new Set<string>();
+    for (const p of pairs) {
+      const text = (p as Record<string, unknown> | null)?.[side];
+      if (typeof text !== "string" || text === "") continue;
+      const folded = text.toLowerCase();
+      if (seen.has(folded)) return `pairs repeat the ${side} text ${JSON.stringify(text)}`;
+      seen.add(folded);
+    }
+  }
+  return null;
+}
+
+/**
  * Validate EACH element against CreateItemBody alone (D-3: one malformed item
  * drops, not the batch), keep only requested types, attach the batch's tags
  * (D-5), and stop at `count`.
@@ -298,7 +354,7 @@ export function validateBatchProposals(
 ): ValidatedBatch {
   const allowed = new Set<string>(
     opts.types === "mix"
-      ? BATCH_GENERABLE_ITEM_TYPES
+      ? BATCH_MIX_ITEM_TYPES
       : BATCH_GENERABLE_ITEM_TYPES.filter((t) => ((opts.types as BatchTypeCounts)[t] ?? 0) > 0),
   );
   const proposals: CreateItemBody[] = [];
@@ -314,6 +370,13 @@ export function validateBatchProposals(
     if (!allowed.has(String(candidate.type))) {
       issues.push(`item ${i + 1}: type ${JSON.stringify(candidate.type)} was not requested`);
       return;
+    }
+    if (candidate.type === "match") {
+      const issue = normalizeMatchElement(candidate);
+      if (issue) {
+        issues.push(`item ${i + 1}: ${issue}`);
+        return;
+      }
     }
     if (opts.standards.length > 0) candidate.standards = [...opts.standards];
     const parsed = CreateItemBody.safeParse(candidate);

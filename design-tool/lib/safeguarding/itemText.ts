@@ -2,9 +2,9 @@ import type { CreateItemBody } from "@/lib/api/items";
 
 /**
  * Flatten an AI-proposed item into a single string for the output
- * guardrail check — the stem, every choice's text, and the short-text
- * answer. Keeps the guardrail looking at everything a student could see,
- * not just the stem.
+ * guardrail check — the stem, every choice's text, the short-text
+ * answer, and a match item's pairs. Keeps the guardrail looking at
+ * everything a student could see, not just the stem.
  *
  * E20: the static type is a lie here. `parseItemText` in lib/ai/itemGenCore.ts
  * blind-casts `JSON.parse` output to GenerateItemResult, so a model reply of
@@ -45,6 +45,19 @@ export function itemProposalText(item: CreateItemBody): string {
       for (const entry of entries) {
         const label = (entry as { label?: unknown } | null)?.label;
         if (typeof label === "string" && label) parts.push(label);
+      }
+    }
+  }
+  // BG slice 6: the batch generator proposes match items — both sides of
+  // every pair are student-visible.
+  if (shape.type === "match") {
+    const pairs = (shape as Record<string, unknown>).pairs;
+    if (Array.isArray(pairs)) {
+      for (const pair of pairs) {
+        for (const side of ["left", "right"] as const) {
+          const text = (pair as Record<string, unknown> | null)?.[side];
+          if (typeof text === "string" && text) parts.push(text);
+        }
       }
     }
   }
