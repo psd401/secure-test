@@ -2024,7 +2024,7 @@ response). stderr marks: `attempt … handed in — instant feedback received
 | **Correct answers, released / at hand-in.** Release answers (or choose "at hand-in"), new attempt | "Correct answer: …" under the missed and partly-right rows only — never under a right or a teacher-scored one; table keys one cell per line | ✅ 2026-10-03 (at hand-in): "Correct answer: 6" under the wrong short answer and the full pairing under the wrong match, none under the right MC or the essay; an incomplete match (2 of 3 pairs, 1 right) scored 0 → "Not right", so "Partly right" was not seen |
 | **Feedback off / older server.** Level `Off` (or a server before rev 82) | Exactly the old behaviour: the "Handed in." notice and "Back to your tests", no results page | |
 | **Only after DID END — REAL AAC session.** Release build, real session, level `Right / wrong`; hand in | stderr order: `handed in — instant feedback received` → `lockdown ending: hand-in confirmed` → `DID END` / state idle → `instant feedback: showing the results page`; the results page is never on screen while the Mac is locked (the "Handed in." notice is, briefly); the hand-in itself is not delayed | |
-| **Done, Return, Escape.** On the results page, in separate runs: click Done; press Return; press Escape | Each goes to Your tests, once (no double transition); the titlebar "Back to your tests" also works | ◐ 2026-10-03: Return → Your tests ✅; Done (click) → Your tests ✅; **Escape did nothing** (Return right after worked, so the page had focus) — finding IF-2 |
+| **Done and Return (Escape is not Done — IF-2).** On the results page, in separate runs: click Done; press Return; press Escape | Done and Return each go to Your tests, once (no double transition); Escape only leaves fullscreen (macOS) and otherwise does nothing; the titlebar "Back to your tests" also works | ◐ 2026-10-03: Return → Your tests ✅; Done (click) → Your tests ✅; **Escape did nothing** (Return right after worked, so the page had focus) — finding IF-2 |
 | **Teacher hand-in shows nothing (D-6).** Student mid-test; teacher presses Hand in / Hand in everyone (then Close) | The student gets the session-ended sheet ("Your teacher ended the test session." / "Time is up."), never a results page | ✅ 2026-10-03: Close then Hand in everyone → the session-ended sheet ("Your teacher ended the test session. Your answers are saved."), no results page; no `feedback_shown` event for that attempt |
 | **Time out shows nothing (D-6).** Timed fixture, let it reach zero | "Time is up." sheet, no results page | |
 | **Passed back shows nothing (D-3).** Teacher passes back a handed-in attempt; student resumes and hands in again | The old "Handed in." notice only, no results page | |
@@ -2036,8 +2036,10 @@ response). stderr marks: `attempt … handed in — instant feedback received
 | **Read aloud.** Student with `tts_test_content` (or `tts_student_responses`) On; press Read aloud, then Stop reading; read again and press Done mid-reading | Reads heading, score, pending, note and each row with a pause between, a formula as words; Stop reading stops; Done stops the voice and goes home. Without a TTS grant the button is absent. No word highlight on this page (by design) | |
 | **KaTeX answers.** A key or answer with `$\frac{1}{2}$` and a multi-line answer (match / order / table) | The formula renders as math; a `$57,600` in prose stays a dollar amount; each line of a multi-line answer on its own line; nothing renders as markup (`<b>` typed into a short text shows as the literal text) | |
 
-Finding from the 2026-10-03 Debug run (proposal): **IF-2** — Escape does not
-close the results page (Return and the Done button do). The page's key handler
+Finding from the 2026-10-03 Debug run: **IF-2** — Escape does not close the
+results page (Return and the Done button do). **Closed as not wanted (James,
+2026-10-03):** macOS uses Escape to leave fullscreen, the client's default
+state; the page no longer handles Escape at all. The page's key handler
 or the window may never see Escape (AppKit's `cancelOperation:` / the exit
 menu's key handling are candidates). Fix or drop Escape from the page's copy
 and these rows. Also observed: stderr order on the simulated run was `handed in —

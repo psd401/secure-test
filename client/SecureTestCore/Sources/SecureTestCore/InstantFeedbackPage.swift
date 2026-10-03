@@ -150,7 +150,7 @@ public enum InstantFeedbackPage {
     .feedback-actions button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     """
 
-    /// The page's behaviour: the math pass, Done (button, Return, Escape) →
+    /// The page's behaviour: the math pass, Done (button, Return) →
     /// the `home` channel, and the optional Read aloud over the existing `tts`
     /// channel. Runs after `mathPassFunctions` and KaTeX in document order.
     static let script = #"""
@@ -183,14 +183,13 @@ public enum InstantFeedbackPage {
 
       var readButton = document.getElementById('feedback-read');
 
-      // Return and Escape anywhere on the page are Done, except Return on the
-      // Read aloud button, which is that button's own activation.
+      // Return anywhere on the page is Done, except on the Read aloud button,
+      // which is that button's own activation. Escape is NOT Done (IF-2,
+      // James 2026-10-03): macOS uses it to leave fullscreen, the client's
+      // default window state.
       document.addEventListener('keydown', function (event) {
         var key = event && event.key;
-        if (key === 'Escape') {
-          if (event.preventDefault) event.preventDefault();
-          done();
-        } else if (key === 'Enter' && !(readButton && document.activeElement === readButton)) {
+        if (key === 'Enter' && !(readButton && document.activeElement === readButton)) {
           if (event.preventDefault) event.preventDefault();
           done();
         }

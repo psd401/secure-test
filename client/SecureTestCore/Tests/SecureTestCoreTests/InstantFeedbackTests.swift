@@ -4,7 +4,7 @@ import XCTest
 
 /// IF slice 3 (`docs/instant-feedback-design.md`): decoding the submit
 /// response's `feedback`, the words the results page says, the page markup,
-/// and the page script's Done / Return / Escape / Read aloud behaviour.
+/// and the page script's Done / Return / Read aloud behaviour (Escape is not Done).
 final class InstantFeedbackTests: XCTestCase {
     // Shapes taken from design-tool/test/instant-feedback-api.test.ts and
     // lib/feedback/buildFeedback.ts (the server's own output).
@@ -335,7 +335,7 @@ final class InstantFeedbackTests: XCTestCase {
         XCTAssertEqual(c.evaluateScript("__focused && __focused.id")?.toString(), "feedback-heading")
     }
 
-    func testDoneReturnAndEscapeEachGoHomeOnce() throws {
+    func testDoneAndReturnEachGoHomeOnceEscapeDoesNot() throws {
         let c = try runScript(withReadButton: false)
         c.evaluateScript("done.onclick();")
         XCTAssertEqual(c.evaluateScript("__home.length")?.toInt32(), 1)
@@ -348,7 +348,7 @@ final class InstantFeedbackTests: XCTestCase {
 
         let e = try runScript(withReadButton: false)
         e.evaluateScript("__keydown({ key: 'Escape', preventDefault: function () {} });")
-        XCTAssertEqual(e.evaluateScript("__home.length")?.toInt32(), 1)
+        XCTAssertEqual(e.evaluateScript("__home.length")?.toInt32(), 0, "Escape is not Done (IF-2)")
 
         let other = try runScript(withReadButton: false)
         other.evaluateScript("__keydown({ key: 'a', preventDefault: function () {} });")

@@ -329,8 +329,8 @@ green.
   token (a test pins no literal hex), so all eight contrast sets apply.
   Buttons carry `tabindex="0"` (HS-1 / ME-1, Keyboard navigation OFF).
   **Choice: focus starts on the heading (`tabindex="-1"`), not on Done**, so
-  VoiceOver reads the results before the way out; Return and Escape are Done
-  from anywhere on the page (Return on the Read aloud button is that
+  VoiceOver reads the results before the way out; Return is Done from
+  anywhere on the page (Escape is not — IF-2, below) (Return on the Read aloud button is that
   button's own activation), guarded to post once.
 - **Read aloud — choice: a page-level "Read aloud" / "Stop reading" button**
   over the existing `tts` channel, shown for any read-aloud grant
@@ -345,11 +345,18 @@ green.
   order, no list at `score`, key lines only where sent, escaping, `tabindex`,
   Read aloud gating, contrast / zoom attributes + CSP, token-only styles,
   the shared math pass; the page script in JavaScriptCore against a small
-  DOM stub (focus on the heading, Done / Return / Escape post `home` once,
+  DOM stub (focus on the heading, Done / Return post `home` once, Escape does not,
   Return on Read aloud does not, the spoken segments decode as a
   `SpeechCommand` and read in order without the marks or buttons).
 - Not done / only a hand-run can prove: the page actually appearing after a
   REAL `DID END` and never inside the lock; WebKit rendering of KaTeX and
-  the contrast sets on this page; VoiceOver's reading order; Return /
-  Escape reaching the page in a real window (the host makes the web view
+  the contrast sets on this page; VoiceOver's reading order; Return
+  reaching the page in a real window (the host makes the web view
   first responder); the client release (psd-sign + `gh release create`).
+
+**IF-2 closed 2026-10-03 (James): Escape is not Done.** The Debug run found
+Escape did nothing on the results page; on the release client Escape leaves
+fullscreen (macOS), the client's default state. Escape-as-Done came from the
+slice brief, not a decision, so the page no longer handles Escape; Return and
+the Done button remain.
+
