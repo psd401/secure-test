@@ -203,6 +203,11 @@ export function eventLabel(kind: string): string {
     // shown by the timeline.
     case "score_changed":
       return "Score changed by teacher";
+    // Instant feedback (docs/instant-feedback-design.md, D-5): the student saw
+    // feedback on their own hand-in. What they saw is on the row's detail and
+    // spelled out by the timeline.
+    case "feedback_shown":
+      return "Saw instant feedback";
     default:
       return kind;
   }

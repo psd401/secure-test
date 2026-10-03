@@ -58,6 +58,8 @@ export async function POST(req: Request) {
       allow_llm_authoring: body.allow_llm_authoring ?? false,
       allow_clipboard: body.allow_clipboard ?? false,
       student_layout: body.student_layout ?? "scroll",
+      student_feedback: body.student_feedback,
+      answers_release: body.answers_release,
       allowed_accommodations: body.allowed_accommodations,
       construct_altering: body.construct_altering,
     })

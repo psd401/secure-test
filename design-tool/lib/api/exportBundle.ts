@@ -250,6 +250,15 @@ export async function buildExportBundle(
     ...(ca.length > 0 ? { construct_altering: ca } : {}),
     // Client paging: only "paged" is worth a field; scroll is the default.
     ...(assessmentRow.student_layout === "paged" ? { student_layout: "paged" as const } : {}),
+    // Instant feedback (docs/instant-feedback-design.md): the two settings,
+    // each only when not its default. `answers_released_at` never travels —
+    // a copy starts unreleased.
+    ...(assessmentRow.student_feedback !== "off"
+      ? { student_feedback: assessmentRow.student_feedback }
+      : {}),
+    ...(assessmentRow.answers_release !== "on_release"
+      ? { answers_release: assessmentRow.answers_release }
+      : {}),
   };
 
   // Round-trip through @secure-test/schema as a final correctness check.

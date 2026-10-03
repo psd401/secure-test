@@ -82,7 +82,13 @@ const KIND_ORDER = [
 export const NO_EVENTS = "No integrity events";
 
 /** Kinds counted but never printed (see `integrityPhrases`). */
-const NOT_PRINTED: ReadonlySet<string> = new Set(["focus_regained", "speech_preflight"]);
+// `feedback_shown` (instant feedback, D-5) is not an integrity event; the
+// per-student timeline carries it.
+const NOT_PRINTED: ReadonlySet<string> = new Set([
+  "focus_regained",
+  "speech_preflight",
+  "feedback_shown",
+]);
 
 export function countByKind(
   events: ReadonlyArray<{ kind: string }>,

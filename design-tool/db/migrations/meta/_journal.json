@@ -379,6 +379,13 @@
       "when": 1791040436273,
       "tag": "0053_class_insight_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791062634775,
+      "tag": "0054_instant_feedback",
+      "breakpoints": true
     }
   ]
 }

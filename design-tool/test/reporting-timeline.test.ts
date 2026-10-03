@@ -248,6 +248,24 @@ describe("buildTimeline — score_changed", () => {
   });
 });
 
+// Instant feedback (docs/instant-feedback-design.md, D-5): what the student
+// was shown at hand-in.
+describe("buildTimeline — feedback_shown", () => {
+  test("says the score shown and whether answers were", () => {
+    const line = (detail: Record<string, unknown> | null) =>
+      buildTimeline([{ kind: "feedback_shown", at: at("21:07:00"), detail }])[0]!.text;
+    expect(line({ level: "answers", earned: 14, max_auto: 18, answers_shown: true })).toBe(
+      "Saw instant feedback 2:07 PM · 14 of 18 (answers shown)",
+    );
+    expect(line({ level: "score", earned: 3, max_auto: 5, answers_shown: false })).toBe(
+      "Saw instant feedback 2:07 PM · 3 of 5",
+    );
+    for (const detail of [null, {}, { earned: 1 }, { earned: "1", max_auto: 2 }]) {
+      expect(line(detail)).toBe("Saw instant feedback 2:07 PM");
+    }
+  });
+});
+
 describe("durationLabel", () => {
   test("under a minute is seconds; a minute and over rounds to minutes", () => {
     expect(durationLabel(0)).toBe("0 sec");

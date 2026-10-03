@@ -141,4 +141,89 @@ hand-ins); 9.3 → D-4 (teacher release).
 
 ## Progress
 
-Nothing built.
+**Slice 1 (server) BUILT 2026-10-03** — not committed, not deployed. No
+teacher UI (slice 2), no client (slice 3), no hand-run rows.
+
+- **Migration 0054** (`instant_feedback`): `assessments.student_feedback`
+  (`off` default | `score` | `right_wrong` | `answers`, CHECK),
+  `assessments.answers_release` (`on_release` default | `at_hand_in`, CHECK),
+  `assessments.answers_released_at timestamptz null`, attempt event kind
+  `feedback_shown` (CHECK widened). Applied to dev, test and `_demo`; Aurora
+  picks it up at the next deploy's boot (DS-1).
+- **`feedback_shown` is server-written only**: it rides
+  `STAFF_ONLY_ATTEMPT_EVENT_KINDS` (the "not client-postable" list) although
+  it is not a staff action — a client that could post one could plant "saw
+  14 of 18". Detail `{ level, earned, max_auto, answers_shown }`. Monitor
+  label "Saw instant feedback"; the per-student timeline reads "Saw instant
+  feedback 2:07 PM · 14 of 18 (answers shown)"; the print report's integrity
+  line skips it (not an integrity event).
+- **Settings API**: both settings on the assessment GET (row columns), on
+  create (defaults) and PATCH (Zod enums, unknown value = 400). **Published
+  lock**: a second door beside the unlock, `isFeedbackSettingsOnlyPatch`
+  (`lib/api/requireDraft.ts`) — same changed-field rule as the unlock (C9:
+  the editor sends every field), status must stay `published`, at least one
+  of the two settings must actually change; any other changed field still
+  409s. `answers_released_at` is NOT on the PATCH body.
+- **Release = `POST /api/assessments/[id]/release-answers`** (choice: a
+  dedicated POST, not a PATCH field — the stamp is a server instant, and
+  keeping it off the PATCH body means neither the settings PATCH nor the lock
+  exception has to reason about it). `edit` level (404 below it), allowed
+  while Published, 409 `not_answers_level` unless the setting is `answers`
+  (a release at a lower level would silently pre-release the key if the
+  teacher later raised it), idempotent (`already_released: true`, original
+  stamp kept, `IS NULL` guard on the update). No un-release.
+- **Bundle**: `student_feedback` / `answers_release` added to
+  `ItemBundleSchema` (teacher bundle; `StudentFeedbackSchema` /
+  `AnswersReleaseSchema` in `packages/schema`), emitted only when not the
+  default (byte-stable older bundles, as `student_layout`); import reads
+  absent as the defaults. The stamp never travels — export, share-accept and
+  duplicate (which rides export → import) all start unreleased. The delivery
+  bundle is untouched (ADR 0016).
+- **Builder** `lib/feedback/buildFeedback.ts` (pure) + `attemptFeedback.ts`
+  (DB load of items / responses / FINAL scores, the event write). Output as
+  D-2 plus `answers_note` (the exact copy above) at `answers` before
+  release. Choices / deviations:
+  - **A skipped KEYED auto item counts as `incorrect`, 0 of its max, inside
+    `max_auto`** — deviation from "sum over items with a final score":
+    otherwise a skipped MC question would be counted as "scored by your
+    teacher", which is untrue. Consequence: `earned` always equals the
+    results matrix's `total_points` at hand-in (tested); `max_auto` equals
+    `scored_max_points` only when every auto item was answered (tested on
+    such an attempt) and is larger by the skipped items' max otherwise.
+  - `pending` = every non-`auto` method (essay, drawing, `human` / `ai` /
+    `hybrid`, keyless table), a keyless auto item, and an answered auto item
+    with no final (e.g. a scoring failure). Pending items carry `earned` /
+    `max` null and never a key.
+  - `correct_answer` only on **missed** items (`incorrect` / `partial`), per
+    the note's "the key for each missed item"; never on correct or pending
+    ones.
+  - Text: lines joined with `\n`; MC = choice text, match = `left → right`
+    in authoring order, order = `1. label`, table = `Row, Column: value` for
+    the keyed cells (a blank row label reads `Row N`, an empty cell
+    `(blank)`), hotspot = `Region N` by the region's position (regions have
+    no labels), drawing = `[drawing]`, essay = its text, unanswered = `null`.
+    Image refs become their alt text or `[image]`; no asset id survives.
+    `answerView.ts` was not reused: it carries ✓ / ✗ and raw region ids, and
+    has no table text.
+  - Unknown level value → null (show nothing).
+- **Submit route**: after `runAutoScoringPass`, when `pass_back_count === 0`
+  (D-3) and the level is not `off`, the response gains `feedback` and one
+  `feedback_shown` row is written; a failure is logged and never fails the
+  hand-in. No existing response field changed. Teacher Hand in / Hand in
+  everyone / time-out go through other routes and never build it (D-6).
+  **Retry choice**: an idempotent retry (`already_submitted: true`) re-sends
+  `feedback` only when a `feedback_shown` row already exists for the attempt
+  (and `pass_back_count` is 0), rebuilt from the current finals, with no
+  second event — the first answer may have been lost on the wire; a
+  teacher-handed-in attempt has no such row, so D-6 holds on that path.
+  Practice attempts get feedback (a teacher previewing what students see).
+- Tests: `test/instant-feedback-builder.test.ts` (16, pure — every level
+  and release state, every auto type's result + text, partial, pending,
+  skipped items, no `correct_answer` / `asset:` in the JSON where none is
+  allowed), `test/instant-feedback-api.test.ts` (19, test DB — submit per
+  level, event once + retry, results-matrix equality, pass back, teacher
+  hand-in, release access / level guard / idempotency, Published PATCH,
+  export + duplicate), a `feedback_shown` timeline case. Design-tool 2770
+  pass, typecheck clean; schema 126 pass.
+- Not done here: the Settings select + Release buttons + help text (slice
+  2), the client page after `DID END` (slice 3), rows (slice 4).

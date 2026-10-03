@@ -13,7 +13,11 @@ import {
   UpdateAssessmentBody,
   findConstructAlteringSubsetViolation,
 } from "@/lib/api/assessments";
-import { isUnlockOnlyPatch, requireDraft } from "@/lib/api/requireDraft";
+import {
+  isFeedbackSettingsOnlyPatch,
+  isUnlockOnlyPatch,
+  requireDraft,
+} from "@/lib/api/requireDraft";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 
@@ -137,8 +141,15 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // saveMetadata always sends all six metadata fields, so the unlock the lock
   // banner told the teacher to perform 409'd every single time. It now keys on
   // changed fields rather than present fields — see isUnlockOnlyPatch.
+  //
+  // Instant feedback (docs/instant-feedback-design.md, D-1): the second door
+  // through the lock is a PATCH whose only changes are the two feedback
+  // settings — neither rides the delivery bundle.
   if (access.assessment.status === "published") {
-    if (!isUnlockOnlyPatch(body, access.assessment)) {
+    if (
+      !isUnlockOnlyPatch(body, access.assessment) &&
+      !isFeedbackSettingsOnlyPatch(body, access.assessment)
+    ) {
       return NextResponse.json(
         {
           ok: false,

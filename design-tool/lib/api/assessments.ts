@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { StudentLayoutSchema } from "@secure-test/schema";
-import { ITEM_TYPES } from "@/db/schema";
+import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 
 const AccommodationId = z
@@ -18,6 +18,9 @@ export const CreateAssessmentBody = z
     allow_clipboard: z.boolean().optional().default(false),
     // Client paging: default scroll (docs/client-paging-design.md, D-1).
     student_layout: StudentLayoutSchema.optional().default("scroll"),
+    // Instant feedback (docs/instant-feedback-design.md, D-1 / D-4).
+    student_feedback: z.enum(STUDENT_FEEDBACK_LEVELS).optional().default("off"),
+    answers_release: z.enum(ANSWERS_RELEASE_MODES).optional().default("on_release"),
     allowed_accommodations: AllowedAccommodations.optional().default([]),
     construct_altering: ConstructAltering.optional().default([]),
   })
@@ -44,6 +47,11 @@ export const UpdateAssessmentBody = z
     allow_llm_authoring: z.boolean().optional(),
     allow_clipboard: z.boolean().optional(),
     student_layout: StudentLayoutSchema.optional(),
+    // Instant feedback (D-1): the two settings a Published assessment still
+    // accepts — see isFeedbackSettingsOnlyPatch. `answers_released_at` is NOT
+    // here: only `POST /api/assessments/[id]/release-answers` stamps it.
+    student_feedback: z.enum(STUDENT_FEEDBACK_LEVELS).optional(),
+    answers_release: z.enum(ANSWERS_RELEASE_MODES).optional(),
     allowed_accommodations: AllowedAccommodations.optional(),
     construct_altering: ConstructAltering.optional(),
     status: z.enum(["draft", "published"]).optional(),

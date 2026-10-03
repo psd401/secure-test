@@ -143,6 +143,15 @@ function lineSuffix(event: TimelineEvent): string {
     const max = finiteNumber(event.detail?.max);
     return ` · ${from} → ${to}${max === null ? "" : ` of ${max}`}`;
   }
+  if (event.kind === "feedback_shown") {
+    // Instant feedback (docs/instant-feedback-design.md, D-5): what the
+    // student was shown — "· 14 of 18 (answers shown)". A row without usable
+    // numbers gets the bare sentence.
+    const earned = finiteNumber(event.detail?.earned);
+    const max = finiteNumber(event.detail?.max_auto);
+    if (earned === null || max === null) return "";
+    return ` · ${earned} of ${max}${event.detail?.answers_shown === true ? " (answers shown)" : ""}`;
+  }
   if (event.kind === "gradebook_sent") {
     const points = event.detail?.points;
     if (typeof points !== "number" || !Number.isFinite(points)) return "";

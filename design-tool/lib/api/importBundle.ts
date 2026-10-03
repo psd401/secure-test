@@ -283,6 +283,10 @@ export async function importBundleForOwner(
         construct_altering: caValid,
         // Client paging: an older bundle has no field and reads as scroll.
         student_layout: bundle.student_layout ?? "scroll",
+        // Instant feedback: absent reads as the defaults. The release stamp is
+        // not in the bundle, so the copy starts unreleased.
+        student_feedback: bundle.student_feedback ?? "off",
+        answers_release: bundle.answers_release ?? "on_release",
       })
       .returning();
     // E5 slice 1: the new item ids come back by position (position = index

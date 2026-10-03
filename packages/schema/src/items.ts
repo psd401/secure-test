@@ -397,12 +397,26 @@ export function itemSetIssues(
 export const StudentLayoutSchema = z.enum(["scroll", "paged"]);
 export type StudentLayout = z.infer<typeof StudentLayoutSchema>;
 
+// Instant feedback at hand-in (design-tool docs/instant-feedback-design.md,
+// D-1 / D-4): teacher settings carried by the TEACHER bundle only, so export,
+// import, share and duplicate keep them. Absent means `off` / `on_release`.
+// The release stamp itself never travels — a copy starts unreleased. The
+// delivery bundle carries neither: feedback is a post-submit response.
+export const StudentFeedbackSchema = z.enum(["off", "score", "right_wrong", "answers"]);
+export type StudentFeedback = z.infer<typeof StudentFeedbackSchema>;
+export const AnswersReleaseSchema = z.enum(["at_hand_in", "on_release"]);
+export type AnswersRelease = z.infer<typeof AnswersReleaseSchema>;
+
 export const ItemBundleSchema = z.object({
   test_id: z.string().min(1),
   title: z.string(),
   items: z.array(ItemSchema),
   // Client paging: emitted only when `paged`, keeping older bundles byte-stable.
   student_layout: StudentLayoutSchema.optional(),
+  // Instant feedback: emitted only when not the default, keeping older
+  // bundles byte-stable.
+  student_feedback: StudentFeedbackSchema.optional(),
+  answers_release: AnswersReleaseSchema.optional(),
   // E5 slice 1: optional so every bundle written before it parses unchanged.
   item_sets: z.array(TeacherItemSetSchema).optional(),
   // Map<uuid, asset>. Optional — bundles without image refs omit this.

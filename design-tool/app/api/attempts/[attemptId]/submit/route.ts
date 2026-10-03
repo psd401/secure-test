@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { attempts } from "@/db/schema";
+import { assessments, attempts } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { runAutoScoringPass } from "@/lib/scoring/runAutoScoring";
 import { scheduleAttemptScreening } from "@/lib/safeguarding/screening/screen";
+import {
+  feedbackForAttempt,
+  feedbackWasShown,
+  recordFeedbackShown,
+} from "@/lib/feedback/attemptFeedback";
+import type { Feedback, FeedbackSettings } from "@/lib/feedback/buildFeedback";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -37,7 +43,27 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
 
   if (access.attempt.status === "submitted") {
-    return NextResponse.json({ attempt: access.attempt, already_submitted: true });
+    // Instant feedback: a retry of a hand-in that WAS shown feedback (the
+    // event exists, so the first response was built) gets it again — the
+    // first answer may have been lost on the wire. No second event. A
+    // teacher's hand-in never wrote one, so D-6 holds on this path too.
+    let feedback: Feedback | null = null;
+    if (access.attempt.pass_back_count === 0 && (await feedbackWasShown(db, access.attempt.id))) {
+      try {
+        feedback = await feedbackForAttempt(
+          db,
+          access.attempt,
+          await feedbackSettings(db, access.attempt.assessment_id),
+        );
+      } catch (err) {
+        console.error("submit: feedback rebuild failed", err);
+      }
+    }
+    return NextResponse.json({
+      attempt: access.attempt,
+      already_submitted: true,
+      ...(feedback ? { feedback } : {}),
+    });
   }
 
   // D-1..D-3 (docs/close-session-ends-attempts-design.md): a hand-in that
@@ -79,5 +105,44 @@ export async function POST(_req: Request, ctx: RouteContext) {
     console.error("submit: auto-scoring failed", err);
   }
 
-  return NextResponse.json({ attempt: row, already_submitted: false });
+  // Instant feedback (docs/instant-feedback-design.md, D-2): built from the
+  // finals the pass above just wrote. Only on the student's OWN hand-in —
+  // teacher Hand in / Hand in everyone / time-out paths go through other
+  // routes and never build it (D-6) — and never after a pass back (D-3).
+  // Like scoring, a failure here must never fail the hand-in.
+  let feedback: Feedback | null = null;
+  if (row!.pass_back_count === 0) {
+    try {
+      const settings = await feedbackSettings(db, row!.assessment_id);
+      feedback = await feedbackForAttempt(db, row!, settings);
+      if (feedback) await recordFeedbackShown(db, row!.id, feedback, settings);
+    } catch (err) {
+      console.error("submit: instant feedback failed", err);
+      feedback = null;
+    }
+  }
+
+  return NextResponse.json({
+    attempt: row,
+    already_submitted: false,
+    ...(feedback ? { feedback } : {}),
+  });
+}
+
+async function feedbackSettings(
+  db: ReturnType<typeof getDb>,
+  assessmentId: string,
+): Promise<FeedbackSettings> {
+  const [settings] = await db
+    .select({
+      student_feedback: assessments.student_feedback,
+      answers_release: assessments.answers_release,
+      answers_released_at: assessments.answers_released_at,
+    })
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
+  return (
+    settings ?? { student_feedback: "off", answers_release: "on_release", answers_released_at: null }
+  );
 }

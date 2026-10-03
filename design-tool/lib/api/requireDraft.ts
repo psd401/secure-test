@@ -118,3 +118,35 @@ export function isUnlockOnlyPatch(
   }
   return true;
 }
+
+/**
+ * Instant feedback (docs/instant-feedback-design.md, D-1): does this PATCH on
+ * a PUBLISHED assessment change nothing but the two feedback settings?
+ *
+ * A teacher may turn answers on after the last period, so `student_feedback`
+ * and `answers_release` pass the publish lock — neither reaches the delivery
+ * bundle, so nothing a student is mid-way through can change. Same
+ * changed-field rule as the unlock (C9): the editor sends every metadata field
+ * on save, so a field that is present but equal to the stored value is not a
+ * change. `status` must stay `published` (an unlock is the other door); at
+ * least one of the two settings must actually change, so a no-op PATCH still
+ * meets the lock rather than slipping through it.
+ */
+export function isFeedbackSettingsOnlyPatch(
+  body: Record<string, unknown>,
+  current: AssessmentRow,
+): boolean {
+  const FEEDBACK_KEYS = new Set(["student_feedback", "answers_release"]);
+  const currentRecord = current as unknown as Record<string, unknown>;
+  let changesFeedback = false;
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined) continue;
+    const same = sameValue(value, currentRecord[key]);
+    if (FEEDBACK_KEYS.has(key)) {
+      if (!same) changesFeedback = true;
+      continue;
+    }
+    if (!same) return false;
+  }
+  return changesFeedback;
+}

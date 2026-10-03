@@ -92,6 +92,21 @@ export const assessments = pgTable(
     // a status change — a published assessment stays published while
     // archived, so unarchiving restores it exactly.
     archived_at: timestamp("archived_at", { withTimezone: true }),
+    // Instant feedback at hand-in (docs/instant-feedback-design.md, D-1): what
+    // a student sees right after THEIR OWN hand-in — nothing (`off`, the
+    // default and every assessment authored before the column), the
+    // auto-scored total (`score`), the total plus a per-question right / wrong
+    // list (`right_wrong`), or that plus the key for each missed question
+    // (`answers`). Changeable while Published (a settings-only PATCH).
+    student_feedback: text("student_feedback").notNull().default("off"),
+    // D-4: at the `answers` level, when the key may reach a student —
+    // `on_release` (the default: only after the teacher presses Release
+    // answers) or `at_hand_in`. Ignored at every other level.
+    answers_release: text("answers_release").notNull().default("on_release"),
+    // D-4: stamped once by `POST /api/assessments/[id]/release-answers`; null
+    // = not released. Never carried by export / duplicate (a copy starts
+    // unreleased).
+    answers_released_at: timestamp("answers_released_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -112,8 +127,23 @@ export const assessments = pgTable(
       "assessments_student_layout_check",
       sql`student_layout IN ('scroll', 'paged')`,
     ),
+    studentFeedbackCheck: check(
+      "assessments_student_feedback_check",
+      sql`student_feedback IN ('off', 'score', 'right_wrong', 'answers')`,
+    ),
+    answersReleaseCheck: check(
+      "assessments_answers_release_check",
+      sql`answers_release IN ('at_hand_in', 'on_release')`,
+    ),
   }),
 );
+
+// Instant feedback (docs/instant-feedback-design.md): the closed sets the two
+// columns above CHECK against, shared with the PATCH body's Zod enums.
+export const STUDENT_FEEDBACK_LEVELS = ["off", "score", "right_wrong", "answers"] as const;
+export type StudentFeedbackLevel = (typeof STUDENT_FEEDBACK_LEVELS)[number];
+export const ANSWERS_RELEASE_MODES = ["at_hand_in", "on_release"] as const;
+export type AnswersReleaseMode = (typeof ANSWERS_RELEASE_MODES)[number];
 
 export const ASSIGNED_SCOPES = ["teacher", "school", "district"] as const;
 export type AssignedScope = (typeof ASSIGNED_SCOPES)[number];
@@ -867,6 +897,13 @@ export const ATTEMPT_EVENT_KINDS = [
   // written only, like the four above: a client that could post one could
   // plant a line claiming a teacher changed a score that was never changed.
   "score_changed",
+  // Instant feedback (docs/instant-feedback-design.md, D-5): the student saw
+  // feedback on their own hand-in. `detail` is { level, earned, max_auto,
+  // answers_shown } — a snapshot of what was shown, so a later Change score
+  // can be explained. Server-written by the submit route only: a client that
+  // could post one could plant a line claiming a student saw a result they
+  // never saw.
+  "feedback_shown",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -881,6 +918,10 @@ export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
  * column actually holds. Nothing is scored off these rows, so the damage is
  * confusion rather than grades — but the fix costs one list, so the list
  * exists.
+ *
+ * `feedback_shown` (docs/instant-feedback-design.md, D-5) is not a staff
+ * action but rides the same list: it is server-written by the submit route
+ * and must not be client-postable either.
  */
 export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "teacher_hand_in",
@@ -888,6 +929,7 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "passed_back",
   "gradebook_sent",
   "score_changed",
+  "feedback_shown",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -932,7 +974,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown')`,
     ),
   }),
 );
