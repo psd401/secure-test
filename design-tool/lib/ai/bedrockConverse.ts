@@ -102,6 +102,8 @@ export type ConverseSurface =
   | "rubric-extract"
   // BG slice 5: "Suggest standards" for untagged items.
   | "tag-suggest"
+  // Class insights slice 2: the class report on the results page.
+  | "class-insights"
   // Safeguarding alerts slice 1: the hand-in wellbeing / injection screener.
   | "safeguarding-screen";
 

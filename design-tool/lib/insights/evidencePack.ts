@@ -154,6 +154,9 @@ export interface EvidencePackResult {
   pack: EvidencePack;
   /** `S<n>` → the attempt and name. Server-side only; never sent to a model. */
   names: Record<string, { attempt_id: string; display_name: string }>;
+  /** `Q<n>` → the item id (slice 2: a stored report keeps its links when
+   * positions later move). Server-side only, like `names`. */
+  items: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +493,9 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
     figures,
   };
   const hash = createHash("sha256").update(JSON.stringify(canonical(body))).digest("hex");
-  return { pack: { ...body, hash }, names };
+  const itemIds: Record<string, string> = {};
+  for (const item of itemList) itemIds[labelOf.get(item.id)!] = item.id;
+  return { pack: { ...body, hash }, names, items: itemIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -507,7 +512,17 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
  */
 export async function buildEvidencePack(
   db: ReturnType<typeof getDb>,
-  { assessmentId, section }: { assessmentId: string; section: string | null },
+  {
+    assessmentId,
+    section,
+    results: prebuilt,
+  }: {
+    assessmentId: string;
+    section: string | null;
+    /** A `buildResults(assessmentId)` the caller already holds (slice 2's GET
+     * needs it for the name swap too); omitted, the loader builds its own. */
+    results?: Awaited<ReturnType<typeof buildResults>>;
+  },
 ): Promise<EvidencePackResult> {
   const [assessment] = await db
     .select({ name: assessments.name })
@@ -518,7 +533,7 @@ export async function buildEvidencePack(
 
   // Owner-scoped students, practice excluded, section labels resolved.
   // In-progress attempts are left out here; the pure half drops them too.
-  const results = await buildResults(assessmentId);
+  const results = prebuilt ?? (await buildResults(assessmentId));
   const rows =
     section === null
       ? results.rows

@@ -13,6 +13,12 @@ import {
   buildSuggestUserText,
   parseSuggestArray,
 } from "./standardsSuggestCore";
+import { parseReportObject, type ClassInsightsPackInput } from "@/lib/insights/report";
+import {
+  CLASS_INSIGHTS_MAX_TOKENS,
+  CLASS_INSIGHTS_SYSTEM_PROMPT,
+  buildClassInsightsUserText,
+} from "@/lib/insights/reportPrompt";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
@@ -184,5 +190,20 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
       ownerSub,
     });
     return parseSuggestArray(text, "bedrock", { truncated: stopReason === "max_tokens" });
+  },
+
+  // Class insights slice 2: one plain-text Converse turn on the evidence pack,
+  // on the item model (Sonnet-class, like batch generation).
+  async generateClassInsights(pack: ClassInsightsPackInput, ownerSub?: string): Promise<unknown> {
+    const { text, stopReason } = await converseTextWithMeta({
+      modelId: process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL,
+      systemText: CLASS_INSIGHTS_SYSTEM_PROMPT,
+      userText: buildClassInsightsUserText(pack),
+      maxTokens: CLASS_INSIGHTS_MAX_TOKENS,
+      errPrefix: "bedrock",
+      surface: "class-insights",
+      ownerSub,
+    });
+    return parseReportObject(text, "bedrock", { truncated: stopReason === "max_tokens" });
   },
 };

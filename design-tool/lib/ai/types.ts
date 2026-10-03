@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ConverseDocument } from "@/lib/ai/bedrockConverse";
 import { MAX_RUBRIC_TEXT_CHARS } from "@/lib/ai/rubricExtractor/types";
 import { CreateItemBody, StandardsField } from "@/lib/api/items";
+import type { ClassInsightsPackInput } from "@/lib/insights/report";
 
 // Slice 47: pinned list instead of z.enum(ITEM_TYPES) so new item types
 // don't silently become AI-generable. match/order/hotspot/drawing (and future
@@ -233,4 +234,12 @@ export interface ItemGeneratorProvider {
    * one place a code becomes a tag, and drops anything outside the candidates.
    */
   suggestStandards(input: SuggestStandardsInput, ownerSub?: string): Promise<unknown[]>;
+  /**
+   * Class insights slice 2 (docs/class-insights-design.md): one call on the
+   * evidence pack — WITHOUT its hash, and never with names (they stay in the
+   * server's pseudonym map). Returns the model's reply object RAW;
+   * `fillReport` (lib/insights/report.ts) is the one place a claim is
+   * checked, filled or dropped.
+   */
+  generateClassInsights(pack: ClassInsightsPackInput, ownerSub?: string): Promise<unknown>;
 }

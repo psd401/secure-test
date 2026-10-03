@@ -365,6 +365,13 @@
       "when": 1791003018877,
       "tag": "0051_guardrail_surface_tag_suggest",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1791037022594,
+      "tag": "0052_class_insight_reports",
+      "breakpoints": true
     }
   ]
 }

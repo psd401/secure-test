@@ -13,6 +13,12 @@ import {
   parseSuggestArray,
 } from "./standardsSuggestCore";
 import { extractFirstText, wrapProviderError } from "./sdkResponse";
+import { parseReportObject, type ClassInsightsPackInput } from "@/lib/insights/report";
+import {
+  CLASS_INSIGHTS_MAX_TOKENS,
+  CLASS_INSIGHTS_SYSTEM_PROMPT,
+  buildClassInsightsUserText,
+} from "@/lib/insights/reportPrompt";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
@@ -119,6 +125,26 @@ export const anthropicItemProvider: ItemGeneratorProvider = {
       wrapProviderError(err, "anthropic");
     }
     return parseSuggestArray(extractFirstText(response.content, "anthropic"), "anthropic", {
+      truncated: response.stop_reason === "max_tokens",
+    });
+  },
+
+  // Class insights slice 2 (dev path): one Messages turn on the evidence pack.
+  async generateClassInsights(pack: ClassInsightsPackInput): Promise<unknown> {
+    const client = anthropicClient("AI_PROVIDER=anthropic");
+    const model = process.env.ANTHROPIC_ITEM_MODEL ?? DEFAULT_MODEL;
+    let response;
+    try {
+      response = await client.messages.create({
+        model,
+        max_tokens: CLASS_INSIGHTS_MAX_TOKENS,
+        system: CLASS_INSIGHTS_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildClassInsightsUserText(pack) }],
+      });
+    } catch (err) {
+      wrapProviderError(err, "anthropic");
+    }
+    return parseReportObject(extractFirstText(response.content, "anthropic"), "anthropic", {
       truncated: response.stop_reason === "max_tokens",
     });
   },

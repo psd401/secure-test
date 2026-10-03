@@ -6,7 +6,7 @@ celebrations using specific students as examples, recommended next steps
 for whole-class instruction, and a chat to talk with an AI about the
 results. Decisions marked **D-n**; James's answers of 2026-10-02 are
 recorded as decided, the rest are recommendations. **§Progress says what
-is built** (slice 1).
+is built** (slices 1–2).
 
 ## Relation to the roadmap
 
@@ -183,7 +183,83 @@ spend per teacher.
    `buildResults`. Tests: `insights-evidence-pack` (10 pure + 1 loader
    against the test DB).
 2. Report: provider method, Zod schema, citation/number fill, storage
-   (migration: `class_insight_reports`), staleness hash (Opus 5 / medium).
+   (migration: `class_insight_reports`), staleness hash (Opus 5 / medium). BUILT 2026-10-03, **migration 0052** (`class_insight_reports` + the
+   guardrail surface CHECK widened to `class-insights`; applied to dev +
+   test), no UI. Where things live: `lib/insights/report.ts` (Zod shape,
+   `parseReportObject`, `fillReport`, `reportText`),
+   `lib/insights/reportPrompt.ts` (system prompt, user text,
+   `CLASS_INSIGHTS_PROMPT_VERSION` = 2026-10-03 with a prompt-hash drift
+   test like the essay scorer's — the hash also covers a fixture pack, so a
+   change to what the pack carries asks for a bump too),
+   `lib/insights/reportView.ts` (render + name swap),
+   `generateClassInsights` on the item provider (mock / Bedrock on
+   `BEDROCK_ITEM_MODEL`, `ai_usage` surface `class-insights`, 4000 tokens /
+   Anthropic dev path), and `app/api/assessments/[id]/class-insights`
+   (GET at `view`, POST at `edit`). Choices made here:
+   - **Shape:** `strengths`, `growth`, `celebrations`, `next_steps`, each a
+     list of `{ text, citations: { items, tags, students }, figures }`;
+     ≤ 6 claims per section, next steps 2–4, ≤ 400 chars a claim. The
+     four-section object (and the 2–4) is validated whole — a reply that
+     fails it is a 502; each claim is then checked alone and DROPPED on
+     failure (`dropped_claims` on the row). A reply where no claim survives
+     is also a 502. The note's `{item:3.p_value}` became the pack's own key
+     form, `{item.Q3.p_value}`.
+   - **Fill + the digit rule (D-3):** every `{key}` must be in
+     `pack.figures` and is replaced by its value (p-values and percents get
+     a `%`; means and counts as slice 1 rounded them); an unknown key, a
+     stray brace, an unknown `Q<n>` / `S<n>` (text or citations), an
+     unknown cited tag or figure drops the claim. Then, with the `{key}`
+     references, the labels and the ALLOWED STRINGS removed, the text must
+     carry no digit. Allowed strings = every tag as stored and its code,
+     every rubric criterion name and level label — only those containing a
+     letter (a level labelled "3" would otherwise admit any "3"), matched
+     verbatim. A test asserts every number left in a filled report is a
+     formatted pack value. Labels mentioned in the text are added to the
+     claim's citations rather than dropping it; a tag cited by code is
+     stored as the stored tag.
+   - **Celebrations** must cite a student AND a figure or an item, else
+     drop.
+   - **Stored form:** filled text with labels wrapped as `[[S4]]` /
+     `[[Q3]]` (so a render never mistakes an `S1` inside a tag code for a
+     student, and a model that writes `[[` itself is dropped); the row
+     keeps `pseudonyms` (`S<n>` → attempt id) AND `item_ids` (`Q<n>` → item
+     id) — slice 1's result gained `items` for this, beside `names`. No
+     name in the row; the guardrail snippet also has pseudonyms only.
+   - **Render (GET and the POST's reply):** `[[S4]]` → the stored map's
+     attempt → the CURRENT results' name (results built with in-progress
+     rows, so a passed-back student keeps their name), else "a student no
+     longer in these results"; `[[Q3]]` → the stored item id's CURRENT
+     position, else the stored label with the link dropped. `stale` =
+     current pack hash ≠ stored; `note` = the current pack's unscored line.
+     The loader takes an optional prebuilt `results` so GET builds results
+     once.
+   - **Section keys:** `__all__` (null), `__none__`, else the label;
+     `?section=` / the body's `section` absent, empty or `__all__` = all.
+     One row per (assessment, section key), unique; a regenerate upserts
+     (same id, new `created_at`). Cascades on assessment delete (D-4).
+   - **Gate:** POST 409 `nothing_to_report` when the pack has no student
+     (no handed-in attempt with a final score). NOT gated on
+     `allow_llm_authoring` — it governs AI authoring of items, and the
+     results-side AI (essay scoring, rescore-ai) has never consulted it.
+     Access through `authorizeAssessment` (404 below the level, student 403
+     by `requireStaff`); `created_by_sub` = the session's sub.
+   - **Guardrail:** surface `class-insights`, OUTPUT check only, on the
+     filled claim text — the input is the server-built pack with no free
+     text typed for this call (the scorer's rationale and the anonymous
+     short-answer clusters already passed their own surfaces; alert-flagged
+     answers are out). Output block → 422 `guardrail_blocked`, nothing
+     stored.
+   - **Mock:** deterministic claims from the pack's real keys (best / worst
+     item, top tag, most-chosen wrong choice, two lowest scorers, top
+     student); title hooks `MOCK_MALFORMED` (502), `MOCK_INVENTED` (three
+     claims that must drop), `BLOCKME` (output block).
+   Tests: `insights-report` (13 pure: fill, digit rule, celebrations, shape,
+   parse, prompt input carries no name / id / hash, render, drift) and
+   `insights-report-route` (13 on the test DB: generate + upsert, 409,
+   section reports, 400, 502, dropped count, guardrail block + allow, GET
+   404 / stale / deleted attempt / deleted item, cascade, student 403,
+   foreign 404, view-grantee reads but cannot generate, edit can). Not
+   built: the UI, the rating, Copy (slice 3); no Bedrock run yet (slice 6).
 3. Report UI on the results page + rating + Copy (Sonnet 5 / medium).
 4. Chat: migration (`class_insight_threads`, `…_turns`), route, guardrail,
    per-teacher scope, on-demand answer pull (D-6), cap + summary (Opus 5 / medium).
@@ -209,4 +285,6 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
 
 ## Progress
 
-- Slice 1 BUILT 2026-10-03 (see §Slices) — not deployed, nothing reads it.
+- Slice 1 BUILT 2026-10-03 (see §Slices) — not deployed.
+- Slice 2 BUILT 2026-10-03 (see §Slices) — routes + migration 0052, no UI,
+  not deployed.

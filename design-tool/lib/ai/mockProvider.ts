@@ -1,4 +1,5 @@
 import { planTypes } from "./itemBatchCore";
+import type { ClassInsightsPackInput } from "@/lib/insights/report";
 import type {
   BatchGenerateInput,
   BatchGenerableItemType,
@@ -118,7 +119,108 @@ export const mockProvider: ItemGeneratorProvider = {
       return { item: item.ref, tags };
     });
   },
+
+  async generateClassInsights(pack: ClassInsightsPackInput): Promise<unknown> {
+    return mockClassInsights(pack);
+  },
 };
+
+// Class insights slice 2: a deterministic report built ONLY from keys the pack
+// actually has, so it always survives `fillReport`. Three hooks in the
+// assessment title, like the other mocks' markers: MOCK_MALFORMED throws as
+// an unparseable reply would (→ 502); MOCK_INVENTED adds three claims that
+// must drop (a digit of its own, an unknown figure key, an unknown student);
+// BLOCKME puts the mock guardrail's sentinel in a claim (→ output block).
+export function mockClassInsights(pack: ClassInsightsPackInput): unknown {
+  const title = pack.assessment.title;
+  if (title.includes("MOCK_MALFORMED")) throw new Error("mock_returned_invalid_json");
+
+  const scored = pack.item_analytics.filter((a) => a.p_value !== null);
+  const best = [...scored].sort((a, b) => b.p_value! - a.p_value! || a.label.localeCompare(b.label))[0];
+  const worst = [...scored].sort((a, b) => a.p_value! - b.p_value! || a.label.localeCompare(b.label))[0];
+  const strugglers = worst
+    ? pack.students
+        .filter((s) => pack.figures[`student.${s.id}.item.${worst.label}.points`] !== undefined)
+        .sort(
+          (a, b) =>
+            pack.figures[`student.${a.id}.item.${worst.label}.points`]! -
+              pack.figures[`student.${b.id}.item.${worst.label}.points`]! || a.id.localeCompare(b.id),
+        )
+        .slice(0, 2)
+        .map((s) => s.id)
+    : [];
+  const top = [...pack.students].sort((a, b) => b.total - a.total || a.id.localeCompare(b.id))[0];
+
+  const strengths: unknown[] = [];
+  if (best) {
+    strengths.push({
+      text: `The class did well on ${best.label}, averaging {item.${best.label}.p_value} of its points.`,
+      citations: { items: [best.label] },
+    });
+  }
+  const tag = [...pack.tags].sort((a, b) => b.percent - a.percent || a.tag.localeCompare(b.tag))[0];
+  if (tag) {
+    strengths.push({
+      text: `Questions tagged ${tag.code} came out at {tag.${tag.tag}.percent} overall.`,
+      citations: { tags: [tag.code] },
+    });
+  }
+  if (pack.scope.note) {
+    strengths.push({
+      text: "Some responses are not scored yet ({scope.unscored_responses}), so this picture is partial.",
+    });
+  }
+  if (title.includes("BLOCKME")) strengths.push({ text: "Mock: BLOCKME" });
+
+  const growth: unknown[] = [];
+  if (worst) {
+    const wrong = (worst.choice_counts ?? [])
+      .filter((c) => !c.is_key && c.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))[0];
+    growth.push({
+      text:
+        `${worst.label} was the hardest question at {item.${worst.label}.p_value}` +
+        (wrong
+          ? `; choice ${wrong.label} drew {item.${worst.label}.choice.${wrong.label}.count} answers, which suggests a shared misconception.`
+          : ".") +
+        (strugglers.length > 0 ? ` See ${strugglers.join(" and ")}.` : ""),
+      citations: { items: [worst.label], students: strugglers },
+    });
+  }
+
+  const celebrations: unknown[] = top
+    ? [
+        {
+          text: `${top.id} earned {student.${top.id}.total} of {student.${top.id}.max} points.`,
+          citations: { students: [top.id] },
+        },
+      ]
+    : [];
+
+  const focus = worst?.label;
+  const next_steps: unknown[] = [
+    {
+      text: focus
+        ? `Reteach the idea behind ${focus} with a short worked example before moving on.`
+        : "Open the next lesson with a short check on the unit's key idea.",
+      ...(focus ? { citations: { items: [focus] } } : {}),
+    },
+    strugglers.length > 0 && focus
+      ? {
+          text: `Pull a small group (${strugglers.join(", ")}) to revisit ${focus}.`,
+          citations: { items: [focus], students: strugglers },
+        }
+      : { text: "Close with an exit ticket on the same idea to see who has it now." },
+  ];
+
+  if (title.includes("MOCK_INVENTED")) {
+    strengths.push({ text: "Seven students aced it: 7 of them." });
+    growth.push({ text: "Look at {item.Q99.p_value}.", citations: { items: ["Q1"] } });
+    celebrations.push({ text: "S999 did great on Q1.", citations: { students: ["S999"], items: ["Q1"] } });
+  }
+
+  return { strengths, growth, celebrations, next_steps };
+}
 
 function mockBatchItem(type: BatchGenerableItemType, stem: string): GenerateItemResult {
   const choices = ["a", "b", "c", "d"].map((id) => ({

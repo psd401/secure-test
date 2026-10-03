@@ -506,6 +506,11 @@ export const GUARDRAIL_SURFACES = [
   // BG slice 5 (docs/batch-item-generation-design.md D-2): "Suggest standards"
   // — checks the pasted unit list (input) and the suggestions' reasons (output).
   "tag-suggest",
+  // Class insights slice 2 (docs/class-insights-design.md): the class report.
+  // OUTPUT only — the input is the server-built evidence pack (no teacher or
+  // student free text), so no input check runs; the output check reads the
+  // filled claim text, pseudonyms and all, never a name.
+  "class-insights",
 ] as const;
 export type GuardrailSurfaceValue = (typeof GUARDRAIL_SURFACES)[number];
 
@@ -546,7 +551,7 @@ export const guardrail_events = pgTable(
     createdAtIdx: index("guardrail_events_created_at_idx").on(t.created_at),
     surfaceCheck: check(
       "guardrail_events_surface_check",
-      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import', 'rubric-extract', 'tag-suggest')`,
+      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import', 'rubric-extract', 'tag-suggest', 'class-insights')`,
     ),
     stageCheck: check(
       "guardrail_events_stage_check",
@@ -1914,3 +1919,51 @@ export const gradebook_section_prefs = pgTable(
 export type GradebookPushRow = typeof gradebook_pushes.$inferSelect;
 export type GradebookPushScoreRow = typeof gradebook_push_scores.$inferSelect;
 export type GradebookSectionPrefRow = typeof gradebook_section_prefs.$inferSelect;
+
+// --- Class insights reports (docs/class-insights-design.md, slice 2) -------
+//
+// One stored report per (assessment, section filter); a regenerate overwrites
+// it. `report` holds the FILLED claims — numbers already in, students as
+// `[[S4]]` markers, items as `[[Q3]]` markers — and never a name: names are
+// swapped in at render from `pseudonyms` (S-number → attempt id) through the
+// CURRENT results, because S-numbers follow attempt-id order and a later
+// attempt would otherwise shift every one. `item_ids` does the same for Q
+// labels, which follow item position. Deleted with the assessment (D-4
+// retention). Attempt and item ids are not identities.
+export const CLASS_INSIGHT_SECTION_ALL = "__all__";
+
+export const class_insight_reports = pgTable(
+  "class_insight_reports",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    /** `__all__` = every section, `__none__` = rows with no section, else the
+     * section label exactly as the results page's filter offers it. */
+    section_key: text("section_key").notNull(),
+    report: jsonb("report").$type<Record<string, unknown>>().notNull(),
+    /** `{ "S1": attempt_id, … }` — the pack's pseudonyms when it was written. */
+    pseudonyms: jsonb("pseudonyms").$type<Record<string, string>>().notNull(),
+    /** `{ "Q1": item_id, … }` — the pack's item labels when it was written. */
+    item_ids: jsonb("item_ids").$type<Record<string, string>>().notNull(),
+    /** The evidence pack's hash; a different current hash = stale (D-8). */
+    pack_hash: text("pack_hash").notNull(),
+    model_id: text("model_id").notNull(),
+    prompt_version: text("prompt_version").notNull(),
+    /** Claims the validator dropped (unknown key / label / tag, invented digits). */
+    dropped_claims: integer("dropped_claims").notNull().default(0),
+    created_by_sub: text("created_by_sub").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    assessmentSectionUnq: uniqueIndex("class_insight_reports_assessment_section_unq").on(
+      t.assessment_id,
+      t.section_key,
+    ),
+  }),
+);
+
+export type ClassInsightReportRow = typeof class_insight_reports.$inferSelect;
