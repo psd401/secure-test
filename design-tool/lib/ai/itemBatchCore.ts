@@ -26,7 +26,7 @@ export const BATCH_MAX_TOKENS = 8000;
 export const EXISTING_STEMS_MAX = 40;
 export const EXISTING_STEM_CHARS = 200;
 
-const FRAMEWORK: Record<StandardEntry["scheme"], string> = {
+export const FRAMEWORK: Record<StandardEntry["scheme"], string> = {
   wa2026: "Washington 2026",
   ccss2010: "CCSS 2011",
   ngss: "NGSS",

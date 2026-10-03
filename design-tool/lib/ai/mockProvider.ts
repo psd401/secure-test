@@ -5,6 +5,7 @@ import type {
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
+  SuggestStandardsInput,
 } from "./types";
 
 // Deterministic-ish provider that produces a valid, vaguely-sensible item
@@ -91,6 +92,30 @@ export const mockProvider: ItemGeneratorProvider = {
     return planTypes(input.count, input.types).map((type, i) => {
       if (all || (first && i === 0)) return { type, stem: "" };
       return mockBatchItem(type, `Question ${i + 1} on ${focus}`);
+    });
+  },
+
+  // BG slice 5: deterministic suggestions — two catalog candidates per item,
+  // rotating through the list, with a reason that echoes the stem's opening
+  // (so a stem the mock guardrail blocks blocks the output stage). Two hooks
+  // in the pasted unit list: MOCK_MALFORMED returns a reply that is not a
+  // JSON array (→ 502), MOCK_OUT_OF_CATALOG adds a code the catalog does not
+  // have to every item (→ dropped by validation).
+  async suggestStandards(input: SuggestStandardsInput): Promise<unknown[]> {
+    const list = input.unitList ?? "";
+    if (list.includes("MOCK_MALFORMED")) throw new Error("mock_returned_invalid_json");
+    const outside = list.includes("MOCK_OUT_OF_CATALOG");
+    const n = input.candidates.length;
+    return input.items.map((item, i) => {
+      const tags: { code: string; reason: string }[] = [];
+      for (let k = 0; k < Math.min(2, n); k++) {
+        tags.push({
+          code: input.candidates[(i + k) % n]!.code,
+          reason: `Mock: the question "${item.stem.slice(0, 40)}" fits this standard.`,
+        });
+      }
+      if (outside) tags.push({ code: "NOT.A.REAL.CODE", reason: "Mock: out of catalog." });
+      return { item: item.ref, tags };
     });
   },
 };

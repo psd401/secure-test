@@ -6,12 +6,19 @@ import {
   parseItemText,
 } from "./itemGenCore";
 import { BATCH_MAX_TOKENS, BATCH_SYSTEM_PROMPT, buildBatchUserText, parseBatchArray } from "./itemBatchCore";
+import {
+  SUGGEST_MAX_TOKENS,
+  SUGGEST_SYSTEM_PROMPT,
+  buildSuggestUserText,
+  parseSuggestArray,
+} from "./standardsSuggestCore";
 import { extractFirstText, wrapProviderError } from "./sdkResponse";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
+  SuggestStandardsInput,
 } from "./types";
 
 // Direct Anthropic-API item generator. Default model is Claude Sonnet 4.6
@@ -92,6 +99,26 @@ export const anthropicItemProvider: ItemGeneratorProvider = {
     }
 
     return parseBatchArray(extractFirstText(response.content, "anthropic"), "anthropic", {
+      truncated: response.stop_reason === "max_tokens",
+    });
+  },
+
+  // BG slice 5: one Messages turn for up to 40 untagged items.
+  async suggestStandards(input: SuggestStandardsInput): Promise<unknown[]> {
+    const client = anthropicClient("AI_PROVIDER=anthropic");
+    const model = process.env.ANTHROPIC_ITEM_MODEL ?? DEFAULT_MODEL;
+    let response;
+    try {
+      response = await client.messages.create({
+        model,
+        max_tokens: SUGGEST_MAX_TOKENS,
+        system: SUGGEST_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildSuggestUserText(input) }],
+      });
+    } catch (err) {
+      wrapProviderError(err, "anthropic");
+    }
+    return parseSuggestArray(extractFirstText(response.content, "anthropic"), "anthropic", {
       truncated: response.stop_reason === "max_tokens",
     });
   },

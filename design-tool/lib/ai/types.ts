@@ -150,6 +150,56 @@ export interface BatchGenerateInput {
 // Gemini, ...) gets validated the same way the human-edit POST does.
 export type GenerateItemResult = z.infer<typeof CreateItemBody>;
 
+// BG slice 5 (docs/batch-item-generation-design.md, D-2): "Suggest standards"
+// for UNTAGGED items. Nothing is applied — the route returns suggestions and
+// the teacher accepts each one.
+export const SUGGEST_MAX_ITEMS = 40;
+export const SUGGEST_MAX_TAGS_PER_ITEM = 3;
+export const SUGGEST_REASON_CHARS = 160;
+/** Pasted unit standards list (1.2: paste only). */
+export const MAX_SUGGEST_UNIT_LIST_CHARS = 20000;
+/** The candidate list sent to the model never exceeds this (largest slice today: 160). */
+export const SUGGEST_MAX_CANDIDATES = 250;
+
+export const SUGGEST_SUBJECTS = ["math", "ela", "science"] as const;
+export const SUGGEST_SCHEMES = ["wa2026", "ccss2010"] as const;
+
+/** 1.4: subject + grade band are required — no free-form suggestions. */
+export const SuggestStandardsRequest = z.object({
+  assessment_id: z.string().uuid(),
+  subject: z.enum(SUGGEST_SUBJECTS),
+  grade_band: z.string().trim().min(1).max(20),
+  course: OptionalText(80),
+  scheme: z.enum(SUGGEST_SCHEMES).optional(),
+  unit_list: OptionalText(MAX_SUGGEST_UNIT_LIST_CHARS),
+});
+export type SuggestStandardsRequest = z.infer<typeof SuggestStandardsRequest>;
+
+/** One catalog standard offered to the model; `tag` is the stored form. */
+export interface SuggestCandidate {
+  tag: string;
+  code: string;
+  text: string;
+}
+
+/** One untagged item as the model sees it; `ref` is its short id in the prompt. */
+export interface SuggestItemInput {
+  ref: number;
+  id: string;
+  type: string;
+  stem: string;
+  choices: string[];
+}
+
+/** What the route hands a provider: the items, the candidate set, the pasted list. */
+export interface SuggestStandardsInput {
+  items: SuggestItemInput[];
+  candidates: SuggestCandidate[];
+  /** "Washington 2026" etc., for the prompt. */
+  framework: string;
+  unitList?: string;
+}
+
 export interface ItemGeneratorProvider {
   /**
    * Human-readable provider id used in logs and the response payload, e.g.
@@ -171,4 +221,10 @@ export interface ItemGeneratorProvider {
    * element becomes a CreateItemBody, so one malformed element drops alone.
    */
   generateItems(input: BatchGenerateInput, ownerSub?: string): Promise<unknown[]>;
+  /**
+   * BG slice 5: one call for up to 40 untagged items. Returns the model's
+   * array RAW — `validateSuggestions` (lib/ai/standardsSuggestCore.ts) is the
+   * one place a code becomes a tag, and drops anything outside the candidates.
+   */
+  suggestStandards(input: SuggestStandardsInput, ownerSub?: string): Promise<unknown[]>;
 }

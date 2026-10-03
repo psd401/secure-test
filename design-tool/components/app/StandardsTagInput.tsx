@@ -41,7 +41,7 @@ type LookupEntry = { code: string; scheme: Scheme; text: string } | null;
 // localStorage can throw (private window, blocked site data) or come back
 // empty; the picker works without it.
 
-interface Prefs {
+export interface Prefs {
   subject: Subject | "";
   gradeBand: string;
   course: string;
@@ -53,7 +53,7 @@ const DEFAULT_PREFS: Prefs = { subject: "", gradeBand: "", course: "", prefer: "
 let prefs: Prefs | null = null;
 const prefListeners = new Set<() => void>();
 
-function readPrefs(): Prefs {
+export function readPrefs(): Prefs {
   if (prefs) return prefs;
   let stored: Partial<Prefs> = {};
   try {
@@ -70,7 +70,7 @@ function readPrefs(): Prefs {
   return prefs;
 }
 
-function writePrefs(next: Prefs) {
+export function writePrefs(next: Prefs) {
   prefs = next;
   try {
     window.localStorage.setItem(PREFS_KEY, JSON.stringify(next));
@@ -94,7 +94,7 @@ const inFlight = new Set<string>();
 const lookupListeners = new Set<() => void>();
 let facetsPromise: Promise<SearchResponse["facets"] | null> | null = null;
 
-function loadFacets() {
+export function loadFacets() {
   facetsPromise ??= fetch("/api/standards?limit=1")
     .then((r) => (r.ok ? (r.json() as Promise<SearchResponse>) : null))
     .then((b) => b?.facets ?? null)

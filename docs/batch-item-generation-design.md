@@ -335,7 +335,62 @@ What "ship both and associate them" looks like:
    proposals and form values across close / reopen (Discard all is the explicit
    drop), and Generate again does not keep a chosen file (a browser file input
    cannot be refilled). Tests `batch-form` (19); rows 358–371 unrun.
-5. Suggest standards (route + chips) (Sonnet 5 / medium).
+5. Suggest standards (route + chips) (Sonnet 5 / medium). BUILT 2026-10-02,
+   **migration 0051** (`guardrail_surface_tag_suggest`: the
+   `guardrail_events` surface CHECK gains `tag-suggest`, applied to dev +
+   test): `POST /api/ai/suggest-standards`
+   (`app/api/ai/suggest-standards/route.ts`) — staff, `edit`,
+   `allow_llm_authoring` (403 `llm_authoring_disabled`); body
+   `SuggestStandardsRequest` in `lib/ai/types.ts` (`assessment_id`, required
+   `subject` + `grade_band`, optional HS `course`, optional `scheme`
+   `wa2026` | `ccss2010` default 2026 — ignored for science, which is NGSS —
+   and optional pasted `unit_list` ≤ 20000; blank = absent) → 200 `{ ok,
+   suggestions: [{ item_id, tags: [{ tag, reason }] }], considered, left_out,
+   provider }`, nothing written. The server keeps the assessment's items with
+   empty `standards`, takes the first 40 in item order (`left_out` = the
+   rest), and sends them numbered 1..N with stem (≤ 400 chars) and up to six
+   choices (≤ 80 chars each) — short numbers rather than UUIDs, so the model
+   cannot corrupt an id. Candidate set (`lib/ai/standardsSuggestCore.ts`):
+   the catalog slice for subject + grade band (+ course) in the one scheme
+   (largest slice today 160 codes, ~37 KB; a 250-code ceiling), narrowed to
+   the codes the pasted list names — whole tokens only, a 2011 code in the
+   list names its linked 2026 standards — when it names any, else the whole
+   slice with the list as context. An empty slice (unknown grade band) is a
+   400. The pasted list is wrapped in `<unit_list>` with a closing tag
+   inside neutralised. Validation: a code must resolve in the candidate set
+   (a `scheme:` prefix or a case difference is read as the code), duplicates
+   removed, ≤ 3 per item, one-line reasons ≤ 160 chars, items with no
+   surviving tag omitted, tags returned in the stored `scheme:code` form;
+   unparseable reply → 502 `provider_failed`. Zero untagged items → 200 with
+   empty suggestions and no model call. Provider method `suggestStandards`
+   on the mock (deterministic — two rotating candidates per item, the reason
+   echoes the stem's opening so a stem the mock guardrail blocks blocks the
+   output stage; unit-list hooks `MOCK_MALFORMED` and `MOCK_OUT_OF_CATALOG`),
+   Bedrock (one `converseTextWithMeta` turn, 6000 max tokens, `ai_usage`
+   surface `tag-suggest`) and Anthropic. Guardrail surface `tag-suggest`:
+   input = the pasted unit list only (the questions are already on the
+   assessment; none is screened, as the batch generator's existing stems are
+   not), output = the kept reasons; a block is the generator's 422
+   `guardrail_blocked`. UI: `SuggestStandardsDialog` (subject / grade /
+   course / 2026-or-2011 selects prefilled from the picker's remembered
+   values and written back to them, the unit-list textarea, Suggest) beside
+   "Generate questions" over the pure `lib/ai/suggestForm.ts`; on success the
+   dialog closes and each suggested card shows `StandardSuggestionChips`
+   (code + short text via `/api/standards/lookup`, the reason, Accept /
+   Dismiss) with a summary line ("N of M questions … K left out — run again
+   for the rest", or "Every question already has a standard" / "No standards
+   matched"). Chips live in editor state only (1.1). **Accept is an ordinary
+   tag (D-2a):** `addTag` into the card's `standards`, then the card's own
+   save (`persistItem`) when nothing else on the card is unsaved; a card
+   mid-edit gets the tag in its field and keeps its Save button, so one PATCH
+   never carries edits the teacher has not saved. **Not gated by
+   `isLocked`:** tags stay editable while Published (14.1), so the button
+   shows whenever `allow_llm_authoring` is on and the assessment has items.
+   Tests `standards-suggest-core` (19), `ai-suggest-standards` (22),
+   `suggest-form` (17). **Deviations:** (a) the picker's exported
+   `readPrefs` / `writePrefs` / `loadFacets` are reused rather than
+   duplicated; (b) no "Accept all" per item; (c) the Bedrock call uses the
+   item model (`BEDROCK_ITEM_MODEL`).
 6. Match in a batch (Opus 5 / medium).
 7. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
    run on a hand-built resource (no teacher PDF in the repo).

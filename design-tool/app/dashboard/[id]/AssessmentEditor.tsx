@@ -68,7 +68,10 @@ import { TableEditor } from "./TableEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
 import { GenerateQuestionsDialog } from "@/components/app/GenerateQuestionsDialog";
-import { normalizeStandards } from "@/lib/standards/tags";
+import { SuggestStandardsDialog, type SuggestOutcome } from "@/components/app/SuggestStandardsDialog";
+import { StandardSuggestionChips } from "@/components/app/StandardSuggestionChips";
+import { removeSuggestion, suggestionCount, type SuggestEntry, type SuggestionMap } from "@/lib/ai/suggestForm";
+import { addTag, normalizeStandards } from "@/lib/standards/tags";
 
 // UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
 // and deep links land on the same panel. Param values are stable; the labels
@@ -808,6 +811,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // question's picker so one test stays consistent.
   const usedStandards = useMemo(() => normalizeStandards(items.flatMap((i) => i.standards)), [items]);
   const [shareOpen, setShareOpen] = useState(false);
+  // BG slice 5: the AI's standards suggestions for untagged questions. Page
+  // state only — lost on reload (1.1); Accept saves through persistItem.
+  const [suggestions, setSuggestions] = useState<SuggestionMap>({});
+  const [suggestionEntries, setSuggestionEntries] = useState<Record<string, SuggestEntry>>({});
+  const [suggestionNote, setSuggestionNote] = useState<string | null>(null);
 
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1247,6 +1255,35 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "idle" } }));
       setItemError(item.id, describe(e));
     }
+  }
+
+  function onSuggested(outcome: SuggestOutcome) {
+    setSuggestions(outcome.map);
+    setSuggestionEntries(outcome.entries);
+    setSuggestionNote(outcome.summary);
+  }
+
+  function dismissSuggestion(itemId: string, tag: string) {
+    setSuggestions((prev) => removeSuggestion(prev, itemId, tag));
+  }
+
+  // Accept = an ordinary tag (D-2a). A card with nothing else unsaved saves at
+  // once through the card's own save (tags stay editable while Published,
+  // 14.1); a card mid-edit gets the tag in its field and keeps the teacher's
+  // Save button — one PATCH never carries edits the teacher has not saved.
+  async function acceptSuggestion(itemId: string, tag: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const result = addTag(item.standards, tag);
+    if (!result.ok) {
+      setItemError(itemId, result.error);
+      return;
+    }
+    const next: ItemView = { ...item, standards: result.next };
+    const clean = persisted[itemId] === fingerprint(item);
+    setSuggestions((prev) => removeSuggestion(prev, itemId, tag));
+    updateItem(itemId, (i) => ({ ...i, standards: result.next }));
+    if (clean) await persistItem(next);
   }
 
   async function confirmDelete() {
@@ -1970,7 +2007,24 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               onAdded={reloadFromServer}
             />
           ) : null}
+          {/* BG slice 5: NOT gated by isLocked — tags stay editable while Published (14.1). */}
+          {assessment.allow_llm_authoring ? (
+            <SuggestStandardsDialog
+              assessmentId={assessment.id}
+              disabled={items.length === 0}
+              onSuggested={onSuggested}
+            />
+          ) : null}
         </div>
+        {suggestionNote ? (
+          <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            {suggestionNote}
+            {suggestionCount(suggestions) > 0 ? ` ${suggestionCount(suggestions)} suggestion${suggestionCount(suggestions) === 1 ? "" : "s"} left.` : ""}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSuggestionNote(null)}>
+              Hide
+            </Button>
+          </p>
+        ) : null}
 
         {assessment.allow_llm_authoring && aiPanelOpen && !isLocked ? (
           <div className="rounded-md border border-border bg-muted p-4 space-y-3">
@@ -2520,6 +2574,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   value={item.standards}
                   onChange={(standards) => updateItem(item.id, (i) => ({ ...i, standards }))}
                   suggestions={usedStandards}
+                />
+                <StandardSuggestionChips
+                  suggestions={suggestions[item.id] ?? []}
+                  entries={suggestionEntries}
+                  busy={save.kind === "saving"}
+                  onAccept={(tag) => void acceptSuggestion(item.id, tag)}
+                  onDismiss={(tag) => dismissSuggestion(item.id, tag)}
                 />
 
                 {item.type === "match" ? (

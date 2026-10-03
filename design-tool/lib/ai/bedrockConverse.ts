@@ -100,6 +100,8 @@ export type ConverseSurface =
   | "pdf-import"
   | "essay-score"
   | "rubric-extract"
+  // BG slice 5: "Suggest standards" for untagged items.
+  | "tag-suggest"
   // Safeguarding alerts slice 1: the hand-in wellbeing / injection screener.
   | "safeguarding-screen";
 

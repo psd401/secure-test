@@ -503,6 +503,9 @@ export const GUARDRAIL_SURFACES = [
   // PDF/DOCX document path, as pdf-import does for scans) and the proposed
   // criterion names + descriptors (output).
   "rubric-extract",
+  // BG slice 5 (docs/batch-item-generation-design.md D-2): "Suggest standards"
+  // — checks the pasted unit list (input) and the suggestions' reasons (output).
+  "tag-suggest",
 ] as const;
 export type GuardrailSurfaceValue = (typeof GUARDRAIL_SURFACES)[number];
 
@@ -543,7 +546,7 @@ export const guardrail_events = pgTable(
     createdAtIdx: index("guardrail_events_created_at_idx").on(t.created_at),
     surfaceCheck: check(
       "guardrail_events_surface_check",
-      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import', 'rubric-extract')`,
+      sql`surface IN ('item-gen', 'math-translate', 'essay-score', 'pdf-import', 'rubric-extract', 'tag-suggest')`,
     ),
     stageCheck: check(
       "guardrail_events_stage_check",

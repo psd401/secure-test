@@ -7,11 +7,18 @@ import {
   ITEM_SYSTEM_PROMPT,
   buildUserText,
 } from "./itemGenCore";
+import {
+  SUGGEST_MAX_TOKENS,
+  SUGGEST_SYSTEM_PROMPT,
+  buildSuggestUserText,
+  parseSuggestArray,
+} from "./standardsSuggestCore";
 import type {
   BatchGenerateInput,
   GenerateItemRequest,
   GenerateItemResult,
   ItemGeneratorProvider,
+  SuggestStandardsInput,
 } from "./types";
 
 // Amazon Bedrock item generator (ADR 0007), built on the AWS SDK Converse API
@@ -162,5 +169,20 @@ export const bedrockItemProvider: ItemGeneratorProvider = {
       ownerSub,
     });
     return parseBatchArray(text, "bedrock", { truncated: stopReason === "max_tokens" });
+  },
+
+  // BG slice 5: one plain-text Converse turn for up to 40 untagged items, on
+  // the item model.
+  async suggestStandards(input: SuggestStandardsInput, ownerSub?: string): Promise<unknown[]> {
+    const { text, stopReason } = await converseTextWithMeta({
+      modelId: process.env.BEDROCK_ITEM_MODEL ?? DEFAULT_MODEL,
+      systemText: SUGGEST_SYSTEM_PROMPT,
+      userText: buildSuggestUserText(input),
+      maxTokens: SUGGEST_MAX_TOKENS,
+      errPrefix: "bedrock",
+      surface: "tag-suggest",
+      ownerSub,
+    });
+    return parseSuggestArray(text, "bedrock", { truncated: stopReason === "max_tokens" });
   },
 };
