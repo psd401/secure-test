@@ -3,6 +3,7 @@ import { counterparts, lookup, parseTag, type StandardEntry } from "@/lib/standa
 import { resolveBareCode } from "@/lib/standards/search";
 import { repairModelJson } from "@/lib/pdfImport/extractCore";
 import { MATH_DOLLAR_RULE } from "./mathPromptRule";
+import { normalizeProposalMath } from "./mathNormalize";
 import {
   BATCH_GENERABLE_ITEM_TYPES,
   BATCH_MIX_ITEM_TYPES,
@@ -381,7 +382,8 @@ export function validateBatchProposals(
       }
     }
     if (opts.standards.length > 0) candidate.standards = [...opts.standards];
-    const parsed = CreateItemBody.safeParse(candidate);
+    // BG-E1: digit-led math the model left as $...$ renders raw under M-1.
+    const parsed = CreateItemBody.safeParse(normalizeProposalMath(candidate));
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       issues.push(`item ${i + 1}: ${first ? `${first.path.join(".")} ${first.message}` : "invalid"}`);

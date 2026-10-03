@@ -584,3 +584,20 @@ validation, rewrite a `$…$` run that M-1 would leave raw into `${…}$` when
 the run starts with a digit, has no leading / trailing space, no word of two
 or more letters, and ends in a letter, digit, `)` or `}` — currency such as
 "$5 to $10", "$5-$10" or "$3.50/$4" fails those tests and is left alone.
+
+**BG-E1 server-side rewrite BUILT 2026-10-03 (James: build + deploy).**
+`lib/ai/mathNormalize.ts` — `normalizeDigitLedMath` applies the proposed
+test (digit first, no space at either end, no word of two or more letters,
+ends in a letter / digit / `)` / `}`, and M-1 would leave it raw) and writes
+the run as `${run}$`; `normalizeProposalMath` applies it to the stem, every
+choice's text and both sides of every match pair — never `correct_answer`.
+Called just before `CreateItemBody.safeParse` in the batch validator
+(`itemBatchCore.ts`), the single-item route (`app/api/ai/generate-item`) and
+the PDF importer (`extractCore.ts`), so the output guardrail still sees the
+model's text and the editor receives the rewritten one. Not applied: table
+row / column labels, set stimulus and source text (verbatim passages, where
+currency is the common case), and questions already saved. Tests
+`test/math-normalize.test.ts` (17: the run's raw strings wrap and render as
+KaTeX; "$5 to $10", "$5-$10", "$3.50/$4", "$12.50 per hour … $200", `\$`,
+`$$…$$` untouched; command runs untouched; keys untouched; the batch
+validator applies it).

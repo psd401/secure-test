@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAssessment } from "@/lib/api/access";
 import { getProvider } from "@/lib/ai/provider";
+import { normalizeProposalMath } from "@/lib/ai/mathNormalize";
 import { GenerateItemRequest } from "@/lib/ai/types";
 import { CreateItemBody } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
@@ -76,7 +77,8 @@ export async function POST(req: Request) {
   // Double-validate against the CreateItemBody contract — guards against a
   // future provider returning a malformed shape and lets the editor save
   // the proposal through the existing POST /items route without surprises.
-  const validated = CreateItemBody.safeParse(proposal);
+  // BG-E1: digit-led math the model left as $...$ renders raw under M-1.
+  const validated = CreateItemBody.safeParse(normalizeProposalMath(proposal));
   if (!validated.success) {
     return NextResponse.json(
       {

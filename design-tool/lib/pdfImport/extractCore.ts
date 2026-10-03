@@ -1,5 +1,6 @@
 import { CreateItemBody } from "@/lib/api/items";
 import { MATH_DOLLAR_RULE } from "@/lib/ai/mathPromptRule";
+import { normalizeProposalMath } from "@/lib/ai/mathNormalize";
 
 // Shared between the mock and Bedrock PDF extractors + the route.
 
@@ -465,7 +466,8 @@ export function validatePdfCandidates(raw: unknown[], opts: NormalizeOptions = {
   const candidates: ReturnType<typeof CreateItemBody.parse>[] = [];
   const rejected: { index: number; errors: string[] }[] = [];
   slice.forEach((cand, index) => {
-    const parsed = CreateItemBody.safeParse(normalizePdfCandidate(cand, opts));
+    // BG-E1: digit-led math the model left as $...$ renders raw under M-1.
+    const parsed = CreateItemBody.safeParse(normalizeProposalMath(normalizePdfCandidate(cand, opts)));
     if (parsed.success) {
       candidates.push(parsed.data);
     } else {
