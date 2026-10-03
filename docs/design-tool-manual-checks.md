@@ -1207,3 +1207,27 @@ Findings from rows 358–371 (2026-10-02, origin rev 71), proposals:
 
 G-1, G-2, G-3 and the short-text key rule BUILT 2026-10-02 the same evening (James: fix now, then deploy) and checked on local dev: G-1 — the dialog stays mounted while open (only the trigger hides when locked); a Publish after the first Add left the dialog open with "Added 1 of 3, then stopped: the assessment was published, so no more questions can be added. Unpublish it to add the rest." and the 2 cards (Add errors now read in words — `describeAddError`); G-2 — the picker closes its list after an add (typing reopens it); G-3 — `DialogTrigger`, focus returns to "Generate questions" on Escape; prompt — "A short_text key is the bare answer a student would type…" (the next batch's short-text key was "ATP"). Re-run rows 367 (forced failure) and 371 (focus) on the origin after the deploy.
 
+
+## Suggest standards (BG slice 5, 2026-10-02)
+
+Run on the origin (rev 73, Claude in Chrome, Bedrock) on the scratch fixture
+`BG suggest hand-run 2026-10-02`: four untagged grade-7-style math questions
+(ratio, distributive property, triangle area, two-step equation), AI
+authoring on. Row numbers continue from 371.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 372 | Questions tab with AI authoring ON | **Suggest standards** sits beside "Generate questions" | ✅ 2026-10-02 |
+| 373 | Open the dialog | Subject / Grade / Standards (2026 or 2011) selects prefilled from the standards picker's remembered filters, an optional unit-list textarea, Close + Suggest | ✅ 2026-10-02: prefilled Math / Grade 7 / 2026 codes |
+| 374 | Suggest with no unit list | The dialog closes; "Suggested standards for N of N questions without one…" above the list; each suggested card shows chips (code, short text, reason, Accept, Dismiss) under its Standards field; every code is in the chosen grade slice | ✅ 2026-10-02: 4 of 4, 5 suggestions — RP.1 (ratio), EE.1 + EE.2 (distributive), SR.G.6 (area), EE.4 (two-step); reasons one line each |
+| 375 | Accept on a card with no unsaved edits | The chip leaves, the tag joins the Standards field and is saved at once (server copy carries it) | ✅ 2026-10-02: question 1 stored `wa2026:M.7.R.RP.1` |
+| 376 | Dismiss one chip | The chip leaves; nothing is saved | ✅ 2026-10-02: question 2 kept only EE.1; server copy unchanged |
+| 377 | Type into a card's stem, then Accept its chip without saving | The tag joins the field, the card shows "Unsaved changes", the server copy is unchanged; Save question stores both the edit and the tag | ✅ 2026-10-02: question 3 server copy unchanged until Save, then stem + `wa2026:M.7.SR.G.6` together |
+| 378 | Publish with chips still showing, then Accept | The button stays (tags stay editable while Published); the chips survive Publish; Accept saves on the Published assessment | ✅ 2026-10-02: question 4 stored `wa2026:M.7.R.EE.4`, "Saved" shown |
+| 379 | Reload; Suggest again with a unit list naming one code (`Unit 3: M.7.R.EE.2`) | The chips are gone after the reload; only still-untagged questions are considered and every suggestion is a code named in the list | ✅ 2026-10-02: no chips after reload; "1 of 1 question", one chip `M.7.R.EE.2` |
+| 380 | Accept the last chip, Suggest again | "Every question already has a standard." and no model call | ✅ 2026-10-02 |
+| 381 | AI authoring OFF | The button is absent; a direct POST answers 403 `llm_authoring_disabled` | NOT RUN on the origin (route test covers the 403) |
+| 382 | Keyboard + VoiceOver: open, fill, Suggest, Accept / Dismiss by keyboard | Focus inside the dialog, labelled fields, Escape closes and returns focus to the button; Accept / Dismiss reachable by Tab and named with their code | NOT RUN (Accept / Dismiss carry `aria-label` "Accept <code>" / "Dismiss <code>", seen through the accessibility tree) |
+| 383 | More than 40 untagged questions | "… K left out — run again for the rest" | NOT RUN on the origin (route test covers the cap) |
+
+The scratch fixture stays on the origin (Published) until James deletes it.
