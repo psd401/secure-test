@@ -427,7 +427,10 @@ What "ship both and associate them" looks like:
    column can coincide with the key order (a three-pair list sorted by chance)
    — accepted, the student's copy is shuffled per attempt anyway.
 7. Teacher rows in `docs/design-tool-manual-checks.md`; Bedrock evidence
-   run on a hand-built resource (no teacher PDF in the repo).
+   run on a hand-built resource (no teacher PDF in the repo). DONE
+   2026-10-02: rows 345–390 run on the origin across slices 2, 4, 5 and 6
+   (results in the checks file); the evidence run is under §Progress
+   ("Slice 7 evidence run"); one finding, BG-E1, is a proposal.
 
 Design tool only; no client change.
 
@@ -517,3 +520,53 @@ None open.
   MS-ESS1), repaired by joining fragments into words seen on undamaged
   pages (one-word extra list: "Punnett"); a scan of the repaired entries
   found only real words.
+
+### Slice 7 evidence run (2026-10-02, origin rev 74, Bedrock)
+
+Three batches through `POST /api/ai/generate-items` on the scratch fixture
+`BG match hand-run 2026-10-02` (nothing saved — the route writes nothing).
+The resource is a hand-written ~330-word plate-tectonics passage (written
+for this run; no teacher material).
+
+| Batch | Request | Kept / requested | Time |
+|---|---|---|---|
+| A | passage, 10, Mix | 10 / 10 (MC single ×5, MC multi ×2, short text ×2, essay) | 14.7 s |
+| B | standards `M.7.R.RP.2` + `M.7.R.EE.4`, 10 = 3 MC single + 2 MC multi + 3 short text + 2 match | 10 / 10 | 17.8 s |
+| C | passage, 6 = 4 match + 2 short text | 6 / 6 | 8.4 s |
+
+Plus the rows' own Bedrock batches (slice 4: 5 + 3 + 2 + 3; slice 6: 3 + 5)
+— no drop in any batch this run.
+
+- **Keys:** all 26 checked by hand against the passage / the arithmetic —
+  every MC key, short-text key and match pairing is correct. One rounded
+  value is marked correct as an MC-multi step ("h ≤ 3.92" for 255 / 65).
+- **Source grounding (A, C):** every question is answerable from the
+  passage; numbers and names (2.5 cm/yr, Juan de Fuca, San Andreas) are the
+  passage's.
+- **Match (B, C + rows):** 8 matching questions, 3–5 pairs each,
+  one-to-one in every one, stems name both columns. Right sides are often
+  full clauses rather than "short plain text"; one hint-style cue (row 386:
+  a left names another pair's right).
+- **Readings, no change proposed:** (a) D-5 puts every requested standard
+  on every question, so a ratio question also carries EE.4 — by design, the
+  teacher removes a tag per question; (b) short-text keys are exact phrases
+  ("San Andreas Fault", "mountains") that the auto-scorer matches exactly —
+  the "Check the key" review is where a teacher widens them.
+- **Finding BG-E1 (proposal, not built):** the batch prompt says only "wrap
+  inline expressions in $...$". Under rule M-1 a `$` followed by a digit
+  opens math only when the run holds a LaTeX command, `^` or `_`, so
+  digit-led math the model wrote renders RAW, dollar signs and all, in the
+  preview, the editor and the client: batch B's first matching question
+  (`$3x + 7 = 22$`, `$5(x - 2) = 30$`, `$2x + 9 = 3$` — 3 of its 4 left
+  sides), `$2.50m + 3 = 18$` and `$2(n + 6) = 26$` in the second, and
+  choice A of an inequality MC (`$12.50h < 200$`). Checked with
+  `renderLatex` (M-1's rule is identical in all three renderers):
+  `$3x + 7 = 22$` → raw, `${3x + 7 = 22}$` → KaTeX. Currency in prose
+  ("$12.50 per hour") happens to render as a dollar sign under M-1, but the
+  prompt does not ask for `\$` as the PDF importer's does. Proposal: add
+  to the batch system prompt (and the PDF importer's, which has the same
+  gap for digit-led math with no command) — "Write a dollar amount with a
+  backslash (\$12.50). Math that starts with a digit and has no LaTeX
+  command, ^ or _ goes in ${...}$ (${3x + 7 = 22}$)" — plus a mock-free
+  unit test on the prompt text, then one Bedrock batch to confirm.
+
