@@ -46,7 +46,7 @@ export const FEEDBACK_WHEN_NOTE =
 
 export const FEEDBACK_ON_RELEASE_NOTE =
   "Until you press Release answers, students who hand in see right / wrong and are told " +
-  "the correct answers will be available after every class has taken the test.";
+  "their teacher will go over the correct answers.";
 
 export const RELEASE_CONFIRM_TITLE = "Release answers?";
 export const RELEASE_CONFIRM_BODY =
