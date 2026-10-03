@@ -1231,3 +1231,26 @@ authoring on. Row numbers continue from 371.
 | 383 | More than 40 untagged questions | "… K left out — run again for the rest" | NOT RUN on the origin (route test covers the cap) |
 
 The scratch fixture stays on the origin (Published) until James deletes it.
+
+## Matching in Generate questions (BG slice 6, 2026-10-02)
+
+Run on the origin (rev 74, Claude in Chrome, Bedrock) on the scratch fixture
+`BG match hand-run 2026-10-02` (Draft, AI authoring on). Rows continue from 383.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 384 | Open Generate questions with Mix selected | A hint under the types: "Mix uses multiple choice, short text and essay. For matching, choose how many of each." | ✅ 2026-10-02 |
+| 385 | Choose how many of each | A **Matching** box beside the four others; the total counts it | ✅ 2026-10-02: 1 multiple choice + 2 Matching = "Total: 3", no mismatch line |
+| 386 | Generate 1 MC + 2 Matching from an objective only | "3 questions ready"; each matching card shows its instruction stem, the left column in order and the right column sorted alphabetically (not lined up), and a "Check the key" badge | ✅ 2026-10-02: "Students identify cell organelles and their functions" → 1 MC + matching with 4 and 5 pairs; columns apart, rights sorted, badges on both |
+| 387 | Open "Show the key" on one matching card | That card's badge clears and the lined-up left → right pairs show; the other card keeps its badge | ✅ 2026-10-02: four correct pairs (ribosome, mitochondria, cell membrane, nucleus) |
+| 388 | Add all | All three stored; each matching question has `config.pairs` with ids `p1..pn` in the proposed pairing; the form returns | ✅ 2026-10-02 |
+| 389 | Mix, 5 questions | No matching question among them | ✅ 2026-10-02: MC single ×2, MC multi, short text, essay |
+| 390 | A student attempt on a generated matching question | The right column is shuffled per attempt and auto-scoring marks the stored pairing | NOT RUN (the match renderer + scoring are unchanged since slice 47) |
+
+Reading (model output, no code): in the 5-pair question one left ("…cannot
+move from ribosomes toward the Golgi apparatus") names another pair's right
+("Golgi apparatus"). That is a distractor-style cue the prompt's "no hint"
+rule does not quite forbid. Watch for it in the slice 7 evidence run before
+tightening the prompt.
+
+The scratch fixture stays on the origin (Draft, 3 questions) until James deletes it.
