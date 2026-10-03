@@ -260,7 +260,24 @@ spend per teacher.
    404 / stale / deleted attempt / deleted item, cascade, student 403,
    foreign 404, view-grantee reads but cannot generate, edit can). Not
    built: the UI, the rating, Copy (slice 3); no Bedrock run yet (slice 6).
-3. Report UI on the results page + rating + Copy (Sonnet 5 / medium).
+3. Report UI on the results page + rating + Copy (Sonnet 5 / medium). BUILT
+   2026-10-03, no migration. `components/app/ClassInsightsPanel.tsx` (client;
+   GETs the stored report for the page's `?section=` on mount, `view` reads,
+   `edit` — `levelSatisfies(level, "edit")` — sees Write / Regenerate), pure
+   helpers in `lib/insights/panelCopy.ts` (headings, error copy, Copy text,
+   rating message; test `insights-panel`). Choices: the panel shows only when
+   the results page has rows; the page's "all sections" (`""`) is sent as
+   `__all__`; Q citations link to `#col-q<n>` — a stable `id` added on the
+   matrix column header; student citations link to the per-student page, a
+   gone student or deleted item renders as plain text; **Copy** = the
+   teacher-only line + headings + `- ` claims with names (empty sections
+   omitted), "Copied" / failure line; **rating** rides `POST /api/feedback`
+   with the message `class-insights rating: helpful|not helpful | assessment
+   <id> | prompt <version>` (+ the comment on the next line) — the route
+   emails the maintainer for every feedback row, so it gained an optional
+   `quiet: true` that stores the row and skips the SNS publish; the panel
+   sets it when there is no comment (a rated comment still emails). The
+   buttons are replaced by "Thanks for the rating." after sending.
 4. Chat: migration (`class_insight_threads`, `…_turns`), route, guardrail,
    per-teacher scope, on-demand answer pull (D-6), cap + summary (Opus 5 / medium).
 5. Chat UI (Sonnet 5 / medium).
@@ -288,3 +305,5 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
 - Slice 1 BUILT 2026-10-03 (see §Slices) — not deployed.
 - Slice 2 BUILT 2026-10-03 (see §Slices) — routes + migration 0052, no UI,
   not deployed.
+- Slice 3 BUILT 2026-10-03 (see §Slices) — results-page panel, Copy, rating;
+  teacher rows 391+ in `docs/design-tool-manual-checks.md` NOT RUN.

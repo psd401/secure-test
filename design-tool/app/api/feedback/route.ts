@@ -31,6 +31,9 @@ const Body = z.object({
     .min(1)
     .max(2000),
   path: z.string().max(MAX_PATH),
+  // Class insights slice 3: a report rating is a row for later reading, not
+  // an email per click. `quiet` stores the row and skips the SNS publish.
+  quiet: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -76,7 +79,7 @@ export async function POST(req: Request) {
   ].join("\n");
 
   try {
-    await getNotifyPublisher().publish(subject, body);
+    if (!parsed.data.quiet) await getNotifyPublisher().publish(subject, body);
   } catch (err) {
     log.warn("feedback_publish_failed", {
       sub: row.sub,

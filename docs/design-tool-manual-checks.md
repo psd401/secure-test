@@ -1254,3 +1254,25 @@ rule does not quite forbid. Watch for it in the slice 7 evidence run before
 tightening the prompt.
 
 The scratch fixture stays on the origin (Draft, 3 questions) until James deletes it.
+
+## Class insights — report, Copy, rating (CI slices 2–3, 2026-10-03)
+
+Rows continue from 390. Needs a handed-in, scored assessment (the `_demo`
+database works). Bedrock rows need `ITEM_PROVIDER=bedrock` locally or the origin.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 391 | Results page of an assessment with scored work, as the owner | A "Class insights" section below the matrix, with the intro line and a "Write class insights" button | NOT RUN |
+| 392 | Write class insights | Button shows a spinner and "Writing…", then four sections (Strengths, Areas for growth, Celebrations, Next steps for the whole class), "Written by AI — check it before you act on it." and a written time | NOT RUN |
+| 393 | Click a Q citation | The page jumps to that question's column header in the matrix | NOT RUN |
+| 394 | Click a student name citation | Opens that student's results page | NOT RUN |
+| 395 | Pick a section in the filter and Show | The panel shows that section's own report (or the empty state); "All sections" shows the all-sections report | NOT RUN |
+| 396 | Hand in or Change a score, reload | "Results have changed since this was written — Regenerate." appears; Regenerate replaces the report and clears it | NOT RUN |
+| 397 | An assessment with unscored answers | The unscored note shows above the sections | NOT RUN |
+| 398 | Copy, paste into a text editor | First line "Teacher-only: names students; not for families.", then headings and "- " claims with real names; "Copied" appears | NOT RUN |
+| 399 | Helpful with no comment | "Thanks for the rating."; a `feedback` row `class-insights rating: helpful …` exists; no email / SNS message | NOT RUN |
+| 400 | Not helpful with a comment | Row stores the comment on the second line; the maintainer gets one email | NOT RUN |
+| 401 | A co-teacher at view level | Sees the stored report (or "No class insights yet.") and Copy / rating, no Write or Regenerate button | NOT RUN |
+| 402 | Delete a student's attempt after generating | The claim naming them reads "a student no longer in these results", no link | NOT RUN |
+| 403 | An assessment with no scored student, POST by hand | 409 `nothing_to_report`; via the button: "No student has a scored answer yet." | NOT RUN |
+| 404 | Mock `BLOCKME` title / Bedrock guardrail block | "The report was withheld by content safeguards. Try again."; nothing stored | NOT RUN |

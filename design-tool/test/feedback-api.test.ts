@@ -114,6 +114,14 @@ describe("POST /api/feedback", () => {
     expect(notifications[0]!.body).not.toContain(SESSION_COOKIE_NAME);
   });
 
+  test("quiet stores the row and sends no notification", async () => {
+    principal = staffPrincipal("teacher-sub-1", TEACHER_EMAIL);
+    const res = await post(body({ quiet: true }));
+    expect(res.status).toBe(200);
+    expect(await rows()).toHaveLength(1);
+    expect(notifications).toHaveLength(0);
+  });
+
   test("empty message is rejected", async () => {
     principal = staffPrincipal("teacher-sub-1", TEACHER_EMAIL);
     const res = await post(body({ message: "   " }));

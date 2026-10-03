@@ -9,12 +9,14 @@ import {
 } from "@/lib/scoring/results";
 import { formatMean } from "@/lib/reporting/analytics";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment } from "@/lib/api/access";
+import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { canSendToGradebook, gradebookSendConfigured } from "@/lib/gradebook/sendDialog";
 import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
+import { ClassInsightsPanel } from "@/components/app/ClassInsightsPanel";
+import { questionAnchor } from "@/lib/insights/panelCopy";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 
@@ -229,6 +231,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                     key={item.id}
                     className="px-2 py-2 text-center font-medium"
                     title={item.stem}
+                    id={questionAnchor(`Q${item.position + 1}`)}
                   >
                     Q{item.position + 1}
                   </th>
@@ -334,6 +337,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           </table>
         </div>
       )}
+
+      {results.rows.length > 0 ? (
+        <ClassInsightsPanel
+          assessmentId={assessment.id}
+          section={selectedSection}
+          canGenerate={levelSatisfies(access.level, "edit")}
+        />
+      ) : null}
 
       {results.rows.length > 0 ? (
         <section className="mt-12" aria-labelledby="item-analytics">
