@@ -9,6 +9,7 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
 import { markAssessmentGrantSeen } from "@/lib/api/grants";
+import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,11 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           allow_llm_authoring: assessment.allow_llm_authoring,
           time_limit_seconds: assessment.time_limit_seconds,
           student_layout: assessment.student_layout as "scroll" | "paged",
+          student_feedback: assessment.student_feedback as FeedbackLevelSetting,
+          answers_release: assessment.answers_release as AnswersReleaseSetting,
+          answers_released_at: assessment.answers_released_at
+            ? assessment.answers_released_at.toISOString()
+            : null,
           allowed_accommodations: (assessment.allowed_accommodations ??
             []) as string[],
           construct_altering: (assessment.construct_altering ?? []) as string[],

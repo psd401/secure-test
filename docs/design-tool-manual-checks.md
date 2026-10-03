@@ -1325,3 +1325,21 @@ The dev overlay's "1 Issue" during rows 405–414 was a hydration mismatch from
 the district's Securly browser extension injecting `securlyOverlay` before
 React loaded — not app code.
 
+
+## Instant feedback — teacher settings and Release answers (IF slice 2, 2026-10-03)
+
+Teacher side only; what the student sees after hand-in is slice 3 (client).
+Rows 415–421 need only a Draft and a Published assessment you own; 422–423 a
+second staff account.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 415 | Settings tab on a Draft: find "Instant feedback at hand-in" under Save settings; open the select | Four options — Off, Score only, Right / wrong, Correct answers — and one line under the current choice (Score only reads "You scored 14 of 18 on the questions scored right away. Your teacher will score 2 more."); "Show correct answers" appears only at Correct answers | NOT RUN |
+| 416 | Change the select (no Save press); reload the page | "Saved <time>" appears at once; the choice is still there after reload | NOT RUN |
+| 417 | Choose Correct answers | A second select "Show correct answers" (After I release them is the default) with the note about Release answers, and a "Release answers" button | NOT RUN |
+| 418 | Publish the assessment, then change the select and the release choice | The rest of the Settings tab is locked, these two stay enabled and each change saves ("Saved <time>"); no "assessment_published_editing_locked" error | NOT RUN |
+| 419 | Press Release answers | A confirm: "Students who hand in from now on will see the correct answers for the questions they missed. Students who already handed in will not see them in the app — go over them in class."; Cancel changes nothing; confirming replaces the button with "Answers released <date time>"; reload keeps it | NOT RUN |
+| 420 | Results page of that assessment (edit level), before and after row 419 | Before: a "Release answers" button in the toolbar (same confirm, page reloads after); after: the quiet "Answers released <date time>" line, no button. At "At hand-in", Right / wrong, Score only or Off: no button | NOT RUN |
+| 421 | Help page (`/help.html`, topic 8) | An "Instant feedback when students hand in" subsection explains the four levels, the release choice, and who sees what | NOT RUN |
+| 422 | A co-teacher at view level opens the results page of a Correct answers / After I release them assessment | No Release answers button (the released line appears once released) | NOT RUN |
+| 423 | A co-teacher at edit level uses the Settings control and Release answers | Both work; a view-level grant's hand POST to `release-answers` answers 404 | NOT RUN |

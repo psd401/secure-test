@@ -50,6 +50,13 @@ time) and its rubric is attached.
    Draft copy — "(copy)" — with the questions, sources, accommodations and
    settings; results and test sessions are not copied. Use it for a second
    period's version or before a big edit.
+6. **Instant feedback at hand-in** (Settings): Off, Score only, Right /
+   wrong, or Correct answers. It saves as you change it and works on a
+   Published test. At Correct answers the key stays hidden until you press
+   **Release answers** (Settings or Results), unless you choose "At
+   hand-in". Students see it only when they hand in themselves — not after
+   your Hand in, Hand in everyone, a time-out or a pass back — and students
+   who handed in before the release do not see the answers in the app.
 
 ## Read-aloud and speech-to-text (client v1.4.0 and later)
 

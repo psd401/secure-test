@@ -227,3 +227,43 @@ teacher UI (slice 2), no client (slice 3), no hand-run rows.
   pass, typecheck clean; schema 126 pass.
 - Not done here: the Settings select + Release buttons + help text (slice
   2), the client page after `DID END` (slice 3), rows (slice 4).
+
+**Slice 2 (teacher UI) BUILT 2026-10-03** — one commit, not deployed, no
+migration. Rows 415–423 in `docs/design-tool-manual-checks.md`, NOT RUN. The
+timeline line already existed from slice 1 (`lib/reporting/timeline.ts`) —
+nothing added.
+
+- **Settings tab**: `components/app/InstantFeedbackSettings.tsx`, below the
+  Save row. Choice: it **saves on change** (its own PATCH, "Saved <time>" via
+  `StatusLine`) rather than riding the tab's Save button, because the tab's
+  Save sends `name` / `description` / `time_limit_seconds` / the layout, which
+  are locked while Published; the control sends ONLY
+  `{ student_feedback, answers_release }` (`feedbackSettingsBody`), so
+  `isFeedbackSettingsOnlyPatch` has nothing else to compare. It is not gated
+  by `isLocked`. A failed save reverts the select and shows the error. The
+  "Show correct answers" select appears only at `answers`; the "feedback shows
+  only when students hand in themselves, not after a teacher hand-in /
+  Hand in everyone / time-out / pass back" note shows at every level but Off.
+- **Release answers**: `components/app/ReleaseAnswersControl.tsx` (button +
+  AlertDialog confirm with the note's exact copy + POST `release-answers`;
+  replaced by "Answers released <date time>" once stamped; no un-release),
+  used on the Settings tab and, through `results/ReleaseAnswersAndReload`
+  (full reload, like `SendToGradebookAndReload`), on the results page toolbar.
+  Button rule `canReleaseAnswers` = `answers` + `on_release` + not stamped;
+  the released line shows at `answers` once stamped. On the results page the
+  button is edit-level (`levelSatisfies(access.level, "edit")`); the quiet
+  line is shown to any viewer. Choice: on the Settings tab the button is not
+  disabled-with-explanation at other levels — it is simply absent (the release
+  select it belongs to is absent too).
+- **Wording and rules** in `lib/feedback/settingsUi.ts` (client-safe, no
+  drizzle import). `AssessmentView` gained the two settings + the release
+  stamp (ISO), fed from `app/dashboard/[id]/page.tsx`.
+- **Help**: `public/help.html` topic 8 ("Score and give feedback") gained
+  "Instant feedback when students hand in" (no screenshot);
+  `docs/pilot-quick-start.md` building list item 6.
+- Tests: `test/instant-feedback-ui.test.tsx` (14: wording, button / line
+  rules, the PATCH body against `isFeedbackSettingsOnlyPatch`, static markup
+  of both controls). The click paths (PATCH on change, confirm + POST) are
+  hand-run rows.
+- Not done: the client feedback page (slice 3), the two-account rows 422–423,
+  a screenshot for the help topic.

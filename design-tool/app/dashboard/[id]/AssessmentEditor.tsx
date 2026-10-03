@@ -18,6 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { InstantFeedbackSettings } from "@/components/app/InstantFeedbackSettings";
+import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/app/EmptyState";
 import { ApiError, itemErrorCopy } from "@/lib/ui/errorCopy";
@@ -159,6 +161,11 @@ interface AssessmentView {
   time_limit_seconds: number | null;
   /** Client paging (docs/client-paging-design.md): scroll | paged. */
   student_layout: "scroll" | "paged";
+  /** Instant feedback (docs/instant-feedback-design.md): off | score | right_wrong | answers. */
+  student_feedback: FeedbackLevelSetting;
+  answers_release: AnswersReleaseSetting;
+  /** ISO instant the teacher released the key, or null. */
+  answers_released_at: string | null;
   allowed_accommodations: string[];
   construct_altering: string[];
   /** D-1 (docs/archive-and-delete-design.md): governs the Settings-tab Delete draft action. */
@@ -1761,6 +1768,17 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </Button>
           <StatusLine state={settingsSave} />
         </div>
+
+        {/* Instant feedback (docs/instant-feedback-design.md): NOT gated by
+            isLocked — it saves itself, at once, and the server lets exactly
+            these two settings through the publish lock. */}
+        <InstantFeedbackSettings
+          assessmentId={assessment.id}
+          initialLevel={assessment.student_feedback}
+          initialRelease={assessment.answers_release}
+          initialReleasedAt={assessment.answers_released_at}
+          onSaved={refresh}
+        />
 
         {/* Access slice 3: Duplicate, Archive and Delete draft are all
             `own`-level routes (docs/access-model-design.md) — a co-teacher's

@@ -15,6 +15,8 @@ import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
+import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
+import { canReleaseAnswers, showsReleasedLine } from "@/lib/feedback/settingsUi";
 import { ClassInsightsPanel } from "@/components/app/ClassInsightsPanel";
 import { questionAnchor } from "@/lib/insights/panelCopy";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
@@ -103,6 +105,17 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     ? await loadSendDialogSections(db, assessment.id, session.email, results)
     : [];
 
+  // Instant feedback (docs/instant-feedback-design.md, D-4): the key is held
+  // back for a teacher release only at the answers level + on_release. The
+  // button is edit-level; the released line is quiet and shown to any viewer.
+  const releasedAtIso = assessment.answers_released_at
+    ? assessment.answers_released_at.toISOString()
+    : null;
+  const showReleaseButton =
+    levelSatisfies(access.level, "edit") &&
+    canReleaseAnswers(assessment.student_feedback, assessment.answers_release, releasedAtIso);
+  const showReleasedLine = showsReleasedLine(assessment.student_feedback, releasedAtIso);
+
   const raw = (await searchParams).section;
   const selectedSection = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
   // Co-teacher follow-ups, 2026-09-22: the options also carry every section a
@@ -153,6 +166,9 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           >
             Print student work
           </a>
+          {showReleaseButton || showReleasedLine ? (
+            <ReleaseAnswersAndReload assessmentId={assessment.id} releasedAt={releasedAtIso} />
+          ) : null}
           {sendSections.length > 0 ? (
             <SendToGradebookAndReload
               assessmentId={assessment.id}
