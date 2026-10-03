@@ -1266,16 +1266,16 @@ database works). Bedrock rows need `ITEM_PROVIDER=bedrock` locally or the origin
 | 392 | Write class insights | Button shows a spinner and "Writing…", then four sections (Strengths, Areas for growth, Celebrations, Next steps for the whole class), "Written by AI — check it before you act on it." and a written time | ◐ 2026-10-03: spinner + "Writing…", 24 s on Bedrock (`ai_usage` class-insights, Sonnet 4.6, 4,086 in / 1,778 out), four sections, the AI line and the time, the unscored note above — but the CONTENT has findings CI-1…CI-4 below |
 | 393 | Click a Q citation | The page jumps to that question's column header in the matrix | ✅ 2026-10-03 by markup: every Q link is `#col-q<n>` and each anchor exists on the matrix header |
 | 394 | Click a student name citation | Opens that student's results page | ✅ 2026-10-03 by markup: each name links to the same per-student page as that student's matrix row |
-| 395 | Pick a section in the filter and Show | The panel shows that section's own report (or the empty state); "All sections" shows the all-sections report | NOT RUN |
-| 396 | Hand in or Change a score, reload | "Results have changed since this was written — Regenerate." appears; Regenerate replaces the report and clears it | NOT RUN |
-| 397 | An assessment with unscored answers | The unscored note shows above the sections | NOT RUN |
-| 398 | Copy, paste into a text editor | First line "Teacher-only: names students; not for families.", then headings and "- " claims with real names; "Copied" appears | NOT RUN |
-| 399 | Helpful with no comment | "Thanks for the rating."; a `feedback` row `class-insights rating: helpful …` exists; no email / SNS message | NOT RUN |
-| 400 | Not helpful with a comment | Row stores the comment on the second line; the maintainer gets one email | NOT RUN |
-| 401 | A co-teacher at view level | Sees the stored report (or "No class insights yet.") and Copy / rating, no Write or Regenerate button | NOT RUN |
-| 402 | Delete a student's attempt after generating | The claim naming them reads "a student no longer in these results", no link | NOT RUN |
-| 403 | An assessment with no scored student, POST by hand | 409 `nothing_to_report`; via the button: "No student has a scored answer yet." | NOT RUN |
-| 404 | Mock `BLOCKME` title / Bedrock guardrail block | "The report was withheld by content safeguards. Try again."; nothing stored | NOT RUN |
+| 395 | Pick a section in the filter and Show | The panel shows that section's own report (or the empty state); "All sections" shows the all-sections report | ✅ 2026-10-03 (`_demo`, Bedrock): the all-sections report and the section `AP Biology · 1(A)` are separate rows — the section answered 404 `none` while the all-sections report existed |
+| 396 | Hand in or Change a score, reload | "Results have changed since this was written — Regenerate." appears; Regenerate replaces the report and clears it | ✅ 2026-10-03: scoring the one open answer made GET `stale: true` and the panel showed "Results have changed since this was written — Regenerate."; Regenerate (≈ 20 s) replaced the report and the line cleared |
+| 397 | An assessment with unscored answers | The unscored note shows above the sections | ✅ 2026-10-03: "1 response not yet scored — score them first for a complete picture" above the sections while one answer was open; gone once it was scored |
+| 398 | Copy, paste into a text editor | First line "Teacher-only: names students; not for families.", then headings and "- " claims with real names; "Copied" appears | ◐ 2026-10-03: "Copied" appeared; the clipboard was not read back (Chrome's paste-permission prompt froze the automation tab) — the text itself is covered by `test/insights-panel.test.tsx` |
+| 399 | Helpful with no comment | "Thanks for the rating."; a `feedback` row `class-insights rating: helpful …` exists; no email / SNS message | ✅ 2026-10-03: "Thanks for the rating."; `feedback` row `class-insights rating: helpful | assessment … | prompt 2026-10-03.2`; sent quiet (no SNS locally either way — `feedback-api.test.ts` asserts no publish) |
+| 400 | Not helpful with a comment | Row stores the comment on the second line; the maintainer gets one email | NOT RUN (the comment + one-email path is covered by `feedback-api.test.ts`) |
+| 401 | A co-teacher at view level | Sees the stored report (or "No class insights yet.") and Copy / rating, no Write or Regenerate button | NOT RUN (needs a co-teacher grant on the demo assessment) |
+| 402 | Delete a student's attempt after generating | The claim naming them reads "a student no longer in these results", no link | NOT RUN on hand (would delete a demo attempt the help captures use; `insights-report-route.test.ts` covers the wording) |
+| 403 | An assessment with no scored student, POST by hand | 409 `nothing_to_report`; via the button: "No student has a scored answer yet." | ✅ 2026-10-03: POST on `Photosynthesis Quiz` (nothing handed in) → 409 `nothing_to_report` |
+| 404 | Mock `BLOCKME` title / Bedrock guardrail block | "The report was withheld by content safeguards. Try again."; nothing stored | NOT RUN on hand (mock `BLOCKME` covered by `insights-report-route.test.ts`; a real Bedrock block was not provoked) |
 
 Findings from rows 391–394 (2026-10-03, `_demo` DB, Bedrock), proposals —
 rows 395–404 held until they are fixed:
