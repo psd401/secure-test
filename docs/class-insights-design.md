@@ -6,7 +6,7 @@ celebrations using specific students as examples, recommended next steps
 for whole-class instruction, and a chat to talk with an AI about the
 results. Decisions marked **D-n**; James's answers of 2026-10-02 are
 recorded as decided, the rest are recommendations. **§Progress says what
-is built** (nothing yet).
+is built** (slice 1).
 
 ## Relation to the roadmap
 
@@ -146,7 +146,42 @@ spend per teacher.
 
 0. This note.
 1. Evidence pack builder (pure, from results + analytics) + pseudonym map
-   + tests (Opus 5 / medium).
+   + tests (Opus 5 / medium). BUILT 2026-10-03, no migration, no route,
+   no model call — nothing reads it yet: `lib/insights/evidencePack.ts`.
+   `buildEvidencePackFromData(input)` is pure (plain items / attempts /
+   responses with their FINAL score / open-alert response ids / tag
+   lookup in → `{ pack, names }`); `buildEvidencePack(db, { assessmentId,
+   section })` loads through `buildResults` (owner scoping, practice out,
+   section labels; `section` = null for all, `NO_SECTION_FILTER` =
+   `"__none__"` like the results page, else a label), one responses ⟕
+   final-score read, the unacknowledged `safeguarding_alerts`, and
+   `lookupTags`; analytics go through R1's `buildItemAnalytics` over the
+   SCOPED rows (the results page's own footer stays all-sections).
+   Defaults: pseudonyms `S1…Sn` by ascending attempt id; items labelled
+   `Q<position+1>` like the CSV; stems ≤ 200 chars with pictures read as
+   `[image: alt]`; MC choices lettered A, B, … with the key marked; the
+   short-text key shown; top 8 short-text answers (trim + case-fold,
+   shown as the most common spelling, ties by code point, mean final
+   points per cluster); rubric level distributions per criterion ordered
+   by points; the scorer's overall rationale ≤ 400 chars; whole-number
+   percents, means to 2 places. `pack.figures` is flat:
+   `scope.{handed_in,scored,unscored_responses}`,
+   `item.Q<n>.{mean,p_value,answered_count,answered_percent,max_points}`,
+   `item.Q<n>.choice.<letter>.count`,
+   `item.Q<n>.criterion.<name>.<level>.count`, `tag.<stored tag>.percent`,
+   `student.S<n>.{total,max}`, `student.S<n>.item.Q<n>.points`,
+   `student.S<n>.tag.<stored tag>.percent` (a figure with no value —
+   nothing scored — is absent, so a claim citing it drops). `pack.hash` =
+   sha256 of the key-sorted JSON; input order does not move it. Choices
+   made here: the per-student list holds handed-in attempts with at least
+   one final score (totals over finals, `unscored` per student); "scored"
+   in the header = handed-in attempts with every answer final; for an
+   answer with an open alert the scorer's rationale is withheld too (it
+   describes that writing) while its levels and points count; no item
+   ids in the pack (slice 2/3 map `Q<n>` back by position). The loader
+   takes no `viewer` — access is the caller's precondition, as for
+   `buildResults`. Tests: `insights-evidence-pack` (10 pure + 1 loader
+   against the test DB).
 2. Report: provider method, Zod schema, citation/number fill, storage
    (migration: `class_insight_reports`), staleness hash (Opus 5 / medium).
 3. Report UI on the results page + rating + Copy (Sonnet 5 / medium).
@@ -160,6 +195,10 @@ Design tool only; no client change. Most useful after row BG slice 1
 
 ## Open questions
 
+- **Acknowledged alerts (James, 2026-10-03): the pack excludes an answer's
+  text and rationale only while its safeguarding alert is OPEN** (`acknowledged_at`
+  null). Once acknowledged, the answer is treated like any other.
+
 Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
 (words only on demand); 9.3 → D-7 (one section, comparison maybe later);
 9.4 → D-8 (copy to clipboard only). D-4 persist the chat — confirmed.
@@ -170,4 +209,4 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
 
 ## Progress
 
-Nothing built.
+- Slice 1 BUILT 2026-10-03 (see §Slices) — not deployed, nothing reads it.
