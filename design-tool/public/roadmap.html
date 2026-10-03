@@ -303,12 +303,12 @@
 // ---------------------------------------------------------------------------
 // Content. Update these lists as work lands; the page is built from them.
 // ---------------------------------------------------------------------------
-const UPDATED = "2026-09-29";
+const UPDATED = "2026-10-03";
 
 const STATS = [
-  { value: "130", label: "days from first experiment" },
-  { value: "9", label: "student app releases" },
-  { value: "49", label: "database migrations" },
+  { value: "134", label: "days from first experiment" },
+  { value: "10", label: "student app releases" },
+  { value: "54", label: "database migrations" },
   { value: "3,000+", label: "automated tests" },
 ];
 
@@ -366,12 +366,19 @@ const JOURNEY = [
     text: "A teacher can correct any final score, with the earlier one kept as a record." },
   { date: "2026-09-29", star: true, title: "Scores go to PowerSchool",
     text: "Send to gradebook puts each student's total points into PowerTeacher Pro, one section at a time, through a district PowerSchool plugin. Colleagues now see a New badge when something is shared with them." },
+  { date: "2026-10-01", title: "Email from the app",
+    text: "Safeguarding alerts reach the teacher's inbox, and colleagues get an email when a test is shared with them." },
+  { date: "2026-10-01", star: true, title: "Read-aloud and speech-to-text",
+    text: "Student app 1.4.0: questions and passages read aloud, students\u2019 own answers read back, and answers dictated by voice \u2014 for the students a teacher grants them to. Voices stay on the Mac. The project became an open beta across one school." },
+  { date: "2026-10-02", title: "Standards and batch question writing",
+    text: "Questions can carry Washington and NGSS standards. Generate questions drafts up to ten at a time from standards, an objective or a teacher's own material, including matching; Suggest standards proposes tags for untagged questions. Nothing is saved until the teacher adds it." },
+  { date: "2026-10-03", star: true, title: "Class insights",
+    text: "On the results page, the AI writes strengths, areas for growth, celebrations and next steps for the class, and a teacher can ask follow-up questions. Every number comes from the class's own scores, and names never reach the AI." },
 ];
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
-  { title: "Email from the app", text: "Safeguarding alerts reach the teacher's inbox, and colleagues get an email when a test is shared with them.", wait: "IT + AWS email setup" },
-  { title: "Read-aloud and speech-to-text for students", text: "Built; ships with the next student-app release. Questions and passages read aloud, students\u2019 own answers read back, and answers dictated by voice \u2014 for the students a teacher grants them to. Voices stay on the Mac." },
+  { title: "Instant feedback at hand-in", text: "When a teacher turns it on, students see right / wrong on machine-scored questions as soon as they hand in." },
   { title: "Run the open beta and gather feedback", text: "Users across one school. Teacher and student feedback rounds; the questions at right are part of it." },
   { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
   { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },
