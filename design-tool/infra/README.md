@@ -5,7 +5,7 @@ CDK stack `SecureTestDesignTool` provisioning an Aurora Postgres Serverless v2 c
 ## What it stands up
 
 - VPC: 2 AZs, no NAT. Public subnets (the cluster) plus isolated subnets (the roster importer Lambda) with an S3 gateway endpoint (free) and a Secrets Manager interface endpoint (`privateDnsEnabled`) so the isolated side reaches both services without NAT.
-- Aurora Postgres Serverless v2 (Postgres 16.6), min **0 ACU** (scale-to-zero) / max **1 ACU**.
+- Aurora Postgres Serverless v2 (Postgres 16.6), min **0.5 ACU** / max **1 ACU** (min raised from 0 for the pilot to avoid the 15–90 s cold start — decision 1.2 in `docs/ecs-deploy-plan.md`).
 - One writer instance, publicly accessible.
 - Security group with **SG→SG ingress only** on 5432: the roster importer Lambda and the Fargate app service. No CIDR rules since 2026-09-01 — laptop access is a temporary hand-added rule (below), never a standing one; the district's egress IP is the WSIPC/K-20 NAT shared by the whole network.
 - Master credentials in Secrets Manager (auto-generated 30-char password).
@@ -22,9 +22,14 @@ CDK stack `SecureTestDesignTool` provisioning an Aurora Postgres Serverless v2 c
 
 ## Cost posture
 
-- Idle (cluster paused at 0 ACU): storage only, ~$0.10/GB-month.
-- Active (1 ACU): ~$0.12/hour = ~$3/day.
-- No NAT (~$32/mo saved). S3 gateway endpoint is free. The Secrets Manager interface endpoint is the one paid endpoint: one ENI per AZ (2) at ~$0.01/hour each plus data processed — order of ~$15/mo, needed because the importer has no other path to Secrets Manager.
+List prices, us-west-2. The stack never idles to zero: roughly **$105/month** before any AI use.
+
+- Aurora: never pauses — 0.5 ACU floor at ~$0.12/ACU-hour ≈ $44/mo, up to ≈ $88/mo if it sat at the 1 ACU cap all month; storage ~$0.10/GB-month, I/O a dollar or two.
+- App tier, always on: ALB ≈ $16.50/mo + LCUs (a few dollars); one Fargate task (0.5 vCPU / 1 GB, ARM64) ≈ $14.50/mo, a second for minutes during each deploy.
+- Public IPv4: four addresses (ALB ×2, the Fargate task, the publicly accessible writer) at $0.005/hour each ≈ $15/mo.
+- No NAT (~$32/mo saved). S3 gateway endpoint is free. The Secrets Manager interface endpoint is the one paid endpoint: **one AZ** since follow-up 9.4 (2026-08-28), ~$0.01/hour ≈ $7.30/mo plus data processed, needed because the importer has no other path to Secrets Manager. Two secrets add $0.80/mo.
+- CloudWatch (30-day logs, four alarms, one custom metric), ECR image storage, S3, SNS, SES and the once-a-day Lambda: single dollars combined.
+- Bedrock is per use (no floor): Sonnet 4.6 $3 / $15 and Haiku 4.5 $1 / $5 per million input / output tokens, plus ApplyGuardrail per text unit. The `ai_usage` log line records tokens per call.
 
 `cdk destroy` removes everything; `RemovalPolicy.DESTROY` is set for dev.
 
@@ -71,6 +76,19 @@ scripts/deploy.sh --during-school  # override the school-hours guard
 ```
 
 `aws sso login` stays a human step (it opens a browser).
+
+Image cleanup (2026-10-03): after a healthy deploy the script runs
+`cdk gc --type ecr --rollback-buffer-days 30 --unstable=gc` against this
+account + region. The app image goes into CDK's shared bootstrap ECR
+repository, whose only lifecycle rule expires *untagged* images — ours are
+tagged by asset hash, so none ever expired (32 images, 4.5 GB on
+2026-10-03, ~140 MB per deploy). `cdk gc` tags images no CloudFormation
+stack references and deletes them after 30 days tagged; the running image
+and anything another stack uses are never touched, and re-bootstrapping
+does not undo it. A rollback to a task definition whose image was deleted
+fails — 30 days is the window. Best-effort: a gc failure is printed and
+the deploy still succeeds. Preview without changing anything:
+`bunx cdk gc aws://<account-id>/us-west-2 --unstable=gc --type ecr --action print`.
 
 ### Context file (`cdk.context.json`)
 

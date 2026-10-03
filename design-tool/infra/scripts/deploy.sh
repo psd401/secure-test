@@ -22,6 +22,8 @@
 #   4. cdk deploy --require-approval never (no TTY in a scripted run).
 #   5. verify: wait (up to DEPLOY_HEALTH_WAIT s, default 600) for /api/health
 #      to report HEAD, then print the service's rollout.
+#   6. after a healthy deploy only: cdk gc on the bootstrap ECR repository
+#      (unreferenced images deleted after 30 days), best-effort.
 #
 # Migrations (DS-1, 2026-09-25): the container runs them at boot, before the
 # server starts (scripts/docker-entrypoint.mjs), so a health stamp == HEAD also
@@ -154,6 +156,20 @@ aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
 if [ "$HEAD_LIVE" -eq 1 ]; then
   echo "health stamp = HEAD ✅ (boot-time migrations applied)"
   [ "$CDK_EXIT" -ne 0 ] && echo "deploy: cdk exited $CDK_EXIT but the new image is serving — treated as success"
+  # ---------- 6. image cleanup ----------
+  # The app image lands in CDK's shared bootstrap repository, whose only
+  # lifecycle rule expires UNTAGGED images — ours are tagged by asset hash, so
+  # nothing ever left (32 images / 4.5 GB on 2026-10-03). cdk gc tags images no
+  # stack in this account + region references and deletes them once tagged for
+  # 30 days (the rollback window). ECR only — the bootstrap S3 bucket is left
+  # alone. Only after a healthy deploy, and best-effort: a gc failure never
+  # fails the deploy. --unstable=gc: the CLI still flags the command unstable.
+  say "image cleanup (cdk gc, ecr, 30-day buffer)"
+  (
+    ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+    bunx cdk gc "aws://${ACCOUNT}/${AWS_REGION}" --unstable=gc --type ecr \
+      --rollback-buffer-days 30 --confirm=false
+  ) || echo "deploy: cdk gc failed — images left in place, the deploy itself succeeded"
   exit 0
 fi
 echo "health stamp never reached HEAD ($HEAD_SHA) — the new task did not go healthy (failed build, failed boot migration, or a rollback). Read the task's logs before re-running." >&2
