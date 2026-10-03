@@ -1,4 +1,5 @@
 import { CreateItemBody } from "@/lib/api/items";
+import { MATH_DOLLAR_RULE } from "@/lib/ai/mathPromptRule";
 
 // Shared between the mock and Bedrock PDF extractors + the route.
 
@@ -82,11 +83,9 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   // (docs/roadmap-2026-09.md, 2026-09-16): a `$` before a digit opens math in
   // both renderers only when the run carries a LaTeX command, `^` or `_`, so a
   // dollar amount must still carry the backslash to render as a literal `$`,
-  // while `$3.5 \times 10^{4}$` above is fine as written.
-  "Write a dollar amount with a backslash before the sign (\\$57,600), never",
-  "as math: a dollar amount must carry the backslash. Math that starts with a",
-  "digit is fine inside $...$ as long as it contains a LaTeX command, ^ or _",
-  "($6 \\times 7$, $3.5 \\times 10^{4}$).",
+  // while `$3.5 \times 10^{4}$` above is fine as written. BG-E1 adds the
+  // digit-led math with no command (`${3x + 7 = 22}$`); shared rule text.
+  MATH_DOLLAR_RULE,
   "Leave correct_answer values as plain text.",
   "The text may contain markers like [FIGURE 3] where a figure (a graph,",
   "diagram, table or picture) sits in the document. When one or more",

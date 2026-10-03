@@ -2,6 +2,7 @@ import { CreateItemBody } from "@/lib/api/items";
 import { counterparts, lookup, parseTag, type StandardEntry } from "@/lib/standards/catalog";
 import { resolveBareCode } from "@/lib/standards/search";
 import { repairModelJson } from "@/lib/pdfImport/extractCore";
+import { MATH_DOLLAR_RULE } from "./mathPromptRule";
 import {
   BATCH_GENERABLE_ITEM_TYPES,
   BATCH_MIX_ITEM_TYPES,
@@ -105,6 +106,7 @@ REQUIREMENTS:
 - Essays get the prompt only. Do NOT write a rubric, scoring guide or sample answer.
 - When standards are given, write to what the standard describes, not to its code. Do not print standard codes in the items.
 - Math: wrap inline expressions in $...$ (single dollars). Available macros include \\frac, \\sqrt, ^, _, \\cdot, \\div, \\plusminus, \\degree, \\percent.
+- ${MATH_DOLLAR_RULE}
 - Keep stems and choices age-appropriate for K-12 students.
 - Do NOT add fields beyond the shapes above.`;
 

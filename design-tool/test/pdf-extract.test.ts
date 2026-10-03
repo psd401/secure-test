@@ -3,6 +3,7 @@
 // finding), scanned detection, candidate validation, and the mock provider.
 import { describe, expect, test } from "bun:test";
 import { makeMultiPageTextPdf } from "./helpers/pdf";
+import { MATH_DOLLAR_RULE } from "@/lib/ai/mathPromptRule";
 import {
   extractPdfText,
   looksScanned,
@@ -265,16 +266,12 @@ describe("extractor prompt (E1/E2/E4/E7a/E8)", () => {
       /KEEP each \[FIGURE n\] marker, on a line of its own, exactly where that figure is printed/,
     );
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("escape double quotes");
-    // C-2 as refined by M-1 (2026-09-16): a dollar amount still carries the
-    // backslash, but math starting with a digit is fine when the run holds a
-    // LaTeX command / `^` / `_`.
-    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("\\$57,600");
-    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(
-      "a dollar amount must carry the backslash",
-    );
-    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(
-      "Math that starts with a digit is fine inside $...$ as long as it contains a LaTeX command, ^ or _",
-    );
+    // C-2 as refined by M-1 (2026-09-16) and BG-E1 (2026-10-02): a dollar
+    // amount carries the backslash, digit-led math with a LaTeX command /
+    // `^` / `_` is fine as $...$, and digit-led math without one goes in
+    // ${...}$. The shared rule text and its rendering are tested in
+    // test/math-prompt-rule.test.ts.
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain(MATH_DOLLAR_RULE);
     expect(PDF_EXTRACT_SYSTEM_PROMPT).not.toContain(
       "a $ directly before a digit is never a math delimiter",
     );

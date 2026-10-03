@@ -1,4 +1,5 @@
 import type { GenerateItemRequest, GenerateItemResult } from "./types";
+import { MATH_DOLLAR_RULE } from "./mathPromptRule";
 
 // Shared item-generation core for the Anthropic-family providers
 // (direct Anthropic API + Amazon Bedrock). Both SDKs expose the same
@@ -87,6 +88,7 @@ REQUIREMENTS:
 - For multiple_choice_multi, include at least 2 correct ids.
 - Distractors (wrong choices) must be plausible — represent common misconceptions or near-miss reasoning, not obviously wrong throwaways.
 - Math: wrap inline expressions in $...$ (single dollars). Available macros include \\frac, \\sqrt, ^, _, \\cdot, \\div, \\plusminus, \\degree, \\percent, \\half, \\third, \\quarter.
+- ${MATH_DOLLAR_RULE}
 - Keep stems and choices age-appropriate for K-12 students.
 - Do NOT add fields beyond the shape above. The downstream system will reject extras.`;
 
