@@ -570,3 +570,17 @@ Plus the rows' own Bedrock batches (slice 4: 5 + 3 + 2 + 3; slice 6: 3 + 5)
   command, ^ or _ goes in ${...}$ (${3x + 7 = 22}$)" — plus a mock-free
   unit test on the prompt text, then one Bedrock batch to confirm.
 
+
+**BG-E1 prompt rule BUILT + DEPLOYED 2026-10-02 (rev 75) — partial.** The
+shared `MATH_DOLLAR_RULE` (`lib/ai/mathPromptRule.ts`) now rides the batch,
+single-item and PDF-import prompts. Re-run of batch B ×2 on Bedrock (20 / 20
+kept): of 67 texts holding a `$`, 25 dollar amounts came back escaped (`\$`)
+and 4 math runs used `${...}$`, but 19 digit-led runs without a command would
+still render raw — 10 equations / inequalities (`5x + 3 = 28`,
+`30h + 45 = 135`, `2x < 18`, …) and 9 bare numbers (`$2.5$`). The model
+follows the currency half of the rule and mostly ignores the brace half.
+A deterministic fix is proposed (James to decide): server-side, before
+validation, rewrite a `$…$` run that M-1 would leave raw into `${…}$` when
+the run starts with a digit, has no leading / trailing space, no word of two
+or more letters, and ends in a letter, digit, `)` or `}` — currency such as
+"$5 to $10", "$5-$10" or "$3.50/$4" fails those tests and is left alone.
