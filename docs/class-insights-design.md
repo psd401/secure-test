@@ -385,7 +385,9 @@ spend per teacher.
    cascade, access matrix, per-co-teacher threads). Not built: the UI
    (slice 5); no Bedrock run (slice 6).
 5. Chat UI (Sonnet 5 / medium).
-6. Teacher rows; Bedrock evidence on the `_demo` database.
+6. Teacher rows; Bedrock evidence on the `_demo` database. DONE 2026-10-03:
+   rows 391–414 run (results in `docs/design-tool-manual-checks.md`), the
+   evidence is under §Progress ("Slice 6 evidence"); open items listed there.
 
 Design tool only; no client change. Most useful after row BG slice 1
 (tags) and with real scored data — build last of the three beta requests.
@@ -413,8 +415,10 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
   teacher rows 391+ in `docs/design-tool-manual-checks.md` NOT RUN.
 - Slice 4 BUILT 2026-10-03 (see §Slices) — chat routes + migration 0053, no
   UI, not deployed.
-- Slice 5 BUILT 2026-10-03 — chat UI under the report; rows 405–414 NOT RUN,
-  not deployed.
+- Slice 5 BUILT 2026-10-03 — chat UI under the report.
+- **Deployed 2026-10-03:** slices 1–3 on rev 77 (migration 0052), the CI-1…CI-4
+  fixes on rev 78, slices 4–5 on rev 79 (migration 0053). Row CI is LIVE.
+- **Slice 6 DONE 2026-10-03** — see "Slice 6 evidence" below.
 
 Slice 5 BUILT 2026-10-03, no migration. `components/app/ClassInsightsChat.tsx`
 (client) renders inside `ClassInsightsPanel` after the report states, keyed by
@@ -436,3 +440,44 @@ UI can say "Read N answers" — the shape did not expose it; the route test
 asserts it. Intro line says names are swapped for S1, S2… and that up to 300
 words of answers may be read when an essay / short-answer question is named.
 Rows 405–414. Not done: Bedrock run (slice 6), no DOM-harness click tests.
+
+### Slice 6 evidence (2026-10-03, local dev on the `_demo` database, Bedrock)
+
+Why `_demo`: the origin's hand-run fixtures show no rows once the demo
+students' one-day roster rows expire (results are scoped to the owner's
+current roster), and real students' work must not be used for a hand-run.
+Class: `Cell Structure Check-in` — 7 questions (MC, multi-select, short text,
+two-criterion essay, match, order), 4 handed-in fictional students, one essay
+unscored at the start. Model: Sonnet 4.6 (`BEDROCK_ITEM_MODEL`).
+
+| Run | Prompt | Time | Tokens in / out | Claims dropped | Checked against the matrix |
+|---|---|---|---|---|---|
+| Report 1 | 2026-10-03 | 24 s | 4,086 / 1,778 | — | **CI-1 … CI-4** (below) |
+| Report 2, 3 | 2026-10-03.2 | 19 s, 21 s | — | 2, 1 | every named student fits; no `%%`; note not repeated; no answer beside a name |
+| Regenerate after scoring | 2026-10-03.2 | ≈ 20 s | — | — | stale line cleared |
+| Chat 1 ("hardest question") | chat 2026-10-03 | ≈ 20 s | — | — | numbers match; a reasoning slip (Q4 called hardest while Q2 was 0%) |
+| Chat 2 (typed name + essay) | chat 2026-10-03 | ≈ 20 s | — | — | 2 of 6 on Q5 and 2 of 12 overall match; read 1 answer; name stored as `[[S1]]` |
+
+- **Findings fixed the same day (rev 78):** CI-1 `75%%`; **CI-2 a growth
+  claim named a student among those who got Q4 wrong although that student
+  earned full points** — now `studentsFitClaim` drops such claims server-side;
+  CI-3 the unscored note repeated inside a claim; CI-4 an anonymous short
+  answer paired with a named student. Prompt version 2026-10-03.2.
+- **Success measures (§Success looks like):** "every number a pack value" —
+  enforced by the fill and its test, and no hand-checked number was wrong;
+  "no student identity in any prompt or `ai_usage` line" — tested (report and
+  chat), and the stored chat turn held `[[S1]]` where the teacher typed a
+  name; "celebrations name real students for real evidence" — enforced since
+  CI-2, all four celebrations in reports 2–3 checked true; "mostly helpful"
+  ratings — waits on the beta (ratings are stored quietly in `feedback`).
+- **Readings, no change:** the chat can still make a reasoning slip without an
+  invented number (Q4 "hardest" while Q2 was 0%) — the report's CI-2 check
+  does not apply to free chat replies (slice 4 decision); one demo student's
+  teacher-changed score disagrees with their chosen option, and the model
+  went by the choice counts, which is correct for the pack.
+- **Open (not run by hand):** co-teacher rows 401 (view level sees the
+  report, no Write) and 411 (per-teacher threads) need a real co-teacher
+  grant; the 40-turn cap (409), a live Bedrock guardrail block (404 / 408)
+  and the comment-email rating (400) are covered by route / API tests only;
+  the chat starters were not all sent on Bedrock.
+
