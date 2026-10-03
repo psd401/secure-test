@@ -29,7 +29,7 @@ List prices, us-west-2. The stack never idles to zero: roughly **$105/month** be
 - Public IPv4: four addresses (ALB ×2, the Fargate task, the publicly accessible writer) at $0.005/hour each ≈ $15/mo.
 - No NAT (~$32/mo saved). S3 gateway endpoint is free. The Secrets Manager interface endpoint is the one paid endpoint: **one AZ** since follow-up 9.4 (2026-08-28), ~$0.01/hour ≈ $7.30/mo plus data processed, needed because the importer has no other path to Secrets Manager. Two secrets add $0.80/mo.
 - CloudWatch (30-day logs, four alarms, one custom metric), ECR image storage, S3, SNS, SES and the once-a-day Lambda: single dollars combined.
-- Bedrock is per use (no floor): Sonnet 4.6 $3 / $15 and Haiku 4.5 $1 / $5 per million input / output tokens, plus ApplyGuardrail per text unit. The `ai_usage` log line records tokens per call.
+- Bedrock is per use (no floor): Sonnet 4.6 $3.30 / $16.50 and Haiku 4.5 $1.10 / $5.50 per million input / output tokens (the `us.` cross-region rate, 10% above AWS's global rate), plus ApplyGuardrail per text unit. The `ai_usage` log line records tokens per call; **`scripts/ai-usage.sh`** (read-only Logs Insights, `--days 1–30`, `--exclude-sub <sub>` or `AI_USAGE_EXCLUDE_SUBS` to drop test accounts, `--by-owner`) prints calls, average tokens and estimated cost per surface. Its price table is in the script — update it when a model or price changes.
 
 `cdk destroy` removes everything; `RemovalPolicy.DESTROY` is set for dev.
 
