@@ -601,3 +601,9 @@ currency is the common case), and questions already saved. Tests
 KaTeX; "$5 to $10", "$5-$10", "$3.50/$4", "$12.50 per hour … $200", `\$`,
 `$$…$$` untouched; command runs untouched; keys untouched; the batch
 validator applies it).
+
+**BG-E1 DEPLOYED + VERIFIED 2026-10-03 (rev 76).** Batch B ×2 on Bedrock
+again (20 / 20 kept, 0 dropped): 71 texts holding a `$`; 0 digit-led runs
+left raw; 24 `${…}$` runs, every one math (equations, inequalities, bare
+numbers — no dollar amount wrapped); 31 escaped dollar amounts. BG-E1 is
+CLOSED.
