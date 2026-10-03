@@ -392,9 +392,12 @@ None open.
   listens in the capture phase) — `onEscapeKeyDown` now ignores an
   Escape from an expanded combobox; the dialog stayed at `sm:max-w-lg`
   because the primitive's class won over `max-w-2xl`, scrolling sideways
-  by 33 px — now `sm:max-w-2xl` + `overflow-x-hidden`. Reading, not
-  fixed: answer choices show raw LaTeX (`$CO_2$`) while the stem gets a
-  rendered preview. Rows 358–371 open for the origin.
+  by 33 px — now `sm:max-w-2xl` + `overflow-x-hidden`. Then (James,
+  23.3): the cards rendered choices as raw LaTeX (`$CO_2$`) beside a
+  stem preview — a read-only card now renders its stem, choices and key
+  once through `renderContent` (KaTeX, emphasis, images), raw text only
+  while it loads; checked on a fresh Bedrock batch (18 choices with math,
+  no raw `$`). Rows 358–371 open for the origin.
 - **Slice 2 BUILT 2026-10-02 (`a3d0633`, not deployed — migration 0050):**
   optional standards tags on items, the editor picker, the two staff
   routes, bundles carry tags, tags editable while Published (14.1).

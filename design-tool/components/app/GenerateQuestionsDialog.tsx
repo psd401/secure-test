@@ -14,7 +14,7 @@ import {
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
-import { MathPreview } from "@/app/dashboard/[id]/MathPreview";
+import { renderContent } from "@/app/actions/renderContent";
 import { cardText } from "@/app/dashboard/[id]/PdfImportPanel";
 import { chipLabel, tagScheme } from "@/lib/standards/tags";
 import {
@@ -569,13 +569,12 @@ function ProposalCard({
               </span>
             ) : null}
           </div>
-          <p className="whitespace-pre-line text-sm">{cardText(p.stem)}</p>
-          <MathPreview text={p.stem} />
+          <Rendered text={p.stem} className="block whitespace-pre-line text-sm" />
           {p.choices && p.choices.length > 0 ? (
             <ul className="space-y-0.5 text-sm">
               {p.choices.map((ch) => (
                 <li key={ch.id} className="text-muted-foreground">
-                  {ch.text}
+                  <Rendered text={ch.text} />
                   {/* The mark appears only once the key is opened, so the
                       "Check the key" badge means the teacher has not seen it. */}
                   {!checkKey && correct.has(ch.id) ? (
@@ -614,7 +613,9 @@ function ProposalCard({
               <summary className="cursor-pointer text-xs underline">Show the key</summary>
               <ul className="mt-1 list-disc pl-5">
                 {key.map((k, i) => (
-                  <li key={i}>{k}</li>
+                  <li key={i}>
+                    <Rendered text={k} />
+                  </li>
                 ))}
               </ul>
             </details>
@@ -640,4 +641,32 @@ function ProposalCard({
 
 function typeLabel(type: string): string {
   return (BATCH_TYPE_LABEL as Record<string, string>)[type] ?? type;
+}
+
+// A proposal is read-only, so its stem, choices and key render once —
+// math as KaTeX, **bold** / _italic_, images — through the same server
+// action as the editor's MathPreview, instead of raw text beside a preview.
+// Plain text (nothing to render) skips the round-trip; until the HTML
+// arrives, or if the action returns nothing, the raw text shows.
+function Rendered({ text, className }: { text: string; className?: string }) {
+  const interesting =
+    text.includes("$") || text.includes("](asset:") || /\*\*|(^|\s)_[^_\s]/.test(text);
+  const [html, setHtml] = useState<string>("");
+  useEffect(() => {
+    if (!interesting) return;
+    let cancelled = false;
+    void renderContent(text).then((out) => {
+      if (!cancelled) setHtml(out);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [text, interesting]);
+  // renderContent output is server-rendered: text HTML-escaped, math is
+  // KaTeX, images point at session-scoped /api/assets — the same trust as
+  // MathPreview.
+  if (interesting && html) {
+    return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  return <span className={className}>{cardText(text)}</span>;
 }
