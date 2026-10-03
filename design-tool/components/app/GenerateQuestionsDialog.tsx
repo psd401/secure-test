@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogTrigger,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -18,6 +19,7 @@ import { renderContent } from "@/app/actions/renderContent";
 import { cardText } from "@/app/dashboard/[id]/PdfImportPanel";
 import { chipLabel, tagScheme } from "@/lib/standards/tags";
 import {
+  describeAddError,
   BATCH_DIFFICULTIES,
   BATCH_DIFFICULTY_LABEL,
   BATCH_FILE_ACCEPT,
@@ -61,12 +63,19 @@ export function GenerateQuestionsDialog({
   assessmentId,
   usedStandards,
   disabled,
+  canOpen = true,
   onAdded,
 }: {
   assessmentId: string;
   /** Tags already on the assessment — the picker offers them first. */
   usedStandards: string[];
   disabled?: boolean;
+  /**
+   * G-1: false while the assessment is locked. Only the trigger hides — an
+   * open dialog stays mounted, so an Add all stopped by a Publish from another
+   * tab still shows "Added N of M, then stopped" and the unadded cards.
+   */
+  canOpen?: boolean;
   /** Called after any Add so the editor's question list refreshes. */
   onAdded: () => void | Promise<void>;
 }) {
@@ -161,7 +170,7 @@ export function GenerateQuestionsDialog({
     });
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { detail?: string; error?: string } | null;
-      throw new Error(err?.detail ?? err?.error ?? `HTTP ${res.status}`);
+      throw new Error(describeAddError(res.status, err));
     }
   }
 
@@ -229,308 +238,304 @@ export function GenerateQuestionsDialog({
   const showForm = cards === null || cards.length === 0;
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      >
-        <Sparkles aria-hidden />
-        Generate questions
-      </Button>
-
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          if (locked) return; // never close mid-generation or mid-Add
-          setOpen(o);
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (locked) return; // never close mid-generation or mid-Add
+        setOpen(o);
+      }}
+    >
+      {/* G-3: a DialogTrigger, so Radix returns focus to it on close. */}
+      {canOpen ? (
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline" size="sm" disabled={disabled}>
+            <Sparkles aria-hidden />
+            Generate questions
+          </Button>
+        </DialogTrigger>
+      ) : null}
+      <DialogContent
+        className="max-h-[calc(100vh-2rem)] overflow-x-hidden overflow-y-auto sm:max-w-2xl"
+        // Escape in the standards picker with its list open closes the list,
+        // not the dialog: Radix listens on the document in the capture phase,
+        // so the picker's own handler cannot stop it first.
+        onEscapeKeyDown={(e) => {
+          const el = document.activeElement;
+          if (el?.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true") {
+            e.preventDefault();
+          }
         }}
       >
-        <DialogContent
-          className="max-h-[calc(100vh-2rem)] overflow-x-hidden overflow-y-auto sm:max-w-2xl"
-          // Escape in the standards picker with its list open closes the list,
-          // not the dialog: Radix listens on the document in the capture phase,
-          // so the picker's own handler cannot stop it first.
-          onEscapeKeyDown={(e) => {
-            const el = document.activeElement;
-            if (el?.getAttribute("role") === "combobox" && el.getAttribute("aria-expanded") === "true") {
+        <DialogHeader>
+          <DialogTitle>Generate questions</DialogTitle>
+          <DialogDescription>
+            The AI drafts questions from your standards, objective or source material.
+            Nothing is saved until you add it, and you should check each answer key.
+          </DialogDescription>
+        </DialogHeader>
+
+        {showForm ? (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
               e.preventDefault();
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Generate questions</DialogTitle>
-            <DialogDescription>
-              The AI drafts questions from your standards, objective or source material.
-              Nothing is saved until you add it, and you should check each answer key.
-            </DialogDescription>
-          </DialogHeader>
-
-          {showForm ? (
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void generate();
-              }}
-              aria-busy={busy}
-            >
-              <fieldset disabled={busy} className="space-y-4 border-0 p-0">
-                <div className="space-y-1">
-                  <label htmlFor={`${uid}-count`} className="block text-sm font-medium">
-                    How many questions
-                  </label>
-                  <input
-                    id={`${uid}-count`}
-                    type="number"
-                    min={1}
-                    max={10}
-                    inputMode="numeric"
-                    value={values.count}
-                    onChange={(e) => patch({ count: e.target.value })}
-                    aria-invalid={errors.count ? true : undefined}
-                    aria-describedby={errors.count ? `${uid}-count-err` : undefined}
-                    className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                  />
-                  {errors.count ? (
-                    <p id={`${uid}-count-err`} className="text-xs text-destructive">
-                      {errors.count}
-                    </p>
-                  ) : null}
-                </div>
-
-                <fieldset className="space-y-2 border-0 p-0">
-                  <legend className="text-sm font-medium">Question types</legend>
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <label className="flex items-center gap-1.5">
-                      <input
-                        type="radio"
-                        name={`${uid}-types`}
-                        checked={values.typeMode === "mix"}
-                        onChange={() => patch({ typeMode: "mix" })}
-                      />
-                      Mix
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <input
-                        type="radio"
-                        name={`${uid}-types`}
-                        checked={values.typeMode === "counts"}
-                        onChange={() => patch({ typeMode: "counts" })}
-                      />
-                      Choose how many of each
-                    </label>
-                  </div>
-                  {values.typeMode === "counts" ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {BATCH_TYPES.map((t) => (
-                        <label key={t} className="flex items-center justify-between gap-2 text-sm">
-                          <span>{BATCH_TYPE_LABEL[t]}</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={10}
-                            inputMode="numeric"
-                            value={values.typeCounts[t]}
-                            placeholder="0"
-                            onChange={(e) =>
-                              patch({ typeCounts: { ...values.typeCounts, [t]: e.target.value } })
-                            }
-                            className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  ) : null}
-                  {values.typeMode === "counts" ? (
-                    <p className="text-xs text-muted-foreground">
-                      Total: {typeCountSum(values)}
-                    </p>
-                  ) : null}
-                  <p
-                    role="status"
-                    aria-live="polite"
-                    className="min-h-4 text-xs text-destructive"
-                  >
-                    {errors.types ?? ""}
-                  </p>
-                </fieldset>
-
-                <StandardsTagInput
-                  value={values.standards}
-                  onChange={(standards) => patch({ standards })}
-                  suggestions={usedStandards}
-                  disabled={busy}
+              void generate();
+            }}
+            aria-busy={busy}
+          >
+            <fieldset disabled={busy} className="space-y-4 border-0 p-0">
+              <div className="space-y-1">
+                <label htmlFor={`${uid}-count`} className="block text-sm font-medium">
+                  How many questions
+                </label>
+                <input
+                  id={`${uid}-count`}
+                  type="number"
+                  min={1}
+                  max={10}
+                  inputMode="numeric"
+                  value={values.count}
+                  onChange={(e) => patch({ count: e.target.value })}
+                  aria-invalid={errors.count ? true : undefined}
+                  aria-describedby={errors.count ? `${uid}-count-err` : undefined}
+                  className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
                 />
-
-                <div className="space-y-1">
-                  <label htmlFor={`${uid}-objective`} className="block text-sm font-medium">
-                    Objective <span className="font-normal text-muted-foreground">(optional)</span>
-                  </label>
-                  <input
-                    id={`${uid}-objective`}
-                    value={values.objective}
-                    maxLength={BATCH_MAX_OBJECTIVE}
-                    onChange={(e) => patch({ objective: e.target.value })}
-                    placeholder="e.g. Students compare ratios in a table"
-                    className="w-full rounded-md border border-border bg-transparent px-3 py-1.5 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">
-                    Source material <span className="font-normal text-muted-foreground">(optional)</span>
-                  </div>
-                  <label className="block text-xs text-muted-foreground" htmlFor={`${uid}-file`}>
-                    A PDF, Word (.docx), Markdown or text file, up to 5 MB — the questions are
-                    drawn from it.
-                  </label>
-                  <input
-                    key={fileKey}
-                    id={`${uid}-file`}
-                    type="file"
-                    accept={BATCH_FILE_ACCEPT}
-                    onChange={(e) => patch({ file: e.target.files?.[0] ?? null })}
-                    aria-describedby={errors.file ? `${uid}-file-err` : undefined}
-                    className="block text-sm"
-                  />
-                  {values.file ? (
-                    <button
-                      type="button"
-                      className="text-xs underline"
-                      onClick={() => {
-                        patch({ file: null });
-                        setFileKey((k) => k + 1);
-                      }}
-                    >
-                      Remove {values.file.name}
-                    </button>
-                  ) : null}
-                  <Textarea
-                    value={values.resourceText}
-                    onChange={(e) => patch({ resourceText: e.target.value })}
-                    rows={4}
-                    placeholder="Or paste the text here"
-                    aria-label="Paste source material"
-                  />
-                  <p role="status" aria-live="polite" className="min-h-4 text-xs text-destructive">
-                    {errors.resource ?? ""}
+                {errors.count ? (
+                  <p id={`${uid}-count-err`} className="text-xs text-destructive">
+                    {errors.count}
                   </p>
-                  {errors.file ? (
-                    <p id={`${uid}-file-err`} className="text-xs text-destructive">
-                      {errors.file}
-                    </p>
-                  ) : null}
-                </div>
+                ) : null}
+              </div>
 
-                <div className="space-y-1">
-                  <label htmlFor={`${uid}-difficulty`} className="block text-sm font-medium">
-                    Difficulty
+              <fieldset className="space-y-2 border-0 p-0">
+                <legend className="text-sm font-medium">Question types</legend>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name={`${uid}-types`}
+                      checked={values.typeMode === "mix"}
+                      onChange={() => patch({ typeMode: "mix" })}
+                    />
+                    Mix
                   </label>
-                  <NativeSelect
-                    id={`${uid}-difficulty`}
-                    size="sm"
-                    value={values.difficulty}
-                    onChange={(e) => patch({ difficulty: e.target.value as BatchDifficulty })}
-                  >
-                    {BATCH_DIFFICULTIES.map((d) => (
-                      <NativeSelectOption key={d} value={d}>
-                        {BATCH_DIFFICULTY_LABEL[d]}
-                      </NativeSelectOption>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name={`${uid}-types`}
+                      checked={values.typeMode === "counts"}
+                      onChange={() => patch({ typeMode: "counts" })}
+                    />
+                    Choose how many of each
+                  </label>
+                </div>
+                {values.typeMode === "counts" ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {BATCH_TYPES.map((t) => (
+                      <label key={t} className="flex items-center justify-between gap-2 text-sm">
+                        <span>{BATCH_TYPE_LABEL[t]}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10}
+                          inputMode="numeric"
+                          value={values.typeCounts[t]}
+                          placeholder="0"
+                          onChange={(e) =>
+                            patch({ typeCounts: { ...values.typeCounts, [t]: e.target.value } })
+                          }
+                          className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                        />
+                      </label>
                     ))}
-                  </NativeSelect>
-                </div>
-
-                <div className="space-y-1">
-                  <label htmlFor={`${uid}-notes`} className="block text-sm font-medium">
-                    Notes <span className="font-normal text-muted-foreground">(optional)</span>
-                  </label>
-                  <Textarea
-                    id={`${uid}-notes`}
-                    value={values.notes}
-                    maxLength={BATCH_MAX_NOTES}
-                    onChange={(e) => patch({ notes: e.target.value })}
-                    rows={3}
-                    placeholder="Anything else the AI should know"
-                  />
-                </div>
+                  </div>
+                ) : null}
+                {values.typeMode === "counts" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Total: {typeCountSum(values)}
+                  </p>
+                ) : null}
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="min-h-4 text-xs text-destructive"
+                >
+                  {errors.types ?? ""}
+                </p>
               </fieldset>
 
-              <p role="status" aria-live="polite" className="min-h-4 text-xs text-muted-foreground">
-                {!canGenerate && errors.focus && !errors.count && !errors.types ? errors.focus : ""}
-              </p>
+              <StandardsTagInput
+                value={values.standards}
+                onChange={(standards) => patch({ standards })}
+                suggestions={usedStandards}
+                disabled={busy}
+              />
 
-              {busy ? (
-                <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                  <span
-                    aria-hidden
-                    className="inline-block size-4 animate-spin rounded-full border-2 border-border border-t-foreground"
-                  />
-                  Generating questions…
-                </p>
-              ) : null}
-              {error ? (
-                <p role="alert" className="rounded border border-destructive/40 p-2 text-sm text-destructive">
-                  {error}
-                </p>
-              ) : null}
+              <div className="space-y-1">
+                <label htmlFor={`${uid}-objective`} className="block text-sm font-medium">
+                  Objective <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <input
+                  id={`${uid}-objective`}
+                  value={values.objective}
+                  maxLength={BATCH_MAX_OBJECTIVE}
+                  onChange={(e) => patch({ objective: e.target.value })}
+                  placeholder="e.g. Students compare ratios in a table"
+                  className="w-full rounded-md border border-border bg-transparent px-3 py-1.5 text-sm"
+                />
+              </div>
 
-              <DialogFooter>
-                <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
-                  Close
-                </Button>
-                <Button type="submit" disabled={!canGenerate || busy}>
-                  {busy ? "Generating…" : "Generate"}
-                </Button>
-              </DialogFooter>
-            </form>
-          ) : null}
-
-          {inList && cards ? (
-            <div className="space-y-3">
-              <p className="text-sm font-medium" role="status" aria-live="polite">
-                {proposalHeader(cards.length, dropped)}
-              </p>
-              {error ? (
-                <p role="alert" className="rounded border border-destructive/40 p-2 text-sm text-destructive">
-                  {error}
-                </p>
-              ) : null}
-              <ul className="space-y-2">
-                {cards.map((c) => (
-                  <ProposalCard
-                    key={c.id}
-                    card={c}
-                    entries={entries}
-                    checkKey={needsKeyCheck(c.proposal, reviewed, c.id)}
-                    busy={adding !== null}
-                    adding={adding === c.id}
-                    onKeyOpened={() => markReviewed(c.id)}
-                    onAdd={() => void addOne(c)}
-                    onDiscard={() => discard(c.id)}
-                  />
-                ))}
-              </ul>
-              <DialogFooter className="sm:justify-between">
-                <Button type="button" variant="outline" disabled={adding !== null} onClick={generateAgain}>
-                  Generate again
-                </Button>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" disabled={adding !== null} onClick={discardAll}>
-                    Discard all
-                  </Button>
-                  <Button type="button" disabled={adding !== null} onClick={() => void addAll()}>
-                    {adding === "all" ? "Adding…" : `Add all (${cards.length})`}
-                  </Button>
+              <div className="space-y-2">
+                <div className="text-sm font-medium">
+                  Source material <span className="font-normal text-muted-foreground">(optional)</span>
                 </div>
-              </DialogFooter>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </>
+                <label className="block text-xs text-muted-foreground" htmlFor={`${uid}-file`}>
+                  A PDF, Word (.docx), Markdown or text file, up to 5 MB — the questions are
+                  drawn from it.
+                </label>
+                <input
+                  key={fileKey}
+                  id={`${uid}-file`}
+                  type="file"
+                  accept={BATCH_FILE_ACCEPT}
+                  onChange={(e) => patch({ file: e.target.files?.[0] ?? null })}
+                  aria-describedby={errors.file ? `${uid}-file-err` : undefined}
+                  className="block text-sm"
+                />
+                {values.file ? (
+                  <button
+                    type="button"
+                    className="text-xs underline"
+                    onClick={() => {
+                      patch({ file: null });
+                      setFileKey((k) => k + 1);
+                    }}
+                  >
+                    Remove {values.file.name}
+                  </button>
+                ) : null}
+                <Textarea
+                  value={values.resourceText}
+                  onChange={(e) => patch({ resourceText: e.target.value })}
+                  rows={4}
+                  placeholder="Or paste the text here"
+                  aria-label="Paste source material"
+                />
+                <p role="status" aria-live="polite" className="min-h-4 text-xs text-destructive">
+                  {errors.resource ?? ""}
+                </p>
+                {errors.file ? (
+                  <p id={`${uid}-file-err`} className="text-xs text-destructive">
+                    {errors.file}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor={`${uid}-difficulty`} className="block text-sm font-medium">
+                  Difficulty
+                </label>
+                <NativeSelect
+                  id={`${uid}-difficulty`}
+                  size="sm"
+                  value={values.difficulty}
+                  onChange={(e) => patch({ difficulty: e.target.value as BatchDifficulty })}
+                >
+                  {BATCH_DIFFICULTIES.map((d) => (
+                    <NativeSelectOption key={d} value={d}>
+                      {BATCH_DIFFICULTY_LABEL[d]}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor={`${uid}-notes`} className="block text-sm font-medium">
+                  Notes <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <Textarea
+                  id={`${uid}-notes`}
+                  value={values.notes}
+                  maxLength={BATCH_MAX_NOTES}
+                  onChange={(e) => patch({ notes: e.target.value })}
+                  rows={3}
+                  placeholder="Anything else the AI should know"
+                />
+              </div>
+            </fieldset>
+
+            <p role="status" aria-live="polite" className="min-h-4 text-xs text-muted-foreground">
+              {!canGenerate && errors.focus && !errors.count && !errors.types ? errors.focus : ""}
+            </p>
+
+            {busy ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <span
+                  aria-hidden
+                  className="inline-block size-4 animate-spin rounded-full border-2 border-border border-t-foreground"
+                />
+                Generating questions…
+              </p>
+            ) : null}
+            {error ? (
+              <p role="alert" className="rounded border border-destructive/40 p-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
+                Close
+              </Button>
+              <Button type="submit" disabled={!canGenerate || busy}>
+                {busy ? "Generating…" : "Generate"}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : null}
+
+        {inList && cards ? (
+          <div className="space-y-3">
+            <p className="text-sm font-medium" role="status" aria-live="polite">
+              {proposalHeader(cards.length, dropped)}
+            </p>
+            {error ? (
+              <p role="alert" className="rounded border border-destructive/40 p-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <ul className="space-y-2">
+              {cards.map((c) => (
+                <ProposalCard
+                  key={c.id}
+                  card={c}
+                  entries={entries}
+                  checkKey={needsKeyCheck(c.proposal, reviewed, c.id)}
+                  busy={adding !== null}
+                  adding={adding === c.id}
+                  onKeyOpened={() => markReviewed(c.id)}
+                  onAdd={() => void addOne(c)}
+                  onDiscard={() => discard(c.id)}
+                />
+              ))}
+            </ul>
+            <DialogFooter className="sm:justify-between">
+              <Button type="button" variant="outline" disabled={adding !== null} onClick={generateAgain}>
+                Generate again
+              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" disabled={adding !== null} onClick={discardAll}>
+                  Discard all
+                </Button>
+                <Button type="button" disabled={adding !== null} onClick={() => void addAll()}>
+                  {adding === "all" ? "Adding…" : `Add all (${cards.length})`}
+                </Button>
+              </div>
+            </DialogFooter>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 

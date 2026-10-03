@@ -100,6 +100,7 @@ REQUIREMENTS:
 - Choice ids are lowercase letters starting at "a". Always 4 choices for multiple-choice items; multiple_choice_multi has at least 2 correct ids.
 - Distractors are plausible: common misconceptions or near-miss reasoning, never throwaways.
 - Propose an answer key for every multiple-choice and short_text item; the teacher checks it before use.
+- A short_text key is the bare answer a student would type, because it is scored by matching: a number without units ("1.6", not "1.6 pages per minute"), or a single word or short phrase. If the answer needs a unit, name the unit in the stem ("…in pages per minute?").
 - Essays get the prompt only. Do NOT write a rubric, scoring guide or sample answer.
 - When standards are given, write to what the standard describes, not to its code. Do not print standard codes in the items.
 - Math: wrap inline expressions in $...$ (single dollars). Available macros include \\frac, \\sqrt, ^, _, \\cdot, \\div, \\plusminus, \\degree, \\percent.

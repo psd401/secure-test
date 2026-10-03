@@ -377,6 +377,14 @@ None open.
   per course → optional `courses[].text`. Reading for slice 2: the
   catalog JSON is ~950 KB — keep `lib/standards/catalog.ts` server-only
   (search through a route), never import it into a client component.
+- **Slice 4 follow-ups (2026-10-02 evening, after rows 358–371 on the
+  origin):** G-1 the dialog stays mounted while open on a lock (only the
+  trigger hides), so an Add all stopped by a Publish keeps its message and
+  cards, and Add refusals read in words (`describeAddError`); G-2 the
+  standards picker closes its list after an add (it covered the next
+  fields with a subject filter on); G-3 the trigger is a `DialogTrigger`
+  so focus returns to it on close; the batch prompt asks for bare
+  short_text keys (a key with units would never match a bare answer).
 - **Slices 3 + 4 (2026-10-02):** slice 3 (`451d16e`) DEPLOYED with
   rev 70 (`025e7d5`, the route only — nothing called it yet). Slice 4
   built in an isolated worktree, brought over and checked in the browser

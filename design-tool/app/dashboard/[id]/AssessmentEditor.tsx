@@ -1962,10 +1962,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               {aiPanelOpen ? "Close AI panel" : "Generate with AI"}
             </Button>
           ) : null}
-          {assessment.allow_llm_authoring && !isLocked ? (
+          {assessment.allow_llm_authoring ? (
             <GenerateQuestionsDialog
               assessmentId={assessment.id}
               usedStandards={usedStandards}
+              canOpen={!isLocked}
               onAdded={reloadFromServer}
             />
           ) : null}

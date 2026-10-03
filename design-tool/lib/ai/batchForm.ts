@@ -236,6 +236,22 @@ export function describeGenerateError(status: number, body: GenerateErrorBody | 
   return "Something went wrong generating questions. Try again.";
 }
 
+/**
+ * What the dialog shows when Add (POST to the items route) is refused. The
+ * 2026-10-02 hand-run (row 367) showed the raw `assessment_published_editing_locked`
+ * after a Publish from another tab stopped an Add all.
+ */
+export function describeAddError(status: number, body: GenerateErrorBody | null): string {
+  if (status === 409 && body?.error === "assessment_published_editing_locked") {
+    return "the assessment was published, so no more questions can be added. Unpublish it to add the rest.";
+  }
+  if (status === 404) return "this assessment is no longer available to you.";
+  if (status === 400) {
+    return body?.detail ? `the question wasn't accepted (${body.detail}).` : "the question wasn't accepted.";
+  }
+  return "something went wrong adding the question. Try again.";
+}
+
 // ── Proposals ──────────────────────────────────────────────────────────────
 
 /** A proposal as the route returns it: a CreateItemBody-shaped item. */

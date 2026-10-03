@@ -228,6 +228,11 @@ export function StandardsTagInput({ value, onChange, suggestions, disabled }: Pr
     onChange(result.next);
     setQuery("");
     setActive(-1);
+    // G-2 (2026-10-02 hand-run): close the list after an add. With a subject
+    // filter on, an open list kept browsing and covered the fields below, so
+    // the next click aimed at another field picked a standard instead. Typing
+    // or ArrowDown reopens it.
+    setOpen(false);
   }
 
   async function addTyped() {

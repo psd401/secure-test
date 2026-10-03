@@ -11,6 +11,7 @@ import {
   buildBatchFetchInit,
   buildBatchRequest,
   canGenerate,
+  describeAddError,
   describeGenerateError,
   emptyBatchForm,
   hasProposedKey,
@@ -260,5 +261,16 @@ describe("<GenerateQuestionsDialog> closed render", () => {
     );
     expect(html).toContain("Generate questions");
     expect(html).not.toContain("How many questions");
+  });
+});
+
+describe("describeAddError", () => {
+  test("a Publish mid Add all reads in words, not as the error code (row 367)", () => {
+    const msg = describeAddError(409, { error: "assessment_published_editing_locked" });
+    expect(msg).toContain("the assessment was published");
+    expect(msg).not.toContain("assessment_published_editing_locked");
+    expect(describeAddError(404, null)).toContain("no longer available");
+    expect(describeAddError(400, { detail: "stem: Required" })).toContain("stem: Required");
+    expect(describeAddError(500, null)).toContain("Try again");
   });
 });

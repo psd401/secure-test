@@ -3,6 +3,7 @@
 // per-element validation. No DB, no model.
 import { describe, expect, test } from "bun:test";
 import {
+  BATCH_SYSTEM_PROMPT,
   EXISTING_STEMS_MAX,
   EXISTING_STEM_CHARS,
   buildBatchUserText,
@@ -250,5 +251,14 @@ describe("GenerateItemsRequest", () => {
         target: { standards: Array.from({ length: 11 }, (_, i) => `t${i}`) },
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("BATCH_SYSTEM_PROMPT", () => {
+  test("asks for bare short_text keys (scored by matching, units belong in the stem)", () => {
+    // 2026-10-02 hand-run (rows 358–371): a key came back as "1.6 pages per
+    // minute", which an exact match would not award to "1.6".
+    expect(BATCH_SYSTEM_PROMPT).toContain("A short_text key is the bare answer a student would type");
+    expect(BATCH_SYSTEM_PROMPT).toContain('"1.6", not "1.6 pages per minute"');
   });
 });
