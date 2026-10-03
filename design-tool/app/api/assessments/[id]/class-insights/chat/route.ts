@@ -138,6 +138,7 @@ async function renderTurns(
     role: t.role as "teacher" | "assistant",
     ...renderClaim({ text: t.text, citations: t.citations, figures: t.figures }, ctx),
     stale_turn: t.pack_hash !== currentHash,
+    read_answers: t.read_response_ids.length,
     created_at: t.created_at,
   }));
 }

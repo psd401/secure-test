@@ -92,3 +92,69 @@ export function ratingMessage(input: {
   const comment = input.comment.trim();
   return comment ? `${head}\n${comment}` : head;
 }
+
+// Class insights slice 5: the chat under the report.
+
+export interface PanelTurn {
+  position: number;
+  role: "teacher" | "assistant";
+  text: string;
+  citations: PanelClaim["citations"];
+  stale_turn: boolean;
+  created_at: string;
+  /** Handed-in answers the reply was allowed to read (D-6); absent on old rows. */
+  read_answers?: number;
+}
+
+export const CHAT_HEADING = "Ask about this class";
+export const CHAT_INTRO =
+  "Answers come from this class's scores and the report. Student names you type are swapped for S1, S2… before the AI sees them; when you name an essay or short-answer question it may read up to 300 words of answers.";
+export const CHAT_MAX_CHARS = 1000;
+export const CHAT_STARTERS = [
+  "Why did the hardest question go badly?",
+  "Group students for a reteach",
+  "Who should I check in with?",
+] as const;
+export const CHAT_STALE_NOTE = "Based on earlier results";
+export const CHAT_DELETE_CONFIRM = "This deletes this conversation for you. The report stays.";
+
+/** Plain-language message for a chat route error (`stage` only on a 422). */
+export function chatErrorCopy(code: string, stage?: string): string {
+  switch (code) {
+    case "thread_full":
+      return "This conversation is full. Start a new one.";
+    case "guardrail_blocked":
+      return stage === "input"
+        ? "Your question was blocked by content safeguards. Rephrase it and try again."
+        : "The answer was withheld by content safeguards. Try again.";
+    case "provider_failed":
+      return "The AI could not answer. Try again.";
+    case "nothing_to_report":
+      return "No student has a scored answer yet.";
+    case "conflict":
+      return "Something changed while sending. Try again.";
+    case "network":
+      return "Could not reach the server. Try again.";
+    default:
+      return "Something went wrong. Try again.";
+  }
+}
+
+/** The character counter, shown only near the limit. */
+export function counterText(length: number, max: number = CHAT_MAX_CHARS): string {
+  return length >= max - 100 ? `${length} / ${max}` : "";
+}
+
+/** "Read 3 answers" on an assistant turn that pulled student writing; "" when none. */
+export function readAnswersText(n: number | undefined): string {
+  if (!n || n <= 0) return "";
+  return `Read ${n} answer${n === 1 ? "" : "s"}`;
+}
+
+/** Quiet reminder of the cap, only when it is close. */
+export function turnsLeftText(turnsLeft: number): string {
+  if (turnsLeft > 10) return "";
+  return turnsLeft === 0
+    ? "This conversation is full."
+    : `${turnsLeft} message${turnsLeft === 1 ? "" : "s"} left in this conversation`;
+}

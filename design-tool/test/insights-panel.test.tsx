@@ -74,3 +74,66 @@ describe("class insights panel helpers", () => {
     expect(html).toContain("Loading");
   });
 });
+
+import {
+  CHAT_STARTERS,
+  chatErrorCopy,
+  counterText,
+  readAnswersText,
+  turnsLeftText,
+} from "../lib/insights/panelCopy";
+import { ClassInsightsChat } from "../components/app/ClassInsightsChat";
+
+describe("class insights chat helpers (slice 5)", () => {
+  test("error copy per code and guardrail stage", () => {
+    expect(chatErrorCopy("thread_full")).toBe("This conversation is full. Start a new one.");
+    expect(chatErrorCopy("guardrail_blocked", "input")).toBe(
+      "Your question was blocked by content safeguards. Rephrase it and try again.",
+    );
+    expect(chatErrorCopy("guardrail_blocked", "output")).toBe(
+      "The answer was withheld by content safeguards. Try again.",
+    );
+    expect(chatErrorCopy("provider_failed")).toBe("The AI could not answer. Try again.");
+    expect(chatErrorCopy("nothing_to_report")).toBe("No student has a scored answer yet.");
+    expect(chatErrorCopy("conflict")).toBe("Something changed while sending. Try again.");
+    expect(chatErrorCopy("network")).toBe("Could not reach the server. Try again.");
+    expect(chatErrorCopy("weird")).toContain("Try again");
+  });
+
+  test("counter, read-answers and turns-left text", () => {
+    expect(counterText(10)).toBe("");
+    expect(counterText(900)).toBe("900 / 1000");
+    expect(readAnswersText(undefined)).toBe("");
+    expect(readAnswersText(0)).toBe("");
+    expect(readAnswersText(1)).toBe("Read 1 answer");
+    expect(readAnswersText(4)).toBe("Read 4 answers");
+    expect(turnsLeftText(11)).toBe("");
+    expect(turnsLeftText(10)).toBe("10 messages left in this conversation");
+    expect(turnsLeftText(1)).toBe("1 message left in this conversation");
+    expect(turnsLeftText(0)).toBe("This conversation is full.");
+  });
+
+  test("starters avoid question numbers", () => {
+    expect(CHAT_STARTERS.length).toBe(3);
+    for (const s of CHAT_STARTERS) expect(/\bQ\d|question \d/i.test(s)).toBe(false);
+  });
+
+  test("static markup: heading, log, labelled input, Send; starters wait for the load", () => {
+    const html = renderToStaticMarkup(<ClassInsightsChat assessmentId="a" section="" />);
+    expect(html).toContain("Ask about this class");
+    expect(html).toContain('role="log"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('for="class-insights-chat-input"');
+    expect(html).toContain(">Send<");
+    expect(html).not.toContain("Start a new conversation");
+  });
+
+  test("the panel shows the chat to editors only", () => {
+    const edit = renderToStaticMarkup(<ClassInsightsPanel assessmentId="a" section="" canGenerate />);
+    const view = renderToStaticMarkup(
+      <ClassInsightsPanel assessmentId="a" section="" canGenerate={false} />,
+    );
+    expect(edit).toContain("Ask about this class");
+    expect(view).not.toContain("Ask about this class");
+  });
+});

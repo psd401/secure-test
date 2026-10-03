@@ -413,3 +413,26 @@ Decided 2026-10-02 (James): 9.1 → D-5 (thread per teacher); 9.2 → D-6
   teacher rows 391+ in `docs/design-tool-manual-checks.md` NOT RUN.
 - Slice 4 BUILT 2026-10-03 (see §Slices) — chat routes + migration 0053, no
   UI, not deployed.
+- Slice 5 BUILT 2026-10-03 — chat UI under the report; rows 405–414 NOT RUN,
+  not deployed.
+
+Slice 5 BUILT 2026-10-03, no migration. `components/app/ClassInsightsChat.tsx`
+(client) renders inside `ClassInsightsPanel` after the report states, keyed by
+section so each filter loads its own thread. Choices: **shown whenever the
+viewer is at edit** (`canGenerate`) and the page has rows — the panel already
+renders only with rows, and the chat works with no report; view-level viewers
+never see it (the routes need `edit`). Citations reuse the report's renderer,
+extracted to `components/app/ClaimCitations.tsx` (the panel imports it). Pure
+copy lives in `lib/insights/panelCopy.ts` (`chatErrorCopy` per code + 422
+stage, `counterText` from 900 chars, `readAnswersText`, `turnsLeftText` at ≤ 10,
+starters, intro; tests in `insights-panel`). The turn list is `role="log"`
+`aria-live="polite"`; teacher turns indented on a muted ground, assistant turns
+bordered; stale turns grey with "Based on earlier results". Enter sends,
+Shift+Enter newline, the typed message survives every error, starters only
+fill the box and show while the thread is empty. "Start a new conversation"
+asks for confirmation inline, then DELETEs. **One server change:** GET / POST
+turns gained `read_answers` (the stored `read_response_ids` length) so the
+UI can say "Read N answers" — the shape did not expose it; the route test
+asserts it. Intro line says names are swapped for S1, S2… and that up to 300
+words of answers may be read when an essay / short-answer question is named.
+Rows 405–414. Not done: Bedrock run (slice 6), no DOM-harness click tests.

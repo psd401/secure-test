@@ -176,6 +176,7 @@ interface Turn {
   text: string;
   citations: { students: { pseudonym: string; attempt_id: string | null; name: string }[] };
   stale_turn: boolean;
+  read_answers: number;
 }
 interface Body {
   ok: boolean;
@@ -268,6 +269,9 @@ describe("POST /api/assessments/[id]/class-insights/chat", () => {
       expect(new Set(last!.read_response_ids)).toEqual(
         new Set([s.responseIds["Alpha Tester"]!.essay, s.responseIds["Charlie Tester"]!.essay]),
       );
+      // Rendered turns carry the count for the UI's "Read N answers".
+      const reread = await (await get(s.assessment.id)).json();
+      expect(reread.turns.at(-1).read_answers).toBe(2);
 
       // Naming one student narrows the pull to them.
       await post(s.assessment.id, "What did alpha write on Q3?");

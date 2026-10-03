@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ClaimCitations } from "@/components/app/ClaimCitations";
+import { ClassInsightsChat } from "@/components/app/ClassInsightsChat";
 import { Textarea } from "@/components/ui/textarea";
 import {
   INTRO_LINE,
@@ -11,11 +12,9 @@ import {
   SECTION_ORDER,
   WRITTEN_BY_AI,
   insightsErrorCopy,
-  questionAnchor,
   ratingMessage,
   reportCopyText,
   sectionParam,
-  type PanelClaim,
   type PanelReport,
 } from "@/lib/insights/panelCopy";
 
@@ -168,6 +167,13 @@ export function ClassInsightsPanel({
           {error}
         </p>
       ) : null}
+
+      {/* The chat works without a report (it reads the same scores), so it
+          shows whenever the viewer is at edit and the page has rows; keyed by
+          section so a filter change starts that section's thread fresh. */}
+      {canGenerate ? (
+        <ClassInsightsChat key={section} assessmentId={assessmentId} section={section} />
+      ) : null}
     </section>
   );
 }
@@ -225,7 +231,7 @@ function ReportView({
               {report.sections[s].map((claim, i) => (
                 <li key={i}>
                   {claim.text}
-                  <Citations assessmentId={assessmentId} claim={claim} />
+                  <ClaimCitations assessmentId={assessmentId} claim={claim} />
                 </li>
               ))}
             </ul>
@@ -234,41 +240,6 @@ function ReportView({
       )}
       <Rating assessmentId={assessmentId} promptVersion={report.prompt_version} />
     </div>
-  );
-}
-
-function Citations({ assessmentId, claim }: { assessmentId: string; claim: PanelClaim }) {
-  const { items, students } = claim.citations;
-  if (items.length === 0 && students.length === 0) return null;
-  return (
-    <span className="ml-2 text-xs text-muted-foreground">
-      {items.map((it) =>
-        it.item_id ? (
-          <a key={it.label} href={`#${questionAnchor(it.label)}`} className="mr-2 underline">
-            {it.label}
-          </a>
-        ) : (
-          <span key={it.label} className="mr-2">
-            {it.label}
-          </span>
-        ),
-      )}
-      {students.map((st) =>
-        st.attempt_id ? (
-          <Link
-            key={st.pseudonym}
-            href={`/dashboard/${assessmentId}/results/${st.attempt_id}`}
-            className="mr-2 underline"
-          >
-            {st.name}
-          </Link>
-        ) : (
-          <span key={st.pseudonym} className="mr-2">
-            {st.name}
-          </span>
-        ),
-      )}
-    </span>
   );
 }
 
