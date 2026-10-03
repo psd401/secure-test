@@ -84,6 +84,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// stretch after an emergency end is exactly when a teacher wants eyes.
     private var peekResponder: PeekResponder?
     private var attemptHandedIn = false
+    /// IF slice 3 (`docs/instant-feedback-design.md`, D-2): the instant
+    /// feedback the student's own hand-in came back with, held until the
+    /// secure session has ENDED (`.idle`, i.e. after `DID END`) and shown then
+    /// on the attempt's own web view. Nil — feedback off, an older server, or
+    /// any end that is not the student's hand-in — means exactly the old
+    /// behaviour. Cleared once shown and whenever the attempt screen goes.
+    private var pendingFeedback: InstantFeedback?
     /// Time limit slice 2 (`docs/time-limit-and-unfinished-attempts-design.md`,
     /// D-2 / D-3): this attempt's clock, or nil when the assessment has no
     /// limit. One per attempt, started from the bundle's deadline and stopped
@@ -448,6 +455,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller?.retire()
         controller = nil
         attemptHandedIn = false
+        pendingFeedback = nil
         // Client hygiene (audit #17): no attempt is on screen, so every row
         // still spooled belongs to one that is over — purge whatever is past
         // the 24-hour floor. Rows younger than that stay: a student who lost
@@ -542,6 +550,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             peekResponder = nil
         }
         attemptHandedIn = false
+        pendingFeedback = nil
         countdown?.stop()
         countdown = nil
         sessionEndedByTimeLimit = false
@@ -605,16 +614,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onSittingClosed = { [weak self] in
             Task { @MainActor in self?.sittingClosedDuringAttempt(via: "write") }
         }
-        controller.onHandedIn = { [weak self] in
+        controller.onHandedIn = { [weak self] feedback in
+            guard let self else { return }
             // Time limit: handed in, so there is nothing left to run out.
-            self?.countdown?.stop()
+            self.countdown?.stop()
             // Before endLockdown, so focus noise stops but the reporter is
             // still there for the lockdown_end the teardown produces.
-            self?.attemptHandedIn = true
+            self.attemptHandedIn = true
             // A submitted attempt has no screen worth peeking (the server
             // answers 409 to new requests); stop asking.
-            self?.peekResponder?.stop()
-            self?.endLockdown(reason: "hand-in confirmed")
+            self.peekResponder?.stop()
+            // IF slice 3 (D-2): kept, not shown — the results page waits for
+            // the session to end. The hand-in itself never waits on it.
+            self.pendingFeedback = feedback
+            let wasActive = self.lockdown?.isActive == true
+            self.endLockdown(reason: "hand-in confirmed")
+            // No session was up (nothing to end, so no `.idle` is coming): the
+            // window is already the normal one, so the page can show now — on
+            // the next turn, after the test page has taken its hand-in result.
+            if !wasActive {
+                DispatchQueue.main.async { [weak self] in
+                    MainActor.assumeIsolated { self?.showPendingFeedback() }
+                }
+            }
         }
         self.controller = controller
         window?.contentView = controller.view
@@ -1008,7 +1030,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // still on screen (the handed-in notice), so the titlebar route
             // home stays. Every other end sends the student home itself, just
             // below, and `showEntry` removes this accessory anyway.
-            if attemptHandedIn { installBackToTestsAccessoryIfNeeded() }
+            if attemptHandedIn {
+                installBackToTestsAccessoryIfNeeded()
+                // IF slice 3 (D-2): `.idle` is the session's end (`DID END`,
+                // or the grace teardown) — the Mac is unlocked, so the
+                // results page may show now, and only now.
+                showPendingFeedback()
+            }
             returnHomeAfterSessionEnd()
         case .starting, .active:
             // Security slice 1: `.active` — and nothing else — releases the
@@ -1026,6 +1054,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // chance, gated the same way.
             if state == .active { enterFullScreenAtLaunchIfNeeded() }
         }
+    }
+
+    /// IF slice 3 (D-2): shows the held instant feedback, once, on the attempt
+    /// screen — only after the student's own hand-in, only once the secure
+    /// session is down. Done (or Return / Escape) posts on the page's `home`
+    /// channel, which is `onBackToTests` → `showEntry()`. A student who left
+    /// the attempt screen first (the in-page "Back to your tests" before
+    /// `DID END`) has nothing to show it on, and `showEntry()` has already
+    /// dropped it.
+    private func showPendingFeedback() {
+        guard let feedback = pendingFeedback else { return }
+        guard screen == .serverAttempt, attemptHandedIn, let controller,
+              lockdown?.isActive != true
+        else { return }
+        pendingFeedback = nil
+        controller.showFeedback(feedback)
     }
 
     /// The always-visible, truthfully-labelled way out (AAC-1 decision 2.3).

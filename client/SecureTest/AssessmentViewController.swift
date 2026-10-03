@@ -139,7 +139,12 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     var onSpeechPreflight: ((SpeechToTextPreflight) -> Void)?
     /// AAC-1: fires after the server CONFIRMS the hand-in. The host ends the
     /// assessment session here — hand-in returns the Mac to the student.
-    var onHandedIn: (() -> Void)?
+    ///
+    /// IF slice 3: carries the instant feedback the submit response held, or
+    /// nil (feedback off, an older server, an unreadable object). The host
+    /// keeps it and shows it only after the session has ended — never inside
+    /// the lockdown, and the hand-in never waits on it.
+    var onHandedIn: ((InstantFeedback?) -> Void)?
 
     /// UX pass 2: the page asked to go back to "Your tests" (post-hand-in).
     var onBackToTests: (() -> Void)?
@@ -511,6 +516,28 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             </div>
             """
         )
+    }
+
+    // MARK: instant feedback (IF slice 3)
+
+    /// D-2: the results page, loaded into this controller's web view after
+    /// the secure session has ended. Reusing the attempt's web view rather
+    /// than a new screen keeps what the student already has: the bundle's
+    /// accommodations (contrast, font, zoom — and the read-aloud grant, which
+    /// `handleSpeech` checks against this same bundle), the magnification
+    /// they set, and the `home` channel the Done button posts on, which the
+    /// host already routes to "Your tests".
+    func showFeedback(_ feedback: InstantFeedback) {
+        guard !isRetired else { return }
+        stopSpeech(reason: "results page")
+        stopListening(reason: "results page")
+        log("instant feedback: showing the results page (\(feedback.level.rawValue), \(feedback.items?.count ?? 0) rows)")
+        loadHostPage(InstantFeedbackPage.html(
+            feedback,
+            accommodations: bundle?.accommodations ?? [:]
+        ))
+        // Return / Escape are handled by the page; it needs the key focus.
+        view.window?.makeFirstResponder(webView)
     }
 
     // MARK: zoom (C-4 / D-7)
@@ -894,12 +921,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     self.reportSubmit(ok: false)
                     return
                 }
-                try await client.submit(attemptID: attemptID)
+                let feedback = try await client.submit(attemptID: attemptID)
                 // Now residue: the server has them, and the local copies are a
                 // second copy of a child's work sitting on a shared machine.
                 try await spool.clear(attemptID: attemptID)
-                self.log("attempt \(attemptID) handed in")
-                self.onHandedIn?()
+                self.log("attempt \(attemptID) handed in"
+                    + (feedback.map { " — instant feedback received (\($0.level.rawValue))" } ?? ""))
+                self.onHandedIn?(feedback)
                 self.reportSubmit(ok: true)
             } catch let error as APIError where error.isSittingClosed {
                 // Row CS: not a failure to report — the teacher ended the

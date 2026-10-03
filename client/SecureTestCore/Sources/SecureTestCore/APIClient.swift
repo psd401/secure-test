@@ -291,12 +291,18 @@ public actor APIClient {
         )
     }
 
-    public func submit(attemptID: String) async throws {
-        _ = try await sendRaw(
+    /// Hand the attempt in. Returns the instant feedback the server sent with
+    /// the confirmation (IF slice 3), or nil — feedback off, an older server,
+    /// or a body this build cannot read. A feedback object it cannot decode
+    /// never fails the hand-in: the throw paths are exactly the ones before.
+    @discardableResult
+    public func submit(attemptID: String) async throws -> InstantFeedback? {
+        let data = try await sendRaw(
             path: "/api/attempts/\(attemptID)/submit",
             method: "POST",
             rawBody: nil,
         )
+        return InstantFeedback.fromSubmitResponse(data)
     }
 
     /// Slice 92: report one client event (quit, emergency exit, focus change,

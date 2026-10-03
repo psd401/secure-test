@@ -267,3 +267,89 @@ nothing added.
   hand-run rows.
 - Not done: the client feedback page (slice 3), the two-account rows 422–423,
   a screenshot for the help topic.
+
+**Slice 3 (client) BUILT 2026-10-03** — one commit, not released, no
+`MARKETING_VERSION` bump (the release is its own step). No server change.
+17 rows in `client/MANUAL-CHECKS.md` "Instant feedback page (IF slice 3)",
+NOT RUN. `swift test` 877 (847 + 30 new), Debug and Release `xcodebuild`
+green.
+
+- **Decode** (`SecureTestCore/InstantFeedback.swift`): `APIClient.submit` now
+  returns `InstantFeedback?` (`@discardableResult`); its throw paths are
+  unchanged and a feedback object it cannot read is nil, never a failed
+  hand-in. Rules: unknown `level`, or a missing / non-numeric / boolean
+  `earned` / `max_auto` / `pending_count` → nil (old behaviour exactly).
+  **Choice: an item with an unknown `result` word, or without a usable
+  `number`, is DROPPED** rather than shown as "Scored by your teacher" — a
+  future server's new word must not become a claim this build cannot back;
+  the score line stays the server's own total. A `pending` row never carries
+  points or a key, whatever the wire says.
+- **Presentation** (`InstantFeedbackPresentation`, pure): score line "You
+  scored 14 of 18 on the questions scored right away." (D-1); a test with
+  nothing scored right away says "None of the questions on this test are
+  scored right away." + "Your teacher will score all N questions." /
+  "…the question.". **Deviation from D-1's example copy: the pending line
+  carries the noun** — "Your teacher will score 1 more question." / "2 more
+  questions." — so the plural rule has something to apply to. Row headings
+  "Question N — Right / Partly right (1 of 2) / Not right / Scored by your
+  teacher" (points on a partial only); "Your answer: …" ("(no answer)" when
+  null); "Correct answer: …" only when the server sent one. Points print
+  whole, else up to two decimals.
+- **Ordering (D-2, D-6)**: `onHandedIn` carries the feedback; the host
+  (`AppDelegate`) keeps it in `pendingFeedback` and shows it only from the
+  `.idle` transition (`DID END`, or the grace teardown) with
+  `attemptHandedIn` set — never inside the lockdown, and the hand-in never
+  waits on it. A hand-in with no session up (nothing to end, so no `.idle`)
+  shows it on the next main-queue turn. Every non-hand-in end (teacher Hand
+  in → `sitting_closed`, time-out, Cmd-E / Cmd-Q, refusal) goes through the
+  existing paths and never sets it; `showEntry()` / `showAssessment()` clear
+  it. **Reading: a student who presses the in-page "Back to your tests" in
+  the second between "Handed in." and `DID END` leaves the attempt screen
+  first and does not see the page** (accepted; the server's `feedback_shown`
+  row is written at hand-in regardless, as D-5 has it).
+- **Page** (`SecureTestCore/InstantFeedbackPage.swift`): loaded into the
+  attempt's OWN web view (`AssessmentViewController.showFeedback`) rather
+  than a new screen — the bundle's accommodations (contrast, optional font,
+  zoom through `PageShell`'s root attributes), the student's pinch / ⌘=
+  magnification, the CSP (no network) and the `home` channel (→
+  `onBackToTests` → `showEntry()`) all come for free. Markup is built in
+  Swift with every server string HTML-escaped, then the page runs the test's
+  own `$…$` math pass over the text nodes; `\n` is kept by `white-space:
+  pre-line`. **Refactor to share the math rule: `mathSegments`,
+  `stripTexAnnotations`, `mathFragment` and `renderMathIn` moved verbatim
+  out of `rendererScript` into `AssessmentPage.mathPassFunctions`, which the
+  renderer splices in at the old spot** — one copy for both pages, so C-2 /
+  M-1 / ME-3 cannot drift (the 847 existing tests pass unchanged). Answers
+  get the authored-text rule; a short-text answer shows as typed (the
+  field's own text — the `\mathrm{…}` formula preview is not reproduced),
+  and `**bold**` / `_italic_` are not applied.
+- **Accessibility**: `h1`, `p`, `ol role="list"` (WebKit drops list
+  semantics under `list-style: none`), one `li` per question with the result
+  as words; the ✓ / ✗ / ◐ / … marks are `aria-hidden`. Every colour is a
+  token (a test pins no literal hex), so all eight contrast sets apply.
+  Buttons carry `tabindex="0"` (HS-1 / ME-1, Keyboard navigation OFF).
+  **Choice: focus starts on the heading (`tabindex="-1"`), not on Done**, so
+  VoiceOver reads the results before the way out; Return and Escape are Done
+  from anywhere on the page (Return on the Read aloud button is that
+  button's own activation), guarded to post once.
+- **Read aloud — choice: a page-level "Read aloud" / "Stop reading" button**
+  over the existing `tts` channel, shown for any read-aloud grant
+  (`TextToSpeechScope.isEnabled`, the same check `handleSpeech` applies
+  against the attempt's bundle). It sends the page as segments (text nodes,
+  formulas as TeX, a full stop between blocks, marks and buttons skipped).
+  The test's per-block Speak controls and word highlight were not carried
+  over — `word` callbacks are accepted and ignored.
+- Tests (`InstantFeedbackTests`, 30): decode per level, older server / empty
+  body / bad shapes, unknown result + missing number, pending without
+  points, the submit call's return; presentation copy and plurals; page
+  order, no list at `score`, key lines only where sent, escaping, `tabindex`,
+  Read aloud gating, contrast / zoom attributes + CSP, token-only styles,
+  the shared math pass; the page script in JavaScriptCore against a small
+  DOM stub (focus on the heading, Done / Return / Escape post `home` once,
+  Return on Read aloud does not, the spoken segments decode as a
+  `SpeechCommand` and read in order without the marks or buttons).
+- Not done / only a hand-run can prove: the page actually appearing after a
+  REAL `DID END` and never inside the lock; WebKit rendering of KaTeX and
+  the contrast sets on this page; VoiceOver's reading order; Return /
+  Escape reaching the page in a real window (the host makes the web view
+  first responder); the client release (psd-sign + `gh release create`).

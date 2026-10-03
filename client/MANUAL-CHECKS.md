@@ -2002,3 +2002,36 @@ TTS row.
 | **Real session, first prompt never inside.** Reset both permissions; REAL AAC session for a granted student | Both prompts appear BEFORE the screen locks (finding #16's hang cannot happen); if they are dismissed, the session starts without speech-to-text and the notice shows |  ✅ 2026-10-01 (Debug build from Finder, REAL AAC session, both permissions reset first; same fixture and sitting) — both prompts appeared after pressing Resume and BEFORE the lock (James) |
 | **Teacher sees a denied run (2026-10-01).** Reset both permissions; granted student joins with the Monitor open in a browser; Don't Allow the microphone | stderr has no `event speech_preflight … not delivered` line; within one Monitor poll the student's row carries "Speech-to-text unavailable on this Mac" (grey note, not a Needs-attention alert); after allowing the microphone in System Settings and rejoining, the note is gone. Not granted: no `speech_preflight` event at all |  ✅ 2026-10-01 (Release build of `1603ec6`, sitting SKRKS9) — after the denied and timed-out joins the Monitor row shows "Speech-to-text unavailable on this Mac" (checked in Chrome on the origin, rev 67) |
 | **Timeline wording (2026-10-01).** After the row above (one denied join, one ready rejoin), open the student's per-student results page | The integrity timeline lists "Speech-to-text unavailable — microphone permission denied <time>" then "Speech-to-text ready <time>", each before that join's "Secure session started"; the print view's Integrity line does not mention speech-to-text |  ✅ 2026-10-01 (Release build of `1603ec6`, sitting SKRKS9) — the per-student timeline lists "Speech-to-text ready 4:28 PM", "Speech-to-text unavailable — microphone permission denied 4:38 PM", "Speech-to-text unavailable — timed out while preparing 4:40 PM" |
+
+## Instant feedback page (IF slice 3, 2026-10-03)
+
+`docs/instant-feedback-design.md` (D-2, D-3, D-6) is the record. The results
+page appears after the student's OWN hand-in, only once the secure session
+has ended (`DID END`), in the normal window, on the attempt's own web view;
+Done (or Return / Escape) goes to Your tests. Nothing here is run. Fixture: a
+Published assessment with a correct-able MC, a short text with a KaTeX key
+(`\frac{1}{2}` shown as `$\frac{1}{2}$` in a choice or key), a multi-select or
+table (partial credit), an essay (pending); set **Instant feedback** on the
+Settings tab per row. Server needs rev 82 or later (`feedback` in the submit
+response). stderr marks: `attempt … handed in — instant feedback received
+(<level>)`, `instant feedback: showing the results page (<level>, N rows)`.
+
+| Check | Expect | Result |
+|---|---|---|
+| **Score only.** Level `Score only`; hand in with one MC right, one wrong, the essay written (simulated lockdown) | After the session ends: "Your results", "You scored 1 of 2 on the questions scored right away." (numbers per the fixture), "Your teacher will score 1 more question."; no question list; Done → Your tests | |
+| **Right / wrong.** Level `Right / wrong` | The score and pending lines, then one row per question in order: "Question 1 — Right", "Question 2 — Not right", "Question 3 — Partly right (1 of 2)", "Question 4 — Scored by your teacher", each with "Your answer: …" ("(no answer)" for a skipped one); NO "Correct answer" anywhere | |
+| **Correct answers, before release.** Level `Correct answers`, "after I release them", not released | Right / wrong rows plus the line "Your teacher will go over the correct answers."; no "Correct answer" line | |
+| **Correct answers, released / at hand-in.** Release answers (or choose "at hand-in"), new attempt | "Correct answer: …" under the missed and partly-right rows only — never under a right or a teacher-scored one; table keys one cell per line | |
+| **Feedback off / older server.** Level `Off` (or a server before rev 82) | Exactly the old behaviour: the "Handed in." notice and "Back to your tests", no results page | |
+| **Only after DID END — REAL AAC session.** Release build, real session, level `Right / wrong`; hand in | stderr order: `handed in — instant feedback received` → `lockdown ending: hand-in confirmed` → `DID END` / state idle → `instant feedback: showing the results page`; the results page is never on screen while the Mac is locked (the "Handed in." notice is, briefly); the hand-in itself is not delayed | |
+| **Done, Return, Escape.** On the results page, in separate runs: click Done; press Return; press Escape | Each goes to Your tests, once (no double transition); the titlebar "Back to your tests" also works | |
+| **Teacher hand-in shows nothing (D-6).** Student mid-test; teacher presses Hand in / Hand in everyone (then Close) | The student gets the session-ended sheet ("Your teacher ended the test session." / "Time is up."), never a results page | |
+| **Time out shows nothing (D-6).** Timed fixture, let it reach zero | "Time is up." sheet, no results page | |
+| **Passed back shows nothing (D-3).** Teacher passes back a handed-in attempt; student resumes and hands in again | The old "Handed in." notice only, no results page | |
+| **Cmd-Q / emergency end.** Mid-test, Cmd-E (or Cmd-Q) | Today's paths unchanged — no results page | |
+| **Contrast sets.** Student with each `color_contrast` set (at least black-on-white, a dark set, rose) | Page, rows, labels, the Done button and the result marks are legible on every set; the left rule of each row is green / amber / red / grey within the set | |
+| **Zoom and font.** Student with the largest `zoom` and the optional font; also ⌘= / ⌘- from the Session menu | Text scales; rows wrap without horizontal scroll; Done stays reachable; the optional font is used | |
+| **VoiceOver order.** VoiceOver on BEFORE joining; on the results page read with VO-arrows | Heading "Your results", score line, pending line, note, "list, N items", then each row as "Question N — Right / Not right / …" followed by its answer lines; the ✓ / ✗ marks are not read; then Read aloud (if granted) and Done | |
+| **Keyboard, Keyboard navigation OFF.** Tab from the page top | Tab reaches Read aloud (if granted) and Done, with a focus ring; Return on Done leaves; Return on Read aloud starts reading and does not leave | |
+| **Read aloud.** Student with `tts_test_content` (or `tts_student_responses`) On; press Read aloud, then Stop reading; read again and press Done mid-reading | Reads heading, score, pending, note and each row with a pause between, a formula as words; Stop reading stops; Done stops the voice and goes home. Without a TTS grant the button is absent. No word highlight on this page (by design) | |
+| **KaTeX answers.** A key or answer with `$\frac{1}{2}$` and a multi-line answer (match / order / table) | The formula renders as math; a `$57,600` in prose stays a dollar amount; each line of a multi-line answer on its own line; nothing renders as markup (`<b>` typed into a short text shows as the literal text) | |

@@ -525,6 +525,170 @@ public enum AssessmentPage {
     // element. Item content never reaches innerHTML — every piece of authored
     // text becomes a text node — so a stem shaped like markup renders as the
     // characters it is.
+    /// The math tokenizer (`mathSegments`, C-2 / M-1), ME-3's annotation
+    /// strip, and the closing KaTeX pass (`mathFragment` / `renderMathIn`),
+    /// as one block of function declarations. Moved out of `rendererScript`
+    /// unchanged (instant feedback slice 3, 2026-10-03) so the post-hand-in
+    /// feedback page renders answers by exactly the test's rule rather than
+    /// a second copy that could drift. Needs `katex` and `KATEX_MACROS` in
+    /// scope only when `mathFragment` is called.
+    static let mathPassFunctions = #"""
+      // C-2 (2026-09-09) as refined by M-1 (docs/roadmap-2026-09.md,
+      // 2026-09-16), the same rule as the design tool's two renderers: a
+      // single `$` whose next character is a digit opens math ONLY when a
+      // matching single `$` exists AND the run between the delimiters carries
+      // a math marker — a LaTeX command (`\` plus a letter), `^`, or `_`.
+      // Otherwise the `$` is a dollar sign and stays text, so a pilot
+      // stimulus's `$57,600 … $30,000–$120,000` is prose while `$6 \times 7$`
+      // and `$3.5 \times 10^{4}$` are math. `$$` openers and `\$` unchanged.
+      var MATH_MARKER_RE = /\\[a-zA-Z]|[\^_]/;
+
+      function digitOpenerHasMathMarker(text, openAt, closeAt) {
+        return MATH_MARKER_RE.test(text.slice(openAt + 1, closeAt));
+      }
+
+      // Math-aware split: [{ math: bool, text }] in order, `\$` kept literal.
+      function mathSegments(text) {
+        var segs = [], i = 0, start = 0, len = text.length;
+        while (i < len) {
+          var ch = text.charAt(i);
+          if (ch === '\\' && text.charAt(i + 1) === '$') { i += 2; continue; }
+          if (ch === '$') {
+            var display = text.charAt(i + 1) === '$';
+            var nextCh = text.charAt(i + 1);
+            // C-2 / M-1 (see digitOpenerHasMathMarker above): a digit opener
+            // is a dollar sign unless the run up to its matching `$` carries a
+            // LaTeX command, `^` or `_`.
+            var digitOpener = !display && nextCh >= '0' && nextCh <= '9';
+            var open = display ? 2 : 1;
+            var scan = i + open, close = -1;
+            while (scan < len) {
+              if (text.charAt(scan) === '\\' && text.charAt(scan + 1) === '$') { scan += 2; continue; }
+              if (text.charAt(scan) === '$') {
+                if (display) {
+                  if (text.charAt(scan + 1) === '$') { close = scan; break; }
+                  scan += 1; continue;
+                }
+                close = scan; break;
+              }
+              scan += 1;
+            }
+            if (close === -1) { i += 1; continue; }
+            if (digitOpener && !digitOpenerHasMathMarker(text, i, close)) { i += 1; continue; }
+            if (i > start) segs.push({ math: false, text: text.slice(start, i) });
+            segs.push({ math: true, text: text.slice(i, close + open) });
+            i = close + open; start = i;
+            continue;
+          }
+          i += 1;
+        }
+        if (start < len) segs.push({ math: false, text: text.slice(start) });
+        return segs;
+      }
+
+      // Finding ME-3 (2026-09-23, district Mac, real AAC session, v1.3.4): VoiceOver
+      // read a previewed `\frac{1}{2}` as the literal LaTeX. KaTeX's default output
+      // hides the visual `.katex-html` from assistive tech and leaves a MathML twin
+      // for it — but that twin ends in
+      // an `annotation` element (encoding application/x-tex) holding the source, and the
+      // annotation is the one place the LaTeX survives as text. Removing it after a
+      // render leaves the MathML (what a screen reader should speak) and takes the
+      // source out of the text a live region announces. Walks childNodes rather than
+      // querySelectorAll so the harness's shim and any DOM without it behave the same.
+      function stripTexAnnotations(el) {
+        if (!el) return;
+        var kids = el.childNodes || el.children || [];
+        for (var i = kids.length - 1; i >= 0; i--) {
+          var node = kids[i];
+          if (!node || node.nodeType !== 1) continue;
+          var name = String(node.localName || node.nodeName || '').toLowerCase();
+          if (name === 'annotation') {
+            el.removeChild(node);
+          } else {
+            stripTexAnnotations(node);
+          }
+        }
+      }
+
+      var MATH_SKIP_TAGS = {
+        textarea: true, input: true, select: true, script: true, style: true, canvas: true
+      };
+
+      // A fragment for one merged run of text, or null when it holds neither
+      // math nor an escaped dollar (`\$57,600`, as the importer now writes
+      // money, must lose its backslash even in prose with no math at all).
+      function mathFragment(text) {
+        var segs = mathSegments(text);
+        var hasMath = segs.some(function (seg) { return seg.math; });
+        if (!hasMath && text.indexOf('\\$') === -1) return null;
+        var frag = document.createDocumentFragment();
+        segs.forEach(function (seg) {
+          if (!seg.math) {
+            frag.appendChild(document.createTextNode(seg.text.replace(/\\\$/g, '$')));
+            return;
+          }
+          var display = seg.text.slice(0, 2) === '$$';
+          var open = display ? 2 : 1;
+          var tex = seg.text.slice(open, seg.text.length - open);
+          var span = document.createElement('span');
+          try {
+            katex.render(tex, span, {
+              displayMode: display,
+              throwOnError: false,
+              errorColor: '#cc0000',
+              strict: 'ignore',
+              trust: false,
+              macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
+            });
+            // ME-3 (2026-09-23): the same MathML twin carries the stem's LaTeX
+            // source as an annotation; VoiceOver reading a stem or choice would
+            // meet it exactly as it did in the answer preview.
+            stripTexAnnotations(span);
+            // TTS slice 1: what the read-aloud speaks for this formula (D-4).
+            // An expando, not an attribute — nothing reaches the accessibility
+            // tree, which is what ME-3 removed the annotation to keep clean.
+            span.__tex = tex;
+            frag.appendChild(span);
+          } catch (e) {
+            // throwOnError keeps parse errors red rather than thrown, but a
+            // TypeError still can escape; the raw source is better than a gap.
+            console.log('KaTeX render failed: ' + (e && e.message));
+            frag.appendChild(document.createTextNode(seg.text));
+          }
+        });
+        return frag;
+      }
+
+      function renderMathIn(el) {
+        var kids = el.childNodes;
+        for (var i = 0; i < kids.length; i++) {
+          var node = kids[i];
+          if (node.nodeType === 3) {
+            // Adjacent text nodes are merged first, as auto-render did, so an
+            // expression split across nodes still parses as one.
+            var text = node.textContent || '';
+            var next = node.nextSibling, extra = 0;
+            while (next && next.nodeType === 3) {
+              text += next.textContent || '';
+              next = next.nextSibling;
+              extra += 1;
+            }
+            var frag = mathFragment(text);
+            if (!frag) { i += extra; continue; }
+            for (var d = 0; d < extra; d++) el.removeChild(node.nextSibling);
+            i += frag.childNodes.length - 1;
+            el.replaceChild(frag, node);
+          } else if (node.nodeType === 1) {
+            var tag = (node.nodeName || '').toLowerCase();
+            if (MATH_SKIP_TAGS[tag] === true) continue;
+            // Never re-enter markup KaTeX itself produced.
+            if ((' ' + (node.className || '') + ' ').indexOf(' katex ') !== -1) continue;
+            renderMathIn(node);
+          }
+        }
+      }
+    """#
+
     static let rendererScript = #"""
     (function () {
       'use strict';
@@ -804,58 +968,11 @@ public enum AssessmentPage {
       var BOLD_RE = /\*\*([^*\s](?:[^*\n]*?[^*\s])?)\*\*/g;
       var ITALIC_RE = /(^|[\s(\[{"'\u201c\u2018])_([^_\s](?:[^_\n]*?[^_\s])?)_(?=$|[\s.,;:!?)\]}"'\u201d\u2019])/g;
 
-      // C-2 (2026-09-09) as refined by M-1 (docs/roadmap-2026-09.md,
-      // 2026-09-16), the same rule as the design tool's two renderers: a
-      // single `$` whose next character is a digit opens math ONLY when a
-      // matching single `$` exists AND the run between the delimiters carries
-      // a math marker — a LaTeX command (`\` plus a letter), `^`, or `_`.
-      // Otherwise the `$` is a dollar sign and stays text, so a pilot
-      // stimulus's `$57,600 … $30,000–$120,000` is prose while `$6 \times 7$`
-      // and `$3.5 \times 10^{4}$` are math. `$$` openers and `\$` unchanged.
-      var MATH_MARKER_RE = /\\[a-zA-Z]|[\^_]/;
-
-      function digitOpenerHasMathMarker(text, openAt, closeAt) {
-        return MATH_MARKER_RE.test(text.slice(openAt + 1, closeAt));
-      }
-
-      // Math-aware split: [{ math: bool, text }] in order, `\$` kept literal.
-      function mathSegments(text) {
-        var segs = [], i = 0, start = 0, len = text.length;
-        while (i < len) {
-          var ch = text.charAt(i);
-          if (ch === '\\' && text.charAt(i + 1) === '$') { i += 2; continue; }
-          if (ch === '$') {
-            var display = text.charAt(i + 1) === '$';
-            var nextCh = text.charAt(i + 1);
-            // C-2 / M-1 (see digitOpenerHasMathMarker above): a digit opener
-            // is a dollar sign unless the run up to its matching `$` carries a
-            // LaTeX command, `^` or `_`.
-            var digitOpener = !display && nextCh >= '0' && nextCh <= '9';
-            var open = display ? 2 : 1;
-            var scan = i + open, close = -1;
-            while (scan < len) {
-              if (text.charAt(scan) === '\\' && text.charAt(scan + 1) === '$') { scan += 2; continue; }
-              if (text.charAt(scan) === '$') {
-                if (display) {
-                  if (text.charAt(scan + 1) === '$') { close = scan; break; }
-                  scan += 1; continue;
-                }
-                close = scan; break;
-              }
-              scan += 1;
-            }
-            if (close === -1) { i += 1; continue; }
-            if (digitOpener && !digitOpenerHasMathMarker(text, i, close)) { i += 1; continue; }
-            if (i > start) segs.push({ math: false, text: text.slice(start, i) });
-            segs.push({ math: true, text: text.slice(i, close + open) });
-            i = close + open; start = i;
-            continue;
-          }
-          i += 1;
-        }
-        if (start < len) segs.push({ math: false, text: text.slice(start) });
-        return segs;
-      }
+      // Instant feedback slice 3 (2026-10-03): the math tokenizer and the
+      // closing math pass live in `mathPassFunctions`, shared verbatim with the
+      // post-hand-in feedback page (`InstantFeedbackPage`) so both render a
+      // `$…$` run by one rule. Spliced here unchanged.
+    \#(mathPassFunctions)
 
       function italicNodes(text, into) {
         var last = 0, m;
@@ -1972,29 +2089,6 @@ public enum AssessmentPage {
           trust: false,
           macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
         };
-      }
-      // Finding ME-3 (2026-09-23, district Mac, real AAC session, v1.3.4): VoiceOver
-      // read a previewed `\frac{1}{2}` as the literal LaTeX. KaTeX's default output
-      // hides the visual `.katex-html` from assistive tech and leaves a MathML twin
-      // for it — but that twin ends in
-      // an `annotation` element (encoding application/x-tex) holding the source, and the
-      // annotation is the one place the LaTeX survives as text. Removing it after a
-      // render leaves the MathML (what a screen reader should speak) and takes the
-      // source out of the text a live region announces. Walks childNodes rather than
-      // querySelectorAll so the harness's shim and any DOM without it behave the same.
-      function stripTexAnnotations(el) {
-        if (!el) return;
-        var kids = el.childNodes || el.children || [];
-        for (var i = kids.length - 1; i >= 0; i--) {
-          var node = kids[i];
-          if (!node || node.nodeType !== 1) continue;
-          var name = String(node.localName || node.nodeName || '').toLowerCase();
-          if (name === 'annotation') {
-            el.removeChild(node);
-          } else {
-            stripTexAnnotations(node);
-          }
-        }
       }
       function formulaPreviewNote(preview) {
         var note = document.createElement('span');
@@ -4575,83 +4669,6 @@ public enum AssessmentPage {
       // longer inlined. This pass uses `mathSegments`, the one tokenizer the
       // client already shares with the design tool's renderers, and unescapes
       // `\$` to `$` in text exactly as `renderLatex`'s pushText does.
-      var MATH_SKIP_TAGS = {
-        textarea: true, input: true, select: true, script: true, style: true, canvas: true
-      };
-
-      // A fragment for one merged run of text, or null when it holds neither
-      // math nor an escaped dollar (`\$57,600`, as the importer now writes
-      // money, must lose its backslash even in prose with no math at all).
-      function mathFragment(text) {
-        var segs = mathSegments(text);
-        var hasMath = segs.some(function (seg) { return seg.math; });
-        if (!hasMath && text.indexOf('\\$') === -1) return null;
-        var frag = document.createDocumentFragment();
-        segs.forEach(function (seg) {
-          if (!seg.math) {
-            frag.appendChild(document.createTextNode(seg.text.replace(/\\\$/g, '$')));
-            return;
-          }
-          var display = seg.text.slice(0, 2) === '$$';
-          var open = display ? 2 : 1;
-          var tex = seg.text.slice(open, seg.text.length - open);
-          var span = document.createElement('span');
-          try {
-            katex.render(tex, span, {
-              displayMode: display,
-              throwOnError: false,
-              errorColor: '#cc0000',
-              strict: 'ignore',
-              trust: false,
-              macros: (typeof KATEX_MACROS === 'object' && KATEX_MACROS) ? KATEX_MACROS : {}
-            });
-            // ME-3 (2026-09-23): the same MathML twin carries the stem's LaTeX
-            // source as an annotation; VoiceOver reading a stem or choice would
-            // meet it exactly as it did in the answer preview.
-            stripTexAnnotations(span);
-            // TTS slice 1: what the read-aloud speaks for this formula (D-4).
-            // An expando, not an attribute — nothing reaches the accessibility
-            // tree, which is what ME-3 removed the annotation to keep clean.
-            span.__tex = tex;
-            frag.appendChild(span);
-          } catch (e) {
-            // throwOnError keeps parse errors red rather than thrown, but a
-            // TypeError still can escape; the raw source is better than a gap.
-            console.log('KaTeX render failed: ' + (e && e.message));
-            frag.appendChild(document.createTextNode(seg.text));
-          }
-        });
-        return frag;
-      }
-
-      function renderMathIn(el) {
-        var kids = el.childNodes;
-        for (var i = 0; i < kids.length; i++) {
-          var node = kids[i];
-          if (node.nodeType === 3) {
-            // Adjacent text nodes are merged first, as auto-render did, so an
-            // expression split across nodes still parses as one.
-            var text = node.textContent || '';
-            var next = node.nextSibling, extra = 0;
-            while (next && next.nodeType === 3) {
-              text += next.textContent || '';
-              next = next.nextSibling;
-              extra += 1;
-            }
-            var frag = mathFragment(text);
-            if (!frag) { i += extra; continue; }
-            for (var d = 0; d < extra; d++) el.removeChild(node.nextSibling);
-            i += frag.childNodes.length - 1;
-            el.replaceChild(frag, node);
-          } else if (node.nodeType === 1) {
-            var tag = (node.nodeName || '').toLowerCase();
-            if (MATH_SKIP_TAGS[tag] === true) continue;
-            // Never re-enter markup KaTeX itself produced.
-            if ((' ' + (node.className || '') + ' ').indexOf(' katex ') !== -1) continue;
-            renderMathIn(node);
-          }
-        }
-      }
 
       if (typeof katex === 'object' && katex && typeof katex.render === 'function') {
         try {
