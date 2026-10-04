@@ -56,7 +56,7 @@ jobs:
             '\b168\.212\.[0-9]+\.[0-9]+\b' \
             'docs/requests/' ; do
             hits=$(git grep -nIE -- "$p" -- \
-              ':!.github/workflows/scan.yml' ':!.gitleaks.toml' \
+              ':!.github/workflows/scan.yml' ':!.gitleaks.toml' ':!.githooks/pre-commit' \
               ':!docs/public-release-plan.md' \
               ':!design-tool/infra/cdk.context.json.example' || true)
             if [ -n "$hits" ]; then

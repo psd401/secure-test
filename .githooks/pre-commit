@@ -10,19 +10,35 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: refusing to commit unscanned changes to a public repository." >&2
   exit 1
 fi
-# The production hostname is identifier-shaped, not credential-shaped, so
-# gitleaks cannot catch it; this mirrors that pattern in scan.yml's sweep
-# (same excluded paths) over the lines this commit adds. A gitleaks rule
-# would instead fail CI's full-history scan on commits already pushed.
-hits=$(git diff --cached -U0 --no-color -- . \
+# The identifier sweep from scan.yml, over the lines this commit adds.
+# These shapes (hostname, account ids, IP ranges, paths) are identifiers,
+# not credentials, so gitleaks' rules miss most of them; and a gitleaks
+# rule would fail CI's full-history scan on commits already pushed. Keep
+# the pattern list and excluded paths in step with scan.yml's sweep job.
+added=$(git diff --cached -U0 --no-color -- . \
   ':!.github/workflows/scan.yml' ':!.gitleaks.toml' ':!.githooks/pre-commit' \
   ':!docs/public-release-plan.md' \
   ':!design-tool/infra/cdk.context.json.example' \
-  | grep -E '^(\+\+\+ |\+.*securetest\.psd401\.ai)' \
-  | grep -B1 -E '^\+[^+]' || true)
-if [ -n "$hits" ]; then
-  echo "pre-commit: the production hostname is staged; use <origin> instead:" >&2
-  echo "$hits" >&2
+  | awk '/^\+\+\+ b\//{f=substr($0,7);next} /^@@/{split($3,a,",");n=substr(a[1],2);next}
+         /^\+/{print f":"n": "substr($0,2);n++}')
+fail=0
+for p in \
+  'arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:' \
+  '\b[0-9]{12}\b.*(aws://|--profile)' \
+  '[0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com' \
+  '\b[0-9]{4,10}@edtools\.psd401\.net' \
+  'securetest\.psd401\.ai' \
+  '\b168\.212\.[0-9]+\.[0-9]+\b' \
+  'docs/requests/' ; do
+  hits=$(printf '%s\n' "$added" | grep -E -- "$p" || true)
+  if [ -n "$hits" ]; then
+    printf 'pre-commit: staged addition matches %s\n' "$p" >&2
+    printf '%s\n' "$hits" >&2
+    fail=1
+  fi
+done
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: use placeholders (<origin>, <account-id>, ...) — see CLAUDE.md." >&2
   exit 1
 fi
 exec gitleaks git --pre-commit --staged --config .gitleaks.toml --no-banner --redact
