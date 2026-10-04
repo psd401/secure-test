@@ -263,7 +263,7 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
   takes several addresses and gains `cc`. Tests: 6 new in
   `test/safeguarding-screening.test.ts`; design-tool 2424 pass, typecheck
   clean, infra synth shows the env var. Rows 330–331 NOT RUN.
-- 2026-10-01: IT published `_dmarc.securetest.psd401.ai` at p=quarantine
+- 2026-10-01: IT published `_dmarc.<origin>` at p=quarantine
   (adkim / aspf relaxed); the parent `.ai` zone has no DMARC record, so
   this is the only policy. DKIM aligns (no custom MAIL FROM — SPF does not
   align and need not). Aggregate reports not set up.
