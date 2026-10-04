@@ -1,0 +1,27 @@
+# Identifier sweep: shapes that must never appear in a tracked file.
+# Read by .github/workflows/scan.yml (every tracked file, on push / PR) and
+# .githooks/pre-commit (the lines a commit adds). These are identifiers,
+# not credentials, so gitleaks' rules miss most of them.
+#
+# One entry per line: `pattern <ERE>` or `exclude <path>`. Extend when a
+# review finds a new shape; keep each pattern a plain ERE. Synthetic
+# fixtures use the real domains on purpose (role-from-domain is product
+# logic), so the student rule matches only digit-only local parts — the
+# shape a real student account has — and there is no staff-address rule:
+# a named address has no fixed shape, review catches those.
+
+pattern arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:
+pattern \b[0-9]{12}\b.*(aws://|--profile)
+pattern [0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com
+pattern \b[0-9]{4,10}@edtools\.psd401\.net
+pattern securetest\.psd401\.ai
+pattern \b168\.212\.[0-9]+\.[0-9]+\b
+pattern docs/requests/
+
+# Files that carry the patterns themselves, or document them.
+exclude .github/identifier-sweep.txt
+exclude .github/workflows/scan.yml
+exclude .gitleaks.toml
+exclude .githooks/pre-commit
+exclude docs/public-release-plan.md
+exclude design-tool/infra/cdk.context.json.example

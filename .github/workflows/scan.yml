@@ -2,7 +2,8 @@ name: scan
 
 # Two gates on every push and pull request: gitleaks over the whole history
 # with the repo's identifier-aware config, and a grep sweep for the patterns
-# gitleaks cannot shape (a hostname, a person's name). The sweep list mirrors
+# gitleaks cannot shape (a hostname, a person's name). The sweep list lives in
+# .github/identifier-sweep.txt (shared with .githooks/pre-commit) and mirrors
 # CLAUDE.md's "Contributing / what stays out of this repo".
 
 on:
@@ -40,27 +41,18 @@ jobs:
         run: |
           set -u
           fail=0
-          # Patterns that must never appear in a tracked file. Extend when a
-          # review finds a new shape; keep each one a plain ERE. Synthetic
-          # fixtures use the real domains on purpose (role-from-domain is
-          # product logic), so the student rule matches only digit-only
-          # local parts — the shape a real student account has — and there
-          # is no staff-address rule: a named address has no fixed shape,
-          # review catches those.
-          for p in \
-            'arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:' \
-            '\b[0-9]{12}\b.*(aws://|--profile)' \
-            '[0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com' \
-            '\b[0-9]{4,10}@edtools\.psd401\.net' \
-            'securetest\.psd401\.ai' \
-            '\b168\.212\.[0-9]+\.[0-9]+\b' \
-            'docs/requests/' ; do
-            hits=$(git grep -nIE -- "$p" -- \
-              ':!.github/workflows/scan.yml' ':!.gitleaks.toml' ':!.githooks/pre-commit' \
-              ':!docs/public-release-plan.md' \
-              ':!design-tool/infra/cdk.context.json.example' || true)
+          # Patterns and excluded paths live in .github/identifier-sweep.txt,
+          # shared with .githooks/pre-commit.
+          sweep=.github/identifier-sweep.txt
+          excludes=()
+          while read -r kind rest; do
+            if [ "$kind" = exclude ]; then excludes+=(":!$rest"); fi
+          done < "$sweep"
+          while read -r kind p; do
+            [ "$kind" = pattern ] || continue
+            hits=$(git grep -nIE -- "$p" -- "${excludes[@]}" || true)
             if [ -n "$hits" ]; then
               echo "::error::pattern matched: $p"; echo "$hits"; fail=1
             fi
-          done
+          done < "$sweep"
           exit $fail

@@ -10,33 +10,27 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: refusing to commit unscanned changes to a public repository." >&2
   exit 1
 fi
-# The identifier sweep from scan.yml, over the lines this commit adds.
-# These shapes (hostname, account ids, IP ranges, paths) are identifiers,
-# not credentials, so gitleaks' rules miss most of them; and a gitleaks
-# rule would fail CI's full-history scan on commits already pushed. Keep
-# the pattern list and excluded paths in step with scan.yml's sweep job.
-added=$(git diff --cached -U0 --no-color -- . \
-  ':!.github/workflows/scan.yml' ':!.gitleaks.toml' ':!.githooks/pre-commit' \
-  ':!docs/public-release-plan.md' \
-  ':!design-tool/infra/cdk.context.json.example' \
+# The identifier sweep (.github/identifier-sweep.txt, shared with
+# scan.yml) over the lines this commit adds. A gitleaks rule would instead
+# fail CI's full-history scan on commits already pushed.
+sweep=.github/identifier-sweep.txt
+set -- .
+while read -r kind rest; do
+  if [ "$kind" = exclude ]; then set -- "$@" ":!$rest"; fi
+done < "$sweep"
+added=$(git diff --cached -U0 --no-color -- "$@" \
   | awk '/^\+\+\+ b\//{f=substr($0,7);next} /^@@/{split($3,a,",");n=substr(a[1],2);next}
          /^\+/{print f":"n": "substr($0,2);n++}')
 fail=0
-for p in \
-  'arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:' \
-  '\b[0-9]{12}\b.*(aws://|--profile)' \
-  '[0-9]{10,}-[a-z0-9]+\.apps\.googleusercontent\.com' \
-  '\b[0-9]{4,10}@edtools\.psd401\.net' \
-  'securetest\.psd401\.ai' \
-  '\b168\.212\.[0-9]+\.[0-9]+\b' \
-  'docs/requests/' ; do
+while read -r kind p; do
+  [ "$kind" = pattern ] || continue
   hits=$(printf '%s\n' "$added" | grep -E -- "$p" || true)
   if [ -n "$hits" ]; then
     printf 'pre-commit: staged addition matches %s\n' "$p" >&2
     printf '%s\n' "$hits" >&2
     fail=1
   fi
-done
+done < "$sweep"
 if [ "$fail" -ne 0 ]; then
   echo "pre-commit: use placeholders (<origin>, <account-id>, ...) — see CLAUDE.md." >&2
   exit 1
