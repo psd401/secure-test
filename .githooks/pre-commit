@@ -10,4 +10,19 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: refusing to commit unscanned changes to a public repository." >&2
   exit 1
 fi
+# The production hostname is identifier-shaped, not credential-shaped, so
+# gitleaks cannot catch it; this mirrors that pattern in scan.yml's sweep
+# (same excluded paths) over the lines this commit adds. A gitleaks rule
+# would instead fail CI's full-history scan on commits already pushed.
+hits=$(git diff --cached -U0 --no-color -- . \
+  ':!.github/workflows/scan.yml' ':!.gitleaks.toml' ':!.githooks/pre-commit' \
+  ':!docs/public-release-plan.md' \
+  ':!design-tool/infra/cdk.context.json.example' \
+  | grep -E '^(\+\+\+ |\+.*securetest\.psd401\.ai)' \
+  | grep -B1 -E '^\+[^+]' || true)
+if [ -n "$hits" ]; then
+  echo "pre-commit: the production hostname is staged; use <origin> instead:" >&2
+  echo "$hits" >&2
+  exit 1
+fi
 exec gitleaks git --pre-commit --staged --config .gitleaks.toml --no-banner --redact
