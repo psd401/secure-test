@@ -68,7 +68,13 @@ describe("verifyIdToken (local JWKS)", () => {
 
   test("rejects a tampered signature", async () => {
     const token = await signTestIdToken({ sub: "teacher-002" });
-    const tampered = token.slice(0, -2) + "AA";
+    // Swap one character in the MIDDLE of the signature: the last base64url
+    // character carries unused padding bits, so overwriting the end can
+    // decode to the same bytes and the token would still verify.
+    const [header, payload, signature] = token.split(".");
+    const i = Math.floor(signature!.length / 2);
+    const swapped = signature![i] === "A" ? "B" : "A";
+    const tampered = `${header}.${payload}.${signature!.slice(0, i)}${swapped}${signature!.slice(i + 1)}`;
     await expect(
       verifyIdToken(tampered, {
         issuer: TEST_ISSUER,

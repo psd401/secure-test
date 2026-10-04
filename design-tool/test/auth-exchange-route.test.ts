@@ -192,7 +192,14 @@ describe("POST /api/auth/exchange (slice 77)", () => {
 
   test("a bad signature is refused with 401", async () => {
     const token = await idToken({ email: "teacher.one@psd401.net", email_verified: true });
-    const { res } = await exchange(token.slice(0, -3) + "xyz");
+    // Swap one character in the MIDDLE of the signature: the last base64url
+    // character carries unused padding bits, so overwriting the end can
+    // decode to the same bytes and the token would still verify.
+    const [header, payload, signature] = token.split(".");
+    const i = Math.floor(signature!.length / 2);
+    const swapped = signature![i] === "A" ? "B" : "A";
+    const tampered = `${header}.${payload}.${signature!.slice(0, i)}${swapped}${signature!.slice(i + 1)}`;
+    const { res } = await exchange(tampered);
     expect(res.status).toBe(401);
   });
 });
