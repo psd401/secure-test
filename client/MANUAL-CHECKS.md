@@ -2107,10 +2107,11 @@ Release build:
 | **No feedback.** Level Off; hand in, press Back to your tests at once | Leaves at once as before (`leaving the attempt screen`) | ✅ 2026-10-05 — Release 1.5.0 (`6cab230`), real AAC session against the origin (fixture C): `handed in` → `end() called` → `leaving the attempt screen` at once |
 | **EX-3 re-run.** Same, on the build with the flag captured before the hop | `page load gate: held … (EX-3)`; no questions drawn; the time-up sheet | ✅ 2026-10-05 — Release 1.5.0 (`1bb469a`), real AAC session against the origin (fixture B, resumed 16 s past the deadline): `end() requested while STARTING — deferred` → `DID BEGIN with an end deferred` → `page load gate: held … (EX-3); the test is not drawn` → `DID END` → `page load gate settled after the attempt screen went away — discarded`; no questions seen; the time-up sheet |
 
-## U-12 + U-15 — one row per test; "Time ran out" (2026-10-05, next release)
+## U-12 + U-15 — one row per test; "Time ran out" (2026-10-05, v1.5.1)
 
-Server half (one row per assessment, `time_ran_out`) reaches every client
-version once deployed; the disabled Resume + note needs the next release.
+Server half (one row per assessment, `time_ran_out`) is LIVE since rev 90
+(2026-10-05) for every client version; the disabled Resume + note ships in
+**v1.5.1** — run these rows on the v1.5.1 build before release.
 
 | Check | Expected | Result |
 |---|---|---|
