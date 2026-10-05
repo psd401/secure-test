@@ -951,9 +951,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // State can change from the backstop queue (a grace-expired teardown
         // clears there), so every AppKit touch hops to the main actor.
-        lockdown.onState = { [weak self] state in
+        //
+        // EX-3: whether an end is already owed is read HERE, synchronously, in
+        // the didSet that fires `.active` — `didBegin` issues the owed end()
+        // and clears the flag right after, so by the time the hop below runs
+        // it is always false (the first EX-3 fix read it there and never
+        // fired; v1.5.0 smoke re-run, 2026-10-05).
+        lockdown.onState = { [weak self, weak lockdown] state in
+            let endOwedOnBegin = state == .active && lockdown?.endIsOwedOnBegin == true
             Task { @MainActor in
-                self?.lockdownStateChanged(state)
+                self?.lockdownStateChanged(state, endOwedOnBegin: endOwedOnBegin)
             }
         }
         lockdown.onCountdown = { [weak self] remaining in
@@ -1009,14 +1016,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// to `.idle` (an emergency end seconds after begin) could otherwise have
     /// its refusal land first and report a start that never failed. This is
     /// decided here, on the main actor, where the states genuinely are ordered.
-    private func openPageLoadGate() {
+    private func openPageLoadGate(endOwedOnBegin: Bool = false) {
         lockdownBecameActive = true
         // EX-3: DID BEGIN arrived with an end already owed (requested while
         // starting — e.g. the countdown ran out on a resume inside the
         // deadline's grace). The session goes straight back down; building
         // the test now only flashes the questions. The gate stays shut, and
-        // the wait is discarded when the attempt screen is retired.
-        if lockdown?.endIsOwedOnBegin == true {
+        // the wait is discarded when the attempt screen is retired. The flag
+        // is captured in `onState` before the main-actor hop (see there).
+        if endOwedOnBegin {
             Self.log("page load gate: held — the secure session began with an end already owed (EX-3); the test is not drawn")
             return
         }
@@ -1042,7 +1050,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lockdown.endBeforeTeardown {}
     }
 
-    private func lockdownStateChanged(_ state: AssessmentLockdown.State) {
+    private func lockdownStateChanged(_ state: AssessmentLockdown.State, endOwedOnBegin: Bool = false) {
         switch state {
         case .idle:
             endSessionItem?.isEnabled = false
@@ -1070,7 +1078,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Security slice 1: `.active` — and nothing else — releases the
             // page build (C-1's reason for the gate is unchanged: the AAC
             // begin() transition has finished resizing the window by now).
-            if state == .active { openPageLoadGate() }
+            if state == .active { openPageLoadGate(endOwedOnBegin: endOwedOnBegin) }
             endSessionItem?.isEnabled = true
             installLockdownAccessoryIfNeeded()
             lockdownStatusLabel?.stringValue =
