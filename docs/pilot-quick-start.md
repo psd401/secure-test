@@ -109,7 +109,9 @@ their work.
    the server accepts nothing more after a 30-second grace. Leaving and
    resuming does not restart it. **Adjust time** (beside Hand in everyone,
    or on one student's row) moves the deadline to a time you pick, later or
-   earlier — the default is today at 11:59 PM; for a class finishing
+   earlier — the default is today at 11:59 PM (on a test with no time
+   limit of its own it opens on No time limit, and a deadline set there
+   stays after the session ends); for a class finishing
    tomorrow, pick tomorrow, start a new session tomorrow and close it when
    they are done. Choose **No time limit** in the same dialog to take the
    limit away — from the header it also covers anyone who joins that
@@ -170,6 +172,22 @@ its own.
    dialog says how many. Their rows stay *In progress*; press **Hand in
    everyone** (or **Hand in** on a row) to finalise, or open another
    session for them to continue.
+
+### A test that takes more than one class
+
+- **Publish once and leave it published.** Unpublishing doesn't stop
+  students; closing the session does.
+- **One session per class period.** Start it when class starts, **Close
+  session** when it ends. Answers are saved; nothing is handed in.
+- **Next class, start a new session.** Students see the test under **Your
+  tests** with **Resume** and continue where they stopped.
+- **Close the old session before starting the next.** Each open session is
+  its own row on the student's screen, so two open sessions list the same
+  test twice.
+- **When everyone's done, press Hand in everyone.** It covers the students
+  whose last session was that one; check **Results** for anyone still *In
+  progress* and press **Hand in** on their row. Only handed-in work reaches
+  the scoring queue.
 
 ## Teacher — after
 
@@ -242,6 +260,14 @@ its own.
   Expected — Close returns them to Your tests with their answers saved but
   does not hand in. Press **Hand in** on their row, or open another
   session and they resume where they left off.
+- **A student has saved work but isn't in the scoring queue.** The queue
+  shows handed-in work only. Press **Hand in** on their row, or have them
+  press **Finish and hand in**.
+- **Students see the same test listed more than once.** More than one
+  session is open for them. Close the older ones on the Test sessions tab.
+- **"Time is up." every time a student presses Resume.** Their time ran out,
+  or a deadline set with Adjust time has passed. **Adjust time** on their row
+  → **No time limit** or a later time.
 - **A student's session ended by itself.** Either the teacher's time limit
   ran out ("Time is up." on the student's screen, answers kept), the
   session was closed or ran out ("Your teacher ended the test session."),
