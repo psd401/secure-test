@@ -66,6 +66,24 @@ final class APIClientTests: XCTestCase {
         )
     }
 
+    /// EX-2 (2026-10-05): the version header is the server's signal that this
+    /// client understands a delivery 409 `time_expired`.
+    func testRequestsCarryTheClientVersionWhenGiven() async throws {
+        let transport = RecordingTransport(body: #"{"attempt":{"id":"at1","status":"in_progress"},"resumed":false}"#)
+        let versioned = APIClient(
+            baseURL: base, transport: transport,
+            tokens: InMemoryTokenStore(token: "tok-123"), clientVersion: "1.5.0"
+        )
+        _ = try await versioned.startAttempt(testSessionID: "s1")
+        XCTAssertEqual(transport.sent[0].value(forHTTPHeaderField: APIClient.versionHeader), "1.5.0")
+    }
+
+    func testRequestsCarryNoVersionHeaderWhenNoneGiven() async throws {
+        let transport = RecordingTransport(body: #"{"attempt":{"id":"at1","status":"in_progress"},"resumed":false}"#)
+        _ = try await client(transport).startAttempt(testSessionID: "s1")
+        XCTAssertNil(transport.sent[0].value(forHTTPHeaderField: APIClient.versionHeader))
+    }
+
     /// Bearer rather than a cookie: a native app has no cookie jar worth
     /// emulating, and the server accepts either since slice 58.
     func testEveryRequestCarriesTheBearerToken() async throws {

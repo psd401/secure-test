@@ -481,7 +481,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let client = APIClient(
             baseURL: config.serverURL ?? Self.unconfiguredPlaceholderURL,
             transport: URLSessionTransport(),
-            tokens: tokens
+            tokens: tokens,
+            // EX-2: tells the server this build handles a delivery 409
+            // `time_expired` (and lets it count versions on the fleet).
+            clientVersion: AppVersion.marketing
         )
 
         var signIn: (() async throws -> SignedInSession)?

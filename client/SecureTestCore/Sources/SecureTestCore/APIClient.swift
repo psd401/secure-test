@@ -170,14 +170,28 @@ public struct UploadTarget: Decodable, Equatable, Sendable {
 }
 
 public actor APIClient {
+    /// EX-2 (2026-10-05): the header that tells the server which client build
+    /// is asking. Its presence is the capability signal — a client that sends
+    /// it understands a delivery 409 `time_expired` (v1.5.0+); one that does
+    /// not (≤ v1.4.0) would dead-end on it, so the server answers it the old
+    /// way. The value is `MARKETING_VERSION`, for the server's own counts.
+    public static let versionHeader = "X-SecureTest-Version"
+
     private let baseURL: URL
     private let transport: HTTPTransport
     private let tokens: TokenStore
+    private let clientVersion: String?
 
-    public init(baseURL: URL, transport: HTTPTransport, tokens: TokenStore) {
+    public init(
+        baseURL: URL,
+        transport: HTTPTransport,
+        tokens: TokenStore,
+        clientVersion: String? = nil
+    ) {
         self.baseURL = baseURL
         self.transport = transport
         self.tokens = tokens
+        self.clientVersion = clientVersion
     }
 
     // MARK: sign-in (slice 80)
@@ -189,6 +203,7 @@ public actor APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/auth/exchange"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let clientVersion { request.setValue(clientVersion, forHTTPHeaderField: Self.versionHeader) }
         request.httpBody = try JSONSerialization.data(withJSONObject: ["id_token": idToken])
 
         let (data, response) = try await transport.send(request)
@@ -506,6 +521,7 @@ public actor APIClient {
         // Bearer rather than a cookie: a native app has no cookie jar worth
         // emulating, and the server accepts either (slice 58).
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let clientVersion { request.setValue(clientVersion, forHTTPHeaderField: Self.versionHeader) }
         if let rawBody {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = rawBody
