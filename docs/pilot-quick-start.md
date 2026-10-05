@@ -264,6 +264,11 @@ its own.
   shows handed-in work only. Press **Hand in** on their row, **Hand in all
   in progress** on Results for the whole class, or have them press **Finish
   and hand in**.
+- **A Students-page accommodation didn't show up in the test.** The test's
+  **Accommodations** tab doesn't allow that tool — that tab is what the test
+  permits, not what everyone gets. Tick it there; only students with it on
+  their record (or an exception on the Student accommodations tab) get it.
+  In a co-taught class the owner's records are used.
 - **Students see the same test listed more than once.** More than one
   session is open for them. Close the older ones on the Test sessions tab.
 - **"Time is up." every time a student presses Resume.** Their time ran out,
