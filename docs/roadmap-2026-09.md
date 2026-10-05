@@ -497,6 +497,36 @@ slice. James decided to HOLD the release: this is built and tested, not cut.
 (6 rows, NOT RUN — they need two attempts and a `sqlite3` row-ageing step).
 `MARKETING_VERSION` deliberately NOT bumped.
 
+### 2026-10-05 — EX-2 in the field: "Time is up." on every Resume (design-tool + client)
+
+A beta teacher reported a student who got "Time is up." on every Resume
+although the session was open all day. Read-only Aurora showed the cause:
+the assessment has NO time limit, but on Fri 2026-10-02 the teacher used
+Adjust time, whose default is "today 23:59". `deadlineFor` lets an override
+win on an untimed assessment, so Friday 23:59 became a permanent deadline;
+on Monday the student tried eleven times in eight minutes, each one
+`time_expired` → `lockdown_begin` → `lockdown_end` inside ~3 s (reading
+EX-2). The Monitor row did say "Time expired", in muted text. Fixed live the
+same morning through Act as → Adjust time → No time limit.
+
+Built the same day (decisions James 2026-10-05: warn, note only, server 409
+yes, "Your tests" flag deferred, client honours the 30 s grace):
+- `7f83a24` design-tool: Adjust time opens on "No time limit" on an untimed
+  assessment and warns on a deadline (all five render sites); the passed
+  note reads "Time ran out — use Adjust time to let them continue" in
+  warning colour; the results matrix and the Test sessions attendance table
+  show it too. Deployed with this entry.
+- `ad57f2e` client (v1.5.0, held): an attempt past deadline + 30 s on
+  arrival, or a delivery 409 `time_expired`, never reaches `begin()`;
+  back to Your tests with "Your time for this test has run out…". Seven
+  rows in `client/MANUAL-CHECKS.md` "EX-2", NOT RUN.
+- Local branch `hold/ex2-delivery-409`: the delivery route's 409
+  `time_expired`. **Merge only after v1.5.0 is on the fleet** — a v1.4.0
+  client shown it lands on "This test could not be opened" with no way home
+  but Cmd-Q.
+- Deferred: "Your tests" showing "Time ran out — ask your teacher" instead
+  of Resume (needs a `/api/me/sittings` field + client work).
+
 ### 2026-10-01 — MIN-1: minimize during a test strands the student (client, v1.4.0)
 
 - **Pilot report:** a student previewing with a teacher clicked the yellow
