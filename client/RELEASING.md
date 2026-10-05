@@ -194,6 +194,32 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.5.0 — 2026-10-05** (built from `1bb469ab9657`, tag on `main` via
+  `--target`; a feature release): the instant feedback results page after
+  `DID END` (IF slice 3, IF-2), EX-2 (an attempt already past its deadline
+  + 30 s, or a delivery refused 409 `time_expired`, never reaches
+  `begin()`), the `X-SecureTest-Version` header on every request, and two
+  fixes found by its own smoke test: the in-page "Back to your tests"
+  waits for `DID END` while instant feedback is pending (it used to drop
+  the results page — `6cab230`), and EX-3, no questions drawn when the
+  session begins with an end already owed (`6cab230` + `1bb469a`; the
+  first version read the flag after the main-actor hop and never fired).
+  psd-sign 0.6.1: pre-flight (clean tree, HEAD = `origin/main`, 1.5.0 >
+  v1.4.0), archive-only Developer ID + hardened runtime (no re-sign), all
+  seven entitlements = `expected-entitlements.txt`, profile "SecureTest
+  Developer ID" (expires 2044), `PSDBuildCommit` = HEAD, pkg
+  Installer-signed (`net.psd401.securetest.client`), `/releases/latest`
+  → v1.5.0, asset sha256 `878ba0ce…74da3f1b` = the Desktop pkg. Smoke test
+  on THIS build in real AAC sessions on the maintainer's Mac against the
+  origin (rev 88), teacher side in Chrome between sessions:
+  `client/MANUAL-CHECKS.md` "EX-2" and "v1.5.0 smoke test fixes" (two EX-2
+  rows not run: older server, refused join). **NOT NOTARIZED — the same
+  deviation as v1.4.0:** the notary service still answers HTTP 403 "A
+  required agreement is missing or has expired" (three submissions
+  2026-10-05); Jamf / AutoPkg installs are unaffected, browser downloads
+  are blocked until notarized, the release notes say so. **Follow-up (now
+  two releases):** when Apple accepts submissions, notarize the SAME
+  v1.4.0 and v1.5.0 pkgs (and apps) without replacing the assets.
 - **v1.4.0 — 2026-10-01** (built from `5dd8d32726f8`, tag on `main`;
   renamed from 1.3.6 the same day — a feature release): read-aloud for
   test content and for students' own answers (word highlight, incl. inside
