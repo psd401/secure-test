@@ -13,12 +13,14 @@ import {
 } from "../app/dashboard/[id]/attendanceView";
 import {
   ExtendTimeControl,
+  defaultExtendChoice,
   defaultExtendValue,
   extendHint,
   extendRequest,
   extendStatusText,
   shortensHint,
   toIsoInstant,
+  untimedDeadlineWarning,
 } from "../components/app/ExtendTimeControl";
 
 describe("ExtendTimeControl", () => {
@@ -197,5 +199,27 @@ describe("Monitor selection helpers", () => {
     expect(selectAllState(1, 2)).toBe("some");
     expect(selectAllState(2, 2)).toBe("all");
     expect(selectAllState(0, 0)).toBe("none");
+  });
+});
+
+// 2026-10-05: on an untimed assessment a deadline outlives the session (a
+// student re-tried Resume eleven times days later). The dialog opens on "No
+// time limit" there and warns if the teacher picks a deadline anyway.
+describe("untimed assessment", () => {
+  test("opens on No time limit when the assessment is untimed", () => {
+    expect(defaultExtendChoice(true)).toBe("no_limit");
+  });
+
+  test("opens on New deadline when the assessment is timed", () => {
+    expect(defaultExtendChoice(false)).toBe("deadline");
+  });
+
+  test("warns on a deadline for an untimed assessment", () => {
+    expect(untimedDeadlineWarning(true, "deadline")).toContain("can't resume");
+  });
+
+  test("no warning on No time limit, or on a timed assessment", () => {
+    expect(untimedDeadlineWarning(true, "no_limit")).toBeNull();
+    expect(untimedDeadlineWarning(false, "deadline")).toBeNull();
   });
 });

@@ -40,6 +40,7 @@ export default async function MonitorPage({ params }: PageProps) {
       status={row.sitting.status}
       expiresAt={row.sitting.expires_at.toISOString()}
       kind={row.sitting.kind}
+      assessmentUntimed={(row.assessment.time_limit_seconds ?? 0) <= 0}
     />
   );
 }

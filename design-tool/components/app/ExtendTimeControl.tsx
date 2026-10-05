@@ -157,6 +157,29 @@ export function shortensHint(
 }
 
 /**
+ * 2026-10-05 (a student re-tried Resume eleven times days later): on an
+ * assessment with NO time limit a deadline is the only clock the student has,
+ * and it outlives the session — `deadlineFor` lets an override win even with
+ * no limit. So an untimed assessment opens the dialog on "No time limit", and
+ * picking a deadline there says what it means. Pure for the same reason as
+ * the hints above.
+ */
+export function defaultExtendChoice(assessmentUntimed: boolean): ExtendChoice {
+  return assessmentUntimed ? "no_limit" : "deadline";
+}
+
+export function untimedDeadlineWarning(
+  assessmentUntimed: boolean,
+  choice: ExtendChoice,
+): string | null {
+  if (!assessmentUntimed || choice !== "deadline") return null;
+  return (
+    "This test has no time limit. A deadline stays in force after the " +
+    "session ends — once it passes, the student can't resume."
+  );
+}
+
+/**
  * A `datetime-local` value ("YYYY-MM-DDTHH:mm", read as local time by the
  * browser) turned into an ISO instant. `null` when the value is empty or
  * unparseable, which the caller treats as "nothing to submit" rather than
@@ -197,6 +220,7 @@ export function ExtendTimeControl({
   variant = "outline",
   currentDeadlines,
   label = "Adjust time",
+  assessmentUntimed = false,
 }: {
   target: ExtendTarget;
   /** The button's text; the dialog's title stays "Adjust time". */
@@ -205,6 +229,9 @@ export function ExtendTimeControl({
   disabledReason?: string;
   /** The in-scope students' current deadlines, for the "shortens" hint. */
   currentDeadlines?: ReadonlyArray<string | Date | null | undefined>;
+  /** The assessment has no time limit of its own: open on "No time limit"
+   * and warn on a deadline (`untimedDeadlineWarning`). */
+  assessmentUntimed?: boolean;
   size?: "xs" | "sm" | "default";
   variant?: "outline" | "ghost";
 }) {
@@ -218,7 +245,7 @@ export function ExtendTimeControl({
   function openDialog() {
     setError(null);
     setValue(defaultExtendValue());
-    setChoice("deadline");
+    setChoice(defaultExtendChoice(assessmentUntimed));
     setOpen(true);
   }
 
@@ -309,6 +336,11 @@ export function ExtendTimeControl({
               No time limit
             </label>
           </fieldset>
+          {untimedDeadlineWarning(assessmentUntimed, choice) ? (
+            <p className="text-xs text-warning-foreground">
+              {untimedDeadlineWarning(assessmentUntimed, choice)}
+            </p>
+          ) : null}
           {choice === "deadline" && shortensHint(value, currentDeadlines) ? (
             <p className="text-xs text-muted-foreground">
               {shortensHint(value, currentDeadlines)}

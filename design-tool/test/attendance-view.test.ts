@@ -6,6 +6,7 @@ import {
   canHandInAll,
   countInProgress,
   deadlineNote,
+  TIME_RAN_OUT_NOTE,
   earlierSessionNote,
   eventLabel,
   practiceHasAttempt,
@@ -268,11 +269,16 @@ describe("deadlineNote", () => {
   });
 
   test("deadline_passed wins over a still-present deadline_at", () => {
-    expect(deadlineNote(iso(60_000), true, new Date(T0))).toBe("Time expired");
+    expect(deadlineNote(iso(60_000), true, new Date(T0))).toBe(TIME_RAN_OUT_NOTE);
   });
 
-  test("deadline_passed with no deadline_at (defensive): still 'Time expired'", () => {
-    expect(deadlineNote(null, true, new Date(T0))).toBe("Time expired");
+  test("deadline_passed with no deadline_at (defensive): still the ran-out note", () => {
+    expect(deadlineNote(null, true, new Date(T0))).toBe(TIME_RAN_OUT_NOTE);
+  });
+
+  // 2026-10-05: the passed line names the fix, not just the fact.
+  test("the ran-out note points the teacher at Adjust time", () => {
+    expect(TIME_RAN_OUT_NOTE).toContain("Adjust time");
   });
 
   // Remove time limit (2026-09-24): the removal is said, not left silent.

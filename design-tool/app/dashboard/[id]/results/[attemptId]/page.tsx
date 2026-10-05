@@ -452,7 +452,13 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 </>
               ) : null}
               {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed) ? (
-                <span className="ml-2 text-xs text-muted-foreground">
+                <span
+                  className={
+                    row.deadline_passed && !attempt.time_limit_removed
+                      ? "ml-2 text-xs text-warning-foreground"
+                      : "ml-2 text-xs text-muted-foreground"
+                  }
+                >
                   {deadlineNote(row.deadline_at, row.deadline_passed, undefined, attempt.time_limit_removed)}
                 </span>
               ) : null}
@@ -505,7 +511,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
               />
             ) : null}
             {row.status === "in_progress" ? (
-              <ExtendTimeAndReload attemptId={attemptId} deadlineAt={row.deadline_at} />
+              <ExtendTimeAndReload
+                attemptId={attemptId}
+                deadlineAt={row.deadline_at}
+                assessmentUntimed={(assessment.time_limit_seconds ?? 0) <= 0}
+              />
             ) : null}
             {row.status === "submitted" ? (
               <PassBackAndReload

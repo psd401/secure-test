@@ -303,6 +303,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                       >
                         Not handed in — {row.answered_count} of {results.items.length}{" "}
                         answered
+                        {/* 2026-10-05: an in-progress attempt past its deadline
+                            cannot be resumed — the fix (Adjust time) is on the
+                            student's own page, one click away on the name. */}
+                        {row.deadline_passed ? (
+                          <span className="text-warning-foreground"> · Time ran out</span>
+                        ) : null}
                       </td>
                       <td className="sticky right-0 bg-background px-2 py-2 text-right whitespace-nowrap">
                         <HandInAttemptAndReload

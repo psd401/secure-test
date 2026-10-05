@@ -100,6 +100,9 @@ interface Props {
    * doesn't; optional so existing callers (and tests) that predate practice
    * sittings still type-check as an ordinary class sitting. */
   kind?: string;
+  /** The assessment has no time limit: Adjust time opens on "No time limit"
+   * (2026-10-05, `untimedDeadlineWarning`). */
+  assessmentUntimed?: boolean;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -135,6 +138,7 @@ export function MonitorView({
   status,
   expiresAt,
   kind,
+  assessmentUntimed = false,
 }: Props) {
   // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
   // or "Extend time" at the header level, same exclusions the Test sessions
@@ -355,6 +359,7 @@ export function MonitorView({
                 (2026-09-24): "No time limit" here sets the sitting's flag. */}
             {!isPractice ? (
               <ExtendTimeControl
+                assessmentUntimed={assessmentUntimed}
                 target={{ kind: "sitting", sessionId: sittingId }}
                 onExtended={() => void load()}
                 currentDeadlines={(data?.rows ?? [])
@@ -494,6 +499,7 @@ export function MonitorView({
           {!isPractice ? (
             <div className="flex justify-end">
               <ExtendTimeControl
+                assessmentUntimed={assessmentUntimed}
                 target={{
                   kind: "selected",
                   sessionId: sittingId,
@@ -564,6 +570,7 @@ export function MonitorView({
                     selectable={!isPractice}
                     selected={r.attempt_id !== null && selected.has(r.attempt_id)}
                     onToggleSelected={toggleSelected}
+                    assessmentUntimed={assessmentUntimed}
                   />
                 ))}
               </TableBody>
@@ -629,6 +636,7 @@ function StudentRow({
   assessmentId,
   sessionClosed,
   onDeleted,
+  assessmentUntimed,
   selectable,
   selected,
   onToggleSelected,
@@ -639,6 +647,7 @@ function StudentRow({
   assessmentId: string;
   sessionClosed: boolean;
   onDeleted: () => void;
+  assessmentUntimed: boolean;
   /** Whether the checkbox COLUMN exists (not on a practice sitting). */
   selectable: boolean;
   selected: boolean;
@@ -725,7 +734,13 @@ function StudentRow({
               time limit" once the teacher removed it (2026-09-24). */}
           {!earlier &&
           deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed) ? (
-            <span className="text-xs text-muted-foreground">
+            <span
+              className={
+                r.deadline_passed && !r.time_limit_removed
+                  ? "text-xs text-warning-foreground"
+                  : "text-xs text-muted-foreground"
+              }
+            >
               {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
             </span>
           ) : null}
@@ -808,6 +823,7 @@ function StudentRow({
                 attempt is in progress — no session-closed gate. */}
                 {canExtend(r.status) ? (
                   <ExtendTimeControl
+                    assessmentUntimed={assessmentUntimed}
                     target={{ kind: "attempt", attemptId: r.attempt_id }}
                     onExtended={onDeleted}
                     currentDeadlines={[r.deadline_at]}

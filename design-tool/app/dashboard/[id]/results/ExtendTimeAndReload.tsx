@@ -11,14 +11,17 @@ import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 export function ExtendTimeAndReload({
   attemptId,
   deadlineAt,
+  assessmentUntimed = false,
 }: {
   attemptId: string;
   deadlineAt?: string | Date | null;
+  assessmentUntimed?: boolean;
 }) {
   return (
     <ExtendTimeControl
       target={{ kind: "attempt", attemptId }}
       currentDeadlines={[deadlineAt]}
+      assessmentUntimed={assessmentUntimed}
       onExtended={() => {
         window.location.reload();
       }}

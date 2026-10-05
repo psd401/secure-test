@@ -3148,6 +3148,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           isPublished={assessment.status === "published"}
           archived={archivedAt !== null}
           onPublish={() => setPublishOpen("publish")}
+          assessmentUntimed={(assessment.time_limit_seconds ?? 0) <= 0}
         />
       </TabsContent>
       </Tabs>

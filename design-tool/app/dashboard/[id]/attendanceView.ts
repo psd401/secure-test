@@ -324,8 +324,10 @@ export function selectAllState(
 /**
  * The effective deadline as a short teacher-facing line: "Until 3:00 PM" /
  * "Until Sep 18, 11:59 PM" (today's date omitted, `formatWhen`) once
- * `deadline_passed` flips to "Time expired" — the same two facts the hand-in
- * route's own relaxation reads. Null when there is nothing to say: no limit,
+ * `deadline_passed` flips to `TIME_RAN_OUT_NOTE` — the same two facts the
+ * hand-in route's own relaxation reads. The passed line names the fix
+ * (2026-10-05, a student re-tried Resume eleven times against a leftover
+ * deadline while the row said only "Time expired"). Null when there is nothing to say: no limit,
  * no extension, or a submitted row (`deadline_at` is always null there).
  *
  * `time_limit_removed` (2026-09-24): the teacher chose "No time limit", so the
@@ -333,6 +335,8 @@ export function selectAllState(
  * test", and the teacher needs to see the removal took. Callers pass it only
  * for an in-progress attempt, as they do `deadline_at`.
  */
+export const TIME_RAN_OUT_NOTE = "Time ran out — use Adjust time to let them continue";
+
 export function deadlineNote(
   deadline_at: string | null,
   deadline_passed: boolean,
@@ -340,7 +344,7 @@ export function deadlineNote(
   time_limit_removed = false,
 ): string | null {
   if (time_limit_removed) return "No time limit";
-  if (deadline_passed) return "Time expired";
+  if (deadline_passed) return TIME_RAN_OUT_NOTE;
   if (!deadline_at) return null;
   return `Until ${formatWhen(deadline_at, now)}`;
 }

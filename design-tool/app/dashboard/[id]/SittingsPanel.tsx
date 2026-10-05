@@ -60,6 +60,7 @@ import {
   canHandInAll,
   closeDialogCopy,
   countInProgress,
+  deadlineNote,
   eventLabel,
   idleFor,
   practiceHasAttempt,
@@ -125,6 +126,9 @@ interface Props {
   archived?: boolean;
   /** UX pass 1, slice 4 (A-10): opens the editor's Publish dialog from the draft notice. */
   onPublish?: () => void;
+  /** The SAVED assessment has no time limit: Adjust time opens on "No time
+   * limit" (2026-10-05, `untimedDeadlineWarning`). */
+  assessmentUntimed?: boolean;
 }
 
 function sectionLabel(s: Section): string {
@@ -184,6 +188,7 @@ export function SittingsPanel({
   isPublished,
   archived = false,
   onPublish,
+  assessmentUntimed = false,
 }: Props) {
   const [sections, setSections] = useState<Section[]>([]);
   const [roster, setRoster] = useState<RosterStudent[] | null>(null);
@@ -918,6 +923,7 @@ export function SittingsPanel({
                           {!archived && !isPractice ? (
                             <ExtendTimeControl
                               target={{ kind: "sitting", sessionId: s.id }}
+                              assessmentUntimed={assessmentUntimed}
                               onExtended={() => {
                                 setNow(Date.now());
                                 void loadAttendance(s.id);
@@ -1044,6 +1050,21 @@ export function SittingsPanel({
                                               ) : r.alert && !alertIsCurrent(r) ? (
                                                 <span className="text-xs text-muted-foreground">
                                                   Earlier: {eventLabel(r.alert.kind)} · {ago(r.alert.at, now)}
+                                                </span>
+                                              ) : null}
+                                              {/* 2026-10-05: the time-limit line the Monitor
+                                                  shows, so a run-out deadline is visible
+                                                  here too (in-progress rows only). */}
+                                              {r.status === "in_progress" &&
+                                              deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed) ? (
+                                                <span
+                                                  className={
+                                                    r.deadline_passed && !r.time_limit_removed
+                                                      ? "text-xs text-warning-foreground"
+                                                      : "text-xs text-muted-foreground"
+                                                  }
+                                                >
+                                                  {deadlineNote(r.deadline_at, r.deadline_passed, new Date(now), r.time_limit_removed)}
                                                 </span>
                                               ) : null}
                                             </span>
