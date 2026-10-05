@@ -1,6 +1,6 @@
 // Slice 83: the sittings a student may join right now, as the client lists them.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments, attempts, students, test_sessions } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
@@ -116,9 +116,13 @@ describe("GET /api/me/sittings", () => {
         params: Promise.resolve({ sessionId: closed.id }),
       });
     }
+    // U-12: one row per assessment, so each scope gets its own assessment
+    // here — this test is about admission, not collapsing.
+    const essay = await seedAssessment(TEACHER, "Essay");
+    const makeUp = await seedAssessment(TEACHER, "Make-up");
     const all = await createSitting({ assessment_id: algebra.id });
-    const english = await createSitting({ assessment_id: algebra.id, section_ps_id: "5003" });
-    const benOnly = await createSitting({ assessment_id: algebra.id, student_ps_ids: [OTHER_STUDENT.ps_id] });
+    const english = await createSitting({ assessment_id: essay.id, section_ps_id: "5003" });
+    const benOnly = await createSitting({ assessment_id: makeUp.id, student_ps_ids: [OTHER_STUDENT.ps_id] });
     // Expired: inserted directly, since the route will not mint one.
     await getDb().insert(test_sessions).values({
       assessment_id: algebra.id,
@@ -138,7 +142,7 @@ describe("GET /api/me/sittings", () => {
     expect(ada.sittings.map((s) => s.test_session_id).sort()).toEqual([all.id, english.id].sort());
     const englishRow = ada.sittings.find((s) => s.test_session_id === english.id)!;
     expect(englishRow).toMatchObject({
-      assessment_name: "Algebra quiz",
+      assessment_name: "Essay",
       scope: "section",
       teacher_email: TEACHER_EMAIL,
       attempt: null,
@@ -207,10 +211,80 @@ describe("GET /api/me/sittings", () => {
     );
     expect(joined.status).toBe(200);
 
+    // U-12: one row for the assessment — the sitting the attempt now lives on.
     const ada = await listAs(STUDENT.email);
-    const bySitting = new Map(ada.sittings.map((s) => [s.test_session_id, s]));
-    expect(bySitting.get(second.id)!.attempt).toMatchObject({ id: attempt!.id, status: "in_progress" });
-    expect(bySitting.get(first.id)!.attempt).toBeNull();
+    expect(ada.sittings.map((s) => s.test_session_id)).toEqual([second.id]);
+    expect(ada.sittings[0]!.attempt).toMatchObject({ id: attempt!.id, status: "in_progress" });
+  });
+
+  test("U-12: one row per assessment — the attempt's sitting, else the newest", async () => {
+    principal = staffPrincipal(TEACHER);
+    const a = await seedAssessment(TEACHER, "Quiz");
+    const older = await createSitting({ assessment_id: a.id });
+    const newer = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+    const fresh = await listAs(STUDENT.email);
+    expect(fresh.sittings.map((s) => s.test_session_id)).toEqual([newer.id]);
+    expect(fresh.sittings[0]!.attempt).toBeNull();
+
+    // An in-progress attempt on the OLDER sitting pins the row there.
+    const db = getDb();
+    const [overlay] = await db
+      .insert(students)
+      .values({ owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" })
+      .returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({ assessment_id: a.id, student_id: overlay!.id, test_session_id: older.id, status: "in_progress" })
+      .returning();
+    const pinned = await listAs(STUDENT.email);
+    expect(pinned.sittings.map((s) => s.test_session_id)).toEqual([older.id]);
+    expect(pinned.sittings[0]!.attempt).toMatchObject({ id: attempt!.id, status: "in_progress" });
+
+    // Its sitting closed: the newest row carries it (Resume; the join rebinds).
+    {
+      principal = staffPrincipal(TEACHER);
+      const { POST } = await import("../app/api/test-sessions/[sessionId]/close/route");
+      await POST(new Request("http://localhost/x", { method: "POST" }), {
+        params: Promise.resolve({ sessionId: older.id }),
+      });
+    }
+    const moved = await listAs(STUDENT.email);
+    expect(moved.sittings.map((s) => s.test_session_id)).toEqual([newer.id]);
+    expect(moved.sittings[0]!.attempt).toMatchObject({ id: attempt!.id, status: "in_progress" });
+  });
+
+  test("U-15: time_ran_out on an in-progress attempt past its deadline + grace", async () => {
+    principal = staffPrincipal(TEACHER);
+    const a = await seedAssessment(TEACHER, "Timed");
+    const db = getDb();
+    await db.update(assessments).set({ time_limit_seconds: 600 }).where(eq(assessments.id, a.id));
+    const sitting = await createSitting({ assessment_id: a.id });
+    const [overlay] = await db
+      .insert(students)
+      .values({ owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" })
+      .returning();
+    // Started 10 min ago: deadline now, still inside the 30 s grace.
+    const [attempt] = await db
+      .insert(attempts)
+      .values({
+        assessment_id: a.id,
+        student_id: overlay!.id,
+        test_session_id: sitting.id,
+        status: "in_progress",
+        started_at: new Date(Date.now() - 600_000),
+      })
+      .returning();
+    expect((await listAs(STUDENT.email)).sittings[0]).toMatchObject({ time_ran_out: false });
+
+    await db
+      .update(attempts)
+      .set({ started_at: new Date(Date.now() - 700_000) })
+      .where(eq(attempts.id, attempt!.id));
+    expect((await listAs(STUDENT.email)).sittings[0]).toMatchObject({ time_ran_out: true });
+
+    // The teacher's "No time limit" clears it.
+    await db.update(attempts).set({ time_limit_removed: true }).where(eq(attempts.id, attempt!.id));
+    expect((await listAs(STUDENT.email)).sittings[0]).toMatchObject({ time_ran_out: false });
   });
 
   // Finding 10.2 (2026-08-29): a test handed in through a sitting that has since

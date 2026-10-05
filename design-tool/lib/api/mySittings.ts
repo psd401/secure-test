@@ -18,6 +18,18 @@
 // the join would return it unmoved and every save is refused); an in-progress
 // one shows only on the sitting it is bound to (finding 8.2: the join rebinds
 // it there, so "Resume" belongs where it lives and "Join" elsewhere).
+//
+// U-12 (2026-10-05, open-beta report "too many options to join"): ONE row per
+// assessment. Teachers open several sittings of one test (a sitting per
+// period, two by a double press, a co-teacher's beside the owner's), and the
+// student saw the test once per sitting. Every sitting of one assessment
+// joins the same attempt (the join key above is per assessment), so the row
+// names one sitting: the one the in-progress attempt is bound to, else the
+// newest. The row carries the attempt whichever sitting it names — the join
+// rebinds it there (8.2). Server-side, so every client version gets it.
+//
+// U-15: `time_ran_out` — an in-progress attempt past its deadline + grace, the
+// rule v1.5.0 refuses on before `begin()`. Older clients ignore the field.
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import {
   assessments,
@@ -32,6 +44,7 @@ import { isStaff } from "@/lib/auth/roles";
 import { isAdmittedToSitting } from "@/lib/api/resolveStudent";
 import { findActiveRosterStudentsByEmail, normalizeEmail } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
+import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -49,6 +62,67 @@ export interface MySitting {
   expires_at: Date;
   created_at: Date;
   attempt: { id: string; status: string; submitted_at: Date | null } | null;
+  /** U-15: the in-progress attempt's time is up (deadline + 30 s grace).
+   * Joining is refused; the student needs the teacher's Adjust time. */
+  time_ran_out: boolean;
+}
+
+type SittingWithAssessment = {
+  sitting: typeof test_sessions.$inferSelect;
+  assessment: typeof assessments.$inferSelect;
+};
+type AttemptRow = typeof attempts.$inferSelect;
+
+/**
+ * U-12: one entry per assessment, in the input's (newest-first) order. Picks
+ * the sitting the in-progress attempt is bound to when it is listed, else the
+ * newest. Exported for tests.
+ */
+export function onePerAssessment<T extends SittingWithAssessment>(
+  rows: T[],
+  attemptOf: (assessment: T["assessment"]) => AttemptRow | undefined,
+): Array<{ row: T; attempt: AttemptRow | undefined }> {
+  const byAssessment = new Map<string, T[]>();
+  for (const row of rows) {
+    const group = byAssessment.get(row.assessment.id);
+    if (group) group.push(row);
+    else byAssessment.set(row.assessment.id, [row]);
+  }
+  return [...byAssessment.values()].map((group) => {
+    const attempt = attemptOf(group[0]!.assessment);
+    const bound =
+      attempt?.status === "in_progress"
+        ? group.find((r) => r.sitting.id === attempt.test_session_id)
+        : undefined;
+    return { row: bound ?? group[0]!, attempt };
+  });
+}
+
+function timeRanOut(attempt: AttemptRow | undefined, assessment: SittingWithAssessment["assessment"], now: Date): boolean {
+  if (!attempt || attempt.status !== "in_progress") return false;
+  return isPastDeadline(now, deadlineFor(attempt, assessment));
+}
+
+function toMySitting(
+  { sitting, assessment }: SittingWithAssessment,
+  attempt: AttemptRow | undefined,
+  scope: MySitting["scope"],
+  sectionLabel: string | null,
+  now: Date,
+): MySitting {
+  return {
+    test_session_id: sitting.id,
+    code: sitting.code,
+    assessment_id: assessment.id,
+    assessment_name: assessment.name,
+    teacher_email: sitting.owner_email,
+    scope,
+    section_label: sectionLabel,
+    expires_at: sitting.expires_at,
+    created_at: sitting.created_at,
+    attempt: attempt ? { id: attempt.id, status: attempt.status, submitted_at: attempt.submitted_at } : null,
+    time_ran_out: timeRanOut(attempt, assessment, now),
+  };
 }
 
 export type MySittingsResult =
@@ -95,39 +169,31 @@ export async function listMySittings(db: Db, session: SessionPayload): Promise<M
   // Keyed by the ASSESSMENT's owner, the tenant a join files the overlay
   // under — not the sitting's, which is the co-teacher's on a co-teach
   // sitting (co-teacher tenant fix, 2026-09-22).
-  const attemptFor = ({ sitting, assessment }: (typeof admitted)[number]) => {
-    const attempt = attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${sitting.assessment_id}`);
-    if (!attempt) return undefined;
-    if (attempt.status === "submitted") return attempt;
-    return attempt.test_session_id === sitting.id ? attempt : undefined;
-  };
+  const picked = onePerAssessment(admitted, (assessment) =>
+    attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${assessment.id}`),
+  );
 
-  const sectionIds = [...new Set(admitted.map((r) => r.sitting.section_ps_id).filter((x): x is string => !!x))];
+  const sectionIds = [
+    ...new Set(picked.map(({ row }) => row.sitting.section_ps_id).filter((x): x is string => !!x)),
+  ];
   const labelByPsId = new Map<string, string>();
   if (sectionIds.length > 0) {
     const rows = await db.select().from(roster_sections).where(inArray(roster_sections.ps_id, sectionIds));
     for (const s of rows) labelByPsId.set(s.ps_id, sectionLabel(s));
   }
 
+  const now = new Date();
   return {
     ok: true,
-    sittings: admitted.map(({ sitting, assessment }) => {
-      const attempt = attemptFor({ sitting, assessment });
-      return {
-        test_session_id: sitting.id,
-        code: sitting.code,
-        assessment_id: assessment.id,
-        assessment_name: assessment.name,
-        teacher_email: sitting.owner_email,
-        scope: sitting.student_ps_ids ? "students" : sitting.section_ps_id ? "section" : "sections",
-        section_label: sitting.section_ps_id ? (labelByPsId.get(sitting.section_ps_id) ?? null) : null,
-        expires_at: sitting.expires_at,
-        created_at: sitting.created_at,
-        attempt: attempt
-          ? { id: attempt.id, status: attempt.status, submitted_at: attempt.submitted_at }
-          : null,
-      };
-    }),
+    sittings: picked.map(({ row, attempt }) =>
+      toMySitting(
+        row,
+        attempt,
+        row.sitting.student_ps_ids ? "students" : row.sitting.section_ps_id ? "section" : "sections",
+        row.sitting.section_ps_id ? (labelByPsId.get(row.sitting.section_ps_id) ?? null) : null,
+        now,
+      ),
+    ),
   };
 }
 
@@ -142,7 +208,8 @@ export async function listMySittings(db: Db, session: SessionPayload): Promise<M
  * practice overlay row (under the ASSESSMENT owner — see
  * `resolvePracticePrincipal`) and the assessment are the join's key; a
  * submitted attempt shows on every listed sitting of that assessment, an
- * in-progress one only on the sitting it is bound to.
+ * in-progress one only on the sitting it is bound to. U-12 applies here too:
+ * one row per assessment.
  */
 async function listMyPracticeSittings(db: Db, session: SessionPayload): Promise<MySittingsResult> {
   const rows = await db
@@ -177,28 +244,11 @@ async function listMyPracticeSittings(db: Db, session: SessionPayload): Promise<
     attemptByOwnerAndAssessment.set(`${owner_sub}\u0000${attempt.assessment_id}`, attempt);
   }
 
+  const now = new Date();
   return {
     ok: true,
-    sittings: rows.map(({ sitting, assessment }) => {
-      const found = attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${assessment.id}`);
-      const attempt =
-        found && (found.status === "submitted" || found.test_session_id === sitting.id)
-          ? found
-          : undefined;
-      return {
-        test_session_id: sitting.id,
-        code: sitting.code,
-        assessment_id: assessment.id,
-        assessment_name: assessment.name,
-        teacher_email: sitting.owner_email,
-        scope: "practice" as const,
-        section_label: null,
-        expires_at: sitting.expires_at,
-        created_at: sitting.created_at,
-        attempt: attempt
-          ? { id: attempt.id, status: attempt.status, submitted_at: attempt.submitted_at }
-          : null,
-      };
-    }),
+    sittings: onePerAssessment(rows, (assessment) =>
+      attemptByOwnerAndAssessment.get(`${assessment.owner_sub}\u0000${assessment.id}`),
+    ).map(({ row, attempt }) => toMySitting(row, attempt, "practice", null, now)),
   };
 }

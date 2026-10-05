@@ -1409,3 +1409,12 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 448 | With that sitting open, press Start session again with the same scope | Error "A session for this class is already open — code XXXXXX. Use that one, or close it first."; no new row | NOT RUN |
 | 449 | Same assessment, a different scope (one section, or picked students) while the all-sections sitting is open | A second sitting opens | NOT RUN |
 | 450 | Close the sitting from row 448, press Start session with the same scope | A new sitting opens | NOT RUN |
+
+### U-12 + U-15 — Your tests, server half (2026-10-05)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 451 | Two open sittings of one assessment admit a student (all sections + their section); read `GET /api/me/sittings` as that student | One entry for the assessment, the newest sitting | NOT RUN |
+| 452 | The student starts through the older sitting, then reads the list again | One entry, now the older sitting, `attempt.status = in_progress` | NOT RUN |
+| 453 | Timed test, the student's time runs out (deadline + 30 s) with the attempt in progress | The entry has `time_ran_out: true`; after Adjust time to later it reads `false` | NOT RUN |
+
