@@ -122,9 +122,9 @@ describe("shortensHint", () => {
 describe("No time limit — copy", () => {
   test("hints: only the whole sitting mentions later joiners", () => {
     expect(extendHint("sitting", "no_limit")).toBe(
-      "Every student still in progress, and anyone who joins this session later, has no time limit.",
+      "Every student still in progress, and anyone who joins this session later, will have no time limit.",
     );
-    expect(extendHint("attempt", "no_limit")).toBe("This student has no time limit.");
+    expect(extendHint("attempt", "no_limit")).toBe("This student will have no time limit.");
     expect(extendHint("selected", "no_limit")).not.toContain("later");
     expect(extendHint("selected")).toBe("The selected students get until this time.");
   });

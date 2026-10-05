@@ -57,11 +57,13 @@ export function extendHint(
     if (target === "sitting") {
       return (
         "Every student still in progress, and anyone who joins this session " +
-        "later, has no time limit."
+        "later, will have no time limit."
       );
     }
-    if (target === "selected") return "The selected students have no time limit.";
-    return "This student has no time limit.";
+    if (target === "selected") return "The selected students will have no time limit.";
+    // "will have", not "has" (2026-10-05): with No time limit preselected on
+  // an untimed test, "has" read as the student's current state.
+  return "This student will have no time limit.";
   }
   if (target === "sitting") {
     return "Every student still in progress on this session gets until this time.";
