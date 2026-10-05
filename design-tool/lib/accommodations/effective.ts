@@ -122,6 +122,123 @@ export async function coTeacherEntitlementStudentId(
   return row?.id ?? null;
 }
 
+/** The assessment fields the rule reads. */
+export type AccommodationRule = Pick<
+  AssessmentRow,
+  "allowed_accommodations" | "construct_altering" | "assigned_scope"
+>;
+
+/** A live entitlement or override row, reduced to what the rule reads. */
+export interface ToolSetting {
+  tool_id: string;
+  value: string;
+}
+
+/**
+ * U-16: the effective result plus WHY, for the teacher's "who gets what"
+ * preview. Delivery reads only `enabled` / `constructAltering`.
+ */
+export interface ExplainedAccommodations extends EffectiveAccommodations {
+  /** Tools an exception (override) turned on for this student. */
+  grantedByException: string[];
+  /** Tools the record turned on and an Off exception switched off. */
+  removedByException: string[];
+  /** On the student's record (enabled) but not allowed on this assessment and
+   * not granted by an exception — "on their record, not allowed here". */
+  notAllowed: ToolSetting[];
+}
+
+/**
+ * The rule itself, with no database (U-16 split it out so the delivery path
+ * and the preview cannot disagree). `recordRows` are the student's LIVE
+ * accommodation rows; `overrides` this assessment's exceptions for them.
+ */
+export function explainAccommodations(
+  assessment: AccommodationRule,
+  recordRows: readonly ToolSetting[],
+  overrides: readonly ToolSetting[],
+): ExplainedAccommodations {
+  const allowed = new Set(
+    ((assessment.allowed_accommodations ?? []) as string[]).filter(
+      isValidAccommodationId,
+    ),
+  );
+
+  // On the record and switched on, whether or not this assessment allows it.
+  const onRecord = new Map<string, string>();
+  for (const row of recordRows) {
+    if (!isEnabledValue(row.value)) continue;
+    // Two subjects granting the same tool with different values: first wins,
+    // and both are "on", so the difference is a setting nuance rather than a
+    // question of entitlement.
+    if (!onRecord.has(row.tool_id)) onRecord.set(row.tool_id, row.value);
+  }
+
+  // An empty allowed list gives nothing, exceptions included — the assessment
+  // permits no tool at all.
+  if (allowed.size === 0) {
+    return {
+      enabled: {},
+      constructAltering: [],
+      grantedByException: [],
+      removedByException: [],
+      notAllowed: [...onRecord]
+        .filter(([toolId]) => isValidAccommodationId(toolId))
+        .map(([tool_id, value]) => ({ tool_id, value })),
+    };
+  }
+
+  const enabled: Record<string, string> = {};
+  for (const [toolId, value] of onRecord) {
+    if (allowed.has(toolId)) enabled[toolId] = value;
+  }
+
+  // On a teacher-assigned assessment the teacher's override outranks the
+  // allowed list; on one assigned from above, it does not.
+  const overrideMayExceedAllowed = assessment.assigned_scope === "teacher";
+  const grantedBeyondAllowed: string[] = [];
+  const granted = new Set<string>();
+  const removed = new Set<string>();
+
+  for (const override of overrides) {
+    const withinAllowed = allowed.has(override.tool_id);
+    if (!withinAllowed && !overrideMayExceedAllowed) continue;
+    // An id outside the catalog cannot be honoured by any client, so it is
+    // dropped whatever the scope — this is a shape check, not a policy one.
+    if (!isValidAccommodationId(override.tool_id)) continue;
+
+    if (isEnabledValue(override.value)) {
+      enabled[override.tool_id] = override.value;
+      granted.add(override.tool_id);
+      removed.delete(override.tool_id);
+      if (!withinAllowed) grantedBeyondAllowed.push(override.tool_id);
+    } else {
+      // Revocation applies regardless of scope: withdrawing a support for one
+      // student never threatens comparability.
+      if (override.tool_id in enabled) removed.add(override.tool_id);
+      delete enabled[override.tool_id];
+      granted.delete(override.tool_id);
+    }
+  }
+
+  const flagged = new Set(
+    ((assessment.construct_altering ?? []) as string[]).filter((id) => id in enabled),
+  );
+  for (const id of grantedBeyondAllowed) {
+    if (id in enabled) flagged.add(id);
+  }
+
+  return {
+    enabled,
+    constructAltering: [...flagged],
+    grantedByException: [...granted],
+    removedByException: [...removed].filter((id) => onRecord.has(id)),
+    notAllowed: [...onRecord]
+      .filter(([toolId]) => isValidAccommodationId(toolId) && !allowed.has(toolId) && !granted.has(toolId))
+      .map(([tool_id, value]) => ({ tool_id, value })),
+  };
+}
+
 export async function resolveEffectiveAccommodations(
   db: Db,
   assessment: AssessmentRow,
@@ -132,12 +249,11 @@ export async function resolveEffectiveAccommodations(
    * per assessment on the owner's overlay. */
   entitlementFallbackId: string | null = null,
 ): Promise<EffectiveAccommodations> {
-  const allowed = new Set(
-    ((assessment.allowed_accommodations ?? []) as string[]).filter(
-      isValidAccommodationId,
-    ),
+  // Short-circuit kept from before U-16: no allowed tool, no queries.
+  const allowedAny = ((assessment.allowed_accommodations ?? []) as string[]).some(
+    isValidAccommodationId,
   );
-  if (allowed.size === 0) return { enabled: {}, constructAltering: [] };
+  if (!allowedAny) return { enabled: {}, constructAltering: [] };
 
   // Live rows only — removed_at is a soft delete kept for the audit trail, and
   // a withdrawn accommodation must not keep being applied.
@@ -149,7 +265,7 @@ export async function resolveEffectiveAccommodations(
   // Mathematics gets it on any assessment whose author permitted that tool.
   const liveRowsOf = (id: string) =>
     db
-      .select()
+      .select({ tool_id: student_accommodations.tool_id, value: student_accommodations.value })
       .from(student_accommodations)
       .where(
         and(
@@ -162,18 +278,11 @@ export async function resolveEffectiveAccommodations(
     studentRows = await liveRowsOf(entitlementFallbackId);
   }
 
-  const enabled: Record<string, string> = {};
-  for (const row of studentRows) {
-    if (!allowed.has(row.tool_id)) continue;
-    if (!isEnabledValue(row.value)) continue;
-    // Two subjects granting the same tool with different values: first wins,
-    // and both are "on", so the difference is a setting nuance rather than a
-    // question of entitlement.
-    if (!(row.tool_id in enabled)) enabled[row.tool_id] = row.value;
-  }
-
   const overrides = await db
-    .select()
+    .select({
+      tool_id: assessment_student_overrides.tool_id,
+      value: assessment_student_overrides.value,
+    })
     .from(assessment_student_overrides)
     .where(
       and(
@@ -182,34 +291,6 @@ export async function resolveEffectiveAccommodations(
       ),
     );
 
-  // On a teacher-assigned assessment the teacher's override outranks the
-  // allowed list; on one assigned from above, it does not.
-  const overrideMayExceedAllowed = assessment.assigned_scope === "teacher";
-  const grantedBeyondAllowed: string[] = [];
-
-  for (const override of overrides) {
-    const withinAllowed = allowed.has(override.tool_id);
-    if (!withinAllowed && !overrideMayExceedAllowed) continue;
-    // An id outside the catalog cannot be honoured by any client, so it is
-    // dropped whatever the scope — this is a shape check, not a policy one.
-    if (!isValidAccommodationId(override.tool_id)) continue;
-
-    if (isEnabledValue(override.value)) {
-      enabled[override.tool_id] = override.value;
-      if (!withinAllowed) grantedBeyondAllowed.push(override.tool_id);
-    } else {
-      // Revocation applies regardless of scope: withdrawing a support for one
-      // student never threatens comparability.
-      delete enabled[override.tool_id];
-    }
-  }
-
-  const flagged = new Set(
-    ((assessment.construct_altering ?? []) as string[]).filter((id) => id in enabled),
-  );
-  for (const id of grantedBeyondAllowed) {
-    if (id in enabled) flagged.add(id);
-  }
-
-  return { enabled, constructAltering: [...flagged] };
+  const { enabled, constructAltering } = explainAccommodations(assessment, studentRows, overrides);
+  return { enabled, constructAltering };
 }

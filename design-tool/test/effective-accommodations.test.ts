@@ -17,6 +17,7 @@ import {
   type AssessmentRow,
 } from "../db/schema";
 import {
+  explainAccommodations,
   isEnabledValue,
   resolveEffectiveAccommodations,
 } from "../lib/accommodations/effective";
@@ -293,5 +294,63 @@ describe("resolveEffectiveAccommodations", () => {
     await grant(student.id, "spell_check", "On");
     const result = await resolveEffectiveAccommodations(getDb(), assessment, student.id);
     expect(result.enabled).toEqual({ spell_check: "On" });
+  });
+});
+
+// U-16: the pure rule the delivery route and the preview share.
+describe("explainAccommodations", () => {
+  const rule = (allowed: string[], opts: { constructAltering?: string[]; scope?: string } = {}) =>
+    ({
+      allowed_accommodations: allowed,
+      construct_altering: opts.constructAltering ?? [],
+      assigned_scope: opts.scope ?? "teacher",
+    }) as Parameters<typeof explainAccommodations>[0];
+
+  test("says why: record, exception on, exception off, not allowed here", () => {
+    const result = explainAccommodations(
+      rule(["color_contrast", "spell_check", "zoom"], { constructAltering: ["spell_check"] }),
+      [
+        { tool_id: "color_contrast", value: "Black on Rose" },
+        { tool_id: "zoom", value: "2X" },
+        { tool_id: "tts_test_content", value: "On" },
+        { tool_id: "optional_font", value: "Off" },
+      ],
+      [
+        { tool_id: "spell_check", value: "On" },
+        { tool_id: "zoom", value: "Off" },
+      ],
+    );
+    expect(result.enabled).toEqual({ color_contrast: "Black on Rose", spell_check: "On" });
+    expect(result.grantedByException).toEqual(["spell_check"]);
+    expect(result.removedByException).toEqual(["zoom"]);
+    expect(result.notAllowed).toEqual([{ tool_id: "tts_test_content", value: "On" }]);
+    expect(result.constructAltering).toEqual(["spell_check"]);
+  });
+
+  test("an empty allowed list gives nothing, and everything on record is 'not allowed'", () => {
+    const result = explainAccommodations(
+      rule([]),
+      [{ tool_id: "color_contrast", value: "Black on Rose" }],
+      [{ tool_id: "zoom", value: "2X" }],
+    );
+    expect(result.enabled).toEqual({});
+    expect(result.grantedByException).toEqual([]);
+    expect(result.notAllowed).toEqual([{ tool_id: "color_contrast", value: "Black on Rose" }]);
+  });
+
+  test("an Off exception on a tool the record never had removes nothing", () => {
+    const result = explainAccommodations(rule(["zoom"]), [], [{ tool_id: "zoom", value: "Off" }]);
+    expect(result.removedByException).toEqual([]);
+  });
+
+  test("a teacher-assigned exception beyond the list is granted, not 'not allowed'", () => {
+    const result = explainAccommodations(
+      rule(["zoom"]),
+      [{ tool_id: "color_contrast", value: "Black on Rose" }],
+      [{ tool_id: "color_contrast", value: "Black on Rose" }],
+    );
+    expect(result.enabled).toEqual({ color_contrast: "Black on Rose" });
+    expect(result.notAllowed).toEqual([]);
+    expect(result.constructAltering).toEqual(["color_contrast"]);
   });
 });
