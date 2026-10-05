@@ -511,12 +511,13 @@ same morning through Act as → Adjust time → No time limit.
 
 Built the same day (decisions James 2026-10-05: warn, note only, server 409
 yes, "Your tests" flag deferred, client honours the 30 s grace):
-- `7f83a24` design-tool: Adjust time opens on "No time limit" on an untimed
+- `4fba81e` design-tool: Adjust time opens on "No time limit" on an untimed
   assessment and warns on a deadline (all five render sites); the passed
   note reads "Time ran out — use Adjust time to let them continue" in
   warning colour; the results matrix and the Test sessions attendance table
-  show it too. Deployed with this entry.
-- `ad57f2e` client (v1.5.0, held): an attempt past deadline + 30 s on
+  show it too. DEPLOYED 2026-10-05 ~09:50 PT: task def rev 84, health
+  stamp = `4863c63`, no migration.
+- `c42dc98` client (v1.5.0, held): an attempt past deadline + 30 s on
   arrival, or a delivery 409 `time_expired`, never reaches `begin()`;
   back to Your tests with "Your time for this test has run out…". Seven
   rows in `client/MANUAL-CHECKS.md` "EX-2", NOT RUN.
