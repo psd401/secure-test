@@ -236,12 +236,12 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
   if (allowedCatalog.length === 0) {
     return (
       <EmptyState
-        title="No accommodations are allowed on this assessment yet"
-        description="A student override can only grant a tool the assessment already permits. Choose the allowed tools first."
+        title="No accommodations are allowed on this test yet"
+        description="An exception can only grant a tool this test allows. Choose the allowed tools first."
         action={
           onOpenAccommodations ? (
             <Button type="button" onClick={onOpenAccommodations}>
-              Open the Accommodations tab
+              Open Allowed on this test
             </Button>
           ) : undefined
         }
@@ -253,7 +253,7 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
     return (
       <EmptyState
         title="No accommodation records yet"
-        description="Overrides attach to a student's accommodation record — the TIDE import or a support you added on the Students page, not the PowerSchool class list."
+        description="Exceptions attach to a student's accommodation record — the TIDE import or a support you added on the Students page, not the PowerSchool class list."
         action={
           <Button asChild variant="outline">
             <Link href={`/dashboard/accommodations/import?return=${encodeURIComponent(`/dashboard/${assessmentId}?tab=students`)}`}>
@@ -280,7 +280,7 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
 
       <Card>
         <CardContent className="space-y-4">
-          <h3 className="font-semibold">Add an override</h3>
+          <h3 className="font-semibold">Add an exception</h3>
           <fieldset disabled={isLocked} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="ov-student">Student</Label>
@@ -334,9 +334,9 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
       </Card>
 
       <section className="space-y-2">
-        <h3 className="font-semibold">Overrides on this assessment ({shownOverrides.length})</h3>
+        <h3 className="font-semibold">Exceptions on this test ({shownOverrides.length})</h3>
         {shownOverrides.length === 0 ? (
-          <EmptyState title="No overrides yet" description="Every student gets the assessment's allowed tools as their own record sets them." />
+          <EmptyState title="No exceptions yet" description="Every student gets this test's allowed tools as their own record sets them." />
         ) : (
           <div className="overflow-x-auto rounded-lg border bg-card">
             <Table>
@@ -393,7 +393,7 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Remove the {pendingRemove ? (catalogById.get(pendingRemove.tool_id)?.label ?? pendingRemove.tool_id) : ""} override
+              Remove the {pendingRemove ? (catalogById.get(pendingRemove.tool_id)?.label ?? pendingRemove.tool_id) : ""} exception
               for {pendingRemove ? studentHeading({ name: pendingRemove.student_name, ssid: pendingRemove.student_ssid }) : ""}?
             </AlertDialogTitle>
             <AlertDialogDescription>

@@ -51,6 +51,7 @@ import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
 import { SourcePicker, type SourceSummary } from "./SourcePicker";
 import { OverridesPanel } from "./OverridesPanel";
+import { WhoGetsWhat } from "./WhoGetsWhat";
 import { ImportItemsPanel } from "./ImportItemsPanel";
 import { SittingsPanel } from "./SittingsPanel";
 import { PdfImportPanel } from "./PdfImportPanel";
@@ -83,8 +84,10 @@ type EditorTab = (typeof EDITOR_TABS)[number];
 const TAB_LABEL: Record<EditorTab, string> = {
   questions: "Questions",
   settings: "Settings",
-  accommodations: "Accommodations",
-  students: "Student accommodations",
+  // U-16: the teacher's words for what each tab decides — the old
+  // "Accommodations" read as "for all students". `?tab=` values unchanged.
+  accommodations: "Allowed on this test",
+  students: "Exceptions for this test",
   sessions: "Test sessions",
 };
 function parseTab(raw: string | null): EditorTab {
@@ -1864,10 +1867,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             </span>
           </legend>
           <p className="text-xs text-muted-foreground">
-            Which tools, supports and accommodations students may use on this
-            assessment. Tick &ldquo;Changes what is measured&rdquo; when a tool
-            alters the skill being tested (for example, text-to-speech on a
-            reading test) so results can be reported separately.
+            Which tools students may use on this test. Ticking a tool gives it
+            to no one by itself: a student gets it when it is on their Students
+            page record, which carries over to every test, or when you add it
+            on &ldquo;Exceptions for this test&rdquo;. Tick &ldquo;Changes what
+            is measured&rdquo; when a tool alters the skill being tested (for
+            example, text-to-speech on a reading test) so results can be
+            reported separately.
           </p>
           {OSPI_TIER_ORDER.map((ospiTier) => {
             const entries = accommodationsByOspi.get(ospiTier) ?? [];
@@ -1929,6 +1935,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </span>
           <StatusLine state={accomSave} />
         </div>
+
+        <WhoGetsWhat
+          assessmentId={assessment.id}
+          savedKey={`${[...assessment.allowed_accommodations].sort().join(",")}|${[...assessment.construct_altering].sort().join(",")}`}
+        />
       </section>
       </TabsContent>
 

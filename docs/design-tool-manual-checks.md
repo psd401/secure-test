@@ -1418,3 +1418,13 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 452 | The student starts through the older sitting, then reads the list again | One entry, now the older sitting, `attempt.status = in_progress` | NOT RUN |
 | 453 | Timed test, the student's time runs out (deadline + 30 s) with the attempt in progress | The entry has `time_ran_out: true`; after Adjust time to later it reads `false` | NOT RUN |
 
+### U-16 slice 2 — Allowed on this test / Exceptions for this test / Who gets what (2026-10-05)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 454 | Open an assessment | Tabs read Questions · Settings · Allowed on this test · Exceptions for this test · Test sessions; old `?tab=accommodations` / `?tab=students` links still open the same tabs | ✅ 2026-10-05 local `_demo` (fixture `U-16 who gets what (demo)`) |
+| 455 | Allowed tab, under the checklist | "Who gets what": each student with a record or exception, tools with settings, Exception / Changes what's measured tags, "Switched off for this test" and "On their record, not allowed here" lines, then "N other students on your class lists get none." | ✅ 2026-10-05 local `_demo`: five students, all three line kinds seen, 28 others |
+| 456 | Tick a tool students have on their record | After "Saved", those students gain it and the others count drops | ✅ 2026-10-05 local `_demo`: Text-to-Speech (Test Content) → three students gained it, 28 → 25; unticked back |
+| 457 | Exceptions tab | "Add an exception", "Exceptions on this test (N)", Remove dialog says "exception" | ✅ 2026-10-05 local `_demo` (heading + table seen; Remove dialog wording read from code, not opened) |
+| 458 | On the origin after the deploy, an assessment with real TIDE records | Preview loads in under 2 s for a full class; no "not allowed here" line for a tool the Allowed tab cannot show | NOT RUN |
+
