@@ -2093,3 +2093,63 @@ export const class_insight_turns = pgTable(
 
 export type ClassInsightThreadRow = typeof class_insight_threads.$inferSelect;
 export type ClassInsightTurnRow = typeof class_insight_turns.$inferSelect;
+
+// Row GD slice 3 (docs/google-docs-release-design.md): the folders the app
+// made in a teacher's Drive, looked up by id so a rename or move does not
+// matter. `scope_key` is "root", "a:<assessment id>" or
+// "a:<assessment id>:s:<section label>" — one non-null key, so the unique
+// index needs no NULLS NOT DISTINCT.
+export const google_doc_folders = pgTable(
+  "google_doc_folders",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    owner_sub: text("owner_sub").notNull(),
+    scope_key: text("scope_key").notNull(),
+    /** Null for the root folder; cascades so a deleted assessment drops its
+     * rows (the Drive folders themselves stay — they are the teacher's). */
+    assessment_id: uuid("assessment_id").references(() => assessments.id, {
+      onDelete: "cascade",
+    }),
+    drive_folder_id: text("drive_folder_id").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    ownerScopeUnq: uniqueIndex("google_doc_folders_owner_scope_unq").on(
+      t.owner_sub,
+      t.scope_key,
+    ),
+  }),
+);
+
+// One row per Doc released. Many per attempt: "create new" (D-5) adds one;
+// "skip" checks for any row by the same sender.
+export const google_doc_releases = pgTable(
+  "google_doc_releases",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    attempt_id: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    /** The teacher the send ran as; the Doc is in their Drive. */
+    sender_sub: text("sender_sub").notNull(),
+    drive_file_id: text("drive_file_id").notNull(),
+    title: text("title").notNull(),
+    /** Which content boxes were ticked: { prompt, sources, score,
+     * teacher_feedback, ai_feedback }. */
+    contents: jsonb("contents").$type<Record<string, boolean>>().notNull(),
+    /** D-12: the attempt was not handed in when the Doc was made. */
+    was_draft: boolean("was_draft").notNull().default(false),
+    ownership_transferred_at: timestamp("ownership_transferred_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    attemptIdx: index("google_doc_releases_attempt_id_idx").on(t.attempt_id),
+  }),
+);
+
+export type GoogleDocFolderRow = typeof google_doc_folders.$inferSelect;
+export type GoogleDocReleaseRow = typeof google_doc_releases.$inferSelect;

@@ -374,6 +374,7 @@ describe("ownership enforcement across every teacher route", () => {
       [join("ai", "suggest-standards"), "llm_authoring_disabled on the assessment (BG slice 5)"],
       [join("google", "drive", "start"), "an act-as session may not grant Drive (GD slice 2)"],
       [join("google", "drive", "callback"), "an act-as session may not grant Drive (GD slice 2)"],
+      [join("assessments", "[id]", "google-docs"), "an act-as session may not send to Drive (GD slice 3)"],
     ]);
     const wrong: string[] = [];
     for (const { path, source } of staffRoutes) {

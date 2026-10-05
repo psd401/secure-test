@@ -195,3 +195,23 @@ D-10).
   `next?gdrive=<outcome>`. 17 tests. **Checked against real Google on local
   dev the same day:** the callback carried `scope=…/auth/drive.file` only
   and landed on `/dashboard?gdrive=ok`.
+- 2026-10-05 — **slice 3 BUILT** (`lib/googleDocs/content.ts` / `drive.ts`
+  / `release.ts`, `POST /api/assessments/[id]/google-docs`, **migration
+  0055** `google_doc_folders` + `google_doc_releases`, applied to dev +
+  test; NOT on Aurora — it applies at boot with the next deploy). Edit
+  level; act-as refused 403; no Drive cookie → 401 `drive_auth_needed`.
+  Every skip is decided before Drive is touched (an all-skipped send makes
+  no folders). Three Docs at a time; Drive 429 / 5xx / rate-limit 403
+  retried three times. A 401 mid-send stops the rest
+  (`drive_auth_expired`, `drive_auth_needed: true`); any other refusal
+  fails that student only, with Drive's reason code. 18 tests (fake Drive
+  for the release, stubbed fetch for the route). **Deviations from the
+  note, recorded here:** (a) no `released_to_google_docs` event kind — the
+  releases table is the record and slice 4 reads it; (b) the safeguarding
+  gate counts any open alert on the ATTEMPT (essay or not) — stricter than
+  essay-only, simpler; (c) a Doc whose upload succeeded but whose share
+  failed stays in the teacher's folder unshared and the student is reported
+  failed (no release row, so "skip" sends it again); (d) folder rows key on
+  one `scope_key` string so the unique index needs no NULLS NOT DISTINCT.
+  Not yet run against real Drive end to end — slice 4's dialog is the
+  first real path.
