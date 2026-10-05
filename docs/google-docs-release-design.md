@@ -245,3 +245,8 @@ D-10).
   James editor, the Doc still in the section folder — and the run
   exercised the reconnect path live for the first time (POST 401 → drive
   start → callback → POST 200, the dialog reopened with its choices).
+- 2026-10-05 — **slice 6: rows 430–446** in `docs/design-tool-manual-checks.md`.
+  ✅ 430, 433–436; ◐ 431, 432; NOT RUN 437–446 (alert gate, drafts,
+  approved-AI feedback, two essays, co-teacher, wrong account, trashed
+  folder, a full-section timing, the origin, practice). Next: the deploy
+  (migration 0055 at boot) and the origin rows.

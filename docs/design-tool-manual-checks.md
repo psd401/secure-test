@@ -1370,3 +1370,33 @@ later sitting). Close sitting 1; leave sitting 2 open for row 427.
 | 427 | With sitting 2 open and no time limit, one student In progress there and one from closed sitting 1 | Button reads (1); the dialog adds "1 student still in an open test session is left alone; close that session first to include them." Only the sitting-1 student is handed in | NOT RUN |
 | 428 | Every In progress row is in an open sitting | Button disabled, (0), title "Everyone still working is in an open test session. Close it first, then hand in." | NOT RUN |
 | 429 | A co-teacher at view level opens Results with In progress rows | No button | NOT RUN |
+
+## Release essays to Google Docs (roadmap row GD, 2026-10-05)
+
+Record: `docs/google-docs-release-design.md`. Fixture (local dev, James's
+account): `GD hand-run 2026-10-05` — one essay with a two-criterion rubric,
+published, a sitting picked for one demo student (section 5001), a seeded
+handed-in essay (`scripts/seed-essays.ts`), a human final of 4 / 5 with a
+note. Rows marked ✅ below ran on local dev in James's Chrome; the origin
+needs the deploy (migration 0055 at boot) and the production redirect URI
+(registered 2026-10-05).
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 430 | First Drive authorization: `/api/google/drive/start?next=/dashboard` while signed in | Google asks only for "the specific Google Drive files you use with this app"; back on `/dashboard?gdrive=ok`; the callback's `scope` is `drive.file` alone (GD-P1) | ✅ 2026-10-05 local: the callback carried `scope=…/auth/drive.file` only, landed `?gdrive=ok` |
+| 431 | Results page of an assessment with an essay, edit level | "Send to Google Docs" beside Print student work; absent for a view-level co-teacher, while acting as a teacher, and on an assessment with no essay | ◐ 2026-10-05: shown for the owner; the three absent cases NOT RUN (predicate covered by `google-docs-send-dialog.test.ts`) |
+| 432 | Send, the section, Prompt + Score + Teacher feedback | "1 Doc created and shared"; the name links to the Doc; in Drive `secure-test / <assessment> / <section>`; the Doc has the prompt, the essay with its paragraphs, a Claim / Evidence table with levels and points, "Score: 4 of 5" and the teacher's note; no AI feedback; the student is an editor; the student gets Drive's share email | ◐ 2026-10-05: all but Drive's email ✅ (the demo inbox was not checked); 7.0 s for one student incl. creating three folders |
+| 433 | Send again, "Skip them" | "already has a Doc from you"; nothing new in Drive | ✅ 2026-10-05 |
+| 434 | Send again, "Make a new Doc" | A second Doc, title `<student> – <assessment> – <date time>` with the new time | ✅ 2026-10-05 (with row 435) |
+| 435 | "Make a new Doc" + "Give students ownership of their Doc" | "— owned by the student"; in Drive the student is owner, the teacher editor, the Doc still listed in the section folder; the per-student page marks "(owned by the student)" | ✅ 2026-10-05 |
+| 436 | Send after the Drive token's hour | The page goes through Google (usually no screen) and returns with the dialog reopened, its choices kept, and "Google Drive is connected. Press Send to continue."; Send works | ✅ 2026-10-05: POST 401 → start → callback → POST 200 |
+| 437 | A student with an OPEN safeguarding alert on any answer | Listed "held back — an open safeguarding alert needs your review first"; nothing made for them; after Acknowledge on the per-student page, the next send makes their Doc | NOT RUN |
+| 438 | A student still In progress | Skipped "not handed in"; with "Include students who have not handed in" ticked, their Doc opens with "Draft — not handed in as of <time>" and the per-student page marks "(draft)" | NOT RUN |
+| 439 | An essay whose final score is an APPROVED AI score, AI feedback ticked | Each criterion's feedback and the overall feedback appear; a proposal not yet approved never does (with or without the box) | NOT RUN |
+| 440 | An assessment with two essays in one set with sources | ONE Doc per student, "Question n" headings, the stimulus and sources printed once | NOT RUN |
+| 441 | A co-teacher at edit level sends | The Doc lands in the CO-TEACHER's Drive under the same folder path; the owner's per-student page does not link it | NOT RUN — needs a second staff account |
+| 442 | At Google's consent, pick a different Google account | "Google signed in with a different account…"; nothing sent; no Drive token set | NOT RUN |
+| 443 | Trash the section folder in Drive, then send ("Make a new Doc") | A new section folder is made under the assessment folder; the Doc lands there | NOT RUN |
+| 444 | A whole section (≥ 25 students) | Finishes inside the 60 s ALB limit; the result lists every student | NOT RUN — measure on the origin |
+| 445 | On the origin after the deploy | Migration 0055 applied at boot; rows 430 and 432 pass against the production redirect URI | NOT RUN |
+| 446 | Per-student page of a practice attempt | No Send to Google Docs button | NOT RUN |
