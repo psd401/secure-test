@@ -306,3 +306,12 @@ once after 4.
   period's current roster students (named from the roster, `student_id =
   roster:<ps_id>`). Rows 466–468 ✅ local `_demo`, 469–474 open. Design-tool
   2903 pass.
+- 2026-10-05 — **slice 4 DEPLOYED** (rev 91, Aurora 0057, health stamp =
+  `f88ea7a`). **Slice 5 BUILT** (docs): help topic 5 gains a step and a "By
+  class period" subsection (own list, give everyone, exceptions win, which
+  period counts, copies drop it) + picture `public/help/by-class-period.png`;
+  the tip names period lists and grants; FAQ "A whole class period needs the
+  same tool"; Duplicate notes period settings are not copied; quick start
+  FAQ + Duplicate line; `/roadmap.html` journey entry for 2026-10-05.
+  **U-17 + U-18 COMPLETE** bar rows 462–464 (second staff account) and
+  469–474.

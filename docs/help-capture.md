@@ -80,6 +80,12 @@ the help page shows. Files are in `design-tool/scripts/help-capture/content/`.
   (Text-to-Speech Test Content On); exceptions Spell Check On for Mateo and
   Zoom Off for Jordan. Made by SQL on the `_demo` database (it shows the
   resolver, not the building).
+  For U-17 / U-18 (the `by-class-period` still): demo.coteacher records on
+  Kai Vance (Spell Check On) and Ruby Whitaker (Color Contrast Black on
+  White), and English 10 set to give everyone Spell Check (By class period,
+  saved through the UI). Pick English 10 under **Settings for** only after
+  the picker's options have loaded, then capture the box down to the end of
+  Who gets what.
 
 Typing through Chrome automation drops characters while the editor
 re-renders; set field values with the native value setter plus an `input`

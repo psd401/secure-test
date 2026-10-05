@@ -294,6 +294,7 @@
             <li>Press <b class="ui">Import TIDE settings</b> to bring in the state testing accommodations file.</li>
             <li>Open a student to review or change their supports. Your edits survive the next TIDE import.</li>
             <li>On each assessment, tick the tools allowed on that test in its <b class="ui">Allowed on this test</b> tab. It saves as you go, and <b class="ui">Who gets what</b> under the list shows what each student will actually get.</li>
+            <li>To treat one class period differently, use <b class="ui">By class period</b> on the same tab (below).</li>
           </ol>
         </div>
         <figure class="shot" data-src="/help/accommodations.png" data-alt="The Students page listing a class with accommodation markers">
@@ -306,9 +307,22 @@
         <li><b class="ui">Allowed on this test</b> tab (on the assessment): which supports are <em>allowed</em> on this test. Ticking a tool here gives it to no one by itself; it lets students who have it on the Students page use it.</li>
         <li><b class="ui">Exceptions for this test</b> tab (on the assessment): for one student on this test only, add or switch off a tool.</li>
       </ol>
-      <div class="tip"><strong>So a student gets a tool when:</strong> it is on their Students page record <em>and</em> ticked on the test's Allowed on this test tab, or you added it as an exception. <b class="ui">Who gets what</b> shows the result for each student, and why a tool on someone's record isn't reaching them. In a co-taught class, both teachers' records count for the students each teaches: your Students page shows a co-teacher's as "Also on … record", and an exception added by either teacher applies.</div>
+      <div class="tip"><strong>So a student gets a tool when:</strong> it is on their Students page record <em>and</em> allowed on the test (or for their class period), or their class period gives it to everyone, or you added it as an exception. <b class="ui">Who gets what</b> shows the result for each student, and why a tool on someone's record isn't reaching them. In a co-taught class, both teachers' records count for the students each teaches: your Students page shows a co-teacher's as "Also on … record", and an exception added by either teacher applies.</div>
       <figure class="shot" data-src="/help/who-gets-what.png" data-alt="The Allowed on this test tab with Who gets what listing each student's tools, an exception, and a tool on a record that isn't allowed">
         <figcaption>Allowed on this test, with Who gets what below the list.</figcaption>
+      </figure>
+      <h3 class="sub">By class period</h3>
+      <p>One test, several periods: an honors period without a tool, or a co-taught period where everyone gets one. On the <b class="ui">Allowed on this test</b> tab, open <b class="ui">By class period</b> and pick the period under <b class="ui">Settings for</b>.</p>
+      <ol class="steps">
+        <li><b class="ui">Use a different list for this period</b> replaces the test's list for that period only. On a test assigned by the school or district a period can only narrow the list.</li>
+        <li><b class="ui">Give everyone in this period</b> gives a tool to every student in it, with or without a record. A student's own setting for that tool is kept.</li>
+        <li>Exceptions still win: switching a tool off for one student removes it even if the period gives it.</li>
+        <li><b class="ui">Who gets what</b> follows the period you pick; tools given to the whole period say <b class="ui">Whole period</b>.</li>
+        <li>Which period counts: the one the test session names. A session for all your sections uses every set period the student is in.</li>
+        <li>Copies (Duplicate, Share, a backup file) keep the test's list but not the period settings, since class periods are yours.</li>
+      </ol>
+      <figure class="shot" data-src="/help/by-class-period.png" data-alt="By class period set to English 10, giving everyone Spell Check, with Who gets what listing that period's students">
+        <figcaption>By class period: one period gets Spell Check for everyone.</figcaption>
       </figure>
     </section>
 
@@ -432,7 +446,7 @@
           <ol class="steps">
             <li>Press <b class="ui">Share</b> and enter a colleague's school email. They get their own copy; later edits don't travel either way.</li>
             <li>For a class you teach together, use <b class="ui">Co-teach</b> in the same dialog. You both see and run the same test and its results.</li>
-            <li><b class="ui">Duplicate</b> makes your own Draft copy, for a second period's version or before a big edit.</li>
+            <li><b class="ui">Duplicate</b> makes your own Draft copy, for a second period's version or before a big edit. Period settings (By class period) are not copied.</li>
           </ol>
         </div>
         <figure class="shot" data-src="/help/share.png" data-alt="The Share dialog with Share a copy and Co-teach">
@@ -474,6 +488,8 @@
         <dd>Their time ran out, or a deadline you set with Adjust time has passed. Open <b class="ui">Adjust time</b> on their row and choose <b class="ui">No time limit</b> or a later time.</dd>
         <dt>A student's accommodation from the Students page didn't show up in the test.</dt>
         <dd>The test's <b class="ui">Allowed on this test</b> tab doesn't allow that tool. Tick it there. Students without it on their record still won't get it. <b class="ui">Who gets what</b>, under the list, shows each student's result.</dd>
+        <dt>A whole class period needs the same tool.</dt>
+        <dd>Open <b class="ui">By class period</b> on the <b class="ui">Allowed on this test</b> tab, pick the period and tick the tool under <b class="ui">Give everyone in this period</b>. No need to add it student by student.</dd>
         <dt>A row says Idle while the student is clearly writing.</dt>
         <dd>Idle means nothing has been saved for 10 minutes. View screen shows what they are doing; typed text saves every few seconds on current Macs.</dd>
         <dt>A student's session ended by itself.</dt>
