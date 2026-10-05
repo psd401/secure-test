@@ -6,7 +6,8 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
 import { UpsertOverrideBody } from "@/lib/api/overrides";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment, authorizeStudent } from "@/lib/api/access";
+import { authorizeAssessment } from "@/lib/api/access";
+import { exceptionTargetFor } from "@/lib/accommodations/coTeacherRecords";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -84,20 +85,17 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  // The overlay row must be one the caller may read. Access slice 1 (D-3)
-  // collapsed the old `student_forbidden` 403 into this 404: a student row
-  // belonging to another teacher is now indistinguishable from one that is not
-  // there, the same rule every other row follows. The error code stays
-  // `student_not_found` rather than a bare `not_found` so the client can still
-  // tell WHICH of the two ids in the body was the problem.
-  // The overlay student row stays OWNER-only: `students` is per-teacher, not
-  // per-assessment, so an `edit` grant on this assessment does not reach
-  // somebody else's accommodations rows (access slice 2).
-  const studentAccess = await authorizeStudent(db, auth.session, body.student_id, "own");
-  if (!studentAccess.ok) {
+  // F-1 (docs/coteach-and-section-accommodations-design.md, 13.5): the
+  // exception attaches to the ASSESSMENT OWNER's row for the child — the only
+  // row delivery and the preview read. A co-teacher (edit) may name the
+  // owner's row or their own row for the child, which is mapped to the
+  // owner's. Anything else stays a 404 (`student_not_found`, so the client
+  // can tell which of the two ids was the problem).
+  const target = await exceptionTargetFor(db, access.assessment, auth.session.sub, body.student_id);
+  if (!target.ok) {
     return NextResponse.json(
-      { ok: false, error: "student_not_found" },
-      { status: 404 },
+      { ok: false, error: target.error },
+      { status: target.error === "student_not_found" ? 404 : 400 },
     );
   }
 
@@ -109,7 +107,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     .insert(assessment_student_overrides)
     .values({
       assessment_id: id,
-      student_id: body.student_id,
+      student_id: target.studentId,
       tool_id: body.tool_id,
       value: body.value,
       created_by_sub: auth.session.sub,

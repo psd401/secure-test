@@ -8,9 +8,9 @@ import {
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
 import {
-  coTeacherEntitlementStudentId,
   resolveEffectiveAccommodations,
 } from "@/lib/accommodations/effective";
+import { coTeacherRecordStudentIds } from "@/lib/accommodations/coTeacherRecords";
 import {
   UnknownItemTypeError,
   buildDeliveryBundle,
@@ -105,9 +105,9 @@ export async function GET(req: Request, ctx: RouteContext) {
     db,
     assessment,
     resolved.student.id,
-    // A co-teacher's sitting: their row for this child is the fallback
-    // entitlement source (co-teacher tenant fix follow-up, 2026-09-22).
-    await coTeacherEntitlementStudentId(db, assessment, attempt, resolved.student),
+    // U-17: co-teachers who currently teach this child add their records
+    // (the owner's are read first and win a same-tool conflict).
+    await coTeacherRecordStudentIds(db, assessment, resolved.student.roster_ps_id),
   );
 
   try {

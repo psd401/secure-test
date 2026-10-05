@@ -397,6 +397,12 @@ export const students = pgTable(
     // student's row. Every class reader of the overlay (the Students page,
     // `GET /api/students`) filters these out (D-4).
     practice_for_sub: text("practice_for_sub"),
+    // U-17 (docs/coteach-and-section-accommodations-design.md, 13.3): the
+    // overlay owner's email, lowercased. Grants and the roster know a
+    // co-teacher by EMAIL, overlay rows by SUB, and nothing else maps one to
+    // the other. Stamped at staff sign-in and on staff-made inserts;
+    // backfilled by migration 0056. Null until the owner next signs in.
+    owner_email: text("owner_email"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -406,6 +412,7 @@ export const students = pgTable(
   },
   (t) => ({
     ownerSubIdx: index("students_owner_sub_idx").on(t.owner_sub),
+    ownerEmailIdx: index("students_owner_email_idx").on(t.owner_email),
     ownerSsidUnq: unique("students_owner_sub_ssid_unq").on(
       t.owner_sub,
       t.ssid,

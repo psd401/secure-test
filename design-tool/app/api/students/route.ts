@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { students, student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { CreateStudentBody } from "@/lib/api/students";
+import { normalizeEmail } from "@/lib/roster/queries";
 
 export async function GET() {
   const auth = await requireStaff();
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
     .insert(students)
     .values({
       owner_sub: auth.session.sub,
+      owner_email: normalizeEmail(auth.session.email),
       ssid: body.ssid,
       name: body.name ?? "",
       grade: body.grade ?? null,

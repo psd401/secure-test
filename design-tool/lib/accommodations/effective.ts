@@ -2,11 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   assessment_student_overrides,
   student_accommodations,
-  students,
-  test_sessions,
   type AssessmentRow,
-  type AttemptRow,
-  type StudentRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
@@ -84,42 +80,6 @@ const DISABLED_VALUES = new Set(["", "off", "none", "none (default)", "default"]
 
 export function isEnabledValue(value: string): boolean {
   return !DISABLED_VALUES.has(value.trim().toLowerCase());
-}
-
-/**
- * Co-teacher tenant fix follow-up (2026-09-22, docs/access-model-design.md
- * §Progress): a join through a co-teacher's sitting files the student under
- * the ASSESSMENT owner, whose overlay row may carry no accommodations — the
- * co-teacher, who teaches this child, recorded them on their own row. This
- * returns that row's id when the attempt's sitting belongs to someone other
- * than the assessment owner and they have a row for the same roster student;
- * else null. Read only as a fallback (`entitlementFallbackId` below).
- */
-export async function coTeacherEntitlementStudentId(
-  db: Db,
-  assessment: Pick<AssessmentRow, "owner_sub">,
-  attempt: Pick<AttemptRow, "test_session_id">,
-  student: Pick<StudentRow, "roster_ps_id">,
-): Promise<string | null> {
-  if (!attempt.test_session_id || !student.roster_ps_id) return null;
-  const [sitting] = await db
-    .select({ owner_sub: test_sessions.owner_sub })
-    .from(test_sessions)
-    .where(eq(test_sessions.id, attempt.test_session_id))
-    .limit(1);
-  if (!sitting || sitting.owner_sub === assessment.owner_sub) return null;
-  const [row] = await db
-    .select({ id: students.id })
-    .from(students)
-    .where(
-      and(
-        eq(students.owner_sub, sitting.owner_sub),
-        eq(students.roster_ps_id, student.roster_ps_id),
-        isNull(students.practice_for_sub),
-      ),
-    )
-    .limit(1);
-  return row?.id ?? null;
 }
 
 /** The assessment fields the rule reads. */
@@ -243,11 +203,13 @@ export async function resolveEffectiveAccommodations(
   db: Db,
   assessment: AssessmentRow,
   studentId: string,
-  /** Co-teacher follow-up: whose entitlements to read when `studentId`'s row
-   * has NO live accommodation rows at all (a row with every tool Off is a
-   * decision, and wins). Overrides are always `studentId`'s — they are set
-   * per assessment on the owner's overlay. */
-  entitlementFallbackId: string | null = null,
+  /** U-17 (docs/coteach-and-section-accommodations-design.md): co-teachers'
+   * overlay rows for the same child (`coTeacherRecordStudentIds`), in
+   * order. Their live records are UNIONED with the owner's (D-1, On wins);
+   * the owner's are read first, so the owner's value wins a same-tool
+   * conflict (13.2). Exceptions are always `studentId`'s — one place per
+   * test. Replaces the 2026-09-22 only-when-empty fallback. */
+  coTeacherStudentIds: readonly string[] = [],
 ): Promise<EffectiveAccommodations> {
   // Short-circuit kept from before U-16: no allowed tool, no queries.
   const allowedAny = ((assessment.allowed_accommodations ?? []) as string[]).some(
@@ -273,9 +235,9 @@ export async function resolveEffectiveAccommodations(
           isNull(student_accommodations.removed_at),
         ),
       );
-  let studentRows = await liveRowsOf(studentId);
-  if (studentRows.length === 0 && entitlementFallbackId) {
-    studentRows = await liveRowsOf(entitlementFallbackId);
+  const studentRows = await liveRowsOf(studentId);
+  for (const id of coTeacherStudentIds) {
+    studentRows.push(...(await liveRowsOf(id)));
   }
 
   const overrides = await db

@@ -5,6 +5,8 @@ import {
   parseTideXlsx,
   TideImportError,
 } from "@/lib/api/importTide";
+import { getDb } from "@/db/client";
+import { stampOverlayOwnerEmail } from "@/lib/accommodations/coTeacherRecords";
 
 // TIDE district exports are well under 25 MiB for a single year-group.
 // Larger districts may need a larger cap; revisit when a real export
@@ -69,6 +71,8 @@ export async function POST(req: Request) {
   try {
     const parsed = await parseTideXlsx(buf);
     const result = await applyTideImport(parsed, auth.session.sub);
+    // U-17: the rows this import made carry no owner email yet.
+    await stampOverlayOwnerEmail(getDb(), auth.session.sub, auth.session.email);
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof TideImportError) {

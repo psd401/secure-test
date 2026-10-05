@@ -10,6 +10,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import {
   access_grants,
+  assessment_student_overrides,
   assessments,
   items,
   roster_sections,
@@ -211,11 +212,12 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
     expect(results.rows[0]!.student.student_number).toBe(BIOLOGY_STUDENT.ps_id);
   });
 
-  // Follow-up (6.2, 2026-09-22): the co-teacher recorded this child's
-  // accommodations on THEIR overlay row; the owner's row the join creates has
-  // none. Delivery falls back to the co-teacher's row — unless the owner's row
-  // carries any live row at all, which is then the decision.
-  test("delivery falls back to the co-teacher's accommodations when the owner's row has none", async () => {
+  // Follow-up (6.2, 2026-09-22), superseded by U-17 (2026-10-05,
+  // docs/coteach-and-section-accommodations-design.md): the co-teacher
+  // recorded this child's accommodations on THEIR overlay row; the owner's
+  // row the join creates has none. Delivery unions the co-teacher's record
+  // (D-1): the owner's Off no longer cancels it — only an Off exception does.
+  test("delivery unions the co-teacher's accommodations with the owner's", async () => {
     const db = getDb();
     const [assessment] = await db
       .insert(assessments)
@@ -249,7 +251,12 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
     });
     const [coRow] = await db
       .insert(students)
-      .values({ owner_sub: CO_TEACHER, roster_ps_id: BIOLOGY_STUDENT.ps_id, name: "Co-teacher's row" })
+      .values({
+        owner_sub: CO_TEACHER,
+        owner_email: OTHER_TEACHER_EMAIL,
+        roster_ps_id: BIOLOGY_STUDENT.ps_id,
+        name: "Co-teacher's row",
+      })
       .returning();
     await db.insert(student_accommodations).values({
       student_id: coRow!.id,
@@ -288,13 +295,23 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
 
     expect((await deliver()).accommodations).toEqual({ spell_check: "On" });
 
-    // The owner records a decision (Off) on their own row: that wins.
+    // The owner's own Off does not cancel the co-teacher's On (D-1)…
     await db.insert(student_accommodations).values({
       student_id: attempt.student_id,
       subject: "Science",
       tool_id: "spell_check",
       value: "Off",
       source: "manual",
+    });
+    expect((await deliver()).accommodations).toEqual({ spell_check: "On" });
+
+    // …an Off exception on this test does.
+    await db.insert(assessment_student_overrides).values({
+      assessment_id: assessment!.id,
+      student_id: attempt.student_id,
+      tool_id: "spell_check",
+      value: "Off",
+      created_by_sub: OWNER,
     });
     expect((await deliver()).accommodations).toBeUndefined();
   });

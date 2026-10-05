@@ -237,3 +237,22 @@ once after 4.
   preview marks co-teacher-sourced tools; jsonb column; grants within the
   period's list; picker = owner's + co-teachers' sections; dropped from
   copies; deploy after slice 2 and after slice 4.
+- 2026-10-05 — **slice 1 BUILT** (server, not deployed): **migration 0056**
+  `students.owner_email` + index, backfilled from the newest (sub, email)
+  pair on `assessments` / `test_sessions`; stamped at staff sign-in
+  (`/api/auth/callback`, best-effort), on `POST /api/students` and after a
+  TIDE import (`stampOverlayOwnerEmail`). `lib/accommodations/coTeacherRecords.ts`:
+  `coTeacherEmailsFor` (live assessment grants + `coTeachersOf(owner)`),
+  `teachersCurrentlyTeaching`, `coTeacherRecordStudentIds` (rows by roster id,
+  or by the roster SSID on an unbound TIDE row; ordered by email),
+  `exceptionTargetFor` (F-1). `resolveEffectiveAccommodations` takes the
+  co-teachers' row ids and UNIONS their live records after the owner's;
+  `coTeacherEntitlementStudentId` is deleted. Delivery switched over. The
+  preview keys children by roster id, lists a co-teacher-only child, and
+  marks `from_record_of` per tool. `POST /api/assessments/[id]/overrides`
+  attaches to the owner's row (owner's row named directly, or the caller's
+  own row mapped / created; `student_not_linked` 400 for an unmappable row).
+  Tests: `test/coteach-accommodations.test.ts` (10), the 2026-09-22 fallback
+  test rewritten for D-1 (owner's Off no longer cancels; an Off exception
+  does). Design-tool 2882 pass, typecheck clean. Migration applied to dev,
+  test and `_demo`.

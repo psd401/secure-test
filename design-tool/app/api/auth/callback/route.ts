@@ -11,6 +11,9 @@ import { safeNextPath } from "@/lib/auth/safeNext";
 import { sessionFromIdTokenClaims } from "@/lib/auth/identity";
 import { resolveExpectedAudience, verifyIdToken } from "@/lib/auth/verifyIdToken";
 import { appOrigin } from "@/lib/auth/appOrigin";
+import { getDb } from "@/db/client";
+import { isStaff } from "@/lib/auth/roles";
+import { stampOverlayOwnerEmail } from "@/lib/accommodations/coTeacherRecords";
 
 function buildRedirectUri(req: Request): string {
   const fromEnv = process.env.OIDC_REDIRECT_URI;
@@ -120,6 +123,15 @@ export async function GET(req: Request) {
     );
   }
   const sessionJwt = await mintSessionJWT(identity.payload);
+  // U-17 (13.3): a co-teacher's accommodation records are found by email;
+  // stamp it on this teacher's overlay rows. Best-effort: never block sign-in.
+  if (isStaff(identity.payload.role)) {
+    try {
+      await stampOverlayOwnerEmail(getDb(), identity.payload.sub, identity.payload.email);
+    } catch (err) {
+      console.warn("auth: owner_email stamp failed:", err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // Re-validate at the redirect boundary. The cookie is signed, but this is the
   // call that actually resolves the value against the origin — keep the check

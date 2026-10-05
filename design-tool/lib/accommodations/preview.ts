@@ -1,12 +1,14 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   assessment_student_overrides,
+  roster_students,
   student_accommodations,
   students,
   type AssessmentRow,
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { explainAccommodations, type ToolSetting } from "@/lib/accommodations/effective";
+import { explainAccommodations, isEnabledValue, type ToolSetting } from "@/lib/accommodations/effective";
+import { coTeacherEmailsFor, teachersCurrentlyTeaching } from "@/lib/accommodations/coTeacherRecords";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { assessmentOwner } from "@/lib/scoring/results";
 
@@ -24,9 +26,10 @@ type Db = ReturnType<typeof getDb>;
  * not listed: `others_count` is the owner's current class-list students
  * (roster) who get no tool. Null when the owner's email is unknown.
  *
- * Not modelled: delivery's co-teacher fallback (an owner row with NO live
- * records reads the co-teacher's when the attempt came through their sitting)
- * — it depends on the attempt. U-17 replaces that fallback.
+ * U-17: co-teachers' records for the children they currently teach are
+ * unioned in, owner first (the delivery rule), and a tool they supplied is
+ * marked `from_record_of`. A child with only a co-teacher's record is listed
+ * too — the join creates the owner's row with nothing on it.
  */
 export interface PreviewTool {
   tool_id: string;
@@ -34,6 +37,9 @@ export interface PreviewTool {
   /** Turned on by an exception rather than the record. */
   exception: boolean;
   construct_altering: boolean;
+  /** U-17 (13.6): the co-teacher whose record supplied it; null when it came
+   * from the owner's record or an exception. */
+  from_record_of: string | null;
 }
 
 export interface PreviewStudent {
@@ -57,21 +63,83 @@ export async function buildAccommodationsPreview(
   db: Db,
   assessment: AssessmentRow,
 ): Promise<AccommodationsPreview> {
-  const records = await db
+  // U-17: co-teachers (D-2) whose records count for the children they
+  // currently teach (13.1).
+  const coEmails = await coTeacherEmailsFor(db, assessment);
+
+  const people = await db
     .select({
-      student_id: student_accommodations.student_id,
-      tool_id: student_accommodations.tool_id,
-      value: student_accommodations.value,
+      id: students.id,
+      name: students.name,
+      ssid: students.ssid,
+      roster_ps_id: students.roster_ps_id,
+      owner_sub: students.owner_sub,
+      owner_email: students.owner_email,
     })
-    .from(student_accommodations)
-    .innerJoin(students, eq(students.id, student_accommodations.student_id))
+    .from(students)
     .where(
       and(
-        eq(students.owner_sub, assessment.owner_sub),
         isNull(students.practice_for_sub),
-        isNull(student_accommodations.removed_at),
+        coEmails.length > 0
+          ? or(
+              eq(students.owner_sub, assessment.owner_sub),
+              and(inArray(students.owner_email, coEmails), ne(students.owner_sub, assessment.owner_sub)),
+            )
+          : eq(students.owner_sub, assessment.owner_sub),
       ),
     );
+
+  // A co-teacher's TIDE row is bound by SSID until the child joins one of
+  // their own tests — tie it to the roster id through the roster's SSID.
+  const unboundSsids = [
+    ...new Set(
+      people
+        .filter((p) => p.owner_sub !== assessment.owner_sub && !p.roster_ps_id && p.ssid)
+        .map((p) => p.ssid!),
+    ),
+  ];
+  const psIdBySsid = new Map<string, string>();
+  if (unboundSsids.length > 0) {
+    const rows = await db
+      .select({ ps_id: roster_students.ps_id, ssid: roster_students.ssid })
+      .from(roster_students)
+      .where(inArray(roster_students.ssid, unboundSsids));
+    for (const r of rows) if (r.ssid) psIdBySsid.set(r.ssid, r.ps_id);
+  }
+
+  // One entry per child: the owner's row (if any) and the co-teachers' rows.
+  type Person = (typeof people)[number];
+  const children = new Map<string, { owner: Person | null; co: Person[]; psId: string | null }>();
+  for (const p of people) {
+    if (p.owner_sub === assessment.owner_sub) {
+      const key = p.roster_ps_id ?? `row:${p.id}`;
+      const entry = children.get(key) ?? { owner: null, co: [], psId: p.roster_ps_id };
+      entry.owner = p;
+      children.set(key, entry);
+    } else {
+      const psId = p.roster_ps_id ?? (p.ssid ? psIdBySsid.get(p.ssid) : undefined);
+      if (!psId) continue; // cannot be tied to a child
+      const entry = children.get(psId) ?? { owner: null, co: [], psId };
+      entry.co.push(p);
+      children.set(psId, entry);
+    }
+  }
+
+  const psIds = [...children.values()].map((c) => c.psId).filter((x): x is string => !!x);
+  const teaching = await teachersCurrentlyTeaching(db, coEmails, psIds);
+
+  const ids = people.map((p) => p.id);
+  const records =
+    ids.length === 0
+      ? []
+      : await db
+          .select({
+            student_id: student_accommodations.student_id,
+            tool_id: student_accommodations.tool_id,
+            value: student_accommodations.value,
+          })
+          .from(student_accommodations)
+          .where(and(inArray(student_accommodations.student_id, ids), isNull(student_accommodations.removed_at)));
   const overrides = await db
     .select({
       student_id: assessment_student_overrides.student_id,
@@ -80,52 +148,49 @@ export async function buildAccommodationsPreview(
     })
     .from(assessment_student_overrides)
     .where(eq(assessment_student_overrides.assessment_id, assessment.id));
-
   const recordsBy = groupBy(records);
   const overridesBy = groupBy(overrides);
-  const ids = [...new Set([...recordsBy.keys(), ...overridesBy.keys()])];
-  const people =
-    ids.length === 0
-      ? []
-      : await db
-          .select({
-            id: students.id,
-            name: students.name,
-            ssid: students.ssid,
-            roster_ps_id: students.roster_ps_id,
-            owner_sub: students.owner_sub,
-          })
-          .from(students)
-          .where(inArray(students.id, ids));
 
   const listed: PreviewStudent[] = [];
-  for (const person of people) {
-    // An override row always hangs off the owner's overlay in practice; the
-    // check keeps a stray foreign row out of the owner's preview.
-    if (person.owner_sub !== assessment.owner_sub) continue;
+  for (const child of children.values()) {
+    const teachers = child.psId ? (teaching.get(child.psId) ?? new Set<string>()) : new Set<string>();
+    const co = child.co
+      .filter((p) => p.owner_email && teachers.has(p.owner_email))
+      .sort((a, b) => (a.owner_email ?? "").localeCompare(b.owner_email ?? ""));
+    if (!child.owner && co.length === 0) continue;
+
+    const ownerRecords = child.owner ? (recordsBy.get(child.owner.id) ?? []) : [];
+    const coRecords = co.map((p) => ({ email: p.owner_email!, rows: recordsBy.get(p.id) ?? [] }));
     const explained = explainAccommodations(
       assessment,
-      recordsBy.get(person.id) ?? [],
-      overridesBy.get(person.id) ?? [],
+      [...ownerRecords, ...coRecords.flatMap((c) => c.rows)],
+      child.owner ? (overridesBy.get(child.owner.id) ?? []) : [],
     );
     const granted = new Set(explained.grantedByException);
     const altering = new Set(explained.constructAltering);
+    const ownerOn = new Set(ownerRecords.filter((r) => isEnabledValue(r.value)).map((r) => r.tool_id));
+    const sourceOf = (toolId: string): string | null => {
+      if (granted.has(toolId) || ownerOn.has(toolId)) return null;
+      return coRecords.find((c) => c.rows.some((r) => r.tool_id === toolId && isEnabledValue(r.value)))?.email ?? null;
+    };
     const tools = Object.entries(explained.enabled)
       .map(([tool_id, value]) => ({
         tool_id,
         value,
         exception: granted.has(tool_id),
         construct_altering: altering.has(tool_id),
+        from_record_of: sourceOf(tool_id),
       }))
       .sort((a, b) => a.tool_id.localeCompare(b.tool_id));
     if (tools.length === 0 && explained.removedByException.length === 0 && explained.notAllowed.length === 0) {
-      continue; // a record of every tool Off — nothing to say
+      continue; // every tool Off — nothing to say
     }
+    const face = child.owner ?? co[0]!;
     listed.push({
-      student_id: person.id,
-      name: person.name,
-      ssid: person.ssid,
-      roster_ps_id: person.roster_ps_id,
+      student_id: face.id,
+      name: face.name,
+      ssid: face.ssid,
+      roster_ps_id: child.psId,
       tools,
       removed_by_exception: [...explained.removedByException].sort(),
       not_allowed: [...explained.notAllowed].sort((a, b) => a.tool_id.localeCompare(b.tool_id)),

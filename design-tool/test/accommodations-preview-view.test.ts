@@ -25,7 +25,7 @@ describe("Who gets what — words", () => {
       others_count: 3,
       students: [
         student({
-          tools: [{ tool_id: "spell_check", value: "On", exception: true, construct_altering: true }],
+          tools: [{ tool_id: "spell_check", value: "On", exception: true, construct_altering: true, from_record_of: null }],
           removed_by_exception: ["zoom"],
           not_allowed: [{ tool_id: "color_contrast", value: "Black on Rose" }],
         }),
