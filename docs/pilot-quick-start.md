@@ -269,7 +269,8 @@ its own.
   test permits, not what everyone gets. Tick it there; only students with it
   on their record (or an exception on the Exceptions for this test tab) get
   it. **Who gets what**, under the list, shows each student's result and why.
-  In a co-taught class the owner's records are used.
+  In a co-taught class both teachers' records count for the students each
+  teaches (the Students page shows the other's as "Also on … record").
 - **Start session says a session for this class is already open.** One with
   the same students is still open; its code is shown. Use it, or close it on
   the Test sessions tab and start again. (Students see each test once under
