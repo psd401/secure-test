@@ -1438,5 +1438,5 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 462 | As a CO-TEACHER with a Co-teach grant: Exceptions tab | Picker lists the owner's records plus the co-teacher's own for children the owner has none for; adding one for their own student saves, and the owner then sees it in "Exceptions on this test" | NOT RUN (second staff account; covered by `test/coteach-accommodations.test.ts`) |
 | 463 | As that co-teacher: their Students page, a child the owner also records | "Also on <owner>'s record: …" | NOT RUN (second staff account) |
 | 464 | A student page (`/dashboard/accommodations/<id>`) for such a child | A box with "Also on …" and "counts on the tests you share" | NOT RUN |
-| 465 | On the origin after the deploy: migration 0056 applied; `owner_email` filled for existing teachers | `oneoff-aurora.sh` count of `students where owner_email is null` small (teachers with no test or sitting yet) | NOT RUN |
+| 465 | On the origin after the deploy: migration 0056 applied; `owner_email` filled for existing teachers | `oneoff-aurora.sh` count of `students where owner_email is null` small (teachers with no test or sitting yet) | ✅ 2026-10-05 rev 90 (`query-aurora.sh`, read-only): 57 journal rows; 714 rows / 8 teachers stamped, 1 row / 1 teacher not yet (fills at that teacher's next sign-in) |
 
