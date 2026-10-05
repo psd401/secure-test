@@ -184,10 +184,10 @@ its own.
 - **Close the old session before starting the next.** Each open session is
   its own row on the student's screen, so two open sessions list the same
   test twice.
-- **When everyone's done, press Hand in everyone.** It covers the students
-  whose last session was that one; check **Results** for anyone still *In
-  progress* and press **Hand in** on their row. Only handed-in work reaches
-  the scoring queue.
+- **When everyone's done,** close the session, open **Results** and press
+  **Hand in all in progress**. It covers unfinished work from every session
+  (pick a section first to limit it to one class). Only handed-in work
+  reaches the scoring queue.
 
 ## Teacher — after
 
@@ -261,8 +261,9 @@ its own.
   does not hand in. Press **Hand in** on their row, or open another
   session and they resume where they left off.
 - **A student has saved work but isn't in the scoring queue.** The queue
-  shows handed-in work only. Press **Hand in** on their row, or have them
-  press **Finish and hand in**.
+  shows handed-in work only. Press **Hand in** on their row, **Hand in all
+  in progress** on Results for the whole class, or have them press **Finish
+  and hand in**.
 - **Students see the same test listed more than once.** More than one
   session is open for them. Close the older ones on the Test sessions tab.
 - **"Time is up." every time a student presses Resume.** Their time ran out,

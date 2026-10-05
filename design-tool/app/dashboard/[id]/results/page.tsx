@@ -14,6 +14,7 @@ import { canSendToGradebook, gradebookSendConfigured } from "@/lib/gradebook/sen
 import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
+import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
 import { canReleaseAnswers, showsReleasedLine } from "@/lib/feedback/settingsUi";
@@ -127,6 +128,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
       : selectedSection === NO_SECTION
         ? results.rows.filter((r) => !r.student.section)
         : results.rows.filter((r) => r.student.section === selectedSection);
+  // Roadmap U-14 (2026-10-05): hand in every unfinished row the page shows,
+  // whichever session each last joined. Same enable rule as the row's Hand in.
+  const inProgressRows = filtered.filter((r) => r.status === "in_progress");
+  const readyAttemptIds = inProgressRows
+    .filter((r) => !r.sitting_open || r.deadline_passed)
+    .map((r) => r.attempt_id);
+  const showHandInInProgress =
+    inProgressRows.length > 0 && levelSatisfies(access.level, "run");
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -222,6 +231,26 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
             </Link>
           ) : null}
         </form>
+      ) : null}
+
+      {showHandInInProgress ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <HandInInProgressAndReload
+            assessmentId={assessment.id}
+            readyAttemptIds={readyAttemptIds}
+            heldCount={inProgressRows.length - readyAttemptIds.length}
+            sectionLabel={
+              selectedSection === ""
+                ? null
+                : selectedSection === NO_SECTION
+                  ? "No section"
+                  : selectedSection
+            }
+          />
+          <span className="text-xs text-muted-foreground">
+            Unfinished work from every session{selectedSection === "" ? "" : " in this section"} — only handed-in work reaches the scoring queue.
+          </span>
+        </div>
       ) : null}
 
       {results.rows.length === 0 ? (

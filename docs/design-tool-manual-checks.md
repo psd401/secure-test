@@ -1355,3 +1355,18 @@ Finding from rows 415–421 (2026-10-03, origin rev 81), proposal:
   will go over the correct answers." Proposal: both lines say students see
   right / wrong and are told their teacher will go over the correct answers.
 
+
+## Hand in all in progress — Results page (roadmap U-14, 2026-10-05)
+
+Fixture: a test run over two sittings — a few students joined sitting 1 and
+stopped; others resumed in sitting 2 (a resume moves the attempt to the
+later sitting). Close sitting 1; leave sitting 2 open for row 427.
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 424 | Results page, All sections, both sittings closed, three students In progress | "Hand in all in progress (3)" under the section filter with the note "Unfinished work from every session — only handed-in work reaches the scoring queue." | NOT RUN |
+| 425 | Press it | Confirm: "Hand in 3 students who haven't finished? … goes to scoring. This can't be undone."; Hand in 3 students → page reloads, the three rows show totals and "Handed in by teacher", the auto-scored cells are filled, essays appear in the scoring queue | NOT RUN |
+| 426 | Choose one section, then press it | The count and the dialog name only that section's students ("… in <section> …"); other sections' rows stay In progress | NOT RUN |
+| 427 | With sitting 2 open and no time limit, one student In progress there and one from closed sitting 1 | Button reads (1); the dialog adds "1 student still in an open test session is left alone; close that session first to include them." Only the sitting-1 student is handed in | NOT RUN |
+| 428 | Every In progress row is in an open sitting | Button disabled, (0), title "Everyone still working is in an open test session. Close it first, then hand in." | NOT RUN |
+| 429 | A co-teacher at view level opens Results with In progress rows | No button | NOT RUN |
