@@ -6,6 +6,7 @@ import {
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
+import { ruleForSections } from "@/lib/accommodations/sections";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -86,7 +87,11 @@ export function isEnabledValue(value: string): boolean {
 export type AccommodationRule = Pick<
   AssessmentRow,
   "allowed_accommodations" | "construct_altering" | "assigned_scope"
->;
+> & {
+  /** U-18: the class period's grants — everyone in the period gets them
+   * (`ruleForSections`). Applied after the record, before exceptions. */
+  grants?: readonly ToolSetting[];
+};
 
 /** A live entitlement or override row, reduced to what the rule reads. */
 export interface ToolSetting {
@@ -101,6 +106,8 @@ export interface ToolSetting {
 export interface ExplainedAccommodations extends EffectiveAccommodations {
   /** Tools an exception (override) turned on for this student. */
   grantedByException: string[];
+  /** U-18: tools a class-period grant turned on (not already on the record). */
+  grantedBySection: string[];
   /** Tools the record turned on and an Off exception switched off. */
   removedByException: string[];
   /** On the student's record (enabled) but not allowed on this assessment and
@@ -141,6 +148,7 @@ export function explainAccommodations(
       enabled: {},
       constructAltering: [],
       grantedByException: [],
+      grantedBySection: [],
       removedByException: [],
       notAllowed: [...onRecord]
         .filter(([toolId]) => isValidAccommodationId(toolId))
@@ -151,6 +159,14 @@ export function explainAccommodations(
   const enabled: Record<string, string> = {};
   for (const [toolId, value] of onRecord) {
     if (allowed.has(toolId)) enabled[toolId] = value;
+  }
+  // U-18: class-period grants, for tools the period allows. A value already on
+  // the student's record is the more specific setting and is kept.
+  const bySection = new Set<string>();
+  for (const g of assessment.grants ?? []) {
+    if (!allowed.has(g.tool_id) || !isEnabledValue(g.value) || g.tool_id in enabled) continue;
+    enabled[g.tool_id] = g.value;
+    bySection.add(g.tool_id);
   }
 
   // On a teacher-assigned assessment the teacher's override outranks the
@@ -192,7 +208,8 @@ export function explainAccommodations(
     enabled,
     constructAltering: [...flagged],
     grantedByException: [...granted],
-    removedByException: [...removed].filter((id) => onRecord.has(id)),
+    grantedBySection: [...bySection].filter((id) => !granted.has(id) && id in enabled),
+    removedByException: [...removed].filter((id) => onRecord.has(id) || bySection.has(id)),
     notAllowed: [...onRecord]
       .filter(([toolId]) => isValidAccommodationId(toolId) && !allowed.has(toolId) && !granted.has(toolId))
       .map(([tool_id, value]) => ({ tool_id, value })),
@@ -210,12 +227,12 @@ export async function resolveEffectiveAccommodations(
    * conflict (13.2). Exceptions are always `studentId`'s — one place per
    * test. Replaces the 2026-09-22 only-when-empty fallback. */
   coTeacherStudentIds: readonly string[] = [],
+  /** U-18: the student's class periods for this attempt (`sectionsForAttempt`). */
+  sectionPsIds: readonly string[] = [],
 ): Promise<EffectiveAccommodations> {
+  const rule = ruleForSections(assessment, sectionPsIds);
   // Short-circuit kept from before U-16: no allowed tool, no queries.
-  const allowedAny = ((assessment.allowed_accommodations ?? []) as string[]).some(
-    isValidAccommodationId,
-  );
-  if (!allowedAny) return { enabled: {}, constructAltering: [] };
+  if ((rule.allowed_accommodations as string[]).length === 0) return { enabled: {}, constructAltering: [] };
 
   // Live rows only — removed_at is a soft delete kept for the audit trail, and
   // a withdrawn accommodation must not keep being applied.
@@ -253,6 +270,6 @@ export async function resolveEffectiveAccommodations(
       ),
     );
 
-  const { enabled, constructAltering } = explainAccommodations(assessment, studentRows, overrides);
+  const { enabled, constructAltering } = explainAccommodations(rule, studentRows, overrides);
   return { enabled, constructAltering };
 }

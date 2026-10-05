@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import {
   assessment_student_overrides,
+  roster_enrollments,
   roster_students,
   student_accommodations,
   students,
@@ -9,7 +10,8 @@ import {
 import type { getDb } from "@/db/client";
 import { explainAccommodations, isEnabledValue, type ToolSetting } from "@/lib/accommodations/effective";
 import { coTeacherEmailsFor, teachersCurrentlyTeaching } from "@/lib/accommodations/coTeacherRecords";
-import { studentsInTeachersSections } from "@/lib/roster/queries";
+import { configuredSectionsOf, ruleForSections } from "@/lib/accommodations/sections";
+import { enrollmentIsCurrent, studentsInTeachersSections } from "@/lib/roster/queries";
 import { assessmentOwner } from "@/lib/scoring/results";
 
 type Db = ReturnType<typeof getDb>;
@@ -40,6 +42,8 @@ export interface PreviewTool {
   /** U-17 (13.6): the co-teacher whose record supplied it; null when it came
    * from the owner's record or an exception. */
   from_record_of: string | null;
+  /** U-18: a class-period grant supplied it. */
+  from_section: boolean;
 }
 
 export interface PreviewStudent {
@@ -62,7 +66,10 @@ export interface AccommodationsPreview {
 export async function buildAccommodationsPreview(
   db: Db,
   assessment: AssessmentRow,
+  /** U-18: one class period — only its current students, under its rule. */
+  opts: { section?: string | null } = {},
 ): Promise<AccommodationsPreview> {
+  const section = opts.section ?? null;
   // U-17: co-teachers (D-2) whose records count for the children they
   // currently teach (13.1).
   const coEmails = await coTeacherEmailsFor(db, assessment);
@@ -125,8 +132,25 @@ export async function buildAccommodationsPreview(
     }
   }
 
+  // U-18: with a period chosen, only its current students; without, each
+  // child under their configured periods (D-8's no-sitting case).
+  let sectionRoster: Set<string> | null = null;
+  if (section) {
+    sectionRoster = new Set(
+      (
+        await db
+          .select({ ps_id: roster_enrollments.student_ps_id })
+          .from(roster_enrollments)
+          .where(and(enrollmentIsCurrent, eq(roster_enrollments.section_ps_id, section)))
+      ).map((r) => r.ps_id),
+    );
+    for (const [key, child] of children) {
+      if (!child.psId || !sectionRoster.has(child.psId)) children.delete(key);
+    }
+  }
   const psIds = [...children.values()].map((c) => c.psId).filter((x): x is string => !!x);
   const teaching = await teachersCurrentlyTeaching(db, coEmails, psIds);
+  const sectionsByPs = section ? null : await configuredSectionsOf(db, assessment, psIds);
 
   const ids = people.map((p) => p.id);
   const records =
@@ -161,16 +185,21 @@ export async function buildAccommodationsPreview(
 
     const ownerRecords = child.owner ? (recordsBy.get(child.owner.id) ?? []) : [];
     const coRecords = co.map((p) => ({ email: p.owner_email!, rows: recordsBy.get(p.id) ?? [] }));
-    const explained = explainAccommodations(
+    const rule = ruleForSections(
       assessment,
+      section ? [section] : child.psId ? (sectionsByPs?.get(child.psId) ?? []) : [],
+    );
+    const explained = explainAccommodations(
+      rule,
       [...ownerRecords, ...coRecords.flatMap((c) => c.rows)],
       child.owner ? (overridesBy.get(child.owner.id) ?? []) : [],
     );
     const granted = new Set(explained.grantedByException);
+    const bySection = new Set(explained.grantedBySection);
     const altering = new Set(explained.constructAltering);
     const ownerOn = new Set(ownerRecords.filter((r) => isEnabledValue(r.value)).map((r) => r.tool_id));
     const sourceOf = (toolId: string): string | null => {
-      if (granted.has(toolId) || ownerOn.has(toolId)) return null;
+      if (granted.has(toolId) || bySection.has(toolId) || ownerOn.has(toolId)) return null;
       return coRecords.find((c) => c.rows.some((r) => r.tool_id === toolId && isEnabledValue(r.value)))?.email ?? null;
     };
     const tools = Object.entries(explained.enabled)
@@ -180,6 +209,7 @@ export async function buildAccommodationsPreview(
         exception: granted.has(tool_id),
         construct_altering: altering.has(tool_id),
         from_record_of: sourceOf(tool_id),
+        from_section: bySection.has(tool_id),
       }))
       .sort((a, b) => a.tool_id.localeCompare(b.tool_id));
     if (tools.length === 0 && explained.removedByException.length === 0 && explained.notAllowed.length === 0) {
@@ -198,14 +228,20 @@ export async function buildAccommodationsPreview(
   }
   listed.sort((a, b) => a.name.localeCompare(b.name) || (a.ssid ?? "").localeCompare(b.ssid ?? ""));
 
+  const getting = new Set(
+    listed.filter((s) => s.tools.length > 0 && s.roster_ps_id).map((s) => s.roster_ps_id!),
+  );
+  if (sectionRoster) {
+    return {
+      students: listed,
+      others_count: [...sectionRoster].filter((psId) => !getting.has(psId)).length,
+    };
+  }
   const { ownerEmail } = await assessmentOwner(db, assessment.id);
   let othersCount: number | null = null;
   if (ownerEmail) {
     const classList = new Set(
       (await studentsInTeachersSections(db, ownerEmail)).map((r) => r.student.ps_id),
-    );
-    const getting = new Set(
-      listed.filter((s) => s.tools.length > 0 && s.roster_ps_id).map((s) => s.roster_ps_id!),
     );
     othersCount = [...classList].filter((psId) => !getting.has(psId)).length;
   }

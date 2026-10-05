@@ -111,8 +111,8 @@ describe("GET /api/assessments/:id/accommodations-preview", () => {
     const [adaRow, benRow] = body.students;
     expect(adaRow.student_id).toBe(ada.id);
     expect(adaRow.tools).toEqual([
-      { tool_id: "color_contrast", value: "Black on Rose", exception: false, construct_altering: false, from_record_of: null },
-      { tool_id: "spell_check", value: "On", exception: true, construct_altering: true, from_record_of: null },
+      { tool_id: "color_contrast", value: "Black on Rose", exception: false, construct_altering: false, from_record_of: null, from_section: false },
+      { tool_id: "spell_check", value: "On", exception: true, construct_altering: true, from_record_of: null, from_section: false },
     ]);
     expect(adaRow.not_allowed).toEqual([{ tool_id: "tts_test_content", value: "On" }]);
     expect(adaRow.removed_by_exception).toEqual([]);

@@ -11,6 +11,7 @@ import {
   resolveEffectiveAccommodations,
 } from "@/lib/accommodations/effective";
 import { coTeacherRecordStudentIds } from "@/lib/accommodations/coTeacherRecords";
+import { sectionsForAttempt } from "@/lib/accommodations/sections";
 import {
   UnknownItemTypeError,
   buildDeliveryBundle,
@@ -108,6 +109,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     // U-17: co-teachers who currently teach this child add their records
     // (the owner's are read first and win a same-tool conflict).
     await coTeacherRecordStudentIds(db, assessment, resolved.student.roster_ps_id),
+    // U-18 (D-8): the sitting's class period, else the student's configured ones.
+    await sectionsForAttempt(db, assessment, attempt, resolved.student.roster_ps_id),
   );
 
   try {

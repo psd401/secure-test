@@ -14,7 +14,7 @@ interface RouteContext {
  * lib/accommodations/preview.ts. Read-only; `edit` level, the same as the
  * overrides list it sits beside (both name students and their supports).
  */
-export async function GET(_req: Request, ctx: RouteContext) {
+export async function GET(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
@@ -24,5 +24,10 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const db = getDb();
   const access = await authorizeAssessment(db, auth.session, id, "edit");
   if (!access.ok) return access.response;
-  return NextResponse.json(await buildAccommodationsPreview(db, access.assessment));
+  // U-18: `?section=<ps_id>` — one class period under its own rule.
+  const section = new URL(req.url).searchParams.get("section");
+  if (section !== null && (section.length === 0 || section.length > 64)) {
+    return NextResponse.json({ ok: false, error: "invalid_section" }, { status: 400 });
+  }
+  return NextResponse.json(await buildAccommodationsPreview(db, access.assessment, { section }));
 }

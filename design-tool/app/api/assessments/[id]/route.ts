@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/requireDraft";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { validateSectionAccommodations } from "@/lib/accommodations/sections";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -195,6 +196,23 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     if (currentCA.length > 0) {
       const newAllowed = new Set(body.allowed_accommodations);
       patch.construct_altering = currentCA.filter((id) => newAllowed.has(id));
+    }
+  }
+
+  // U-18: per-period settings are checked against the test's list as it will
+  // be after this PATCH (13.8 grants within the period's list; a school /
+  // district test's period list only narrows).
+  if (body.section_accommodations !== undefined) {
+    const check = validateSectionAccommodations(
+      body.section_accommodations,
+      (body.allowed_accommodations ?? access.assessment.allowed_accommodations ?? []) as string[],
+      access.assessment.assigned_scope,
+    );
+    if (!check.ok) {
+      return NextResponse.json(
+        { ok: false, error: check.error, section_ps_id: check.section_ps_id, tool_id: check.tool_id },
+        { status: 400 },
+      );
     }
   }
 

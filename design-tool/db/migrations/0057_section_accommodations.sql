@@ -1,0 +1,1 @@
+ALTER TABLE "assessments" ADD COLUMN "section_accommodations" jsonb DEFAULT '{}'::jsonb NOT NULL;

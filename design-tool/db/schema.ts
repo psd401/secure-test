@@ -69,6 +69,15 @@ export const assessments = pgTable(
     construct_altering: jsonb("construct_altering")
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // U-18 (docs/coteach-and-section-accommodations-design.md): per class
+    // period — `{ "<section_ps_id>": { allowed: string[] | null, grants:
+    // [{ tool_id, value }] } }`. `allowed: null` = use the list above.
+    // Shape and invariants in lib/accommodations/sections.ts. Never carried
+    // by exports, Duplicate or Share copies (13.10).
+    section_accommodations: jsonb("section_accommodations")
+      .$type<Record<string, { allowed: string[] | null; grants: { tool_id: string; value: string }[] }>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     status: text("status").notNull().default("draft"),
     // Slice 63: who assigned this assessment, which decides whether a teacher's
     // per-student accommodation override may exceed the assessment's allowed

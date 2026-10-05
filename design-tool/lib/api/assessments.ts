@@ -2,6 +2,7 @@ import { z } from "zod";
 import { StudentLayoutSchema } from "@secure-test/schema";
 import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
+import { SectionAccommodationsSchema } from "@/lib/accommodations/sections";
 
 const AccommodationId = z
   .string()
@@ -54,6 +55,9 @@ export const UpdateAssessmentBody = z
     answers_release: z.enum(ANSWERS_RELEASE_MODES).optional(),
     allowed_accommodations: AllowedAccommodations.optional(),
     construct_altering: ConstructAltering.optional(),
+    // U-18: the whole per-period value, replaced on every PATCH (the Allowed
+    // tab autosaves it). Cross-field rules in the route.
+    section_accommodations: SectionAccommodationsSchema.optional(),
     status: z.enum(["draft", "published"]).optional(),
     // Archive (docs/archive-and-delete-design.md, D-3). Status-only, like the
     // unlock: the route refuses a body that carries `archived` together with

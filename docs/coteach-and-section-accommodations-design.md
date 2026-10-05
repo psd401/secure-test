@@ -267,3 +267,25 @@ once after 4.
   page; Who gets what tags "From <name>'s record" (names = the address's
   local part — the app has no staff names). Rows 459–461 ✅ on local
   `_demo`, 462–465 open. Design-tool 2886 pass.
+- 2026-10-05 — **slice 3 BUILT** (U-18 server, not deployed): **migration
+  0057** `assessments.section_accommodations jsonb not null default '{}'`.
+  `lib/accommodations/sections.ts`: `SectionAccommodationsSchema`,
+  `validateSectionAccommodations` (district / school period lists only
+  narrow; grants within the period's list, On values, no repeats),
+  `ruleForSections` (period list replaces the test's; several configured
+  periods union; narrow-only re-applied at resolve time), `configuredSectionsOf`,
+  `sectionsForAttempt` (the sitting's section when named, else the student's
+  current configured periods). `explainAccommodations` applies `rule.grants`
+  after the record (the record's own value kept) and before exceptions;
+  reports `grantedBySection`; an Off exception's removal of a grant counts in
+  `removedByException`. Delivery passes the periods; `PATCH
+  /api/assessments/[id]` takes `section_accommodations` (whole value, locked
+  while Published like the allowed list) and answers 400 with the error, the
+  period and the tool; the preview takes `?section=` (that period's current
+  students only, `others_count` from its enrolment) and flags `from_section`.
+  Exports / Duplicate / Share copies carry nothing (explicit field lists —
+  tested). **Reading:** an exception still has to be a tool on the TEST's
+  allowed list (`POST …/overrides` unchanged), so a tool only a period allows
+  cannot get a per-student exception; widen the test's list or grant the
+  period. Tests: `test/section-accommodations.test.ts` (13). Design-tool
+  2899 pass. Migration applied to dev, test and `_demo`.
