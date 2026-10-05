@@ -91,6 +91,10 @@ const NO_OWNED_ROW = new Map<string, string>([
   [join("auth", "exchange"), "login surface — no principal yet"],
   [join("auth", "logout"), "login surface — no principal yet"],
   [join("health"), "ALB probe; reads nothing"],
+  // Row GD slice 2: Google Drive authorization for the caller's OWN Google
+  // account. The token lands in the caller's cookie; no row is read or written.
+  [join("google", "drive", "start"), "Drive authorization for the caller's own account"],
+  [join("google", "drive", "callback"), "Drive authorization for the caller's own account"],
   [join("debug", "throw"), "row 67's knob; reads nothing, writes nothing"],
   [join("feedback"), "writes a feedback row of the caller's own"],
   [
@@ -368,6 +372,8 @@ describe("ownership enforcement across every teacher route", () => {
       [join("ai", "generate-item"), "llm_authoring_disabled on the assessment"],
       [join("ai", "generate-items"), "llm_authoring_disabled on the assessment (BG slice 3)"],
       [join("ai", "suggest-standards"), "llm_authoring_disabled on the assessment (BG slice 5)"],
+      [join("google", "drive", "start"), "an act-as session may not grant Drive (GD slice 2)"],
+      [join("google", "drive", "callback"), "an act-as session may not grant Drive (GD slice 2)"],
     ]);
     const wrong: string[] = [];
     for (const { path, source } of staffRoutes) {

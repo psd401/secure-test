@@ -185,3 +185,13 @@ D-10).
   OAuth client before, including `gmail.send`. R-1 changes: request
   `drive.file` WITHOUT `include_granted_scopes`, and check that the
   granted scope list is exactly what was asked for.
+- 2026-10-05 — **slice 2 BUILT** (`lib/googleDocs/driveAuth.ts`,
+  `GET /api/google/drive/start` + `/callback`): drive.file alone without
+  `include_granted_scopes`, a granted list other than exactly drive.file
+  refused (`scope_mismatch`), the consenting Google account must equal the
+  session's email (`about.get`, `wrong_account`), the one-hour token in an
+  encrypted (`dir` / A256GCM) httpOnly cookie bound to the session's sub on
+  path `/api/assessments`, act-as refused 403, every outcome a redirect to
+  `next?gdrive=<outcome>`. 17 tests. **Checked against real Google on local
+  dev the same day:** the callback carried `scope=…/auth/drive.file` only
+  and landed on `/dashboard?gdrive=ok`.
