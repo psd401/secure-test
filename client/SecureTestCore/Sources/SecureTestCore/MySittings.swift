@@ -33,6 +33,11 @@ public struct MySittings: Decodable, Equatable, Sendable {
         /// demand. An unparseable date degrades the display, never the row.
         public let expiresAt: String?
         public let attempt: Attempt?
+        /// U-15: the in-progress attempt's time is up (deadline + 30 s grace)
+        /// — the server's word for what `JoinOutcome` refuses on after the
+        /// fetch. Optional on the wire: a server from before the field omits
+        /// it, read as false.
+        public let timeRanOut: Bool?
 
         public var expiryDate: Date? {
             expiresAt.flatMap(ISO8601.parse)
@@ -48,6 +53,7 @@ public struct MySittings: Decodable, Equatable, Sendable {
             case sectionLabel = "section_label"
             case expiresAt = "expires_at"
             case attempt
+            case timeRanOut = "time_ran_out"
         }
     }
 
@@ -87,7 +93,15 @@ public struct SittingRowModel: Equatable, Sendable {
         /// Submitted — rendered as done, no button (the contract's "a
         /// submitted attempt should render as done, not as Join").
         case done
+        /// U-15: in progress but the time is up — Resume shown disabled with
+        /// "Time ran out — ask your teacher". The teacher's Adjust time (or
+        /// No time limit) clears it on the next refresh.
+        case timeRanOut
     }
+
+    /// U-15: the note beside the disabled Resume.
+    public static let timeRanOutNote = "Time ran out — ask your teacher"
+
 
     public let testSessionID: String
     public let assessmentID: String
@@ -134,7 +148,7 @@ public struct SittingRowModel: Equatable, Sendable {
 
         switch sitting.attempt?.status {
         case "submitted": state = .done
-        case .some: state = .resume
+        case .some: state = sitting.timeRanOut == true ? .timeRanOut : .resume
         case nil: state = .join
         }
     }

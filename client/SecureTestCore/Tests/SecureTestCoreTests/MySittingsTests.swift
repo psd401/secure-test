@@ -63,6 +63,7 @@ final class MySittingsTests: XCTestCase {
         expiresAt: String? = "2026-08-27T22:08:54.000Z",
         attemptStatus: String? = nil,
         code: String? = nil,
+        timeRanOut: Bool? = nil,
     ) throws -> MySittings.Sitting {
         var object: [String: Any] = [
             "test_session_id": "ts-1",
@@ -74,6 +75,7 @@ final class MySittingsTests: XCTestCase {
         object["teacher_email"] = teacher
         object["expires_at"] = expiresAt
         object["code"] = code
+        object["time_ran_out"] = timeRanOut
         if let attemptStatus {
             object["attempt"] = ["id": "at-1", "status": attemptStatus]
         }
@@ -85,6 +87,20 @@ final class MySittingsTests: XCTestCase {
         XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: nil)).state, .join)
         XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: "in_progress")).state, .resume)
         XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: "submitted")).state, .done)
+    }
+
+    /// U-15: an in-progress attempt past its deadline reads as time ran out;
+    /// the flag means nothing on any other state, and an older server's
+    /// missing field is false.
+    func testTimeRanOutState() throws {
+        XCTAssertEqual(
+            SittingRowModel(try sitting(attemptStatus: "in_progress", timeRanOut: true)).state,
+            .timeRanOut,
+        )
+        XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: "in_progress", timeRanOut: false)).state, .resume)
+        XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: "submitted", timeRanOut: true)).state, .done)
+        XCTAssertEqual(SittingRowModel(try sitting(attemptStatus: nil, timeRanOut: true)).state, .join)
+        XCTAssertNil(try JSONDecoder().decode(MySittings.self, from: Data(Self.contractJSON.utf8)).sittings[0].timeRanOut)
     }
 
     func testDetailPrefersTheSectionLabelAndNamesTheTeacher() throws {

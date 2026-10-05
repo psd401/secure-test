@@ -516,6 +516,23 @@ final class SessionEntryViewController: NSObject {
             )
             rowButtons.append(button)
             trailing = button
+        case .timeRanOut:
+            // U-15: the row stays so the student sees the test, but Resume is
+            // disabled — the server refuses past the deadline, and v1.5.0
+            // refuses before `begin()`. Kept out of `rowButtons` so a failed
+            // join elsewhere does not re-enable it.
+            let note = NSTextField(labelWithString: SittingRowModel.timeRanOutNote)
+            note.font = .systemFont(ofSize: 12, weight: .semibold)
+            note.textColor = PSDColor.inkSoft
+            let button = PSDPrimaryButton(title: "Resume", target: nil, action: nil)
+            button.isEnabled = false
+            let group = NSStackView(views: [note, button])
+            group.orientation = .horizontal
+            group.alignment = .centerY
+            group.spacing = 8
+            group.setAccessibilityElement(true)
+            group.setAccessibilityLabel("\(row.title): \(SittingRowModel.timeRanOutNote)")
+            trailing = group
         }
         trailing.translatesAutoresizingMaskIntoConstraints = false
         trailing.setContentHuggingPriority(.required, for: .horizontal)

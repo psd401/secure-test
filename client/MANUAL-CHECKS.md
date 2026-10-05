@@ -2106,3 +2106,16 @@ Release build:
 | **EX-3.** Resume inside the 30 s grace after the deadline | `page load gate: held … (EX-3)`; no questions drawn at any point; the time-up sheet | ❌ 2026-10-05 — Release 1.5.0 (`6cab230`), real AAC session against the origin (fixture B, resumed 5 s past the deadline): no `held` line, `page load gate: opened`, the questions flashed. Cause: `onState` hops to the main actor in a Task, and `didBegin` issues the owed end() and clears `endDeferred` before the hop runs — the host read the flag too late. Fixed in the next commit (the flag is captured inside `onState`, before the hop); re-run below |
 | **No feedback.** Level Off; hand in, press Back to your tests at once | Leaves at once as before (`leaving the attempt screen`) | ✅ 2026-10-05 — Release 1.5.0 (`6cab230`), real AAC session against the origin (fixture C): `handed in` → `end() called` → `leaving the attempt screen` at once |
 | **EX-3 re-run.** Same, on the build with the flag captured before the hop | `page load gate: held … (EX-3)`; no questions drawn; the time-up sheet | ✅ 2026-10-05 — Release 1.5.0 (`1bb469a`), real AAC session against the origin (fixture B, resumed 16 s past the deadline): `end() requested while STARTING — deferred` → `DID BEGIN with an end deferred` → `page load gate: held … (EX-3); the test is not drawn` → `DID END` → `page load gate settled after the attempt screen went away — discarded`; no questions seen; the time-up sheet |
+
+## U-12 + U-15 — one row per test; "Time ran out" (2026-10-05, next release)
+
+Server half (one row per assessment, `time_ran_out`) reaches every client
+version once deployed; the disabled Resume + note needs the next release.
+
+| Check | Expected | Result |
+|---|---|---|
+| **One row per test.** Teacher opens two sittings of one assessment (all sections + one section) | Your tests lists the test once (on ANY client version once the server is deployed) | NOT RUN |
+| **Resume lands on the attempt's sitting.** Start the test through the row, quit, teacher opens a third sitting, relaunch | One row, Resume; joins the same attempt with answers restored | NOT RUN |
+| **Time ran out.** Timed test, let the time run out, quit, relaunch and sign in again | Row shows "Time ran out — ask your teacher" beside a disabled Resume; VoiceOver reads "<title>: Time ran out — ask your teacher" | NOT RUN |
+| **Cleared by the teacher.** From the row above, teacher Adjust time → a later time (or No time limit), student presses Refresh / relaunches | Row returns to an enabled Resume; joining works | NOT RUN |
+
