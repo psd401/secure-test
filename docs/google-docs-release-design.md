@@ -264,3 +264,9 @@ D-10).
   HTML import gives a bare `<p>` no space after, so paragraphs ran together
   — fixed (`PARAGRAPH_OPEN` with a 10 pt bottom margin on body paragraphs),
   checked in a new Doc.
+- 2026-10-05 — **rows 431 + 443 ✅ locally** (431: owner yes; view-level
+  co-teacher, act-as, no-essay assessment no; 443: a missing section folder
+  is remade, simulated through the stored id). **Open, not runnable from
+  the session:** 432's Drive email (the demo student's inbox), 441
+  (co-teacher send into their own Drive — a second staff Google account)
+  and 442 (picking another Google account at consent).
