@@ -21,6 +21,7 @@ import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink } from "../lib/log";
 import {
+  PARAGRAPH_OPEN,
   buildDocHtml,
   docTitle,
   plainContent,
@@ -148,8 +149,9 @@ describe("content", () => {
 
   test("the essay alone when every box is off; paragraphs and line breaks kept", () => {
     const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [essay], contents: NONE });
-    expect(html).toContain("<p>Para one line one.<br>Line two.</p>");
-    expect(html).toContain("<p>Para two.</p>");
+    // GD-1: each body paragraph carries its own space after.
+    expect(html).toContain(`${PARAGRAPH_OPEN}Para one line one.<br>Line two.</p>`);
+    expect(html).toContain(`${PARAGRAPH_OPEN}Para two.</p>`);
     for (const absent of ["Argue it.", "Read both.", "Alpha text", "3 of 4", "See me.", "Solid overall.", "Clear claim."]) {
       expect(html).not.toContain(absent);
     }

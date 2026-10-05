@@ -259,3 +259,8 @@ D-10).
   estimate** (James: options b + c — no real section is sent just to time
   it); `google_docs_released` now logs `duration_ms`, to be read on the
   first real class send. Needs a deploy to reach the origin.
+- 2026-10-05 — **row 439 ✅ locally** (approved AI score: criterion feedback +
+  overall shown; an unapproved proposal never). Reading **GD-1**: Drive's
+  HTML import gives a bare `<p>` no space after, so paragraphs ran together
+  — fixed (`PARAGRAPH_OPEN` with a 10 pt bottom margin on body paragraphs),
+  checked in a new Doc.

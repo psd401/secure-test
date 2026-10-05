@@ -84,6 +84,14 @@ export function plainContent(text: string): string {
   );
 }
 
+/**
+ * GD-1 (row 439, 2026-10-05): Drive's HTML import gives a bare `<p>` no space
+ * after it, so an essay's paragraphs ran together into one block. Body
+ * paragraphs carry their own spacing; Drive keeps an inline margin as
+ * "space after".
+ */
+export const PARAGRAPH_OPEN = '<p style="margin:0 0 10pt 0">';
+
 /** Blank lines split paragraphs; single newlines stay as line breaks. */
 export function paragraphs(text: string): string {
   return text
@@ -91,7 +99,7 @@ export function paragraphs(text: string): string {
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter((p) => p !== "")
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .map((p) => `${PARAGRAPH_OPEN}${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
     .join("\n");
 }
 
