@@ -176,6 +176,14 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// for the log, never page content.
     var onCouldNotStartSecurely: ((String) -> Void)?
 
+    /// EX-2 (2026-10-05): this attempt's time had already run out when it
+    /// arrived — either the bundle's own deadline is past (beyond the server's
+    /// 30 s grace) or the delivery route refused it 409 `time_expired`. Fired
+    /// BEFORE `onBundleLoaded`, so no secure session is begun and no page is
+    /// built; the host goes home and says so. The string is a short stable
+    /// token for the log ("bundle" or "server").
+    var onTimeRanOutBeforeStart: ((String) -> Void)?
+
     /// Security slice 1: set by the host when this controller leaves the
     /// screen (`showEntry`). The fetch Task below checks it after every
     /// suspension, so a gate that opens late — after an emergency end has
@@ -332,6 +340,17 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     self.bundle = bundle
                     self.bundleReceivedAt = Date()
                     self.log("bundle fetched: \(bundle.items.count) items")
+                    // EX-2: an attempt whose time already ran out never gets a
+                    // secure session — before the STT pre-flight (no prompts for
+                    // a test that will not open) and before `onBundleLoaded`,
+                    // which is what calls begin(). Older servers still answer
+                    // 200 for such an attempt, so this check stays even now
+                    // that the route refuses it.
+                    if bundle.isPastDeadline(receivedAt: self.bundleReceivedAt ?? Date()) {
+                        self.log("time limit: already past on arrival — not starting the secure session")
+                        self.onTimeRanOutBeforeStart?("bundle")
+                        return
+                    }
                     self.log("tts: \(TextToSpeechScope(accommodations: bundle.accommodations).logDescription)")
                     // STT slice 3 (PoC-A finding #16): the microphone and
                     // speech-recognition prompts and the transcriber's assets
@@ -395,6 +414,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     }
                     self.loadHostPage(AssessmentPage.html(
                         title: bundle.title, bundleJSON: json, speechToText: self.speechToText))
+                } catch let error as APIError where error.isTimeExpired {
+                    // EX-2: the delivery route refused the attempt as past its
+                    // deadline. Not a fetch failure — the expected answer for a
+                    // resume after time ran out — so no error log line.
+                    guard !self.isRetired else { return }
+                    self.log("time limit: server refused the bundle (time_expired) — not starting the secure session")
+                    self.onTimeRanOutBeforeStart?("server")
                 } catch {
                     // Refusing beats rendering a partial test: a student handed
                     // fewer items than assigned has no way to know.

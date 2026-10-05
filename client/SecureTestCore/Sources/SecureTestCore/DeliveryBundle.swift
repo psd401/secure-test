@@ -225,6 +225,31 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
         return receivedAt.addingTimeInterval(endsAt.timeIntervalSince(sentAt))
     }
 
+    /// EX-2 (`client/MANUAL-CHECKS.md`, 2026-10-05): the server's grace past a
+    /// deadline. Its `isPastDeadline` refuses answers only after `deadline +
+    /// 30 s`, so the client refuses a start on the same terms — an attempt
+    /// inside that window can still save what it has.
+    public static let deadlineGrace: TimeInterval = 30
+
+    /// EX-2: true only when this attempt HAS a deadline and `now` is beyond it
+    /// by more than `grace`. A student resuming an attempt whose time already
+    /// ran out used to be put into a secure session that the countdown ended
+    /// at once — "Time is up." eleven times in a row for one student. The host
+    /// asks this before `begin()` and refuses instead.
+    ///
+    /// Measured the same way as `deadline(receivedAt:)` — the server's own
+    /// `ends_at − server_now` added to this Mac's clock at receipt — so a
+    /// skewed clock neither refuses a live attempt nor admits a dead one. No
+    /// limit (or an unparseable one) is never past.
+    public func isPastDeadline(
+        receivedAt: Date,
+        now: Date = Date(),
+        grace: TimeInterval = DeliveryBundle.deadlineGrace
+    ) -> Bool {
+        guard let deadline = deadline(receivedAt: receivedAt) else { return false }
+        return now > deadline.addingTimeInterval(grace)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case title, items, assets, accommodations, layout
         case testId = "test_id"

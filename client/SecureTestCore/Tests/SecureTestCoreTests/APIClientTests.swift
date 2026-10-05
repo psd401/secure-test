@@ -129,6 +129,23 @@ final class APIClientTests: XCTestCase {
         }
     }
 
+    /// EX-2: the delivery route's 409 for an attempt past its deadline is
+    /// told apart from every other refusal, so the app can go home instead of
+    /// showing "This test could not be opened."
+    func testADeliveryRefusedAsTimeExpiredIsRecognised() async {
+        let transport = RecordingTransport(status: 409, body: #"{"ok":false,"error":"time_expired"}"#)
+        do {
+            _ = try await client(transport).fetchBundle(assessmentID: "a")
+            XCTFail("expected refusal")
+        } catch {
+            let apiError = error as? APIError
+            XCTAssertEqual(apiError, .refused(status: 409, code: "time_expired"))
+            XCTAssertEqual(apiError?.isTimeExpired, true)
+            XCTAssertEqual(apiError?.isSittingClosed, false)
+        }
+        XCTAssertFalse(APIError.refused(status: 409, code: "sitting_closed").isTimeExpired)
+    }
+
     func testARefusalWithNoParseableBodyStillReportsTheStatus() async {
         let transport = RecordingTransport(status: 500, body: "<html>oops")
         do {
@@ -194,6 +211,14 @@ final class JoinErrorMessageTests: XCTestCase {
             XCTAssertTrue(message(code).lowercased().contains("teacher"))
             XCTAssertFalse(message(code).lowercased().contains("try again"))
         }
+    }
+
+    /// EX-2: a join refused as `time_expired` reads the same words as the
+    /// sheet the app shows for the delivery route's refusal.
+    func testTimeExpiredReadsTheTimeRanOutCopy() {
+        let text = message("time_expired")
+        XCTAssertTrue(text.contains(JoinErrorCopy.timeRanOutMessage))
+        XCTAssertTrue(text.contains(JoinErrorCopy.timeRanOutInformative))
     }
 
     func testAnUnrecognisedCodeStillProducesUsableWords() {

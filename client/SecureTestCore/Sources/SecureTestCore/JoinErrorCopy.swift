@@ -8,6 +8,15 @@ import Foundation
 /// versus fetch the teacher — and a student who reads the same sentence for
 /// both will do the wrong one.
 public enum JoinErrorCopy {
+    /// EX-2 (2026-10-05): the sheet a student reads when the attempt they
+    /// joined or resumed is already past its time limit. Shown instead of a
+    /// secure session that would end the moment it began. One source for the
+    /// client-side check, the delivery route's 409 `time_expired` and the join
+    /// status line.
+    public static let timeRanOutMessage = "Your time for this test has run out."
+    public static let timeRanOutInformative =
+        "Your answers are saved. Ask your teacher to adjust your time if you need to keep working."
+
     public static func message(for error: Error, isPractice: Bool = false, isStaff: Bool = false) -> String {
         guard let apiError = error as? APIError else {
             return "Something went wrong. Tell your teacher."
@@ -67,6 +76,10 @@ public enum JoinErrorCopy {
             // Slice 80: the exchange refused the Google account — the one
             // failure where the fix is on the student's side of the screen.
             return "That Google account cannot be used here. Sign in with your school account."
+        case "time_expired":
+            // EX-2: the status line has room for one sentence pair; the same
+            // words as the sheet.
+            return "\(timeRanOutMessage) \(timeRanOutInformative)"
         case "identity_conflict":
             return "There is a problem with your account. Tell your teacher."
         default:

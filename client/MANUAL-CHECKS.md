@@ -1819,6 +1819,10 @@ deferred until `DID BEGIN` (finding 8.3's path), `page load gate: opened` logged
 between the deferred `end()` and `DID END`, then the app returned home. No content
 outside a lock, and the server refuses writes — but the client could refuse before
 `begin()` when the bundle's deadline is already past (v1.3.6 candidate).
+**BUILT 2026-10-05** (unreleased; rows in "EX-2 — refuse an expired attempt
+before begin() (2026-10-05)" below): the client refuses before `begin()` when
+the bundle's deadline is past by more than the server's 30 s grace, and treats
+the delivery route's 409 `time_expired` the same way.
 
 ## v1.3.5 — No time limit mid-test (2026-09-24)
 
@@ -2049,3 +2053,30 @@ instant feedback received (answers)` → `lockdown ending: hand-in confirmed` �
 `DID END` → `instant feedback: showing the results page (answers, 4 rows)`,
 and each student hand-in wrote one `feedback_shown` event.
 
+## EX-2 — refuse an expired attempt before begin() (2026-10-05)
+
+Reading EX-2 above, after a real student hit "Time is up." eleven times in a
+row resuming an attempt whose time had already run out. The controller checks
+`DeliveryBundle.isPastDeadline(receivedAt:)` (deadline + `deadlineGrace` = 30 s,
+the server's own grace) right after the bundle arrives — before the STT
+pre-flight and before `onBundleLoaded`, which is what calls `begin()` — and a
+delivery refused 409 `time_expired` (newer servers) takes the same path:
+`AssessmentViewController.onTimeRanOutBeforeStart` →
+`AppDelegate.timeRanOutBeforeStart(via:)` → one `time_expired` event (detail
+`{ at: arrival, via: bundle | server }`) → `showEntry()` → the sheet "Your time
+for this test has run out." / "Your answers are saved. Ask your teacher to
+adjust your time if you need to keep working." A join refused `time_expired`
+shows the same words in the status line. Core logic unit-tested
+(`DeliveryBundleTests`, `APIClientTests`, `JoinErrorMessageTests`); the app
+wiring is hand-run only. Set an override in the past with Adjust time on the
+Monitor (or let a short limit run out, then rejoin).
+
+| Check | Expected | Result |
+|---|---|---|
+| **Expired, older server.** Server that answers 200 for an expired attempt (any rev before the delivery-route change); attempt's deadline more than 30 s in the past; Resume from Your tests | stderr has `time limit: already past on arrival — not starting the secure session` and NO `lockdown begin`, `DID BEGIN` or `page load gate` line; the "Loading your test…" notice gives way to Your tests with the sheet "Your time for this test has run out." / "Your answers are saved. Ask your teacher to adjust your time if you need to keep working."; no test content ever drawn; OK leaves Your tests usable (another test joins normally); the teacher's timeline shows one `time_expired` | NOT RUN |
+| **Expired, newer server.** Same attempt against a server whose delivery route answers 409 `time_expired` | stderr has `server refused the bundle (time_expired)`, no `BUNDLE FETCH FAILED`, no `lockdown begin` / `DID BEGIN`; the same sheet and the same landing; no "This test could not be opened." page | NOT RUN |
+| **Expired, join refused.** If a server ever refuses the join POST itself with `time_expired` | Status line on Your tests reads the same two sentences; nothing begins | NOT RUN |
+| **Within the grace.** Override set so the attempt is under 30 s past its deadline on arrival (or a limit that ends while the bundle loads) | The session begins as today; the countdown ends it at once with "Time is up." — the grace mirrors the server's, which still accepts the last saves | NOT RUN |
+| **No time limit.** Untimed assessment, join / resume | Unaffected: `lockdown begin` → `DID BEGIN` → `page load gate: opened`, the test as before | NOT RUN |
+| **Future deadline.** Timed assessment with time left | Unaffected: begins, countdown shows the remaining time | NOT RUN |
+| **Adjust time then rejoin.** After the sheet, the teacher moves the deadline into the future; student resumes | Begins normally with the new time left | NOT RUN |

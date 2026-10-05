@@ -67,6 +67,17 @@ extension APIError {
         if case .refused(_, let code) = self { return code == Self.sittingClosedCode }
         return false
     }
+
+    /// EX-2 (2026-10-05): the server's error string for "this attempt's time
+    /// ran out" — the delivery route answers it 409 for an attempt past its
+    /// deadline + grace, so the client never begins a secure session for it.
+    /// The response routes already used it (the spool drops such writes).
+    public static let timeExpiredCode = "time_expired"
+
+    public var isTimeExpired: Bool {
+        if case .refused(_, let code) = self { return code == Self.timeExpiredCode }
+        return false
+    }
 }
 
 /// Server error bodies are `{ ok: false, error: "..." }` throughout the API.

@@ -436,4 +436,59 @@ final class DeliveryDecodingEdgeCaseTests: XCTestCase {
         """#
         XCTAssertNil(try DeliveryBundle.decode(from: Data(unparseable.utf8)).deadline())
     }
+
+    // MARK: EX-2 — refuse an expired attempt before begin()
+
+    /// 45 minutes of server time left at send; every case below measures from
+    /// a fixed receipt instant so only `now` moves.
+    private func timedBundle() throws -> DeliveryBundle {
+        let json = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T18:45:00.000Z",
+         "server_now":"2026-09-11T18:00:00.000Z"}
+        """#
+        return try DeliveryBundle.decode(from: Data(json.utf8))
+    }
+
+    func testPastDeadlineBeyondTheGraceIsPast() throws {
+        let received = Date(timeIntervalSince1970: 1_000_000)
+        let bundle = try timedBundle()
+        XCTAssertTrue(bundle.isPastDeadline(receivedAt: received, now: received.addingTimeInterval(45 * 60 + 31)))
+        // An override already behind the server's clock: negative duration.
+        let expired = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T17:00:00.000Z",
+         "server_now":"2026-09-11T18:00:00.000Z"}
+        """#
+        let late = try DeliveryBundle.decode(from: Data(expired.utf8))
+        XCTAssertTrue(late.isPastDeadline(receivedAt: received, now: received))
+    }
+
+    /// The server refuses answers only after deadline + 30 s; an attempt
+    /// inside that window still starts.
+    func testPastDeadlineWithinTheGraceIsNotPast() throws {
+        let received = Date(timeIntervalSince1970: 1_000_000)
+        let bundle = try timedBundle()
+        XCTAssertFalse(bundle.isPastDeadline(receivedAt: received, now: received.addingTimeInterval(45 * 60 + 29)))
+        XCTAssertEqual(DeliveryBundle.deadlineGrace, 30)
+        // A bundle sent 10 s after its deadline is inside the grace on arrival.
+        let justOver = #"""
+        {"test_id":"t","title":"T","items":[],
+         "time_limit_ends_at":"2026-09-11T18:00:00.000Z",
+         "server_now":"2026-09-11T18:00:10.000Z"}
+        """#
+        XCTAssertFalse(try DeliveryBundle.decode(from: Data(justOver.utf8))
+            .isPastDeadline(receivedAt: received, now: received))
+    }
+
+    func testFutureDeadlineIsNotPast() throws {
+        let received = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertFalse(try timedBundle().isPastDeadline(receivedAt: received, now: received))
+    }
+
+    func testNoTimeLimitIsNeverPast() throws {
+        let json = #"{"test_id":"t","title":"T","items":[]}"#
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        XCTAssertFalse(bundle.isPastDeadline(receivedAt: Date(timeIntervalSince1970: 0), now: .distantFuture))
+    }
 }

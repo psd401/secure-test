@@ -602,6 +602,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onCouldNotStartSecurely = { [weak self] reason in
             self?.couldNotStartSecurely(reason)
         }
+        // EX-2: the attempt's time had already run out on arrival. Fired before
+        // `onBundleLoaded`, so lockdown was never begun.
+        controller.onTimeRanOutBeforeStart = { [weak self] source in
+            self?.timeRanOutBeforeStart(via: source)
+        }
         controller.onTimerDismissed = { [weak self] in
             // D-3: the banner is hidden for the rest of the attempt. The clock
             // keeps running — the notices and the end of the session at zero
@@ -1226,6 +1231,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = "Couldn't start a secure session"
         alert.informativeText = "Your test didn't open. Ask your teacher for help."
+        alert.addButton(withTitle: "OK")
+        presentOnEntryWindow(alert)
+    }
+
+    /// EX-2 (`client/MANUAL-CHECKS.md`, 2026-10-05): the attempt joined or
+    /// resumed was already past its deadline (plus the server's 30 s grace)
+    /// when its bundle arrived, or the delivery route refused it 409
+    /// `time_expired`. A real student hit "Time is up." eleven times in a row
+    /// because each resume began a secure session the countdown ended at
+    /// once. Now nothing begins: no `begin()`, no countdown, no page — the
+    /// controller returned before `onBundleLoaded` and before the page-load
+    /// gate, so nothing is waiting on it — and the student goes home told.
+    ///
+    /// The `.timeExpired` event is the same one the countdown's zero reports;
+    /// `at: arrival` tells the teacher's timeline this one ended nothing. It
+    /// needs no session — the reporter's Task outlives `showEntry()` dropping
+    /// the reporter.
+    private func timeRanOutBeforeStart(via source: String) {
+        guard screen == .serverAttempt, !quitInProgress else { return }
+        Self.log("time limit: already past on arrival (\(source)) — no secure session, back to Your tests")
+        eventReporter?.report(.timeExpired, detail: ["at": "arrival", "via": source])
+        // Defensive: lockdown is never begun on this path, but an earlier
+        // session still up would otherwise outlive the screen.
+        endLockdown(reason: "time already expired on arrival")
+        showEntry()
+        let alert = NSAlert()
+        alert.messageText = JoinErrorCopy.timeRanOutMessage
+        alert.informativeText = JoinErrorCopy.timeRanOutInformative
         alert.addButton(withTitle: "OK")
         presentOnEntryWindow(alert)
     }
