@@ -44,8 +44,8 @@ export function WhoGetsWhat({ assessmentId, savedKey }: { assessmentId: string; 
         Who gets what
       </h3>
       <p className="text-xs text-muted-foreground">
-        What each student will actually get on this test: their Students page record, narrowed to the tools
-        ticked above, plus any exceptions. Updates after each save.
+        What each student will actually get on this test: their Students page record (and their
+        co-teachers&apos;), narrowed to the tools ticked above, plus any exceptions. Updates after each save.
       </p>
       {error ? (
         <Alert variant="destructive">
@@ -84,6 +84,9 @@ function PreviewList({ preview }: { preview: AccommodationsPreview }) {
                     <span key={tool.text} className="inline-flex flex-wrap items-center gap-1">
                       <Badge variant="outline">{tool.text}</Badge>
                       {tool.exception ? <Badge variant="info">Exception</Badge> : null}
+                      {tool.fromRecordOf ? (
+                        <Badge variant="neutral">From {tool.fromRecordOf}&apos;s record</Badge>
+                      ) : null}
                       {tool.constructAltering ? <Badge variant="warning">Changes what&apos;s measured</Badge> : null}
                     </span>
                   ))

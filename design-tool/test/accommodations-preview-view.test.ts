@@ -1,6 +1,6 @@
 // U-16 slice 2: the words of the "Who gets what" preview.
 import { describe, expect, test } from "bun:test";
-import { othersLine, previewRows, toolSetting } from "../lib/accommodations/previewView";
+import { alsoOnRecordLine, othersLine, previewRows, toolSetting } from "../lib/accommodations/previewView";
 import type { AccommodationsPreview, PreviewStudent } from "../lib/accommodations/preview";
 
 const student = (over: Partial<PreviewStudent>): PreviewStudent => ({
@@ -32,7 +32,7 @@ describe("Who gets what — words", () => {
       ],
     });
     expect(row!.heading).toBe("Ada");
-    expect(row!.tools).toEqual([{ text: "Spell Check", exception: true, constructAltering: true }]);
+    expect(row!.tools).toEqual([{ text: "Spell Check", exception: true, constructAltering: true, fromRecordOf: null }]);
     expect(row!.removedLine).toBe("Switched off for this test: Zoom (in-app)");
     expect(row!.notAllowedLine).toBe("On their record, not allowed here: Color Contrast: Black on Rose");
   });
@@ -54,5 +54,26 @@ describe("Who gets what — words", () => {
     expect(othersLine(p(null))).toBe("Everyone else gets none.");
     expect(othersLine(p(1))).toBe("1 other student on your class lists gets none.");
     expect(othersLine(p(27))).toBe("27 other students on your class lists get none.");
+  });
+
+  test("U-17: a co-teacher's tool and record are named by the address's local part", () => {
+    const [row] = previewRows({
+      others_count: 0,
+      students: [
+        student({
+          tools: [{ tool_id: "zoom", value: "2X", exception: false, construct_altering: false, from_record_of: "teacher.one@psd401.net" }],
+        }),
+      ],
+    });
+    expect(row!.tools[0]!.fromRecordOf).toBe("teacher.one");
+    expect(
+      alsoOnRecordLine({
+        email: "teacher.one@psd401.net",
+        tools: [
+          { tool_id: "spell_check", value: "On" },
+          { tool_id: "zoom", value: "2X" },
+        ],
+      }),
+    ).toBe("Also on teacher.one's record: Spell Check, Zoom (in-app): 2X");
   });
 });

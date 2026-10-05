@@ -24,6 +24,7 @@ import {
   stampOverlayOwnerEmail,
 } from "../lib/accommodations/coTeacherRecords";
 import { buildAccommodationsPreview } from "../lib/accommodations/preview";
+import { otherTeachersRecords } from "../lib/accommodations/sharedRecords";
 import {
   BIOLOGY_STUDENT,
   OTHER_STUDENT,
@@ -256,3 +257,71 @@ describe("13.3: owner_email stamp", () => {
     expect(rows.get(foreign.id)).toBeNull();
   });
 });
+
+async function exceptionStudents(assessmentId: string) {
+  const { GET } = await import("../app/api/assessments/[id]/exception-students/route");
+  return GET(new Request("http://localhost/x"), { params: Promise.resolve({ id: assessmentId }) });
+}
+
+describe("U-17 slice 2: who an exception can be added for", () => {
+  test("owner: their own records; co-teacher: the owner's plus their own for children the owner lacks", async () => {
+    const a = await seedAssessment();
+    const own = await overlay(OWNER, OTHER_TEACHER_EMAIL, { roster_ps_id: STUDENT.ps_id, ssid: STUDENT.ssid, name: "Ada" });
+    const coAda = await overlay(CO, TEACHER_EMAIL, { roster_ps_id: STUDENT.ps_id, ssid: STUDENT.ssid, name: "Ada" });
+    const coBen = await overlay(CO, TEACHER_EMAIL, { ssid: OTHER_STUDENT.ssid, name: "Ben" });
+
+    principal = { sub: OWNER, role: "staff", email: OTHER_TEACHER_EMAIL };
+    const asOwner = (await (await exceptionStudents(a.id)).json()) as { students: { id: string }[] };
+    expect(asOwner.students.map((x) => x.id)).toEqual([own.id]);
+
+    principal = { sub: CO, role: "staff", email: TEACHER_EMAIL };
+    const asCo = (await (await exceptionStudents(a.id)).json()) as { students: { id: string }[] };
+    expect(asCo.students.map((x) => x.id).sort()).toEqual([own.id, coBen.id].sort());
+    expect(asCo.students.some((x) => x.id === coAda.id)).toBe(false);
+  });
+
+  test("a teacher without edit is refused", async () => {
+    const a = await seedAssessment();
+    principal = { sub: STRANGER, role: "staff", email: "stranger@psd401.net" };
+    expect((await exceptionStudents(a.id)).status).toBe(404);
+  });
+});
+
+describe("U-17 slice 2: 'Also on X's record' (D-3)", () => {
+  test("both directions, only for children the other teacher teaches, enabled visible tools only", async () => {
+    await seedAssessment();
+    const ownAda = await overlay(OWNER, OTHER_TEACHER_EMAIL, { roster_ps_id: STUDENT.ps_id });
+    const coAda = await overlay(CO, TEACHER_EMAIL, { roster_ps_id: STUDENT.ps_id });
+    const coCy = await overlay(CO, TEACHER_EMAIL, { roster_ps_id: BIOLOGY_STUDENT.ps_id });
+    await record(ownAda.id, "color_contrast", "Black on Rose");
+    await record(coAda.id, "spell_check", "On");
+    await record(coAda.id, "zoom", "Off");
+    await record(coAda.id, "desmos_calculator", "On"); // hidden from teachers
+    await record(coCy.id, "spell_check", "On");
+
+    // The owner (teacher.two) sees teacher.one's record for Ada (taught by
+    // teacher.one) but not for Cy (teacher.one does not teach Cy).
+    const forOwner = await otherTeachersRecords(
+      getDb(),
+      { sub: OWNER, email: OTHER_TEACHER_EMAIL },
+      [STUDENT.ps_id, BIOLOGY_STUDENT.ps_id],
+    );
+    expect(forOwner.get(STUDENT.ps_id)).toEqual([
+      { email: TEACHER_EMAIL, tools: [{ tool_id: "spell_check", value: "On" }] },
+    ]);
+    expect(forOwner.has(BIOLOGY_STUDENT.ps_id)).toBe(false);
+
+    // The co-teacher sees the owner's only where the owner teaches the child:
+    // teacher.two teaches Cy, not Ada.
+    await record((await overlay(OWNER, OTHER_TEACHER_EMAIL, { roster_ps_id: BIOLOGY_STUDENT.ps_id })).id, "zoom", "2X");
+    const forCo = await otherTeachersRecords(getDb(), { sub: CO, email: TEACHER_EMAIL }, [
+      STUDENT.ps_id,
+      BIOLOGY_STUDENT.ps_id,
+    ]);
+    expect(forCo.has(STUDENT.ps_id)).toBe(false);
+    expect(forCo.get(BIOLOGY_STUDENT.ps_id)).toEqual([
+      { email: OTHER_TEACHER_EMAIL, tools: [{ tool_id: "zoom", value: "2X" }] },
+    ]);
+  });
+});
+

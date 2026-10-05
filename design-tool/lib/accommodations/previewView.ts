@@ -2,6 +2,7 @@
 // `bun test` covers them (the repo has no DOM harness).
 import { ACCOMMODATION_CATALOG, isVisibleAccommodation } from "@/lib/accommodations/catalog";
 import type { AccommodationsPreview, PreviewStudent } from "@/lib/accommodations/preview";
+import type { ToolSetting } from "@/lib/accommodations/effective";
 
 const LABEL = new Map(ACCOMMODATION_CATALOG.map((e) => [e.id, e.label]));
 
@@ -17,7 +18,7 @@ export function toolSetting(toolId: string, value: string): string {
 export interface PreviewRowView {
   studentId: string;
   heading: string;
-  tools: Array<{ text: string; exception: boolean; constructAltering: boolean }>;
+  tools: Array<{ text: string; exception: boolean; constructAltering: boolean; fromRecordOf: string | null }>;
   /** "Switched off for this test: Zoom" — an exception removed it. */
   removedLine: string | null;
   /** "On their record, not allowed here: Spell Check" */
@@ -42,6 +43,7 @@ export function previewRows(preview: AccommodationsPreview): PreviewRowView[] {
         text: toolSetting(t.tool_id, t.value),
         exception: t.exception,
         constructAltering: t.construct_altering,
+        fromRecordOf: t.from_record_of ? recordOwnerName(t.from_record_of) : null,
       })),
       removedLine:
         s.removed_by_exception.length > 0
@@ -70,4 +72,19 @@ function heading(s: PreviewStudent): string {
   if (s.ssid) return `SSID ${s.ssid}`;
   if (s.roster_ps_id) return `Student ${s.roster_ps_id}`;
   return "Unnamed student";
+}
+
+/**
+ * U-17: how a co-teacher is named beside a tool or a record — the local part
+ * of their address ("teacher.one"); the app has no staff names.
+ */
+export function recordOwnerName(email: string): string {
+  return email.split("@")[0] || email;
+}
+
+/** "Also on teacher.one's record: Spell Check, Zoom (in-app)" (D-3). */
+export function alsoOnRecordLine(other: { email: string; tools: readonly ToolSetting[] }): string {
+  return `Also on ${recordOwnerName(other.email)}'s record: ${other.tools
+    .map((t) => toolSetting(t.tool_id, t.value))
+    .join(", ")}`;
 }

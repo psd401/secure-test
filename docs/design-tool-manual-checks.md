@@ -1428,3 +1428,15 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 457 | Exceptions tab | "Add an exception", "Exceptions on this test (N)", Remove dialog says "exception" | ✅ 2026-10-05 local `_demo` (heading + table seen; Remove dialog wording read from code, not opened) |
 | 458 | On the origin after the deploy, an assessment with real TIDE records | Preview loads in under 2 s for a full class; no "not allowed here" line for a tool the Allowed tab cannot show | NOT RUN |
 
+### U-17 — co-teacher accommodation records + F-1 (2026-10-05)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 459 | Allowed tab of a test whose owner has a roster co-teacher with records for children both teach | Who gets what lists those children with the co-teacher's tools tagged "From <co-teacher>'s record"; a child with only the co-teacher's record is listed | ✅ 2026-10-05 local `_demo` (Kai Vance, Ruby Whitaker via demo.coteacher on English 10) |
+| 460 | Owner's Students page | "Also on <co-teacher>'s record: …" under the supports of each such child (on every section row the child appears in) | ✅ 2026-10-05 local `_demo` |
+| 461 | Owner's Exceptions tab | Student picker lists the owner's records, as before | ✅ 2026-10-05 local `_demo` |
+| 462 | As a CO-TEACHER with a Co-teach grant: Exceptions tab | Picker lists the owner's records plus the co-teacher's own for children the owner has none for; adding one for their own student saves, and the owner then sees it in "Exceptions on this test" | NOT RUN (second staff account; covered by `test/coteach-accommodations.test.ts`) |
+| 463 | As that co-teacher: their Students page, a child the owner also records | "Also on <owner>'s record: …" | NOT RUN (second staff account) |
+| 464 | A student page (`/dashboard/accommodations/<id>`) for such a child | A box with "Also on …" and "counts on the tests you share" | NOT RUN |
+| 465 | On the origin after the deploy: migration 0056 applied; `owner_email` filled for existing teachers | `oneoff-aurora.sh` count of `students where owner_email is null` small (teachers with no test or sitting yet) | NOT RUN |
+

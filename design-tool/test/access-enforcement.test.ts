@@ -236,6 +236,13 @@ const OWNER_SUB_ALLOWED = new Map<string, string>([
   // Class insights slice 4 (D-5): the chat thread's own column — the teacher
   // whose thread it is — read and written under the caller's sub after
   // authorizeAssessment has decided access. Not an assessment ownership check.
+  // U-17 slice 2 (F-1): after authorizeAssessment(edit), lists the
+  // ASSESSMENT OWNER's overlay rows plus the caller's own — read scopes, not
+  // an ownership refusal.
+  [
+    join("assessments", "[id]", "exception-students"),
+    "overlay lists scoped to the assessment's owner and the caller after authorizeAssessment",
+  ],
   [
     join("assessments", "[id]", "class-insights", "chat"),
     "the thread's own teacher column, scoped to the caller after authorizeAssessment",

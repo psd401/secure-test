@@ -83,9 +83,10 @@ function describe(e: unknown): string {
 
 /**
  * Per-assessment, per-student accommodation overrides. The two lists here
- * read DIFFERENT sources on purpose: the student picker is the teacher's
- * accommodation records (/api/students — TIDE import + manual), not the
- * PowerSchool class list, because an override attaches to a record.
+ * read DIFFERENT sources on purpose: the student picker is accommodation
+ * records (TIDE import + manual), not the PowerSchool class list, because an
+ * override attaches to a record — the ASSESSMENT OWNER's (U-17 / F-1), with a
+ * co-teacher's own records for children the owner has none for.
  */
 export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, onOpenAccommodations }: Props) {
   const [students, setStudents] = useState<StudentSummary[]>([]);
@@ -128,7 +129,9 @@ export function OverridesPanel({ assessmentId, allowedAccommodations, isLocked, 
     (async () => {
       try {
         const [stuRes, ovRes] = await Promise.all([
-          fetch(`/api/students`),
+          // U-17 (F-1): the owner's records (+ a co-teacher's own), not the
+          // caller's alone — exceptions attach to the owner's row.
+          fetch(`/api/assessments/${assessmentId}/exception-students`),
           fetch(`/api/assessments/${assessmentId}/overrides`),
         ]);
         if (!stuRes.ok) throw await readError(stuRes);

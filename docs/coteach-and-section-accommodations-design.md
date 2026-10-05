@@ -256,3 +256,14 @@ once after 4.
   test rewritten for D-1 (owner's Off no longer cancels; an Off exception
   does). Design-tool 2882 pass, typecheck clean. Migration applied to dev,
   test and `_demo`.
+- 2026-10-05 — **slice 2 BUILT** (UI, not deployed): `GET
+  /api/assessments/[id]/exception-students` (edit; the owner's records, plus
+  for a co-teacher their own records for children the owner lacks) feeds the
+  Exceptions tab; `lib/accommodations/sharedRecords.ts`
+  (`relatedTeacherEmails` = roster co-teachers + grantees on my tests +
+  owners of tests granted to me; `otherTeachersRecords`, enabled visible tools
+  of those teachers' records for children they currently teach) feeds "Also
+  on <name>'s record: …" on the Students page rows and a box on the student
+  page; Who gets what tags "From <name>'s record" (names = the address's
+  local part — the app has no staff names). Rows 459–461 ✅ on local
+  `_demo`, 462–465 open. Design-tool 2886 pass.

@@ -5,6 +5,8 @@ import { ChevronRight, FileSpreadsheet, Users } from "lucide-react";
 import { getDb } from "@/db/client";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { pendingTideDiffs } from "@/lib/accommodations/pendingDiffs";
+import { otherTeachersRecords, type OtherRecord } from "@/lib/accommodations/sharedRecords";
+import { alsoOnRecordLine } from "@/lib/accommodations/previewView";
 import {
   sectionLabel,
   studentDisplayName,
@@ -54,6 +56,15 @@ export default async function StudentsPage() {
     pendingTideDiffs(db, session.sub),
   ]);
   const totalRostered = roster.sections.reduce((n, s) => n + s.students.length, 0);
+  // U-17 (D-3): co-teachers' records for the same children, read-only.
+  const psIds = [
+    ...new Set([
+      ...roster.sections.flatMap((sec) => sec.students.map((s) => s.roster.ps_id)),
+      ...roster.coTaught.flatMap((g) => g.students.map((o) => o.roster_ps_id)),
+      ...roster.unlinked.map((o) => o.roster_ps_id),
+    ].filter((x): x is string => !!x)),
+  ];
+  const others = await otherTeachersRecords(db, { sub: session.sub, email: session.email ?? null }, psIds);
   const diffsByStudent = new Map<string, number>();
   for (const d of diffs) diffsByStudent.set(d.student_id, (diffsByStudent.get(d.student_id) ?? 0) + 1);
 
@@ -139,6 +150,7 @@ export default async function StudentsPage() {
                         grade={overlay?.grade ?? s.grade}
                         overlay={overlay}
                         pending={overlay ? (diffsByStudent.get(overlay.id) ?? 0) : 0}
+                        others={others.get(s.ps_id)}
                       />
                     ))}
                   </TableBody>
@@ -186,6 +198,7 @@ export default async function StudentsPage() {
                     grade={o.grade}
                     overlay={o}
                     pending={diffsByStudent.get(o.id) ?? 0}
+                    others={o.roster_ps_id ? others.get(o.roster_ps_id) : undefined}
                   />
                 ))}
               </TableBody>
@@ -213,6 +226,7 @@ export default async function StudentsPage() {
                     grade={o.grade}
                     overlay={o}
                     pending={diffsByStudent.get(o.id) ?? 0}
+                    others={o.roster_ps_id ? others.get(o.roster_ps_id) : undefined}
                   />
                 ))}
               </TableBody>
@@ -231,6 +245,7 @@ function StudentRow({
   grade,
   overlay,
   pending,
+  others,
 }: {
   href: string;
   name: string;
@@ -238,6 +253,8 @@ function StudentRow({
   grade: string | null;
   overlay: OverlayInfo | null;
   pending: number;
+  /** U-17 (D-3): co-teachers' records for this child — they count on shared tests. */
+  others?: OtherRecord[];
 }) {
   const off = overlay ? overlay.accommodation_count - overlay.enabled_count : 0;
   return (
@@ -268,6 +285,11 @@ function StudentRow({
             </span>
           ) : null}
         </div>
+        {others?.map((o) => (
+          <p key={o.email} className="mt-1 text-xs text-muted-foreground">
+            {alsoOnRecordLine(o)}
+          </p>
+        ))}
       </TableCell>
       <TableCell className="text-right">
         <Link href={href} aria-label={`Open ${name || "student"}`} className="inline-flex text-muted-foreground">
