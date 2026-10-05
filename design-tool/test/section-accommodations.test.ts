@@ -304,3 +304,87 @@ describe("copies leave per-period settings behind (13.10)", () => {
     expect(copy!.allowed_accommodations).toEqual(["color_contrast", "spell_check", "zoom"]);
   });
 });
+
+async function postException(assessmentId: string, body: Record<string, unknown>) {
+  const { POST } = await import("../app/api/assessments/[id]/overrides/route");
+  return POST(
+    new Request("http://localhost/x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ id: assessmentId }) },
+  );
+}
+
+describe("17.2: an exception may name a tool the student's period allows", () => {
+  test("allowed for a student in that period, refused otherwise; nothing created on an early refusal", async () => {
+    const a = await seed({ "5003": { allowed: ["tts_test_content"], grants: [] } });
+    const db = getDb();
+    const [ada, ben] = await db
+      .insert(students)
+      .values([
+        { owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" }, // in 5003
+        { owner_sub: TEACHER, roster_ps_id: OTHER_STUDENT.ps_id, name: "Ben" }, // not in 5003
+      ])
+      .returning();
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+
+    expect((await postException(a.id, { student_id: ada!.id, tool_id: "tts_test_content", value: "On" })).status).toBe(201);
+    const refused = await postException(a.id, { student_id: ben!.id, tool_id: "tts_test_content", value: "On" });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toBe("tool_not_in_allowed_accommodations");
+
+    const before = (await db.select().from(students)).length;
+    expect((await postException(a.id, { student_id: ada!.id, tool_id: "optional_font", value: "On" })).status).toBe(400);
+    expect((await db.select().from(students)).length).toBe(before);
+  });
+
+  test("shrinking the test's list keeps exceptions a period still allows", async () => {
+    const a = await seed({ "5003": { allowed: ["zoom"], grants: [] } });
+    const db = getDb();
+    const [ada] = await db.insert(students).values({ owner_sub: TEACHER, roster_ps_id: STUDENT.ps_id, name: "Ada" }).returning();
+    await db.insert(assessment_student_overrides).values([
+      { assessment_id: a.id, student_id: ada!.id, tool_id: "zoom", value: "2X", created_by_sub: TEACHER },
+      { assessment_id: a.id, student_id: ada!.id, tool_id: "spell_check", value: "On", created_by_sub: TEACHER },
+    ]);
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    expect((await patch(a.id, { allowed_accommodations: ["color_contrast"] })).status).toBe(200);
+    const left = await db
+      .select({ tool_id: assessment_student_overrides.tool_id })
+      .from(assessment_student_overrides)
+      .where(eq(assessment_student_overrides.assessment_id, a.id));
+    expect(left.map((r) => r.tool_id)).toEqual(["zoom"]);
+  });
+});
+
+describe("GET section-options (13.9)", () => {
+  test("the owner's current periods, plus a configured period no longer on the roster", async () => {
+    const a = await seed({ "9999": { allowed: null, grants: [{ tool_id: "zoom", value: "2X" }] } });
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const { GET } = await import("../app/api/assessments/[id]/section-options/route");
+    const res = await GET(new Request("http://localhost/x"), { params: Promise.resolve({ id: a.id }) });
+    const { sections } = (await res.json()) as {
+      sections: { ps_id: string; on_roster: boolean; configured: boolean }[];
+    };
+    const byId = new Map(sections.map((s) => [s.ps_id, s]));
+    expect(byId.get("5001")).toMatchObject({ on_roster: true, configured: false });
+    expect(byId.get("5003")).toMatchObject({ on_roster: true, configured: false });
+    expect(byId.get("9999")).toMatchObject({ on_roster: false, configured: true });
+  });
+});
+
+describe("preview lists a granted period's students who have no record", () => {
+  test("named from the roster, the grant flagged, none left over", async () => {
+    const a = await seed({ "5001": { allowed: null, grants: [{ tool_id: "zoom", value: "2X" }] } });
+    const p = await buildAccommodationsPreview(getDb(), a, { section: "5001" });
+    // 5001's current students in the fixture: Ada and Ben (no overlay rows).
+    expect(p.students.map((s) => s.roster_ps_id).sort()).toEqual([STUDENT.ps_id, OTHER_STUDENT.ps_id].sort());
+    expect(p.students.every((s) => s.student_id.startsWith("roster:"))).toBe(true);
+    expect(p.students[0]!.tools).toEqual([
+      { tool_id: "zoom", value: "2X", exception: false, construct_altering: false, from_record_of: null, from_section: true },
+    ]);
+    expect(p.others_count).toBe(0);
+  });
+});
+

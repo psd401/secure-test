@@ -1440,3 +1440,17 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 464 | A student page (`/dashboard/accommodations/<id>`) for such a child | A box with "Also on …" and "counts on the tests you share" | NOT RUN |
 | 465 | On the origin after the deploy: migration 0056 applied; `owner_email` filled for existing teachers | `oneoff-aurora.sh` count of `students where owner_email is null` small (teachers with no test or sitting yet) | ✅ 2026-10-05 rev 90 (`query-aurora.sh`, read-only): 57 journal rows; 714 rows / 8 teachers stamped, 1 row / 1 teacher not yet (fills at that teacher's next sign-in) |
 
+### U-18 — accommodations by class period (2026-10-05)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 466 | Allowed tab → "By class period" → Settings for | All periods + the owner's and co-teachers' current periods; a set period reads "· own settings" | ✅ 2026-10-05 local `_demo` (AP Biology, Biology, English 10) |
+| 467 | Pick a period | Who gets what shows only that period's students and "N other students in this period get none" | ✅ 2026-10-05 local `_demo` (English 10: 2 listed, 8 others) |
+| 468 | Give everyone in the period a tool | After "Saved", every student in the period shows it with "Whole period" — including students with no record; others 0; survives a reload | ✅ 2026-10-05 local `_demo` (Spell Check → 10 of 10) |
+| 469 | "Use a different list for this period", untick a tool | The period's own list; a given tool that is no longer allowed is dropped; Who gets what follows | NOT RUN (covered by `test/section-accommodations.test.ts`) |
+| 470 | "Remove this period's settings" | Period back to the test's list; "· own settings" gone | NOT RUN |
+| 471 | Exceptions tab: add an exception for a tool only a period allows, for a student in that period / not in it | 201 / "tool not allowed" error | NOT RUN in the UI (route-tested) |
+| 472 | A school- or district-assigned test | Period checklist offers only the test's tools; the narrowing note shows | NOT RUN (no such test on `_demo`) |
+| 473 | A student sits the test through a period sitting (real client) | The period's tools arrive in the bundle | NOT RUN — needs a sitting on the origin after the deploy |
+| 474 | Published test | Period controls disabled ("Unpublish to change accommodations." on a forced save) | NOT RUN |
+

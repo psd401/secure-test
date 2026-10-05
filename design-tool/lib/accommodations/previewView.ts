@@ -18,7 +18,14 @@ export function toolSetting(toolId: string, value: string): string {
 export interface PreviewRowView {
   studentId: string;
   heading: string;
-  tools: Array<{ text: string; exception: boolean; constructAltering: boolean; fromRecordOf: string | null }>;
+  tools: Array<{
+    text: string;
+    exception: boolean;
+    constructAltering: boolean;
+    fromRecordOf: string | null;
+    /** U-18: given to the whole class period. */
+    fromSection: boolean;
+  }>;
   /** "Switched off for this test: Zoom" — an exception removed it. */
   removedLine: string | null;
   /** "On their record, not allowed here: Spell Check" */
@@ -44,6 +51,7 @@ export function previewRows(preview: AccommodationsPreview): PreviewRowView[] {
         exception: t.exception,
         constructAltering: t.construct_altering,
         fromRecordOf: t.from_record_of ? recordOwnerName(t.from_record_of) : null,
+        fromSection: t.from_section,
       })),
       removedLine:
         s.removed_by_exception.length > 0
@@ -59,12 +67,11 @@ export function previewRows(preview: AccommodationsPreview): PreviewRowView[] {
 }
 
 /** The line under the list. */
-export function othersLine(preview: AccommodationsPreview): string {
+export function othersLine(preview: AccommodationsPreview, inPeriod = false): string {
   if (preview.others_count === null) return "Everyone else gets none.";
   const n = preview.others_count;
-  return n === 1
-    ? "1 other student on your class lists gets none."
-    : `${n} other students on your class lists get none.`;
+  const where = inPeriod ? "in this period" : "on your class lists";
+  return n === 1 ? `1 other student ${where} gets none.` : `${n} other students ${where} get none.`;
 }
 
 function heading(s: PreviewStudent): string {

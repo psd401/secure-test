@@ -97,6 +97,8 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           allowed_accommodations: (assessment.allowed_accommodations ??
             []) as string[],
           construct_altering: (assessment.construct_altering ?? []) as string[],
+          section_accommodations: assessment.section_accommodations ?? {},
+          assigned_scope: assessment.assigned_scope,
           attempt_count: attemptCountRow?.n ?? 0,
           archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
         }}

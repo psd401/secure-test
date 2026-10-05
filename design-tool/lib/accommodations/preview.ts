@@ -116,7 +116,10 @@ export async function buildAccommodationsPreview(
 
   // One entry per child: the owner's row (if any) and the co-teachers' rows.
   type Person = (typeof people)[number];
-  const children = new Map<string, { owner: Person | null; co: Person[]; psId: string | null }>();
+  const children = new Map<
+    string,
+    { owner: Person | null; co: Person[]; psId: string | null; roster?: { name: string; ssid: string | null } }
+  >();
   for (const p of people) {
     if (p.owner_sub === assessment.owner_sub) {
       const key = p.roster_ps_id ?? `row:${p.id}`;
@@ -148,6 +151,34 @@ export async function buildAccommodationsPreview(
       if (!child.psId || !sectionRoster.has(child.psId)) children.delete(key);
     }
   }
+  // A class-period grant reaches every student in the period, including those
+  // with no record anywhere (the join creates the owner's row) — so those
+  // periods' current students are listed too, named from the roster.
+  const grantSections = Object.entries(assessment.section_accommodations ?? {})
+    .filter(([psId, c]) => c.grants.length > 0 && (!section || psId === section))
+    .map(([psId]) => psId);
+  if (grantSections.length > 0) {
+    const enrolled = await db
+      .selectDistinct({
+        ps_id: roster_students.ps_id,
+        first: roster_students.first_name,
+        last: roster_students.last_name,
+        ssid: roster_students.ssid,
+      })
+      .from(roster_enrollments)
+      .innerJoin(roster_students, eq(roster_students.ps_id, roster_enrollments.student_ps_id))
+      .where(and(enrollmentIsCurrent, inArray(roster_enrollments.section_ps_id, grantSections)));
+    for (const r of enrolled) {
+      if (children.has(r.ps_id)) continue;
+      children.set(r.ps_id, {
+        owner: null,
+        co: [],
+        psId: r.ps_id,
+        roster: { name: `${r.first} ${r.last}`.trim() || r.ps_id, ssid: r.ssid },
+      });
+    }
+  }
+
   const psIds = [...children.values()].map((c) => c.psId).filter((x): x is string => !!x);
   const teaching = await teachersCurrentlyTeaching(db, coEmails, psIds);
   const sectionsByPs = section ? null : await configuredSectionsOf(db, assessment, psIds);
@@ -181,7 +212,7 @@ export async function buildAccommodationsPreview(
     const co = child.co
       .filter((p) => p.owner_email && teachers.has(p.owner_email))
       .sort((a, b) => (a.owner_email ?? "").localeCompare(b.owner_email ?? ""));
-    if (!child.owner && co.length === 0) continue;
+    if (!child.owner && co.length === 0 && !child.roster) continue;
 
     const ownerRecords = child.owner ? (recordsBy.get(child.owner.id) ?? []) : [];
     const coRecords = co.map((p) => ({ email: p.owner_email!, rows: recordsBy.get(p.id) ?? [] }));
@@ -215,11 +246,12 @@ export async function buildAccommodationsPreview(
     if (tools.length === 0 && explained.removedByException.length === 0 && explained.notAllowed.length === 0) {
       continue; // every tool Off — nothing to say
     }
-    const face = child.owner ?? co[0]!;
+    const face = child.owner ?? co[0] ?? null;
     listed.push({
-      student_id: face.id,
-      name: face.name,
-      ssid: face.ssid,
+      // A roster-only child has no overlay row yet; the key is the roster id.
+      student_id: face ? face.id : `roster:${child.psId}`,
+      name: face ? face.name : child.roster!.name,
+      ssid: face ? face.ssid : child.roster!.ssid,
       roster_ps_id: child.psId,
       tools,
       removed_by_exception: [...explained.removedByException].sort(),

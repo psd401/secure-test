@@ -32,7 +32,7 @@ describe("Who gets what — words", () => {
       ],
     });
     expect(row!.heading).toBe("Ada");
-    expect(row!.tools).toEqual([{ text: "Spell Check", exception: true, constructAltering: true, fromRecordOf: null }]);
+    expect(row!.tools).toEqual([{ text: "Spell Check", exception: true, constructAltering: true, fromRecordOf: null, fromSection: false }]);
     expect(row!.removedLine).toBe("Switched off for this test: Zoom (in-app)");
     expect(row!.notAllowedLine).toBe("On their record, not allowed here: Color Contrast: Black on Rose");
   });
@@ -54,6 +54,7 @@ describe("Who gets what — words", () => {
     expect(othersLine(p(null))).toBe("Everyone else gets none.");
     expect(othersLine(p(1))).toBe("1 other student on your class lists gets none.");
     expect(othersLine(p(27))).toBe("27 other students on your class lists get none.");
+    expect(othersLine(p(4), true)).toBe("4 other students in this period get none.");
   });
 
   test("U-17: a co-teacher's tool and record are named by the address's local part", () => {

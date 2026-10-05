@@ -289,3 +289,20 @@ once after 4.
   cannot get a per-student exception; widen the test's list or grant the
   period. Tests: `test/section-accommodations.test.ts` (13). Design-tool
   2899 pass. Migration applied to dev, test and `_demo`.
+- 2026-10-05 — **slice 4 BUILT** (U-18 UI + 17.2, not deployed): `GET
+  /api/assessments/[id]/section-options` (edit; owner's + co-teachers'
+  current sections, plus configured ones off the roster); `PeriodSettings`
+  on the Allowed tab under the test's checklist (deviation from the note:
+  "All periods" is a picker entry meaning the list above, rather than the
+  checklist moving inside the picker) — own list or the test's, "Give
+  everyone in this period" with the TIDE value picker, remove, autosave of
+  the whole value; Who gets what follows the picked period and tags "Whole
+  period". **17.2:** `POST …/overrides` accepts a tool a period the student
+  is currently in allows (refused before the student is resolved when no
+  period allows it, so a refusal creates nothing); the PATCH orphan sweep
+  keeps exceptions any period still allows; the Exceptions tab's tool picker
+  offers the union. **Found in the hand-run and fixed:** a period grant
+  reaches students with no record at all, so the preview now lists a granted
+  period's current roster students (named from the roster, `student_id =
+  roster:<ps_id>`). Rows 466–468 ✅ local `_demo`, 469–474 open. Design-tool
+  2903 pass.

@@ -14,7 +14,16 @@ import { Skeleton } from "@/components/ui/skeleton";
  * autosave lands, which re-fetches — so a ticked box shows its effect after
  * the save, never before it.
  */
-export function WhoGetsWhat({ assessmentId, savedKey }: { assessmentId: string; savedKey: string }) {
+export function WhoGetsWhat({
+  assessmentId,
+  savedKey,
+  section = null,
+}: {
+  assessmentId: string;
+  savedKey: string;
+  /** U-18: one class period, or null for every student. */
+  section?: string | null;
+}) {
   const [preview, setPreview] = useState<AccommodationsPreview | null>(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -22,7 +31,8 @@ export function WhoGetsWhat({ assessmentId, savedKey }: { assessmentId: string; 
   useEffect(() => {
     let cancelled = false;
     setError(false);
-    fetch(`/api/assessments/${assessmentId}/accommodations-preview`)
+    const query = section ? `?section=${encodeURIComponent(section)}` : "";
+    fetch(`/api/assessments/${assessmentId}/accommodations-preview${query}`)
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         return (await res.json()) as AccommodationsPreview;
@@ -36,7 +46,7 @@ export function WhoGetsWhat({ assessmentId, savedKey }: { assessmentId: string; 
     return () => {
       cancelled = true;
     };
-  }, [assessmentId, savedKey, retry]);
+  }, [assessmentId, savedKey, retry, section]);
 
   return (
     <section className="space-y-2" aria-labelledby="who-gets-what">
@@ -59,13 +69,13 @@ export function WhoGetsWhat({ assessmentId, savedKey }: { assessmentId: string; 
       ) : preview === null ? (
         <Skeleton className="h-16 w-full" />
       ) : (
-        <PreviewList preview={preview} />
+        <PreviewList preview={preview} inPeriod={section !== null} />
       )}
     </section>
   );
 }
 
-function PreviewList({ preview }: { preview: AccommodationsPreview }) {
+function PreviewList({ preview, inPeriod }: { preview: AccommodationsPreview; inPeriod: boolean }) {
   const rows = previewRows(preview);
   return (
     <div className="space-y-2">
@@ -84,6 +94,7 @@ function PreviewList({ preview }: { preview: AccommodationsPreview }) {
                     <span key={tool.text} className="inline-flex flex-wrap items-center gap-1">
                       <Badge variant="outline">{tool.text}</Badge>
                       {tool.exception ? <Badge variant="info">Exception</Badge> : null}
+                      {tool.fromSection ? <Badge variant="neutral">Whole period</Badge> : null}
                       {tool.fromRecordOf ? (
                         <Badge variant="neutral">From {tool.fromRecordOf}&apos;s record</Badge>
                       ) : null}
@@ -98,7 +109,7 @@ function PreviewList({ preview }: { preview: AccommodationsPreview }) {
           ))}
         </ul>
       )}
-      <p className="text-xs text-muted-foreground">{othersLine(preview)}</p>
+      <p className="text-xs text-muted-foreground">{othersLine(preview, inPeriod)}</p>
     </div>
   );
 }

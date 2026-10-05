@@ -225,9 +225,20 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // ("tool_not_in_allowed_accommodations"), broken after the fact by an edit
   // to the parent. Delete the orphans in the same transaction as the update so
   // the two can't diverge.
+  // U-18 (17.2): an exception may name a tool a class period allows, so the
+  // ones to keep are the test's new list plus every period's list.
+  const nextPeriods = (body.section_accommodations ?? access.assessment.section_accommodations ?? {}) as Record<
+    string,
+    { allowed: string[] | null }
+  >;
   const nextAllowed =
     body.allowed_accommodations !== undefined
-      ? body.allowed_accommodations
+      ? [
+          ...new Set([
+            ...body.allowed_accommodations,
+            ...Object.values(nextPeriods).flatMap((c) => c.allowed ?? []),
+          ]),
+        ]
       : null;
 
   const [updated] = await db.transaction(async (tx) => {

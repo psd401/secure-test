@@ -8,6 +8,7 @@ import { UpsertOverrideBody } from "@/lib/api/overrides";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { exceptionTargetFor } from "@/lib/accommodations/coTeacherRecords";
+import { configuredSectionsOf } from "@/lib/accommodations/sections";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -69,22 +70,26 @@ export async function POST(req: Request, ctx: RouteContext) {
   const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
 
-  // Slice 21 invariant lifted: override.tool_id must be present in the
-  // assessment's allowed_accommodations. Otherwise an override could
-  // grant a tool the assessment doesn't allow.
-  const allowed = (access.assessment.allowed_accommodations ?? []) as string[];
-  if (!allowed.includes(body.tool_id)) {
+  const db = getDb();
+  // Refuse a tool nothing on the test allows BEFORE resolving the student, so
+  // a refusal never creates the owner's overlay row as a side effect.
+  const anyPeriodAllows = Object.values(access.assessment.section_accommodations ?? {}).some((c) =>
+    (c.allowed ?? []).includes(body.tool_id),
+  );
+  if (
+    !((access.assessment.allowed_accommodations ?? []) as string[]).includes(body.tool_id) &&
+    !anyPeriodAllows
+  ) {
     return NextResponse.json(
       {
         ok: false,
         error: "tool_not_in_allowed_accommodations",
-        hint: "Add the tool to the assessment's allowed_accommodations first.",
+        hint: "Allow the tool on the test, or on a class period this student is in, first.",
       },
       { status: 400 },
     );
   }
 
-  const db = getDb();
   // F-1 (docs/coteach-and-section-accommodations-design.md, 13.5): the
   // exception attaches to the ASSESSMENT OWNER's row for the child — the only
   // row delivery and the preview read. A co-teacher (edit) may name the
@@ -96,6 +101,36 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json(
       { ok: false, error: target.error },
       { status: target.error === "student_not_found" ? 404 : 400 },
+    );
+  }
+
+  // Slice 21 invariant: the tool must be one the test allows — or, since
+  // U-18 (17.2), one a class period this student is currently in allows
+  // (`section_accommodations`), so a period-only tool can still get a
+  // per-student exception. Otherwise an exception could grant a tool nothing
+  // on the test permits.
+  const testAllowed = (access.assessment.allowed_accommodations ?? []) as string[];
+  let toolAllowed = testAllowed.includes(body.tool_id);
+  if (!toolAllowed) {
+    const [targetRow] = await db
+      .select({ roster_ps_id: students.roster_ps_id })
+      .from(students)
+      .where(eq(students.id, target.studentId))
+      .limit(1);
+    const psId = targetRow?.roster_ps_id ?? null;
+    const periods = psId ? ((await configuredSectionsOf(db, access.assessment, [psId])).get(psId) ?? []) : [];
+    toolAllowed = periods.some((p) =>
+      (access.assessment.section_accommodations?.[p]?.allowed ?? []).includes(body.tool_id),
+    );
+  }
+  if (!toolAllowed) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "tool_not_in_allowed_accommodations",
+        hint: "Allow the tool on the test, or on a class period this student is in, first.",
+      },
+      { status: 400 },
     );
   }
 

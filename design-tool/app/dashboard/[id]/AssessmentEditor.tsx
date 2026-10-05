@@ -52,6 +52,8 @@ import { EmphasisButtons } from "./EmphasisButtons";
 import { SourcePicker, type SourceSummary } from "./SourcePicker";
 import { OverridesPanel } from "./OverridesPanel";
 import { WhoGetsWhat } from "./WhoGetsWhat";
+import { PeriodSettings } from "./PeriodSettings";
+import type { SectionAccommodations } from "@/lib/accommodations/sections";
 import { ImportItemsPanel } from "./ImportItemsPanel";
 import { SittingsPanel } from "./SittingsPanel";
 import { PdfImportPanel } from "./PdfImportPanel";
@@ -171,6 +173,10 @@ interface AssessmentView {
   answers_released_at: string | null;
   allowed_accommodations: string[];
   construct_altering: string[];
+  /** U-18: per class period (lib/accommodations/sections.ts). */
+  section_accommodations: SectionAccommodations;
+  /** teacher | school | district — a period may only narrow above teacher. */
+  assigned_scope: string;
   /** D-1 (docs/archive-and-delete-design.md): governs the Settings-tab Delete draft action. */
   attempt_count: number;
   /** D-2 / D-3: null = live. ISO string, or null. */
@@ -680,6 +686,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       ? String(Math.round(assessment.time_limit_seconds / 60))
       : "",
   );
+  // U-18: the class period the Allowed tab is showing (null = all periods).
+  const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
   const [allowedAccommodations, setAllowedAccommodations] = useState<
     Set<string>
   >(() => new Set(assessment.allowed_accommodations));
@@ -1936,9 +1944,21 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           <StatusLine state={accomSave} />
         </div>
 
+        <PeriodSettings
+          assessmentId={assessment.id}
+          testAllowed={assessment.allowed_accommodations}
+          initial={assessment.section_accommodations}
+          assignedScope={assessment.assigned_scope}
+          isLocked={isLocked}
+          selected={selectedPeriod}
+          onSelect={setSelectedPeriod}
+          onSaved={refresh}
+        />
+
         <WhoGetsWhat
           assessmentId={assessment.id}
-          savedKey={`${[...assessment.allowed_accommodations].sort().join(",")}|${[...assessment.construct_altering].sort().join(",")}`}
+          section={selectedPeriod}
+          savedKey={`${[...assessment.allowed_accommodations].sort().join(",")}|${[...assessment.construct_altering].sort().join(",")}|${JSON.stringify(assessment.section_accommodations)}`}
         />
       </section>
       </TabsContent>
@@ -3146,7 +3166,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       <TabsContent value="students" className="mt-6">
         <OverridesPanel
           assessmentId={assessment.id}
-          allowedAccommodations={[...allowedAccommodations]}
+          allowedAccommodations={[
+            // U-18 (17.2): a tool a class period allows can get an exception too.
+            ...new Set([
+              ...allowedAccommodations,
+              ...Object.values(assessment.section_accommodations).flatMap((c) => c.allowed ?? []),
+            ]),
+          ]}
           isLocked={isLocked}
           onOpenAccommodations={() => setActiveTab("accommodations")}
         />
