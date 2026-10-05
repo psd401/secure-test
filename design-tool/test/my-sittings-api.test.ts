@@ -107,9 +107,8 @@ describe("GET /api/me/sittings", () => {
   test("lists exactly the open sittings whose scope admits the student", async () => {
     principal = staffPrincipal(TEACHER);
     const algebra = await seedAssessment(TEACHER, "Algebra quiz");
-    const all = await createSitting({ assessment_id: algebra.id });
-    const english = await createSitting({ assessment_id: algebra.id, section_ps_id: "5003" });
-    const benOnly = await createSitting({ assessment_id: algebra.id, student_ps_ids: [OTHER_STUDENT.ps_id] });
+    // U-13: an identical open sitting is refused, so the closed one is made
+    // (and closed) before "all".
     const closed = await createSitting({ assessment_id: algebra.id });
     {
       const { POST } = await import("../app/api/test-sessions/[sessionId]/close/route");
@@ -117,6 +116,9 @@ describe("GET /api/me/sittings", () => {
         params: Promise.resolve({ sessionId: closed.id }),
       });
     }
+    const all = await createSitting({ assessment_id: algebra.id });
+    const english = await createSitting({ assessment_id: algebra.id, section_ps_id: "5003" });
+    const benOnly = await createSitting({ assessment_id: algebra.id, student_ps_ids: [OTHER_STUDENT.ps_id] });
     // Expired: inserted directly, since the route will not mint one.
     await getDb().insert(test_sessions).values({
       assessment_id: algebra.id,
@@ -181,8 +183,9 @@ describe("GET /api/me/sittings", () => {
   test("finding 8.2: a rejoin through a new sitting carries the attempt to that sitting", async () => {
     principal = staffPrincipal(TEACHER);
     const a = await seedAssessment(TEACHER, "Quiz");
+    // U-13: two open sittings need different scopes; Ada is in 5001.
     const first = await createSitting({ assessment_id: a.id });
-    const second = await createSitting({ assessment_id: a.id });
+    const second = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
     const db = getDb();
     const [overlay] = await db
       .insert(students)

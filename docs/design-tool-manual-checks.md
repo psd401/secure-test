@@ -1400,3 +1400,12 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 444 | A whole section (≥ 25 students) | Finishes inside the 60 s ALB limit; the result lists every student | ACCEPTED ON THE ESTIMATE 2026-10-05 (James, options b + c): not run with a real section on purpose — it would create Docs for, share with and email real students only to time it. Measured so far: 7.0 s for one student incl. creating three folders (local), ~5.5 s for a later single send; each further student is one upload + one share, three at a time → roughly 20–30 s for 30 students, under the 60 s ALB limit. The `google_docs_released` log line now carries `duration_ms` — read it from CloudWatch on the first real class send and record it here |
 | 445 | On the origin after the deploy | Migration 0055 applied at boot; rows 430 and 432 pass against the production redirect URI | ✅ 2026-10-05 — rev 88, Aurora at 0055 (health stamp = HEAD); fixture `GD origin hand-run 2026-10-05` (one essay, the demo student handed in from the v1.5.0 client): Send to Google Docs from the results page with Prompt + Score → 401 → Google with NO consent screen → back on `?gdrive=ok` (stripped from the address), the dialog reopened with its choices and "Google Drive is connected…" → Send → "1 Doc created and shared"; the Doc has the name, assessment, Prompt and Essay, no score block (no final score yet — correct); the per-student page links it as "Released to Google Docs: 2:25 PM". The production redirect URI works |
 | 446 | Per-student page of a practice attempt | No Send to Google Docs button | ✅ 2026-10-05 local: a practice attempt's page renders its answers with no Send to Google Docs (and no Print this student's work) |
+
+### U-13 — Start session double-press guard (2026-10-05)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 447 | Double-click Start session as fast as possible (all sections) | One new sitting in the list, not two | NOT RUN |
+| 448 | With that sitting open, press Start session again with the same scope | Error "A session for this class is already open — code XXXXXX. Use that one, or close it first."; no new row | NOT RUN |
+| 449 | Same assessment, a different scope (one section, or picked students) while the all-sections sitting is open | A second sitting opens | NOT RUN |
+| 450 | Close the sitting from row 448, press Start session with the same scope | A new sitting opens | NOT RUN |

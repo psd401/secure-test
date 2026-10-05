@@ -341,6 +341,7 @@ export function SittingsPanel({
   // only changes from the teacher's own actions in this tab, or slowly from
   // another device — the manual Refresh button already covers that).
   const fetchedPracticeIds = useRef<Set<string>>(new Set());
+  const startInFlight = useRef(false);
   useEffect(() => {
     for (const s of [...sittings, ...archivedSittings]) {
       if (s.kind !== "practice" || !isOpen(s)) continue;
@@ -381,6 +382,11 @@ export function SittingsPanel({
   const closesPreview = minutesValid ? closesAt(new Date(now + minutesNumber * 60_000), new Date(now)) : null;
 
   async function createSitting() {
+    // U-13: `busy` disables the button only after the next render, so two
+    // clicks in one frame both reached here and opened two sittings. A ref is
+    // read synchronously.
+    if (startInFlight.current) return;
+    startInFlight.current = true;
     setBusy(true);
     setActionError(null);
     try {
@@ -398,12 +404,25 @@ export function SittingsPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 409) {
+        // U-13: an identical sitting is already open — name its code.
+        const payload = (await res.json().catch(() => ({}))) as { error?: unknown; code?: unknown };
+        if (payload.error === "sitting_already_open" && typeof payload.code === "string") {
+          setActionError(
+            `A session for this class is already open — code ${payload.code}. Use that one, or close it first.`,
+          );
+          await loadSittings();
+          return;
+        }
+        throw new ApiError(typeof payload.error === "string" ? payload.error : "http_409", 409);
+      }
       if (!res.ok) throw await readError(res);
       setNow(Date.now());
       await loadSittings();
     } catch (err) {
       setActionError(describe(err));
     } finally {
+      startInFlight.current = false;
       setBusy(false);
     }
   }

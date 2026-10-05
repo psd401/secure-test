@@ -534,7 +534,8 @@ describe("GET /api/test-sessions/:id/attendance", () => {
       .insert(items)
       .values([1, 2].map((n) => ({ assessment_id: a.id, position: n, type: "mc", stem: `Q${n}` })))
       .returning();
-    const first = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
+    // U-13: two open sittings need different scopes; Ada is in 5001.
+    const first = await createSitting({ assessment_id: a.id });
     const second = await createSitting({ assessment_id: a.id, section_ps_id: "5001" });
     await joinAs(TEACHER, STUDENT.ps_id, a.id, first.id, "in_progress");
     const [attempt] = await db.select().from(attempts);

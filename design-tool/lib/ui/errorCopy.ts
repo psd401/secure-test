@@ -216,6 +216,11 @@ export function sessionErrorCopy(code: string): ErrorCopy {
           "One of those students isn't in your sections any more. Check the list.",
         showCode: false,
       };
+    case "sitting_already_open":
+      return {
+        message: "A session for this class is already open. Use that one, or close it first.",
+        showCode: false,
+      };
     case "code_unavailable":
       return {
         message: "Couldn't get a free session code. Try again.",

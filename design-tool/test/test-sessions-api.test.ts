@@ -200,6 +200,58 @@ describe("POST /api/test-sessions", () => {
   });
 });
 
+describe("POST /api/test-sessions — U-13 duplicate guard", () => {
+  test("a second identical class sitting is refused with the open one's code", async () => {
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const a = await seedAssessment();
+    const first = await post({ assessment_id: a.id });
+    expect(first.status).toBe(201);
+    const { test_session } = (await first.json()) as { test_session: { id: string; code: string } };
+    const second = await post({ assessment_id: a.id });
+    expect(second.status).toBe(409);
+    const body = (await second.json()) as { error: string; code: string; test_session_id: string };
+    expect(body.error).toBe("sitting_already_open");
+    expect(body.code).toBe(test_session.code);
+    expect(body.test_session_id).toBe(test_session.id);
+    const rows = await getDb().select().from(test_sessions).where(eq(test_sessions.assessment_id, a.id));
+    expect(rows.length).toBe(1);
+  });
+
+  test("a different scope, a closed sitting or an expired one does not block", async () => {
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const a = await seedAssessment();
+    const all = await post({ assessment_id: a.id });
+    expect(all.status).toBe(201);
+    const picked = await post({ assessment_id: a.id, student_ps_ids: [STUDENT.ps_id] });
+    expect(picked.status).toBe(201);
+    // The same student listed twice IS the same scope.
+    const again = await post({ assessment_id: a.id, student_ps_ids: [STUDENT.ps_id, STUDENT.ps_id] });
+    expect(again.status).toBe(409);
+
+    const { test_session } = (await all.json()) as { test_session: { id: string } };
+    await getDb().update(test_sessions).set({ status: "closed" }).where(eq(test_sessions.id, test_session.id));
+    expect((await post({ assessment_id: a.id })).status).toBe(201);
+
+    await getDb()
+      .update(test_sessions)
+      .set({ expires_at: new Date(Date.now() - 60_000) })
+      .where(eq(test_sessions.assessment_id, a.id));
+    expect((await post({ assessment_id: a.id })).status).toBe(201);
+  });
+
+  test("another teacher's open sitting of the same assessment does not block", async () => {
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const a = await seedAssessment();
+    await getDb().insert(test_sessions).values({
+      assessment_id: a.id,
+      owner_sub: OTHER_TEACHER,
+      code: "ZZZZZZ",
+      expires_at: new Date(Date.now() + 3_600_000),
+    });
+    expect((await post({ assessment_id: a.id })).status).toBe(201);
+  });
+});
+
 describe("GET /api/test-sessions", () => {
   test("lists only the caller's sittings, and can narrow to one assessment", async () => {
     const mine = await seedAssessment();
@@ -360,10 +412,12 @@ describe("PATCH /api/test-sessions/:id — archive", () => {
   test("the list hides archived sittings by default and ?archived=1 returns only them", async () => {
     principal = { sub: TEACHER, role: "staff" };
     const assessment = await seedAssessment();
-    const live = await (await post({ assessment_id: assessment.id })).json();
+    // U-13: an identical open sitting is refused, so close the first before
+    // opening the second.
     const gone = await (await post({ assessment_id: assessment.id })).json();
     await close(gone.test_session.id);
     await archive(gone.test_session.id, true);
+    const live = await (await post({ assessment_id: assessment.id })).json();
 
     const shown = await (await list()).json();
     expect(shown.test_sessions.map((s: { id: string }) => s.id)).toEqual([

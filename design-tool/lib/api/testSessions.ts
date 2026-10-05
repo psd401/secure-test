@@ -70,6 +70,47 @@ export async function sweepExpired(db: Db, ownerSub: string): Promise<number> {
   return closed.length;
 }
 
+/**
+ * U-13 (docs/roadmap-2026-09.md, 2026-10-05): the open class sitting a new
+ * one would duplicate — same owner, same assessment, same scope — or null.
+ *
+ * A teacher pressed Start session twice and got two sittings 2 s apart; every
+ * student then saw the test twice on Your tests. Call after `sweepExpired`, so
+ * `status = 'open'` means live (an open sitting cannot be archived). Overlapping
+ * scopes (all sections vs one section) are not duplicates — U-12 dedupes those
+ * on the student's side. Check-then-insert, so two requests in the same
+ * millisecond can still both pass; the button's ref guard covers that case.
+ */
+export async function findIdenticalOpenSitting(
+  db: Db,
+  args: {
+    assessmentId: string;
+    ownerSub: string;
+    sectionPsId: string | null;
+    studentPsIds: string[] | null;
+  },
+): Promise<typeof test_sessions.$inferSelect | null> {
+  const rows = await db
+    .select()
+    .from(test_sessions)
+    .where(
+      and(
+        eq(test_sessions.assessment_id, args.assessmentId),
+        eq(test_sessions.owner_sub, args.ownerSub),
+        eq(test_sessions.kind, "class"),
+        eq(test_sessions.status, "open"),
+      ),
+    );
+  const wanted = args.studentPsIds ? [...new Set(args.studentPsIds)].sort().join("\u0000") : null;
+  return (
+    rows.find((r) => {
+      if ((r.section_ps_id ?? null) !== args.sectionPsId) return false;
+      const have = r.student_ps_ids ? [...new Set(r.student_ps_ids)].sort().join("\u0000") : null;
+      return have === wanted;
+    }) ?? null
+  );
+}
+
 export class CodeExhaustionError extends Error {
   constructor() {
     super("could not allocate an unused session code");

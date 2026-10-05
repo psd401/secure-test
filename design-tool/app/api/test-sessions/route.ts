@@ -9,6 +9,7 @@ import {
   DEFAULT_DURATION_MINUTES,
   MAX_DURATION_MINUTES,
   createSessionWithCode,
+  findIdenticalOpenSitting,
   sittingVisibleToCaller,
   sweepExpired,
 } from "@/lib/api/testSessions";
@@ -178,6 +179,23 @@ export async function POST(req: Request) {
   // Swept for the sitting's OWNER, which is whose code-holding rows could
   // block the new one.
   await sweepExpired(db, sittingOwnerSub);
+
+  // U-13: a second press of Start session must not open the same sitting
+  // twice. Refused with the existing code so the teacher reads that one out.
+  if (!practice) {
+    const existing = await findIdenticalOpenSitting(db, {
+      assessmentId: assessment.id,
+      ownerSub: sittingOwnerSub,
+      sectionPsId: body.section_ps_id ?? null,
+      studentPsIds: body.student_ps_ids ?? null,
+    });
+    if (existing) {
+      return NextResponse.json(
+        { ok: false, error: "sitting_already_open", code: existing.code, test_session_id: existing.id },
+        { status: 409 },
+      );
+    }
+  }
 
   const minutes = body.duration_minutes ?? DEFAULT_DURATION_MINUTES;
   const expiresAt = new Date(Date.now() + minutes * 60_000);
