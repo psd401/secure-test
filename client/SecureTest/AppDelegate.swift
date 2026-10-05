@@ -597,8 +597,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.eventReporter?.report(.speechPreflight, detail: report.eventDetail)
         }
         controller.onBackToTests = { [weak self] in
+            guard let self else { return }
+            // v1.5.0 smoke test: a press while the hand-in's session is still
+            // ending would drop the instant feedback page. Wait for DID END;
+            // the results page shows then, and its Done comes back here.
+            if BackToTests.decide(
+                feedbackPending: self.pendingFeedback != nil,
+                sessionActive: self.lockdown?.isActive == true
+            ) == .waitForSessionEnd {
+                Self.log("back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END; the results page shows then")
+                return
+            }
             Self.log("back to your tests pressed (in-page) — leaving the attempt screen")
-            self?.showEntry()
+            self.showEntry()
         }
         // Security slice 1: the gate refused or never answered, so no test page
         // was built. Whatever is up comes down and the student goes home told.
@@ -1000,6 +1011,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// decided here, on the main actor, where the states genuinely are ordered.
     private func openPageLoadGate() {
         lockdownBecameActive = true
+        // EX-3: DID BEGIN arrived with an end already owed (requested while
+        // starting — e.g. the countdown ran out on a resume inside the
+        // deadline's grace). The session goes straight back down; building
+        // the test now only flashes the questions. The gate stays shut, and
+        // the wait is discarded when the attempt screen is retired.
+        if lockdown?.endIsOwedOnBegin == true {
+            Self.log("page load gate: held — the secure session began with an end already owed (EX-3); the test is not drawn")
+            return
+        }
         guard let gate = pageLoadGate else { return }
         Task { await gate.open() }
     }
@@ -1066,11 +1086,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// IF slice 3 (D-2): shows the held instant feedback, once, on the attempt
     /// screen — only after the student's own hand-in, only once the secure
-    /// session is down. Done (or Return / Escape) posts on the page's `home`
-    /// channel, which is `onBackToTests` → `showEntry()`. A student who left
-    /// the attempt screen first (the in-page "Back to your tests" before
-    /// `DID END`) has nothing to show it on, and `showEntry()` has already
-    /// dropped it.
+    /// session is down. Done (or Return) posts on the page's `home` channel,
+    /// which is `onBackToTests` → `showEntry()`. The in-page "Back to your
+    /// tests" pressed before `DID END` waits (`BackToTests`, v1.5.0 smoke
+    /// test) rather than leaving, so the page is not dropped; only the
+    /// titlebar route or a session end that sends the student home first
+    /// (`showEntry()` clears it) can still skip it.
     private func showPendingFeedback() {
         guard let feedback = pendingFeedback else { return }
         guard screen == .serverAttempt, attemptHandedIn, let controller,

@@ -476,6 +476,31 @@ final class AssessmentLockdownTests: XCTestCase {
         XCTAssertEqual(backstopClock.pendingCount, 0)
     }
 
+    /// EX-3: the host must be able to tell, inside the `.active` callback
+    /// that DID BEGIN produces, that an end is already owed — and must not
+    /// see that on an ordinary begin.
+    func testEndIsOwedOnBeginIsVisibleInTheActiveCallback() {
+        let (subject, session) = heldLockdown()
+        var owedAtActive: [Bool] = []
+        subject.onState = { state in
+            if state == .active { owedAtActive.append(subject.endIsOwedOnBegin) }
+        }
+        subject.begin()
+        subject.end()
+        session.deliver(.didBegin)
+        XCTAssertEqual(owedAtActive, [true])
+        XCTAssertFalse(subject.endIsOwedOnBegin, "cleared once the session is down")
+
+        let (plain, plainSession) = heldLockdown()
+        var plainOwed: [Bool] = []
+        plain.onState = { state in
+            if state == .active { plainOwed.append(plain.endIsOwedOnBegin) }
+        }
+        plain.begin()
+        plainSession.deliver(.didBegin)
+        XCTAssertEqual(plainOwed, [false])
+    }
+
     func testRepeatedEndsWhileStartingIssueOnePhysicalEnd() {
         let (subject, session) = heldLockdown()
         subject.begin()

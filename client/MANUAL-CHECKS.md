@@ -2074,9 +2074,34 @@ Monitor (or let a short limit run out, then rejoin).
 | Check | Expected | Result |
 |---|---|---|
 | **Expired, older server.** Server that answers 200 for an expired attempt (any rev before the delivery-route change); attempt's deadline more than 30 s in the past; Resume from Your tests | stderr has `time limit: already past on arrival — not starting the secure session` and NO `lockdown begin`, `DID BEGIN` or `page load gate` line; the "Loading your test…" notice gives way to Your tests with the sheet "Your time for this test has run out." / "Your answers are saved. Ask your teacher to adjust your time if you need to keep working."; no test content ever drawn; OK leaves Your tests usable (another test joins normally); the teacher's timeline shows one `time_expired` | NOT RUN |
-| **Expired, newer server.** Same attempt against a server whose delivery route answers 409 `time_expired` | stderr has `server refused the bundle (time_expired)`, no `BUNDLE FETCH FAILED`, no `lockdown begin` / `DID BEGIN`; the same sheet and the same landing; no "This test could not be opened." page | NOT RUN |
+| **Expired, newer server.** Same attempt against a server whose delivery route answers 409 `time_expired` | stderr has `server refused the bundle (time_expired)`, no `BUNDLE FETCH FAILED`, no `lockdown begin` / `DID BEGIN`; the same sheet and the same landing; no "This test could not be opened." page | ✅ 2026-10-05 — Release 1.5.0 (`0700efd16321`) from the archive, real AAC session on James's Mac against the origin (rev 88), managed-preference config: stderr `server refused the bundle (time_expired)` → `already past on arrival (server)`, no `lockdown begin`, the sheet, Mac never locked; proves `X-SecureTest-Version` is sent (the origin answers the 409 only to clients that send it) |
 | **Expired, join refused.** If a server ever refuses the join POST itself with `time_expired` | Status line on Your tests reads the same two sentences; nothing begins | NOT RUN |
-| **Within the grace.** Override set so the attempt is under 30 s past its deadline on arrival (or a limit that ends while the bundle loads) | The session begins as today; the countdown ends it at once with "Time is up." — the grace mirrors the server's, which still accepts the last saves | NOT RUN |
-| **No time limit.** Untimed assessment, join / resume | Unaffected: `lockdown begin` → `DID BEGIN` → `page load gate: opened`, the test as before | NOT RUN |
-| **Future deadline.** Timed assessment with time left | Unaffected: begins, countdown shows the remaining time | NOT RUN |
-| **Adjust time then rejoin.** After the sheet, the teacher moves the deadline into the future; student resumes | Begins normally with the new time left | NOT RUN |
+| **Within the grace.** Override set so the attempt is under 30 s past its deadline on arrival (or a limit that ends while the bundle loads) | The session begins as today; the countdown ends it at once with "Time is up." — the grace mirrors the server's, which still accepts the last saves | ✅ 2026-10-05 — Release 1.5.0 (`0700efd16321`) from the archive, real AAC session on James's Mac against the origin (rev 88), managed-preference config: resumed 20 s past the deadline → `begin()`, `time limit: -20s left`, the end deferred until DID BEGIN (finding 8.3) → `DID END`, the time-up sheet. The questions flashed for an instant between DID BEGIN and the end → finding **EX-3**, fixed in the next commit (re-run below) |
+| **No time limit.** Untimed assessment, join / resume | Unaffected: `lockdown begin` → `DID BEGIN` → `page load gate: opened`, the test as before | ✅ 2026-10-05 — Release 1.5.0 (`0700efd16321`) from the archive, real AAC session on James's Mac against the origin (rev 88), managed-preference config: after Adjust time → No time limit, Resume began with no countdown (`lockdown begin` → `DID BEGIN` → `page load gate: opened`) |
+| **Future deadline.** Timed assessment with time left | Unaffected: begins, countdown shows the remaining time | ✅ 2026-10-05 — Release 1.5.0 (`0700efd16321`) from the archive, real AAC session on James's Mac against the origin (rev 88), managed-preference config: `time limit: 1799s left`, `DID BEGIN`, gate opened; Cmd-E ended it cleanly |
+| **Adjust time then rejoin.** After the sheet, the teacher moves the deadline into the future; student resumes | Begins normally with the new time left | ✅ 2026-10-05 — same run: after the sheet, No time limit, then Resume began normally |
+
+### v1.5.0 smoke test fixes (2026-10-05)
+
+Found running the rows above and the instant feedback ordering row on the
+Release build:
+
+- **Back to your tests drops instant feedback.** The ordering row FAILED:
+  `handed in — instant feedback received (right_wrong)` → `end() called` →
+  `back to your tests pressed (in-page)` → controller retired → `DID END`
+  a few seconds later with no screen to show the results page on. Under
+  simulated lockdown `DID END` is instant, so the window never existed.
+  Fix: `BackToTests.decide` (Core) — while feedback is pending and the
+  session is still up, the in-page press waits (`waiting for DID END`), and
+  the results page shows at `DID END`.
+- **EX-3 — questions flash on a resume inside the grace.** DID BEGIN with an
+  end already owed (finding 8.3) opened the page gate before the owed end
+  went out. Fix: `AssessmentLockdown.endIsOwedOnBegin`; the host holds the
+  gate (`page load gate: held … (EX-3)`).
+
+| Check | Expected | Result |
+|---|---|---|
+| **Feedback after an early press.** Real session, level Right / wrong; hand in and press "Back to your tests" on the Handed in. screen at once | stderr: `instant feedback received` → `end() called` → `… still ending — waiting for DID END` → `DID END` → `instant feedback: showing the results page`; the results page appears once the Mac unlocks; Done goes to Your tests | NOT RUN |
+| **Feedback without a press.** Same, but wait | The results page appears after `DID END` (the IF ordering row above) | NOT RUN |
+| **EX-3.** Resume inside the 30 s grace after the deadline | `page load gate: held … (EX-3)`; no questions drawn at any point; the time-up sheet | NOT RUN |
+| **No feedback.** Level Off; hand in, press Back to your tests at once | Leaves at once as before (`leaving the attempt screen`) | NOT RUN |

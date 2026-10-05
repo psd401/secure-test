@@ -165,6 +165,14 @@ public final class AssessmentLockdown {
 
     public var isActive: Bool { state != .idle }
 
+    /// EX-3 (v1.5.0 smoke test, 2026-10-05): true while an end requested
+    /// during `.starting` is still owed — including inside the `onState`
+    /// callback for `.active` that `didBegin` produces, which runs BEFORE the
+    /// owed `end()` is issued. The host reads it there so it does not build
+    /// the test for the instant between `DID BEGIN` and that end (the
+    /// questions flashed on a resume inside the deadline's grace).
+    public var endIsOwedOnBegin: Bool { endDeferred }
+
     private let makeSession: () -> Session
     private let scheduler: LockdownScheduler
     private let backstopScheduler: LockdownScheduler
