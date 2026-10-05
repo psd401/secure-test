@@ -26,6 +26,8 @@ const Body = z
     }),
     mode: z.enum(["skip", "new"]),
     include_drafts: z.boolean(),
+    // Slice 5: optional so a dialog from before it still posts.
+    transfer_ownership: z.boolean().optional(),
   })
   .refine((b) => (b.section === undefined) !== (b.attempt_id === undefined), {
     message: "exactly one of section or attempt_id",
@@ -81,7 +83,12 @@ export async function POST(req: Request, ctx: RouteContext) {
     assessment: access.assessment,
     senderSub: session.sub,
     scope: body.attempt_id ? { attemptId: body.attempt_id } : { section: body.section! },
-    options: { contents: body.contents, mode: body.mode, includeDrafts: body.include_drafts },
+    options: {
+      contents: body.contents,
+      mode: body.mode,
+      includeDrafts: body.include_drafts,
+      transferOwnership: body.transfer_ownership ?? false,
+    },
     drive: createDriveClient(token),
   });
   if (!result.ok) {

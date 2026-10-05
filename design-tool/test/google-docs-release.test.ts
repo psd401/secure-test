@@ -207,6 +207,20 @@ describe("Drive client", () => {
     expect(calls).toBe(2);
   });
 
+  test("the transfer PATCHes the student's permission to owner", async () => {
+    let seen: { url: string; method?: string; body?: string } | null = null;
+    const client = createDriveClient("tok", {
+      fetchImpl: (async (url: string, init: RequestInit) => {
+        seen = { url, method: init.method, body: String(init.body) };
+        return Response.json({ id: "p1" });
+      }) as unknown as typeof fetch,
+    });
+    await client.transferOwnership("f1", "p1");
+    expect(seen!.method).toBe("PATCH");
+    expect(seen!.url).toBe("https://www.googleapis.com/drive/v3/files/f1/permissions/p1?transferOwnership=true&fields=id");
+    expect(JSON.parse(seen!.body!)).toEqual({ role: "owner" });
+  });
+
   test("401 is DriveAuthError; other refusals carry the reason; a 404 folder is unusable", async () => {
     const respond = (res: Response) =>
       createDriveClient("tok", { sleep: async () => {}, fetchImpl: (async () => res.clone()) as unknown as typeof fetch });
@@ -262,6 +276,12 @@ class FakeDrive implements DriveClient {
   async shareWriter(fileId: string, email: string) {
     this.shares.push({ fileId, email });
     return `perm-${fileId}`;
+  }
+  transfers: Array<{ fileId: string; permissionId: string }> = [];
+  failTransferWith: Error | null = null;
+  async transferOwnership(fileId: string, permissionId: string) {
+    if (this.failTransferWith) throw this.failTransferWith;
+    this.transfers.push({ fileId, permissionId });
   }
 }
 
@@ -503,6 +523,55 @@ describe("releaseToGoogleDocs", () => {
       assessment: s.assessment, senderSub: OWNER, scope: { section: s.section }, options: OPTS, drive,
     });
     expect(none).toEqual({ ok: false, error: "no_essays" });
+  });
+
+  test("ownership transfer: done after the share, recorded on the row (slice 5)", async () => {
+    const s = await scene();
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, transferOwnership: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.outcomes[0]).toMatchObject({ status: "sent", ownership: "transferred" });
+    expect(drive.transfers).toEqual([{ fileId: drive.docs[0]!.id, permissionId: `perm-${drive.docs[0]!.id}` }]);
+    const [row] = await getDb().select().from(google_doc_releases);
+    expect(row!.ownership_transferred_at).not.toBeNull();
+  });
+
+  test("a refused transfer still counts as sent, shared as editor (slice 5)", async () => {
+    const s = await scene();
+    const drive = new FakeDrive();
+    drive.failTransferWith = new DriveError(403, "consentRequiredForOwnershipTransfer");
+    const r = await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, transferOwnership: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.outcomes[0]).toMatchObject({
+      status: "sent",
+      ownership: "not_transferred",
+      ownership_error: "consentRequiredForOwnershipTransfer",
+    });
+    const [row] = await getDb().select().from(google_doc_releases);
+    expect(row!.ownership_transferred_at).toBeNull();
+  });
+
+  test("no transfer unless asked", async () => {
+    const s = await scene();
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment, senderSub: OWNER, scope: { attemptId: s.ada.attempt.id }, options: OPTS, drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(drive.transfers.length).toBe(0);
+    expect(r.outcomes[0]!.ownership).toBeUndefined();
   });
 
   test("a lost token mid-send stops the rest; another refusal fails that student only", async () => {

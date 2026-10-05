@@ -234,3 +234,14 @@ D-10).
   per-student page linked the Doc. 7.0 s for one student incl. creating
   three folders. The reconnect path (401 → Google → dialog reopens) was
   NOT exercised live — the morning's token was still within its hour.
+- 2026-10-05 — **slice 5 BUILT**: `transferOwnership` (PATCH the student's
+  writer permission to `owner`, `transferOwnership=true`) after the share
+  when "Give students ownership of their Doc" is ticked (off by default);
+  success sets `ownership_transferred_at` and reads "owned by the student";
+  a refusal still counts as sent (shared as editor) and reads "shared, but
+  ownership not transferred (<code>)"; a 401 during it stops the rest; the
+  per-student page marks "(owned by the student)". 5 tests. **Live ✅ on
+  local dev the same day** (new Doc + ownership): the demo student is owner,
+  James editor, the Doc still in the section folder — and the run
+  exercised the reconnect path live for the first time (POST 401 → drive
+  start → callback → POST 200, the dialog reopened with its choices).

@@ -11,6 +11,8 @@ export interface SendOutcome {
   status: "sent" | "skipped" | "failed";
   reason?: string;
   url?: string;
+  ownership?: "transferred" | "not_transferred";
+  ownership_error?: string;
 }
 
 export interface DialogState {
@@ -18,6 +20,8 @@ export interface DialogState {
   contents: ReleaseContents;
   mode: "skip" | "new";
   includeDrafts: boolean;
+  /** Slice 5. */
+  transferOwnership: boolean;
 }
 
 export const DEFAULT_CONTENTS: ReleaseContents = {
@@ -50,6 +54,15 @@ export function outcomeReason(o: SendOutcome): string {
   if (!o.reason) return "";
   if (o.status === "failed") return `Google Drive refused (${o.reason})`;
   return REASONS[o.reason] ?? o.reason;
+}
+
+/** Slice 5: the line after a sent name when a transfer was asked for. */
+export function ownershipNote(o: SendOutcome): string | null {
+  if (o.ownership === "transferred") return "owned by the student";
+  if (o.ownership === "not_transferred") {
+    return `shared, but ownership not transferred (${o.ownership_error ?? "unknown"})`;
+  }
+  return null;
 }
 
 export function summaryLine(outcomes: SendOutcome[]): string {
@@ -121,7 +134,13 @@ export function parseSavedState(raw: string | null): DialogState | null {
       const flag = (v.contents as Record<string, unknown> | undefined)?.[key];
       if (typeof flag === "boolean") contents[key] = flag;
     }
-    return { section: v.section, contents, mode: v.mode, includeDrafts: v.includeDrafts };
+    return {
+      section: v.section,
+      contents,
+      mode: v.mode,
+      includeDrafts: v.includeDrafts,
+      transferOwnership: v.transferOwnership === true,
+    };
   } catch {
     return null;
   }

@@ -17,6 +17,7 @@ import {
   authOutcomeCopy,
   authStartHref,
   outcomeReason,
+  ownershipNote,
   parseSavedState,
   sendErrorCopy,
   stateToSave,
@@ -63,6 +64,7 @@ export function SendToGoogleDocsControl({
     contents: DEFAULT_CONTENTS,
     mode: "skip",
     includeDrafts: false,
+    transferOwnership: false,
   });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -124,6 +126,7 @@ export function SendToGoogleDocsControl({
           contents: state.contents,
           mode: state.mode,
           include_drafts: state.includeDrafts,
+          transfer_ownership: state.transferOwnership,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -199,6 +202,18 @@ export function SendToGoogleDocsControl({
                     ) : (
                       <span>{o.name}</span>
                     )}
+                    {o.status === "sent" && ownershipNote(o) ? (
+                      <span
+                        className={
+                          o.ownership === "not_transferred"
+                            ? "text-danger-foreground"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {" "}
+                        — {ownershipNote(o)}
+                      </span>
+                    ) : null}
                     {o.status === "sent" ? null : (
                       <span
                         className={
@@ -293,6 +308,22 @@ export function SendToGoogleDocsControl({
                   onChange={(e) => setState({ ...state, includeDrafts: e.target.checked })}
                 />
                 {single ? "Send even if not handed in yet" : "Include students who have not handed in"}
+              </label>
+
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={state.transferOwnership}
+                  disabled={busy}
+                  onChange={(e) => setState({ ...state, transferOwnership: e.target.checked })}
+                />
+                <span>
+                  {single ? "Give the student ownership of the Doc" : "Give students ownership of their Doc"}
+                  <span className="block text-xs text-muted-foreground">
+                    The Doc becomes theirs. You keep edit access, and it stays listed in your folder.
+                  </span>
+                </span>
               </label>
             </div>
           )}

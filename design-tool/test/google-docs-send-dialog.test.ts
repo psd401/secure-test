@@ -8,6 +8,7 @@ import {
   authStartHref,
   canSendToGoogleDocs,
   outcomeReason,
+  ownershipNote,
   parseSavedState,
   stateToSave,
   storageKey,
@@ -21,6 +22,7 @@ const STATE: DialogState = {
   contents: { ...DEFAULT_CONTENTS, prompt: true },
   mode: "new",
   includeDrafts: true,
+  transferOwnership: true,
 };
 
 const o = (status: SendOutcome["status"], reason?: string): SendOutcome => ({
@@ -55,6 +57,14 @@ describe("send dialog logic", () => {
     );
   });
 
+  test("ownership notes", () => {
+    expect(ownershipNote({ ...o("sent"), ownership: "transferred" })).toBe("owned by the student");
+    expect(ownershipNote({ ...o("sent"), ownership: "not_transferred", ownership_error: "x" })).toBe(
+      "shared, but ownership not transferred (x)",
+    );
+    expect(ownershipNote(o("sent"))).toBeNull();
+  });
+
   test("auth outcomes: only ok is ok", () => {
     expect(authOutcomeCopy("ok").ok).toBe(true);
     for (const x of ["denied", "wrong_account", "scope_mismatch", "expired", "anything"]) {
@@ -67,6 +77,8 @@ describe("send dialog logic", () => {
     expect(stateToSave(STATE, null).mode).toBe("new");
     expect(stateToSave(STATE, [o("sent"), o("skipped", "drive_auth_expired")]).mode).toBe("skip");
     expect(parseSavedState("not json")).toBeNull();
+    const { transferOwnership: _omit, ...older } = STATE;
+    expect(parseSavedState(JSON.stringify(older))!.transferOwnership).toBe(false);
     expect(parseSavedState(JSON.stringify({ ...STATE, mode: "everything" }))).toBeNull();
     expect(parseSavedState(JSON.stringify({ ...STATE, contents: { prompt: "yes" } }))!.contents).toEqual(
       DEFAULT_CONTENTS,

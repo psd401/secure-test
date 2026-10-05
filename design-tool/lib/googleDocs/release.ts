@@ -40,6 +40,8 @@ export interface ReleaseOptions {
   mode: "skip" | "new";
   /** D-12: include attempts not handed in yet. */
   includeDrafts: boolean;
+  /** D-3 / slice 5: hand each Doc's ownership to its student. */
+  transferOwnership?: boolean;
 }
 
 export type SkipReason =
@@ -56,6 +58,10 @@ export interface StudentOutcome {
   status: "sent" | "skipped" | "failed";
   reason?: SkipReason | string;
   url?: string;
+  /** Slice 5, only when ownership transfer was asked for. A failed transfer
+   * leaves the Doc shared as editor; `ownership_error` carries Drive's code. */
+  ownership?: "transferred" | "not_transferred";
+  ownership_error?: string;
 }
 
 export type ReleaseResult =
@@ -320,7 +326,23 @@ export async function releaseToGoogleDocs(
           contents: options.contents,
         });
         const fileId = await drive.uploadDoc(title, sectionFolders.get(row.student.section ?? "")!, html);
-        await drive.shareWriter(fileId, row.student.email!);
+        const permissionId = await drive.shareWriter(fileId, row.student.email!);
+        // Slice 5: the Doc is already shared, so a failed transfer is
+        // reported, never a failed send.
+        let ownership: Pick<StudentOutcome, "ownership" | "ownership_error"> = {};
+        if (options.transferOwnership) {
+          try {
+            await drive.transferOwnership(fileId, permissionId);
+            ownership = { ownership: "transferred" };
+          } catch (err) {
+            if (err instanceof DriveAuthError) authLost = true;
+            else if (!(err instanceof DriveError)) throw err;
+            ownership = {
+              ownership: "not_transferred",
+              ownership_error: err instanceof DriveError ? err.code : "drive_auth_expired",
+            };
+          }
+        }
         await db.insert(google_doc_releases).values({
           attempt_id: row.attempt_id,
           sender_sub: senderSub,
@@ -328,8 +350,9 @@ export async function releaseToGoogleDocs(
           title,
           contents: { ...options.contents },
           was_draft: draft,
+          ownership_transferred_at: ownership.ownership === "transferred" ? new Date() : null,
         });
-        outcomes.push({ ...base, status: "sent", url: docUrl(fileId) });
+        outcomes.push({ ...base, status: "sent", url: docUrl(fileId), ...ownership });
       } catch (err) {
         if (err instanceof DriveAuthError) {
           authLost = true;

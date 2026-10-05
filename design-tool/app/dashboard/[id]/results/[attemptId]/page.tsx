@@ -588,6 +588,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 {formatWhen(r.created_at)}
               </a>
               {r.was_draft ? " (draft)" : null}
+              {r.ownership_transferred_at ? " (owned by the student)" : null}
             </span>
           ))}
         </p>

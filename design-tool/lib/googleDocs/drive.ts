@@ -32,6 +32,8 @@ export interface DriveClient {
   folderUsable(folderId: string): Promise<boolean>;
   uploadDoc(name: string, parentId: string, html: string): Promise<string>;
   shareWriter(fileId: string, email: string): Promise<string>;
+  /** Slice 5: make the student (already a writer) the owner. */
+  transferOwnership(fileId: string, permissionId: string): Promise<void>;
 }
 
 const RETRY_DELAYS_MS = [500, 1500, 4000];
@@ -131,6 +133,20 @@ export function createDriveClient(
         },
       );
       return String(json.id);
+    },
+
+    async transferOwnership(fileId, permissionId) {
+      // Proven by slice 0 (2026-10-05): within the district's Workspace the
+      // transfer is immediate, no pending-owner step; the sender stays a
+      // writer and the file keeps its parent in the sender's folder.
+      await call(
+        `${DRIVE}/files/${encodeURIComponent(fileId)}/permissions/${encodeURIComponent(permissionId)}?transferOwnership=true&fields=id`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ role: "owner" }),
+        },
+      );
     },
   };
 }
