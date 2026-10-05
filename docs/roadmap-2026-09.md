@@ -521,10 +521,15 @@ yes, "Your tests" flag deferred, client honours the 30 s grace):
   arrival, or a delivery 409 `time_expired`, never reaches `begin()`;
   back to Your tests with "Your time for this test has run out…". Seven
   rows in `client/MANUAL-CHECKS.md` "EX-2", NOT RUN.
-- Local branch `hold/ex2-delivery-409`: the delivery route's 409
-  `time_expired`. **Merge only after v1.5.0 is on the fleet** — a v1.4.0
-  client shown it lands on "This test could not be opened" with no way home
-  but Cmd-Q.
+- `5ec701c` (and the commit before it) server: the delivery route's 409 `time_expired`,
+  sent ONLY to a request carrying `X-SecureTest-Version` — which v1.5.0+
+  sends (`06a09cf`) — because a v1.4.0 client shown it lands on "This test
+  could not be opened" with no way home but Cmd-Q. Older clients keep the
+  old 200, so the server half ships ahead of the fleet. The header also
+  makes a server-side client-version count possible (not built).
+- `79e8266`: checked on the origin, the dialog defaults to No time limit
+  and warns on a deadline; its subtitle now says "will have no time limit"
+  (it read as the student's current state).
 - Deferred: "Your tests" showing "Time ran out — ask your teacher" instead
   of Resume (needs a `/api/me/sittings` field + client work).
 
