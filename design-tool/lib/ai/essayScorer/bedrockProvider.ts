@@ -1,3 +1,4 @@
+import { log } from "../../log";
 import { converseTextWithMeta } from "../bedrockConverse";
 import {
   ESSAY_SCORER_PROMPT_VERSION,
@@ -6,6 +7,7 @@ import {
   buildEssayScoreUserPrompt,
   parseScoreResult,
   reconcileLevelIds,
+  reconcilePointsTotal,
   scoringView,
   validateAgainstRubric,
 } from "./scoreCore";
@@ -59,9 +61,13 @@ export const bedrockEssayScorer: EssayScorerProvider = {
       // and genuinely malformed output; it goes into the log line.
       throw new Error(`${err instanceof Error ? err.message : String(err)} (stopReason ${stopReason ?? "unknown"})`);
     }
-    const { result, repaired } = reconcileLevelIds(parsed, rubric);
+    const { result: levelled, repaired } = reconcileLevelIds(parsed, rubric);
     if (repaired > 0) {
       console.warn(`bedrock essay score: repaired ${repaired} level id(s) by points`);
+    }
+    const { result, corrected } = reconcilePointsTotal(levelled, rubric);
+    if (corrected) {
+      log.warn("essay_score_total_corrected", corrected);
     }
     const bounds = validateAgainstRubric(result, rubric);
     if (!bounds.valid) {

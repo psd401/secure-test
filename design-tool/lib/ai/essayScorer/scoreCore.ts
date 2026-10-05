@@ -284,3 +284,28 @@ export function reconcileLevelIds<
   });
   return { result: { ...result, criterion_scores }, repaired };
 }
+
+/**
+ * 2026-10-05 (pilot alarm): the model chose a valid level for every
+ * criterion — those levels summed to 33 — and reported `points: 34`. The
+ * bounds check refused it on every retry, so the teacher got no proposal.
+ * The level selections are what is scored; the total is derived from them.
+ *
+ * So, for MODEL output only (a teacher's manual score stays strict): when
+ * the result is valid against the rubric once `points` is set to the sum of
+ * the criterion points, that corrected result is returned. Any other defect
+ * leaves the result untouched for validateAgainstRubric to report.
+ */
+export function reconcilePointsTotal<
+  T extends {
+    criterion_scores: Array<{ criterion_id: string; level_id: string; points: number }>;
+    points: number;
+    max_points: number;
+  },
+>(result: T, rubric: Rubric): { result: T; corrected: { from: number; to: number } | null } {
+  const sum = result.criterion_scores.reduce((acc, cs) => acc + cs.points, 0);
+  if (Math.abs(result.points - sum) <= EPS) return { result, corrected: null };
+  const candidate = { ...result, points: sum };
+  if (!validateAgainstRubric(candidate, rubric).valid) return { result, corrected: null };
+  return { result: candidate, corrected: { from: result.points, to: sum } };
+}

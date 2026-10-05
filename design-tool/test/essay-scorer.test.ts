@@ -24,6 +24,7 @@ import {
   isScorableRubricStyle,
   parseScoreResult,
   reconcileLevelIds,
+  reconcilePointsTotal,
   rubricMaxPoints,
   scoringView,
   validateAgainstRubric,
@@ -170,6 +171,27 @@ describe("scoreCore validators", () => {
   ])("rejects %s", (_label, result) => {
     const verdict = validateAgainstRubric(result, RUBRIC);
     expect(verdict.valid).toBe(false);
+  });
+
+  test("reconcilePointsTotal sets a mis-added total to the level sum (2026-10-05)", () => {
+    const off = { ...good, points: good.points + 1 };
+    expect(validateAgainstRubric(off, RUBRIC).valid).toBe(false);
+    const { result, corrected } = reconcilePointsTotal(off, RUBRIC);
+    expect(corrected).toEqual({ from: good.points + 1, to: good.points });
+    expect(result.points).toBe(good.points);
+    expect(validateAgainstRubric(result, RUBRIC)).toEqual({ valid: true });
+  });
+
+  test("reconcilePointsTotal leaves a correct total and other defects alone", () => {
+    expect(reconcilePointsTotal(good, RUBRIC)).toEqual({ result: good, corrected: null });
+    const badLevel = {
+      ...good,
+      points: good.points + 1,
+      criterion_scores: [{ ...good.criterion_scores[0]!, level_id: "nope" }, good.criterion_scores[1]!],
+    };
+    expect(reconcilePointsTotal(badLevel, RUBRIC).corrected).toBeNull();
+    const badMax = { ...good, points: good.points + 1, max_points: good.max_points + 1 };
+    expect(reconcilePointsTotal(badMax, RUBRIC).corrected).toBeNull();
   });
 
   test("parseScoreResult takes the object out of prose wrapping (2026-09-15)", () => {
