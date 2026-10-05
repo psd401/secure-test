@@ -293,7 +293,7 @@
             <li>Open <b class="ui">Students</b>. Your class list is already there from PowerSchool.</li>
             <li>Press <b class="ui">Import TIDE settings</b> to bring in the state testing accommodations file.</li>
             <li>Open a student to review or change their supports. Your edits survive the next TIDE import.</li>
-            <li>On each assessment, tick the tools <b class="ui">allowed</b> on that test in its <b class="ui">Accommodations</b> tab. It saves as you go.</li>
+            <li>On each assessment, tick the tools allowed on that test in its <b class="ui">Allowed on this test</b> tab. It saves as you go, and <b class="ui">Who gets what</b> under the list shows what each student will actually get.</li>
           </ol>
         </div>
         <figure class="shot" data-src="/help/accommodations.png" data-alt="The Students page listing a class with accommodation markers">
@@ -303,10 +303,13 @@
       <h3 class="sub">Three places, one rule</h3>
       <ol class="steps">
         <li><b class="ui">Students page:</b> who is entitled to a support. Set it once; it carries over to every test.</li>
-        <li><b class="ui">Accommodations tab</b> (on the assessment): which supports are <em>allowed</em> on this test. Ticking a tool here gives it to no one by itself; it lets students who have it on the Students page use it.</li>
-        <li><b class="ui">Student accommodations tab</b> (on the assessment): exceptions for one student on this test only, to add or switch off a tool.</li>
+        <li><b class="ui">Allowed on this test</b> tab (on the assessment): which supports are <em>allowed</em> on this test. Ticking a tool here gives it to no one by itself; it lets students who have it on the Students page use it.</li>
+        <li><b class="ui">Exceptions for this test</b> tab (on the assessment): for one student on this test only, add or switch off a tool.</li>
       </ol>
-      <div class="tip"><strong>So a student gets a tool when:</strong> it is on their Students page record <em>and</em> ticked on the test's Accommodations tab, or you added it as an exception. In a co-taught class, the test uses the records of the teacher who owns the assessment.</div>
+      <div class="tip"><strong>So a student gets a tool when:</strong> it is on their Students page record <em>and</em> ticked on the test's Allowed on this test tab, or you added it as an exception. <b class="ui">Who gets what</b> shows the result for each student, and why a tool on someone's record isn't reaching them. In a co-taught class, the test uses the records of the teacher who owns the assessment.</div>
+      <figure class="shot" data-src="/help/who-gets-what.png" data-alt="The Allowed on this test tab with Who gets what listing each student's tools, an exception, and a tool on a record that isn't allowed">
+        <figcaption>Allowed on this test, with Who gets what below the list.</figcaption>
+      </figure>
     </section>
 
     <section class="topic" id="publish" data-title="Publish and practise">
@@ -350,7 +353,7 @@
         <li><b class="ui">Publish once and leave it published.</b> Unpublishing doesn't stop students; closing the session does.</li>
         <li><b class="ui">One session per class period.</b> Start a session when class starts and <b class="ui">Close session</b> when it ends. Answers are saved; nothing is handed in.</li>
         <li><b class="ui">Next class, start a new session.</b> Students see the test under <b class="ui">Your tests</b> with <b class="ui">Resume</b> and continue where they stopped. No new code to share.</li>
-        <li><b class="ui">Close the old session before you start the next.</b> Each open session is a separate row on the student's screen, so two open sessions show the same test twice.</li>
+        <li><b class="ui">Close the old session when the class ends.</b> Students see each test once under <b class="ui">Your tests</b> even with two sessions open, but an open session lets them keep working outside class time.</li>
         <li><b class="ui">When everyone's done,</b> close the session, open <b class="ui">Results</b> and press <b class="ui">Hand in all in progress</b>. It covers unfinished work from every session (pick a section first to limit it to one class).</li>
       </ol>
       <div class="tip"><strong>Scoring queue:</strong> only handed-in work reaches it. Work that is saved but still In progress shows on the Monitor and Results, not in the queue.</div>
@@ -444,8 +447,8 @@
       <div class="topic-body wide">
         <div>
           <ol class="steps">
-            <li>On the assessment's <b class="ui">Accommodations</b> tab, tick the tools this test allows: <b class="ui">Text-to-Speech (Test Content)</b>, <b class="ui">Text-to-Speech (Student Responses)</b>, <b class="ui">TTS for ELA Reading</b> and <b class="ui">Speech-to-Text</b>. The list shows only the tools the app delivers today.</li>
-            <li>Grant each tool to the students who need it: on the <b class="ui">Student accommodations</b> tab or the <b class="ui">Students</b> page. A TIDE import sets them too. A student with no grant sees nothing new.</li>
+            <li>On the assessment's <b class="ui">Allowed on this test</b> tab, tick the tools this test allows: <b class="ui">Text-to-Speech (Test Content)</b>, <b class="ui">Text-to-Speech (Student Responses)</b>, <b class="ui">TTS for ELA Reading</b> and <b class="ui">Speech-to-Text</b>. The list shows only the tools the app delivers today.</li>
+            <li>Grant each tool to the students who need it: on the <b class="ui">Exceptions for this test</b> tab or the <b class="ui">Students</b> page. A TIDE import sets them too. A student with no grant sees nothing new.</li>
             <li>A granted student sees <b class="ui">Speak</b> buttons on questions, passages and sources (which of those depends on the <b class="ui">Items</b> / <b class="ui">Stimuli</b> value), <b class="ui">Read my answer</b> under what they have typed, and <b class="ui">Speak my answer</b> to dictate into a short answer or essay.</li>
             <li>The <b class="ui">first time on each Mac</b>, a student granted Speech-to-Text is asked for microphone and speech-recognition permission before the test locks, and must press <b class="ui">Allow</b>. IT cannot approve the microphone ahead of time, so have those students open Secure Test and join once before test day.</li>
             <li>If they press Don't Allow, the test still works and the student sees "Speech-to-text isn't available on this Mac. Tell your teacher." You will also see a note on the Monitor. Allow it in System Settings, under Privacy &amp; Security, then rejoin.</li>
@@ -454,7 +457,7 @@
           <p class="note">Voices stay on the Mac: nothing is recorded or sent anywhere. Limits for now: English only; no speech-to-text inside tables; math is read as words, and anything unusual as "math expression".</p>
           <div class="tip"><strong>Feedback wanted:</strong> how do the voices sound on your students' Macs, and is anything missing? <b class="ui">Send feedback</b>, top right of every page, tells the project team.</div>
         </div>
-        <!-- TODO: picture still to capture (from the demo DB, per docs/help-capture.md): the Accommodations tab with the speech tools ticked. -->
+        <!-- TODO: picture still to capture (from the demo DB, per docs/help-capture.md): the Allowed on this test tab with the speech tools ticked. -->
       </div>
     </section>
 
@@ -465,12 +468,12 @@
         <dd>Closing returns students to Your tests with answers saved, but does not hand in. Press <b class="ui">Hand in</b> on the row, or open another session and they resume.</dd>
         <dt>A student has saved work, but isn't in the scoring queue.</dt>
         <dd>The queue shows handed-in work only. Press <b class="ui">Hand in</b> on their row (Monitor or Results), <b class="ui">Hand in all in progress</b> on Results for the whole class, or have them press <b class="ui">Finish and hand in</b>.</dd>
-        <dt>My students see the same test listed more than once.</dt>
-        <dd>More than one session is open for them; each one is a row. Close the older sessions on the <b class="ui">Test sessions</b> tab.</dd>
+        <dt>Start session says a session for this class is already open.</dt>
+        <dd>One with the same students is still open, and its code is shown. Use that one, or close it on the <b class="ui">Test sessions</b> tab and start again.</dd>
         <dt>A student keeps getting "Time is up." when they press Resume.</dt>
         <dd>Their time ran out, or a deadline you set with Adjust time has passed. Open <b class="ui">Adjust time</b> on their row and choose <b class="ui">No time limit</b> or a later time.</dd>
         <dt>A student's accommodation from the Students page didn't show up in the test.</dt>
-        <dd>The test's <b class="ui">Accommodations</b> tab doesn't allow that tool. Tick it there. Students without it on their record still won't get it.</dd>
+        <dd>The test's <b class="ui">Allowed on this test</b> tab doesn't allow that tool. Tick it there. Students without it on their record still won't get it. <b class="ui">Who gets what</b>, under the list, shows each student's result.</dd>
         <dt>A row says Idle while the student is clearly writing.</dt>
         <dd>Idle means nothing has been saved for 10 minutes. View screen shows what they are doing; typed text saves every few seconds on current Macs.</dd>
         <dt>A student's session ended by itself.</dt>

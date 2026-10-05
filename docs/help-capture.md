@@ -73,6 +73,13 @@ the help page shows. Files are in `design-tool/scripts/help-capture/content/`.
   deleted attempts.
 - One accommodation (Color Contrast, Yellow on Black) on Avery Brooks via
   **Students → Add support**.
+- **Cell Structure Quiz B** (U-16, 2026-10-05; the `who-gets-what` still):
+  a Draft allowed Zoom, Spell Check (Changes what is measured) and Color
+  Contrast; records on Jordan Castillo (Zoom 2X, Text-to-Speech Test Content
+  On), Mateo Dunn (Color Contrast Black on Rose), Priya Ellison
+  (Text-to-Speech Test Content On); exceptions Spell Check On for Mateo and
+  Zoom Off for Jordan. Made by SQL on the `_demo` database (it shows the
+  resolver, not the building).
 
 Typing through Chrome automation drops characters while the editor
 re-renders; set field values with the native value setter plus an `input`
@@ -97,6 +104,13 @@ pointer off the page.
   on, labels and watermark off (James, 2026-09-25), as `<name>-raw.gif`, then
   `scripts/help-capture/anim.sh <name>-raw <name> <seconds-per-frame> <crop>`
   → 900 px wide, last frame held 3 s.
+
+- **Built-in browser pane instead of Chrome** (2026-10-05, when Chrome
+  already holds a real local session on `localhost` and Next dev will not
+  hydrate on `127.0.0.1`): set the pane's viewport to 800 px wide (its
+  screenshots are 800 px, so 800 is 1:1), sign in with the cookie, hide the
+  dev badge, screenshot, then crop and palette the saved JPEG with the same
+  ffmpeg filter `still.sh` uses. The result is ~784 px wide rather than 900.
 
 ## 6. Before committing a screenshot
 

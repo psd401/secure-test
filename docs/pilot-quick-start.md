@@ -60,10 +60,10 @@ time) and its rubric is attached.
 
 ## Read-aloud and speech-to-text (client v1.4.0 and later)
 
-- **Grant it.** On the assessment's **Accommodations** tab, allow the tools
+- **Grant it.** On the assessment's **Allowed on this test** tab, allow the tools
   (Text-to-Speech Test Content / Student Responses / ELA Reading,
   Speech-to-Text); then grant each to the students who need it on the
-  **Student accommodations** tab or the **Students** page. TIDE imports set
+  **Exceptions for this test** tab or the **Students** page. TIDE imports set
   them too. The list shows only tools the app delivers.
 - **Students see** *Speak* on questions, passages and sources, *Read my
   answer* under their typing, and *Speak my answer* on short answers and
@@ -181,9 +181,9 @@ its own.
   session** when it ends. Answers are saved; nothing is handed in.
 - **Next class, start a new session.** Students see the test under **Your
   tests** with **Resume** and continue where they stopped.
-- **Close the old session before starting the next.** Each open session is
-  its own row on the student's screen, so two open sessions list the same
-  test twice.
+- **Close the old session when the class ends.** Students see each test
+  once under **Your tests** even with two sessions open, but an open session
+  lets them keep working outside class time.
 - **When everyone's done,** close the session, open **Results** and press
   **Hand in all in progress**. It covers unfinished work from every session
   (pick a section first to limit it to one class). Only handed-in work
@@ -265,12 +265,15 @@ its own.
   in progress** on Results for the whole class, or have them press **Finish
   and hand in**.
 - **A Students-page accommodation didn't show up in the test.** The test's
-  **Accommodations** tab doesn't allow that tool — that tab is what the test
-  permits, not what everyone gets. Tick it there; only students with it on
-  their record (or an exception on the Student accommodations tab) get it.
+  **Allowed on this test** tab doesn't allow that tool — that tab is what the
+  test permits, not what everyone gets. Tick it there; only students with it
+  on their record (or an exception on the Exceptions for this test tab) get
+  it. **Who gets what**, under the list, shows each student's result and why.
   In a co-taught class the owner's records are used.
-- **Students see the same test listed more than once.** More than one
-  session is open for them. Close the older ones on the Test sessions tab.
+- **Start session says a session for this class is already open.** One with
+  the same students is still open; its code is shown. Use it, or close it on
+  the Test sessions tab and start again. (Students see each test once under
+  Your tests, however many sessions are open.)
 - **"Time is up." every time a student presses Resume.** Their time ran out,
   or a deadline set with Adjust time has passed. **Adjust time** on their row
   → **No time limit** or a later time.
