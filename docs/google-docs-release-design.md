@@ -52,7 +52,8 @@ for peer review.
 
 - **R-1 No stored Google token.** Each send runs Google's incremental
   authorization for `https://www.googleapis.com/auth/drive.file` with
-  `include_granted_scopes=true` and `login_hint` = the teacher. Google
+  `login_hint` = the teacher, and WITHOUT `include_granted_scopes`
+  (finding GD-P1: it folds in every earlier grant). Google
   remembers the grant, so after the first consent it is a redirect with
   no prompt. The one-hour access token lives in an encrypted, httpOnly,
   short-lived cookie scoped to the send route, and nothing persists in
@@ -169,3 +170,18 @@ D-10).
 ## Progress
 
 - 2026-10-05 — note written; D-1…D-13 decided; nothing built.
+- 2026-10-05 — **slice 0 proof PASSED** (scratchpad script, James's staff
+  account → a demo student, local redirect URI). Consent granted
+  `drive.file` with no refresh token; a folder and an HTML upload
+  converted to a Google Doc; writer share with Drive's email; ownership
+  transfer to the student succeeded directly (no pending-owner step).
+  After the transfer the teacher's app still reads the file through
+  `drive.file`: the student is the owner, the file's parent is still the
+  teacher's folder (the folder listing shows the Doc itself, not a
+  shortcut), `canEdit` and `canShare` true, `canTrash` false. So "skip
+  existing" can trust the stored file id, and a transferred Doc stays
+  reachable. **Finding GD-P1:** with `include_granted_scopes=true` the
+  token came back carrying every scope this user had granted to this
+  OAuth client before, including `gmail.send`. R-1 changes: request
+  `drive.file` WITHOUT `include_granted_scopes`, and check that the
+  granted scope list is exactly what was asked for.
