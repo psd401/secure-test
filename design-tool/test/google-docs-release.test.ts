@@ -651,8 +651,16 @@ describe("POST /api/assessments/[id]/google-docs", () => {
       return Response.json({ id: `id-${++n}` });
     }) as typeof fetch;
     const cookie = await mintDriveTokenCookie("ya29.t", OWNER, 600);
+    const lines: Array<Record<string, unknown>> = [];
+    const prior = setLogSink((line) => lines.push(JSON.parse(line)));
     const res = await post(s.assessment.id, body({ section: s.section }), cookie);
+    setLogSink(prior);
     expect(res.status).toBe(200);
+    // Row 444 (b): the send's wall time is on the log line, nothing about a student.
+    const logged = lines.find((l) => l.event === "google_docs_released")!;
+    expect(logged).toMatchObject({ sent: 2, skipped: 0, failed: 0 });
+    expect(typeof logged.duration_ms).toBe("number");
+    expect(JSON.stringify(logged)).not.toContain("Ada");
     expect((res.body.outcomes as Array<{ status: string }>).map((o) => o.status)).toEqual(["sent", "sent"]);
     expect(seen.filter((x) => x.startsWith("POST https://www.googleapis.com/upload/")).length).toBe(2);
     expect(seen.filter((x) => x.includes("/permissions")).length).toBe(2);

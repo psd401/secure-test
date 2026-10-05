@@ -253,3 +253,9 @@ D-10).
 - 2026-10-05 — rows **437, 438, 440, 446 ✅** on local dev (a second fixture,
   `GD hand-run two essays 2026-10-05`: two essays in one set with sources).
   Still open: 431's absent cases, 432's Drive email, 439, 441–445.
+- 2026-10-05 — **row 445 ✅ on the origin** (rev 88, Aurora 0055): the
+  production redirect URI, the round trip with no consent screen, one Doc
+  for the demo student, the per-student link. **Row 444 accepted on the
+  estimate** (James: options b + c — no real section is sent just to time
+  it); `google_docs_released` now logs `duration_ms`, to be read on the
+  first real class send. Needs a deploy to reach the origin.

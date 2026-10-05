@@ -79,6 +79,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "drive_auth_needed" }, { status: 401 });
   }
 
+  // Row 444 (option b, 2026-10-05): the send's wall time goes on the log line
+  // so the first real class send measures it against the ALB's 60 s limit.
+  const startedAt = Date.now();
   const result = await releaseToGoogleDocs(db, {
     assessment: access.assessment,
     senderSub: session.sub,
@@ -103,6 +106,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     skipped: count("skipped"),
     failed: count("failed"),
     drive_auth_needed: result.drive_auth_needed,
+    duration_ms: Date.now() - startedAt,
   });
   return NextResponse.json({
     ok: true,
