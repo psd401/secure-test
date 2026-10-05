@@ -215,3 +215,22 @@ D-10).
   one `scope_key` string so the unique index needs no NULLS NOT DISTINCT.
   Not yet run against real Drive end to end — slice 4's dialog is the
   first real path.
+- 2026-10-05 — **slice 4 BUILT** (`components/app/SendToGoogleDocsControl.tsx`,
+  `lib/googleDocs/sendDialog.ts`): "Send to Google Docs" beside Print
+  student work on the results page (edit level, not acting as, an essay on
+  the assessment, at least one labelled section; defaults to the page's
+  section filter) and on the per-student page (never on a practice
+  attempt), with the sender's own releases linked there ("Released to
+  Google Docs: <time>", "(draft)" marked). Dialog: section, the five
+  content boxes, skip / new, include drafts, then a per-student result list
+  (sent names link to the Doc). On 401 `drive_auth_needed` the choices go to
+  sessionStorage, the teacher goes through Google, and `?gdrive=` reopens
+  the dialog with a notice; a send that lost its token partway comes back
+  as "skip". 6 tests on the pure logic. **First real send ✅ on local dev
+  the same day** (James's Chrome, demo student, `GD hand-run 2026-10-05`
+  with a human final + note): one Doc in `secure-test / <assessment> /
+  <section>`, prompt + essay + score table + note, the student an editor,
+  a second Send with Skip reported "already has a Doc from you", the
+  per-student page linked the Doc. 7.0 s for one student incl. creating
+  three folders. The reconnect path (401 → Google → dialog reopens) was
+  NOT exercised live — the morning's token was still within its hour.

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { DeleteAttemptAndReturn } from "./DeleteAttemptAndReturn";
 import { notFound, redirect } from "next/navigation";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assets,
   attempt_events,
   attempts,
+  google_doc_releases,
   items,
   responses,
   scores,
@@ -32,7 +33,10 @@ import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment } from "@/lib/api/access";
+import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
+import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
+import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { docUrl } from "@/lib/googleDocs/drive";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
@@ -313,6 +317,29 @@ export default async function AttemptResultPage({ params }: PageProps) {
     .where(eq(items.assessment_id, id))
     .orderBy(asc(items.position));
 
+  // Row GD slice 4 (docs/google-docs-release-design.md): this teacher's own
+  // Docs for this attempt (a co-teacher's are in their Drive, not linkable
+  // here). Practice attempts are never released, so none is offered.
+  const showGoogleDocs =
+    !attempt.practice &&
+    canSendToGoogleDocs({
+      editLevel: levelSatisfies(access.level, "edit"),
+      actingAs: Boolean(session.actor_sub),
+      itemTypes: itemRows.map((i) => i.type),
+    });
+  const myReleases = showGoogleDocs
+    ? await db
+        .select()
+        .from(google_doc_releases)
+        .where(
+          and(
+            eq(google_doc_releases.attempt_id, attemptId),
+            eq(google_doc_releases.sender_sub, session.sub),
+          ),
+        )
+        .orderBy(desc(google_doc_releases.created_at))
+    : [];
+
   // Stems reach this page rendered — math as KaTeX, image refs owner-scoped —
   // the same resolution the review queue does, for the same reason: a teacher
   // reading a student's answer should see the question as the student saw it.
@@ -496,6 +523,14 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 Print this student&apos;s work
               </a>
             )}
+            {showGoogleDocs ? (
+              <SendToGoogleDocsControl
+                assessmentId={id}
+                attemptId={attemptId}
+                studentName={row.student.name || row.student.ssid || "this student"}
+                returnPath={`/dashboard/${id}/results/${attemptId}`}
+              />
+            ) : null}
             {row.status === "in_progress" ? (
               <HandInAttemptAndReload
                 attemptId={attemptId}
@@ -542,6 +577,21 @@ export default async function AttemptResultPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {myReleases.length > 0 ? (
+        <p className="mb-4 text-sm text-muted-foreground">
+          Released to Google Docs:{" "}
+          {myReleases.map((r, i) => (
+            <span key={r.id}>
+              {i > 0 ? " · " : null}
+              <a href={docUrl(r.drive_file_id)} target="_blank" rel="noreferrer" className="underline">
+                {formatWhen(r.created_at)}
+              </a>
+              {r.was_draft ? " (draft)" : null}
+            </span>
+          ))}
+        </p>
+      ) : null}
 
       <SafeguardingPanel alerts={panelAlerts} canAcknowledge={canAcknowledge} />
 

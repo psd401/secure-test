@@ -16,6 +16,8 @@ import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
+import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
+import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
 import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
 import { canReleaseAnswers, showsReleasedLine } from "@/lib/feedback/settingsUi";
 import { ClassInsightsPanel } from "@/components/app/ClassInsightsPanel";
@@ -134,6 +136,19 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   const readyAttemptIds = inProgressRows
     .filter((r) => !r.sitting_open || r.deadline_passed)
     .map((r) => r.attempt_id);
+  // Row GD slice 4 (docs/google-docs-release-design.md): a section send needs
+  // a section label, so the button offers the labelled sections only; an
+  // unsectioned student is sent from their own page.
+  const showGoogleDocs =
+    labels.length > 0 &&
+    canSendToGoogleDocs({
+      editLevel: levelSatisfies(access.level, "edit"),
+      actingAs: Boolean(session.actor_sub),
+      itemTypes: results.items.map((i) => i.type),
+    });
+  const resultsPath = `/dashboard/${assessment.id}/results${
+    selectedSection ? `?section=${encodeURIComponent(selectedSection)}` : ""
+  }`;
   const showHandInInProgress =
     inProgressRows.length > 0 && levelSatisfies(access.level, "run");
 
@@ -175,6 +190,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           >
             Print student work
           </a>
+          {showGoogleDocs ? (
+            <SendToGoogleDocsControl
+              assessmentId={assessment.id}
+              sections={labels}
+              defaultSection={selectedSection}
+              returnPath={resultsPath}
+            />
+          ) : null}
           {showReleaseButton || showReleasedLine ? (
             <ReleaseAnswersAndReload assessmentId={assessment.id} releasedAt={releasedAtIso} />
           ) : null}
