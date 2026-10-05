@@ -250,3 +250,6 @@ D-10).
   approved-AI feedback, two essays, co-teacher, wrong account, trashed
   folder, a full-section timing, the origin, practice). Next: the deploy
   (migration 0055 at boot) and the origin rows.
+- 2026-10-05 — rows **437, 438, 440, 446 ✅** on local dev (a second fixture,
+  `GD hand-run two essays 2026-10-05`: two essays in one set with sources).
+  Still open: 431's absent cases, 432's Drive email, 439, 441–445.
