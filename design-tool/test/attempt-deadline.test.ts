@@ -465,9 +465,12 @@ describe("an assessment with no time limit is untouched", () => {
   });
 });
 
-async function getDelivery(assessmentId: string) {
+async function getDelivery(assessmentId: string, clientVersion: string | null = "1.5.0") {
   const { GET } = await import("../app/api/assessments/[id]/delivery/route");
-  return GET(new Request("http://localhost/x"), {
+  const headers: Record<string, string> = clientVersion
+    ? { "X-SecureTest-Version": clientVersion }
+    : {};
+  return GET(new Request("http://localhost/x", { headers }), {
     params: Promise.resolve({ id: assessmentId }),
   });
 }
@@ -478,6 +481,11 @@ describe("delivery bundle refuses an expired attempt (EX-2)", () => {
     const res = await getDelivery(s.assessment.id);
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ ok: false, error: "time_expired" });
+  });
+
+  test("a client without the version header (<= v1.4.0) still gets 200", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
+    expect((await getDelivery(s.assessment.id, null)).status).toBe(200);
   });
 
   test("inside the grace -> 200", async () => {

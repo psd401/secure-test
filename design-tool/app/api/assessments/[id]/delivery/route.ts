@@ -39,7 +39,10 @@ interface RouteContext {
  * student on a teacher's roster still cannot read an assessment they were never
  * admitted to.
  */
-export async function GET(_req: Request, ctx: RouteContext) {
+/** Sent by client v1.5.0+ on every API call (`APIClient.versionHeader`). */
+const CLIENT_VERSION_HEADER = "x-securetest-version";
+
+export async function GET(req: Request, ctx: RouteContext) {
   const auth = await requireStudentOrPractice();
   if (!auth.ok) return auth.response;
 
@@ -87,7 +90,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
   // counting down to an instant already past. Submitted attempts are left as
   // they were; no limit / removed limit / extension all resolve inside
   // deadlineFor, so there is one rule.
-  if (attempt.status === "in_progress") {
+  //
+  // Only for a client that sends `X-SecureTest-Version` (v1.5.0+, which
+  // handles the 409 by going home with "Your time for this test has run
+  // out"). A client without it (≤ v1.4.0) dead-ends on a 409 — "This test
+  // could not be opened" and no way home but Cmd-Q — so it keeps the old
+  // 200 and its own countdown ends the session.
+  if (attempt.status === "in_progress" && req.headers.has(CLIENT_VERSION_HEADER)) {
     const expired = await refuseIfPastDeadline(db, attempt);
     if (expired) return expired;
   }
