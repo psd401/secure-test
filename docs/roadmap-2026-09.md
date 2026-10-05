@@ -529,7 +529,8 @@ yes, "Your tests" flag deferred, client honours the 30 s grace):
   makes a server-side client-version count possible (not built).
 - `79e8266`: checked on the origin, the dialog defaults to No time limit
   and warns on a deadline; its subtitle now says "will have no time limit"
-  (it read as the student's current state).
+  (it read as the student's current state). DEPLOYED with the gate: task
+  def rev 85, health stamp = `2487b95`; subtitle checked on the origin.
 - Deferred: "Your tests" showing "Time ran out — ask your teacher" instead
   of Resume (needs a `/api/me/sittings` field + client work).
 
