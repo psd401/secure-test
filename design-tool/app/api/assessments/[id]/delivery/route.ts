@@ -16,7 +16,7 @@ import {
   buildDeliveryBundle,
 } from "@/lib/api/buildDeliveryBundle";
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
-import { deadlineFor } from "@/lib/api/attemptDeadline";
+import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -80,6 +80,16 @@ export async function GET(_req: Request, ctx: RouteContext) {
     // 404 rather than 403: an assessment this student was never admitted to
     // should be indistinguishable from one that does not exist.
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+  }
+
+  // EX-2: an in-progress attempt whose time is up (deadline + the shared
+  // grace) gets the same 409 the write routes give, rather than a bundle
+  // counting down to an instant already past. Submitted attempts are left as
+  // they were; no limit / removed limit / extension all resolve inside
+  // deadlineFor, so there is one rule.
+  if (attempt.status === "in_progress") {
+    const expired = await refuseIfPastDeadline(db, attempt);
+    if (expired) return expired;
   }
 
   const accommodations = await resolveEffectiveAccommodations(

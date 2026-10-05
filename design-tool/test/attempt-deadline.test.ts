@@ -464,3 +464,55 @@ describe("an assessment with no time limit is untouched", () => {
     expect((await submit(s.attempt.id)).status).toBe(200);
   });
 });
+
+async function getDelivery(assessmentId: string) {
+  const { GET } = await import("../app/api/assessments/[id]/delivery/route");
+  return GET(new Request("http://localhost/x"), {
+    params: Promise.resolve({ id: assessmentId }),
+  });
+}
+
+describe("delivery bundle refuses an expired attempt (EX-2)", () => {
+  test("past the grace -> 409 time_expired", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
+    const res = await getDelivery(s.assessment.id);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "time_expired" });
+  });
+
+  test("inside the grace -> 200", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 610 });
+    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+  });
+
+  test("future deadline -> 200", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 60 });
+    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+  });
+
+  test("no time limit -> 200", async () => {
+    const s = await scenario({ timeLimitSeconds: null, elapsedSeconds: 60 * 60 * 8 });
+    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+  });
+
+  test("removed limit with a past override -> 200", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
+    await getDb()
+      .update(attempts)
+      .set({
+        time_limit_removed: true,
+        deadline_override_at: new Date(Date.now() - 3600 * 1000),
+      })
+      .where(eq(attempts.id, s.attempt.id));
+    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+  });
+
+  test("a submitted attempt past its deadline is unchanged -> 200", async () => {
+    const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
+    await getDb()
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: new Date() })
+      .where(eq(attempts.id, s.attempt.id));
+    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+  });
+});
