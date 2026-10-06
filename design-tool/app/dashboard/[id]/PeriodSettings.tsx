@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { tideValuesForTool } from "@/lib/accommodations/tideCatalog";
 import type { SectionAccommodation, SectionAccommodations } from "@/lib/accommodations/sections";
+import { applyTargets, applyToAllPeriods, overwrittenTargets } from "@/lib/accommodations/applyToAllPeriods";
 import { createAutosave } from "@/lib/autosave";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -54,6 +55,8 @@ export function PeriodSettings({
   const [config, setConfig] = useState<SectionAccommodations>(initial);
   const [options, setOptions] = useState<PeriodOption[] | null>(null);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  // U-20: the period whose "Apply to all my periods" is waiting on a confirm.
+  const [confirmApply, setConfirmApply] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,13 +101,24 @@ export function PeriodSettings({
   }
   useEffect(() => () => void autosave.current?.flush(), []);
 
+  function commit(out: SectionAccommodations) {
+    setConfig(out);
+    autosave.current?.schedule(out);
+  }
+
   function update(psId: string, next: SectionAccommodation | null) {
     if (isLocked) return;
+    setConfirmApply(null);
     const out = { ...config };
     if (!next || (next.allowed === null && next.grants.length === 0)) delete out[psId];
     else out[psId] = next;
-    setConfig(out);
-    autosave.current?.schedule(out);
+    commit(out);
+  }
+
+  function applyToAll(psId: string, targets: string[]) {
+    if (isLocked) return;
+    setConfirmApply(null);
+    commit(applyToAllPeriods(config, psId, targets));
   }
 
   const narrowOnly = assignedScope !== "teacher";
@@ -134,6 +148,10 @@ export function PeriodSettings({
     update(selected, { allowed: current.allowed, grants: value ? [...others, { tool_id: toolId, value }] : others });
   }
 
+  const targets = selected ? applyTargets(options ?? [], selected) : [];
+  const overwritten = selected ? overwrittenTargets(config, selected, targets) : [];
+  const labelOf = (psId: string) => (options ?? []).find((o) => o.ps_id === psId)?.label ?? `Section ${psId}`;
+
   const optionLabel = (o: PeriodOption) =>
     `${o.label}${config[o.ps_id] ? " · own settings" : ""}${o.on_roster ? "" : " (no longer on a class list)"}`;
 
@@ -151,7 +169,10 @@ export function PeriodSettings({
         <NativeSelect
           id="period-picker"
           value={selected ?? ""}
-          onChange={(e) => onSelect(e.target.value === "" ? null : e.target.value)}
+          onChange={(e) => {
+            setConfirmApply(null);
+            onSelect(e.target.value === "" ? null : e.target.value);
+          }}
           disabled={options === null}
         >
           <NativeSelectOption value="">All periods (the list above)</NativeSelectOption>
@@ -236,9 +257,40 @@ export function PeriodSettings({
           </div>
 
           {config[selected] ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => update(selected, null)}>
-              Remove this period&apos;s settings
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {targets.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    overwritten.length > 0 ? setConfirmApply(selected) : applyToAll(selected, targets)
+                  }
+                >
+                  Apply to all my periods
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" size="sm" onClick={() => update(selected, null)}>
+                Remove this period&apos;s settings
+              </Button>
+            </div>
+          ) : null}
+
+          {confirmApply === selected && overwritten.length > 0 ? (
+            <div role="alertdialog" aria-labelledby="apply-all-confirm" className="space-y-2 rounded-md border p-3 text-sm">
+              <p id="apply-all-confirm">
+                This replaces the settings already on {overwritten.map(labelOf).join(", ")}. Every other period
+                you teach gets this period&apos;s settings too.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={() => applyToAll(selected, targets)}>
+                  Replace and apply
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setConfirmApply(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
           ) : null}
         </fieldset>
       ) : null}
