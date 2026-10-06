@@ -12,11 +12,14 @@
 //
 // A blank old value is never kept (nothing to recover), nor an unchanged one.
 // The read and the insert run inside the caller's transaction, beside the
-// write they precede.
+// write they precede, in their own SAVEPOINT: history is best-effort (James,
+// 2026-10-06, 6.1) — if keeping a version fails, the student's save still
+// goes through and the failure is logged at error level (it alarms).
 
 import { and, desc, eq } from "drizzle-orm";
 import type { ItemResponse } from "@secure-test/schema";
 import type { getDb } from "@/db/client";
+import { log } from "@/lib/log";
 import {
   response_revisions,
   responses,
@@ -94,7 +97,28 @@ export async function captureBeforeWrite(
   now: Date = new Date(),
 ): Promise<ResponseRevisionReason | null> {
   if (!HISTORY_ITEM_TYPES.has(item.type)) return null;
+  try {
+    // A nested transaction is a SAVEPOINT: a failure here rolls back only the
+    // history step, and the caller's write can still commit.
+    return await tx.transaction((sp) => captureInner(sp, attemptId, item.id, next, now));
+  } catch (err) {
+    log.error("answer_history_capture_failed", {
+      attempt_id: attemptId,
+      item_id: item.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
+async function captureInner(
+  tx: Tx,
+  attemptId: string,
+  itemId: string,
+  next: ItemResponse | null,
+  now: Date,
+): Promise<ResponseRevisionReason | null> {
+  const item = { id: itemId };
   const [current] = await tx
     .select({ response: responses.response, updated_at: responses.updated_at })
     .from(responses)

@@ -3,8 +3,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempts, items, response_revisions, students } from "../db/schema";
-import { answerLength, captureReason } from "../lib/api/answerHistory";
+import { assessments, attempts, items, response_revisions, responses, students } from "../db/schema";
+import { answerLength, captureBeforeWrite, captureReason } from "../lib/api/answerHistory";
 import {
   revisionMeasure,
   revisionReasonNote,
@@ -125,6 +125,39 @@ describe("sweepAnswerHistory (D-3)", () => {
     });
     return attempt!.id;
   }
+
+  // 6.1 (James, 2026-10-06): history is best-effort. A failing capture rolls
+  // back to its savepoint and the student's write in the same transaction
+  // still commits.
+  test("a failing capture never blocks the write beside it", async () => {
+    const attemptId = await attemptWithHistory("in_progress", null);
+    const db = getDb();
+    await db.execute(sql`delete from response_revisions`);
+    const [item] = await db.select().from(items).limit(1);
+    await db
+      .insert(responses)
+      .values({ attempt_id: attemptId, item_id: item!.id, response: { type: "essay", text: "old text" } });
+
+    await db.transaction(async (tx) => {
+      // An invalid `now` makes the revision insert throw inside the savepoint.
+      const kept = await captureBeforeWrite(
+        tx,
+        attemptId,
+        { id: item!.id, type: "essay" },
+        { type: "essay", text: "old text, longer" },
+        new Date(Number.NaN),
+      );
+      expect(kept).toBeNull();
+      await tx
+        .update(responses)
+        .set({ response: { type: "essay", text: "new text" } })
+        .where(sql`${responses.attempt_id} = ${attemptId}`);
+    });
+
+    const [row] = await db.select().from(responses);
+    expect((row!.response as { text: string }).text).toBe("new text");
+    expect((await db.select().from(response_revisions)).length).toBe(0);
+  });
 
   test("deletes history only for attempts handed in more than 30 days ago", async () => {
     const old = await attemptWithHistory("submitted", 31);
