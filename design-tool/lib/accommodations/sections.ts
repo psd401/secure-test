@@ -76,6 +76,12 @@ export function validateSectionAccommodations(
   return { ok: true };
 }
 
+/** U-20 slice 2: the period settings for the periods in `keep` only (a
+ * shared copy keeps the recipient's own periods). */
+export function keepPeriods(config: SectionAccommodations, keep: ReadonlySet<string>): SectionAccommodations {
+  return Object.fromEntries(Object.entries(config ?? {}).filter(([psId]) => keep.has(psId)));
+}
+
 /**
  * The rule for a student whose class periods (on this test) are
  * `sectionPsIds`. Periods without a configuration contribute the test's own

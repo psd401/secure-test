@@ -1,12 +1,13 @@
 // U-18 (docs/coteach-and-section-accommodations-design.md): accommodations by
 // class period — the rule, write validation, delivery's section choice, the
-// preview's ?section=, and copies leaving it behind.
+// preview's ?section=, and what copies keep (U-20 slice 2).
 //
 // Fixture roster: teacher.one leads 5001 (Ada 1001, Ben 1002) and 5003 (Ada).
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import {
+  assessment_shares,
   assessment_student_overrides,
   assessments,
   student_accommodations,
@@ -26,6 +27,8 @@ import {
 import { buildAccommodationsPreview } from "../lib/accommodations/preview";
 import { buildExportBundle } from "../lib/api/exportBundle";
 import { duplicateAssessment } from "../lib/api/duplicateAssessment";
+import { acceptShare } from "../lib/api/shares";
+import type { SessionPayload } from "../lib/auth/session";
 import { OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
 
 const TEACHER = "section-acc-teacher";
@@ -289,19 +292,83 @@ describe("preview ?section=", () => {
   });
 });
 
-describe("copies leave per-period settings behind (13.10)", () => {
-  test("export bundle and Duplicate", async () => {
-    const a = await seed({ "5001": { allowed: null, grants: [{ tool_id: "zoom", value: "2X" }] } });
+describe("copies and per-period settings (U-20 slice 2, reversing 13.10)", () => {
+  const cfg: SectionAccommodations = {
+    "5001": { allowed: null, grants: [{ tool_id: "zoom", value: "2X" }] },
+    "5002": { allowed: ["spell_check"], grants: [{ tool_id: "spell_check", value: "On" }] },
+  };
+
+  test("the export bundle still leaves them behind", async () => {
+    const a = await seed(cfg);
     const built = await buildExportBundle(getDb(), a, TEACHER, true);
     expect(built.ok).toBe(true);
     if (built.ok) expect(JSON.stringify(built.bundle)).not.toContain("section_accommodations");
+  });
 
+  test("Duplicate keeps them whole", async () => {
+    const a = await seed(cfg);
     const dup = await duplicateAssessment(getDb(), a, TEACHER, TEACHER_EMAIL);
     expect(dup.ok).toBe(true);
     if (!dup.ok) return;
     const [copy] = await getDb().select().from(assessments).where(eq(assessments.id, dup.assessment_id));
-    expect(copy!.section_accommodations).toEqual({});
+    expect(copy!.section_accommodations).toEqual(cfg);
     expect(copy!.allowed_accommodations).toEqual(["color_contrast", "spell_check", "zoom"]);
+  });
+
+  test("a Share copy keeps only the periods the recipient teaches", async () => {
+    // The fixture's teacher leads 5001 and 5003, not 5002: shared TO them
+    // from another owner, only 5001 survives.
+    const db = getDb();
+    const [src] = await db
+      .insert(assessments)
+      .values({
+        owner_sub: "section-acc-sharer",
+        owner_email: "sharer@psd401.net",
+        name: "Shared by period",
+        allowed_accommodations: ["color_contrast", "spell_check", "zoom"],
+        section_accommodations: cfg,
+      })
+      .returning();
+    const [share] = await db
+      .insert(assessment_shares)
+      .values({
+        assessment_id: src!.id,
+        recipient_email: TEACHER_EMAIL,
+        shared_by_sub: "section-acc-sharer",
+        shared_by_email: "sharer@psd401.net",
+      })
+      .returning();
+    const accepted = await acceptShare(share!.id, { sub: TEACHER, role: "staff", email: TEACHER_EMAIL } as SessionPayload);
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    const [copy] = await db.select().from(assessments).where(eq(assessments.id, accepted.assessment_id));
+    expect(copy!.section_accommodations).toEqual({ "5001": cfg["5001"]! });
+  });
+
+  test("a Share copy to a teacher with none of the periods keeps none", async () => {
+    const db = getDb();
+    const [src] = await db
+      .insert(assessments)
+      .values({ owner_sub: TEACHER, owner_email: TEACHER_EMAIL, name: "Mine", section_accommodations: cfg })
+      .returning();
+    const [share] = await db
+      .insert(assessment_shares)
+      .values({
+        assessment_id: src!.id,
+        recipient_email: "nobody.teaches@psd401.net",
+        shared_by_sub: TEACHER,
+        shared_by_email: TEACHER_EMAIL,
+      })
+      .returning();
+    const accepted = await acceptShare(share!.id, {
+      sub: "section-acc-recipient",
+      role: "staff",
+      email: "nobody.teaches@psd401.net",
+    } as SessionPayload);
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    const [copy] = await db.select().from(assessments).where(eq(assessments.id, accepted.assessment_id));
+    expect(copy!.section_accommodations).toEqual({});
   });
 });
 

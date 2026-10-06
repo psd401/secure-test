@@ -72,8 +72,9 @@ export const assessments = pgTable(
     // U-18 (docs/coteach-and-section-accommodations-design.md): per class
     // period — `{ "<section_ps_id>": { allowed: string[] | null, grants:
     // [{ tool_id, value }] } }`. `allowed: null` = use the list above.
-    // Shape and invariants in lib/accommodations/sections.ts. Never carried
-    // by exports, Duplicate or Share copies (13.10).
+    // Shape and invariants in lib/accommodations/sections.ts. Not carried by
+    // the export bundle; Duplicate copies it whole and a Share copy keeps the
+    // recipient's own periods (U-20 slice 2, reversing 13.10).
     section_accommodations: jsonb("section_accommodations")
       .$type<Record<string, { allowed: string[] | null; grants: { tool_id: string; value: string }[] }>>()
       .notNull()

@@ -6,6 +6,8 @@ import { roleForEmail } from "@/lib/auth/roles";
 import type { SessionPayload } from "@/lib/auth/session";
 import { buildExportBundle } from "@/lib/api/exportBundle";
 import { importBundleForOwner, isImportBundleError } from "@/lib/api/importBundle";
+import { keepPeriods } from "@/lib/accommodations/sections";
+import { sectionsCurrentlyTaughtBy } from "@/lib/roster/queries";
 
 // Slice C (2026-09-01): staff-to-staff sharing with COPY semantics.
 //
@@ -163,6 +165,22 @@ export async function acceptShare(
   const imported = await importBundleForOwner(built.bundle, recipient.sub, email);
   if (isImportBundleError(imported)) {
     return { ok: false, status: 500, error: `copy_${imported.error}` };
+  }
+  // U-20 slice 2 (James, 2026-10-06, option a): the period settings come
+  // along only for class periods the recipient teaches now (a co-taught
+  // period, typically). The sharer's other periods mean nothing for the
+  // recipient's students, so they are dropped rather than left as
+  // "no longer on a class list". A separate statement after the import's own
+  // transaction, like Duplicate's settings update.
+  if (Object.keys(source.section_accommodations ?? {}).length > 0) {
+    const taught = new Set((await sectionsCurrentlyTaughtBy(db, email)).map((s) => s.ps_id));
+    const kept = keepPeriods(source.section_accommodations, taught);
+    if (Object.keys(kept).length > 0) {
+      await db
+        .update(assessments)
+        .set({ section_accommodations: kept, updated_at: new Date() })
+        .where(eq(assessments.id, imported.assessment_id));
+    }
   }
   await db
     .update(assessment_shares)

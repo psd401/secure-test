@@ -14,7 +14,7 @@ import { importBundleForOwner, isImportBundleError } from "@/lib/api/importBundl
 // the copy belong to the same teacher, so `uniqueImportName` sees the source's
 // own name as taken and the copy lands as "<name> (copy)", "(copy 2)", …
 //
-// Four settings do NOT ride the bundle — the wire format has no field for
+// Five settings do NOT ride the bundle — the wire format has no field for
 // them, and import forces `description` to "" — so they are applied to the
 // new row afterwards. That update is a SEPARATE statement from the import's
 // own transaction: `importBundleForOwner` opens and commits its transaction
@@ -22,6 +22,12 @@ import { importBundleForOwner, isImportBundleError } from "@/lib/api/importBundl
 // with default settings for a moment; a crash inside it leaves a valid Draft
 // copy carrying no description / time limit / allow flags, which is a visible,
 // editable row rather than a corrupt one.
+//
+// U-20 slice 2 (James, 2026-10-06, reversing U-18's 13.10): the copy keeps
+// the period settings (`section_accommodations`) whole. Duplicate is
+// owner-only and the copy has the same owner, so the class periods are the
+// same; periods no longer on a class list come along as they show on the
+// source. The backup file (export / import) still does not carry them.
 //
 // Deliberately NOT carried: per-student overrides, attempts, sittings, shares,
 // `status` (the copy is always a Draft) and `archived_at` (the copy is always
@@ -87,6 +93,7 @@ export async function duplicateAssessment(
       time_limit_seconds: source.time_limit_seconds,
       allow_clipboard: source.allow_clipboard,
       allow_llm_authoring: source.allow_llm_authoring,
+      section_accommodations: source.section_accommodations,
       updated_at: new Date(),
     })
     .where(eq(assessments.id, imported.assessment_id))
