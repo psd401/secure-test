@@ -130,3 +130,9 @@ essay-hour, a few MB per class session at essay sizes. Swept at 30 days.
   7:42:49) — the 7:40 text backfilled as ONE `response_revisions` row
   (`shrink`) on the live database; every temporary cluster deleted, the
   local copies of the text deleted. The teacher restores it herself (row 482).
+- 2026-10-06 midday: rows 476–485 run on the origin (all ✅ bar 479, which
+  needs a second staff account). The teacher restored the backfilled essay
+  herself at 12:12 PT (7,739 characters; no score set aside — the emptied
+  essay had not been scored). Help page topic 9 "Earlier versions of an
+  answer" (+ picture, + FAQ) and the roadmap milestone deployed (`1e8cb72`,
+  no migration).
