@@ -1477,3 +1477,17 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 485 | Restore the "kept before a restore" row | The answer switches back (undo) | ✅ 2026-10-06 origin — back to "Autumn.", then the full essay restored again |
 
 After the 2026-10-06 sitting: the client quit, sitting `75CXSS` closed, the fixture `Answer history hand-run 2026-10-06` archived (its one attempt kept).
+
+## Apply to all my periods + copies keep period settings (U-20, 2026-10-06)
+
+Fixture: any test with two or more of your periods on the roster. Rows 486–489 run on local `_demo` before the commit (`Cell Structure Quiz B`, settings restored after); 490 needs a second staff account.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 486 | On By class period, give English 10 Spell Check; no other period set; press **Apply to all my periods** | No confirm; every period on a class list gets the same setting; "Saved" | ✅ 2026-10-06 local `_demo` (DB showed all three periods identical) |
+| 487 | Give Biology Zoom, go back to English 10, press **Apply to all my periods** | Inline confirm naming "Biology · 3(A)" only; **Replace and apply** replaces it; **Cancel** leaves it | ✅ 2026-10-06 local `_demo` (Replace path; Cancel not pressed) |
+| 488 | A period with no own settings, or a teacher with one period | No **Apply to all my periods** button | ✅ 2026-10-06 local `_demo` for a period with no own settings (AP Biology); the one-period teacher half not run (the button's rule needs another period on a class list, unit-tested) |
+| 489 | **Duplicate** a test with period settings | The copy's By class period shows the same periods "· own settings"; Who gets what on the copy shows "Whole period" | ✅ 2026-10-06 local `_demo` (9 of 10 students Whole period, the tenth from the co-teacher's record; copy deleted) |
+| 490 | **Share** a test with period settings to a colleague who co-teaches one of those periods; they Add it | Their copy keeps that period only; their other periods unset; none of the sharer's other periods listed | NOT RUN — needs a second staff account (route-tested) |
+| 491 | Row 473 with Spell Check: a period given Spell Check through **Apply to all my periods**, a real student joins that period's session on the client | Spelling squiggles in the essay; a student in a period without it gets none | NOT RUN — needs the origin after the deploy |
+

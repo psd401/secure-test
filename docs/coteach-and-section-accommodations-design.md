@@ -174,7 +174,9 @@ class list", removable). (Question 13.9.)
 **Copies, shares, exports.** Section ids are one teacher's classes.
 `section_accommodations` is NOT carried by the teacher bundle (export /
 import), Duplicate, or Share-copy — a copy starts with the assessment-wide
-rule only. (Question 13.10.)
+rule only. (Question 13.10.) **REVERSED 2026-10-06 (James, U-20):**
+Duplicate copies them whole; a Share copy keeps only the periods the
+recipient teaches; the export bundle still carries none. See §Progress.
 
 **UI (D-7).** On the Allowed tab, above the checklist: "Settings for:
 All periods ▾ | <section> …". "All periods" is today's checklist. Picking a
@@ -315,3 +317,23 @@ once after 4.
   FAQ + Duplicate line; `/roadmap.html` journey entry for 2026-10-05.
   **U-17 + U-18 COMPLETE** bar rows 462–464 (second staff account) and
   469–474.
+
+**2026-10-06 — U-20 (`docs/roadmap-2026-09.md`), two changes on top of
+U-18.** Open-beta teacher: ticked Spell Check on "Allowed on this test"
+and no student got it; asked for one switch for all students. Decisions
+(James): an "Apply to all my periods" button rather than a test-wide grant;
+it copies the WHOLE period (list + grants); copies keep period settings
+(13.10 reversed) — Duplicate whole, Share only the recipient's own periods,
+backup file unchanged.
+- Slice 1 `ed32068`: `lib/accommodations/applyToAllPeriods.ts` (targets =
+  periods on a class list except the source; whole copy; the confirm names
+  only targets whose settings differ) + the button and inline confirm in
+  `PeriodSettings.tsx`, saved through the same autosave PATCH.
+- Slice 2 `1875b76`: Duplicate sets `section_accommodations` in its
+  post-import update; `acceptShare` keeps `keepPeriods(source, recipient's
+  sectionsCurrentlyTaughtBy)`; no migration, no bundle change.
+- Slice 3: help topic 5 (button bullet, copies bullet), Share/Duplicate
+  topic, FAQ "I ticked a tool … and no student got it" + "Apply to all my
+  periods" in the whole-period answer, re-captured `by-class-period.png`,
+  quick start; rows 486–491.
+

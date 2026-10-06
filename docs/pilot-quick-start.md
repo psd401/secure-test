@@ -47,8 +47,8 @@ time) and its rubric is attached.
    a session keeps going on what they had.
 4. **Share** with a colleague by staff email. They get their own copy.
 5. **Duplicate** (on the home list row, or the Settings tab) makes your own
-   Draft copy — "(copy)" — with the questions, sources, accommodations and
-   settings; results, test sessions and By class period settings are not
+   Draft copy — "(copy)" — with the questions, sources, accommodations,
+   By class period settings and settings; results and test sessions are not
    copied. Use it for a second
    period's version or before a big edit.
 6. **Instant feedback at hand-in** (Settings): Off, Score only, Right /
@@ -275,7 +275,8 @@ its own.
 - **A whole class period needs the same tool, or a different list.** On the
   **Allowed on this test** tab open **By class period**, pick the period, and
   either tick the tool under **Give everyone in this period** or choose
-  **Use a different list for this period**. Exceptions for one student still
+  **Use a different list for this period**. **Apply to all my periods** copies
+  that period's settings to every period you teach. Exceptions for one student still
   win. The session's period decides; a session for all your sections uses
   every set period the student is in.
 - **Start session says a session for this class is already open.** One with
