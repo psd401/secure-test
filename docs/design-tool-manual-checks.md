@@ -1460,18 +1460,20 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | # | Step | Expect | Result |
 |---|---|---|---|
 | 475 | Per-student page of an attempt with kept versions (local `_demo`, two rows inserted by SQL) | "Earlier versions (2)" under the essay, collapsed; open: newest first, "Saved <time> · N words", "kept before a large deletion" on the shrink row, Copy, text with paragraph breaks | ✅ 2026-10-06 local `_demo` (rows removed after) |
-| 476 | A student (client) types an essay, waits over a minute, keeps typing, then selects all + deletes and hands in | Two or more versions; the last one is the full text, "kept before a large deletion" | NOT RUN — needs a sitting on the origin after the deploy |
-| 477 | Clear answer on a short-text item, then open the per-student page | "kept before the answer was cleared"; the answer itself reads "No answer." | NOT RUN |
-| 478 | Copy on a version, paste into a Doc | The version's text, paragraphs kept; a table pastes as rows with tabs | NOT RUN |
+| 476 | A student (client) types an essay, waits over a minute, keeps typing, then selects all + deletes and hands in | Two or more versions; the last one is the full text, "kept before a large deletion" | ✅ 2026-10-06 origin — three versions: 12 words, 21 words (once-a-minute copies), 31 words "kept before a large deletion"; current answer "Autumn." (fixture `Answer history hand-run 2026-10-06` (Published, essay / short text / MC), sitting `75CXSS` (closed), demo student on the Debug client under simulated lockdown against the origin (rev 93), Claude driving the client by computer use and the teacher side in Chrome) |
+| 477 | Clear answer on a short-text item, then open the per-student page | "kept before the answer was cleared"; the answer itself reads "No answer." | ✅ with a corrected expectation 2026-10-06 origin — a short text has no Clear answer button; emptying the field PUTs empty text, so the version reads "kept before a large deletion" and the answer "(blank)". "Cleared" appears only for a withdrawal (multiple-choice style Clear answer, route-tested) |
+| 478 | Copy on a version, paste into a Doc | The version's text, paragraphs kept; a table pastes as rows with tabs | ✅ 2026-10-06 origin (James, in his own focused Chrome: Copy → pasted into a Doc, paragraphs kept). The automated hidden tab could not copy — a browser refuses clipboard writes from an unfocused window; the table half not run |
 | 479 | The same page as a co-teacher with view-only access / with edit access | No "Earlier versions" / the list shows | NOT RUN — needs a second staff account |
-| 480 | Choice, match, order, hotspot and drawing answers | No "Earlier versions" ever | NOT RUN (route-tested for multiple choice) |
+| 480 | Choice, match, order, hotspot and drawing answers | No "Earlier versions" ever | ✅ 2026-10-06 origin for multiple choice (Red → Green, no history); the other types route-tested by type gate only |
 
 ## Answer history — slice 2: restore (U-19, 2026-10-06)
 
 | # | Step | Expect | Result |
 |---|---|---|---|
 | 481 | Per-student page, "Restore this version" on a kept version, Restore | Dialog names the version's time and says the current answer is kept; after reload the answer is the version, the list gains the old answer "kept before a restore", the timeline reads "Answer restored by teacher" | ✅ 2026-10-06 local `_demo` (in-progress attempt, closed sitting; reverted after) |
-| 482 | Same on a handed-in, scored essay | Dialog mentions the score and Pass back; after: "Not scored yet", the old score under Earlier scores "set aside when an earlier answer was restored"; the essay is back in the review queue | NOT RUN — the backfilled essay from 2026-10-06 is the case |
-| 483 | In-progress attempt while its test session is open | Button disabled, title "End the test session first, then restore." | NOT RUN |
-| 484 | Restore, then Pass back; the student resumes on the client | The restored text is in the essay box | NOT RUN |
-| 485 | Restore the "kept before a restore" row | The answer switches back (undo) | NOT RUN |
+| 482 | Same on a handed-in, scored essay | Dialog mentions the score and Pass back; after: "Not scored yet", the old score under Earlier scores "set aside when an earlier answer was restored"; the essay is back in the review queue | ✅ 2026-10-06 origin through the route the button calls (the hidden Chrome tab does not hydrate, so the dialog itself was checked in row 481): essay scored 0/1 → restore → "Not scored yet", Earlier scores "Q1: 0 / 1 (scored by you) · set aside when an earlier answer was restored", "Autumn." kept "before a restore", timeline "Answer restored by teacher 11:12 AM", review queue lists the essay |
+| 483 | In-progress attempt while its test session is open | Button disabled, title "End the test session first, then restore." | ✅ 2026-10-06 origin (both answers' Restore buttons disabled with that title mid-sitting) |
+| 484 | Restore, then Pass back; the student resumes on the client | The restored text is in the essay box | ✅ 2026-10-06 origin — Pass back, Refresh, Resume: the 31-word essay is in the box |
+| 485 | Restore the "kept before a restore" row | The answer switches back (undo) | ✅ 2026-10-06 origin — back to "Autumn.", then the full essay restored again |
+
+After the 2026-10-06 sitting: the client quit, sitting `75CXSS` closed, the fixture `Answer history hand-run 2026-10-06` archived (its one attempt kept).
