@@ -77,9 +77,11 @@ export function changeScoreErrorMessage(code: string): string {
  * teacher to 3 — rubric misread" (the note only when present).
  */
 export function causeLine(score: {
-  cause: "pass_back" | "changed";
+  cause: "pass_back" | "changed" | "restored";
   replaced_by?: { points: number; note?: string };
 }): string {
+  // Answer history slice 2: the answer it scored was replaced by an earlier version.
+  if (score.cause === "restored") return "set aside when an earlier answer was restored";
   if (score.cause === "changed" && score.replaced_by) {
     const note = score.replaced_by.note;
     return `changed by teacher to ${score.replaced_by.points}${note ? ` — ${note}` : ""}`;

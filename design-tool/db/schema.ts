@@ -920,6 +920,12 @@ export const ATTEMPT_EVENT_KINDS = [
   // could post one could plant a line claiming a student saw a result they
   // never saw.
   "feedback_shown",
+  // Answer history slice 2 (docs/answer-history-design.md): a teacher made an
+  // earlier version of a text answer the current one. `detail` is
+  // { response_id, item_id, revision_id, saved_at, superseded_score_ids }.
+  // Server-written only: a client that could post one could plant a line
+  // claiming a teacher changed a student's answer.
+  "answer_restored",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -946,6 +952,7 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "gradebook_sent",
   "score_changed",
   "feedback_shown",
+  "answer_restored",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -990,7 +997,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored')`,
     ),
   }),
 );

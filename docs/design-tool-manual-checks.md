@@ -1465,3 +1465,13 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 478 | Copy on a version, paste into a Doc | The version's text, paragraphs kept; a table pastes as rows with tabs | NOT RUN |
 | 479 | The same page as a co-teacher with view-only access / with edit access | No "Earlier versions" / the list shows | NOT RUN — needs a second staff account |
 | 480 | Choice, match, order, hotspot and drawing answers | No "Earlier versions" ever | NOT RUN (route-tested for multiple choice) |
+
+## Answer history — slice 2: restore (U-19, 2026-10-06)
+
+| # | Step | Expect | Result |
+|---|---|---|---|
+| 481 | Per-student page, "Restore this version" on a kept version, Restore | Dialog names the version's time and says the current answer is kept; after reload the answer is the version, the list gains the old answer "kept before a restore", the timeline reads "Answer restored by teacher" | ✅ 2026-10-06 local `_demo` (in-progress attempt, closed sitting; reverted after) |
+| 482 | Same on a handed-in, scored essay | Dialog mentions the score and Pass back; after: "Not scored yet", the old score under Earlier scores "set aside when an earlier answer was restored"; the essay is back in the review queue | NOT RUN — the backfilled essay from 2026-10-06 is the case |
+| 483 | In-progress attempt while its test session is open | Button disabled, title "End the test session first, then restore." | NOT RUN |
+| 484 | Restore, then Pass back; the student resumes on the client | The restored text is in the essay box | NOT RUN |
+| 485 | Restore the "kept before a restore" row | The answer switches back (undo) | NOT RUN |

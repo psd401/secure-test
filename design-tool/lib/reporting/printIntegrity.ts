@@ -48,6 +48,9 @@ const PHRASES: Record<string, string> = {
   // Change a final score (docs/change-score-design.md): a count here; which
   // question and the old / new points are on the per-student page's timeline.
   score_changed: "Score changed by teacher",
+  // Answer history slice 2 (docs/answer-history-design.md): a count here; the
+  // version and time are on the per-student page's timeline.
+  answer_restored: "Answer restored by teacher",
 };
 
 /**
@@ -76,6 +79,7 @@ const KIND_ORDER = [
   "gradebook_sent",
   // After the hand-ins: a final score exists only on a submitted attempt.
   "score_changed",
+  "answer_restored",
   "client_error",
 ];
 

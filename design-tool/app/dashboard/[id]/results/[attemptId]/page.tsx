@@ -48,6 +48,7 @@ import { canChange, causeLine } from "@/lib/scoring/changeScoreDialog";
 import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
 import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
 import { CopyTextButton } from "@/components/app/CopyTextButton";
+import { RestoreVersionControl } from "@/components/app/RestoreVersionControl";
 import { listAnswerHistory, type AnswerRevisionView } from "@/lib/api/answerHistory";
 import {
   revisionMeasure,
@@ -259,9 +260,14 @@ function TableGrid({
 function AnswerHistory({
   item,
   revisions,
+  handedIn,
+  restoreDisabledReason,
 }: {
   item: ItemRow;
   revisions: AnswerRevisionView[];
+  handedIn: boolean;
+  /** Set while an open sitting holds the attempt (the route's `session_open`). */
+  restoreDisabledReason?: string;
 }) {
   return (
     <details className="mt-2 rounded border border-border p-2">
@@ -279,6 +285,12 @@ function AnswerHistory({
                 <span>· {revisionMeasure(rev.response)}</span>
                 {note ? <span>· {note}</span> : null}
                 <CopyTextButton text={text} />
+                <RestoreVersionControl
+                  revisionId={rev.id}
+                  savedLabel={formatWhen(rev.saved_at)}
+                  handedIn={handedIn}
+                  disabledReason={restoreDisabledReason}
+                />
               </div>
               <blockquote className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm">
                 {text === "" ? "(blank)" : text}
@@ -768,6 +780,12 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   <AnswerHistory
                     item={item}
                     revisions={historyByItem.get(item.id)!}
+                    handedIn={row.status === "submitted"}
+                    restoreDisabledReason={
+                      row.status === "in_progress" && row.sitting_open
+                        ? "End the test session first, then restore."
+                        : undefined
+                    }
                   />
                 ) : null}
               </div>

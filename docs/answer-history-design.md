@@ -75,8 +75,11 @@ redo; drawings would need the superseded files kept
   superseded (pass-back pattern) and the dialog offers Pass back so the
   student can keep working; on resume the prefill (P-1) shows the restored
   text. Timeline event `answer_restored`.
-- Open for slice 2: re-run auto-scoring for a restored short text on a
-  handed-in attempt, or leave it unscored for the teacher?
+- **D-8** (James, 2026-10-06, 5.3): a restored answer on a handed-in attempt
+  is left for the teacher to score — no auto re-score.
+- **D-9** (James, 2026-10-06, 6.1): history is best-effort. The capture runs
+  in its own savepoint; if it fails, the student's save still commits and
+  `answer_history_capture_failed` is logged at error level (it alarms).
 
 ## Size
 
@@ -104,3 +107,17 @@ essay-hour, a few MB per class session at essay sizes. Swept at 30 days.
   roster sync (log line `answer_history_sweep`). Tests: `test/answer-history.test.ts`
   + four route tests in `test/attempt-ingest-api.test.ts`; design-tool 2915
   pass, typecheck clean. Row 475 ✅ on local `_demo`; 476–480 NOT RUN.
+- 2026-10-06: **6.1 + slice 2 BUILT, not deployed.** Capture in a savepoint
+  (D-9). Migration 0059 adds the staff-only event kind `answer_restored`.
+  `lib/api/restoreAnswer.ts` + `POST /api/response-revisions/[revisionId]/restore`
+  (edit level, 404 posture, 409 `session_open` while an open sitting holds an
+  in-progress attempt): keeps the current non-blank value as `restored`,
+  writes the version, supersedes the answer's `final` and `proposed` scores
+  on a handed-in attempt (D-8), event with `superseded_score_ids`; "Earlier
+  scores" names that cause ("set aside when an earlier answer was
+  restored"); "Restore this version" + dialog on each version
+  (`components/app/RestoreVersionControl.tsx`), disabled with the reason
+  while the sitting holds the attempt. Restored text on a handed-in attempt
+  is not safeguarding-screened until a later hand-in (D-5). Tests:
+  `test/answer-restore-api.test.ts` (6) + the savepoint case; design-tool
+  2922 pass, typecheck clean. Row 481 ✅ on local `_demo` (reverted after).

@@ -208,6 +208,10 @@ export function eventLabel(kind: string): string {
     // spelled out by the timeline.
     case "feedback_shown":
       return "Saw instant feedback";
+    // Answer history slice 2 (docs/answer-history-design.md): a teacher made
+    // an earlier version of a text answer the current one.
+    case "answer_restored":
+      return "Answer restored by teacher";
     default:
       return kind;
   }

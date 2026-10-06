@@ -26,7 +26,7 @@
  */
 
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { responses, scores } from "@/db/schema";
+import { attempt_events, responses, scores } from "@/db/schema";
 import type { getDb } from "@/db/client";
 
 type Db = ReturnType<typeof getDb>;
@@ -41,7 +41,7 @@ export interface SupersededScore {
   /** When the score was given (see the note above — NOT when it was superseded). */
   created_at: Date;
   /** Why the row stopped being the score. */
-  cause: "pass_back" | "changed";
+  cause: "pass_back" | "changed" | "restored";
   /** The score that replaced this one, present only when `cause` is "changed". */
   replaced_by?: { points: number; note?: string; created_at: Date };
 }
@@ -101,6 +101,26 @@ export async function listSupersededScores(
     // passed back twice, so the list is a history, oldest first.
     .orderBy(asc(scores.created_at));
 
+  // Answer history slice 2 (docs/answer-history-design.md): a restore sets
+  // aside the scores of the text it replaced and names them on its
+  // `answer_restored` event — the third writer of the status.
+  const restoredEvents = await db
+    .select({ detail: attempt_events.detail })
+    .from(attempt_events)
+    .where(
+      and(
+        eq(attempt_events.attempt_id, attemptId),
+        eq(attempt_events.kind, "answer_restored"),
+      ),
+    );
+  const setAsideByRestore = new Set<string>();
+  for (const e of restoredEvents) {
+    const ids = (e.detail as { superseded_score_ids?: unknown } | null)?.superseded_score_ids;
+    if (Array.isArray(ids)) {
+      for (const id of ids) if (typeof id === "string") setAsideByRestore.add(id);
+    }
+  }
+
   // Successor by the id it replaced. Scoped to the same response so a stray
   // rationale can never attach one response's correction to another's row.
   const successorOf = new Map<string, (typeof rows)[number]>();
@@ -121,7 +141,7 @@ export async function listSupersededScores(
         method: row.method,
         scorer: row.scorer,
         created_at: row.created_at,
-        cause: next ? "changed" : "pass_back",
+        cause: next ? "changed" : setAsideByRestore.has(row.id) ? "restored" : "pass_back",
       };
       if (next) {
         const note = noteOf(next.rationale);
