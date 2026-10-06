@@ -121,3 +121,12 @@ essay-hour, a few MB per class session at essay sizes. Swept at 30 days.
   is not safeguarding-screened until a later hand-in (D-5). Tests:
   `test/answer-restore-api.test.ts` (6) + the savepoint case; design-tool
   2922 pass, typecheck clean. Row 481 ✅ on local `_demo` (reverted after).
+- 2026-10-06 ~10:25 PT: **DEPLOYED** with `--during-school` in a quiet
+  window (James): LIVE = `b945895`, task def rev 93, rollout COMPLETED,
+  health stamp = HEAD, Aurora at 0059 (applied at boot). The morning's essay
+  was recovered by hand: three point-in-time copies (7:42:55 PT already held
+  2 characters; 7:36:45 held the earlier day's text; **7:40:00 held 7,739
+  characters saved 7:39:54 PT** — the deletion fell between 7:39:54 and
+  7:42:49) — the 7:40 text backfilled as ONE `response_revisions` row
+  (`shrink`) on the live database; every temporary cluster deleted, the
+  local copies of the text deleted. The teacher restores it herself (row 482).
