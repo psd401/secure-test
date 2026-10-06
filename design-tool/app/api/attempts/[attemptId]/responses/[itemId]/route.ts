@@ -20,6 +20,7 @@ import {
   pruneSupersededUploads,
   settlePendingUpload,
 } from "@/lib/api/responseUploads";
+import { captureBeforeWrite } from "@/lib/api/answerHistory";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -134,14 +135,21 @@ export async function PUT(req: Request, ctx: RouteContext) {
     await pruneSupersededUploads(db, access.attempt.id, item.id, stored.upload_id);
   }
 
-  const [row] = await db
-    .insert(responses)
-    .values({ attempt_id: access.attempt.id, item_id: item.id, response: stored })
-    .onConflictDoUpdate({
-      target: [responses.attempt_id, responses.item_id],
-      set: { response: stored, updated_at: new Date() },
-    })
-    .returning();
+  // Answer history (docs/answer-history-design.md, D-2): the value this write
+  // replaces is kept first when the rule says so — same transaction, so a
+  // failed upsert keeps no phantom version.
+  const row = await db.transaction(async (tx) => {
+    await captureBeforeWrite(tx, access.attempt.id, item, stored);
+    const [written] = await tx
+      .insert(responses)
+      .values({ attempt_id: access.attempt.id, item_id: item.id, response: stored })
+      .onConflictDoUpdate({
+        target: [responses.attempt_id, responses.item_id],
+        set: { response: stored, updated_at: new Date() },
+      })
+      .returning();
+    return written;
+  });
 
   return NextResponse.json({ response: row });
 }
@@ -185,11 +193,15 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();
 
-  await db
-    .delete(responses)
-    .where(
-      and(eq(responses.attempt_id, access.attempt.id), eq(responses.item_id, item.id)),
-    );
+  // Answer history (D-2): a withdrawn text answer is always kept first.
+  await db.transaction(async (tx) => {
+    await captureBeforeWrite(tx, access.attempt.id, item, null);
+    await tx
+      .delete(responses)
+      .where(
+        and(eq(responses.attempt_id, access.attempt.id), eq(responses.item_id, item.id)),
+      );
+  });
   // Withdrawing a drawing takes its file with it. Keeping the bytes for an
   // answer the student explicitly retracted is the version of this nobody would
   // defend if asked.

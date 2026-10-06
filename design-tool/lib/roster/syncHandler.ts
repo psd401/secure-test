@@ -17,8 +17,10 @@
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import type { getDb } from "@/db/client";
 import {
+  ANSWER_HISTORY_RETENTION_DAYS,
   PRACTICE_RETENTION_DAYS,
   RETENTION_DAYS_DEFAULT,
+  sweepAnswerHistory,
   sweepEventTables,
   sweepPracticeSittings,
   type SweepCounts,
@@ -275,6 +277,7 @@ export async function handleS3Event(
   }
   await sweepBestEffort(db, log);
   await sweepPracticeBestEffort(db, log, deleteStored);
+  await sweepAnswerHistoryBestEffort(db, log);
   return outcome;
 }
 
@@ -296,6 +299,27 @@ async function sweepBestEffort(db: Db, log: SyncLogger): Promise<void> {
   } catch (err) {
     log({
       event: "retention_sweep_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Answer history (docs/answer-history-design.md, D-3): earlier versions of
+ * answers on attempts handed in more than 30 days ago. Same best-effort rule,
+ * its own try.
+ */
+async function sweepAnswerHistoryBestEffort(db: Db, log: SyncLogger): Promise<void> {
+  try {
+    const counts = await sweepAnswerHistory(db, new Date(), ANSWER_HISTORY_RETENTION_DAYS);
+    log({
+      event: "answer_history_sweep",
+      retention_days: ANSWER_HISTORY_RETENTION_DAYS,
+      ...counts,
+    });
+  } catch (err) {
+    log({
+      event: "answer_history_sweep_failed",
       error: err instanceof Error ? err.message : String(err),
     });
   }

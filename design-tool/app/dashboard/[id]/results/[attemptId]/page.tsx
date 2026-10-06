@@ -47,6 +47,13 @@ import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
 import { canChange, causeLine } from "@/lib/scoring/changeScoreDialog";
 import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
 import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
+import { CopyTextButton } from "@/components/app/CopyTextButton";
+import { listAnswerHistory, type AnswerRevisionView } from "@/lib/api/answerHistory";
+import {
+  revisionMeasure,
+  revisionReasonNote,
+  revisionText,
+} from "@/lib/reporting/answerHistoryView";
 
 export const dynamic = "force-dynamic";
 
@@ -244,6 +251,46 @@ function TableGrid({
   );
 }
 
+/**
+ * Answer history (docs/answer-history-design.md): earlier versions of one text
+ * answer, newest saved first, collapsed. Each shows when the student saved it,
+ * its size, why it was kept when that matters, the text, and Copy.
+ */
+function AnswerHistory({
+  item,
+  revisions,
+}: {
+  item: ItemRow;
+  revisions: AnswerRevisionView[];
+}) {
+  return (
+    <details className="mt-2 rounded border border-border p-2">
+      <summary className="cursor-pointer text-xs font-medium">
+        Earlier versions ({revisions.length})
+      </summary>
+      <ol className="mt-2 space-y-3">
+        {revisions.map((rev) => {
+          const text = revisionText(rev.response, item.config);
+          const note = revisionReasonNote(rev.reason);
+          return (
+            <li key={rev.id}>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Saved {formatWhen(rev.saved_at)}</span>
+                <span>· {revisionMeasure(rev.response)}</span>
+                {note ? <span>· {note}</span> : null}
+                <CopyTextButton text={text} />
+              </div>
+              <blockquote className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm">
+                {text === "" ? "(blank)" : text}
+              </blockquote>
+            </li>
+          );
+        })}
+      </ol>
+    </details>
+  );
+}
+
 /** The page anchor of one answer — the safeguarding panel links to it. */
 function answerAnchor(itemId: string): string {
   return `answer-${itemId}`;
@@ -365,6 +412,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
     .from(responses)
     .where(eq(responses.attempt_id, attemptId));
   const responseByItem = new Map(responseRows.map((r) => [r.item_id, r]));
+
+  // Answer history (docs/answer-history-design.md, D-4): edit level and above.
+  const historyByItem = levelSatisfies(access.level, "edit")
+    ? await listAnswerHistory(db, attemptId)
+    : new Map<string, AnswerRevisionView[]>();
 
   const scoreRows =
     responseRows.length > 0
@@ -711,6 +763,12 @@ export default async function AttemptResultPage({ params }: PageProps) {
                   />
                 ) : view.kind === "lines" ? (
                   <AnswerLines lines={view.lines} />
+                ) : null}
+                {historyByItem.get(item.id)?.length ? (
+                  <AnswerHistory
+                    item={item}
+                    revisions={historyByItem.get(item.id)!}
+                  />
                 ) : null}
               </div>
 

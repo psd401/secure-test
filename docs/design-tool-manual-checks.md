@@ -1454,3 +1454,14 @@ needs the deploy (migration 0055 at boot) and the production redirect URI
 | 473 | A student sits the test through a period sitting (real client) | The period's tools arrive in the bundle | NOT RUN — needs a sitting on the origin after the deploy |
 | 474 | Published test | Period controls disabled ("Unpublish to change accommodations." on a forced save) | NOT RUN |
 
+
+## Answer history — slice 1 (U-19, 2026-10-06; `docs/answer-history-design.md`)
+
+| # | Step | Expect | Result |
+|---|---|---|---|
+| 475 | Per-student page of an attempt with kept versions (local `_demo`, two rows inserted by SQL) | "Earlier versions (2)" under the essay, collapsed; open: newest first, "Saved <time> · N words", "kept before a large deletion" on the shrink row, Copy, text with paragraph breaks | ✅ 2026-10-06 local `_demo` (rows removed after) |
+| 476 | A student (client) types an essay, waits over a minute, keeps typing, then selects all + deletes and hands in | Two or more versions; the last one is the full text, "kept before a large deletion" | NOT RUN — needs a sitting on the origin after the deploy |
+| 477 | Clear answer on a short-text item, then open the per-student page | "kept before the answer was cleared"; the answer itself reads "No answer." | NOT RUN |
+| 478 | Copy on a version, paste into a Doc | The version's text, paragraphs kept; a table pastes as rows with tabs | NOT RUN |
+| 479 | The same page as a co-teacher with view-only access / with edit access | No "Earlier versions" / the list shows | NOT RUN — needs a second staff account |
+| 480 | Choice, match, order, hotspot and drawing answers | No "Earlier versions" ever | NOT RUN (route-tested for multiple choice) |

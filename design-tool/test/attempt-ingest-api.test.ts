@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, and } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempt_events, attempts, item_sets, items, responses, scores, students, test_sessions } from "../db/schema";
+import { assessments, attempt_events, attempts, item_sets, items, response_revisions, responses, scores, students, test_sessions } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import * as scoringMod from "../lib/scoring/runAutoScoring";
@@ -862,5 +862,66 @@ describe("PUT a table response (E3)", () => {
     const mismatch = await put(attempt.id, s.table.id, { type: "short_text", text: "1" });
     expect(mismatch.status).toBe(400);
     expect((await mismatch.json()).error).toBe("response_type_mismatch");
+  });
+});
+
+// Answer history (docs/answer-history-design.md, D-2): the write routes keep
+// the value they replace when the rule says so.
+describe("answer history on the student write routes", () => {
+  async function started() {
+    const s = await scenario();
+    asStudent();
+    const { attempt } = await (await start(s.sitting.id)).json();
+    return { ...s, attempt };
+  }
+  const essay = (text: string) => ({ type: "essay", text });
+  const revisions = () =>
+    getDb().select().from(response_revisions).orderBy(response_revisions.captured_at);
+
+  test("emptying an essay keeps the text it replaced (shrink)", async () => {
+    const s = await started();
+    const long = "A thoughtful paragraph about the causes of the war.";
+    expect((await put(s.attempt.id, s.essay.id, essay(long))).status).toBe(200);
+    // The first PUT replaced nothing.
+    expect((await revisions()).length).toBe(0);
+
+    expect((await put(s.attempt.id, s.essay.id, essay(""))).status).toBe(200);
+    const kept = await revisions();
+    expect(kept.length).toBe(1);
+    expect(kept[0]!.reason).toBe("shrink");
+    expect(kept[0]!.item_id).toBe(s.essay.id);
+    expect((kept[0]!.response as { text: string }).text).toBe(long);
+  });
+
+  test("routine saves keep at most one copy a minute", async () => {
+    const s = await started();
+    await put(s.attempt.id, s.essay.id, essay("One"));
+    await put(s.attempt.id, s.essay.id, essay("One two")); // interval: none kept yet
+    await put(s.attempt.id, s.essay.id, essay("One two three")); // within the minute
+    await put(s.attempt.id, s.essay.id, essay("One two three four"));
+    const kept = await revisions();
+    expect(kept.length).toBe(1);
+    expect(kept[0]!.reason).toBe("interval");
+    expect((kept[0]!.response as { text: string }).text).toBe("One");
+  });
+
+  test("withdrawing a text answer keeps it; a choice answer has no history", async () => {
+    const s = await started();
+    await put(s.attempt.id, s.essay.id, essay("Some words"));
+    await put(s.attempt.id, s.mc.id, PICK);
+    expect((await del(s.attempt.id, s.essay.id)).status).toBe(204);
+    expect((await del(s.attempt.id, s.mc.id)).status).toBe(204);
+    const kept = await revisions();
+    expect(kept.length).toBe(1);
+    expect(kept[0]!.reason).toBe("withdrawn");
+    expect(kept[0]!.item_id).toBe(s.essay.id);
+  });
+
+  test("a refused write keeps nothing", async () => {
+    const s = await started();
+    await put(s.attempt.id, s.essay.id, essay("Handed in text"));
+    await submit(s.attempt.id);
+    expect((await put(s.attempt.id, s.essay.id, essay(""))).status).toBe(409);
+    expect((await revisions()).length).toBe(0);
   });
 });

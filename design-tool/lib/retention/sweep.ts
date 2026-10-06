@@ -12,12 +12,13 @@
 // Pure function over a Drizzle db handle so it is unit-testable against the
 // test database without a Lambda or a schedule.
 
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import {
   attempts,
   client_error_events,
   guardrail_events,
+  response_revisions,
   server_error_events,
   test_sessions,
 } from "@/db/schema";
@@ -163,4 +164,32 @@ export async function sweepPracticeSittings(
     practice_uploads: uploadCount,
     practice_uploads_deleted: uploadsDeleted,
   };
+}
+
+// --- Answer history (docs/answer-history-design.md, D-3) ---
+
+/** D-3: how long earlier versions of answers are kept after hand-in. */
+export const ANSWER_HISTORY_RETENTION_DAYS = 30;
+
+/**
+ * D-3: delete the kept versions of every attempt handed in more than
+ * `retentionDays` ago. In-progress attempts (including passed-back ones,
+ * whose `submitted_at` is cleared) keep theirs; a deleted attempt took its
+ * history with it (FK cascade).
+ */
+export async function sweepAnswerHistory(
+  db: Db,
+  now: Date = new Date(),
+  retentionDays: number = ANSWER_HISTORY_RETENTION_DAYS,
+): Promise<{ response_revisions: number }> {
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const due = db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .where(and(eq(attempts.status, "submitted"), lt(attempts.submitted_at, cutoff)));
+  const deleted = await db
+    .delete(response_revisions)
+    .where(inArray(response_revisions.attempt_id, due))
+    .returning({ id: response_revisions.id });
+  return { response_revisions: deleted.length };
 }

@@ -1069,6 +1069,55 @@ export const responses = pgTable(
   }),
 );
 
+// Answer history (docs/answer-history-design.md, roadmap U-19). `responses`
+// keeps one value per (attempt, item) and every autosave overwrites it, so a
+// student who empties an essay by accident loses it. This keeps EARLIER
+// values of text answers (essay, short_text, table) — captured by the student
+// write routes at most once a minute per answer, and always before a large
+// deletion or a withdrawal (D-2). `saved_at` is when the student last saved
+// that value (the old row's `updated_at`) — the time a teacher reads;
+// `captured_at` is when it was replaced. Swept 30 days after hand-in (D-3);
+// cascades with the attempt and the item.
+export const RESPONSE_REVISION_REASONS = [
+  "interval",
+  "shrink",
+  "withdrawn",
+  "restored",
+] as const;
+export type ResponseRevisionReason = (typeof RESPONSE_REVISION_REASONS)[number];
+
+export const response_revisions = pgTable(
+  "response_revisions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    attempt_id: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    item_id: uuid("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    response: jsonb("response").$type<ItemResponse>().notNull(),
+    saved_at: timestamp("saved_at", { withTimezone: true }).notNull(),
+    captured_at: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    reason: text("reason").$type<ResponseRevisionReason>().notNull(),
+  },
+  (t) => ({
+    attemptItemCapturedIdx: index("response_revisions_attempt_item_captured_idx").on(
+      t.attempt_id,
+      t.item_id,
+      t.captured_at,
+    ),
+    reasonCheck: check(
+      "response_revisions_reason_check",
+      sql`reason IN ('interval', 'shrink', 'withdrawn', 'restored')`,
+    ),
+  }),
+);
+
+export type ResponseRevisionRow = typeof response_revisions.$inferSelect;
+
 // Slice 37: scores — append-only. A response accumulates score rows
 // (proposed AI drafts, the human/auto final); rows are never updated in
 // place, so the scoring history is the audit trail. The partial unique
