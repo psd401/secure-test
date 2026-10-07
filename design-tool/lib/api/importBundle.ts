@@ -11,7 +11,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { assertNever } from "@/lib/assertNever";
-import { ALLOWED_SCORING_METHODS } from "@/lib/api/items";
+import { ALLOWED_SCORING_METHODS, compactBlanks } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
@@ -448,6 +448,26 @@ export async function importBundleForOwner(
                 rows: it.rows,
                 ...(it.corner ? { corner: it.corner } : {}),
                 ...(it.cell_keys ? { cell_keys: it.cell_keys } : {}),
+                ...clampAndCount(it.type, it.scoring_method, false),
+              },
+            };
+          }
+          if (it.type === "fill_blank") {
+            // FB slice 1 (docs/fill-in-blank-design.md): option text is plain
+            // v1 (KaTeX / emphasis, no asset refs) — no rewrite, the table
+            // posture. Keys ride the teacher bundle and are kept, normalized
+            // to the stored form (a key only when set) so a keyless blank has
+            // one representation. Marker ↔ blank pairing is NOT re-checked
+            // here — the wire layer is permissive like match / table, and the
+            // renderers treat an unpaired marker as plain text.
+            return {
+              ...base,
+              type: it.type,
+              choices: [],
+              correct_choice_ids: [],
+              correct_answer: null,
+              config: {
+                blanks: compactBlanks(it.blanks),
                 ...clampAndCount(it.type, it.scoring_method, false),
               },
             };

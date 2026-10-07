@@ -115,6 +115,25 @@ function keyedCells(config: ItemConfig): Array<{ rowId: string; colId: string; l
   return out;
 }
 
+/**
+ * FB slice 1: each blank's teacher-facing label and, for a keyed blank, the
+ * key as text — "Blank n" in `blanks` order (the editor keeps that the
+ * stem's order), a dropdown key as its option text, a typed blank's accepted
+ * answers joined with " or " (D-5). Slice 3 owns the richer read side.
+ */
+function blankLines(config: ItemConfig): Array<{ id: string; label: string; key: string | null }> {
+  return (config.blanks ?? []).map((b, i) => {
+    let key: string | null = null;
+    if (b.kind === "dropdown") {
+      const option = b.options.find((o) => o.id === b.correct_option_id);
+      if (b.correct_option_id != null) key = plainText(option ? option.text : b.correct_option_id);
+    } else if (b.keys && b.keys.length > 0) {
+      key = b.keys.join(" or ");
+    }
+    return { id: b.id, label: `Blank ${i + 1}`, key };
+  });
+}
+
 /** The student's answer as text, or null when there is none. */
 export function yourAnswerText(
   item: FeedbackItemInput,
@@ -172,6 +191,24 @@ export function yourAnswerText(
     }
     case "drawing_upload":
       return "[drawing]";
+    case "fill_blank": {
+      // FB slice 1: every blank in order, a dropdown answer as its option
+      // text; an unanswered blank reads "(blank)" like an empty table cell.
+      const answers = (response.answers ?? {}) as Record<string, unknown>;
+      const blanks = config.blanks ?? [];
+      if (blanks.length === 0) return null;
+      return blanks
+        .map((b, i) => {
+          const v = answers[b.id];
+          let text = typeof v === "string" && v.trim() ? v : "(blank)";
+          if (b.kind === "dropdown" && typeof v === "string" && v) {
+            const option = b.options.find((o) => o.id === v);
+            text = plainText(option ? option.text : v);
+          }
+          return `Blank ${i + 1}: ${text}`;
+        })
+        .join("\n");
+    }
     default:
       return null;
   }
@@ -203,6 +240,12 @@ export function correctAnswerText(item: FeedbackItemInput): string | null {
     case "table": {
       const keyed = keyedCells(config);
       return keyed.length > 0 ? keyed.map((c) => `${c.label}: ${c.key}`).join("\n") : null;
+    }
+    case "fill_blank": {
+      // Only keyed blanks — an unkeyed blank earns no point (D-2) and has no
+      // answer to show.
+      const keyed = blankLines(config).filter((b) => b.key !== null);
+      return keyed.length > 0 ? keyed.map((b) => `${b.label}: ${b.key}`).join("\n") : null;
     }
     default:
       return null;

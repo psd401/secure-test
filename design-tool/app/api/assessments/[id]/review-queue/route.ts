@@ -20,7 +20,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { resolveSourceText } from "@/lib/api/setSources";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
-import { tableMaxPoints } from "@/lib/scoring/auto";
+import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
@@ -245,7 +245,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
           ? rubricMaxPoints(item.config.rubric)
           : item.type === "table"
             ? tableMaxPoints(item.config)
-            : 1,
+            : item.type === "fill_blank"
+              ? fillBlankMaxPoints(item.config)
+              : 1,
         // E3 slice 2: the grid and its keys, so the hand-scorer sees the
         // student's cells laid out and the expected text beside each keyed
         // one. Teacher-only surface — keys are fine here.

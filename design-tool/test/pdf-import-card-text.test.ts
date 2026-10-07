@@ -20,6 +20,9 @@ describe("itemTypeName (HC-2)", () => {
     const { itemTypeName } = await import("../lib/items/typeLabel");
     expect(itemTypeName("short_text")).toBe("Short answer");
     expect(itemTypeName("drawing_upload")).toBe("Drawing");
-    expect(itemTypeName("fill_blank")).toBe("fill blank");
+    // FB slice 1: fill_blank is a known type now (D-10), so the unknown-type
+    // example moved to a name no type uses.
+    expect(itemTypeName("fill_blank")).toBe("Fill in the blank");
+    expect(itemTypeName("sort_into_bins")).toBe("sort into bins");
   });
 });

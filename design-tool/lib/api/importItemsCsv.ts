@@ -107,10 +107,12 @@ function buildCandidate(
     type === "order" ||
     type === "hotspot" ||
     type === "drawing_upload" ||
-    type === "table"
+    type === "table" ||
+    type === "fill_blank"
   ) {
-    // Slices 47-50 + E3: valid item types, but structural — the row-per-question
-    // template can't carry pairs/sequences/regions/canvas/grid metadata. Reject
+    // Slices 47-50 + E3 + FB: valid item types, but structural — the
+    // row-per-question template can't carry pairs/sequences/regions/canvas/
+    // grid/blank metadata. Reject
     // explicitly instead of surfacing a confusing validation error.
     return { error: `type "${type}" is not supported by CSV import — author it in the editor` };
   }

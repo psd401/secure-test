@@ -17,6 +17,7 @@ import {
   uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import type {
   DrawingCanvas,
+  FillBlankBlank,
   HotspotRegion,
   ItemResponse,
   MatchPair,
@@ -168,6 +169,7 @@ export const ITEM_TYPES = [
   "hotspot",
   "drawing_upload",
   "table",
+  "fill_blank",
 ] as const;
 
 export type ItemType = (typeof ITEM_TYPES)[number];
@@ -211,6 +213,11 @@ export type ItemConfig = {
   rows?: TableRow[];
   corner?: string;
   cell_keys?: TableCellKeys;
+  // FB slice 1 (docs/fill-in-blank-design.md): fill_blank items — one entry
+  // per `[[<id>]]` marker in the stem. A dropdown's `correct_option_id` and a
+  // typed blank's `keys` / `exact_form` ARE the answer key and are what the
+  // delivery bundle drops; a blank without them is a keyless draft blank.
+  blanks?: FillBlankBlank[];
   // Numeric equivalence (2026-09-15, docs/math-entry-design.md §Follow-ups):
   // short_text only. Absent / false = a numeric answer is compared to a
   // numeric key BY VALUE (`1/2` ≡ `0.5`); true = the old exact folded

@@ -77,6 +77,8 @@ interface QueueEntry {
     ordered_ids?: string[];
     region_ids?: string[];
     cells?: Record<string, Record<string, string>>;
+    // FB slice 1: a fill_blank response — blank id → option id or text.
+    answers?: Record<string, string>;
     /** Slice 65: a drawing/upload answer — a reference, never the bytes. */
     upload_id?: string;
   };
@@ -303,6 +305,13 @@ function responseText(entry: QueueEntry): string {
     return Object.entries(r.cells)
       .map(([row, cols]) => `${row}: ${Object.entries(cols).map(([c, v]) => `${c}=${v}`).join(", ")}`)
       .join("; ");
+  }
+  // FB slice 1: blank id → answer (a dropdown's option id). Readable, not
+  // pretty — slice 3 owns the sentence view.
+  if (r.answers) {
+    return Object.entries(r.answers)
+      .map(([blank, v]) => `${blank}: ${v}`)
+      .join(", ");
   }
   return JSON.stringify(r);
 }

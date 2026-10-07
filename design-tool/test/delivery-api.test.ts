@@ -344,6 +344,49 @@ describe("GET /api/assessments/:id/delivery — no answer key survives", () => {
     expect(Object.keys(table).sort()).toEqual(["columns", "corner", "id", "rows", "stem", "type"]);
   });
 
+  // FB slice 1 (docs/fill-in-blank-design.md, ADR 0016): a fill_blank ships
+  // its stem and each blank's id, kind and dropdown options in the teacher's
+  // order (D-6) — no correct_option_id, keys or exact_form, and no key VALUE.
+  test("FB: a fill_blank ships its blanks without a key field or value", async () => {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Fill delivery" })
+      .returning();
+    await db.insert(items).values({
+      assessment_id: a!.id,
+      position: 1,
+      type: "fill_blank",
+      stem: "The [[b1]] side is wet; the [[b2]] side is dry.",
+      config: {
+        blanks: [
+          {
+            id: "b1",
+            kind: "dropdown",
+            options: [{ id: "o2", text: "leeward" }, { id: "o1", text: "windward" }],
+            correct_option_id: "o1",
+          },
+          { id: "b2", kind: "text", keys: ["rainshadowkeyvalue"], exact_form: true },
+        ],
+      },
+    });
+    await admitStudent(a!.id);
+    const res = await getDelivery(a!.id);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const raw = JSON.stringify(body);
+    for (const forbidden of ["correct_option_id", "\"keys\"", "exact_form", "rainshadowkeyvalue"]) {
+      expect(raw).not.toContain(forbidden);
+    }
+    const fill = body.items[0];
+    expect(Object.keys(fill).sort()).toEqual(["blanks", "id", "stem", "type"]);
+    expect(fill.stem).toBe("The [[b1]] side is wet; the [[b2]] side is dry.");
+    expect(fill.blanks).toEqual([
+      { id: "b1", kind: "dropdown", options: [{ id: "o2", text: "leeward" }, { id: "o1", text: "windward" }] },
+      { id: "b2", kind: "text" },
+    ]);
+  });
+
   // docs/drawing-background-design.md: the field has no schema of its own on
   // the delivery side — it rides DrawingCanvasSchema — so this proves the
   // shared schema admits it rather than stripping it silently.

@@ -206,6 +206,24 @@ export function unsealResponseIds(
     return { type: "order", ordered_ids: ordered };
   }
 
+  // FB slice 1 (docs/fill-in-blank-design.md): nothing is sealed — blank ids
+  // and option ids ship as authored — but an answer must name one of THIS
+  // item's blanks, and a dropdown answer one of that blank's options ("" =
+  // the student cleared the pick). Anything else is a refusal for the same
+  // reason a stale match id is: it would be stored as an answer no scorer or
+  // teacher view can place.
+  if (response.type === "fill_blank") {
+    const blanks = new Map((item.config?.blanks ?? []).map((b) => [b.id, b] as const));
+    for (const [blankId, answer] of Object.entries(response.answers)) {
+      const blank = blanks.get(blankId);
+      if (!blank) return null;
+      if (blank.kind === "dropdown" && answer !== "" && !blank.options.some((o) => o.id === answer)) {
+        return null;
+      }
+    }
+    return response;
+  }
+
   return response;
 }
 

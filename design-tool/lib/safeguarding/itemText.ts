@@ -48,6 +48,22 @@ export function itemProposalText(item: CreateItemBody): string {
       }
     }
   }
+  // FB slice 1: a dropdown blank's options are student-visible text. (No
+  // provider proposes fill_blank before slice 4; total over the shape.) A
+  // typed blank's keys are not shown to the student, like a table's keys.
+  if (shape.type === "fill_blank") {
+    const blanks = (shape as Record<string, unknown>).blanks;
+    if (Array.isArray(blanks)) {
+      for (const blank of blanks) {
+        const options = (blank as { options?: unknown } | null)?.options;
+        if (!Array.isArray(options)) continue;
+        for (const option of options) {
+          const text = (option as { text?: unknown } | null)?.text;
+          if (typeof text === "string" && text) parts.push(text);
+        }
+      }
+    }
+  }
   // BG slice 6: the batch generator proposes match items — both sides of
   // every pair are student-visible.
   if (shape.type === "match") {

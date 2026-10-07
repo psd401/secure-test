@@ -1430,6 +1430,191 @@ describe("items: table (E3)", () => {
   });
 });
 
+// FB slice 1: fill-in-the-blank items through the API
+// (docs/fill-in-blank-design.md).
+describe("items: fill_blank (FB)", () => {
+  const FILL = {
+    type: "fill_blank",
+    stem: "The [[b1]] side of a mountain gets rain, while the [[b2]] side is $\\text{dry}$.",
+    blanks: [
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }],
+        correct_option_id: "o1",
+      },
+      { id: "b2", kind: "text", keys: ["leeward", "lee"], exact_form: true },
+    ],
+  };
+
+  async function detailOf(res: Response): Promise<string> {
+    return ((await res.json()) as { detail?: string }).detail ?? "";
+  }
+
+  test("creates a mixed item and stores the blanks, keys included, in config", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const res = await createItem(aid, FILL);
+    expect(res.status).toBe(201);
+    const { item } = (await res.json()) as {
+      item: { type: string; choices: unknown[]; correct_answer: string | null; config: Record<string, unknown> };
+    };
+    expect(item.type).toBe("fill_blank");
+    expect(item.choices).toEqual([]);
+    expect(item.correct_answer).toBeNull();
+    expect(item.config.blanks).toEqual(FILL.blanks);
+  });
+
+  test("keyless blanks are a legal draft and store no key fields", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const res = await createItem(aid, {
+      ...FILL,
+      blanks: [
+        { id: "b1", kind: "dropdown", options: FILL.blanks[0]!.options, correct_option_id: null },
+        { id: "b2", kind: "text", keys: [], exact_form: false },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const { item } = (await res.json()) as { item: { config: { blanks: unknown[] } } };
+    expect(item.config.blanks).toEqual([
+      { id: "b1", kind: "dropdown", options: FILL.blanks[0]!.options },
+      { id: "b2", kind: "text" },
+    ]);
+  });
+
+  test("every marker needs a blank and every blank a marker, once", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const orphanMarker = await createItem(aid, { ...FILL, stem: `${FILL.stem} Also [[b3]].` });
+    expect(orphanMarker.status).toBe(400);
+    expect(await detailOf(orphanMarker)).toContain("the stem's blank [[b3]] has no matching entry in blanks");
+
+    const orphanBlank = await createItem(aid, { ...FILL, stem: "Only [[b1]] here." });
+    expect(orphanBlank.status).toBe(400);
+    expect(await detailOf(orphanBlank)).toContain('blank \\"b2\\" has no [[b2]] marker in the stem');
+
+    const twice = await createItem(aid, { ...FILL, stem: "[[b1]] and [[b1]] and [[b2]]" });
+    expect(twice.status).toBe(400);
+    expect(await detailOf(twice)).toContain("the stem has the blank [[b1]] more than once");
+
+    const dupIds = await createItem(aid, {
+      ...FILL,
+      stem: "[[b1]]",
+      blanks: [FILL.blanks[0], { ...FILL.blanks[0], options: FILL.blanks[0]!.options }],
+    });
+    expect(dupIds.status).toBe(400);
+    expect(await detailOf(dupIds)).toContain("blank ids must be unique");
+  });
+
+  test("a dropdown needs at least 2 options with unique ids, and its key must name one", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const one = await createItem(aid, {
+      ...FILL,
+      blanks: [{ ...FILL.blanks[0], options: [{ id: "o1", text: "windward" }] }, FILL.blanks[1]],
+    });
+    expect(one.status).toBe(400);
+    expect(await detailOf(one)).toContain("a dropdown blank needs at least 2 options");
+
+    const badKey = await createItem(aid, {
+      ...FILL,
+      blanks: [{ ...FILL.blanks[0], correct_option_id: "o9" }, FILL.blanks[1]],
+    });
+    expect(badKey.status).toBe(400);
+    expect(await detailOf(badKey)).toContain('names unknown correct option \\"o9\\"');
+
+    const dupOptions = await createItem(aid, {
+      ...FILL,
+      blanks: [
+        { ...FILL.blanks[0], options: [{ id: "o1", text: "a" }, { id: "o1", text: "b" }] },
+        FILL.blanks[1],
+      ],
+    });
+    expect(dupOptions.status).toBe(400);
+  });
+
+  test("caps: 20 blanks, 12 options, 10 keys; a blank id must be marker-safe", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const many = Array.from({ length: 21 }, (_, i) => ({ id: `b${i}`, kind: "text" }));
+    expect(
+      (await createItem(aid, { ...FILL, stem: many.map((b) => `[[${b.id}]]`).join(" "), blanks: many })).status,
+    ).toBe(400);
+    const options = Array.from({ length: 13 }, (_, i) => ({ id: `o${i}`, text: `opt ${i}` }));
+    expect(
+      (await createItem(aid, { ...FILL, blanks: [{ id: "b1", kind: "dropdown", options }, FILL.blanks[1]] })).status,
+    ).toBe(400);
+    const keys = Array.from({ length: 11 }, (_, i) => `k${i}`);
+    expect(
+      (await createItem(aid, { ...FILL, blanks: [FILL.blanks[0], { id: "b2", kind: "text", keys }] })).status,
+    ).toBe(400);
+    expect(
+      (await createItem(aid, { ...FILL, stem: "[[b 1]]", blanks: [{ id: "b 1", kind: "text" }] })).status,
+    ).toBe(400);
+    expect((await createItem(aid, { ...FILL, stem: "No blanks.", blanks: [] })).status).toBe(400);
+  });
+
+  test("rejects choices or a correct_answer; scoring ai is refused", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    expect((await createItem(aid, { ...FILL, choices: [{ id: "a", text: "nope" }] })).status).toBe(400);
+    expect((await createItem(aid, { ...FILL, correct_answer: "nope" })).status).toBe(400);
+    expect((await createItem(aid, { ...FILL, scoring_method: "human" })).status).toBe(201);
+    expect((await createItem(aid, { ...FILL, scoring_method: "ai" })).status).toBe(400);
+  });
+
+  // The E3-F1 rule: no keyed blank → hand-scored by default; the first key
+  // flips it to auto; an explicit choice always wins.
+  test("effective scoring method follows the keys unless the teacher chose explicitly", () => {
+    const options = [{ id: "o1", text: "a" }, { id: "o2", text: "b" }];
+    expect(effectiveScoringMethod("fill_blank", null)).toBe("human");
+    expect(
+      effectiveScoringMethod("fill_blank", {
+        blanks: [{ id: "b1", kind: "dropdown", options }, { id: "b2", kind: "text" }],
+      }),
+    ).toBe("human");
+    expect(
+      effectiveScoringMethod("fill_blank", {
+        blanks: [{ id: "b1", kind: "dropdown", options, correct_option_id: "o1" }],
+      }),
+    ).toBe("auto");
+    expect(
+      effectiveScoringMethod("fill_blank", { blanks: [{ id: "b2", kind: "text", keys: ["x"] }] }),
+    ).toBe("auto");
+    expect(
+      effectiveScoringMethod("fill_blank", {
+        blanks: [{ id: "b2", kind: "text", keys: ["x"] }],
+        scoring_method: "human",
+      }),
+    ).toBe("human");
+  });
+
+  test("PATCH replaces the keys; export round-trips the blanks with their keys", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("fill");
+    const created = (await (await createItem(aid, FILL)).json()) as { item: { id: string } };
+    const nextBlanks = [
+      { ...FILL.blanks[0], correct_option_id: "o2" },
+      { id: "b2", kind: "text", keys: ["arid"] },
+    ];
+    const patched = await patchItem(aid, created.item.id, { ...FILL, blanks: nextBlanks });
+    expect(patched.status).toBe(200);
+    const { item } = (await patched.json()) as { item: { config: Record<string, unknown> } };
+    expect(item.config.blanks).toEqual(nextBlanks);
+
+    const exp = await exportAssessment(aid);
+    expect(exp.status).toBe(200);
+    const bundle = ItemBundleSchema.parse(await exp.json());
+    const exported = bundle.items[0]!;
+    expect(exported.type).toBe("fill_blank");
+    if (exported.type === "fill_blank") {
+      expect(exported.stem).toBe(FILL.stem);
+      expect(exported.blanks as unknown).toEqual(nextBlanks);
+    }
+  });
+});
+
 // Numeric equivalence (James, 2026-09-15, docs/math-entry-design.md
 // §Follow-ups): the per-item opt-out is a boolean in items.config that rides
 // the TEACHER bundle only. Scoring behaviour itself is covered by the pure

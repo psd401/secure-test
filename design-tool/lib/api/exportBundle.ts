@@ -207,6 +207,18 @@ export async function buildExportBundle(
           ...(row.config?.cell_keys ? { cell_keys: row.config.cell_keys } : {}),
           ...scoring,
         };
+      case "fill_blank":
+        // FB slice 1 (docs/fill-in-blank-design.md): the blanks live in
+        // config, keys included — the teacher bundle carries them so import
+        // reads them back. compactBlanks already stored each key only when
+        // set, so the stored array is emitted as is.
+        return {
+          type: "fill_blank" as const,
+          id: row.id,
+          stem: row.stem,
+          blanks: row.config?.blanks ?? [],
+          ...scoring,
+        };
       default:
         return assertNever(type, "export: unhandled item type");
     }

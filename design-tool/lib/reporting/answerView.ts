@@ -10,7 +10,8 @@
 // Pure: item + response in, a description out. The page decides how to draw
 // it; the print view (R2) can draw the same description differently.
 
-import type { MatchPair, SequenceEntry } from "@secure-test/schema";
+import type { FillBlankBlank, MatchPair, SequenceEntry } from "@secure-test/schema";
+import { fillBlankTextMatches } from "@/lib/scoring/auto";
 
 export interface AnswerViewItem {
   type: string;
@@ -21,6 +22,7 @@ export interface AnswerViewItem {
     pairs?: MatchPair[];
     sequence?: SequenceEntry[];
     correct_region_ids?: string[];
+    blanks?: FillBlankBlank[];
   };
 }
 
@@ -134,6 +136,33 @@ export function describeAnswer(
 
     case "table":
       return { kind: "table" };
+
+    case "fill_blank": {
+      // FB slice 1: one line per blank in `blanks` order — a dropdown answer
+      // as its option text — with ✓ / ✗ only on a keyed blank, judged by the
+      // scorer's own rule. An unanswered blank still gets its line. Slice 3
+      // owns the richer view (the sentence with the answers in place).
+      const answers = (response.answers ?? {}) as Record<string, unknown>;
+      return {
+        kind: "lines",
+        lines: (item.config.blanks ?? []).map((b, i) => {
+          const raw = answers[b.id];
+          const answer = typeof raw === "string" ? raw : "";
+          if (b.kind === "dropdown") {
+            const option = b.options.find((o) => o.id === answer);
+            return {
+              text: `Blank ${i + 1}: ${answer ? (option ? option.text : answer) : "(blank)"}`,
+              correct: b.correct_option_id != null ? answer === b.correct_option_id : null,
+            };
+          }
+          const keys = b.keys ?? [];
+          return {
+            text: `Blank ${i + 1}: ${answer.trim() ? answer : "(blank)"}`,
+            correct: keys.length > 0 ? fillBlankTextMatches(answer, keys, b.exact_form === true) : null,
+          };
+        }),
+      };
+    }
 
     default:
       // A response type this build does not know (an older row, a newer

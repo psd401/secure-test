@@ -731,6 +731,92 @@ describe("tableMaxPoints (E3)", () => {
   });
 });
 
+// FB slice 1: fill_blank auto-scoring — one point per KEYED blank (D-2,
+// D-8), a dropdown by option id, a typed blank by any of its keys (D-5)
+// through the short-text rule (docs/fill-in-blank-design.md).
+describe("scoreResponse: fill_blank (FB)", () => {
+  const OPTIONS = [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }];
+  const keyed = fakeItem({
+    type: "fill_blank",
+    config: {
+      blanks: [
+        { id: "b1", kind: "dropdown", options: OPTIONS, correct_option_id: "o1" },
+        { id: "b2", kind: "text", keys: ["leeward", "lee side"] },
+        { id: "b3", kind: "text", keys: ["0.5"] },
+        { id: "b4", kind: "text" }, // keyless — never counted
+      ],
+    },
+  });
+
+  test("every keyed blank right → full marks, max = keyed blanks", () => {
+    const r = scoreResponse(keyed, {
+      type: "fill_blank",
+      answers: { b1: "o1", b2: "leeward", b3: "0.5", b4: "anything" },
+    });
+    expect(r).toEqual({ points: 3, max_points: 3 });
+  });
+
+  test("partial: a wrong dropdown pick and a missing blank each cost one point", () => {
+    const r = scoreResponse(keyed, { type: "fill_blank", answers: { b1: "o2", b2: " Leeward " } });
+    expect(r).toEqual({ points: 1, max_points: 3 });
+  });
+
+  test("D-5: any one of several keys earns the point (short-text normalising)", () => {
+    const r = scoreResponse(keyed, { type: "fill_blank", answers: { b2: "Lee  Side" } });
+    expect(r).toEqual({ points: 1, max_points: 3 });
+  });
+
+  test("numeric equivalence applies unless the blank sets exact_form", () => {
+    expect(scoreResponse(keyed, { type: "fill_blank", answers: { b3: "1/2" } })).toEqual({
+      points: 1,
+      max_points: 3,
+    });
+    const exact = fakeItem({
+      type: "fill_blank",
+      config: { blanks: [{ id: "b3", kind: "text", keys: ["0.5"], exact_form: true }] },
+    });
+    expect(scoreResponse(exact, { type: "fill_blank", answers: { b3: "1/2" } })).toEqual({
+      points: 0,
+      max_points: 1,
+    });
+    expect(scoreResponse(exact, { type: "fill_blank", answers: { b3: "0.5" } })).toEqual({
+      points: 1,
+      max_points: 1,
+    });
+  });
+
+  test("the formula fold applies as for short text: H_2O matches H2O", () => {
+    const chem = fakeItem({
+      type: "fill_blank",
+      config: { blanks: [{ id: "b1", kind: "text", keys: ["H2O"] }] },
+    });
+    expect(scoreResponse(chem, { type: "fill_blank", answers: { b1: "H_2O" } })).toEqual({
+      points: 1,
+      max_points: 1,
+    });
+  });
+
+  test("no keyed blank → unscorable (null), not zero", () => {
+    const draft = fakeItem({
+      type: "fill_blank",
+      config: { blanks: [{ id: "b1", kind: "dropdown", options: OPTIONS }, { id: "b2", kind: "text", keys: [] }] },
+    });
+    expect(scoreResponse(draft, { type: "fill_blank", answers: { b1: "o1" } })).toBeNull();
+  });
+
+  test("a response of another type is defensive-null", () => {
+    expect(scoreResponse(keyed, { type: "short_text", text: "leeward" })).toBeNull();
+  });
+
+  test("fillBlankMaxPoints: keyed blanks when any, else every blank, else 0", async () => {
+    const { fillBlankMaxPoints } = await import("../lib/scoring/auto");
+    expect(fillBlankMaxPoints(keyed.config)).toBe(3);
+    expect(fillBlankMaxPoints({ blanks: [{ id: "b1", kind: "text" }, { id: "b2", kind: "text" }] })).toBe(2);
+    expect(fillBlankMaxPoints({})).toBe(0);
+    expect(fillBlankMaxPoints(null)).toBe(0);
+  });
+});
+
 // Slice 1 of docs/scoring-corpus-design.md: auto scoring asks "is this
 // response already final?". A research row is not a final, so it must not
 // make an auto-scorable response look done.

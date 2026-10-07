@@ -1069,6 +1069,81 @@ describe("import: table items (E3)", () => {
   });
 });
 
+// FB slice 1: a fill_blank round-trips through the teacher bundle, keys
+// included (docs/fill-in-blank-design.md).
+describe("import: fill_blank items (FB)", () => {
+  const fill = {
+    type: "fill_blank",
+    id: "f1",
+    stem: "The [[b1]] side gets rain; the [[b2]] side is dry.",
+    blanks: [
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }],
+        correct_option_id: "o1",
+      },
+      { id: "b2", kind: "text", keys: ["leeward", "lee"], exact_form: true },
+    ],
+    scoring_method: "human",
+  };
+
+  test("imports the blanks with their keys into config, and export gives them back", async () => {
+    asUser("teacher-1");
+    const res = await postImport({ test_id: "x", title: "Blanks", items: [fill] });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { assessment: { id: string }; item_count: number };
+    expect(body.item_count).toBe(1);
+    const [row] = await getDb()
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, body.assessment.id));
+    expect(row!.type).toBe("fill_blank");
+    expect(row!.stem).toBe(fill.stem);
+    expect(row!.config.blanks).toEqual(fill.blanks as never);
+    expect(row!.config.scoring_method).toBe("human");
+
+    const { GET } = await import("../app/api/assessments/[id]/export/route");
+    const exp = await GET(
+      new Request(`http://localhost/api/assessments/${body.assessment.id}/export`),
+      { params: Promise.resolve({ id: body.assessment.id }) },
+    );
+    expect(exp.status).toBe(200);
+    const exported = ((await exp.json()) as { items: Record<string, unknown>[] }).items[0]!;
+    expect(exported.type).toBe("fill_blank");
+    expect(exported.blanks).toEqual(fill.blanks);
+    expect(exported.scoring_method).toBe("human");
+  });
+
+  test("a keyless draft imports with no key fields (empty keys dropped)", async () => {
+    asUser("teacher-1");
+    const res = await postImport({
+      test_id: "x",
+      title: "Blanks",
+      items: [
+        {
+          ...fill,
+          scoring_method: undefined,
+          blanks: [
+            { id: "b1", kind: "dropdown", options: fill.blanks[0]!.options },
+            { id: "b2", kind: "text", keys: [] },
+          ],
+        },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { assessment: { id: string } };
+    const [row] = await getDb()
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, body.assessment.id));
+    expect(row!.config.blanks as unknown).toEqual([
+      { id: "b1", kind: "dropdown", options: fill.blanks[0]!.options },
+      { id: "b2", kind: "text" },
+    ]);
+  });
+});
+
 // Client paging: the teacher bundle carries student_layout only as "paged";
 // an older bundle without the field imports as scroll.
 describe("import: student_layout (client paging)", () => {

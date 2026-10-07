@@ -177,6 +177,26 @@ export function buildResponseFor(item: ItemRow): ItemResponse {
       }
       return ItemResponseSchema.parse({ type: "table", cells });
     }
+    case "fill_blank": {
+      // FB slice 1: every blank answered; a keyed blank gets its key half
+      // the time so per-blank auto-scoring sees both outcomes. A keyless
+      // dropdown picks its first option, a keyless typed blank a filler word.
+      const blanks = item.config.blanks ?? [];
+      if (blanks.length === 0) {
+        throw new Error(`item ${item.id} is fill_blank but has no blanks`);
+      }
+      const answers: Record<string, string> = {};
+      for (const b of blanks) {
+        const right = Math.random() < 0.5;
+        if (b.kind === "dropdown") {
+          const wrong = b.options.find((o) => o.id !== b.correct_option_id) ?? b.options[0]!;
+          answers[b.id] = right && b.correct_option_id ? b.correct_option_id : wrong.id;
+        } else {
+          answers[b.id] = right && b.keys?.[0] ? b.keys[0] : fillerText(1);
+        }
+      }
+      return ItemResponseSchema.parse({ type: "fill_blank", answers });
+    }
     default:
       throw new Error(`unknown item type "${item.type}" (item ${item.id})`);
   }

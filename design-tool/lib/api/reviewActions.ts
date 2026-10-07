@@ -9,7 +9,7 @@ import {
   scoringView,
   validateAgainstRubric,
 } from "@/lib/ai/essayScorer/scoreCore";
-import { tableMaxPoints } from "@/lib/scoring/auto";
+import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
 // re-run AI). Loads the response → attempt → assessment chain and enforces
@@ -124,7 +124,9 @@ export function checkManualScore(
     ? rubricMaxPoints(rubric)
     : item.type === "table"
       ? tableMaxPoints(item.config)
-      : 1;
+      : item.type === "fill_blank"
+        ? fillBlankMaxPoints(item.config)
+        : 1;
   if (body.max_points !== expectedMax) {
     return {
       ok: false,

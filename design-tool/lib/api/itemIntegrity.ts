@@ -42,5 +42,18 @@ export function assertItemsAreBundleable(rows: readonly ItemRow[]): void {
     ) {
       throw new IncompleteItemError(row.id, "a table item needs at least one column and one row");
     }
+    // FB slice 1: the API requires at least one blank, and two options on
+    // every dropdown; anything less is a direct DB write the bundle schemas
+    // would reject anonymously.
+    if (row.type === "fill_blank") {
+      const blanks = row.config?.blanks ?? [];
+      if (blanks.length < 1) {
+        throw new IncompleteItemError(row.id, "a fill-in-the-blank item needs at least one blank");
+      }
+      const thin = blanks.find((b) => b.kind === "dropdown" && (b.options?.length ?? 0) < 2);
+      if (thin) {
+        throw new IncompleteItemError(row.id, `dropdown blank "${thin.id}" needs at least two options`);
+      }
+    }
   }
 }

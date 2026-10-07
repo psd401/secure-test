@@ -21,7 +21,7 @@ import {
   studentsInTeachersSections,
 } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
-import { tableMaxPoints } from "@/lib/scoring/auto";
+import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
 // FINAL scores only. Proposed AI scores are deliberately excluded from
@@ -144,12 +144,15 @@ export function sectionFilterOptions(results: Pick<AssessmentResults, "rows" | "
 
 /** D-R1: an item's constant maximum — the same rule the manual-score route
  * pins (`app/api/responses/[responseId]/score/route.ts`): the rubric max
- * when the item has a rubric, the keyed-cell count for a table, else 1.
+ * when the item has a rubric, the keyed-cell count for a table, the keyed-blank count for a
+ * fill_blank, else 1.
  * Exported for R1: the item-analytics footer and the per-student page divide
  * by the same constant this file sums into `max_points`. */
 export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
   if (item.config.rubric) return rubricMaxPoints(item.config.rubric);
   if (item.type === "table") return tableMaxPoints(item.config);
+  // FB slice 1: one point per keyed blank (D-2), every blank when keyless.
+  if (item.type === "fill_blank") return fillBlankMaxPoints(item.config);
   return 1;
 }
 

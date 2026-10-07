@@ -157,3 +157,54 @@ discuss, not decided. The roadmap's v2.0 list carries it.
 
 None. All decided 2026-10-07 (D-1…D-10). The v2.0 server-delivered
 renderer above is a separate discussion.
+
+## §Progress
+
+**Slice 1 BUILT 2026-10-07 (not deployed).** Schema, write
+boundary, scoring, both bundles, export / import, preview / print. No
+migration (`items.type` is text; blanks live in `items.config.blanks`).
+
+- **Shape as proposed.** `FillBlankItemSchema` (teacher bundle) carries
+  `blanks: [{id, kind: "dropdown", options ≥ 2, correct_option_id?} |
+  {id, kind: "text", keys?, exact_form?}]`; `DeliveryFillBlankItemSchema`
+  keeps only id, kind and a dropdown's options (teacher's order, D-6);
+  `FillBlankResponseSchema` is `answers: blank id → string` (≥ 1 entry,
+  ≤ 500 chars). `fillBlankMarkerIds` / `FILL_BLANK_MARKER_RE` in the schema
+  package are the one reading of a `[[id]]` marker (ids: letters, digits,
+  `_`, `-`, ≤ 40).
+- **Write boundary** (`lib/api/items.ts`): ≤ 20 blanks, 2–12 options, ≤ 10
+  keys, 500-char option text and keys; every marker names one blank, every
+  blank has exactly one marker, a marker appears once, option ids unique,
+  `correct_option_id` names an option. Keys stored only when set
+  (`compactBlanks`). The publish lock admits per-blank key changes
+  (`correct_option_id`, `keys`) and nothing else; `exact_form` stays
+  locked after publish, like short text's (review choice, one rule for
+  both types). `isKeyedBlank` lives in the schema package beside the
+  shape, so the pure scorer does not import the write boundary.
+- **Scoring:** one point per keyed blank (D-2 / D-8); a dropdown by option
+  id; a typed blank by any key (D-5) through `shortTextMatches` with the
+  blank's own `exact_form` (numeric equivalence, formula fold,
+  `canonicalizeMath` exactly as short text). No keyed blank → unscorable and
+  the unset method default is `human` (the E3-F1 rule); `fillBlankMaxPoints`
+  (keyed blanks, else every blank) is the denominator in results, the review
+  queue and the manual-score check.
+- **Ingest:** an answer naming an unknown blank, or a dropdown answer naming
+  an unknown option, is refused `400 unknown_option_id` (`""` = cleared pick,
+  accepted).
+- **Preview / print:** the stem is split at its markers and each text segment
+  rendered by `renderItemContent`; screen = disabled `<select>` (option text
+  escaped, so option math shows as source) or an underlined gap; print =
+  numbered gaps plus each dropdown's options as a lettered list. A marker
+  naming no blank stays literal text. **Limit:** math or emphasis that
+  spans a marker is split by it.
+- **Minimum read side (slice 3 owns the real one):** instant feedback,
+  results / per-student lines and the queue's fallback text list
+  "Blank n: …"; Google Docs is essays only (no change).
+- **Hidden:** the editor's "Add a question" picker does not offer it
+  (`NOT_YET_PICKABLE`) until slice 2.
+- **Not done here, on purpose:** import does not re-check marker ↔ blank
+  pairing (the wire layer stays permissive, like match / table); no answer
+  history for typed blanks; no asset refs in option text; readiness checks
+  (slice 2); the Swift fixture and the delivery version gate (slices 5–6).
+
+Tests: schema 135, design-tool 2969 (full suite, after review fixes), typecheck clean.

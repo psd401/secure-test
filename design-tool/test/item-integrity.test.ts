@@ -163,6 +163,34 @@ describe("assertItemsAreBundleable", () => {
       ]),
     ).not.toThrow();
   });
+
+  // FB slice 1: a fill_blank needs a blank, and a dropdown two options.
+  test("a fill_blank with no blanks or a one-option dropdown is refused; keyless is fine", () => {
+    expect(() => assertItemsAreBundleable([row({ type: "fill_blank", config: { blanks: [] } })])).toThrow(
+      IncompleteItemError,
+    );
+    expect(() =>
+      assertItemsAreBundleable([
+        row({
+          type: "fill_blank",
+          config: { blanks: [{ id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }] }] },
+        }),
+      ]),
+    ).toThrow(IncompleteItemError);
+    expect(() =>
+      assertItemsAreBundleable([
+        row({
+          type: "fill_blank",
+          config: {
+            blanks: [
+              { id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }] },
+              { id: "b2", kind: "text" },
+            ],
+          },
+        }),
+      ]),
+    ).not.toThrow();
+  });
 });
 
 describe("the routes report it instead of throwing", () => {

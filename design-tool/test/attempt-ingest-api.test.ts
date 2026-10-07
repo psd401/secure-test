@@ -865,6 +865,73 @@ describe("PUT a table response (E3)", () => {
   });
 });
 
+// FB slice 1: a fill_blank answer is stored as sent — blank and option ids
+// ship as authored, so nothing is unsealed — but every answer must name one
+// of the item's blanks and a dropdown answer one of that blank's options.
+describe("PUT a fill_blank response (FB)", () => {
+  async function withFill() {
+    const s = await scenario();
+    const [fill] = await getDb()
+      .insert(items)
+      .values({
+        assessment_id: s.assessment.id,
+        position: 5,
+        type: "fill_blank",
+        stem: "The [[b1]] side; the [[b2]] side.",
+        config: {
+          blanks: [
+            {
+              id: "b1",
+              kind: "dropdown",
+              options: [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }],
+              correct_option_id: "o1",
+            },
+            { id: "b2", kind: "text", keys: ["dry"] },
+          ],
+        },
+      })
+      .returning();
+    return { ...s, fill: fill! };
+  }
+
+  test("stores the answers verbatim and a second PUT replaces them", async () => {
+    const s = await withFill();
+    asStudent();
+    const attempt = (await (await start(s.sitting.id)).json()).attempt;
+    const first = await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b1: "o2", b2: "arid" } });
+    expect(first.status).toBe(200);
+    const second = await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b2: "dry" } });
+    expect(second.status).toBe(200);
+    const rows = await getDb().select().from(responses).where(eq(responses.item_id, s.fill.id));
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.response).toEqual({ type: "fill_blank", answers: { b2: "dry" } });
+  });
+
+  test("refuses an unknown blank id, an unknown option id, an empty map and the wrong type", async () => {
+    const s = await withFill();
+    asStudent();
+    const attempt = (await (await start(s.sitting.id)).json()).attempt;
+    const unknownBlank = await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b9: "x" } });
+    expect(unknownBlank.status).toBe(400);
+    expect((await unknownBlank.json()).error).toBe("unknown_option_id");
+    const unknownOption = await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b1: "o9" } });
+    expect(unknownOption.status).toBe(400);
+    expect((await unknownOption.json()).error).toBe("unknown_option_id");
+    expect((await put(attempt.id, s.fill.id, { type: "fill_blank", answers: {} })).status).toBe(400);
+    expect((await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b2: 3 } })).status).toBe(400);
+    const mismatch = await put(attempt.id, s.fill.id, { type: "short_text", text: "dry" });
+    expect(mismatch.status).toBe(400);
+    expect((await mismatch.json()).error).toBe("response_type_mismatch");
+  });
+
+  test("a cleared dropdown (\"\") is accepted", async () => {
+    const s = await withFill();
+    asStudent();
+    const attempt = (await (await start(s.sitting.id)).json()).attempt;
+    expect((await put(attempt.id, s.fill.id, { type: "fill_blank", answers: { b1: "" } })).status).toBe(200);
+  });
+});
+
 // Answer history (docs/answer-history-design.md, D-2): the write routes keep
 // the value they replace when the rule says so.
 describe("answer history on the student write routes", () => {

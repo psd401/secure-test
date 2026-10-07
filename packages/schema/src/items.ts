@@ -257,6 +257,63 @@ export const TableItemSchema = z.object({
   cell_keys: TableCellKeysSchema.optional(),
 });
 
+// FB slice 1 (design-tool docs/fill-in-blank-design.md): a sentence with
+// blanks. The stem carries `[[<blank id>]]` markers; each marker names one
+// entry of `blanks`. A blank is either a dropdown (D-1: the student picks one
+// of the blank's own options, kept in the teacher's order — D-6) or typed
+// (the student writes a short answer). The KEY fields are
+// `correct_option_id` on a dropdown and `keys` / `exact_form` on a typed
+// blank (D-5: several accepted answers, any one matches); the delivery
+// schema has no field that can hold either. A blank may be keyless while
+// drafting. Marker ↔ blank pairing, id uniqueness and the size caps are
+// enforced at the design-tool write boundary — the wire layer stays
+// permissive, like match / order / table.
+export const FillBlankDropdownSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("dropdown"),
+  options: z.array(ChoiceSchema).min(2),
+  correct_option_id: z.string().min(1).optional(),
+});
+
+export const FillBlankTextSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("text"),
+  keys: z.array(z.string().min(1)).optional(),
+  exact_form: z.boolean().optional(),
+});
+
+export const FillBlankBlankSchema = z.discriminatedUnion("kind", [
+  FillBlankDropdownSchema,
+  FillBlankTextSchema,
+]);
+
+export const FillBlankItemSchema = z.object({
+  type: z.literal("fill_blank"),
+  ...baseItem,
+  blanks: z.array(FillBlankBlankSchema).min(1),
+});
+
+/**
+ * FB slice 1: the blank ids a stem's `[[<id>]]` markers name, in order of
+ * appearance (a repeated marker appears twice). Shared by the write boundary,
+ * the preview renderer and the readiness check so all three read a marker the
+ * same way. Ids are letters, digits, `_` and `-`.
+ */
+/** FB: does this blank carry a key? Shared by scoring, the method default
+ * and readiness so "keyed" means one thing everywhere (D-2: only keyed
+ * blanks earn a point). Lives here, beside the shape, so the pure scorer
+ * does not import the design-tool write boundary. */
+export function isKeyedBlank(blank: FillBlankBlank): boolean {
+  return blank.kind === "dropdown"
+    ? blank.correct_option_id != null
+    : (blank.keys?.length ?? 0) > 0;
+}
+
+export const FILL_BLANK_MARKER_RE = /\[\[([A-Za-z0-9_-]{1,40})\]\]/g;
+export function fillBlankMarkerIds(stem: string): string[] {
+  return [...stem.matchAll(FILL_BLANK_MARKER_RE)].map((m) => m[1]!);
+}
+
 // Wire format spans the item types. Old fixtures (PoC-B's
 // items.json predates this slice and omits `type`) are accepted via
 // preprocess that defaults to multiple_choice_single — keeps round-trip
@@ -282,6 +339,7 @@ export const ItemSchema = z.preprocess(
     HotspotItemSchema,
     DrawingUploadItemSchema,
     TableItemSchema,
+    FillBlankItemSchema,
   ]),
 );
 
@@ -470,6 +528,10 @@ export type TableColumn = z.infer<typeof TableColumnSchema>;
 export type TableRow = z.infer<typeof TableRowSchema>;
 export type TableCellKeys = z.infer<typeof TableCellKeysSchema>;
 export type TableItem = z.infer<typeof TableItemSchema>;
+export type FillBlankDropdown = z.infer<typeof FillBlankDropdownSchema>;
+export type FillBlankText = z.infer<typeof FillBlankTextSchema>;
+export type FillBlankBlank = z.infer<typeof FillBlankBlankSchema>;
+export type FillBlankItem = z.infer<typeof FillBlankItemSchema>;
 export type Item = z.infer<typeof ItemSchema>;
 export type BundleAsset = z.infer<typeof BundleAssetSchema>;
 export type ItemBundle = z.infer<typeof ItemBundleSchema>;

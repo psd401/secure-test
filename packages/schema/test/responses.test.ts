@@ -162,3 +162,26 @@ describe("TableResponseSchema (via ItemResponseSchema)", () => {
     expect(r.success).toBe(false);
   });
 });
+
+// FB slice 1: fill-in-the-blank responses — blank id → option id or text.
+describe("FillBlankResponseSchema (via ItemResponseSchema)", () => {
+  test("accepts dropdown and typed answers and round-trips them", () => {
+    const parsed = ItemResponseSchema.parse({
+      type: "fill_blank",
+      answers: { b1: "o2", b2: "leeward", b3: "" },
+    });
+    expect(parsed.type === "fill_blank" && parsed.answers).toEqual({ b1: "o2", b2: "leeward", b3: "" });
+  });
+
+  test("rejects an empty answer map — every blank empty is the absence of a response", () => {
+    expect(ItemResponseSchema.safeParse({ type: "fill_blank", answers: {} }).success).toBe(false);
+  });
+
+  test("rejects an empty blank id, a non-string answer and an answer over 500 characters", () => {
+    expect(ItemResponseSchema.safeParse({ type: "fill_blank", answers: { "": "x" } }).success).toBe(false);
+    expect(ItemResponseSchema.safeParse({ type: "fill_blank", answers: { b1: 3 } }).success).toBe(false);
+    expect(
+      ItemResponseSchema.safeParse({ type: "fill_blank", answers: { b1: "x".repeat(501) } }).success,
+    ).toBe(false);
+  });
+});

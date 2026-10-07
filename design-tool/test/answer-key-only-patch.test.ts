@@ -123,3 +123,87 @@ describe("isAnswerKeyOnlyPatch: table (E3)", () => {
     ).toBe(false);
   });
 });
+
+// FB slice 1: a fill_blank's key lives inside each blank — correct_option_id
+// and keys. The lock admits changing those and nothing else; exact_form stays
+// locked like short_text's.
+describe("isAnswerKeyOnlyPatch: fill_blank (FB)", () => {
+  const options = [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }];
+  const shape = {
+    type: "fill_blank" as const,
+    stem: "The [[b1]] side and the [[b2]] side",
+  };
+  const stored = row({
+    type: "fill_blank",
+    stem: shape.stem,
+    choices: [],
+    config: {
+      blanks: [
+        { id: "b1", kind: "dropdown", options },
+        { id: "b2", kind: "text" },
+      ],
+    },
+  });
+
+  test("filling and changing the per-blank keys is key-only", () => {
+    const body = UpdateItemBody.parse({
+      ...shape,
+      blanks: [
+        { id: "b1", kind: "dropdown", options, correct_option_id: "o2" },
+        { id: "b2", kind: "text", keys: ["arid", "dry"] },
+      ],
+    });
+    expect(isAnswerKeyOnlyPatch(body, stored)).toBe(true);
+  });
+
+  test("turning on a blank's exact_form is not (locked like short_text's)", () => {
+    const body = UpdateItemBody.parse({
+      ...shape,
+      blanks: [
+        { id: "b1", kind: "dropdown", options },
+        { id: "b2", kind: "text", keys: ["arid"], exact_form: true },
+      ],
+    });
+    expect(isAnswerKeyOnlyPatch(body, stored)).toBe(false);
+  });
+
+  test("changing an option's text, a blank's kind or the stem is not", () => {
+    expect(
+      isAnswerKeyOnlyPatch(
+        UpdateItemBody.parse({
+          ...shape,
+          blanks: [
+            { id: "b1", kind: "dropdown", options: [options[0], { id: "o2", text: "lee" }] },
+            { id: "b2", kind: "text" },
+          ],
+        }),
+        stored,
+      ),
+    ).toBe(false);
+    expect(
+      isAnswerKeyOnlyPatch(
+        UpdateItemBody.parse({
+          ...shape,
+          blanks: [
+            { id: "b1", kind: "text", keys: ["windward"] },
+            { id: "b2", kind: "text" },
+          ],
+        }),
+        stored,
+      ),
+    ).toBe(false);
+    expect(
+      isAnswerKeyOnlyPatch(
+        UpdateItemBody.parse({
+          type: "fill_blank",
+          stem: "The [[b2]] side and the [[b1]] side",
+          blanks: [
+            { id: "b1", kind: "dropdown", options },
+            { id: "b2", kind: "text" },
+          ],
+        }),
+        stored,
+      ),
+    ).toBe(false);
+  });
+});

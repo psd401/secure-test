@@ -35,6 +35,9 @@ import {
 //   match / order           see the shape change below
 //   table                   cell_keys  (columns / rows / corner stay — needed
 //                           to draw the grid; E3 slice 1)
+//   fill_blank              correct_option_id, keys, exact_form per blank
+//                           (each blank's id, kind and a dropdown's options
+//                           stay — FB slice 1)
 //   ALL                     scoring_method — not a key, but it telegraphs
 //                           whether an item is AI- or human-scored.
 //
@@ -127,6 +130,33 @@ export const DeliveryTableItemSchema = z.object({
   corner: z.string().optional(),
 });
 
+// FB slice 1 (design-tool docs/fill-in-blank-design.md): each blank keeps
+// its id and kind, and a dropdown its options in the teacher's order (D-6).
+// Neither blank shape has a field that can hold `correct_option_id`, `keys`
+// or `exact_form`, so a caller that forgets to drop them has them stripped
+// rather than shipped (ADR 0016; the test in delivery.test.ts).
+export const DeliveryFillBlankDropdownSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("dropdown"),
+  options: z.array(ChoiceSchema).min(2),
+});
+
+export const DeliveryFillBlankTextSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("text"),
+});
+
+export const DeliveryFillBlankBlankSchema = z.discriminatedUnion("kind", [
+  DeliveryFillBlankDropdownSchema,
+  DeliveryFillBlankTextSchema,
+]);
+
+export const DeliveryFillBlankItemSchema = z.object({
+  type: z.literal("fill_blank"),
+  ...baseDeliveryItem,
+  blanks: z.array(DeliveryFillBlankBlankSchema).min(1),
+});
+
 // No z.preprocess type-defaulting here. ItemSchema carries that for PoC-B
 // fixtures that predate the `type` field; a delivery bundle has no legacy
 // producers, so an untyped item is a bug and should fail loudly.
@@ -140,6 +170,7 @@ export const DeliveryItemSchema = z.discriminatedUnion("type", [
   DeliveryHotspotItemSchema,
   DeliveryDrawingUploadItemSchema,
   DeliveryTableItemSchema,
+  DeliveryFillBlankItemSchema,
 ]);
 
 const UUID_RE =
@@ -269,6 +300,8 @@ export type DeliveryOrderItem = z.infer<typeof DeliveryOrderItemSchema>;
 export type DeliveryHotspotItem = z.infer<typeof DeliveryHotspotItemSchema>;
 export type DeliveryDrawingUploadItem = z.infer<typeof DeliveryDrawingUploadItemSchema>;
 export type DeliveryTableItem = z.infer<typeof DeliveryTableItemSchema>;
+export type DeliveryFillBlankBlank = z.infer<typeof DeliveryFillBlankBlankSchema>;
+export type DeliveryFillBlankItem = z.infer<typeof DeliveryFillBlankItemSchema>;
 export type DeliveryItem = z.infer<typeof DeliveryItemSchema>;
 export type DeliveryBundle = z.infer<typeof DeliveryBundleSchema>;
 // P-1: the two prefill maps, named so a builder or a client can hold one

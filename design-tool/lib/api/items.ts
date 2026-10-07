@@ -3,6 +3,9 @@ import {
   DrawingCanvasSchema,
   RubricSchema,
   ScoringMethodSchema,
+  fillBlankMarkerIds,
+  isKeyedBlank,
+  type FillBlankBlank,
   type ScoringMethod,
 } from "@secure-test/schema";
 import { ITEM_TYPES, type ItemConfig, type ItemType } from "@/db/schema";
@@ -211,6 +214,52 @@ const TableItem = z.object({
     .optional(),
 });
 
+// FB slice 1 (docs/fill-in-blank-design.md): a sentence with blanks. The
+// stem's `[[<id>]]` markers and `blanks` pair one to one (checked in
+// validateFillBlank below). A blank is a dropdown with its own options (D-1,
+// teacher's order — D-6; `correct_option_id` is its key) or typed (`keys`,
+// D-5: several accepted answers, any one matches; `exact_form` opts that
+// blank out of numeric equivalence like short_text). Keys are optional while
+// drafting, as for every other type. Caps: 20 blanks, 12 options per
+// dropdown, 10 keys per typed blank, 500-char option text and keys (a blank
+// is a word or a phrase — the table-cell limit). A blank id is what the
+// marker spells, so it uses the marker's character set.
+const FillBlankId = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{1,40}$/, "blank ids are 1–40 letters, digits, _ or -");
+
+export const FillBlankDropdownShape = z.object({
+  id: FillBlankId,
+  kind: z.literal("dropdown"),
+  options: z
+    .array(z.object({ id: z.string().min(1).max(64), text: z.string().min(1).max(500) }))
+    .min(2, "a dropdown blank needs at least 2 options")
+    .max(12, "a dropdown blank allows at most 12 options"),
+  correct_option_id: z.string().min(1).nullable().optional(),
+});
+
+export const FillBlankTextShape = z.object({
+  id: FillBlankId,
+  kind: z.literal("text"),
+  keys: z
+    .array(z.string().min(1).max(500))
+    .max(10, "a typed blank allows at most 10 accepted answers")
+    .optional(),
+  exact_form: z.boolean().optional(),
+});
+
+const FillBlankItem = z.object({
+  type: z.literal("fill_blank"),
+  ...BaseItemFields,
+  choices: z.array(ChoiceShape).max(0).default([]),
+  correct_choice_ids: z.array(z.string()).max(0).default([]),
+  correct_answer: z.null().optional(),
+  blanks: z
+    .array(z.discriminatedUnion("kind", [FillBlankDropdownShape, FillBlankTextShape]))
+    .min(1, "a fill-in-the-blank question needs at least one blank")
+    .max(20, "a fill-in-the-blank question allows at most 20 blanks"),
+});
+
 // Slice 36: which scoring methods each type may declare, and the default
 // when unset. auto needs a machine-checkable key (choices / correct_answer),
 // which essay lacks; ai/hybrid need a rubric, which only essay carries.
@@ -224,6 +273,7 @@ export const DEFAULT_SCORING_METHOD: Record<ItemType, ScoringMethod> = {
   hotspot: "auto",
   drawing_upload: "human",
   table: "auto",
+  fill_blank: "auto",
 };
 
 export const ALLOWED_SCORING_METHODS: Record<
@@ -243,6 +293,9 @@ export const ALLOWED_SCORING_METHODS: Record<
   // E3: per-cell exact match against cell_keys (lib/scoring/auto.ts), or
   // hand-scored; an unkeyed table is simply unscorable, like a draft hotspot.
   table: ["auto", "human"],
+  // FB: one point per keyed blank (lib/scoring/auto.ts), or hand-scored; a
+  // fully keyless item is unscorable by auto, like an unkeyed table.
+  fill_blank: ["auto", "human"],
 };
 
 // The method scoring actually runs with (slice 37 consumes this): the
@@ -256,6 +309,13 @@ export function effectiveScoringMethod(
 ): ScoringMethod {
   if (config?.scoring_method) return config.scoring_method;
   if (type === "table") return config?.cell_keys ? "auto" : "human";
+  // FB (docs/fill-in-blank-design.md, "a blank without a key … is
+  // hand-scored like a keyless table cell"): the E3-F1 rule — no keyed blank
+  // means nothing to auto-score, so the unset default is human until the
+  // first key exists.
+  if (type === "fill_blank") {
+    return (config?.blanks ?? []).some(isKeyedBlank) ? "auto" : "human";
+  }
   return DEFAULT_SCORING_METHOD[type];
 }
 
@@ -406,6 +466,76 @@ const validateTable = (
   }
 };
 
+export { isKeyedBlank };
+
+// FB slice 1: fill_blank cross-field integrity. Every `[[id]]` marker in the
+// stem names exactly one blank and every blank has exactly one marker — the
+// response and the client address blanks by id, and an orphan on either side
+// is a sentence the student cannot complete (or a blank they cannot see).
+// Within a dropdown, option ids are unique and the key names one of them.
+const validateFillBlank = (
+  body: {
+    type: ItemType;
+    stem: string;
+    blanks?: (
+      | { id: string; kind: "dropdown"; options: { id: string }[]; correct_option_id?: string | null }
+      | { id: string; kind: "text" }
+    )[];
+  },
+  ctx: z.RefinementCtx,
+) => {
+  if (body.type !== "fill_blank") return;
+  const blanks = body.blanks ?? [];
+  const blankIds = new Set(blanks.map((b) => b.id));
+  if (blankIds.size !== blanks.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["blanks"], message: "blank ids must be unique" });
+  }
+  const markers = fillBlankMarkerIds(body.stem);
+  const seen = new Set<string>();
+  for (const id of markers) {
+    if (seen.has(id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["stem"],
+        message: `the stem has the blank [[${id}]] more than once`,
+      });
+    }
+    seen.add(id);
+    if (!blankIds.has(id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["stem"],
+        message: `the stem's blank [[${id}]] has no matching entry in blanks`,
+      });
+    }
+  }
+  blanks.forEach((blank, i) => {
+    if (!seen.has(blank.id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blanks", i],
+        message: `blank "${blank.id}" has no [[${blank.id}]] marker in the stem`,
+      });
+    }
+    if (blank.kind !== "dropdown") return;
+    const optionIds = new Set(blank.options.map((o) => o.id));
+    if (optionIds.size !== blank.options.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blanks", i, "options"],
+        message: `option ids in blank "${blank.id}" must be unique`,
+      });
+    }
+    if (blank.correct_option_id != null && !optionIds.has(blank.correct_option_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blanks", i, "correct_option_id"],
+        message: `blank "${blank.id}" names unknown correct option "${blank.correct_option_id}"`,
+      });
+    }
+  });
+};
+
 // Review fix (2026-08-14): a rubric whose total max is 0 can never be
 // finalized — max_points > 0 is a DB CHECK and every score path rejects it,
 // leaving responses permanently stuck in the review queue. Reject at
@@ -440,11 +570,13 @@ export const CreateItemBody = z
     HotspotItem,
     DrawingUploadItem,
     TableItem,
+    FillBlankItem,
   ])
   .superRefine(validateScoring)
   .superRefine(validateUniqueIds)
   .superRefine(validateHotspot)
   .superRefine(validateTable)
+  .superRefine(validateFillBlank)
   .superRefine(validateRubricMax);
 export type CreateItemBody = z.infer<typeof CreateItemBody>;
 
@@ -497,6 +629,10 @@ export function itemConfigForWrite(
     // empty object — the same convention as every other optional config key.
     const keys = compactCellKeys(body.cell_keys);
     if (keys) config.cell_keys = keys;
+    return config;
+  }
+  if (body.type === "fill_blank") {
+    config.blanks = compactBlanks(body.blanks);
     return config;
   }
   if (body.type !== "essay") return config;
@@ -558,6 +694,31 @@ export function compactCellKeys(
     if (Object.keys(cells).length > 0) out[rowId] = cells;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * FB slice 1: the stored form of a fill_blank's blanks. Keys are emitted only
+ * when set — a null `correct_option_id`, an empty `keys` list and a false
+ * `exact_form` are all the absence of the field, the convention every other
+ * optional config key follows, so "keyless" has one representation.
+ */
+export function compactBlanks(
+  blanks: readonly (
+    | { id: string; kind: "dropdown"; options: { id: string; text: string }[]; correct_option_id?: string | null }
+    | { id: string; kind: "text"; keys?: string[]; exact_form?: boolean }
+  )[],
+): FillBlankBlank[] {
+  return blanks.map((b): FillBlankBlank => {
+    if (b.kind === "dropdown") {
+      const out: FillBlankBlank = { id: b.id, kind: "dropdown", options: b.options };
+      if (b.correct_option_id != null) out.correct_option_id = b.correct_option_id;
+      return out;
+    }
+    const out: FillBlankBlank = { id: b.id, kind: "text" };
+    if (b.keys && b.keys.length > 0) out.keys = b.keys;
+    if (b.exact_form) out.exact_form = true;
+    return out;
+  });
 }
 
 // Updates: same discriminated union — type is immutable in this slice, so

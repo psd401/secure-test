@@ -38,12 +38,21 @@ describe("DeliveryItemSchema", () => {
         columns: [{ id: "c1", label: "Trial 1" }],
         rows: [{ id: "r1", label: "Mass (g)" }],
       },
+      {
+        type: "fill_blank",
+        id: "i10",
+        stem: "The [[b1]] side is wet and the [[b2]] side is dry.",
+        blanks: [
+          { id: "b1", kind: "dropdown", options: CHOICES },
+          { id: "b2", kind: "text" },
+        ],
+      },
     ];
     for (const item of items) {
       expect(() => DeliveryItemSchema.parse(item)).not.toThrow();
     }
     // Guards against a type being added to authoring without a delivery shape.
-    expect(items.length).toBe(9);
+    expect(items.length).toBe(10);
   });
 
   // Drawing background: the student bundle reuses DrawingCanvasSchema, so the
@@ -127,6 +136,46 @@ describe("DeliveryItemSchema", () => {
     expect(JSON.stringify(table)).not.toContain("12");
     expect((table as { columns: unknown[] }).columns.length).toBe(1);
     expect((table as { corner?: string }).corner).toBe("Chamber");
+
+    // FB slice 1 (ADR 0016): every blank keeps its id, kind and a dropdown's
+    // options in the teacher's order (D-6); no key-shaped field survives.
+    const fill = DeliveryItemSchema.parse({
+      type: "fill_blank",
+      id: "i10",
+      stem: "The [[b1]] side and the [[b2]] side",
+      blanks: [
+        {
+          id: "b1",
+          kind: "dropdown",
+          options: [{ id: "o2", text: "leeward" }, { id: "o1", text: "windward" }],
+          correct_option_id: "o1",
+        },
+        { id: "b2", kind: "text", keys: ["xerophytic"], exact_form: true },
+      ],
+    });
+    const json = JSON.stringify(fill);
+    expect(json).not.toContain("correct_option_id");
+    expect(json).not.toContain("keys");
+    expect(json).not.toContain("exact_form");
+    expect(json).not.toContain("xerophytic");
+    expect(fill.type === "fill_blank" && fill.blanks).toEqual([
+      { id: "b1", kind: "dropdown", options: [{ id: "o2", text: "leeward" }, { id: "o1", text: "windward" }] },
+      { id: "b2", kind: "text" },
+    ]);
+  });
+
+  test("a fill_blank dropdown needs two options; an unknown blank kind is refused", () => {
+    const base = { type: "fill_blank", id: "i10", stem: "[[b1]]" };
+    expect(
+      DeliveryItemSchema.safeParse({
+        ...base,
+        blanks: [{ id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      DeliveryItemSchema.safeParse({ ...base, blanks: [{ id: "b1", kind: "slider" }] }).success,
+    ).toBe(false);
+    expect(DeliveryItemSchema.safeParse({ ...base, blanks: [] }).success).toBe(false);
   });
 
   test("strips scoring_method on every type", () => {
@@ -381,6 +430,7 @@ describe("DeliveryBundleSchema saved_responses / saved_uploads", () => {
       i7: { type: "hotspot", region_ids: ["r1"] },
       i8: { type: "drawing_upload", upload_id: UPLOAD_ID },
       i9: { type: "table", cells: { r1: { c1: "12" } } },
+      i10: { type: "fill_blank", answers: { b1: "o1", b2: "leeward" } },
     };
     const parsed = DeliveryBundleSchema.parse({ ...base, saved_responses });
     expect(parsed.saved_responses).toEqual(saved_responses);

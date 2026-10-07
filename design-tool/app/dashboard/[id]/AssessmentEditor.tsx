@@ -258,6 +258,12 @@ type AiProposal = {
 // the client ships drawing (finding 10.10).
 const TYPE_LABEL = ITEM_TYPE_LABEL;
 
+// FB slice 1 (docs/fill-in-blank-design.md) ships the type without its editor
+// form (slice 2), the E3 pattern: until then the picker does not offer it, so
+// no one can create a question this page cannot yet edit. Slice 2 deletes
+// this list.
+const NOT_YET_PICKABLE: readonly ItemType[] = ["fill_blank"];
+
 /** What the items routes return: the DB row, with the type-specific fields in `config`. */
 interface ItemRow {
   id: string;
@@ -375,6 +381,7 @@ const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   hotspot: ["auto", "human"],
   drawing_upload: ["human"],
   table: ["auto", "human"],
+  fill_blank: ["auto", "human"],
 };
 
 const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
@@ -387,6 +394,7 @@ const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
   hotspot: "auto",
   drawing_upload: "human",
   table: "auto",
+  fill_blank: "auto",
 };
 
 // E3-F1: a table's unset default depends on whether it has a key yet — the
@@ -2018,11 +2026,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             onChange={(e) => setAddType(e.target.value as ItemType)}
             disabled={isLocked}
           >
-            {(Object.keys(TYPE_LABEL) as ItemType[]).map((t) => (
-              <NativeSelectOption key={t} value={t}>
-                {TYPE_LABEL[t]}
-              </NativeSelectOption>
-            ))}
+            {(Object.keys(TYPE_LABEL) as ItemType[])
+              .filter((t) => !NOT_YET_PICKABLE.includes(t))
+              .map((t) => (
+                <NativeSelectOption key={t} value={t}>
+                  {TYPE_LABEL[t]}
+                </NativeSelectOption>
+              ))}
           </NativeSelect>
           <Button type="button" size="sm" onClick={addItem} disabled={isPending || isLocked || adding}>
             <Plus aria-hidden />

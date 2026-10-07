@@ -12,6 +12,8 @@ export const ITEM_TYPE_LABEL: Record<ItemType, string> = {
   hotspot: "Click the image",
   drawing_upload: "Drawing",
   table: "Table",
+  // FB D-10: the teacher-facing name.
+  fill_blank: "Fill in the blank",
 };
 
 /** Label for a type string that may not be a known type (model output). */

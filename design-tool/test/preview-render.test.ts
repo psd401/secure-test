@@ -900,6 +900,64 @@ describe("renderAssessmentHtml: table (E3)", () => {
   });
 });
 
+// FB slice 1: the stem renders with each blank in place — a disabled
+// <select> on screen, a numbered gap on paper — and the key never reaches the
+// renderer (PreviewBlank has no field for it; previewBlanks strips it).
+describe("renderAssessmentHtml: fill_blank (FB)", () => {
+  const fill: PreviewItem = {
+    id: "f1",
+    position: 0,
+    type: "fill_blank",
+    stem: "The [[b1]] side of $x^2$ gets **rain**; the [[b2]] side is <dry> and [[b9]] stays.",
+    choices: [],
+    correct_choice_ids: [],
+    correct_answer: null,
+    blanks: [
+      { id: "b1", kind: "dropdown", options: [{ id: "o1", text: "wind<ward>" }, { id: "o2", text: "$y$" }] },
+      { id: "b2", kind: "text" },
+    ],
+  };
+
+  test("screen: a disabled select with the options in order, an underlined gap, segments rendered", () => {
+    const html = renderAssessmentHtml(assessment, [fill]);
+    expect(html).toContain(
+      '<select class="fill-select" aria-label="Blank 1" disabled><option value="">Choose…</option>' +
+        '<option value="o1">wind&lt;ward&gt;</option><option value="o2">$y$</option></select>',
+    );
+    expect(html).toContain('<span class="fill-gap" aria-label="Blank 2"><span class="fill-gap-num">2</span></span>');
+    // Segment text goes through the stem renderer: KaTeX renders, raw HTML is
+    // escaped, and a marker naming no blank stays as literal text.
+    expect(html).toContain('class="katex"');
+    expect(html).toContain("<strong>rain</strong>");
+    expect(html).toContain("&lt;dry&gt;");
+    expect(html).not.toContain("<dry>");
+    expect(html).toContain("[[b9]]");
+    expect(html).not.toContain("[[b1]]");
+  });
+
+  test("print: every blank is a numbered gap; dropdown options follow as a lettered list", () => {
+    const html = renderAssessmentHtml(assessment, [fill], undefined, { printMode: true });
+    expect(html).not.toContain("<select");
+    expect(html).toContain('<span class="fill-gap fill-gap-print" aria-label="Blank 1">');
+    expect(html).toContain('<span class="fill-gap fill-gap-print" aria-label="Blank 2">');
+    expect(html).toContain('<span class="fill-options-label">Blank 1:</span>');
+    expect(html).toContain('<span class="choice-letter">A.</span> wind&lt;ward&gt;');
+    expect(html).toContain("Circle one choice for each numbered blank.");
+  });
+
+  test("previewBlanks drops every key field", async () => {
+    const { previewBlanks } = await import("../lib/preview/renderHtml");
+    const stripped = previewBlanks([
+      { id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }], correct_option_id: "o1" },
+      { id: "b2", kind: "text", keys: ["secretkey"], exact_form: true },
+    ]);
+    expect(stripped).toEqual([
+      { id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }] },
+      { id: "b2", kind: "text" },
+    ]);
+  });
+});
+
 describe("preview — speech controls (speech-tools slice 4)", () => {
   const count = (html: string, label: string) =>
     html.split(`aria-disabled="true">${label}</span>`).length - 1;

@@ -1,4 +1,4 @@
-import type { ItemResponse } from "@secure-test/schema";
+import { isKeyedBlank, type ItemResponse } from "@secure-test/schema";
 import type { ItemRow } from "@/db/schema";
 
 // Slice 37: pure auto-scoring for the objectively markable types. Policy
@@ -421,6 +421,30 @@ export function tableMaxPoints(config: ItemRow["config"] | null | undefined): nu
   return (config?.columns?.length ?? 0) * (config?.rows?.length ?? 0);
 }
 
+// FB slice 1 (docs/fill-in-blank-design.md, D-2 / D-8): what a fill-in-the-
+// blank item is worth, on the tableMaxPoints rule — keyed blanks when there
+// are any (the auto branch counts the same blanks), otherwise every blank,
+// the honest denominator for a hand-scored item (E3-F1's keyless rule).
+export function fillBlankMaxPoints(config: ItemRow["config"] | null | undefined): number {
+  const blanks = config?.blanks ?? [];
+  const keyed = blanks.filter(isKeyedBlank).length;
+  return keyed > 0 ? keyed : blanks.length;
+}
+
+// FB: does a typed blank's answer match one of its keys (D-5: any one
+// earns the point)? Exactly the short_text rule — shortTextMatches with the
+// blank's own `exact_form` opt-out — not tableCellMatches: a typed blank is a
+// short answer inside a sentence, and unlike a table cell it carries the
+// short-text opt-out, so the short-text call is the honest mirror (the two
+// differ only in that switch today).
+export function fillBlankTextMatches(
+  response: string,
+  keys: readonly string[],
+  exactForm: boolean,
+): boolean {
+  return keys.some((key) => shortTextMatches(response, key, { exactForm }));
+}
+
 export function scoreResponse(
   item: ItemRow,
   response: ItemResponse,
@@ -506,6 +530,29 @@ export function scoreResponse(
         const cell = response.cells[rowId]?.[colId] ?? "";
         if (tableCellMatches(cell, key)) points++;
       }
+    }
+    if (max === 0) return null; // no answer key
+    return { points, max_points: max };
+  }
+
+  // FB slice 1: fill_blank — one point per KEYED blank (D-2, D-8 no
+  // all-or-nothing option), max_points = the keyed blanks. A dropdown is
+  // option-id equality; a typed blank matches any of its keys (D-5). A blank
+  // the student left out scores 0; an unkeyed blank is never counted. No
+  // keyed blank → skipped, like an unkeyed table.
+  if (response.type === "fill_blank") {
+    let points = 0;
+    let max = 0;
+    for (const blank of item.config?.blanks ?? []) {
+      if (!isKeyedBlank(blank)) continue;
+      max++;
+      const answer = response.answers[blank.id];
+      if (answer === undefined) continue;
+      const right =
+        blank.kind === "dropdown"
+          ? answer === blank.correct_option_id
+          : fillBlankTextMatches(answer, blank.keys ?? [], blank.exact_form === true);
+      if (right) points++;
     }
     if (max === 0) return null; // no answer key
     return { points, max_points: max };

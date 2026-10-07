@@ -169,6 +169,27 @@ function mapItemForDelivery(row: ItemRow, attemptId: string) {
         rows: config.rows ?? [],
         ...(config.corner ? { corner: config.corner } : {}),
       };
+    case "fill_blank":
+      // FB slice 1 (docs/fill-in-blank-design.md): each blank ships its id,
+      // kind and — for a dropdown — its options in the teacher's order (D-6).
+      // Built field by field rather than spread, so `correct_option_id`,
+      // `keys` and `exact_form` never reach the object (ADR 0016). Option
+      // ids ship as MC choice ids do; blank ids are structure the stem's
+      // markers and the response both address.
+      return {
+        type: "fill_blank" as const,
+        id: row.id,
+        stem: row.stem,
+        blanks: (config.blanks ?? []).map((b) =>
+          b.kind === "dropdown"
+            ? {
+                id: b.id,
+                kind: "dropdown" as const,
+                options: b.options.map((o) => ({ id: o.id, text: o.text })),
+              }
+            : { id: b.id, kind: "text" as const },
+        ),
+      };
     default:
       return assertNever(type, "delivery: unhandled item type");
   }

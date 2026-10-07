@@ -9,7 +9,7 @@ import {
   extractAssetRefsFromMany,
 } from "@/lib/items/extractAssetRefs";
 import type { ResolvedAsset } from "@/lib/items/renderItemContent";
-import { renderAssessmentHtml } from "@/lib/preview/renderHtml";
+import { previewBlanks, renderAssessmentHtml } from "@/lib/preview/renderHtml";
 import { exportItemSets } from "@/lib/api/itemSetsBundle";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { UUID_RE } from "@/lib/uuid";
@@ -138,6 +138,9 @@ export async function GET(req: Request, ctx: RouteContext) {
       columns: r.config?.columns ?? null,
       rows: r.config?.rows ?? null,
       corner: r.config?.corner ?? null,
+      // FB slice 1: id, kind and options only — previewBlanks drops every
+      // blank's key before the renderer sees it.
+      blanks: previewBlanks(r.config?.blanks),
     })),
     resolved,
     { printMode, itemSets },

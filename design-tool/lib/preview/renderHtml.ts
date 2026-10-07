@@ -17,13 +17,15 @@
 // supplies an owner-scoped asset map; unresolved refs render as inline
 // red placeholders. Math + images are interleaved in one pass.
 
-import type {
-  HotspotRegion,
-  MatchPair,
-  Rubric,
-  SequenceEntry,
-  TableColumn,
-  TableRow,
+import {
+  FILL_BLANK_MARKER_RE,
+  type FillBlankBlank,
+  type HotspotRegion,
+  type MatchPair,
+  type Rubric,
+  type SequenceEntry,
+  type TableColumn,
+  type TableRow,
 } from "@secure-test/schema";
 import type { ItemType } from "@/db/schema";
 import { assertNever } from "@/lib/assertNever";
@@ -75,6 +77,96 @@ export interface PreviewItem {
   columns?: TableColumn[] | null;
   rows?: TableRow[] | null;
   corner?: string | null;
+  // Fill-in-the-blank-only (FB slice 1): the blanks the stem's `[[id]]`
+  // markers name. The caller passes ONLY id, kind and a dropdown's options —
+  // never `correct_option_id` / `keys` / `exact_form` — the hotspot / table
+  // posture: the key cannot leak into student-visible HTML because it never
+  // reaches the renderer.
+  blanks?: PreviewBlank[] | null;
+}
+
+export type PreviewBlank =
+  | { id: string; kind: "dropdown"; options: { id: string; text: string }[] }
+  | { id: string; kind: "text" };
+
+/** FB slice 1: strip a stored blank to what the preview may see. */
+export function previewBlanks(blanks: readonly FillBlankBlank[] | null | undefined): PreviewBlank[] {
+  return (blanks ?? []).map((b) =>
+    b.kind === "dropdown"
+      ? { id: b.id, kind: "dropdown", options: b.options.map((o) => ({ id: o.id, text: o.text })) }
+      : { id: b.id, kind: "text" },
+  );
+}
+
+/**
+ * FB slice 1 (docs/fill-in-blank-design.md): the stem with each `[[id]]`
+ * marker replaced by its blank, inline. The text BETWEEN markers goes through
+ * renderItemContent segment by segment (it escapes its own text, renders
+ * KaTeX and emphasis), so no stem text is ever injected raw; the blanks are
+ * markup this function builds from escaped ids and option text. A marker
+ * that names no blank stays as literal text (the write boundary refuses one,
+ * an imported bundle might carry one). Math or emphasis that spans a marker
+ * is split by it — author it on each side (v1 limit, recorded in §Progress).
+ *
+ * Screen: a dropdown is a disabled `<select>` listing its options in the
+ * teacher's order (D-6) — an `<option>` holds text only, so option math
+ * shows as its source here; a typed blank is an underlined gap. Paper: every
+ * blank is a numbered gap, and each dropdown's options follow the sentence
+ * as a lettered list to circle.
+ */
+function renderFillBlankStem(
+  stem: string,
+  blanks: readonly PreviewBlank[],
+  resolved: Map<string, ResolvedAsset>,
+  printMode: boolean,
+): { stemHtml: string; afterHtml: string } {
+  const byId = new Map(blanks.map((b) => [b.id, b] as const));
+  const numberOf = new Map<string, number>();
+  let html = "";
+  let last = 0;
+  for (const m of stem.matchAll(FILL_BLANK_MARKER_RE)) {
+    const blank = byId.get(m[1]!);
+    if (!blank || numberOf.has(blank.id)) continue;
+    const n = numberOf.size + 1;
+    numberOf.set(blank.id, n);
+    html += renderItemContent(stem.slice(last, m.index), resolved);
+    last = m.index! + m[0].length;
+    if (printMode || blank.kind === "text") {
+      html +=
+        `<span class="fill-gap${printMode ? " fill-gap-print" : ""}" aria-label="Blank ${n}">` +
+        `<span class="fill-gap-num">${n}</span></span>`;
+    } else {
+      html +=
+        `<select class="fill-select" aria-label="Blank ${n}" disabled>` +
+        `<option value="">Choose…</option>` +
+        blank.options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.text)}</option>`).join("") +
+        `</select>`;
+    }
+  }
+  html += renderItemContent(stem.slice(last), resolved);
+
+  let afterHtml = "";
+  if (printMode) {
+    const lists = blanks
+      .filter((b): b is Extract<PreviewBlank, { kind: "dropdown" }> => b.kind === "dropdown" && numberOf.has(b.id))
+      .sort((a, b) => numberOf.get(a.id)! - numberOf.get(b.id)!)
+      .map(
+        (b) =>
+          `<div class="fill-options"><span class="fill-options-label">Blank ${numberOf.get(b.id)}:</span> ` +
+          b.options
+            .map(
+              (o, i) =>
+                `<span class="fill-option"><span class="choice-letter">${String.fromCharCode(65 + i)}.</span> ${renderItemContent(o.text, resolved)}</span>`,
+            )
+            .join("") +
+          `</div>`,
+      )
+      .join("");
+    afterHtml = lists
+      ? `${lists}<p class="match-hint">Circle one choice for each numbered blank.</p>`
+      : "";
+  }
+  return { stemHtml: html, afterHtml };
 }
 
 // E5 slice 1: a stimulus shared by the items listed, rendered once above
@@ -214,7 +306,12 @@ function renderItem(
   // renderItemContent HTML-escapes its own non-math, non-image text, so
   // we can drop the result straight into innerHTML-equivalent positions
   // without double-escaping.
-  const stemHtml = renderItemContent(item.stem, resolved);
+  // FB slice 1: a fill-in-the-blank stem carries its blanks inline.
+  const fill =
+    item.type === "fill_blank"
+      ? renderFillBlankStem(item.stem, item.blanks ?? [], resolved, printMode)
+      : null;
+  const stemHtml = fill ? fill.stemHtml : renderItemContent(item.stem, resolved);
   const heading =
     (speech.items ? speechBar("Speak") : "") +
     `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>`;
@@ -381,6 +478,10 @@ function renderItem(
     body =
       `<table class="fill-table${printMode ? " fill-table-print" : ""}" aria-label="Table to fill in">` +
       `<thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
+  } else if (item.type === "fill_blank") {
+    // FB slice 1: the blanks are already in the stem (renderFillBlankStem
+    // above); paper adds each dropdown's options under the sentence.
+    body = fill?.afterHtml ?? "";
   } else if (item.type === "essay") {
     const limit =
       item.max_word_count != null
@@ -613,6 +714,13 @@ export function renderAssessmentHtml(
     .fill-table .table-corner { font-weight: 600; }
     .fill-table .table-cell { min-width: 72px; height: 24px; }
     .fill-table-print .table-cell { height: 32px; }
+    .fill-gap { display: inline-block; min-width: 96px; border-bottom: 1px solid #333; height: 1.2em; vertical-align: baseline; position: relative; margin: 0 2px; }
+    .fill-gap-num { position: absolute; left: 2px; bottom: -2px; font-size: 10px; color: #666; }
+    .fill-gap-print { min-width: 120px; }
+    .fill-select { font-size: 14px; margin: 0 2px; max-width: 240px; }
+    .fill-options { margin: 4px 0; font-size: 14px; }
+    .fill-options-label { font-weight: 600; margin-right: 6px; }
+    .fill-option { margin-right: 16px; }
     /* Hotspot items (slice 49) — static numbered region outlines. */
     .hotspot-wrap { position: relative; display: inline-block; max-width: 100%; margin: 4px 0; }
     .hotspot-image { display: block; max-width: 100%; height: auto; border: 1px solid #eee; border-radius: 4px; }

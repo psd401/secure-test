@@ -49,7 +49,8 @@ function stable(v: unknown): string {
  * them, the readiness checklist flags them) and the teacher fills the key
  * in later — so the publish lock admits a PATCH whose only deltas are
  * correct_choice_ids / correct_answer / hotspot correct_region_ids / table
- * cell_keys (E3), plus the standards tags (BG slice 2 — authoring
+ * cell_keys (E3) / a fill_blank's per-blank
+ * correct_option_id / keys (FB), plus the standards tags (BG slice 2 — authoring
  * metadata, never delivered). Stem, choices, and every other config field must be
  * byte-identical to what is stored, so nothing student-facing can change
  * through this door. Auto
@@ -75,7 +76,25 @@ export function isAnswerKeyOnlyPatch(body: UpdateItemBody, item: ItemRow): boole
     cell_keys: _curCells,
     ...curRest
   } = (item.config ?? {}) as Record<string, unknown>;
-  return stable(nextRest) === stable(curRest);
+  return stable(withoutBlankKeys(nextRest)) === stable(withoutBlankKeys(curRest));
+}
+
+/**
+ * FB slice 1 (docs/fill-in-blank-design.md): a fill_blank's key lives INSIDE
+ * each blank — `correct_option_id`, `keys` — so the lock compares the blanks
+ * with those two fields removed. The id, the kind and a dropdown's options
+ * (what the student sees) must stay byte-identical. `exact_form` stays
+ * locked, the same as short_text's own `exact_form`: one rule for the
+ * answer-form switch on both types.
+ */
+function withoutBlankKeys(config: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(config.blanks)) return config;
+  return {
+    ...config,
+    blanks: (config.blanks as Record<string, unknown>[]).map(
+      ({ correct_option_id: _o, keys: _k, ...rest }) => rest,
+    ),
+  };
 }
 
 /** Loose structural equality for the scalar / string[] shapes a patch carries. */

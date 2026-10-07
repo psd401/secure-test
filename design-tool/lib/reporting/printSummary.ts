@@ -71,6 +71,7 @@ const TYPE_LABELS: Record<string, string> = {
   hotspot: "Hotspot",
   drawing_upload: "Drawing",
   table: "Table",
+  fill_blank: "Fill in the blank",
 };
 
 export function itemTypeLabel(type: string): string {

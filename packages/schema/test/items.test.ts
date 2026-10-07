@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { ItemBundleSchema, ItemSchema, RubricSchema } from "../src/items.js";
+import { ItemBundleSchema, ItemSchema, RubricSchema, fillBlankMarkerIds } from "../src/items.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pocBItemsJsonPath = resolve(
@@ -830,5 +830,65 @@ describe("TableItemSchema (via ItemSchema)", () => {
       items: [valid],
     });
     expect(bundle.items[0]!.type).toBe("table");
+  });
+});
+
+// FB slice 1: fill-in-the-blank items on the wire (design-tool
+// docs/fill-in-blank-design.md).
+describe("FillBlankItemSchema (via ItemSchema)", () => {
+  const valid = {
+    type: "fill_blank",
+    id: "f1",
+    stem: "The [[b1]] side gets rain, while the [[b2]] side is dry.",
+    blanks: [
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [{ id: "o1", text: "windward" }, { id: "o2", text: "leeward" }],
+        correct_option_id: "o1",
+      },
+      { id: "b2", kind: "text", keys: ["leeward", "lee"], exact_form: true },
+    ],
+  };
+
+  test("accepts a mixed item and round-trips both blank kinds with their keys", () => {
+    const parsed = ItemSchema.parse(valid);
+    expect(parsed.type).toBe("fill_blank");
+    if (parsed.type === "fill_blank") expect(parsed.blanks).toEqual(valid.blanks);
+  });
+
+  test("accepts keyless blanks (a legal draft)", () => {
+    const r = ItemSchema.safeParse({
+      ...valid,
+      blanks: [
+        { id: "b1", kind: "dropdown", options: valid.blanks[0]!.options },
+        { id: "b2", kind: "text" },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  test("rejects no blanks, a one-option dropdown, an empty key and an unknown kind", () => {
+    expect(ItemSchema.safeParse({ ...valid, blanks: [] }).success).toBe(false);
+    expect(
+      ItemSchema.safeParse({
+        ...valid,
+        blanks: [{ id: "b1", kind: "dropdown", options: [{ id: "o1", text: "a" }] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ItemSchema.safeParse({ ...valid, blanks: [{ id: "b2", kind: "text", keys: [""] }] }).success,
+    ).toBe(false);
+    expect(ItemSchema.safeParse({ ...valid, blanks: [{ id: "b1", kind: "slider" }] }).success).toBe(false);
+  });
+
+  test("a bundle containing a fill_blank item parses", () => {
+    const bundle = ItemBundleSchema.parse({ test_id: "t1", title: "With blanks", items: [valid] });
+    expect(bundle.items[0]!.type).toBe("fill_blank");
+  });
+
+  test("fillBlankMarkerIds lists marker ids in order, repeats included", () => {
+    expect(fillBlankMarkerIds("a [[b1]] b [[b2]] c [[b1]]")).toEqual(["b1", "b2", "b1"]);
+    expect(fillBlankMarkerIds("no markers, [b1], [[ b1 ]], [[]]")).toEqual([]);
   });
 });

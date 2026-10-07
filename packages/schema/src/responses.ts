@@ -88,6 +88,21 @@ export const TableResponseSchema = z.object({
     ),
 });
 
+// FB slice 1 (design-tool docs/fill-in-blank-design.md): blank id → the
+// student's answer — a dropdown's chosen option id, or a typed blank's text.
+// A blank left empty is absent; an item with every blank empty is the ABSENCE
+// of a response (the match / table rule), so at least one blank must be
+// present. A present typed answer may still be "" (cleared after it was
+// posted). Text is capped like a table cell: a blank is a word or a phrase.
+export const FillBlankResponseSchema = z.object({
+  type: z.literal("fill_blank"),
+  answers: z
+    .record(z.string().min(1), z.string().max(500))
+    .refine((answers) => Object.keys(answers).length > 0, {
+      message: "a fill-in-the-blank response needs at least one blank",
+    }),
+});
+
 export const ItemResponseSchema = z.discriminatedUnion("type", [
   SingleChoiceResponseSchema,
   MultiChoiceResponseSchema,
@@ -98,6 +113,7 @@ export const ItemResponseSchema = z.discriminatedUnion("type", [
   HotspotResponseSchema,
   DrawingUploadResponseSchema,
   TableResponseSchema,
+  FillBlankResponseSchema,
 ]);
 
 export type SingleChoiceResponse = z.infer<typeof SingleChoiceResponseSchema>;
@@ -109,4 +125,5 @@ export type OrderResponse = z.infer<typeof OrderResponseSchema>;
 export type HotspotResponse = z.infer<typeof HotspotResponseSchema>;
 export type DrawingUploadResponse = z.infer<typeof DrawingUploadResponseSchema>;
 export type TableResponse = z.infer<typeof TableResponseSchema>;
+export type FillBlankResponse = z.infer<typeof FillBlankResponseSchema>;
 export type ItemResponse = z.infer<typeof ItemResponseSchema>;
