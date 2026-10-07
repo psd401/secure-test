@@ -931,3 +931,90 @@ describe("research rows are invisible to the review surfaces", () => {
     expect(rows[0]!.status).toBe("research");
   });
 });
+
+// FB slice 3 (docs/fill-in-blank-design.md): a hand-scored fill-in-the-blank
+// reaches the queue as the filled sentence — answers in place (a dropdown as
+// its option TEXT), ✓ / ✗ + expected on keyed blanks, "no key" on an unkeyed
+// one — and the manual score is out of fillBlankMaxPoints.
+describe("review queue: fill-in-the-blank items (FB slice 3)", () => {
+  async function seedFillBlank(keyed: boolean) {
+    const db = getDb();
+    const [a] = await db.insert(assessments).values({ owner_sub: OWNER, name: "Blanks" }).returning();
+    const [item] = await db
+      .insert(items)
+      .values({
+        assessment_id: a!.id,
+        position: 0,
+        type: "fill_blank",
+        stem: "The [[b1]] side is wet and the [[b2]] side is $x^2$ dry.",
+        config: {
+          scoring_method: "human",
+          blanks: [
+            {
+              id: "b1",
+              kind: "dropdown",
+              options: [
+                { id: "o1", text: "windward" },
+                { id: "o2", text: "leeward" },
+              ],
+              ...(keyed ? { correct_option_id: "o1" } : {}),
+            },
+            { id: "b2", kind: "text" },
+          ],
+        },
+      })
+      .returning();
+    const [student] = await db.insert(students).values({ owner_sub: OWNER, ssid: "891", name: "Blank Student" }).returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({ assessment_id: a!.id, student_id: student!.id, status: "submitted", submitted_at: new Date() })
+      .returning();
+    const [response] = await db
+      .insert(responses)
+      .values({
+        attempt_id: attempt!.id,
+        item_id: item!.id,
+        response: { type: "fill_blank", answers: { b1: "o2", b2: "<b>dusty</b>" } },
+      })
+      .returning();
+    return { assessment: a!, response: response! };
+  }
+
+  type FbEntry = { item: { max_points: number }; fill_blank_html: string | null; answer_html: string | null };
+
+  test("a partly keyed item: the sentence, a ✗ with the expected option text, the unkeyed blank called out", async () => {
+    const s = await seedFillBlank(true);
+    const body = (await (await getQueue(s.assessment.id)).json()) as { entries: FbEntry[] };
+    expect(body.entries).toHaveLength(1);
+    const e = body.entries[0]!;
+    expect(e.item.max_points).toBe(1);
+    const html = e.fill_blank_html!;
+    expect(html).toContain('<span class="fb-answer">leeward</span>');
+    expect(html).not.toContain(">o2<");
+    expect(html).toContain("expected windward");
+    expect(html).toContain("no key, not scored");
+    expect(html).toContain("&lt;b&gt;dusty&lt;/b&gt;");
+    expect(html).not.toContain("<b>dusty</b>");
+    expect(html).toContain("katex");
+    expect(html).not.toContain("[[b1]]");
+    expect(html).toContain("Keyed blanks matching the key: 0 of 1. 1 blank has no key and is not scored.");
+    expect(e.answer_html).toBeNull();
+  });
+
+  test("a keyless item is worth every blank and says to score each by hand", async () => {
+    const s = await seedFillBlank(false);
+    const body = (await (await getQueue(s.assessment.id)).json()) as { entries: FbEntry[] };
+    const e = body.entries[0]!;
+    expect(e.item.max_points).toBe(2);
+    expect(e.fill_blank_html).toContain("No blank has a key — score each blank by hand (1 point each).");
+    expect(e.fill_blank_html).not.toContain("✗");
+    const right = await postManualScore(s.response.id, { points: 1, max_points: 2 });
+    expect(right.status).toBe(201);
+  });
+
+  test("a non-fill_blank entry carries fill_blank_html null", async () => {
+    await seedQueueScenario();
+    const body = (await (await getQueue((await seededAssessmentId()) ?? "")).json()) as { entries: FbEntry[] };
+    expect(body.entries.every((e) => e.fill_blank_html === null)).toBe(true);
+  });
+});

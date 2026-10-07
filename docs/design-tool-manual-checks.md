@@ -1510,3 +1510,21 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 501 | Scoring method select with no answer on any blank, then with one | "Default — Human (teacher scores)", then "Default — Auto (machine-scored)" | NOT RUN |
 | 502 | Publish; on the Published test change a dropdown's correct option and a typed blank's accepted answers; Save | Sentence, Insert blank, kind, options, Same options as, Remove and the Answer-form box are disabled; the radios and accepted answers are editable; Save lights up and succeeds | NOT RUN |
 | 503 | Same Published test: try an option-text edit | Not possible (the field is disabled) — the server's lock would refuse it anyway | NOT RUN |
+
+## Fill in the blank — slice 3: the teacher read side (FB, 2026-10-07)
+
+`docs/fill-in-blank-design.md` §Progress "Slice 3" is the record. Fixture: a Published test with (a) a fill-in-the-blank item mixing a keyed dropdown, a typed blank with two accepted answers and `$…$` math in the sentence, (b) a second one with no key on any blank, (c) a third with one keyed and one unkeyed blank and its method set to Human. Responses: seed them (`lib/dev/seedAttempts.ts`) or a demo student — the client does not render the type until slice 5. One student answers wrong on (a), one leaves a blank empty.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 504 | **Review queue** card for (b) | No clamped stem line with `[[b1]]`; the sentence with the student's answers in place (a dropdown as its option text, never an id), small numbers on each blank, "No blank has a key — score each blank by hand (1 point each)."; Points field reads "of 2" (the blank count) | NOT RUN |
+| 505 | Review queue card for (c) | ✓ or ✗ and "expected …" on the keyed blank, "no key, not scored" on the other, "Keyed blanks matching the key: n of 1. 1 blank has no key and is not scored."; Points "of 1"; a manual score saves | NOT RUN |
+| 506 | **Per-student page** for the student who answered (a) wrong | The stem is replaced by the filled sentence: math rendered as KaTeX, the wrong blank underlined in red with ✗ and "expected leeward or lee" (several keys joined "or"), the right one ✓ in green; the summary line under it; the score block below unchanged (points / max) | NOT RUN |
+| 507 | Per-student page for a student who did not answer (a) | The sentence with "(blank)" gaps (no `[[b1]]`), then "No answer." | NOT RUN |
+| 508 | **Results matrix** cell for (a) | Still points / max (e.g. 1 / 2); unchanged | NOT RUN |
+| 509 | **Print student work**, `scores=none` and `scores=ai` | The sentence with the answers in place, NO ✓ / ✗, no "expected", no key notes, no summary (W-1); the option the student did NOT pick is not printed | NOT RUN |
+| 510 | Print student work, `scores=teacher` / `both` | Marks, "expected …" and the summary print, in black ink on paper (print preview) | NOT RUN |
+| 511 | Print student work with "Questions" unticked (`questions=0`) | No sentence; "Blank 1: …", "Blank 2: …" lines, ✓ / ✗ only with the teacher's side | NOT RUN |
+| 512 | Print toolbar's question checklist | The excerpt reads "… the (blank) side …", not "b1" | NOT RUN |
+| 513 | **Instant feedback** at `answers` (released) after a student misses a blank | "Your answer" lists "Blank n: …" in the sentence's order with option text; "Correct answer" lists the keyed blanks, typed keys joined "or" — unchanged from slice 1 apart from the numbering (client renders it; needs slice 5 to sit the test) | NOT RUN |
+| 514 | **Class insights** report on a section that answered (a) | Generates without error; a claim about (a) can cite a blank (the pack carries per-blank answered / right counts and the top answers); no student name tied to a typed answer | NOT RUN |

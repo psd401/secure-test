@@ -11,10 +11,12 @@
 // it; the print view (R2) can draw the same description differently.
 
 import type { FillBlankBlank, MatchPair, SequenceEntry } from "@secure-test/schema";
-import { fillBlankTextMatches } from "@/lib/scoring/auto";
+import { fillBlankAnswer, filledBlankAnswerText } from "@/lib/items/fillBlankAnswer";
 
 export interface AnswerViewItem {
   type: string;
+  /** FB slice 3: a fill_blank's blanks are numbered in stem order. */
+  stem?: string;
   choices?: Array<{ id: string; text: string }>;
   correct_choice_ids?: string[];
   correct_answer?: string | null;
@@ -41,6 +43,11 @@ export type AnswerView =
   | { kind: "drawing" }
   /** The page draws the grid from the item's columns/rows (queue's tableGrid). */
   | { kind: "table" }
+  /**
+   * FB slice 3: the page draws the filled sentence from the item
+   * (fillBlankView); `lines` is the same answer as "Blank n: …" lines.
+   */
+  | { kind: "fill_blank"; lines: AnswerLine[] }
   /** No response row: the student never answered this item. */
   | { kind: "none" };
 
@@ -138,29 +145,19 @@ export function describeAnswer(
       return { kind: "table" };
 
     case "fill_blank": {
-      // FB slice 1: one line per blank in `blanks` order — a dropdown answer
-      // as its option text — with ✓ / ✗ only on a keyed blank, judged by the
-      // scorer's own rule. An unanswered blank still gets its line. Slice 3
-      // owns the richer view (the sentence with the answers in place).
+      // FB slice 3: the shared reading (lib/items/fillBlankAnswer.ts) — the
+      // stem's numbering, a dropdown answer as its option TEXT, ✓ / ✗ only on
+      // a keyed blank by the scorer's own rule. The pages draw the sentence
+      // from the item itself (lib/reporting/fillBlankView.ts); these lines are
+      // the answers-only form (the work packet's `questions=0`).
       const answers = (response.answers ?? {}) as Record<string, unknown>;
+      const filled = fillBlankAnswer(item.stem ?? "", item.config.blanks, answers);
       return {
-        kind: "lines",
-        lines: (item.config.blanks ?? []).map((b, i) => {
-          const raw = answers[b.id];
-          const answer = typeof raw === "string" ? raw : "";
-          if (b.kind === "dropdown") {
-            const option = b.options.find((o) => o.id === answer);
-            return {
-              text: `Blank ${i + 1}: ${answer ? (option ? option.text : answer) : "(blank)"}`,
-              correct: b.correct_option_id != null ? answer === b.correct_option_id : null,
-            };
-          }
-          const keys = b.keys ?? [];
-          return {
-            text: `Blank ${i + 1}: ${answer.trim() ? answer : "(blank)"}`,
-            correct: keys.length > 0 ? fillBlankTextMatches(answer, keys, b.exact_form === true) : null,
-          };
-        }),
+        kind: "fill_blank",
+        lines: filled.blanks.map((b) => ({
+          text: `Blank ${b.number}: ${filledBlankAnswerText(b)}`,
+          correct: b.right,
+        })),
       };
     }
 

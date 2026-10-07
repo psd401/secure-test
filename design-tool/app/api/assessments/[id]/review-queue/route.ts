@@ -19,6 +19,7 @@ import {
 import { requireStaff } from "@/lib/api/requireSession";
 import { resolveSourceText } from "@/lib/api/setSources";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
+import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
@@ -272,6 +273,23 @@ export async function GET(_req: Request, ctx: RouteContext) {
         typeof (response.response as { text?: unknown }).text === "string" &&
         (response.response as { text: string }).text !== ""
           ? renderShortTextAnswer((response.response as { text: string }).text)
+          : null,
+      // FB slice 3 (docs/fill-in-blank-design.md): a fill-in-the-blank answer
+      // as the sentence — the student's answers in place, ✓ / ✗ and the
+      // expected answer on each keyed blank, "no key" on an unkeyed one, and
+      // the n-of-m line. Rendered here for stem_html's reason (KaTeX stays
+      // out of the client bundle); renderFillBlankAnswerHtml escapes the
+      // answers and sends stem text through renderItemContent. Teacher-only
+      // surface — keys are fine here, as the table's are.
+      fill_blank_html:
+        item.type === "fill_blank"
+          ? renderFillBlankAnswerHtml(
+              item.stem,
+              item.config.blanks,
+              response.response as unknown as Record<string, unknown>,
+              resolvedAssets,
+              { showKey: true, summary: true },
+            )
           : null,
       proposed: proposed
         ? {

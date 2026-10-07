@@ -260,3 +260,65 @@ no schema change, no migration.
 
 Tests: design-tool 2997 (full suite), typecheck clean. Rows 492–503 in
 `docs/design-tool-manual-checks.md`, NOT RUN.
+
+**Slice 3 BUILT 2026-10-07 (not deployed).** The teacher read side.
+Design-tool only; no schema change, no migration, no client change.
+
+- **One reading** (`lib/items/fillBlankAnswer.ts`, pure): stem + blanks +
+  the response's `answers` → `segments` (raw stem text | a filled blank),
+  `unplaced` blanks, every blank in number order, `keyed_count` /
+  `right_count`. A filled blank carries its number, kind, the answer as TEXT
+  (a dropdown's option text, never its id; an unknown id → no answer +
+  `unknown_option`), `keyed`, `right` (the scorer's own rule — option-id
+  equality, `fillBlankTextMatches` with the blank's `exact_form`; a test
+  proves `right_count` / `keyed_count` equal `scoreResponse`), and `expected`
+  (the correct option's text, or every accepted answer, D-5). Numbering and
+  marker reading are the preview's: stem order of first appearance; a
+  repeated or orphaned marker stays literal text; a blank no marker places is
+  kept (it is still scored), numbered last.
+- **One renderer** (`lib/reporting/fillBlankView.ts`): the sentence as HTML —
+  stem segments and dropdown option text through `renderItemContent`, typed
+  answers and keys escaped. Each blank: a small number, the answer (or
+  "(blank)"), and with `showKey` a ✓ / ✗, "expected X or Y" on a wrong keyed
+  blank, "no key, not scored" on an unkeyed blank of a partly keyed item.
+  `summary` adds "Keyed blanks matching the key: n of m." (plus the unkeyed
+  count), or "No blank has a key — score each blank by hand (1 point each)."
+  for a keyless item. `.fb-*` styles in `app/globals.css`; print ink in the
+  packet's own CSS.
+- **Review queue:** the route sends `fill_blank_html` (rendered server-side,
+  stem_html's reason); the card shows it in place of the answer block and
+  drops the clamped stem line (it would show `[[b1]]`). Points max was
+  already `fillBlankMaxPoints` (slice 1).
+- **Per-student page:** the filled sentence replaces the stem (with keys and
+  the summary); an unanswered item shows the sentence with "(blank)" gaps and
+  "No answer.". The results matrix cell is unchanged (points / max).
+- **Work packet:** with questions, the filled sentence replaces the stem —
+  marks, "expected" and the summary only with `scores=teacher|both` (W-1);
+  with `questions=0`, answerView's "Blank n: …" lines (✓ / ✗ gated the same
+  way). The toolbar's stem excerpt reads a marker as "(blank)".
+- **answerView:** a new `fill_blank` kind carrying the lines, from the
+  reading (callers pass `stem` so numbering is the stem's).
+- **Instant feedback: lines kept**, now numbered through the reading. A
+  sentence form was not built: the client escapes `your_answer` and runs only
+  the `$…$` pass over it (`InstantFeedbackPage.swift`), so stem emphasis
+  would show as raw `**`, and per-blank marks would need a new field. Both
+  need a client release; the slice-1 shape stays. `correct_answer` still
+  lists every keyed blank (the table's posture), not only the missed ones.
+- **Class insights evidence pack:** the stem with `[Blank n]` gaps;
+  `blanks` (label, kind, option texts, keys); per-blank `blank_answers`
+  (answered / right counts, top answers — a dropdown as option text, typed
+  answers clustered case-folded, alert-flagged answers counted but never
+  listed); figures `item.Qn.blank.k.answered_count` / `.right_count`. The
+  report / chat prompts were NOT changed (the fields are self-describing;
+  changing a prompt means a version bump and a recorded hash) — the
+  pack hash changes for an assessment with a fill-in-the-blank item.
+- **Left, as decided:** answer history (none for blanks), Google Docs
+  (essays only). Score change / pass back read `itemMaxPoints` /
+  `checkManualScore`, already fill_blank-aware since slice 1.
+- **Not done:** a typed answer is shown as escaped text, not KaTeX (short
+  text renders math via `renderShortTextAnswer`; whether a typed blank does
+  waits on the client's slice 5 input). Option text with an asset ref is
+  not resolved (slice 1 limit).
+
+Tests: design-tool 3020 (full suite), typecheck clean. Rows 504–514 in
+`docs/design-tool-manual-checks.md`, NOT RUN.

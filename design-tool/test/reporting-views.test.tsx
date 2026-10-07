@@ -1021,3 +1021,64 @@ describe("research score rows reach no teacher surface", () => {
     expect(await buildResults(scene.assessment.id)).toEqual(before);
   });
 });
+
+// FB slice 3 (docs/fill-in-blank-design.md): on the per-student page a
+// fill-in-the-blank reads as the sentence — the stem with the student's
+// answers in place (a dropdown as its option text), ✓ / ✗ and "expected" on
+// keyed blanks — in place of the raw stem with its `[[b1]]` markers.
+describe("the per-student page — fill in the blank", () => {
+  test("the filled sentence replaces the stem; an unanswered item still reads without markers", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const blanks = [
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [
+          { id: "o1", text: "OPT-WINDWARD" },
+          { id: "o2", text: "OPT-LEEWARD" },
+        ],
+        correct_option_id: "o1",
+      },
+      { id: "b2", kind: "text", keys: ["KEY-DRY", "KEY-ARID"] },
+    ];
+    const [answered, unanswered] = await db
+      .insert(items)
+      .values([
+        {
+          assessment_id: scene.assessment.id,
+          position: 50,
+          type: "fill_blank",
+          stem: "FB-ONE the [[b1]] side and the [[b2]] side.",
+          config: { blanks },
+        },
+        {
+          assessment_id: scene.assessment.id,
+          position: 51,
+          type: "fill_blank",
+          stem: "FB-TWO only [[b1]] here.",
+          config: { blanks: [blanks[0]] },
+        },
+      ] as never)
+      .returning();
+    expect(unanswered).toBeDefined();
+    await db.insert(responses).values({
+      attempt_id: scene.aliceAttempt.id,
+      item_id: answered!.id,
+      response: { type: "fill_blank", answers: { b1: "o1", b2: "wet" } },
+    });
+
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).not.toContain("[[b1]]");
+    expect(html).not.toContain("[[b2]]");
+    expect(html).toContain('<span class="fb-blank fb-right">');
+    expect(html).toContain('<span class="fb-answer">OPT-WINDWARD</span>');
+    expect(html).toContain('<span class="fb-answer">wet</span>');
+    expect(html).toContain("expected KEY-DRY or KEY-ARID");
+    expect(html).toContain("Keyed blanks matching the key: 1 of 2.");
+    // The unanswered item: its sentence with an empty gap, then "No answer."
+    const two = html.slice(html.indexOf("FB-TWO"));
+    expect(two).toContain('<span class="fb-answer fb-empty">(blank)</span>');
+    expect(two).toContain("No answer.");
+  });
+});

@@ -22,6 +22,67 @@
   font-family: monospace;
 }
 
+/* FB slice 3 (docs/fill-in-blank-design.md): a fill-in-the-blank answer read
+   as the sentence (lib/reporting/fillBlankView.ts) on the review queue, the
+   per-student page and the work packet. The ✓ / ✗ glyphs and the words carry
+   the result; colour only repeats it, so the printed packet reads in black. */
+.fb-sentence {
+  line-height: 1.9;
+}
+.fb-blank {
+  display: inline;
+  border-bottom: 2px solid var(--border);
+  padding: 0 2px;
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.fb-blank.fb-right {
+  border-bottom-color: var(--success-foreground);
+}
+.fb-blank.fb-wrong {
+  border-bottom-color: var(--danger-foreground);
+}
+.fb-num {
+  font-size: 0.7em;
+  vertical-align: super;
+  margin-right: 2px;
+  opacity: 0.7;
+}
+.fb-answer {
+  font-weight: 600;
+}
+.fb-empty {
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.7;
+}
+.fb-mark {
+  margin-left: 3px;
+}
+.fb-right .fb-mark {
+  color: var(--success-foreground);
+}
+.fb-wrong .fb-mark,
+.fb-wrong .fb-expected {
+  color: var(--danger-foreground);
+}
+.fb-expected,
+.fb-nokey {
+  margin-left: 4px;
+  font-size: 0.8em;
+}
+.fb-nokey {
+  opacity: 0.7;
+  font-style: italic;
+}
+.fb-unplaced,
+.fb-summary {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
 /* PSD palette (psd-branding skill) mapped onto shadcn's semantic tokens.
    Ratios in the proposal's token table are WCAG 2.x contrast, computed. */
 :root {

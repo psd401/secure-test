@@ -88,6 +88,13 @@ interface QueueEntry {
    * and for a blank answer; `response.text` still carries the raw typed text.
    */
   answer_html?: string | null;
+  /**
+   * FB slice 3: a fill-in-the-blank answer as the sentence — the student's
+   * answers in place, marked against the key — server-rendered by
+   * renderFillBlankAnswerHtml. Null for every other type; absent from an
+   * older payload.
+   */
+  fill_blank_html?: string | null;
   proposed: {
     score_id: string;
     points: number;
@@ -306,8 +313,8 @@ function responseText(entry: QueueEntry): string {
       .map(([row, cols]) => `${row}: ${Object.entries(cols).map(([c, v]) => `${c}=${v}`).join(", ")}`)
       .join("; ");
   }
-  // FB slice 1: blank id → answer (a dropdown's option id). Readable, not
-  // pretty — slice 3 owns the sentence view.
+  // FB: a fill_blank renders as the sentence (fill_blank_html); this is the
+  // fallback text for a payload without it — blank id → answer.
   if (r.answers) {
     return Object.entries(r.answers)
       .map(([blank, v]) => `${blank}: ${v}`)
@@ -630,10 +637,15 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
         {/* stem_html is server-rendered by renderItemContent: text is
             HTML-escaped, math is KaTeX, image refs resolve owner-scoped
             or come back as inline-red placeholders — no injection vector. */}
-        <p
-          className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground"
-          dangerouslySetInnerHTML={{ __html: entry.item.stem_html }}
-        />
+        {/* FB slice 3: a fill-in-the-blank's stem is in its answer (the
+            sentence below), so the clamped stem line — which would show the
+            raw [[b1]] markers — is left out. */}
+        {entry.fill_blank_html ? null : (
+          <p
+            className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: entry.item.stem_html }}
+          />
+        )}
         <QueueAlerts entry={entry} assessmentId={assessmentId} />
         {entry.outline ? (
           <p className="mt-1 text-xs text-muted-foreground">
@@ -655,6 +667,14 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           />
         ) : entry.item.table ? (
           tableGrid(entry)
+        ) : entry.fill_blank_html ? (
+          // FB slice 3: fill_blank_html is server-rendered by
+          // renderFillBlankAnswerHtml — stem text through renderItemContent,
+          // answers and typed keys HTML-escaped — no injection vector.
+          <div
+            className="mt-2 max-h-64 overflow-y-auto whitespace-pre-line rounded bg-muted p-2 text-sm"
+            dangerouslySetInnerHTML={{ __html: entry.fill_blank_html }}
+          />
         ) : entry.answer_html ? (
           // Roadmap 4b-f: answer_html is server-rendered by
           // renderShortTextAnswer — KaTeX HTML for math that parses, escaped

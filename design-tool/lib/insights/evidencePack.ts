@@ -14,13 +14,14 @@
 //
 // What never enters `pack`: student names, emails, student numbers, SSIDs,
 // attempt / response / item ids, and any student-written text except the
-// anonymous short-text answer clusters (and from those, every answer whose
+// anonymous short-text answer clusters and, for fill-in-the-blank, the
+// anonymous per-blank answer counts (and from both, every answer whose
 // response carries an OPEN safeguarding alert). `names` is the server's half
 // and is never sent to a model.
 
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { Rubric } from "@secure-test/schema";
+import type { FillBlankBlank, Rubric } from "@secure-test/schema";
 import type { getDb } from "@/db/client";
 import { assessments, items, responses, safeguarding_alerts, scores } from "@/db/schema";
 import { buildItemAnalytics } from "@/lib/reporting/analytics";
@@ -28,6 +29,7 @@ import { overallRationale, rubricScoreRows } from "@/lib/reporting/rubricScoreVi
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { lookupTags } from "@/lib/standards/search";
 import { chipLabel, shortText } from "@/lib/standards/tags";
+import { fillBlankAnswer } from "@/lib/items/fillBlankAnswer";
 
 export const STEM_MAX = 200;
 export const RATIONALE_MAX = 400;
@@ -53,6 +55,8 @@ export interface EvidenceItemInput {
   /** short_text's key — teacher content, shown to the model as the key. */
   correct_answer?: string | null;
   rubric?: Rubric | null;
+  /** FB slice 3: a fill_blank's blanks — teacher content, keys included. */
+  blanks?: FillBlankBlank[] | null;
 }
 
 export interface EvidenceAttemptInput {
@@ -100,6 +104,11 @@ export interface PackItem {
   choices?: Array<{ label: string; text: string; is_key: boolean }>;
   /** short_text only. */
   key?: string;
+  /**
+   * FB slice 3, fill_blank only: each blank in stem order ("Blank n", as the
+   * stem's `[Blank n]` gaps), a dropdown's options and every key as text.
+   */
+  blanks?: Array<{ label: string; kind: "dropdown" | "text"; options?: string[]; keys?: string[] }>;
 }
 
 export interface PackItemAnalytics {
@@ -113,6 +122,17 @@ export interface PackItemAnalytics {
   choice_counts?: Array<{ label: string; count: number; is_key: boolean }>;
   /** short_text: the top distinct answers, alert-flagged ones excluded. */
   answers?: Array<{ answer: string; count: number; mean_points: number | null }>;
+  /**
+   * FB slice 3, fill_blank only: per blank, how many answered it, how many
+   * matched the key (null when unkeyed), and the top answers — anonymous,
+   * alert-flagged ones excluded, like short_text's.
+   */
+  blank_answers?: Array<{
+    blank: string;
+    answered_count: number;
+    right_count: number | null;
+    answers: Array<{ answer: string; count: number; right: boolean | null }>;
+  }>;
   /** Rubric items: per criterion, how many final scores landed on each level. */
   criteria?: Array<{ criterion: string; levels: Array<{ level: string; count: number }> }>;
 }
@@ -175,6 +195,75 @@ function stemText(stem: string): string {
     ),
     STEM_MAX,
   );
+}
+
+/** FB slice 3: the stem with each blank as `[Blank n]` (the shared reading's numbering). */
+function gappedStem(item: EvidenceItemInput): string {
+  return fillBlankAnswer(item.stem, item.blanks, null)
+    .segments.map((seg) => (seg.kind === "text" ? seg.text : `[Blank ${seg.blank.number}]`))
+    .join("");
+}
+
+/**
+ * FB slice 3: per blank, the answered / right counts (figures) and the most
+ * common answers — a dropdown pick as its option text, a typed answer counted
+ * on trim + case-fold and shown as its most common spelling (short_text's
+ * rule). An answer whose response carries an open safeguarding alert is
+ * counted but never listed.
+ */
+function blankAnswerCounts(
+  item: EvidenceItemInput,
+  label: string,
+  itemResponses: EvidenceResponseInput[],
+  openAlerts: ReadonlySet<string>,
+  figures: Record<string, number>,
+): NonNullable<PackItemAnalytics["blank_answers"]> {
+  type Cluster = { count: number; spellings: Map<string, number>; right: boolean | null };
+  const per = new Map<string, { answered: number; right: number; clusters: Map<string, Cluster> }>();
+  const numbering = fillBlankAnswer(item.stem, item.blanks, null).blanks;
+  for (const b of numbering) per.set(b.id, { answered: 0, right: 0, clusters: new Map() });
+  for (const r of itemResponses) {
+    const answers =
+      r.response && typeof r.response.answers === "object" && r.response.answers !== null
+        ? (r.response.answers as Record<string, unknown>)
+        : {};
+    for (const b of fillBlankAnswer(item.stem, item.blanks, answers).blanks) {
+      const slot = per.get(b.id)!;
+      if (b.answer === null) continue;
+      slot.answered++;
+      if (b.right === true) slot.right++;
+      if (openAlerts.has(r.response_id)) continue;
+      const shown = b.answer.trim();
+      const norm = b.kind === "text" ? shown.toLowerCase() : shown;
+      let c = slot.clusters.get(norm);
+      if (!c) {
+        c = { count: 0, spellings: new Map(), right: b.right };
+        slot.clusters.set(norm, c);
+      }
+      c.count++;
+      c.spellings.set(shown, (c.spellings.get(shown) ?? 0) + 1);
+    }
+  }
+  return numbering.map((b) => {
+    const slot = per.get(b.id)!;
+    const n = b.number;
+    figures[`item.${label}.blank.${n}.answered_count`] = slot.answered;
+    if (b.keyed) figures[`item.${label}.blank.${n}.right_count`] = slot.right;
+    return {
+      blank: `Blank ${n}`,
+      answered_count: slot.answered,
+      right_count: b.keyed ? slot.right : null,
+      answers: [...slot.clusters.entries()]
+        .sort((x, y) => y[1].count - x[1].count || compareStrings(x[0], y[0]))
+        .slice(0, TOP_ANSWERS)
+        .map(([, c]) => {
+          const [answer] = [...c.spellings.entries()].sort(
+            (x, y) => y[1] - x[1] || compareStrings(x[0], y[0]),
+          )[0]!;
+          return { answer: shortText(answer, STEM_MAX), count: c.count, right: c.right };
+        }),
+    };
+  });
 }
 
 function round2(n: number): number {
@@ -262,9 +351,22 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
       label: labelOf.get(item.id)!,
       type: item.type,
       max_points: item.max_points,
-      stem: stemText(item.stem),
+      stem: stemText(item.type === "fill_blank" ? gappedStem(item) : item.stem),
       tags: item.standards.map(tagInfo),
     };
+    if (item.type === "fill_blank") {
+      out.blanks = fillBlankAnswer(item.stem, item.blanks, null).blanks.map((b) => {
+        const source = item.blanks?.find((x) => x.id === b.id);
+        return {
+          label: `Blank ${b.number}`,
+          kind: b.kind,
+          ...(source?.kind === "dropdown"
+            ? { options: source.options.map((o) => shortText(o.text, STEM_MAX)) }
+            : {}),
+          ...(b.keyed ? { keys: b.expected } : {}),
+        };
+      });
+    }
     if (MC_TYPES.has(item.type) && item.choices && item.choices.length > 0) {
       const key = new Set(item.correct_choice_ids ?? []);
       out.choices = item.choices.map((c, i) => ({
@@ -364,6 +466,10 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
                 : null,
           };
         });
+    }
+
+    if (item.type === "fill_blank") {
+      out.blank_answers = blankAnswerCounts(item, label, itemResponses, input.open_alert_response_ids, figures);
     }
 
     if (item.rubric) {
@@ -595,6 +701,7 @@ export async function buildEvidencePack(
         correct_choice_ids: i.correct_choice_ids as string[],
         correct_answer: i.correct_answer,
         rubric: i.config?.rubric ?? null,
+        blanks: i.type === "fill_blank" ? (i.config?.blanks ?? []) : null,
       })),
     },
     section,

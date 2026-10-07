@@ -1121,3 +1121,69 @@ describe("work packet — one student's work (?attempt=)", () => {
     expect(html).toContain(`attempt=${calAttempt.id}`);
   });
 });
+
+// FB slice 3 (docs/fill-in-blank-design.md): a fill-in-the-blank prints as
+// the sentence with Ada's answers in place (a dropdown as its option text);
+// ✓ / ✗ and "expected" only with the teacher's side (W-1); an answers-only
+// packet prints "Blank n: …" lines.
+describe("work packet — fill in the blank", () => {
+  async function seedWithBlank() {
+    const scene = await seedPacketScene();
+    const db = getDb();
+    const [item] = await db
+      .insert(items)
+      .values({
+        assessment_id: scene.assessment.id,
+        position: 9,
+        type: "fill_blank",
+        stem: "STEM-FB the [[b1]] side and the [[b2]] side.",
+        config: {
+          blanks: [
+            {
+              id: "b1",
+              kind: "dropdown",
+              options: [
+                { id: "o1", text: "OPT-WINDWARD" },
+                { id: "o2", text: "OPT-LEEWARD" },
+              ],
+              correct_option_id: "o1",
+            },
+            { id: "b2", kind: "text", keys: ["KEY-DRY"] },
+          ],
+        },
+      })
+      .returning();
+    await db.insert(responses).values({
+      attempt_id: scene.adaAttempt.id,
+      item_id: item!.id,
+      response: { type: "fill_blank", answers: { b1: "o2", b2: "ADA-TYPED" } },
+    });
+    return scene;
+  }
+
+  test("the sentence with the answers in place; the key only with the teacher's side", async () => {
+    const { assessment } = await seedWithBlank();
+    const none = packetBody(await render(assessment.id, { section: SECTION, scores: "none" }));
+    const adaNone = none.slice(none.indexOf("Fixture, Ada"), none.indexOf("Sample, Ben"));
+    expect(adaNone).toContain('<span class="fb-answer">OPT-LEEWARD</span>');
+    expect(adaNone).toContain('<span class="fb-answer">ADA-TYPED</span>');
+    expect(adaNone).not.toContain("[[b1]]");
+    expect(adaNone).not.toContain(">o2<");
+    expect(adaNone).not.toContain("OPT-WINDWARD");
+    expect(adaNone).not.toContain("KEY-DRY");
+
+    const teacher = packetBody(await render(assessment.id, { section: SECTION, scores: "teacher" }));
+    const adaTeacher = teacher.slice(teacher.indexOf("Fixture, Ada"), teacher.indexOf("Sample, Ben"));
+    expect(adaTeacher).toContain("expected OPT-WINDWARD");
+    expect(adaTeacher).toContain("expected KEY-DRY");
+    expect(adaTeacher).toContain("Keyed blanks matching the key: 0 of 2.");
+  });
+
+  test("?questions=0 prints Blank n lines instead of the sentence", async () => {
+    const { assessment } = await seedWithBlank();
+    const body = packetBody(await render(assessment.id, { section: SECTION, questions: "0" }));
+    expect(body).not.toContain("STEM-FB");
+    expect(body).toContain("Blank 1: OPT-LEEWARD");
+    expect(body).toContain("Blank 2: ADA-TYPED");
+  });
+});

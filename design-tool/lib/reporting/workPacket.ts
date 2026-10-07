@@ -7,6 +7,7 @@
 // renders anything; the page draws what these return.
 
 import { UUID_RE } from "@/lib/uuid";
+import { FILL_BLANK_MARKER_RE } from "@secure-test/schema";
 
 export const PACKET_SCORE_MODES = ["none", "teacher", "ai", "both"] as const;
 export type PacketScoresMode = (typeof PACKET_SCORE_MODES)[number];
@@ -131,6 +132,9 @@ const LATEX_EXCERPT_SYMBOLS: Record<string, string> = {
 export function stemExcerpt(stem: string, max = 60): string {
   const stripped = (stem ?? "")
     .replace(/!\[[^\]]*\]\(asset:[^)]*\)/gi, "")
+    // FB slice 3: a fill-in-the-blank marker reads "(blank)", not "b1" (the
+    // markdown strip below would eat a "___").
+    .replace(FILL_BLANK_MARKER_RE, "(blank)")
     .replace(/\$\$?/g, "")
     .replace(/\\[a-zA-Z]+/g, (cmd) => LATEX_EXCERPT_SYMBOLS[cmd] ?? "")
     .replace(/[{}]/g, "")

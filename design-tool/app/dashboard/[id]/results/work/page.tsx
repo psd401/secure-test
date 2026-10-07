@@ -15,6 +15,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
+import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import {
   overallRationale,
@@ -124,6 +125,11 @@ const PRINT_CSS = `
 .packet th, .packet td { border: 1px solid #000; padding: .2rem .35rem;
   text-align: left; vertical-align: top; }
 .packet img { max-width: 100%; }
+/* FB slice 3: the filled sentence in print ink — the underline marks each
+   answer, the ✓ / ✗ glyphs and "expected" carry the result, not colour. */
+.packet .fb-blank { border-bottom: 1px solid #000; }
+.packet .fb-mark, .packet .fb-expected, .packet .fb-nokey, .packet .fb-summary,
+  .packet .fb-unplaced { color: #000; opacity: 1; }
 .packet .scores { margin-top: .5rem; display: grid; gap: .75rem;
   grid-template-columns: 1fr 1fr; break-inside: avoid; page-break-inside: avoid; }
 .packet .scores-one { grid-template-columns: 1fr; }
@@ -722,6 +728,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
               const view = describeAnswer(
                 {
                   type: item.type,
+                  stem: item.stem,
                   choices: item.choices as Array<{ id: string; text: string }>,
                   correct_choice_ids: item.correct_choice_ids as string[],
                   correct_answer: item.correct_answer,
@@ -753,7 +760,28 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                   ) : null}
                   <div className={`item${isText ? " item-flow" : ""}`}>
                     <p className="qnum">Q{item.position + 1}</p>
-                    {query.questions ? (
+                    {/* FB slice 3: with the questions printed, a
+                        fill-in-the-blank stem is printed ONCE, as the sentence
+                        with the student's answers in place
+                        (renderFillBlankAnswerHtml: stem through
+                        renderItemContent, answers escaped). Marks and
+                        "expected" only with the teacher's side (W-1). An
+                        answers-only packet prints the "Blank n: …" lines
+                        below instead. */}
+                    {query.questions && item.type === "fill_blank" ? (
+                      <div
+                        className="stem"
+                        dangerouslySetInnerHTML={{
+                          __html: renderFillBlankAnswerHtml(
+                            item.stem,
+                            item.config.blanks,
+                            responseJson,
+                            resolvedAssets,
+                            { showKey, summary: showKey && responseJson != null },
+                          ),
+                        }}
+                      />
+                    ) : query.questions ? (
                       <div
                         className="stem"
                         dangerouslySetInnerHTML={{
@@ -818,6 +846,8 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                           showKey={showKey}
                         />
                       ) : view.kind === "lines" ? (
+                        <AnswerLines lines={view.lines} showKey={showKey} />
+                      ) : view.kind === "fill_blank" && !query.questions ? (
                         <AnswerLines lines={view.lines} showKey={showKey} />
                       ) : null}
                     </div>

@@ -21,6 +21,7 @@ import {
   type ResolvedAsset,
 } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
+import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import {
   overallRationale,
@@ -669,6 +670,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
           const view = describeAnswer(
             {
               type: item.type,
+              stem: item.stem,
               choices: item.choices as Array<{ id: string; text: string }>,
               correct_choice_ids: item.correct_choice_ids as string[],
               correct_answer: item.correct_answer,
@@ -706,11 +708,26 @@ export default async function AttemptResultPage({ params }: PageProps) {
               </div>
               {/* stem_html is server-rendered by renderItemContent: text is
                   HTML-escaped, math is KaTeX, image refs resolve owner-scoped
-                  or come back as inline-red placeholders — no injection vector. */}
+                  or come back as inline-red placeholders — no injection vector.
+                  FB slice 3: a fill-in-the-blank stem IS the answer — the
+                  sentence with the student's answers in place, marked against
+                  the key (renderFillBlankAnswerHtml: stem segments through
+                  renderItemContent, answers escaped), so it replaces the stem. */}
               <div
                 className="mt-1 whitespace-pre-line text-sm"
                 dangerouslySetInnerHTML={{
-                  __html: renderItemContent(item.stem, resolvedAssets),
+                  __html:
+                    item.type === "fill_blank"
+                      ? renderFillBlankAnswerHtml(
+                          item.stem,
+                          item.config.blanks,
+                          response
+                            ? (response.response as unknown as Record<string, unknown>)
+                            : null,
+                          resolvedAssets,
+                          { showKey: true, summary: response != null },
+                        )
+                      : renderItemContent(item.stem, resolvedAssets),
                 }}
               />
 
@@ -776,6 +793,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 ) : view.kind === "lines" ? (
                   <AnswerLines lines={view.lines} />
                 ) : null}
+                {/* view.kind === "fill_blank": drawn above, in the sentence. */}
                 {historyByItem.get(item.id)?.length ? (
                   <AnswerHistory
                     item={item}

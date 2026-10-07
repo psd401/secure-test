@@ -14,6 +14,7 @@
 import type { ItemConfig, ItemRow, ItemType } from "@/db/schema";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { itemMaxPoints } from "@/lib/scoring/results";
+import { fillBlankAnswer, filledBlankAnswerText } from "@/lib/items/fillBlankAnswer";
 
 export type FeedbackLevel = "score" | "right_wrong" | "answers";
 export type FeedbackResult = "correct" | "partial" | "incorrect" | "pending";
@@ -53,7 +54,10 @@ export interface FeedbackSettings {
 export type FeedbackItemInput = Pick<
   ItemRow,
   "id" | "position" | "type" | "choices" | "correct_choice_ids" | "correct_answer" | "config"
->;
+> & {
+  /** FB slice 3: a fill_blank's blanks are numbered by their markers' order. */
+  stem?: string;
+};
 
 export interface FeedbackInput {
   settings: FeedbackSettings;
@@ -116,22 +120,20 @@ function keyedCells(config: ItemConfig): Array<{ rowId: string; colId: string; l
 }
 
 /**
- * FB slice 1: each blank's teacher-facing label and, for a keyed blank, the
- * key as text — "Blank n" in `blanks` order (the editor keeps that the
- * stem's order), a dropdown key as its option text, a typed blank's accepted
- * answers joined with " or " (D-5). Slice 3 owns the richer read side.
+ * FB: each blank's teacher-facing label and, for a keyed blank, the key as
+ * text — "Blank n" numbered in stem order through the shared reading
+ * (lib/items/fillBlankAnswer.ts, slice 3), so the number is the one the
+ * student saw; a dropdown key as its option text, a typed blank's accepted
+ * answers joined with " or " (D-5).
  */
-function blankLines(config: ItemConfig): Array<{ id: string; label: string; key: string | null }> {
-  return (config.blanks ?? []).map((b, i) => {
-    let key: string | null = null;
-    if (b.kind === "dropdown") {
-      const option = b.options.find((o) => o.id === b.correct_option_id);
-      if (b.correct_option_id != null) key = plainText(option ? option.text : b.correct_option_id);
-    } else if (b.keys && b.keys.length > 0) {
-      key = b.keys.join(" or ");
-    }
-    return { id: b.id, label: `Blank ${i + 1}`, key };
-  });
+function blankLines(item: FeedbackItemInput): Array<{ label: string; key: string | null }> {
+  const config = (item.config ?? {}) as ItemConfig;
+  return fillBlankAnswer(item.stem ?? "", config.blanks, null).blanks.map((b) => ({
+    label: `Blank ${b.number}`,
+    key: b.keyed
+      ? b.expected.map((e) => (b.format === "content" ? plainText(e) : e)).join(" or ")
+      : null,
+  }));
 }
 
 /** The student's answer as text, or null when there is none. */
@@ -192,20 +194,19 @@ export function yourAnswerText(
     case "drawing_upload":
       return "[drawing]";
     case "fill_blank": {
-      // FB slice 1: every blank in order, a dropdown answer as its option
-      // text; an unanswered blank reads "(blank)" like an empty table cell.
+      // FB: every blank in stem order (the shared reading, slice 3), a
+      // dropdown answer as its option text — never its id; an unanswered
+      // blank reads "(blank)" like an empty table cell. Lines, not the
+      // sentence: the client escapes this text and runs only the `$…$` pass
+      // over it (InstantFeedbackPage.swift), so stem emphasis would show as
+      // raw `**`, and a richer shape would need a client release.
       const answers = (response.answers ?? {}) as Record<string, unknown>;
-      const blanks = config.blanks ?? [];
+      const blanks = fillBlankAnswer(item.stem ?? "", config.blanks, answers).blanks;
       if (blanks.length === 0) return null;
       return blanks
-        .map((b, i) => {
-          const v = answers[b.id];
-          let text = typeof v === "string" && v.trim() ? v : "(blank)";
-          if (b.kind === "dropdown" && typeof v === "string" && v) {
-            const option = b.options.find((o) => o.id === v);
-            text = plainText(option ? option.text : v);
-          }
-          return `Blank ${i + 1}: ${text}`;
+        .map((b) => {
+          const text = filledBlankAnswerText(b);
+          return `Blank ${b.number}: ${b.format === "content" ? plainText(text) : text}`;
         })
         .join("\n");
     }
@@ -244,7 +245,7 @@ export function correctAnswerText(item: FeedbackItemInput): string | null {
     case "fill_blank": {
       // Only keyed blanks — an unkeyed blank earns no point (D-2) and has no
       // answer to show.
-      const keyed = blankLines(config).filter((b) => b.key !== null);
+      const keyed = blankLines(item).filter((b) => b.key !== null);
       return keyed.length > 0 ? keyed.map((b) => `${b.label}: ${b.key}`).join("\n") : null;
     }
     default:
