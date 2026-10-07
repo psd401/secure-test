@@ -6,6 +6,7 @@ import {
   BATCH_SYSTEM_PROMPT,
   EXISTING_STEMS_MAX,
   EXISTING_STEM_CHARS,
+  FILL_BLANK_PROMPT_BLOCK,
   MATCH_PROMPT_BLOCK,
   buildBatchUserText,
   capExistingStems,
@@ -15,6 +16,7 @@ import {
   validateBatchProposals,
 } from "../lib/ai/itemBatchCore";
 import { mockProvider } from "../lib/ai/provider";
+import { markersInsideMath } from "../lib/ai/fillBlankNormalize";
 import { CreateItemBody } from "../lib/api/items";
 import { GenerateItemsRequest, hasBatchFocus, type BatchGenerateInput } from "../lib/ai/types";
 import { lookup } from "../lib/standards/catalog";
@@ -348,6 +350,99 @@ describe("match in a batch", () => {
     for (const m of matches) {
       expect(CreateItemBody.safeParse(m).success).toBe(true);
       expect((m as { pairs: { id: string }[] }).pairs.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    }
+  });
+});
+
+// FB slice 4 (docs/fill-in-blank-design.md, D-9): fill in the blank in a
+// batch — by count only, every blank keyed.
+describe("fill in the blank in a batch", () => {
+  const FB = {
+    type: "fill_blank",
+    stem: "A triangle has [[b1]] sides and its angles add to [[b2]] degrees.",
+    blanks: [
+      { id: "b1", kind: "dropdown", options: ["two", "three", "four"], correct_option: "three" },
+      { id: "b2", kind: "text", keys: [" 180 "] },
+    ],
+  };
+
+  test("the shape and rules ride the user turn only when fill_blank is requested", () => {
+    const withFb = buildBatchUserText({ ...BASE, count: 2, types: { fill_blank: 2 } });
+    expect(withFb).toContain(FILL_BLANK_PROMPT_BLOCK);
+    expect(withFb).toContain("2 fill_blank");
+    expect(FILL_BLANK_PROMPT_BLOCK).toContain('"correct_option"');
+    expect(FILL_BLANK_PROMPT_BLOCK).toContain("Every blank has a key");
+    expect(buildBatchUserText({ ...BASE, count: 3 })).not.toContain("fill_blank");
+    expect(BATCH_SYSTEM_PROMPT).not.toContain("fill_blank");
+    expect(planTypes(10, "mix")).not.toContain("fill_blank");
+  });
+
+  test("an element validates: option ids o1…, key read by text, keys trimmed, tags attached", () => {
+    const out = validateBatchProposals([FB], {
+      count: 1,
+      types: { fill_blank: 1 },
+      standards: ["wa2026:M.7.R.RP.2"],
+    });
+    expect(out.issues).toEqual([]);
+    const p = out.proposals[0] as { type: string; blanks: unknown[]; standards: string[] };
+    expect(p.type).toBe("fill_blank");
+    expect(p.blanks).toEqual([
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [
+          { id: "o1", text: "two" },
+          { id: "o2", text: "three" },
+          { id: "o3", text: "four" },
+        ],
+        correct_option_id: "o2",
+      },
+      { id: "b2", kind: "text", keys: ["180"] },
+    ]);
+    expect(p.standards).toEqual(["wa2026:M.7.R.RP.2"]);
+    expect(CreateItemBody.safeParse(p).success).toBe(true);
+  });
+
+  test("a blank without a key, or a key naming no option, drops the element", () => {
+    const noKey = { ...FB, blanks: [FB.blanks[0], { id: "b2", kind: "text" }] };
+    const badKey = {
+      ...FB,
+      blanks: [{ ...FB.blanks[0], correct_option: "five" }, FB.blanks[1]],
+    };
+    const orphan = { ...FB, stem: "Only [[b1]] here." };
+    const inMath = { ...FB, stem: "A triangle has [[b1]] sides; the point $([[b2]], 0)$ is on the axis." };
+    const out = validateBatchProposals([noKey, badKey, orphan, inMath], {
+      count: 4,
+      types: { fill_blank: 4 },
+      standards: [],
+    });
+    expect(out.proposals).toHaveLength(0);
+    expect(out.issues[0]).toMatch(/a blank has no key/);
+    expect(out.issues[1]).toMatch(/a blank has no key/);
+    expect(out.issues[2]).toMatch(/blanks/);
+    expect(out.issues[3]).toMatch(/\[\[b2\]\] is inside \$\.\.\.\$ math/);
+  });
+
+  test("markersInsideMath: odd unescaped $ before a marker; escaped dollars and closed math are fine", () => {
+    expect(markersInsideMath("$x =$ [[b1]] and $([[b2]], 0)$")).toEqual(["b2"]);
+    expect(markersInsideMath("It costs \\$3 and [[b1]] more.")).toEqual([]);
+    expect(markersInsideMath("${3x + 7}$ equals [[b1]].")).toEqual([]);
+  });
+
+  test("under mix a fill_blank element drops as off-type", () => {
+    const out = validateBatchProposals([FB, MC], { count: 2, types: "mix", standards: [] });
+    expect(out.proposals.map((p) => p.type)).toEqual(["multiple_choice_single"]);
+    expect(out.issues[0]).toMatch(/"fill_blank" was not requested/);
+  });
+
+  test("the mock's fill_blank proposals validate", async () => {
+    const types = { fill_blank: 2 };
+    const raw = await mockProvider.generateItems({ ...BASE, count: 2, types, objective: "Words" });
+    const out = validateBatchProposals(raw, { count: 2, types, standards: [] });
+    expect(out.dropped).toBe(0);
+    for (const p of out.proposals) {
+      expect(p.type).toBe("fill_blank");
+      expect(CreateItemBody.safeParse(p).success).toBe(true);
     }
   });
 });

@@ -1528,3 +1528,18 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 512 | Print toolbar's question checklist | The excerpt reads "… the (blank) side …", not "b1" | NOT RUN |
 | 513 | **Instant feedback** at `answers` (released) after a student misses a blank | "Your answer" lists "Blank n: …" in the sentence's order with option text; "Correct answer" lists the keyed blanks, typed keys joined "or" — unchanged from slice 1 apart from the numbering (client renders it; needs slice 5 to sit the test) | NOT RUN |
 | 514 | **Class insights** report on a section that answered (a) | Generates without error; a claim about (a) can cite a blank (the pack carries per-blank answered / right counts and the top answers); no student name tied to a typed answer | NOT RUN |
+
+## Fill in the blank — slice 4: PDF import and Generate questions (FB, 2026-10-07)
+
+`docs/fill-in-blank-design.md` §Progress "Slice 4" is the record. Local dev with `PDF_EXTRACTOR_PROVIDER=bedrock` and the item provider on Bedrock, or the origin after the deploy. Fixture PDF: a hand-made worksheet (no teacher material) with (a) one sentence with two blank lines and a word bank, (b) one sentence with one blank line mid-sentence and no bank, (c) one sentence ending in a blank line, (d) two "count the significant figures" lines with the answer line in front of the number (`____ 25000 m`), and an answer key for all of them; a second copy without the key.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 515 | **Import from PDF** with the keyed fixture | (a)–(c) are "Fill in the blank · n blanks" cards, the sentence shows `____` where the blanks are (never `[[b1]]`); (d) stays two Short text cards; no "Needs answer key" badge; nothing rejected | NOT RUN |
+| 516 | **Add** card (a), open it in the editor | Two Dropdown blanks, each with the whole word bank in printed order and the keyed word marked correct; the sentence carries `[[b1]]` / `[[b2]]`; Preview shows two dropdowns | NOT RUN |
+| 517 | Add cards (b) and (c) | Typed blanks with the key's word as the accepted answer; the checklist has no gap for them | NOT RUN |
+| 518 | Import the copy WITHOUT the key | The fill-in-the-blank cards show "Needs answer key"; the header count includes them; Add still works and the editor's Scoring method reads "Default — Human" until a key is set | NOT RUN |
+| 519 | **Generate questions** → "Choose how many of each" | A "Fill in the blank" box; under Mix the hint reads "…For matching or fill in the blank, choose how many of each." | NOT RUN |
+| 520 | Generate 4 Fill in the blank from a pasted passage | Four cards: each sentence with numbered gaps `____ (1)`; each dropdown's options listed under it ("Blank 1: … · … · …") with NO correct mark; "Check the key" badge until **Show the key** is opened, which lists "Blank n: …" (typed answers joined "or") | NOT RUN |
+| 521 | **Add** one generated card, open it | Saved as Fill in the blank with option ids `o1…`, the dropdown's correct option and the typed blank's accepted answers as shown on the card; Preview renders it | NOT RUN |
+| 522 | Generate a batch with a math standard (2 Fill in the blank + 2 Short text) | Option math (`$(0, 0)$`, `${5.50}$`) renders as math on the card and in the editor; no card shows raw `$` around a gap (an element with a blank inside `$…$` is dropped and counted under "couldn't be used") | NOT RUN |

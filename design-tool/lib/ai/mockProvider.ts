@@ -289,5 +289,17 @@ function mockBatchItem(type: BatchGenerableItemType, stem: string): GenerateItem
       pairs: [1, 2, 3].map((n) => ({ left: `Term ${n}`, right: `Partner ${n} — drafted by AI` })),
     } as unknown as GenerateItemResult;
   }
+  if (type === "fill_blank") {
+    // FB slice 4: one dropdown and one typed blank, options and keys as text
+    // with no option ids — the server numbers them, as it does for the model.
+    return {
+      type,
+      stem: `${stem}: the [[b1]] word and the [[b2]] word.`,
+      blanks: [
+        { id: "b1", kind: "dropdown", options: ["first", "second", "third"], correct_option: "first" },
+        { id: "b2", kind: "text", keys: ["answer"] },
+      ],
+    } as unknown as GenerateItemResult;
+  }
   return { type, stem, choices: [], correct_choice_ids: [], correct_answer: null };
 }

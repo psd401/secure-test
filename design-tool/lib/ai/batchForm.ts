@@ -18,6 +18,8 @@ export const BATCH_TYPES = [
   "essay",
   // BG slice 6: by count only — "mix" on the route stays the four above.
   "match",
+  // FB slice 4 (D-9): by count only, like match.
+  "fill_blank",
 ] as const;
 export type BatchType = (typeof BATCH_TYPES)[number];
 
@@ -28,6 +30,8 @@ export const BATCH_TYPE_LABEL: Record<BatchType, string> = {
   essay: "Essay",
   // The editor's own label for the type (AssessmentEditor TYPE_LABEL).
   match: "Matching",
+  // D-10: the teacher-facing name.
+  fill_blank: "Fill in the blank",
 };
 
 export const BATCH_DIFFICULTIES = ["mixed", "easier", "on_level", "harder"] as const;
@@ -66,6 +70,7 @@ export function emptyBatchForm(): BatchFormValues {
       short_text: "",
       essay: "",
       match: "",
+      fill_blank: "",
     },
     standards: [],
     objective: "",
@@ -269,6 +274,11 @@ export interface BatchProposal {
   standards?: string[];
   /** Match: the pair list in its correct pairing IS the key. */
   pairs?: { id: string; left: string; right: string }[];
+  /** FB slice 4: each blank's correct option or accepted answers is its key. */
+  blanks?: (
+    | { id: string; kind: "dropdown"; options: { id: string; text: string }[]; correct_option_id?: string | null }
+    | { id: string; kind: "text"; keys?: string[]; exact_form?: boolean }
+  )[];
   [key: string]: unknown;
 }
 
@@ -280,6 +290,7 @@ export function hasProposedKey(p: BatchProposal): boolean {
   }
   // Keyed by structure: the pairing the model proposed is the key to check.
   if (p.type === "match") return (p.pairs?.length ?? 0) > 0;
+  if (p.type === "fill_blank") return fillBlankKeyLines(p).length > 0;
   return false;
 }
 
@@ -302,6 +313,7 @@ export function proposalHeader(ready: number, dropped: number): string {
 export function keyText(p: BatchProposal): string[] {
   if (p.type === "short_text") return p.correct_answer ? [p.correct_answer] : [];
   if (p.type === "match") return (p.pairs ?? []).map((pair) => `${pair.left} → ${pair.right}`);
+  if (p.type === "fill_blank") return fillBlankKeyLines(p);
   const byId = new Map((p.choices ?? []).map((c) => [c.id, c.text]));
   return (p.correct_choice_ids ?? []).map((id) => byId.get(id) ?? id);
 }
@@ -320,6 +332,31 @@ export function matchColumns(p: BatchProposal): { lefts: string[]; rights: strin
       .map((pair) => pair.right)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true })),
   };
+}
+
+/**
+ * FB slice 4: one key line per keyed blank, numbered in blank order (the
+ * stem order the server keeps): "Blank 1: windward", or "Blank 2: leeward or
+ * lee" for a typed blank's accepted answers (D-5).
+ */
+export function fillBlankKeyLines(p: BatchProposal): string[] {
+  const out: string[] = [];
+  (p.blanks ?? []).forEach((b, i) => {
+    if (b.kind === "dropdown") {
+      const text = b.options.find((o) => o.id === b.correct_option_id)?.text;
+      if (text) out.push(`Blank ${i + 1}: ${text}`);
+    } else if (b.keys && b.keys.length > 0) {
+      out.push(`Blank ${i + 1}: ${b.keys.join(" or ")}`);
+    }
+  });
+  return out;
+}
+
+/** FB slice 4: what the card shows before the key — each dropdown's options, in the teacher's order (D-6). */
+export function fillBlankOptionLines(p: BatchProposal): { label: string; options: string[] }[] {
+  return (p.blanks ?? []).flatMap((b, i) =>
+    b.kind === "dropdown" ? [{ label: `Blank ${i + 1}`, options: b.options.map((o) => o.text) }] : [],
+  );
 }
 
 export type AddAllResult =

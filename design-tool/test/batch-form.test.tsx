@@ -14,6 +14,8 @@ import {
   describeAddError,
   describeGenerateError,
   emptyBatchForm,
+  fillBlankKeyLines,
+  fillBlankOptionLines,
   hasProposedKey,
   keyText,
   matchColumns,
@@ -35,7 +37,8 @@ import {
 } from "../lib/ai/types";
 import { MAX_UPLOAD_BYTES } from "../lib/ai/documentUpload";
 import { BATCH_MAX_FILE_BYTES } from "../lib/ai/batchForm";
-import { GenerateQuestionsDialog, MatchColumns } from "../components/app/GenerateQuestionsDialog";
+import { FillBlankOptions, GenerateQuestionsDialog, MatchColumns } from "../components/app/GenerateQuestionsDialog";
+import { stemWithGaps } from "../lib/items/fillBlankEditor";
 
 const ID = "7b0d6f5e-7a39-4f3a-9a52-0d6a3b1c9e11";
 
@@ -94,6 +97,7 @@ describe("validateBatchForm", () => {
           short_text: c,
           essay: d,
           match: "",
+          fill_blank: "",
         },
       });
     expect(validateBatchForm(counts("2", "1", "1", "1"))).toEqual({});
@@ -144,6 +148,7 @@ describe("buildBatchRequest", () => {
           short_text: "",
           essay: "1",
           match: "",
+          fill_blank: "",
         },
         standards: [],
         objective: "  compare ratios ",
@@ -319,5 +324,59 @@ describe("match proposals", () => {
     expect(html).toContain("Right column (sorted)");
     expect(html.indexOf(">Fe<")).toBeLessThan(html.indexOf(">Na<"));
     expect(html).not.toContain("→");
+  });
+});
+
+// FB slice 4 (docs/fill-in-blank-design.md, D-9): fill in the blank by count,
+// each blank keyed on its own.
+describe("fill-in-the-blank proposals", () => {
+  const fb: BatchProposal = {
+    type: "fill_blank",
+    stem: "Water boils at [[b1]] degrees Celsius at [[b2]] level.",
+    blanks: [
+      { id: "b1", kind: "text", keys: ["100", "one hundred"] },
+      {
+        id: "b2",
+        kind: "dropdown",
+        options: [
+          { id: "o1", text: "sea" },
+          { id: "o2", text: "mountain" },
+          { id: "o3", text: "cloud" },
+        ],
+        correct_option_id: "o1",
+      },
+    ],
+  };
+
+  test("Fill in the blank is a type box; its count joins the request", () => {
+    const v = form({
+      count: "2",
+      typeMode: "counts",
+      typeCounts: { ...emptyBatchForm().typeCounts, fill_blank: "2" },
+    });
+    expect(validateBatchForm(v)).toEqual({});
+    const body = buildBatchRequest(ID, v);
+    expect(body.types).toEqual({ fill_blank: 2 });
+    expect(GenerateItemsRequest.safeParse(body).success).toBe(true);
+  });
+
+  test("each keyed blank is a key line, numbered in blank order", () => {
+    expect(hasProposedKey(fb)).toBe(true);
+    expect(needsKeyCheck(fb, new Set(), "c1")).toBe(true);
+    expect(fillBlankKeyLines(fb)).toEqual(["Blank 1: 100 or one hundred", "Blank 2: sea"]);
+    expect(keyText(fb)).toEqual(fillBlankKeyLines(fb));
+    expect(hasProposedKey({ ...fb, blanks: [{ id: "b1", kind: "text" }] })).toBe(false);
+  });
+
+  test("the card shows numbered gaps and each dropdown's options, no key", () => {
+    expect(stemWithGaps(fb.stem, { numbered: true })).toBe(
+      "Water boils at ____ (1) degrees Celsius at ____ (2) level.",
+    );
+    expect(stemWithGaps(fb.stem)).toBe("Water boils at ____ degrees Celsius at ____ level.");
+    expect(fillBlankOptionLines(fb)).toEqual([{ label: "Blank 2", options: ["sea", "mountain", "cloud"] }]);
+    const html = renderToStaticMarkup(<FillBlankOptions proposal={fb} />);
+    expect(html).toContain("Blank 2:");
+    expect(html).toContain("mountain");
+    expect(html).not.toContain("correct");
   });
 });

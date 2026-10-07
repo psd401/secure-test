@@ -18,6 +18,11 @@ import type {
 //   DR: <stem>                                        (E2/E4 drawing_upload)
 //   TB: <stem> | cols=<a>,<b> | rows=<x>,<y> | corner=<z>  (E3 table; rows= and
 //                                                      corner= may be omitted)
+//   FB: <stem with [[b1]]> | b1:<opt>,*<correct>,<opt> | b2=<key>;<key>
+//        (FB slice 4 fill_blank: "<id>:" a dropdown, options as text, "*"
+//        marks the key; "<id>=" a typed blank, ";"-separated keys, empty =
+//        keyless. Options and keys as text, the way the prompt asks the model
+//        for them; the normalizer assigns option ids.)
 //   SET: #<a>-<b> | figure=<n>[,<n>] | <stimulus text>  (E5 slice 3: a proposed
 //        item set over the segments whose printed numbers fall in a..b;
 //        "figure=" may be omitted for a passage-only set)
@@ -32,7 +37,7 @@ import type {
 // Text that doesn't start a segment is ignored. This is a stand-in, not a
 // parser teachers rely on — the Bedrock provider does the real work.
 
-const SEGMENT_RE = /(MC|ST|ES|MA|DR|TB|SET):\s*(.*?)(?=(?:MC|ST|ES|MA|DR|TB|SET):|$)/gs;
+const SEGMENT_RE = /(MC|ST|ES|MA|DR|TB|FB|SET):\s*(.*?)(?=(?:MC|ST|ES|MA|DR|TB|FB|SET):|$)/gs;
 
 // Beta feedback 2026-10-07: "{{changed:<original>::<changed_to>::<reason>}}"
 // anywhere in a segment body becomes one entry of the candidate's `changes`
@@ -88,6 +93,32 @@ function parseSegment(kind: string, bodyWithChanges: string): unknown | null {
       rows: list("rows") ?? [""],
       ...(cornerPart ? { corner: cornerPart.slice("corner=".length).trim() } : {}),
     });
+  }
+  if (kind === "FB") {
+    const parts = body.split("|").map((p) => p.trim());
+    const stem = parts.shift() ?? "";
+    const blanks = parts
+      .map((p) => {
+        const dd = /^([A-Za-z0-9_-]+):(.*)$/.exec(p);
+        if (dd) {
+          const opts = dd[2]!.split(",").map((o) => o.trim()).filter((o) => o.length > 0);
+          const correct = opts.find((o) => o.startsWith("*"));
+          return {
+            id: dd[1]!,
+            kind: "dropdown",
+            options: opts.map((o) => o.replace(/^\*/, "")),
+            ...(correct ? { correct_option: correct.slice(1) } : {}),
+          };
+        }
+        const tx = /^([A-Za-z0-9_-]+)=(.*)$/.exec(p);
+        if (tx) {
+          const keys = tx[2]!.split(";").map((k) => k.trim()).filter((k) => k.length > 0);
+          return { id: tx[1]!, kind: "text", ...(keys.length > 0 ? { keys } : {}) };
+        }
+        return null;
+      })
+      .filter((b) => b !== null);
+    return withNumber({ type: "fill_blank", stem, blanks });
   }
   if (kind === "MC") {
     const parts = body.split("|").map((p) => p.trim());

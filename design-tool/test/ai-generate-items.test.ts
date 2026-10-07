@@ -217,6 +217,39 @@ describe("POST /api/ai/generate-items — proposals", () => {
     expect((row!.config as { pairs: unknown }).pairs).toEqual(match.pairs);
   });
 
+  test("FB slice 4: fill_blank by count — option ids assigned, and Add posts it through the items route", async () => {
+    mockSession = { sub: OWNER, role: "staff" };
+    const a = await makeAssessment();
+    const res = await postJson({
+      assessment_id: a.id,
+      count: 2,
+      types: { fill_blank: 2 },
+      target: { standards: ["My target"] },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as OkBody;
+    expect(body.proposals.map((p) => p.type)).toEqual(["fill_blank", "fill_blank"]);
+    const fb = body.proposals[0]!;
+    const blanks = fb.blanks as { id: string; kind: string; options?: { id: string }[]; correct_option_id?: string; keys?: string[] }[];
+    expect(blanks[0]!.options!.map((o) => o.id)).toEqual(["o1", "o2", "o3"]);
+    expect(blanks[0]!.correct_option_id).toBe("o1");
+    expect(blanks[1]!.keys).toEqual(["answer"]);
+
+    const { POST } = await import("../app/api/assessments/[id]/items/route");
+    const added = await POST(
+      new Request(`http://localhost/api/assessments/${a.id}/items`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(fb),
+      }),
+      { params: Promise.resolve({ id: a.id }) },
+    );
+    expect(added.status).toBe(201);
+    const [row] = await getDb().select().from(items).where(eq(items.assessment_id, a.id));
+    expect(row!.type).toBe("fill_blank");
+    expect((row!.config as { blanks: unknown }).blanks).toEqual(fb.blanks);
+  });
+
   test("mix never yields match", async () => {
     mockSession = { sub: OWNER, role: "staff" };
     const a = await makeAssessment();

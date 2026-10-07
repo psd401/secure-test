@@ -1,6 +1,7 @@
 import { CreateItemBody } from "@/lib/api/items";
 import { MATH_DOLLAR_RULE } from "@/lib/ai/mathPromptRule";
 import { normalizeProposalMath } from "@/lib/ai/mathNormalize";
+import { normalizeFillBlankProposal } from "@/lib/ai/fillBlankNormalize";
 
 // Shared between the mock and Bedrock PDF extractors + the route.
 
@@ -47,6 +48,7 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   '{"type":"match","stem":"...","pairs":[{"left":"...","right":"..."}]}',
   '{"type":"drawing_upload","stem":"..."}',
   '{"type":"table","stem":"...","columns":["..."],"rows":["..."],"corner":"..."}',
+  '{"type":"fill_blank","stem":"... [[b1]] ... [[b2]] ...","blanks":[{"id":"b1","kind":"dropdown","options":["...","..."],"correct_option":"..."},{"id":"b2","kind":"text","keys":["..."]}]}',
   'Every object may also carry "source_number": the question number as',
   "printed in the document, as an integer; omit it when the question is not",
   'numbered. An item that covers several numbered rows (a match set built',
@@ -102,6 +104,24 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   "otherwise); the stem is the instruction printed before the table. Never",
   "write such a table into a stem as text. A table whose cells are already",
   "filled in is data the questions refer to — a stimulus, not an item.",
+  // FB slice 4 (docs/fill-in-blank-design.md, D-3): a sentence with its
+  // blank line(s) INSIDE it is a fill-in-the-blank question. Options and keys
+  // are asked for as text — normalizeFillBlankProposal assigns the option ids
+  // and finds the key. A sentence telling the model that a stand-alone answer
+  // line ("2. ____ 25000 m") stays short_text was tried and dropped: on
+  // Bedrock it cost a teacher sample a question (11 instead of 12 in 3 of 7
+  // runs; 6 of 6 at 12 without it, the old prompt 7 of 7), and the count
+  // lines stayed short_text anyway. The short-answer backstop
+  // (fillBlankFromUnderscoreStem) catches the no-bank sentences the model
+  // still returns as short_text.
+  'Use fill_blank when blank lines sit INSIDE a sentence ("The ____ side of a',
+  'mountain gets more rain."): the stem is the sentence with each line',
+  "replaced by [[b1]], [[b2]] … in order, and blanks has one entry per marker",
+  'with the same id — kind "dropdown" with a word bank\'s entries as options',
+  '(plain strings, printed order) and "correct_option" = the keyed entry\'s',
+  'text when the document gives a bank, otherwise kind "text" with "keys" =',
+  "the keyed answers as plain text; omit correct_option / keys when there is",
+  "no key. A word bank for blanks in sentences is fill_blank, not match.",
   "Write chemical formulas, subscripts, superscripts and math as KaTeX",
   "inside $...$ in stems, choices and pairs (H2O becomes $\\mathrm{H_2O}$,",
   "x squared becomes $x^2$, 3.5 x 10^4 becomes $3.5 \\times 10^{4}$), never",
@@ -427,6 +447,42 @@ export function fillableTableFromStem(stem: string): PipeTableGrid | null {
   return null;
 }
 
+// FB slice 4 (docs/fill-in-blank-design.md, D-3): "a worksheet sentence with
+// `____` inside it (not a stand-alone answer line) becomes a fill-in-the-blank
+// candidate". The prompt asks for fill_blank; this is the backstop for a model
+// that still answers short_text with the line in its stem (the E3 table
+// backstop's pattern). A line counts as INSIDE the sentence when, on its own
+// line of the stem, a letter comes before it (a leading "2." / "(b)" number
+// does not count) and that text does not end in ":" or "=" — "Answer: ____"
+// and "x = ____" are answer lines — and something follows it ("The ____ side
+// of a mountain…", "…is called ____."). Every line in the stem must qualify,
+// or the stem is left alone: "2. ____ 25000 m" (the count written in front of
+// the number) stays short_text. Returns the stem with `[[b1]]…` markers and
+// one typed blank per line, or null.
+const LEADING_NUMBER_RE = /^\s*(?:\(?[0-9]{1,3}[.)]|\(?[a-zA-Z][.)]|\([a-zA-Z0-9]{1,3}\))\s*/;
+
+export function fillBlankFromUnderscoreStem(
+  stem: string,
+): { stem: string; blanks: { id: string; kind: "text" }[] } | null {
+  const runs = [...stem.matchAll(/_{3,}/g)];
+  if (runs.length === 0 || runs.length > 20) return null;
+  for (const m of runs) {
+    const at = m.index!;
+    const lineStart = stem.lastIndexOf("\n", at - 1) + 1;
+    const before = stem.slice(lineStart, at).replace(LEADING_NUMBER_RE, "").trim();
+    const after = stem.slice(at + m[0].length);
+    if (!/\p{L}/u.test(before)) return null;
+    if (/[:=]$/.test(before)) return null;
+    if (after.trim().length === 0) return null;
+  }
+  let n = 0;
+  const marked = stem.replace(/_{3,}/g, () => `[[b${++n}]]`);
+  return {
+    stem: marked,
+    blanks: Array.from({ length: n }, (_, i) => ({ id: `b${i + 1}`, kind: "text" as const })),
+  };
+}
+
 // The model is asked for label lists, not ids (like match pairs): coerce a
 // string or an id-less object to {id, label}, c1…/r1… for all so a half-
 // filled list cannot collide. Anything else passes through for
@@ -462,6 +518,25 @@ export function normalizePdfCandidate(cand: unknown, opts: NormalizeOptions = {}
       obj = { ...rest, type: "table", ...grid };
     }
   }
+  // FB slice 4 backstop (D-3): a short answer whose stem has its blank line
+  // inside the sentence becomes a fill_blank with typed blanks. The printed
+  // answer carries over only when there is exactly one blank — with several,
+  // which part answers which blank is not known, and a wrong key is worse
+  // than none ("Needs answer key" shows).
+  if (obj.type === "short_text" && typeof obj.stem === "string") {
+    const fb = fillBlankFromUnderscoreStem(obj.stem);
+    if (fb) {
+      const { correct_answer: answer, exact_form: exactForm, ...rest } = obj;
+      const key = typeof answer === "string" && answer.trim().length > 0 ? answer.trim() : null;
+      const blanks = fb.blanks.map((b) => ({
+        ...b,
+        ...(key && fb.blanks.length === 1 ? { keys: [key] } : {}),
+        ...(typeof exactForm === "boolean" ? { exact_form: exactForm } : {}),
+      }));
+      obj = { ...rest, type: "fill_blank", stem: fb.stem, blanks };
+    }
+  }
+  if (obj.type === "fill_blank") return normalizeFillBlankProposal(obj);
   if (obj.type === "table") {
     const { corner: rawCorner, ...rest } = obj;
     const columns = coerceGridList(rest.columns, "c");

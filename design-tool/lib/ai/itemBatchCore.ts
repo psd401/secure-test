@@ -4,6 +4,7 @@ import { resolveBareCode } from "@/lib/standards/search";
 import { repairModelJson } from "@/lib/pdfImport/extractCore";
 import { MATH_DOLLAR_RULE } from "./mathPromptRule";
 import { normalizeProposalMath } from "./mathNormalize";
+import { everyBlankKeyed, markersInsideMath, normalizeFillBlankProposal } from "./fillBlankNormalize";
 import {
   BATCH_GENERABLE_ITEM_TYPES,
   BATCH_MIX_ITEM_TYPES,
@@ -117,6 +118,7 @@ const TYPE_LABEL: Record<BatchGenerableItemType, string> = {
   short_text: "short_text",
   essay: "essay",
   match: "match",
+  fill_blank: "fill_blank",
 };
 
 const DIFFICULTY_LINE: Record<BatchGenerateInput["difficulty"], string> = {
@@ -168,6 +170,25 @@ Match rules:
 - Math in pairs goes in $...$ like stems and choices.
 - Do not add ids or any other fields to the pairs.`;
 
+/**
+ * FB slice 4 (docs/fill-in-blank-design.md, D-9): the fill_blank shape rides
+ * in the user turn only when it is requested by count, like match. Options and
+ * keys are asked for as text; the server assigns option ids and reads the key
+ * by text (normalizeFillBlankProposal, shared with the PDF importer). Dropdown
+ * blanks are preferred where they suit; every blank carries a key, or the
+ * element drops (a generated item always has one).
+ */
+export const FILL_BLANK_PROMPT_BLOCK = `This batch includes fill_blank items. A fill_blank item is a sentence (or two) with blanks in it, and has this shape — no choices and no correct_answer, because each blank carries its own key:
+{"type":"fill_blank","stem":"<a sentence with [[b1]] and [[b2]] where the blanks go>","blanks":[{"id":"b1","kind":"dropdown","options":["...","...","..."],"correct_option":"<the exact text of the correct option>"},{"id":"b2","kind":"text","keys":["..."]}]}
+Fill-in-the-blank rules:
+- The stem is the sentence itself, with a marker [[b1]], [[b2]], … where each blank goes, numbered in the order they appear. Each marker appears once and has exactly one entry in blanks with the same id. No ____ lines.
+- 1 to 3 blanks per item, each blanking a word, number or short phrase that the rest of the sentence makes answerable.
+- Prefer kind "dropdown" when the topic suits it: 3 or 4 short options, one correct and the others plausible, no option repeated; correct_option is that option's exact text.
+- Use kind "text" when a student should produce the answer rather than recognise it: keys lists the accepted answers (1 to 3 — spellings or forms of the same answer), bare, without units; name any unit in the sentence.
+- Every blank has a key. Nothing in the sentence or the options hints at another blank's answer.
+- Math in the stem and in options goes in $...$ like stems and choices; never put a marker inside $...$.
+- Do not add option ids or any other fields.`;
+
 /** Pasted source text must not be able to close its own wrapper early. */
 export function neutraliseSourceTag(text: string): string {
   return text.replace(/<\/source_material/gi, "<\\/source_material");
@@ -197,6 +218,10 @@ export function buildBatchUserText(input: BatchGenerateInput): string {
   if (input.types !== "mix" && (input.types.match ?? 0) > 0) {
     lines.push("");
     lines.push(MATCH_PROMPT_BLOCK);
+  }
+  if (input.types !== "mix" && (input.types.fill_blank ?? 0) > 0) {
+    lines.push("");
+    lines.push(FILL_BLANK_PROMPT_BLOCK);
   }
 
   if (input.standards.length > 0) {
@@ -381,9 +406,27 @@ export function validateBatchProposals(
         return;
       }
     }
-    if (opts.standards.length > 0) candidate.standards = [...opts.standards];
+    let shaped: Record<string, unknown> = candidate;
+    if (candidate.type === "fill_blank") {
+      shaped = normalizeFillBlankProposal(candidate);
+      // D-9: a generated fill-in-the-blank always carries its keys. A blank
+      // without one (or a dropdown key naming no option) drops the element
+      // rather than reach the teacher as a half-keyed proposal.
+      if (Array.isArray(shaped.blanks) && shaped.blanks.length > 0 && !everyBlankKeyed(shaped)) {
+        issues.push(`item ${i + 1}: a blank has no key`);
+        return;
+      }
+      // FB slice 4 Bedrock evidence: one element of eight put a marker inside
+      // $...$ despite the prompt; the sentence would render as raw math.
+      const inMath = typeof shaped.stem === "string" ? markersInsideMath(shaped.stem) : [];
+      if (inMath.length > 0) {
+        issues.push(`item ${i + 1}: blank [[${inMath[0]}]] is inside $...$ math`);
+        return;
+      }
+    }
+    if (opts.standards.length > 0) shaped.standards = [...opts.standards];
     // BG-E1: digit-led math the model left as $...$ renders raw under M-1.
-    const parsed = CreateItemBody.safeParse(normalizeProposalMath(candidate));
+    const parsed = CreateItemBody.safeParse(normalizeProposalMath(shaped));
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       issues.push(`item ${i + 1}: ${first ? `${first.path.join(".")} ${first.message}` : "invalid"}`);

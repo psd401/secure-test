@@ -60,7 +60,8 @@ export function normalizeDigitLedMath(text: string): string {
 
 /**
  * Apply normalizeDigitLedMath to the student-visible text of one proposed
- * item: the stem, every choice's text and both sides of every match pair.
+ * item: the stem, every choice's text, both sides of every match pair and
+ * every dropdown blank's option text.
  * Answer keys (correct_answer) are plain text and never touched. Returns a
  * new object; anything not shaped as expected passes through for the schema
  * to judge.
@@ -83,6 +84,22 @@ export function normalizeProposalMath<T>(item: T): T {
       if (typeof pair.left === "string") pair.left = normalizeDigitLedMath(pair.left);
       if (typeof pair.right === "string") pair.right = normalizeDigitLedMath(pair.right);
       return pair;
+    });
+  }
+  // FB slice 4: a dropdown blank's option text is student-visible like a
+  // choice; a typed blank's keys are plain text and never touched.
+  if (Array.isArray(obj.blanks)) {
+    obj.blanks = obj.blanks.map((b) => {
+      if (!b || typeof b !== "object" || !Array.isArray((b as { options?: unknown }).options)) return b;
+      const blank = { ...(b as Record<string, unknown>) };
+      blank.options = (blank.options as unknown[]).map((o) =>
+        o && typeof o === "object" && typeof (o as { text?: unknown }).text === "string"
+          ? { ...o, text: normalizeDigitLedMath((o as { text: string }).text) }
+          : typeof o === "string"
+            ? normalizeDigitLedMath(o)
+            : o,
+      );
+      return blank;
     });
   }
   return obj as T;

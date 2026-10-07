@@ -651,3 +651,49 @@ describe("POST items/import-pdf: table candidates (E3)", () => {
     expect(rows[0]!.config.cell_keys).toBeUndefined();
   });
 });
+
+// FB slice 4 (docs/fill-in-blank-design.md, D-3): fill-in-the-blank candidates
+// from the import, and the short-answer backstop.
+describe("POST items/import-pdf: fill-in-the-blank candidates (FB slice 4)", () => {
+  test("an FB segment and a short answer with its line inside the sentence; Add stores the blanks", async () => {
+    const id = await createAssessment("Fill in the blank");
+    const res = await postPdf(
+      id,
+      makeTextPdf([
+        "FB: #1 The [[b1]] side is wet and the [[b2]] side is dry. | b1:*windward,leeward | b2:windward,*leeward",
+        "ST: #2 Light from the Sun reaches Earth in about ____ minutes. | 8",
+        "ST: #3 ____ 25000 m | 2",
+      ]),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string; stem: string; blanks?: unknown[]; correct_answer?: string }[];
+      rejected_count: number;
+      changes: unknown[];
+    };
+    expect(body.rejected_count).toBe(0);
+    expect(body.candidates.map((c) => c.type)).toEqual(["fill_blank", "fill_blank", "short_text"]);
+    expect(body.changes).toHaveLength(3);
+    expect(body.candidates[1]!.stem).toBe("Light from the Sun reaches Earth in about [[b1]] minutes.");
+    expect(body.candidates[1]!.blanks).toEqual([{ id: "b1", kind: "text", keys: ["8"] }]);
+    expect(body.candidates[2]!.correct_answer).toBe("2");
+
+    const { POST: createItem } = await import("../app/api/assessments/[id]/items/route");
+    const add = await createItem(
+      new Request(`http://localhost/api/assessments/${id}/items`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body.candidates[0]),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(add.status).toBe(201);
+    const rows = await getDb().select().from(items).where(eq(items.assessment_id, id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.type).toBe("fill_blank");
+    const blanks = rows[0]!.config.blanks as { id: string; correct_option_id?: string; options?: { id: string; text: string }[] }[];
+    expect(blanks.map((b) => b.id)).toEqual(["b1", "b2"]);
+    expect(blanks[0]!.correct_option_id).toBe("o1");
+    expect(blanks[1]!.options?.find((o) => o.id === blanks[1]!.correct_option_id)?.text).toBe("leeward");
+  });
+});

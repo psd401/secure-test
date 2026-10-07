@@ -31,6 +31,21 @@ export function marker(id: string): string {
   return `[[${id}]]`;
 }
 
+/**
+ * FB slice 4: a read-only card's sentence (PDF import, Generate questions)
+ * with each `[[id]]` marker shown as a gap, for display only — the stored
+ * stem keeps its markers. `numbered` puts "(n)" after each gap, n = the
+ * marker's position, so the card's key lines ("Blank n: …") line up; a
+ * repeated marker gets the number of its first appearance.
+ */
+export function stemWithGaps(stem: string, opts: { numbered?: boolean } = {}): string {
+  const order = new Map<string, number>();
+  return stem.replace(/\[\[([A-Za-z0-9_-]{1,40})\]\]/g, (_m, id: string) => {
+    if (!order.has(id)) order.set(id, order.size + 1);
+    return opts.numbered ? `____ (${order.get(id)})` : "____";
+  });
+}
+
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

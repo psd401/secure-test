@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
 import { RenderedText as Rendered } from "@/components/app/RenderedText";
 import { chipLabel, tagScheme } from "@/lib/standards/tags";
+import { stemWithGaps } from "@/lib/items/fillBlankEditor";
 import {
   describeAddError,
   BATCH_DIFFICULTIES,
@@ -31,6 +32,7 @@ import {
   buildBatchFetchInit,
   describeGenerateError,
   emptyBatchForm,
+  fillBlankOptionLines,
   keyText,
   matchColumns,
   needsKeyCheck,
@@ -356,10 +358,11 @@ export function GenerateQuestionsDialog({
                     Total: {typeCountSum(values)}
                   </p>
                 ) : (
-                  // BG slice 6: the route's "mix" never writes match items.
+                  // BG slice 6 / FB slice 4: the route's "mix" never writes
+                  // match or fill-in-the-blank items.
                   <p className="text-xs text-muted-foreground">
-                    Mix uses multiple choice, short text and essay. For matching, choose how many
-                    of each.
+                    Mix uses multiple choice, short text and essay. For matching or fill in the
+                    blank, choose how many of each.
                   </p>
                 )}
                 <p
@@ -579,7 +582,12 @@ function ProposalCard({
               </span>
             ) : null}
           </div>
-          <Rendered text={p.stem} className="block whitespace-pre-line text-sm" />
+          {/* FB slice 4: a marker reads as a numbered gap; the key lines
+              ("Blank n: …") use the same numbers. Add posts the markers. */}
+          <Rendered
+            text={p.type === "fill_blank" ? stemWithGaps(p.stem, { numbered: true }) : p.stem}
+            className="block whitespace-pre-line text-sm"
+          />
           {p.choices && p.choices.length > 0 ? (
             <ul className="space-y-0.5 text-sm">
               {p.choices.map((ch) => (
@@ -595,6 +603,7 @@ function ProposalCard({
             </ul>
           ) : null}
           {p.type === "match" && p.pairs ? <MatchColumns proposal={p} /> : null}
+          {p.type === "fill_blank" ? <FillBlankOptions proposal={p} /> : null}
           {tags.length > 0 ? (
             <ul className="flex flex-wrap gap-1.5" aria-label="Standards on this question">
               {tags.map((tag) => {
@@ -692,6 +701,29 @@ export function MatchColumns({ proposal }: { proposal: BatchProposal }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+// FB slice 4: each dropdown blank's options in the teacher's order (D-6),
+// before the key — like a multiple-choice card's choices, with the correct one
+// only under "Show the key".
+export function FillBlankOptions({ proposal }: { proposal: BatchProposal }) {
+  const lines = fillBlankOptionLines(proposal);
+  if (lines.length === 0) return null;
+  return (
+    <ul aria-label="Options for each blank" className="space-y-0.5 text-sm text-muted-foreground">
+      {lines.map((line) => (
+        <li key={line.label}>
+          <span className="text-xs font-medium text-foreground">{line.label}:</span>{" "}
+          {line.options.map((text, i) => (
+            <span key={i}>
+              {i > 0 ? " · " : null}
+              <Rendered text={text} />
+            </span>
+          ))}
+        </li>
+      ))}
+    </ul>
   );
 }
 

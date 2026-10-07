@@ -42,7 +42,9 @@ export const BATCH_MIX_ITEM_TYPES = [
   ...AI_GENERABLE_ITEM_TYPES,
   "essay",
 ] as const;
-export const BATCH_GENERABLE_ITEM_TYPES = [...BATCH_MIX_ITEM_TYPES, "match"] as const;
+// FB slice 4 (docs/fill-in-blank-design.md, D-9): fill_blank joins on the
+// same terms as match — by count only, never in a "mix".
+export const BATCH_GENERABLE_ITEM_TYPES = [...BATCH_MIX_ITEM_TYPES, "match", "fill_blank"] as const;
 export type BatchGenerableItemType = (typeof BATCH_GENERABLE_ITEM_TYPES)[number];
 
 /** D-3: at most ten proposals per call. */
@@ -65,6 +67,7 @@ export const BatchTypeCounts = z
     short_text: TypeCount,
     essay: TypeCount,
     match: TypeCount,
+    fill_blank: TypeCount,
   })
   .strict();
 export type BatchTypeCounts = z.infer<typeof BatchTypeCounts>;

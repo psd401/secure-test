@@ -322,3 +322,84 @@ Design-tool only; no schema change, no migration, no client change.
 
 Tests: design-tool 3020 (full suite), typecheck clean. Rows 504–514 in
 `docs/design-tool-manual-checks.md`, NOT RUN.
+
+**Slice 4 BUILT 2026-10-07 (not deployed).** PDF import (D-3) and Generate
+questions (D-9). Design-tool only; no schema change, no migration, no client
+change.
+
+- **One normalizer** (`lib/ai/fillBlankNormalize.ts`, pure, shared by both
+  paths). The model is asked for blank ids `b1…`, a dropdown's options as
+  TEXT strings and its key as the option's text (`correct_option`), a typed
+  blank's accepted answers as `keys` — like match pairs and table labels, the
+  server assigns ids. It numbers options `o1…` (duplicates by text dropped,
+  ≤ 12), finds the key by text (case-insensitive) or by the model's own option
+  id, and drops a key that names no option rather than guess; `keys` / `key` /
+  `answer` / `correct_answer` become a trimmed, de-duplicated list (≤ 10); a
+  stem with `____` lines and no markers gets `[[id]]` per line when the counts
+  match; blanks are put in stem order; `correct_answer` is removed (the lone
+  typed blank's key when there is one blank). `normalizeProposalMath` now also
+  rewrites a dropdown's option text (BG-E1); keys stay plain.
+- **PDF prompt** (`PDF_EXTRACT_SYSTEM_PROMPT`): the `fill_blank` shape after
+  the table shape, and one rule after the table rule — blank lines inside a
+  sentence → the sentence with `[[b1]]…` markers, a word bank → dropdown
+  blanks with the whole bank as options and `correct_option` = the keyed
+  entry, otherwise typed blanks with `keys`; no key → omit; "A word bank for
+  blanks in sentences is fill_blank, not match." 5e1697e's "changes" rule,
+  the no-"e.g." sentence and the prose-before-fence parse are untouched (a
+  test asserts the first two are still in the prompt).
+- **Backstop** (`fillBlankFromUnderscoreStem`, E3's pattern): a short-text
+  candidate becomes `fill_blank` with typed blanks when EVERY run of 3+
+  underscores in its stem sits inside a sentence — on its own line, a letter
+  before it (a leading `2.` / `(b)` number does not count), the text before it
+  not ending in `:` or `=`, and something after it. `2. ____ 25000 m`,
+  `Answer: ____`, `x = ____` and a trailing line stay short text. The printed
+  answer becomes the key only when there is exactly one blank.
+- **Panel:** "Fill in the blank · n blanks"; the stem shows each marker as
+  `____` (`stemWithGaps`, display only); Add posts the candidate whole, so
+  `blanks` rides it. "Needs answer key" shows when no blank is keyed — a
+  panel-local check, because a keyless fill-in-the-blank is valid and
+  hand-scored (E3-F1) and slice 2's `needsAnswerKey` stays false for it.
+- **Mock:** `FB: <stem> | b1:<opt>,*<correct> | b2=<key>;<key>`.
+- **Generate questions:** `fill_blank` joins `BATCH_GENERABLE_ITEM_TYPES` and
+  the strict type-count map by count only, never under Mix (match's terms).
+  `FILL_BLANK_PROMPT_BLOCK` rides the user turn only when requested: the
+  sentence is the stem, 1–3 blanks, dropdown preferred with 3–4 options,
+  typed when the answer should be produced, every blank keyed, no marker in
+  `$…$`, no option ids. Validation drops an element with an unkeyed blank
+  (a generated item always has its keys, D-9) or with a marker inside `$…$`
+  (`markersInsideMath` — one of the first eight Bedrock elements did it).
+  The card shows the sentence with numbered gaps `____ (n)`, each dropdown's
+  options without a mark, and "Blank n: …" lines under Show the key; the
+  "Check the key" badge applies. The output guardrail already screened option
+  text (slice 1).
+- **Bedrock evidence (Sonnet 4.6).** A hand-made worksheet (our wording: a
+  two-blank sentence with a four-word bank, a one-blank sentence ending in the
+  line, a one-blank mid-sentence line with no bank, two `____ 25000 m`-style
+  count lines, a key) — 3 runs on the final prompt, 15 / 15 valid each time:
+  the bank sentence came back `fill_blank` with two dropdowns, all four words
+  on each, both keys right; the two no-bank sentences were `fill_blank` with
+  typed keys (the model returned them as short text with the line in the stem
+  on 2 of 3 runs and the backstop converted them); both count lines stayed
+  short text with key 2. Regression on two teacher samples: Combined Gas Law
+  8 valid / 0 rejected as this morning (5 runs: 8 three times, 12 twice — the
+  old prompt also gives 12 once in 4: the E4 "Final answer" twins vary); Unit
+  0 12 valid / 0 rejected on 6 of 6 runs, no `fill_blank` proposed (its
+  underscore runs are name lines and MC answer slots). A first version of the
+  rule also told the model that a stand-alone answer line stays short text;
+  with it Unit 0 dropped one of its "circle a value" rewrites in 3 of 7
+  runs (11 valid; the old prompt 7 of 7 at 12), so the sentence was removed —
+  the count lines stayed short text without it. Generate questions, two
+  batches twice: 4 fill-in-the-blank from a hand-written water-cycle passage
+  (4 / 4 kept both times, 7 blanks each, dropdown and typed mixed, every
+  key right) and 2 fill-in-the-blank + 2 short text on a ratio standard (4 / 4
+  both times); in the first run one ratio sentence put `[[b2]]` inside
+  `$(…)$` and printed the answer beside it — the drop rule above; option math
+  (`$(0, 0)$`, `${5.50}$`) came back rendered-ready.
+- **Readings, not changed:** the importer rewrites a `____ 25000 m` count line
+  into "How many significant figures does … have?" without a `changes` entry
+  (the 5e1697e rule's own behaviour); a sentence's closing full stop was
+  dropped on one run; the model writes typed keys as the bare word, so a
+  teacher widens spellings in the editor.
+
+Tests: design-tool 3040 (full suite), typecheck clean. Rows 515–522 in
+`docs/design-tool-manual-checks.md`, NOT RUN.

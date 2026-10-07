@@ -48,9 +48,9 @@ export function itemProposalText(item: CreateItemBody): string {
       }
     }
   }
-  // FB slice 1: a dropdown blank's options are student-visible text. (No
-  // provider proposes fill_blank before slice 4; total over the shape.) A
-  // typed blank's keys are not shown to the student, like a table's keys.
+  // FB slice 1: a dropdown blank's options are student-visible text; slice 4's
+  // batch generator proposes fill_blank, so this screens them. A typed
+  // blank's keys are not shown to the student, like a table's keys.
   if (shape.type === "fill_blank") {
     const blanks = (shape as Record<string, unknown>).blanks;
     if (Array.isArray(blanks)) {

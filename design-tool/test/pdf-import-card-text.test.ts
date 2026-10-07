@@ -26,3 +26,28 @@ describe("itemTypeName (HC-2)", () => {
     expect(itemTypeName("sort_into_bins")).toBe("sort into bins");
   });
 });
+
+// FB slice 4: the PDF card's "Needs answer key" badge and its gap display.
+describe("fill-in-the-blank card (FB slice 4)", () => {
+  test("no keyed blank → the badge; one keyed blank → none; other types unchanged", async () => {
+    const { candidateNeedsKey } = await import("../app/dashboard/[id]/PdfImportPanel");
+    expect(candidateNeedsKey({ type: "fill_blank", stem: "A [[b1]].", blanks: [{ id: "b1", kind: "text" }] })).toBe(true);
+    expect(
+      candidateNeedsKey({
+        type: "fill_blank",
+        stem: "A [[b1]] and [[b2]].",
+        blanks: [
+          { id: "b1", kind: "text", keys: ["x"] },
+          { id: "b2", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }] },
+        ],
+      }),
+    ).toBe(false);
+    expect(candidateNeedsKey({ type: "short_text", stem: "Q", correct_answer: "" })).toBe(true);
+    expect(candidateNeedsKey({ type: "essay", stem: "Q" })).toBe(false);
+  });
+  test("markers read as gaps on the card", async () => {
+    const { stemWithGaps } = await import("../lib/items/fillBlankEditor");
+    expect(stemWithGaps("The [[b1]] side and the [[b2]] side.")).toBe("The ____ side and the ____ side.");
+    expect(stemWithGaps("No markers.")).toBe("No markers.");
+  });
+});

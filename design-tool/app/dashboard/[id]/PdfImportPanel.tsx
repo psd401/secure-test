@@ -7,6 +7,8 @@ import { RenderedText } from "@/components/app/RenderedText";
 import { ChangedFromPdf } from "./ChangedFromPdf";
 import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
+import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
+import type { FillBlankBlank } from "@secure-test/schema";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
 // for scanned/image PDFs, has the model read the pages directly — slice 44
@@ -31,6 +33,8 @@ interface Candidate {
   columns?: { id: string; label: string }[];
   rows?: { id: string; label: string }[];
   corner?: string;
+  /** FB slice 4: fill_blank candidates carry their blanks (Add posts them). */
+  blanks?: FillBlankBlank[];
 }
 
 interface ExtractResult {
@@ -141,11 +145,24 @@ export function figureNumbersIn(text: string): number[] {
   return [...new Set([...text.matchAll(FIGURE_MARKER_RE)].map((m) => Number(m[1])))];
 }
 
+// FB slice 4: the card's "Needs answer key" badge. A fill-in-the-blank with
+// no keyed blank is a valid item (hand-scored per blank, E3-F1 — so it is not
+// a readiness gap and needsAnswerKey stays false for it), but on a PDF card
+// it means the document's key did not come through, like a keyless MC.
+export function candidateNeedsKey(c: Candidate): boolean {
+  if (c.type === "fill_blank") return !hasKeyedBlank(c.blanks ?? null);
+  return needsAnswerKey(c);
+}
+
 function typeLabel(c: Candidate): string {
   const name = itemTypeName(c.type);
   if (c.type === "match") return `${name} · ${c.pairs?.length ?? 0} pairs`;
   if (c.type === "drawing_upload") return `${name} · hand-scored`;
   if (c.type === "table") return `${name} · ${c.columns?.length ?? 0} × ${c.rows?.length ?? 0} cells`;
+  if (c.type === "fill_blank") {
+    const n = c.blanks?.length ?? 0;
+    return `${name} · ${n} blank${n === 1 ? "" : "s"}`;
+  }
   return name;
 }
 
@@ -187,7 +204,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   // E9 slice 2: the drafts Add all created, for the links under the notice.
   const [createdDrafts, setCreatedDrafts] = useState<{ id: string; name: string; count: number }[]>([]);
 
-  const keyless = result ? result.candidates.filter((c) => needsAnswerKey(c)).length : 0;
+  const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
   const needFigure = sets.filter((s) => s.needs_figure && !addedSets.has(s.id)).length;
 
   async function extract(file: File) {
@@ -931,7 +948,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                     <div className="min-w-0">
                       <span className="text-xs text-muted-foreground">
                         {typeLabel(c)}
-                        {needsAnswerKey(c) ? (
+                        {candidateNeedsKey(c) ? (
                           <span className="ml-2 rounded bg-warning-foreground/10 px-1.5 py-0.5 text-[11px] text-warning-foreground">
                             Needs answer key
                           </span>
@@ -939,7 +956,12 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                       </span>
                       {/* Beta feedback 2026-10-07: the raw LaTeX source read
                           as a broken import, so the card renders math like the editor. */}
-                      <RenderedText text={c.stem} className="block truncate text-sm" />
+                      {/* FB slice 4: a marker reads as a gap on the card;
+                          the posted stem keeps its [[b1]] markers. */}
+                      <RenderedText
+                        text={c.type === "fill_blank" ? stemWithGaps(c.stem) : c.stem}
+                        className="block truncate text-sm"
+                      />
                       <ChangedFromPdf changes={result?.changes?.[i] ?? []} />
                       {workTypeOptions(c.type).length > 0 && !added.has(i) ? (
                         <label className="mt-1 block text-xs text-muted-foreground">

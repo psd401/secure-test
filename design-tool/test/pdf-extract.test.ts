@@ -27,6 +27,7 @@ import {
   countNumberedItems,
   detectForms,
   fillableTableFromStem,
+  fillBlankFromUnderscoreStem,
   flagShortenedSources,
   formsReport,
   sourceSpanLengths,
@@ -1064,5 +1065,141 @@ describe("parsePdfExtraction — prose before a fenced block (2026-10-07)", () =
   test("a body that starts as JSON is unchanged", async () => {
     const { parsePdfExtraction } = await import("../lib/pdfImport/extractCore");
     expect(parsePdfExtraction('[{"type":"essay","stem":"a"}]', "t").candidates).toHaveLength(1);
+  });
+});
+
+// FB slice 4 (docs/fill-in-blank-design.md, D-3): a sentence with its blank
+// line INSIDE it is a fill-in-the-blank candidate; a stand-alone answer line
+// stays short text.
+describe("fill-in-the-blank candidates (FB slice 4)", () => {
+  test("the prompt offers the shape and the inside-the-sentence rule", () => {
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"type":"fill_blank"');
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("blank lines sit INSIDE a sentence");
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"correct_option"');
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("A word bank for blanks in sentences is fill_blank");
+    // The 2026-10-07 "changes" rule is still there (5e1697e).
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"changes":[{"original"');
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('Never write "e.g."');
+  });
+
+  test("backstop: a line inside the sentence becomes a marker; answer lines are left alone", () => {
+    expect(fillBlankFromUnderscoreStem("The ____ side of a hill gets more rain.")).toEqual({
+      stem: "The [[b1]] side of a hill gets more rain.",
+      blanks: [{ id: "b1", kind: "text" }],
+    });
+    expect(fillBlankFromUnderscoreStem("3. A cell's ______ makes energy, and its _____ makes protein.")?.stem).toBe(
+      "3. A cell's [[b1]] makes energy, and its [[b2]] makes protein.",
+    );
+    // End of the sentence still counts — the full stop follows.
+    expect(fillBlankFromUnderscoreStem("The capital of the state is ____.")?.blanks).toHaveLength(1);
+    // Stand-alone answer lines.
+    expect(fillBlankFromUnderscoreStem("2. ____ 25000 m")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("____ 25000 m")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("Answer: ____ g")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("x = ____")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("Name the gas. ____")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("Name the gas.\n____ (write it here)")).toBeNull();
+    // Two short underscores are not an answer line; one bad run spoils the stem.
+    expect(fillBlankFromUnderscoreStem("snake__case is fine")).toBeNull();
+    expect(fillBlankFromUnderscoreStem("The ____ is red.\n____ 25 m")).toBeNull();
+  });
+
+  test("a short answer with the line inside its sentence becomes fill_blank; one blank carries the key", () => {
+    const out = normalizePdfCandidate({
+      type: "short_text",
+      stem: "The ____ side of a hill gets more rain.",
+      correct_answer: " windward ",
+      source_number: 4,
+    }) as Record<string, unknown>;
+    expect(out.type).toBe("fill_blank");
+    expect(out.correct_answer).toBeUndefined();
+    expect(out.source_number).toBe(4);
+    expect(out.blanks).toEqual([{ id: "b1", kind: "text", keys: ["windward"] }]);
+    const v = validatePdfCandidates([out]);
+    expect(v.rejected).toHaveLength(0);
+    expect(v.candidates[0]!.type).toBe("fill_blank");
+    // Two blanks: which part answers which is unknown — no key at all.
+    const two = normalizePdfCandidate({
+      type: "short_text",
+      stem: "The ____ side is wet and the ____ side is dry.",
+      correct_answer: "windward, leeward",
+    }) as { blanks: { keys?: string[] }[] };
+    expect(two.blanks.map((b) => b.keys)).toEqual([undefined, undefined]);
+    // A count line stays short text with its answer.
+    const count = normalizePdfCandidate({ type: "short_text", stem: "2. ____ 25000 m", correct_answer: "2" }) as Record<string, unknown>;
+    expect(count.type).toBe("short_text");
+    expect(count.correct_answer).toBe("2");
+  });
+
+  test("model shape: option text gets ids o1…, the key is found by text, blanks follow the stem", () => {
+    const out = normalizePdfCandidate({
+      type: "fill_blank",
+      stem: "Plants take in [[b2]] and give off [[b1]].",
+      blanks: [
+        { id: "b1", kind: "dropdown", options: ["oxygen", "nitrogen", "Oxygen", " "], correct_option: "OXYGEN" },
+        { id: "b2", kind: "text", keys: ["carbon dioxide", "CO2", ""] },
+      ],
+    }) as { blanks: unknown[] };
+    expect(out.blanks).toEqual([
+      { id: "b2", kind: "text", keys: ["carbon dioxide", "CO2"] },
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [
+          { id: "o1", text: "oxygen" },
+          { id: "o2", text: "nitrogen" },
+        ],
+        correct_option_id: "o1",
+      },
+    ]);
+    expect(validatePdfCandidates([out]).rejected).toHaveLength(0);
+  });
+
+  test("model shape: a key naming no option is dropped, not guessed; ____ lines without markers get them", () => {
+    const out = normalizePdfCandidate({
+      type: "fill_blank",
+      stem: "Ice is ____ and steam is ____.",
+      blanks: [
+        { kind: "dropdown", options: [{ id: "x", text: "solid" }, { id: "y", text: "gas" }], correct_option_id: "x" },
+        { options: ["solid", "gas"], correct_option: "plasma" },
+      ],
+    }) as { stem: string; blanks: { id: string; correct_option_id?: string }[] };
+    expect(out.stem).toBe("Ice is [[b1]] and steam is [[b2]].");
+    expect(out.blanks.map((b) => b.id)).toEqual(["b1", "b2"]);
+    expect(out.blanks[0]!.correct_option_id).toBe("o1");
+    expect(out.blanks[1]!.correct_option_id).toBeUndefined();
+    expect(validatePdfCandidates([out]).rejected).toHaveLength(0);
+  });
+
+  test("a marker with no blank is still refused by the write boundary", () => {
+    const v = validatePdfCandidates([
+      { type: "fill_blank", stem: "A [[b1]] and a [[b2]].", blanks: [{ id: "b1", kind: "text", keys: ["x"] }] },
+    ]);
+    expect(v.rejected).toHaveLength(1);
+  });
+
+  test("the mock's FB segment: dropdown with a key, typed keys, keyless typed", async () => {
+    const text =
+      "FB: #5 The [[b1]] side is wet and the [[b2]] side is dry. | b1:*windward,leeward | b2=leeward;lee " +
+      "FB: Light travels at [[b1]] speed. | b1=";
+    const { candidates } = await mockPdfExtractor.extract({ text, page_count: 1 });
+    expect(readSourceNumbers(candidates)).toEqual([[5], []]);
+    const v = validatePdfCandidates(candidates);
+    expect(v.rejected).toHaveLength(0);
+    const first = v.candidates[0] as { type: string; blanks: unknown[] };
+    expect(first.type).toBe("fill_blank");
+    expect(first.blanks).toEqual([
+      {
+        id: "b1",
+        kind: "dropdown",
+        options: [
+          { id: "o1", text: "windward" },
+          { id: "o2", text: "leeward" },
+        ],
+        correct_option_id: "o1",
+      },
+      { id: "b2", kind: "text", keys: ["leeward", "lee"] },
+    ]);
+    expect((v.candidates[1] as { blanks: unknown[] }).blanks).toEqual([{ id: "b1", kind: "text" }]);
   });
 });
