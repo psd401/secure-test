@@ -15,7 +15,7 @@ option list, and the correct choice set per blank. Decisions marked
   cells (E3 D-2). `max_points` = the number of keyed blanks.
 - **D-3 The PDF import proposes it.** A worksheet sentence with `____`
   inside it (not a stand-alone answer line) becomes a fill-in-the-blank
-  candidate. Generate questions offers it in the same release (D-8).
+  candidate. Generate questions offers it in the same release (D-9).
 - **D-4 Older clients: version gate + Self Service message (9.1).** The
   delivery route refuses a bundle carrying `fill_blank` to a client whose
   `X-SecureTest-Version` is older than the release that renders it (and
