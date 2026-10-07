@@ -956,8 +956,17 @@ solve now:
 Open-beta teacher request (a Schoology dropdown fill-in-the-blank for
 reference). Side: both (a new item type, so a client release). D-1
 dropdown and typed blanks, D-2 one point per blank, D-3 the PDF import
-proposes it. Open questions 9.1–9.7 in the note (9.1 release gating is
-the structural one). Nothing built.
+proposes it, D-4 older clients are refused at delivery with a "update
+Secure Test in Self Service" message (no IT work), D-5 several accepted
+answers per typed blank, D-6 teacher's option order, D-7 no alternate
+answer sets, D-8 per blank only, D-9 Generate questions offers it in the
+same release, D-10 named "Fill in the blank". All decided; nothing built.
+
+**v2.0 discussion item (James, 2026-10-07): server-delivered renderer.**
+Ship the item-rendering page JS from the server so new item types need
+no client release; the native shell stays signed. Trade-off: the server
+controls code inside the locked web view (a bridge-hardening ADR). Not
+decided. `docs/fill-in-blank-design.md` §Release gating has the framing.
 
 ## Beta feedback batch A — PDF import (2026-10-07) — design-tool, BUILT
 

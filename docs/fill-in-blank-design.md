@@ -4,7 +4,7 @@ Design page, 2026-10-07. Source: open-beta teacher feedback, with a
 screenshot of a Schoology "fill in the blank — dropdown" question for
 reference: a sentence with numbered blanks, each blank with its own
 option list, and the correct choice set per blank. Decisions marked
-**D-n** are James's; **open questions** are listed last. Nothing is built.
+**D-n** are James's (D-1…D-10, all 2026-10-07). Nothing is built.
 
 ## Decided (James, 2026-10-07)
 
@@ -15,7 +15,29 @@ option list, and the correct choice set per blank. Decisions marked
   cells (E3 D-2). `max_points` = the number of keyed blanks.
 - **D-3 The PDF import proposes it.** A worksheet sentence with `____`
   inside it (not a stand-alone answer line) becomes a fill-in-the-blank
-  candidate. Generate questions may offer it later (open question 9.6).
+  candidate. Generate questions offers it in the same release (D-8).
+- **D-4 Older clients: version gate + Self Service message (9.1).** The
+  delivery route refuses a bundle carrying `fill_blank` to a client whose
+  `X-SecureTest-Version` is older than the release that renders it (and
+  to a client that sends no version). Like EX-2, the refusal arrives
+  before `begin()`, so nothing locks. The client shows: "This test needs
+  a newer version of Secure Test. Open Self Service, update Secure Test,
+  then join again." No IT work is needed: Self Service already offers the
+  update. A button that opens Self Service could come later if wanted.
+  It would need the policy id from IT for a direct link.
+- **D-5 Several accepted answers per typed blank (9.2).** A typed
+  blank carries `keys: string[]` (1 or more). Any one matching earns the
+  point.
+- **D-6 Dropdown options in the teacher's order (9.3)** for this
+  version. No shuffle.
+- **D-7 No alternate answer sets (9.4).** Schoology's "+" (a whole
+  second set of correct answers with its own percentage) is skipped.
+  Per-blank keys (D-5) cover most of it.
+- **D-8 One point per blank only (9.5).** No per-item "all or nothing"
+  option.
+- **D-9 Generate questions offers it now (9.6)**, in the same release as
+  the PDF import (slice 4).
+- **D-10 Teacher-facing name: "Fill in the blank" (9.7).**
 
 ## What exists that this stands on
 
@@ -69,8 +91,7 @@ blanks: [
   any stem. Option text takes math too.
 
 **Delivery.** `{ type: "fill_blank", stem, blanks: [{ id, kind,
-options? }] }`. Option order is shuffled per attempt only if open
-question 9.3 says so. No key field.
+options? }] }`. Options keep the teacher's order (D-6). No key field.
 
 **Response.** `{ type: "fill_blank", answers: { <blank id>: string } }`.
 A dropdown answer is the option id; a typed answer is the text. A blank
@@ -96,10 +117,21 @@ options:
   blank item until a date or flag says the fleet is current. This is
   simpler on the wire but asks the teacher to wait.
 
-Recommendation: **(a)**, plus a readiness note in the editor ("Students
-need Secure Test 1.6 or later") until the fleet has the release.
+**Decided: (a), as D-4**, plus a readiness note in the editor
+("Students need Secure Test 1.6 or later") until the fleet has the
+release.
 
-## Slices (after the open questions)
+**Deferred to v2.0 (James, 2026-10-07): a server-delivered renderer.**
+The page JS that draws items is bundled in the signed client today
+(`AssessmentPage.swift`), so every new item type needs a client release.
+If the server delivered that JS instead, new types would ship with a
+design-tool deploy, and the native shell (lockdown, sign-in, exits,
+spool, uploads) would stay signed. The cost: the server decides what
+code runs inside the locked web view, so the JS-to-native bridge must
+stay narrow and validated. That is an ADR-level decision. It is to
+discuss, not decided. The roadmap's v2.0 list carries it.
+
+## Slices
 
 0. This note + decisions.
 1. Schema (both bundles + response) + API write guard + scoring +
@@ -111,7 +143,7 @@ need Secure Test 1.6 or later") until the fleet has the release.
 3. Teacher read side: review queue, results matrix / per-student page,
    work packet, Google Docs release (essays only today, so this one is
    likely a no-op), instant feedback.
-4. PDF import (D-3): prompt shape + a backstop that turns `____` inside a
+4. PDF import (D-3) and Generate questions (D-9): prompt shapes + a backstop that turns `____` inside a
    sentence into a typed blank when the model returns a short answer with
    the line in its stem.
 5. Client: inline `<select>` and inline text field in the sentence
@@ -123,13 +155,5 @@ need Secure Test 1.6 or later") until the fleet has the release.
 
 ## Open questions
 
-- 9.1 Gating: (a) per-client-version at delivery, or (b) at publish?
-- 9.2 Typed blanks: allow several accepted answers per blank (e.g.
-  `leeward`, `lee`)? Short text today takes exactly one key.
-- 9.3 Shuffle dropdown options per attempt, or keep the teacher's order?
-- 9.4 Schoology's "+" adds whole alternate answer sets with their own
-  percentage. Skip this (per-blank keys cover most of it)?
-- 9.5 Partial credit only, or a per-item "all or nothing" option?
-- 9.6 Should Generate questions offer fill-in-the-blank in the same
-  release, or later?
-- 9.7 Item type name for teachers: "Fill in the blank"?
+None. All decided 2026-10-07 (D-1…D-10). The v2.0 server-delivered
+renderer above is a separate discussion.
