@@ -950,3 +950,22 @@ solve now:
   disables text selection outside inputs by design). Click-a-word-to-start
   or per-paragraph Speak controls are candidates.
 
+
+## Row FB — fill in the blank (scoped 2026-10-07) — `docs/fill-in-blank-design.md` is the record
+
+Open-beta teacher request (a Schoology dropdown fill-in-the-blank for
+reference). Side: both (a new item type, so a client release). D-1
+dropdown and typed blanks, D-2 one point per blank, D-3 the PDF import
+proposes it. Open questions 9.1–9.7 in the note (9.1 release gating is
+the structural one). Nothing built.
+
+## Beta feedback batch A — PDF import (2026-10-07) — design-tool, BUILT
+
+Same report: the PDF import's file control was easy to miss, and a
+teacher read the proposal cards' raw LaTeX as a broken import. Built
+on `main`, one commit each: a shared `FilePicker` ("Choose a PDF…"
+button) on all seven file inputs; proposal cards render math and use
+the editor's type labels (HC-2); the import rewrites instructions a
+student cannot do on screen (underline, circle) and reports every
+change, guessed symbols included, as a blue "Changed from the PDF"
+disclosure on the card. Bedrock evidence in the third commit's message.
