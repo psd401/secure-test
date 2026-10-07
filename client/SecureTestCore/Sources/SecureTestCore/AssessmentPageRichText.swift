@@ -364,7 +364,16 @@ extension AssessmentPage {
             if (name !== 'hr') {
               var indented = (name === 'p' || name === 'div') && node.attrs['data-indent'] === 'first';
               openParagraph(indented);
+              var opened = para;
               children(marks);
+              // RT-1, the server's rule (lib/richText/essayHtml.ts): WebKit's
+              // list command leaves the list inside the paragraph it started in
+              // (a ul inside a p); that wrapper holds no text of its own and
+              // is not a blank line the student typed.
+              if (opened && opened.inlines.length === 0 && richHoldsStructure(node)) {
+                var at = blocks.indexOf(opened);
+                if (at >= 0) blocks.splice(at, 1);
+              }
             }
             endParagraph();
             return;
@@ -479,6 +488,34 @@ extension AssessmentPage {
       function richBlocksFromHtml(html) {
         return richNormalise(richBuildTree(richTokenize(String(html === undefined || html === null ? '' : html))));
       }
+      // Does this tree element contain a list, list item or block below it?
+      function richHoldsStructure(el) {
+        var kids = el.children || [];
+        for (var i = 0; i < kids.length; i++) {
+          var c = kids[i];
+          if (c.kind === 'text') continue;
+          if (c.name === 'ul' || c.name === 'ol' || c.name === 'li' || RICH_BLOCKS[c.name] === true) return true;
+          if (richHoldsStructure(c)) return true;
+        }
+        return false;
+      }
+
+      // RT-1: a live paragraph / div whose children include a list (WebKit
+      // puts its list inside the paragraph). Not a line of its own anywhere positions are
+      // counted. It is NOT repaired live: just after a list command the new item
+      // is still empty, and a rebuild would drop the list (empty lists are
+      // tidied away). The cleaned html and an undo rebuild drop it instead.
+      function richListWrapper(el) {
+        var name = richNodeName(el);
+        if (name !== 'p' && name !== 'div') return false;
+        var kids = el.childNodes || [];
+        for (var i = 0; i < kids.length; i++) {
+          var n = richNodeName(kids[i]);
+          if (kids[i].nodeType === 1 && (n === 'ul' || n === 'ol')) return true;
+        }
+        return false;
+      }
+
       function richBlocksFromDom(node) { return richNormalise(richTreeFromDom(node)); }
       function richSanitize(html) { return richSerialize(richBlocksFromHtml(html)); }
       function richTextFromHtml(html) { return richText(richBlocksFromHtml(html)); }
@@ -569,7 +606,7 @@ extension AssessmentPage {
               // RT-1: skipped here as the DOM reader skips it, so a position
               // taken in the live box lands in the same place in the rebuild.
               if (richInvisibleBlock(k)) continue;
-              if (RICH_LINE_TAGS[name] === true) {
+              if (RICH_LINE_TAGS[name] === true && !richListWrapper(k)) {
                 if (seenLine) pos += 1;
                 seenLine = true;
               }
@@ -603,14 +640,23 @@ extension AssessmentPage {
       function richPointAt(box, target) {
         var hit = null;
         var best = { node: box, offset: 0 };
+        // RT-2: the end of the last text at or before the target. A caret put
+        // on a boundary of the box itself (seen in WebKit: the box @ 1 after an
+        // undo) sits outside every paragraph, so the next keystroke would make
+        // text outside a block; the end of the text before it is where the
+        // student was.
+        var lastText = null;
         richWalk(box, function (node, index, pos) {
           if (pos <= target) best = { node: node, offset: index };
           return pos > target;
         }, function (node, pos, len) {
           if (pos <= target && target <= pos + len) { hit = { node: node, offset: target - pos }; return true; }
+          if (pos + len <= target) lastText = { node: node, offset: len };
           return false;
         });
-        return hit || best;
+        if (hit) return hit;
+        if (lastText && best.node === box) return lastText;
+        return best;
       }
 
       // ---- the undo history (D-6) ----

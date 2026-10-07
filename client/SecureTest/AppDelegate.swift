@@ -1486,6 +1486,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func zoomActualSize() { controller?.actualSize() }
 
+    @objc private func dumpFormattingBoxes() {
+        guard BuildPosture.allowsOfflineBundle else { return }
+        controller?.debugDumpFormattingBoxes()
+    }
+
     /// The standard About panel, with the build stamp in the version line.
     ///
     /// `.version` is set to "" on purpose: AppKit renders `.applicationVersion`
@@ -1555,6 +1560,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             open.target = self
             open.isEnabled = OfflineBundle.canOpen(on: screen)
             openBundleItem = open
+            // RT-1 / RT-2 diagnostics: Debug only, like everything in this menu.
+            let dump = fileMenu.addItem(
+                withTitle: "Dump Formatting Box to Log",
+                action: #selector(dumpFormattingBoxes),
+                keyEquivalent: ""
+            )
+            dump.target = self
+            dump.isEnabled = true
             fileMenuItem.submenu = fileMenu
             mainMenu.addItem(fileMenuItem)
         }

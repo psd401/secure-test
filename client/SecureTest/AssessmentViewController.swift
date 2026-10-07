@@ -577,6 +577,48 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
     func actualSize() { setZoom(ZoomLevel.minimum) }
 
+    /// RT-1 / RT-2 diagnostics (docs/rich-text-essay-design.md §Progress,
+    /// Debug builds only — the menu item does not exist in Release): writes
+    /// each formatting box's live DOM and the selection to the app log, so the
+    /// WebKit structure behind the stray empty line and the caret jump can be
+    /// read without an inspectable web view. Host-initiated; adds nothing to
+    /// the page's message bridge.
+    func debugDumpFormattingBoxes() {
+        let script = """
+        (function () {
+          function path(node, root) {
+            var p = [];
+            while (node && node !== root) {
+              var parent = node.parentNode;
+              if (!parent) break;
+              p.unshift(Array.prototype.indexOf.call(parent.childNodes, node) +
+                (node.nodeType === 1 ? ':' + node.nodeName.toLowerCase() : ':#text'));
+              node = parent;
+            }
+            return p.join('/');
+          }
+          var sel = window.getSelection();
+          return JSON.stringify(Array.prototype.map.call(
+            document.querySelectorAll('[contenteditable="true"]'),
+            function (box) {
+              var inBox = sel && sel.rangeCount && box.contains(sel.anchorNode);
+              return {
+                html: box.innerHTML,
+                anchor: inBox ? path(sel.anchorNode, box) + '@' + sel.anchorOffset : null,
+                focus: inBox ? path(sel.focusNode, box) + '@' + sel.focusOffset : null
+              };
+            }));
+        })()
+        """
+        webView.evaluateJavaScript(script) { [log] result, error in
+            if let text = result as? String {
+                log("rich box dump: \(text)")
+            } else {
+                log("rich box dump failed: \(error.map { "\($0)" } ?? "no result")")
+            }
+        }
+    }
+
     func setZoom(_ factor: Double) {
         let clamped = ZoomLevel.clamp(factor)
         applyMagnification(clamped)

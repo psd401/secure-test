@@ -13,6 +13,15 @@ describe("sanitizeEssayHtml", () => {
     ["the allowed subset passes unchanged", "<p>a <strong>b</strong> <em>c</em> <u>d</u><br>e</p>", "<p>a <strong>b</strong> <em>c</em> <u>d</u><br>e</p>"],
     ["first-line indent is kept (D-4)", '<p data-indent="first">Para</p>', '<p data-indent="first">Para</p>'],
     ["lists one level (D-9)", "<ul><li>a</li></ul><ol><li>b</li></ol>", "<ul><li>a</li></ul><ol><li>b</li></ol>"],
+    // RT-1: WebKit's list command leaves the list inside its paragraph; the
+    // wrapper is not a blank line, but a typed blank paragraph still is.
+    [
+      "a list inside a paragraph drops the empty wrapper (RT-1)",
+      "<p>Plain <b>bold</b></p><p><ul><li>first item</li></ul></p><p>after</p>",
+      "<p>Plain <strong>bold</strong></p><ul><li>first item</li></ul><p>after</p>",
+    ],
+    ["text around a wrapped list keeps its paragraphs (RT-1)", "<p>x<ul><li>y</li></ul>z</p>", "<p>x</p><ul><li>y</li></ul><p>z</p>"],
+    ["a typed blank paragraph stays (RT-1 guard)", "<p>a</p><p><br></p><p>b</p>", "<p>a</p><p><br></p><p>b</p>"],
     ["<b> / <i> map to strong / em", "<p><b>x</b><i>y</i></p>", "<p><strong>x</strong><em>y</em></p>"],
     ["<div> maps to <p>, keeping the indent", '<div data-indent="first">One</div><div>Two</div>', '<p data-indent="first">One</p><p>Two</p>'],
     ["headings and other blocks become paragraphs", "<h1>T</h1><blockquote>Q</blockquote>", "<p>T</p><p>Q</p>"],

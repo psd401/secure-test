@@ -426,3 +426,30 @@ the list; Indent after two Undos still puts the caret mid-word ("bold
 |part" from "part|"). The slice-4 causes were inferred from code; the
 real WebKit DOM was not seen. Next step: inspect the box's DOM in WebKit
 (the Debug web view is not inspectable today) before another fix.
+
+**RT-1 / RT-2 FIXED 2026-10-07 (main session), verified in the Debug
+client.** A Debug-only File → "Dump Formatting Box to Log" (host-run
+`evaluateJavaScript`, nothing added to the page's bridge, absent in
+Release with the rest of the File menu) showed the real WebKit DOM:
+- **RT-1 cause:** WebKit's list command leaves the list INSIDE the
+  paragraph it started in — `<p>…</p><p><ul><li>first item</li></ul></p>`.
+  Both the server sanitiser and its client port turned the empty wrapper
+  into `<p><br></p>`, so the saved html / text carried a blank line the
+  student never typed, and an undo rebuilt it visibly. **Fix:** a
+  `<p>` / `<div>` that held a list or block and no text of its own emits
+  no paragraph (server `holdsStructure`, client `richHoldsStructure`); a
+  typed blank paragraph (`<p><br></p>`, `<p></p>`) stays. The client's
+  position counter treats such a wrapper as no line (`richListWrapper`).
+  A live repair of the wrapper was tried and REMOVED: right after the
+  list command the new item is empty, the rebuild tidied the empty list
+  away and the typing landed in the first paragraph.
+- **RT-2 cause:** after an undo the caret was restored on the box itself
+  (`box @ 1`), outside every paragraph; the "mid-word" caret after Indent
+  was that caret painted at its old x while the text moved 2em right.
+  **Fix:** `richPointAt` falls back to the end of the last text before
+  the target instead of a box-level boundary.
+- Re-run of the same sequence: no blank line after Undo; after two Undos
+  + Indent, a typed "X" lands at the end ("bold partX"); the dump shows
+  `<p data-indent="first">Plain start <strong>bold partX</strong></p>`
+  with the caret inside the text. Tests: three cases added to the shared
+  sanitiser table (server) and both client tables.

@@ -222,6 +222,11 @@ final class RendererRichTextTests: XCTestCase {
         ("<p title=\"a>b\">x</p>", "<p>x</p>"),
         ("", ""),
         ("<script>x</script><img src=x>", ""),
+        // RT-1 (the server's table): WebKit's list inside a paragraph.
+        ("<p>Plain <b>bold</b></p><p><ul><li>first item</li></ul></p><p>after</p>",
+         "<p>Plain <strong>bold</strong></p><ul><li>first item</li></ul><p>after</p>"),
+        ("<p>x<ul><li>y</li></ul>z</p>", "<p>x</p><ul><li>y</li></ul><p>z</p>"),
+        ("<p>a</p><p><br></p><p>b</p>", "<p>a</p><p><br></p><p>b</p>"),
     ]
 
     /// `essayTextFromHtml(sanitizeEssayHtml(html))` in the same file.
@@ -238,6 +243,12 @@ final class RendererRichTextTests: XCTestCase {
         ("<p>a&nbsp;&nbsp;b</p>", "a  b"),
         ("<p>  a \n  b  </p>", "a b"),
         ("", ""),
+        // RT-1: no blank line from WebKit's list-inside-a-paragraph wrapper;
+        // a typed blank paragraph is still one.
+        ("<p>Plain <b>bold</b></p><p><ul><li>first item</li></ul></p><p>after</p>",
+         "Plain bold\n• first item\nafter"),
+        ("<p>x<ul><li>y</li></ul>z</p>", "x\n• y\nz"),
+        ("<p>a</p><p><br></p><p>b</p>", "a\n\nb"),
     ]
 
     /// The pure functions evaluated on their own, at the harness's top level.

@@ -348,6 +348,15 @@ function isIndented(el: ElementNode): boolean {
 
 const WS_ONLY = /^[ \t\n\r\f]*$/;
 
+/** Does this element contain a list, list item or block element anywhere below it? */
+function holdsStructure(el: ElementNode): boolean {
+  return el.children.some(
+    (c) =>
+      c.kind !== "text" &&
+      (c.name === "ul" || c.name === "ol" || c.name === "li" || BLOCKS.has(c.name) || holdsStructure(c)),
+  );
+}
+
 function normalise(root: ElementNode): Block[] {
   const blocks: Block[] = [];
   let para: Extract<Block, { kind: "p" }> | null = null;
@@ -444,7 +453,19 @@ function normalise(root: ElementNode): Block[] {
       endParagraph();
       if (name !== "hr") {
         openParagraph(isIndented(node));
+        const opened = para as Extract<Block, { kind: "p" }> | null;
         children(marks);
+        // RT-1 (docs/rich-text-essay-design.md §Progress): WebKit's list
+        // command leaves the list INSIDE the paragraph it started in
+        // (`<p><ul>…</ul></p>`). The paragraph opened for that wrapper holds
+        // nothing of its own, and kept it would be a blank line the student
+        // never typed. A wrapper that held a list or another block and no
+        // text is dropped; an empty `<p></p>` / `<p><br></p>` with nothing
+        // structural inside is still a blank line and stays.
+        if (opened && opened.inlines.length === 0 && holdsStructure(node)) {
+          const at = blocks.indexOf(opened);
+          if (at >= 0) blocks.splice(at, 1);
+        }
       }
       endParagraph();
       return;
