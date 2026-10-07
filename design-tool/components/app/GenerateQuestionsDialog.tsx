@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FilePicker } from "@/components/app/FilePicker";
 import {
   Dialog,
   DialogContent,
@@ -400,14 +401,12 @@ export function GenerateQuestionsDialog({
                   A PDF, Word (.docx), Markdown or text file, up to 5 MB — the questions are
                   drawn from it.
                 </label>
-                <input
+                <FilePicker
                   key={fileKey}
                   id={`${uid}-file`}
-                  type="file"
                   accept={BATCH_FILE_ACCEPT}
-                  onChange={(e) => patch({ file: e.target.files?.[0] ?? null })}
+                  onFile={(f) => patch({ file: f })}
                   aria-describedby={errors.file ? `${uid}-file-err` : undefined}
-                  className="block text-sm"
                 />
                 {values.file ? (
                   <button

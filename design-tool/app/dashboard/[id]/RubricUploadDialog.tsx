@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { FilePicker } from "@/components/app/FilePicker";
 import { Textarea } from "@/components/ui/textarea";
 import { isDefaultRubric } from "./RubricEditor";
 
@@ -319,13 +320,12 @@ export function RubricUploadDialog({ assessmentId, currentRubric, onApply, disab
 
           {!proposal ? (
             <div className="space-y-3">
-              <input
-                type="file"
+              <FilePicker
                 accept=".pdf,.docx,.md,.txt"
+                label="Choose the rubric file…"
                 disabled={busy}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onFile={setFile}
                 aria-label="Rubric file"
-                className="block text-sm"
               />
               <Textarea
                 value={text}

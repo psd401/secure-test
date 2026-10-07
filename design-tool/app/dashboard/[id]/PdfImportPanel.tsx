@@ -2,6 +2,7 @@
 import { needsAnswerKey } from "./readiness";
 
 import { useState } from "react";
+import { FilePicker } from "@/components/app/FilePicker";
 
 // S-f-1 (docs/multi-source-stimulus-design.md, Row S-f sitting 2026-09-09):
 // the importer writes money as `\$57,600` so the renderers never open math
@@ -557,15 +558,13 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
             ones you want, then edit them in place. Scanned/image PDFs are
             read by AI OCR (up to 30 pages).
           </p>
-          <input
-            type="file"
+          <FilePicker
             accept="application/pdf,.pdf"
+            label="Choose a PDF…"
             disabled={disabled || busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
+            onFile={(f) => {
               if (f) void extract(f);
             }}
-            className="block text-xs"
           />
           {busy ? (
             <p className="text-xs text-muted-foreground">

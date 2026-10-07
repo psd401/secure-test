@@ -11,7 +11,7 @@ import {
 import { importErrorCopy } from "@/lib/ui/errorCopy";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FilePicker } from "@/components/app/FilePicker";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/app/PageHeader";
 import { SubmitButton } from "@/components/app/SubmitButton";
@@ -99,7 +99,7 @@ export default async function ImportPage({ searchParams }: ImportPageProps) {
       <form action={importAssessment} encType="multipart/form-data" className="mt-8 space-y-5">
         <div className="space-y-2">
           <Label htmlFor="file">Assessment file (.json)</Label>
-          <Input id="file" type="file" name="file" accept="application/json,.json" required />
+          <FilePicker id="file" name="file" accept="application/json,.json" label="Choose the .json file…" required />
         </div>
         <div className="flex items-center gap-3">
           <SubmitButton pendingLabel="Importing…">Import</SubmitButton>

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FilePicker } from "@/components/app/FilePicker";
 import { EmptyState } from "@/components/app/EmptyState";
 import { uploadErrorCopy } from "@/lib/ui/errorCopy";
 
@@ -52,6 +52,7 @@ export function UploadsPanel({ initialAssets }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AssetView | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -78,7 +79,7 @@ export function UploadsPanel({ initialAssets }: Props) {
         setError(await errorCode(res));
         return;
       }
-      if (fileRef.current) fileRef.current.value = "";
+      setPickerKey((k) => k + 1);
       refresh();
     } catch {
       setError("network");
@@ -114,12 +115,12 @@ export function UploadsPanel({ initialAssets }: Props) {
         onSubmit={onUpload}
         className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed bg-card px-4 py-3"
       >
-        <Input
-          ref={fileRef}
-          type="file"
+        <FilePicker
+          key={pickerKey}
+          inputRef={fileRef}
           accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
           aria-label="Image file"
-          className="max-w-sm"
+          label="Choose an image…"
         />
         <Button type="submit" disabled={busy}>
           {busy ? "Uploading…" : "Upload"}

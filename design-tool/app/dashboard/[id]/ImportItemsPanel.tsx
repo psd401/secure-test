@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FilePicker } from "@/components/app/FilePicker";
 
 // Slice 41: CSV item import with a preview-before-commit step, mirroring
 // the TIDE importer's review pattern. Paste or upload a CSV, Preview shows
@@ -107,15 +108,13 @@ export function ImportItemsPanel({ assessmentId, disabled, onImported }: Props) 
             multi-select. Short-text <em>correct</em>: the answer. Essay:
             optional <code>rubric_json</code>.
           </p>
-          <input
-            type="file"
+          <FilePicker
             accept=".csv,text/csv"
+            label="Choose a CSV file…"
             disabled={disabled || busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
+            onFile={(f) => {
               if (f) void onFile(f);
             }}
-            className="block text-xs"
           />
           <textarea
             value={csv}

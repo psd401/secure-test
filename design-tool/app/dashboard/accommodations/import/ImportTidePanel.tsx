@@ -7,8 +7,8 @@ import type { ImportTideResult } from "@/lib/api/students";
 import { ApiError, tideImportErrorCopy } from "@/lib/ui/errorCopy";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { FilePicker } from "@/components/app/FilePicker";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 async function readError(res: Response): Promise<ApiError> {
@@ -71,11 +71,11 @@ export function ImportTidePanel({ returnTo }: { returnTo: string | null }) {
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="tide-file">TIDE Student Settings export (.xlsx)</Label>
-          <Input
+          <FilePicker
             id="tide-file"
-            type="file"
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            label="Choose the .xlsx file…"
+            onFile={setFile}
           />
         </div>
         <div className="flex items-center gap-3">
