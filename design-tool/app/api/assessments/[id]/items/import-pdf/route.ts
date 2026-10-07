@@ -13,6 +13,7 @@ import {
   formsReport,
   numberingReport,
   readSourceNumbers,
+  readCandidateChanges,
   validatePdfCandidates,
   validateProposedSets,
 } from "@/lib/pdfImport/extractCore";
@@ -268,6 +269,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   const validSourceNumbers = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawSourceNumbers[rawIndex] ?? []);
+  // Beta feedback 2026-10-07: per validated candidate, what the model
+  // changed from the printed text; the card flags it in blue.
+  const rawChanges = readCandidateChanges(outcome.result.candidates);
+  const changes = [...rawToValid.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([rawIndex]) => rawChanges[rawIndex] ?? []);
   const proposed_sets = [
     ...setValidation.sets,
     ...(scanned ? [] : adjacencyFallback(figures.length, modelText, validSourceNumbers, setValidation.sets)),
@@ -296,6 +303,8 @@ export async function POST(req: Request, ctx: RouteContext) {
     // without the per-candidate errors the teacher just saw "N skipped".
     rejected,
     rejected_count: rejected.length,
+    // Aligned with `candidates`: [] for an item printed as is.
+    changes,
     truncated,
     ...numbering,
     // E5 slice 4: every raster figure above MIN_FIGURE_PT, in document order,

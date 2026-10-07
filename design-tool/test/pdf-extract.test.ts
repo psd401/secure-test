@@ -34,6 +34,7 @@ import {
   numberingReport,
   parsePdfCandidates,
   readSourceNumbers,
+  readCandidateChanges,
   stripFigureMarkers,
   validatePdfCandidates,
 } from "../lib/pdfImport/extractCore";
@@ -1004,5 +1005,64 @@ describe("table candidates (E3 slice 4)", () => {
   test("the prompt offers the table shape and its rule", () => {
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"type":"table"');
     expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("EMPTY cells");
+  });
+});
+
+// Beta feedback 2026-10-07: instructions a student cannot do on screen are
+// rewritten and guessed symbols are reported, both through `changes`.
+describe("readCandidateChanges (beta feedback 2026-10-07)", () => {
+  test("both prompts ask for the changes field", () => {
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain('"changes":[{"original"');
+    expect(PDF_EXTRACT_SYSTEM_PROMPT).toContain("cannot underline");
+    expect(PDF_OCR_USER_PROMPT).toContain('"changes"');
+  });
+
+  test("aligned with the raw list, sanitised, [] when absent", () => {
+    const out = readCandidateChanges([
+      {
+        type: "short_text",
+        changes: [
+          { original: " (Underline the significant digits.) ", changed_to: "", reason: "cannot underline on screen" },
+          { original: "ˍ", changed_to: "−", reason: "unclear operator in the PDF" },
+          { original: "same", changed_to: "same", reason: "no-op" },
+          { original: "", changed_to: "x", reason: "no original" },
+          "not an object",
+          { original: 7, changed_to: "x" },
+        ],
+      },
+      { type: "essay" },
+      null,
+      { type: "essay", changes: "nope" },
+    ]);
+    expect(out).toEqual([
+      [
+        { original: "(Underline the significant digits.)", changed_to: "", reason: "cannot underline on screen" },
+        { original: "ˍ", changed_to: "−", reason: "unclear operator in the PDF" },
+      ],
+      [],
+      [],
+      [],
+    ]);
+  });
+
+  test("caps the count and the length", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ original: `o${i}`, changed_to: "c", reason: "r".repeat(500) }));
+    const [list] = readCandidateChanges([{ changes: many }]);
+    expect(list).toHaveLength(10);
+    expect(list![0]!.reason).toHaveLength(300);
+  });
+});
+
+describe("parsePdfExtraction — prose before a fenced block (2026-10-07)", () => {
+  test("reads the first fenced block when the body does not start as JSON", async () => {
+    const { parsePdfExtraction } = await import("../lib/pdfImport/extractCore");
+    const text =
+      'I need to analyze this test document carefully.\n\n```json\n{"items":[{"type":"essay","stem":"Why [x]?"}],"item_sets":[]}\n```';
+    const r = parsePdfExtraction(text, "t");
+    expect(r.candidates).toEqual([{ type: "essay", stem: "Why [x]?" }]);
+  });
+  test("a body that starts as JSON is unchanged", async () => {
+    const { parsePdfExtraction } = await import("../lib/pdfImport/extractCore");
+    expect(parsePdfExtraction('[{"type":"essay","stem":"a"}]', "t").candidates).toHaveLength(1);
   });
 });

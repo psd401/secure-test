@@ -34,10 +34,22 @@ import type {
 
 const SEGMENT_RE = /(MC|ST|ES|MA|DR|TB|SET):\s*(.*?)(?=(?:MC|ST|ES|MA|DR|TB|SET):|$)/gs;
 
-function parseSegment(kind: string, bodyRaw: string): unknown | null {
+// Beta feedback 2026-10-07: "{{changed:<original>::<changed_to>::<reason>}}"
+// anywhere in a segment body becomes one entry of the candidate's `changes`
+// and is removed from the text.
+const CHANGED_RE = /\{\{changed:(.*?)::(.*?)::(.*?)\}\}/g;
+
+function parseSegment(kind: string, bodyWithChanges: string): unknown | null {
+  const changes = [...bodyWithChanges.matchAll(CHANGED_RE)].map((m) => ({
+    original: m[1]!,
+    changed_to: m[2]!,
+    reason: m[3]!,
+  }));
+  const bodyRaw = bodyWithChanges.replace(CHANGED_RE, "");
   const numbered = /^#(\d+)(?:-(\d+))?\s*/.exec(bodyRaw.trim());
   const body = numbered ? bodyRaw.trim().slice(numbered[0].length) : bodyRaw.trim();
-  const withNumber = (cand: Record<string, unknown>) => {
+  const withNumber = (candIn: Record<string, unknown>) => {
+    const cand = changes.length > 0 ? { ...candIn, changes } : candIn;
     if (!numbered) return cand;
     const from = Number(numbered[1]);
     if (numbered[2] === undefined) return { ...cand, source_number: from };

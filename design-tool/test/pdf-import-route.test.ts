@@ -122,6 +122,30 @@ describe("POST items/import-pdf", () => {
     expect(await db.select().from(items).where(eq(items.assessment_id, id))).toHaveLength(0);
   });
 
+  // Beta feedback 2026-10-07: `changes` is aligned with the VALIDATED
+  // candidates — a rejected candidate before it does not shift the flags.
+  test("changes ride beside the validated candidates", async () => {
+    const id = await createAssessment("Changes");
+    const res = await postPdf(
+      id,
+      makeTextPdf([
+        "MC: Bad one | a:only | *a",
+        "ST: Sig figs in 0.002060 g? {{changed:(Underline.)::::no underline}} | 4",
+        "ES: Explain rounding.",
+      ]),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string }[];
+      changes: { original: string; changed_to: string; reason: string }[][];
+    };
+    expect(body.candidates.map((c) => c.type)).toEqual(["short_text", "essay"]);
+    expect(body.changes).toEqual([
+      [{ original: "(Underline.)", changed_to: "", reason: "no underline" }],
+      [],
+    ]);
+  });
+
   // E1/E2/E8 (2026-09-01): match + drawing candidates come through, and the
   // response compares the PDF's own numbering with what was extracted.
   test("match/drawing candidates, numbering report with missing numbers, match adds", async () => {

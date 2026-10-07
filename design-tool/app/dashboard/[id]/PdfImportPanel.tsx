@@ -4,6 +4,8 @@ import { needsAnswerKey } from "./readiness";
 import { useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
 import { RenderedText } from "@/components/app/RenderedText";
+import { ChangedFromPdf } from "./ChangedFromPdf";
+import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
@@ -38,6 +40,9 @@ interface ExtractResult {
   candidates: Candidate[];
   rejected: { index: number; errors: string[] }[];
   rejected_count: number;
+  /** Aligned with `candidates`: what the model changed from the printed
+   *  text (beta feedback 2026-10-07). Absent from an older server. */
+  changes?: CandidateChange[][];
   truncated: boolean;
   // E8 (lib/pdfImport/extractCore.ts numberingReport): the document's own
   // numbering vs what came back.
@@ -935,6 +940,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                       {/* Beta feedback 2026-10-07: the raw LaTeX source read
                           as a broken import, so the card renders math like the editor. */}
                       <RenderedText text={c.stem} className="block truncate text-sm" />
+                      <ChangedFromPdf changes={result?.changes?.[i] ?? []} />
                       {workTypeOptions(c.type).length > 0 && !added.has(i) ? (
                         <label className="mt-1 block text-xs text-muted-foreground">
                           Add as{" "}

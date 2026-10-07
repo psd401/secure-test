@@ -55,6 +55,32 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   "correct_choice_ids / correct_answer. Preserve the question wording. Do",
   "not invent questions that are not in the text. Choice ids are short",
   "letters (a, b, c...). Return [] if you find no items.",
+  // Beta feedback 2026-10-07 (sig-fig quiz): "(Underline the significant
+  // digits.)" came through on a short-answer item a student cannot underline,
+  // and an unreadable operator between two measurements was silently read as
+  // a minus. Both are now allowed AND reported, so the card can show the
+  // teacher what was changed (readCandidateChanges). The first Bedrock run
+  // rewrote "circle the digits" with an example answer in the stem ("e.g.
+  // '507 — 3'") — hence the no-hint sentence.
+  "The student answers on a computer: they type, click, choose or draw, and",
+  "cannot underline, circle, highlight or mark up the printed page. When a",
+  "question asks for something the student cannot do on screen, rewrite",
+  "that instruction into one they can do with the item type you chose",
+  '(in a short answer, "Underline the significant digits" becomes "Type the',
+  'significant digits") or drop it when the answer asked for does not need',
+  "it. When the printed question asks for two things and one of them is",
+  "the mark-up (circle the digits AND give the count), keep only the other",
+  '(ask for the count). Never write "e.g.", a sample answer, or a format',
+  "example into a stem: any example gives an answer away. When a character or symbol is garbled or unreadable and you infer it",
+  "(a missing operator between two numbers, a broken exponent or unit), use",
+  "your best reading. The teacher must see every such change, so report",
+  "each one on EVERY item it affects — an instruction dropped from a",
+  "heading that covers several questions goes on each of them, and a",
+  "symbol you could not read and inferred always counts — as",
+  '"changes":[{"original":"the printed text","changed_to":"what the item',
+  'now says, or \"\" when dropped","reason":"a few words for the teacher"}]',
+  'and omit "changes" when nothing was changed. KaTeX formatting and',
+  "question numbering are not changes.",
   "Use match when several terms or statements are each paired with exactly",
   "one entry from a bank (column A / column B, a lettered statement bank",
   "matched to numbered terms): ONE match item for the whole set, left = the",
@@ -168,7 +194,11 @@ export const PDF_OCR_USER_PROMPT =
   'them on the set as "sources":[{"label":"Source A","text":"..."}] in ' +
   "printed order, each source's full printed text copied verbatim from the " +
   "page and never summarised; a chart's axis labels, tick values and legend " +
-  "entries stay out of a source's text, and a chart is never described.";
+  "entries stay out of a source's text, and a chart is never described. " +
+  // Beta feedback 2026-10-07: the system prompt's "changes" rule applies to a
+  // scan too — and a scan is where symbols are most often unreadable.
+  'Report rewritten instructions and guessed symbols in "changes" as the ' +
+  "system prompt describes.";
 
 // Caps for the scanned/OCR branch (ADR 0015, approved 2026-08-13). Pages are
 // read as images, which is token-heavy — 30 pages bounds the spend, checked
@@ -207,10 +237,19 @@ export function parsePdfExtraction(
   errPrefix: string,
   opts: { truncated?: boolean } = {},
 ): ParsedExtraction {
-  const cleaned = text
+  let cleaned = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
+  // Beta feedback batch, 2026-10-07: with the longer prompt the model
+  // sometimes opens with a sentence ("I need to analyze this test document
+  // carefully…") before a fenced block, which the fence strip above cannot
+  // reach — Unit 0 failed as invalid JSON. When the body does not start as
+  // JSON, read the first fenced block instead.
+  if (!/^[[{]/.test(cleaned)) {
+    const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(text);
+    if (fenced) cleaned = fenced[1]!.trim();
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(cleaned);
@@ -530,6 +569,38 @@ export function readSourceNumbers(raw: readonly unknown[]): number[][] {
     };
     const list = Array.isArray(source_numbers) ? source_numbers : [source_number];
     return list.map(asQuestionNumber).filter((n): n is number => n != null);
+  });
+}
+
+// Beta feedback 2026-10-07: what the model changed from the printed text
+// (an instruction the student cannot do on screen, a symbol it had to
+// guess), aligned with the raw list like readSourceNumbers; [] when absent.
+// Read BEFORE validation, which strips the field. Strings only, trimmed and
+// capped so a runaway model cannot flood the card.
+export interface CandidateChange {
+  original: string;
+  changed_to: string;
+  reason: string;
+}
+const MAX_CHANGES_PER_ITEM = 10;
+const MAX_CHANGE_CHARS = 300;
+function changeText(v: unknown): string {
+  return typeof v === "string" ? v.trim().slice(0, MAX_CHANGE_CHARS) : "";
+}
+export function readCandidateChanges(raw: readonly unknown[]): CandidateChange[][] {
+  return raw.map((cand) => {
+    if (!cand || typeof cand !== "object") return [];
+    const list = (cand as { changes?: unknown }).changes;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
+      .map((c) => ({
+        original: changeText(c.original),
+        changed_to: changeText(c.changed_to),
+        reason: changeText(c.reason),
+      }))
+      .filter((c) => c.original.length > 0 && c.original !== c.changed_to)
+      .slice(0, MAX_CHANGES_PER_ITEM);
   });
 }
 
