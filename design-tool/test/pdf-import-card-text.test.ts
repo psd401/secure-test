@@ -1,7 +1,7 @@
 // S-f-1: the PDF panel's proposal card drops the importer's `\$` escape
 // (C-2) for its one-line plain-text preview; nothing else changes.
 import { describe, expect, test } from "bun:test";
-import { cardText } from "../app/dashboard/[id]/PdfImportPanel";
+import { cardText } from "../components/app/RenderedText";
 
 describe("cardText (S-f-1)", () => {
   test("drops the backslash before an escaped dollar", () => {
@@ -12,5 +12,14 @@ describe("cardText (S-f-1)", () => {
   test("leaves math delimiters and plain text alone", () => {
     expect(cardText("Solve $x^2 = 4$ for x")).toBe("Solve $x^2 = 4$ for x");
     expect(cardText("No money here")).toBe("No money here");
+  });
+});
+
+describe("itemTypeName (HC-2)", () => {
+  test("teacher wording for known types, de-underscored otherwise", async () => {
+    const { itemTypeName } = await import("../lib/items/typeLabel");
+    expect(itemTypeName("short_text")).toBe("Short answer");
+    expect(itemTypeName("drawing_upload")).toBe("Drawing");
+    expect(itemTypeName("fill_blank")).toBe("fill blank");
   });
 });

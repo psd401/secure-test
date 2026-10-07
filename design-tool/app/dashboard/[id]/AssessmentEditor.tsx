@@ -61,6 +61,7 @@ import { RubricEditor } from "./RubricEditor";
 import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
+import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
 import {
   VISIBLE_ACCOMMODATION_CATALOG,
   type AccommodationCatalogEntry,
@@ -255,17 +256,7 @@ type AiProposal = {
 
 // UX pass 1 (proposal §2.2): plain nouns. "(authoring only)" is stale since
 // the client ships drawing (finding 10.10).
-const TYPE_LABEL: Record<ItemType, string> = {
-  multiple_choice_single: "Multiple choice",
-  multiple_choice_multi: "Multiple select",
-  short_text: "Short answer",
-  essay: "Essay",
-  match: "Matching",
-  order: "Ordering",
-  hotspot: "Click the image",
-  drawing_upload: "Drawing",
-  table: "Table",
-};
+const TYPE_LABEL = ITEM_TYPE_LABEL;
 
 /** What the items routes return: the DB row, with the type-specific fields in `config`. */
 interface ItemRow {

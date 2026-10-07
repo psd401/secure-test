@@ -16,8 +16,7 @@ import {
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
-import { renderContent } from "@/app/actions/renderContent";
-import { cardText } from "@/app/dashboard/[id]/PdfImportPanel";
+import { RenderedText as Rendered } from "@/components/app/RenderedText";
 import { chipLabel, tagScheme } from "@/lib/standards/tags";
 import {
   describeAddError,
@@ -700,30 +699,3 @@ function typeLabel(type: string): string {
   return (BATCH_TYPE_LABEL as Record<string, string>)[type] ?? type;
 }
 
-// A proposal is read-only, so its stem, choices and key render once —
-// math as KaTeX, **bold** / _italic_, images — through the same server
-// action as the editor's MathPreview, instead of raw text beside a preview.
-// Plain text (nothing to render) skips the round-trip; until the HTML
-// arrives, or if the action returns nothing, the raw text shows.
-function Rendered({ text, className }: { text: string; className?: string }) {
-  const interesting =
-    text.includes("$") || text.includes("](asset:") || /\*\*|(^|\s)_[^_\s]/.test(text);
-  const [html, setHtml] = useState<string>("");
-  useEffect(() => {
-    if (!interesting) return;
-    let cancelled = false;
-    void renderContent(text).then((out) => {
-      if (!cancelled) setHtml(out);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [text, interesting]);
-  // renderContent output is server-rendered: text HTML-escaped, math is
-  // KaTeX, images point at session-scoped /api/assets — the same trust as
-  // MathPreview.
-  if (interesting && html) {
-    return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
-  }
-  return <span className={className}>{cardText(text)}</span>;
-}

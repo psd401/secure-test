@@ -3,15 +3,8 @@ import { needsAnswerKey } from "./readiness";
 
 import { useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
-
-// S-f-1 (docs/multi-source-stimulus-design.md, Row S-f sitting 2026-09-09):
-// the importer writes money as `\$57,600` so the renderers never open math
-// on it (C-2), but this one-line card prints the stem as plain text and
-// showed the backslash. The card never renders math — it is a truncated
-// preview — so only the escape is dropped here; the stored stem keeps it.
-export function cardText(stem: string): string {
-  return stem.replace(/\\\$/g, "$");
-}
+import { RenderedText } from "@/components/app/RenderedText";
+import { itemTypeName } from "@/lib/items/typeLabel";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
 // for scanned/image PDFs, has the model read the pages directly — slice 44
@@ -144,10 +137,11 @@ export function figureNumbersIn(text: string): number[] {
 }
 
 function typeLabel(c: Candidate): string {
-  if (c.type === "match") return `match · ${c.pairs?.length ?? 0} pairs`;
-  if (c.type === "drawing_upload") return "drawing_upload · hand-scored";
-  if (c.type === "table") return `table · ${c.columns?.length ?? 0} × ${c.rows?.length ?? 0} cells`;
-  return c.type;
+  const name = itemTypeName(c.type);
+  if (c.type === "match") return `${name} · ${c.pairs?.length ?? 0} pairs`;
+  if (c.type === "drawing_upload") return `${name} · hand-scored`;
+  if (c.type === "table") return `${name} · ${c.columns?.length ?? 0} × ${c.rows?.length ?? 0} cells`;
+  return name;
 }
 
 interface Props {
@@ -938,7 +932,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                           </span>
                         ) : null}
                       </span>
-                      <p className="truncate text-sm">{cardText(c.stem)}</p>
+                      {/* Beta feedback 2026-10-07: the raw LaTeX source read
+                          as a broken import, so the card renders math like the editor. */}
+                      <RenderedText text={c.stem} className="block truncate text-sm" />
                       {workTypeOptions(c.type).length > 0 && !added.has(i) ? (
                         <label className="mt-1 block text-xs text-muted-foreground">
                           Add as{" "}

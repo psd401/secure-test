@@ -920,6 +920,8 @@ Side: design tool, both XS.
   print `multiple_choice_single`, `short_text`, `essay` where the rest of
   the editor says Multiple choice / Short answer / Essay. Proposal: reuse
   the editor's type labels on the proposal cards.
+  **BUILT 2026-10-07** (beta feedback batch A slice 2): `lib/items/typeLabel.ts`
+  is the editor's label table, shared by the editor and the proposal cards.
 
 ## Finding WP-1 — work-packet stem excerpts show raw LaTeX (2026-10-01) — design-tool, nothing built
 
