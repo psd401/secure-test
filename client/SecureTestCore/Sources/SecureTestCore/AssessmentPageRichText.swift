@@ -28,7 +28,7 @@ extension AssessmentPage {
        textarea, and as the teacher's renderer shows it (slice 2). */
     .essay-rich p { margin: 0; }
     .essay-rich p[data-indent="first"] { text-indent: 2em; }
-    .essay-rich ul, .essay-rich ol { margin: 0; padding-left: 1.75em; }
+    .essay-rich ul, .essay-rich ol { margin: 0; padding-left: 1.75em; text-indent: 0; }
     .essay-rich ul { list-style: disc; }
     .essay-rich ol { list-style: decimal; }
     .essay-rich[data-empty="true"]::before {

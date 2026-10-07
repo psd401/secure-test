@@ -2949,6 +2949,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         updateItem(item.id, (i) => ({ ...i, ...patch }))
                       }
                       disabled={isLocked}
+                      handScored={item.scoring_method === "human"}
                     />
                   </div>
                 ) : item.type === "short_text" ? (

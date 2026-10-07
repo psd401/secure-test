@@ -181,6 +181,8 @@ describe("renderAssessmentHtml — essay items (slice 32)", () => {
     const out = renderAssessmentHtml(assessment, [essay({ rich_text: true, placeholder: "Begin <here>" })]);
     expect(out).not.toContain('<textarea class="essay"');
     expect(out).toContain('<div class="essay-toolbar" role="toolbar" aria-label="Formatting">');
+    // RT-3: the inert buttons are dimmed so they do not look pressable.
+    expect(out).toContain(".essay-toolbar .essay-tool { opacity: 0.5; cursor: not-allowed; }");
     for (const label of [
       "Bold",
       "Italic",

@@ -158,6 +158,12 @@ describe("keys and the live line (E3-F1)", () => {
     expect(hasKeyedBlank([{ id: "b1", kind: "text", keys: [" "] }])).toBe(false);
     expect(hasKeyedBlank([drop("b1", ["a", "b"], "o1")])).toBe(true);
   });
+  test("blankCountLine when the method is Human (FB-R3)", () => {
+    expect(blankCountLine([{ id: "b1", kind: "text", keys: ["a"] }, { id: "b2", kind: "text" }], true)).toBe(
+      "Scored by hand: 2 blanks, one point each",
+    );
+  });
+
   test("blankCountLine", () => {
     expect(blankCountLine([{ id: "b1", kind: "text" }])).toBe(
       "No blank has an answer yet, so this question is hand-scored until you add some",

@@ -298,3 +298,32 @@ describe("work packet toolbar excerpt", () => {
     expect(stemExcerpt("The [[b1]] side is wet.")).toBe("The (blank) side is wet.");
   });
 });
+
+// FB-R3 (hand-run 2026-10-07): an item set to Human is scored blank by blank
+// by the teacher — every blank is worth a point and the notes say "by hand".
+describe("FB-R3: a hand-scored, partly keyed item", () => {
+  const blanks: FillBlankBlank[] = [
+    { id: "b1", kind: "text", keys: ["sun"] },
+    { id: "b2", kind: "text" },
+  ];
+  test("max points count every blank only when the method is Human", async () => {
+    const { fillBlankMaxPoints, fillBlankHandScored } = await import("../lib/scoring/auto");
+    expect(fillBlankMaxPoints({ blanks } as ItemRow["config"])).toBe(1);
+    expect(fillBlankMaxPoints({ blanks, scoring_method: "human" } as ItemRow["config"])).toBe(2);
+    expect(fillBlankHandScored({ blanks, scoring_method: "human" } as ItemRow["config"])).toBe(true);
+    expect(fillBlankHandScored({ blanks } as ItemRow["config"])).toBe(false);
+  });
+  test("the notes read 'score by hand' instead of 'not scored'", () => {
+    const response = { type: "fill_blank", answers: { b1: "sun", b2: "moon" } };
+    const html = (handScored: boolean) =>
+      renderFillBlankAnswerHtml("The [[b1]] and the [[b2]].", blanks, response, new Map(), {
+        showKey: true,
+        summary: true,
+        handScored,
+      });
+    expect(html(true)).toContain("no key, score by hand");
+    expect(html(true)).toContain("1 blank has no key — score it by hand (1 point each).");
+    expect(html(true)).not.toContain("not scored");
+    expect(html(false)).toContain("no key, not scored");
+  });
+});

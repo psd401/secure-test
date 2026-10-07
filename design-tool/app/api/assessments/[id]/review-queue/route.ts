@@ -22,7 +22,7 @@ import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { essayRichHtml, renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
-import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
+import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
@@ -298,7 +298,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
               item.config.blanks,
               response.response as unknown as Record<string, unknown>,
               resolvedAssets,
-              { showKey: true, summary: true },
+              { showKey: true, summary: true, handScored: fillBlankHandScored(item.config) },
             )
           : null,
       proposed: proposed

@@ -88,9 +88,11 @@ interface Props {
   onChange: (patch: FillBlankPatch) => void;
   /** Published: structure locked, keys editable. */
   disabled: boolean;
+  /** FB-R3: the scoring method is explicitly Human. */
+  handScored?: boolean;
 }
 
-export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled }: Props) {
+export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled, handScored = false }: Props) {
   const orphans = orphanMarkers(stem, blanks);
 
   function setBlank(i: number, next: FillBlankBlank) {
@@ -209,7 +211,7 @@ export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled }: Pr
         );
       })}
 
-      <p className="text-xs text-muted-foreground">{blankCountLine(blanks)}.</p>
+      <p className="text-xs text-muted-foreground">{blankCountLine(blanks, handScored)}.</p>
     </div>
   );
 }

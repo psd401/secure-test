@@ -427,8 +427,17 @@ export function tableMaxPoints(config: ItemRow["config"] | null | undefined): nu
 // the honest denominator for a hand-scored item (E3-F1's keyless rule).
 export function fillBlankMaxPoints(config: ItemRow["config"] | null | undefined): number {
   const blanks = config?.blanks ?? [];
+  if (fillBlankHandScored(config)) return blanks.length;
   const keyed = blanks.filter(isKeyedBlank).length;
   return keyed > 0 ? keyed : blanks.length;
+}
+
+// FB-R3 (hand-run 2026-10-07, James): a fill-in-the-blank item the teacher
+// set to Human is scored blank by blank by the teacher, so EVERY blank is
+// worth a point — keyed or not. Only the unset default leans on the keys
+// (auto when any blank is keyed, the E3-F1 rule).
+export function fillBlankHandScored(config: ItemRow["config"] | null | undefined): boolean {
+  return config?.scoring_method === "human";
 }
 
 // FB: does a typed blank's answer match one of its keys (D-5: any one

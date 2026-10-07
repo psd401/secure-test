@@ -461,9 +461,9 @@ VoiceOver). Client (Debug, simulated lockdown, against the local server):
 Cmd-B / Cmd-] / Shift-Cmd-8 apply and the autosave stores clean html with
 the derived text; resume restores the formatting; Tab leaves the box;
 Cmd-Z in a typed blank undoes and posts. Readings, proposals only:
-- **RT-3** the preview's inert toolbar LOOKS clickable (opacity 1, normal
+- **RT-3 FIXED 2026-10-07**: dimmed (opacity 0.5, not-allowed cursor). Was: the preview's inert toolbar LOOKS clickable (opacity 1, normal
   colour) — dim it.
-- **RT-4** Return after a first-line-indented paragraph copies the indent
+- **RT-4 FIXED 2026-10-07**, checked in the Debug client: lists reset `text-indent`, and a paragraph that only wraps a list is not one the indent applies to (Indent no longer reads pressed there). Was: Return after a first-line-indented paragraph copies the indent
   onto the next block (WebKit copies the attribute), so a list item started
   there LOOKS indented and Indent shows pressed; the saved html carries no
   indent on the item and a resume shows it correctly. Carrying the indent

@@ -264,6 +264,12 @@ final class RendererRichTextTests: XCTestCase {
         return String(array.dropFirst().dropLast())
     }
 
+    /// RT-4: a list never inherits a paragraph's first-line indent on screen.
+    func testListsResetTheFirstLineIndent() {
+        XCTAssertTrue(AssessmentPage.richTextStyles.contains(
+            ".essay-rich ul, .essay-rich ol { margin: 0; padding-left: 1.75em; text-indent: 0; }"))
+    }
+
     func testTheSanitiserMatchesTheServersTable() throws {
         let h = try pure()
         for (input, output) in Self.sanitizeCases {

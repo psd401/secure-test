@@ -30,7 +30,7 @@ import {
   type RubricScoreRow,
 } from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
-import { tableCellMatches } from "@/lib/scoring/auto";
+import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
@@ -736,7 +736,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                             ? (response.response as unknown as Record<string, unknown>)
                             : null,
                           resolvedAssets,
-                          { showKey: true, summary: response != null },
+                          { showKey: true, summary: response != null, handScored: fillBlankHandScored(item.config) },
                         )
                       : renderItemContent(item.stem, resolvedAssets),
                 }}

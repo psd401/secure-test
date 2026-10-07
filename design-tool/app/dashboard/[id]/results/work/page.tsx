@@ -34,7 +34,7 @@ import {
   stemExcerpt,
   type PacketQuery,
 } from "@/lib/reporting/workPacket";
-import { tableCellMatches } from "@/lib/scoring/auto";
+import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { buildResults, sectionEnrolment, type ResultsRow } from "@/lib/scoring/results";
 import { formatDate, formatDateTime } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
@@ -794,7 +794,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                             item.config.blanks,
                             responseJson,
                             resolvedAssets,
-                            { showKey, summary: showKey && responseJson != null },
+                            { showKey, summary: showKey && responseJson != null, handScored: fillBlankHandScored(item.config) },
                           ),
                         }}
                       />

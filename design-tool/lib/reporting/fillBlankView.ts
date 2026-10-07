@@ -27,6 +27,9 @@ export interface FillBlankHtmlOptions {
   showKey: boolean;
   /** The "Keyed blanks matching the key: n of m." line under the sentence (with `showKey`). */
   summary?: boolean;
+  /** FB-R3: the teacher scores every blank (method Human) — an unkeyed
+   *  blank is scored by hand, not "not scored". */
+  handScored?: boolean;
 }
 
 function text(value: string, format: FilledBlank["format"], resolved: Map<string, ResolvedAsset>): string {
@@ -38,6 +41,7 @@ function blankHtml(
   sentence: FilledSentence,
   resolved: Map<string, ResolvedAsset>,
   showKey: boolean,
+  handScored = false,
 ): string {
   const state = !showKey || !blank.keyed ? "fb-unkeyed" : blank.right ? "fb-right" : "fb-wrong";
   let html =
@@ -58,7 +62,9 @@ function blankHtml(
   } else if (showKey && sentence.keyed_count > 0) {
     // A partly keyed item: this blank earns no point (D-2) — say so, so the
     // teacher does not read the missing mark as an oversight.
-    html += `<span class="fb-nokey">no key, not scored</span>`;
+    html += handScored
+      ? `<span class="fb-nokey">no key, score by hand</span>`
+      : `<span class="fb-nokey">no key, not scored</span>`;
   }
   return html + `</span>`;
 }
@@ -75,22 +81,25 @@ export function renderFilledSentenceHtml(
     html +=
       seg.kind === "text"
         ? renderItemContent(seg.text, resolved)
-        : blankHtml(seg.blank, sentence, resolved, showKey);
+        : blankHtml(seg.blank, sentence, resolved, showKey, options.handScored);
   }
   html += `</div>`;
   if (sentence.unplaced.length > 0) {
     html +=
       `<p class="fb-unplaced">Not in the question text: ` +
-      sentence.unplaced.map((b) => blankHtml(b, sentence, resolved, showKey)).join(" ") +
+      sentence.unplaced.map((b) => blankHtml(b, sentence, resolved, showKey, options.handScored)).join(" ") +
       `</p>`;
   }
   if (showKey && options.summary) {
+    const unkeyed = sentence.blanks.length - sentence.keyed_count;
     const line =
       sentence.keyed_count === 0
         ? "No blank has a key — score each blank by hand (1 point each)."
         : `Keyed blanks matching the key: ${sentence.right_count} of ${sentence.keyed_count}.` +
-          (sentence.keyed_count < sentence.blanks.length
-            ? ` ${sentence.blanks.length - sentence.keyed_count} blank${sentence.blanks.length - sentence.keyed_count === 1 ? " has" : "s have"} no key and ${sentence.blanks.length - sentence.keyed_count === 1 ? "is" : "are"} not scored.`
+          (unkeyed > 0
+            ? options.handScored
+              ? ` ${unkeyed} blank${unkeyed === 1 ? " has" : "s have"} no key — score ${unkeyed === 1 ? "it" : "them"} by hand (1 point each).`
+              : ` ${unkeyed} blank${unkeyed === 1 ? " has" : "s have"} no key and ${unkeyed === 1 ? "is" : "are"} not scored.`
             : "");
     html += `<p class="fb-summary">${escapeHtml(line)}</p>`;
   }

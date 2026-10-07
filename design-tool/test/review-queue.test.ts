@@ -1016,17 +1016,20 @@ describe("review queue: fill-in-the-blank items (FB slice 3)", () => {
     const body = (await (await getQueue(s.assessment.id)).json()) as { entries: FbEntry[] };
     expect(body.entries).toHaveLength(1);
     const e = body.entries[0]!;
-    expect(e.item.max_points).toBe(1);
+    // FB-R3 (hand-run 2026-10-07, James): the item is set to Human, so the
+    // teacher scores EVERY blank — two points, and the unkeyed blank is
+    // scored by hand rather than "not scored".
+    expect(e.item.max_points).toBe(2);
     const html = e.fill_blank_html!;
     expect(html).toContain('<span class="fb-answer">leeward</span>');
     expect(html).not.toContain(">o2<");
     expect(html).toContain("expected windward");
-    expect(html).toContain("no key, not scored");
+    expect(html).toContain("no key, score by hand");
     expect(html).toContain("&lt;b&gt;dusty&lt;/b&gt;");
     expect(html).not.toContain("<b>dusty</b>");
     expect(html).toContain("katex");
     expect(html).not.toContain("[[b1]]");
-    expect(html).toContain("Keyed blanks matching the key: 0 of 1. 1 blank has no key and is not scored.");
+    expect(html).toContain("Keyed blanks matching the key: 0 of 1. 1 blank has no key — score it by hand (1 point each).");
     expect(e.answer_html).toBeNull();
   });
 

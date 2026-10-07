@@ -2781,7 +2781,12 @@ public enum AssessmentPage {
           var inside = false;
           for (var i = 0; i < kids.length; i++) {
             if (kids[i] === first) inside = true;
-            if (inside && kids[i].nodeType === 1 && /^(p|div)$/.test(richNodeName(kids[i]))) out.push(kids[i]);
+            // RT-4: a paragraph that only wraps a list (WebKit's list inside a
+            // paragraph, which keeps the indent it had) is not a paragraph the
+            // indent applies to — its list would show the indent and Indent
+            // would read as pressed.
+            if (inside && kids[i].nodeType === 1 && /^(p|div)$/.test(richNodeName(kids[i])) &&
+                !richListWrapper(kids[i])) out.push(kids[i]);
             if (kids[i] === last) break;
           }
           return out;

@@ -701,6 +701,9 @@ export function renderAssessmentHtml(
     /* RT slice 4 (D-8): the formatted essay box — the client's look (paragraphs
        without margin, MLA first-line indent, one-level lists). */
     .essay-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+    /* RT-3 (hand-run 2026-10-07): the buttons cannot run here, so they must
+       not look pressable — dimmed, with the not-allowed cursor. */
+    .essay-toolbar .essay-tool { opacity: 0.5; cursor: not-allowed; }
     .essay-tool.tool-bold { font-weight: 700; }
     .essay-tool.tool-italic { font-style: italic; }
     .essay-tool.tool-underline { text-decoration: underline; }

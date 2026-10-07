@@ -493,7 +493,7 @@ autosave, teacher side ✅, resume in part — Debug client under simulated
 lockdown. Readings, proposals only:
 - **FB-R1** the per-student page's type chip prints the raw id
   (`fill_blank`, also `essay` — the page's convention for every type).
-- **FB-R3** a hand-scored item with only some blanks keyed is worth the
+- **FB-R3 FIXED 2026-10-07** (James: build before v1.6.0) — an item set to Human is now worth EVERY blank (`fillBlankHandScored` → `fillBlankMaxPoints`), the notes read "no key, score by hand" / "score it by hand", the editor line "Scored by hand: n blanks, one point each". Was: a hand-scored item with only some blanks keyed is worth the
   KEYED blanks (Q3: two blanks, one keyed → "Points (of 1)"), so a teacher
   scoring by hand cannot award the unkeyed blank. A human / hybrid method
   probably wants every blank as the denominator.
