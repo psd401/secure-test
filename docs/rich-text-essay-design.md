@@ -2,14 +2,14 @@
 
 Design page, 2026-10-07. Source: an open-beta teacher asked for students
 to be able to bold, underline or italicize their own writing. Decisions
-marked **D-n** are James's (D-1…D-8, all 2026-10-07). Nothing is built.
+marked **D-n** are James's (D-1…D-10, all 2026-10-07). Nothing is built.
 
 ## Decided (James, 2026-10-07)
 
 - **D-1 A per-essay checkbox.** The teacher turns formatting on for one
   essay question: "Let students format their answer". It is off by
   default, so every existing essay is unchanged.
-- **D-2 Bold, italic, underline, undo and indents.** No lists, headings,
+- **D-2 Bold, italic, underline, undo and indents** (lists added by D-9). No headings,
   fonts, colors, links or images.
 - **D-3 Ships in client v1.6.0** with fill in the blank
   (`docs/fill-in-blank-design.md`). v1.5.1 is skipped.
@@ -26,6 +26,17 @@ marked **D-n** are James's (D-1…D-8, all 2026-10-07). Nothing is built.
   never counts.
 - **D-8 The teacher preview shows the toolbar (13.5)** so a teacher can
   try formatting before publishing.
+- **D-9 Bulleted and numbered lists, one level (14.2).** Added after more
+  teacher requests. No nesting (nesting would need Tab, and D-5 keeps Tab
+  for focus). Toolbar buttons plus Shift-Cmd-8 / Shift-Cmd-7. In the
+  derived `text`, items read as "• " / "1. " lines, so scoring and word
+  count see the structure.
+- **D-10 Double-spacing is a teacher-side display choice (14.3), default
+  off.** It is not part of the student's answer. A "Double-space essays"
+  option on the work packet print and in the Google Docs send dialog
+  (the Doc carries line spacing 2.0, so it stays double-spaced when
+  edited). It applies to every essay, formatted or not, and needs no
+  client change. Students type at normal spacing.
 
 ## What exists that this stands on
 
@@ -62,8 +73,9 @@ italic, underline, indents)".
 
 **Response.** `{type: "essay", text, html?}`.
 - `html` is a small, fixed subset: `<p>` (optional
-  `data-indent="first"`, D-4), `<br>`, `<strong>`, `<em>`, `<u>`.
-  Nothing else, no attributes but `data-indent`.
+  `data-indent="first"`, D-4), `<br>`, `<strong>`, `<em>`, `<u>`,
+  `<ul>` / `<ol>` with `<li>` one level deep (D-9). Nothing else, no
+  attributes but `data-indent`.
 - **The server re-cleans `html` and derives `text` from it.** The stored
   `text` is always the plain reading of the stored `html`, so word count,
   scoring, safeguarding and history cannot disagree with what the teacher
@@ -73,8 +85,8 @@ italic, underline, indents)".
 **Student side (client).**
 - When `rich_text` is on, the essay box is an editable rich-text area
   (`contenteditable`) instead of a textarea, with a small toolbar above
-  it: **B**, *I*, U, Indent first line (a toggle on the current
-  paragraph or paragraphs), Undo, Redo. Each button is a keyboard stop
+  it: **B**, *I*, U, Bulleted list, Numbered list, Indent first line (a
+  toggle on the current paragraph or paragraphs), Undo, Redo. Each button is a keyboard stop
   and announces its pressed state.
 - Shortcuts: Cmd-B / Cmd-I / Cmd-U, Cmd-] / Cmd-[ to add / remove the
   first-line indent, Cmd-Z / Shift-Cmd-Z for undo / redo. **Tab keeps
@@ -105,7 +117,9 @@ preview renders the toolbar and a working box (D-8).
    `html` field on the essay response, the sanitiser + `text`
    derivation at ingest, answer history carrying `html`.
 2. Teacher read side: one renderer, used by the queue, the per-student
-   page, the work packet and the Google Docs release.
+   page, the work packet and the Google Docs release; the "Double-space
+   essays" option on print and the Docs send (D-10, default off). The
+   double-spacing half can ship on its own with any design-tool deploy.
 3. Client: the rich box + toolbar + shortcuts + own undo stack + clean
    paste; autosave, prefill, spool and spell check carried over; the same
    undo stack on plain essays, short answers and table cells (D-6).

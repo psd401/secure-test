@@ -986,6 +986,6 @@ is skipped). D-1 a per-essay "Let students format their answer"
 checkbox, D-2 bold / italic / underline / undo / indents only, D-3 in
 v1.6.0, D-4 MLA-style first-line indent, D-5 Tab keeps moving focus,
 D-6 undo / redo in every student text field (closes ME-2), D-7 word count
-reads plain text, D-8 the teacher preview has the toolbar. No version gate
+reads plain text, D-8 the teacher preview has the toolbar. D-9 one-level bulleted / numbered lists, D-10 double-spacing as a teacher-side print / Google Docs option (default off). No version gate
 needed (older clients ignore the flag and show the plain box). Nothing
 built.
