@@ -1576,3 +1576,15 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 539 | **Send to Google Docs** for one student (b), Double-space essays OFF | The Doc shows bold / italic / underline, the first-line indent (half an inch) and the list; single line spacing | NOT RUN |
 | 540 | Send again (Make a new Doc) with **Double-space essays** ON; type a new line in the essay in the Doc | Format → Line & paragraph spacing reads Double on the essay's paragraphs; the new line is double-spaced too; prompt / feedback (if included) single. Leave the dialog for the Google reconnect once (no Drive cookie): the box is still ticked on return | NOT RUN |
 | 541 | The planted row (stored `html` with `<script>` / `onclick` / `<img onerror>`) on the per-student page, the queue, the packet and a Doc | None of the planted markup reaches any surface (view source / the Doc); the text around it shows | NOT RUN |
+
+## Formatting in a student's essay — slice 4: the preview toolbar (RT, 2026-10-07)
+
+`docs/rich-text-essay-design.md` §Progress "Slice 4" is the record (D-8). The preview runs no script (strict CSP, ADR 0009), so the toolbar's buttons are inert there and a note says what they do; the box is a real editable area — typing and the browser's own Cmd-B / Cmd-I / Cmd-U work in it, nothing is saved. Local dev, slice 1's fixture: essay (b) with "Let students format their answer" ticked, essay (a) not.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 542 | **Preview** the assessment; look at (b) and (a) | (b): a toolbar (B, I, U, • List, 1. List, Indent, Undo, Redo — dimmed, not clickable) above a box showing the placeholder, and the note "Students can format their answer here …" under it; (a): the disabled textarea as before | NOT RUN |
+| 543 | In (b)'s box type two lines, select a word, Cmd-B, Cmd-I, Cmd-U | The text appears; the word turns bold / italic / underlined; Enter starts a new line with no gap; the placeholder disappears once there is text | NOT RUN |
+| 544 | Click a toolbar button; reload the preview | Nothing happens on the click; after the reload the box is empty again (nothing was saved); DevTools console shows no CSP violation | NOT RUN |
+| 545 | **Print / PDF** view of the same assessment | (b) prints as the blank write area like any essay — no toolbar, no editable box, no note | NOT RUN |
+| 546 | VoiceOver on the preview's (b) | "Formatting, toolbar"; each button by name, dimmed; the box as "Your answer, edit text" | NOT RUN |

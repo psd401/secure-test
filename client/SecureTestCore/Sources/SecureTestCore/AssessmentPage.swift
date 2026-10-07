@@ -1484,9 +1484,21 @@ public enum AssessmentPage {
           var mirror = ttsMirrorFor(seg.field);
           node = mirror ? mirror.text : null;
         }
-        if (!node) return;
-        var start = seg.kind === 'math' ? seg.start : seg.start + ttsRawOffset(seg.raw, offset);
-        var end = seg.kind === 'math' ? seg.end : seg.start + ttsRawOffset(seg.raw, offset + length);
+        var start, end;
+        if (seg.box) {
+          // RT slice 4: a word of a formatted answer is a range on the box's
+          // own text node (richSpeechRange); a list marker or a line break has
+          // none, so nothing is marked while it is said.
+          var r = richSpeechRange(seg, offset, length);
+          if (!r) return;
+          node = r.node;
+          start = r.start;
+          end = r.end;
+        } else {
+          if (!node) return;
+          start = seg.kind === 'math' ? seg.start : seg.start + ttsRawOffset(seg.raw, offset);
+          end = seg.kind === 'math' ? seg.end : seg.start + ttsRawOffset(seg.raw, offset + length);
+        }
         try {
           if (typeof Highlight !== 'function' || typeof CSS === 'undefined' || !CSS || !CSS.highlights) return;
           var range = document.createRange();
@@ -1494,6 +1506,7 @@ public enum AssessmentPage {
           range.setEnd(node, end);
           CSS.highlights.set('tts-word', new Highlight(range));
           if (seg.field) ttsMirrorReveal(range);
+          if (seg.box) ttsBoxReveal(seg.box, range);
         } catch (e) {}
       }
 
@@ -1616,6 +1629,20 @@ public enum AssessmentPage {
         if (delta === 0) return;
         m.field.scrollTop = Math.max(0, m.field.scrollTop + delta);
         m.el.scrollTop = m.field.scrollTop;
+      }
+
+      // RT slice 4: the formatted box scrolls itself (overflow-y: auto), so a
+      // spoken word below or above its visible part scrolls the box — the
+      // mirror's rule (ttsMirrorReveal) without a mirror.
+      function ttsBoxReveal(box, range) {
+        if (!range || typeof range.getBoundingClientRect !== 'function') return;
+        if (typeof box.getBoundingClientRect !== 'function' || typeof box.scrollTop !== 'number') return;
+        var word = range.getBoundingClientRect();
+        var view = box.getBoundingClientRect();
+        var delta = 0;
+        if (word.bottom > view.bottom) delta = word.bottom - view.bottom + (word.bottom - word.top);
+        else if (word.top < view.top) delta = word.top - view.top - (word.bottom - word.top);
+        if (delta !== 0) box.scrollTop = Math.max(0, box.scrollTop + delta);
       }
 
       function ttsPaint(target) {
@@ -1864,22 +1891,23 @@ public enum AssessmentPage {
         sttStop();
         ttsStop();
         var field = ctl.field;
-        // RT slice 3: the formatted box has no value or selection offsets; it
-        // hands over its derived text, and each phrase goes in at its caret
-        // (`__richInsert`). The spacing context is the end of that text, so
-        // a phrase dictated mid-paragraph may be spaced as if at the end —
-        // slice 4 (docs/rich-text-essay-design.md) revisits it.
+        // RT slice 3: the formatted box has no value or selection offsets;
+        // each phrase goes in at its caret (`__richInsert`). Slice 4
+        // (docs/rich-text-essay-design.md): the spacing context is read at
+        // that caret (`__richContext` → richCaretContext) — the text before
+        // it and the character after — so a phrase dictated mid-paragraph is
+        // spaced for where it lands, not for the end of the answer.
         if (typeof field.__richInsert === 'function') {
-          var richValue = field.__richText();
+          var context = field.__richContext();
           STT_SEQ += 1;
           var richId = 'stt-' + STT_SEQ;
           if (!sttPost({
             action: 'listen', id: richId,
-            before: richValue.slice(Math.max(0, richValue.length - 16)),
-            after: '',
+            before: context.before,
+            after: context.after,
             single_line: false
           })) return;
-          sttActive = { id: richId, ctl: ctl, at: richValue.length, end: richValue.length };
+          sttActive = { id: richId, ctl: ctl, at: 0, end: 0 };
           sttFinishing = null;
           sttPaint(ctl);
           return;
@@ -2592,6 +2620,9 @@ public enum AssessmentPage {
         // The textarea is named by nothing but its placeholder; a role=textbox
         // div has no placeholder, so it is named outright.
         box.setAttribute('aria-label', 'Your answer');
+        // RT slice 4: the strip names the box it formats.
+        box.id = 'essay-box-' + item.id;
+        toolbar.setAttribute('aria-controls', box.id);
         if (item.placeholder) {
           box.setAttribute('data-placeholder', item.placeholder);
           box.setAttribute('aria-placeholder', item.placeholder);
@@ -2664,6 +2695,10 @@ public enum AssessmentPage {
         if (typeof item.max_word_count === 'number') {
           counter = document.createElement('p');
           counter.className = 'word-count';
+          // RT slice 4: VoiceOver reads the count as the box's description,
+          // so the limit is heard on arriving in the box.
+          counter.id = 'essay-count-' + item.id;
+          box.setAttribute('aria-describedby', counter.id);
         }
         function refresh() {
           var b = blocks();
@@ -2900,10 +2935,16 @@ public enum AssessmentPage {
           buttons.undo.setAttribute('aria-disabled', box.__undo.canUndo() ? 'false' : 'true');
           buttons.redo.setAttribute('aria-disabled', box.__undo.canRedo() ? 'false' : 'true');
         }
+        // RT-2 (slice 4): a caret move inside the box is told to the undo
+        // history (`moved`), so an undo puts the caret back where the undone
+        // change was made.
+        box.__selectionMoved = function () {
+          if (!selectionRange()) return;
+          box.__undo.moved();
+          refreshState();
+        };
         if (typeof document.addEventListener === 'function') {
-          document.addEventListener('selectionchange', function () {
-            if (selectionRange()) refreshState();
-          });
+          document.addEventListener('selectionchange', function () { box.__selectionMoved(); });
         }
         box.onfocus = function () { refreshState(); };
 
@@ -2971,8 +3012,23 @@ public enum AssessmentPage {
 
         // STT slice 3 over the box: a phrase goes in at the caret as typing.
         box.__richText = function () { return richText(blocks()); };
+        // Slice 4: the spacing context at the caret (richCaretContext); with
+        // no caret in the box, the end of the answer — where __richInsert
+        // then puts the phrase.
+        box.__richContext = function () {
+          var range = selectionRange();
+          return range
+            ? richCaretContext(box, range.startContainer, range.startOffset, range.endContainer, range.endOffset)
+            : richCaretContext(box, null);
+        };
         box.__richInsert = function (text) {
-          focusBox();
+          if (!selectionRange()) {
+            // Never focused: WebKit would put the caret at the START; the
+            // context sent to the host said the end.
+            if (typeof box.focus === 'function') box.focus();
+            var last = richLinearText(box).length;
+            setCaret([last, last]);
+          }
           sttInserting = true;
           try {
             richExec('insertText', text);
@@ -2987,14 +3043,19 @@ public enum AssessmentPage {
         if (counter) wrap.appendChild(counter);
         refreshState();
         if (STT === 'ready') afterField(box, sttControl(box));
-        // TTS slice 2 over the box: the DERIVED text is read, without the
-        // word highlight — the mirror (ttsMirrorFor) maps offsets into a
-        // textarea's value and has nothing to map here. Highlighting through
-        // ranges in the box itself is slice 4.
+        // TTS slice 2 over the box, with the word highlight (RT slice 4): the
+        // box is read as segments of its own text nodes (richSpeechSegments —
+        // the D-7 lines, "• " / "1. " said but never marked), so each spoken
+        // word is a range on the box itself; no mirror. Typing stops the
+        // reading (ttsStopWhenTyping, inside ttsAnswerBar), the highlight
+        // clears when it ends.
         if (TTS.responses === true) {
           wrap.insertBefore(ttsAnswerBar(box, function () {
-            var text = box.__richText();
-            return ttsBlank(text) ? [ttsSay('No answer yet.')] : ttsTypedSegments(text, null);
+            if (ttsBlank(box.__richText())) return [ttsSay('No answer yet.')];
+            return richSpeechSegments(box, mathSegments).map(function (seg) {
+              seg.box = box;
+              return seg;
+            });
           }), box.nextSibling);
         }
         if (item.rubric) wrap.appendChild(rubricNode(item.rubric));

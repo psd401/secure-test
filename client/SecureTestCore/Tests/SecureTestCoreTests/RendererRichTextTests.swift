@@ -629,10 +629,181 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('b', __box())"), 0, "saved text is text, never markup")
     }
 
-    // MARK: - Read aloud (slice 4 does the highlight)
+    // MARK: - Slice 4: pure functions (read aloud, dictation, RT-1, RT-2)
 
-    func testReadMyAnswerReadsTheDerivedTextWithoutAMirror() throws {
-        let h = try harness(extra: "var TTS_SCOPE = { items: false, stimuli: false, responses: true };")
+    /// Builds `__sb` in the pure harness:
+    /// <p>The <b>cat</b> sat.</p><p></p><ul><li>one</li><li><br></li><li>two</li></ul><ol><li>x \$5</li></ol>
+    /// — the empty <p> is what WebKit's list command can leave behind (RT-1).
+    private static let speechBox = #"""
+    var __sb = document.createElement('div');
+    (function () {
+      function el(tag, kids) {
+        var n = document.createElement(tag);
+        kids.forEach(function (k) { n.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); });
+        return n;
+      }
+      __sb.appendChild(el('p', ['The ', el('b', ['cat']), ' sat.']));
+      __sb.appendChild(el('p', []));
+      __sb.appendChild(el('ul', [el('li', ['one']), el('li', [el('br', [])]), el('li', ['two'])]));
+      __sb.appendChild(el('ol', [el('li', ['x \\$5'])]));
+    })();
+    var __segs = richSpeechSegments(__sb);
+    function __segText() { return __segs.map(function (s) { return s.text; }).join(''); }
+    """#
+
+    func testSpeechSegmentsReadTheBoxAsTheDerivedTextLines() throws {
+        let h = try pure()
+        try h.eval(Self.speechBox)
+        XCTAssertEqual(try h.string("__segText()"), "The cat sat.\n\u{2022} one\n\u{2022} two\n1. x $5")
+        // The same lines as the D-7 text the server derives (the `\$` is
+        // spoken as `$`).
+        XCTAssertEqual(try h.string("richText(richBlocksFromDom(__sb))"), "The cat sat.\n\u{2022} one\n\u{2022} two\n1. x \\$5")
+        // Markers and line breaks are said, never on a node; every other
+        // segment is a text node of the box.
+        XCTAssertEqual(
+            try h.string("__segs.map(function (s) { return s.said ? 'said' : (s.node ? 'node' : '?'); }).join(',')"),
+            "node,node,node,said,said,node,said,said,node,said,said,node"
+        )
+    }
+
+    func testASpokenWordMapsOntoTheBoxsTextNode() throws {
+        let h = try pure()
+        try h.eval(Self.speechBox)
+        // "cat" is segment 1, the <b>'s own text node.
+        try h.eval("var __r = richSpeechRange(__segs[1], 0, 3);")
+        XCTAssertTrue(try h.bool("__r.node === __sb.childNodes[0].childNodes[1].childNodes[0]"))
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "cat")
+        // " sat." is segment 2: the word at spoken offset 1.
+        try h.eval("__r = richSpeechRange(__segs[2], 1, 3);")
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "sat")
+        // A list marker and a line break mark nothing.
+        XCTAssertTrue(try h.bool("richSpeechRange(__segs[4], 0, 1) === null"))
+        XCTAssertTrue(try h.bool("richSpeechRange(__segs[3], 0, 1) === null"))
+        // After a spoken `$` (written `\$`), offsets map past the backslash.
+        try h.eval("__r = richSpeechRange(__segs[11], 2, 2);")
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "\\$5")
+        // A word running past the node is clamped to it.
+        try h.eval("__r = richSpeechRange(__segs[0], 0, 99);")
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "The ")
+    }
+
+    func testAFormulaInTheBoxIsOneSegmentMarkedWhole() throws {
+        let h = try pure()
+        try h.eval("""
+        var __b = document.createElement('div');
+        var __p = document.createElement('p');
+        __p.appendChild(document.createTextNode('So $x^2$ grows'));
+        __b.appendChild(__p);
+        // A stand-in for the page's mathSegments.
+        var __s = richSpeechSegments(__b, function (raw) {
+          return [{ text: 'So ', math: false }, { text: '$x^2$', math: true }, { text: ' grows', math: false }];
+        });
+        """)
+        XCTAssertEqual(try h.string("__s.map(function (s) { return s.kind; }).join(',')"), "text,math,text")
+        XCTAssertEqual(try h.string("__s[1].tex"), "x^2")
+        try h.eval("var __r = richSpeechRange(__s[1], 0, 0);")
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "$x^2$")
+        try h.eval("__r = richSpeechRange(__s[2], 1, 5);")
+        XCTAssertEqual(try h.string("__r.node.textContent.slice(__r.start, __r.end)"), "grows")
+    }
+
+    /// Dictation spacing: the context is read at the caret, not at the end.
+    func testTheCaretContextIsTheTextAroundTheCaret() throws {
+        let h = try pure()
+        try h.eval("""
+        var __cb = document.createElement('div');
+        ['First line.', 'The cat sat'].forEach(function (t) {
+          var p = document.createElement('p');
+          p.appendChild(document.createTextNode(t));
+          __cb.appendChild(p);
+        });
+        var __t2 = __cb.childNodes[1].childNodes[0];
+        function __ctx(node, offset, endNode, endOffset) {
+          return JSON.stringify(richCaretContext(__cb, node, offset,
+            endNode === undefined ? node : endNode, endOffset === undefined ? offset : endOffset));
+        }
+        """)
+        // Mid-paragraph: "The |cat" — the word before, the letter after.
+        XCTAssertEqual(try h.string("__ctx(__t2, 4)"), #"{"before":"First line.\nThe ","after":"c"}"#)
+        // The start of a paragraph: the boundary reads as a newline.
+        XCTAssertEqual(try h.string("__ctx(__t2, 0)"), #"{"before":"First line.\n","after":"T"}"#)
+        // Mid-word: a letter on both sides.
+        XCTAssertEqual(try h.string("__ctx(__t2, 6)"), #"{"before":"rst line.\nThe ca","after":"t"}"#)
+        // A selection: before its start, after its end.
+        XCTAssertEqual(try h.string("__ctx(__t2, 4, __t2, 7)"), #"{"before":"First line.\nThe ","after":" "}"#)
+        // No caret: the end of the answer.
+        XCTAssertEqual(try h.string("JSON.stringify(richCaretContext(__cb, null))"), #"{"before":"ine.\nThe cat sat","after":""}"#)
+    }
+
+    /// RT-1: an empty <p> (no <br>, no text) renders nothing, so it is neither
+    /// saved nor counted in a caret position.
+    func testAnInvisibleEmptyParagraphIsSkipped() throws {
+        let h = try pure()
+        try h.eval(Self.speechBox)
+        XCTAssertEqual(
+            try h.string("richSerialize(richBlocksFromDom(__sb))"),
+            "<p>The <strong>cat</strong> sat.</p><ul><li>one</li><li>two</li></ul><ol><li>x \\$5</li></ol>"
+        )
+        // "one": "The cat sat." is 12, the item boundary 1 — no extra 1 for
+        // the empty paragraph — so "one" starts at 13.
+        XCTAssertEqual(try h.int("richPositionOf(__sb, __sb.childNodes[2].childNodes[0].childNodes[0], 0)"), 13)
+        // A paragraph holding only a <br> (a visible empty line) is kept.
+        XCTAssertEqual(try h.string("""
+        (function () {
+          var b = document.createElement('div');
+          ['a', null, 'b'].forEach(function (t) {
+            var p = document.createElement('p');
+            p.appendChild(t === null ? document.createElement('br') : document.createTextNode(t));
+            b.appendChild(p);
+          });
+          return richSerialize(richBlocksFromDom(b));
+        })()
+        """), "<p>a</p><p><br></p><p>b</p>")
+    }
+
+    /// RT-2: a caret move updates the current state's caret and closes the step.
+    func testACaretMoveIsKeptForTheNextUndo() throws {
+        let h = try pure()
+        try h.eval("""
+        var __now = 0;
+        undoNow = function () { return __now; };
+        var __val = 'abc', __sel = [3, 3], __applied = null;
+        var __hist = undoHistory(function () { return { key: __val, sel: __sel.slice() }; },
+          function (s) { __applied = s; __val = s.key; __sel = s.sel; });
+        __val = 'abc def'; __sel = [7, 7]; __hist.record(false);
+        __sel = [1, 1]; __hist.moved();            // the student clicks after "a"
+        __val = 'aXbc def'; __sel = [2, 2]; __hist.record(false);
+        """)
+        XCTAssertEqual(try h.int("__hist.depth()"), 3, "the move closed the typing step")
+        try h.eval("__hist.undo();")
+        XCTAssertEqual(try h.string("__val"), "abc def")
+        XCTAssertEqual(try h.string("__sel.join(',')"), "1,1", "the caret goes back where the change was made")
+        // A "move" to the caret typing left is no move: the step stays open.
+        try h.eval("""
+        __val = 'a'; __sel = [1, 1];
+        var __h2 = undoHistory(function () { return { key: __val, sel: __sel.slice() }; }, function () {});
+        __val = 'ab'; __sel = [2, 2]; __h2.record(false);
+        __h2.moved();
+        __val = 'abc'; __sel = [3, 3]; __h2.record(false);
+        """)
+        XCTAssertEqual(try h.int("__h2.depth()"), 2, "still coalesced into the open step")
+    }
+
+    // MARK: - Read aloud over the box (slice 4)
+
+    private static let highlightStub = """
+    var TTS_SCOPE = { items: false, stimuli: false, responses: true };
+    var __hl = [];
+    var __hlCleared = 0;
+    function Highlight(range) { this.range = range; }
+    var CSS = { highlights: {
+      set: function (name, h) { __hl.push(h.range); },
+      delete: function () { __hlCleared += 1; }
+    } };
+    """
+
+    func testReadMyAnswerReadsTheLinesWithoutAMirror() throws {
+        let h = try harness(extra: Self.highlightStub)
         try h.eval("__typeBox(['Hello', 'World']);")
         let bar = "__first('.tts-play', __item(3))"
         XCTAssertEqual(try h.string("\(bar).textContent"), "Read my answer")
@@ -642,6 +813,154 @@ final class RendererRichTextTests: XCTestCase {
         let segments = speak["segments"] as? [[String: Any]]
         XCTAssertEqual(segments?.compactMap { $0["text"] as? String }.joined(), "Hello\nWorld")
         XCTAssertEqual(try h.int("__count('.tts-mirror', document.body)"), 0, "no mirror over a formatted box")
+        XCTAssertTrue(try h.bool("(' ' + __box().className + ' ').indexOf(' tts-reading ') !== -1"))
+    }
+
+    func testASpokenWordIsHighlightedInTheBoxAndTheMarkerIsNot() throws {
+        let h = try harness(extra: Self.highlightStub)
+        try h.eval("""
+        (function () {
+          var box = __box();
+          while (box.firstChild) box.removeChild(box.firstChild);
+          var p = __para('Some ');
+          var b = document.createElement('strong');
+          b.appendChild(document.createTextNode('bold'));
+          p.appendChild(b);
+          p.appendChild(document.createTextNode(' part'));
+          box.appendChild(p);
+          var ul = document.createElement('ul');
+          var li = document.createElement('li');
+          li.appendChild(document.createTextNode('item'));
+          ul.appendChild(li);
+          box.appendChild(ul);
+          box.oninput({ type: 'input' });
+        })()
+        """)
+        try h.eval("__first('.tts-play', __item(3)).onclick({});")
+        let speak = try XCTUnwrap(h.postedSpeech().last)
+        let id = try XCTUnwrap(speak["id"] as? String)
+        let segments = try XCTUnwrap(speak["segments"] as? [[String: Any]])
+        XCTAssertEqual(segments.compactMap { $0["text"] as? String }, ["Some ", "bold", " part", "\n", "\u{2022} ", "item"])
+        // "bold" — segment 1 — is a range on the <strong>'s text node.
+        try h.eval("window.__secureTestSpeech.word('\(id)', 1, 0, 4)")
+        XCTAssertTrue(try h.bool("__hl[0].startContainer === __box().childNodes[0].childNodes[1].childNodes[0]"))
+        XCTAssertEqual(try h.string("__hl[0].startOffset + '-' + __hl[0].endOffset"), "0-4")
+        // "part" in " part".
+        try h.eval("window.__secureTestSpeech.word('\(id)', 2, 1, 4)")
+        XCTAssertEqual(try h.string("__hl[1].startContainer.textContent.slice(__hl[1].startOffset, __hl[1].endOffset)"), "part")
+        // The bullet is said with nothing marked: the previous word clears.
+        let cleared = try h.int("__hlCleared")
+        try h.eval("window.__secureTestSpeech.word('\(id)', 4, 0, 1)")
+        XCTAssertEqual(try h.int("__hl.length"), 2)
+        XCTAssertEqual(try h.int("__hlCleared"), cleared + 1)
+        // The item's own word is marked in the <li>.
+        try h.eval("window.__secureTestSpeech.word('\(id)', 5, 0, 4)")
+        XCTAssertTrue(try h.bool("__hl[2].startContainer === __box().childNodes[1].childNodes[0].childNodes[0]"))
+        // The highlight clears at the end.
+        let before = try h.int("__hlCleared")
+        try h.eval("window.__secureTestSpeech.finished('\(id)')")
+        XCTAssertEqual(try h.int("__hlCleared"), before + 1)
+        XCTAssertFalse(try h.bool("(' ' + __box().className + ' ').indexOf(' tts-reading ') !== -1"))
+    }
+
+    func testTypingInTheBoxStopsTheReading() throws {
+        let h = try harness(extra: Self.highlightStub)
+        try h.eval("__typeBox(['Hello there']);")
+        try h.eval("__first('.tts-play', __item(3)).onclick({});")
+        let id = try XCTUnwrap(h.postedSpeech().last?["id"] as? String)
+        try h.eval("window.__secureTestSpeech.word('\(id)', 0, 0, 5)")
+        let cleared = try h.int("__hlCleared")
+        try h.eval("__typeBox(['Hello there!']);")
+        XCTAssertEqual(try h.postedSpeech().last?["action"] as? String, "stop")
+        XCTAssertGreaterThan(try h.int("__hlCleared"), cleared)
+        XCTAssertEqual(try h.string("__first('.tts-play', __item(3)).textContent"), "Read my answer")
+    }
+
+    func testAnEmptyBoxSaysNoAnswerYet() throws {
+        let h = try harness(extra: Self.highlightStub)
+        try h.eval("__first('.tts-play', __item(3)).onclick({});")
+        let segments = try XCTUnwrap(h.postedSpeech().last?["segments"] as? [[String: Any]])
+        XCTAssertEqual(segments.compactMap { $0["text"] as? String }.joined(), "No answer yet.")
+    }
+
+    // MARK: - Speak my answer into the box (slice 4)
+
+    func testDictationIsSpacedForTheCaretNotTheEnd() throws {
+        let h = try harness(extra: "var STT_STATE = 'ready';")
+        try h.eval("__typeBox(['First line.', 'The cat sat']);")
+        try h.eval("__select(__box().childNodes[1].childNodes[0], 4);")
+        try h.eval("__first('.stt-toggle', __item(3)).onclick({});")
+        let listen = try XCTUnwrap(h.postedDictation().last)
+        XCTAssertEqual(listen["action"] as? String, "listen")
+        XCTAssertEqual(listen["before"] as? String, "First line.\nThe ")
+        XCTAssertEqual(listen["after"] as? String, "c")
+        XCTAssertEqual(listen["single_line"] as? Bool, false)
+    }
+
+    func testDictationIntoAnUnfocusedBoxGoesToTheEnd() throws {
+        let h = try harness(extra: "var STT_STATE = 'ready';")
+        try h.eval("__typeBox(['First line.', 'The cat sat']); __range = null;")
+        try h.eval("__first('.stt-toggle', __item(3)).onclick({});")
+        let listen = try XCTUnwrap(h.postedDictation().last)
+        XCTAssertEqual(listen["before"] as? String, "ine.\nThe cat sat")
+        XCTAssertEqual(listen["after"] as? String, "")
+        // The phrase goes in at the end: the caret is put there first.
+        let id = try XCTUnwrap(listen["id"] as? String)
+        try h.eval("__exec = []; window.__secureTestDictation.insert('\(id)', ' today');")
+        XCTAssertEqual(try execNames(h), ["insertText"])
+        XCTAssertTrue(try h.bool("__range.startContainer === __box().childNodes[1].childNodes[0]"))
+        XCTAssertEqual(try h.int("__range.startOffset"), 11)
+    }
+
+    // MARK: - Accessibility (slice 4)
+
+    func testTheToolbarAndBoxAreNamedAndLinked() throws {
+        let h = try harness()
+        let item = "__item(\(Self.essay))"
+        let toolbar = "__first('.essay-toolbar', \(item))"
+        XCTAssertEqual(try h.string("\(toolbar).getAttribute('aria-label')"), "Formatting")
+        XCTAssertEqual(try h.string("\(toolbar).getAttribute('aria-controls')"), try h.string("__box().id"))
+        XCTAssertEqual(
+            try h.string("__all('button', \(toolbar)).map(function (b) { return b.getAttribute('aria-label'); }).join('|')"),
+            "Bold|Italic|Underline|Bulleted list|Numbered list|Indent first line|Undo|Redo"
+        )
+        // The word count describes the box.
+        let counter = try XCTUnwrap(h.string("__first('.word-count', \(item)).id"))
+        XCTAssertFalse(counter.isEmpty)
+        XCTAssertEqual(try h.string("__box().getAttribute('aria-describedby')"), counter)
+        // No limit, no description.
+        let none = try harness(extra: "delete BUNDLE.items[3].max_word_count;")
+        XCTAssertNil(try none.string("__box().getAttribute('aria-describedby')"))
+    }
+
+    /// RT-2 through the page: an undo after a click puts the caret at the click.
+    func testUndoPutsTheCaretWhereTheUndoneChangeWasMade() throws {
+        let h = try harness(extra: """
+        __execHook = function (name) {
+          if (name !== 'bold') return;
+          var p = __box().childNodes[0];
+          var t = p.childNodes[0];
+          var text = t.textContent;
+          while (p.firstChild) p.removeChild(p.firstChild);
+          p.appendChild(document.createTextNode(text.slice(0, 5)));
+          var b = document.createElement('b');
+          b.appendChild(document.createTextNode(text.slice(5, 9)));
+          p.appendChild(b);
+          p.appendChild(document.createTextNode(text.slice(9)));
+        };
+        """)
+        // Typing ends with the caret after "part" (recorded with the typing).
+        try h.eval("__typeBox(['Some bold part']); __select(__box().childNodes[0].childNodes[0], 14); __box().oninput({ type: 'input' });")
+        try h.eval("__advance(2000);")
+        // The student selects "bold" and makes it bold.
+        try h.eval("__select(__box().childNodes[0].childNodes[0], 5, __box().childNodes[0].childNodes[0], 9); __box().__selectionMoved();")
+        try h.eval("__first('.essay-tool-bold', __item(3)).onclick({});")
+        // The caret is somewhere else when Undo is pressed.
+        try h.eval("__select(__box().childNodes[0].childNodes[0], 0);")
+        try h.eval("__first('.essay-tool-undo', __item(3)).onclick({});")
+        XCTAssertEqual(try h.string("__boxHTML(__box())"), "<p>Some bold part</p>")
+        XCTAssertTrue(try h.bool("__range.startContainer === __box().childNodes[0].childNodes[0]"))
+        XCTAssertEqual(try h.string("__range.startOffset + '-' + __range.endOffset"), "5-9")
     }
 
     // MARK: - Undo in plain fields (D-6)

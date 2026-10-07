@@ -2203,9 +2203,47 @@ first.
 | **Undo in plain fields (D-6).** Type in (b), (c), a cell of (d) and the typed blank of (e), pause, type more, Cmd-Z, Shift-Cmd-Z in each | Each takes back the last step and redoes it; the word count / formula preview follow; stderr shows a post after each undo | NOT RUN |
 | **Math key undo.** In (c) type `x`, press the π key, Cmd-Z | Only the π goes; the preview and a post follow | NOT RUN |
 | **Drawing undo untouched.** Draw a stroke, then Cmd-Z with focus in the drawing item; then Cmd-Z in an essay | The stroke goes (the canvas's own undo); the essay's undo touches only the essay | NOT RUN |
-| **Read my answer (degraded until slice 4).** Responses read-aloud on; in (a) press "Read my answer" | The answer is read in full (list items with their markers); NO word highlight over the box; typing stops the reading | NOT RUN |
+| **Read my answer (degraded until slice 4).** Responses read-aloud on; in (a) press "Read my answer" | The answer is read in full (list items with their markers); NO word highlight over the box; typing stops the reading | SUPERSEDED by the slice 4 rows below |
 | **Speak my answer.** Speech-to-text granted and ready; caret mid-paragraph in (a), dictate a phrase | The phrase is inserted at the caret as plain text in the surrounding formatting; it is saved | NOT RUN |
 | **VoiceOver.** VoiceOver ON before joining; move to (a)'s toolbar and box | "Formatting, toolbar"; each button by name with its pressed state ("Bold, toggle button, not selected" — wording is VoiceOver's); the box as "Your answer, edit text" | NOT RUN |
 | **Real AAC — format keys.** Release build of 1.6.0 against the origin, REAL lockdown: in (a) Cmd-B, Cmd-I, Cmd-U, Shift-Cmd-8, Cmd-] | Each works inside the session exactly as under simulation (the chords reach the page — the main unknown); no beep | NOT RUN |
 | **Real AAC — undo.** Same session: Cmd-Z / Shift-Cmd-Z in (a) and in (c) | Undo / redo work inside the session; the drawing canvas's own Cmd-Z still works | NOT RUN |
 | **Real AAC — paste / Tab / hand in.** Same session: Cmd-V (clipboard per the test's setting), Tab out of (a), hand in | Paste as above; Tab leaves the box; the hand-in succeeds and the teacher sees the formatting; `DID END` | NOT RUN |
+
+## Formatting in essays — read aloud, dictation, VoiceOver (v1.6.0, RT slice 4, 2026-10-07)
+
+`docs/rich-text-essay-design.md` slice 4. "Read my answer" over the formatted
+box now highlights each spoken word with a range on the box's own text (no
+mirror — the box is real DOM with `user-select: text`); list markers ("• ",
+"1. ") are spoken but never highlighted. "Speak my answer" spaces a phrase
+from the text around the CARET (slice 3 used the end of the answer). The box
+is described by its word count (`aria-describedby`); the toolbar names the box
+it formats (`aria-controls`). RT-1 (an empty paragraph appearing after Undo
+around a list) and RT-2 (the caret after Undo) have fixes to confirm. The
+headless suite stubs the Highlight API, the selection and WebKit's editing;
+what only WebKit, the synthesizer and VoiceOver can show is below.
+
+Fixture: the slice 3 fixture — (a) an essay with formatting ON and a max word
+count. Responses read-aloud and speech-to-text granted to the student. Debug
+build under simulated lockdown unless the row says otherwise; rebuild first.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Highlight follows the voice.** In (a) type a paragraph with a **bold** word and an *italic* word, then a bulleted list of two items and a numbered list of one; press Read my answer | Every word is highlighted as it is spoken, including the bold / italic words (the highlight sits on the word, not shifted); the box carries the reading outline | NOT RUN |
+| **Markers spoken, not highlighted.** Same reading, at the lists | The voice says the bullet ("bullet" or a pause — VoiceOver-voice wording) and "1."; while a marker is spoken nothing is highlighted; the item's words then highlight in the list item | NOT RUN |
+| **No stale paint.** Same reading, watch the previous word | Only the current word is painted; no earlier word stays highlighted (the `ttsRepaint` toggle) | NOT RUN |
+| **Long answer scrolls.** Type enough paragraphs that (a) scrolls inside its box; scroll to the top; Read my answer | When the spoken word goes below the visible part, the box scrolls to keep it in view | NOT RUN |
+| **Typing stops reading.** Start Read my answer, type a letter in (a) | Reading stops at once, the highlight clears, the button reads "Read my answer" again | NOT RUN |
+| **Ends clean.** Let a reading finish; then start one and press Stop | The highlight and the outline clear both times | NOT RUN |
+| **Empty box.** Empty (a), press Read my answer | "No answer yet." is spoken | NOT RUN |
+| **Formula in the answer.** Type `So $x^2$ grows` in (a), Read my answer | The formula is read as math and highlighted whole; "grows" is highlighted after it | NOT RUN |
+| **Dictation mid-paragraph.** Type "The cat sat." and a second paragraph; put the caret between "The " and "cat"; Speak my answer, say "big" | "The big cat sat." — one space each side, lower case, no doubled space | NOT RUN |
+| **Dictation at a paragraph start.** Caret at the start of the second paragraph; dictate a phrase | The phrase starts with a capital letter and no leading space; a space separates it from the word after | NOT RUN |
+| **Dictation never focused.** Reload (Resume) so the box has no caret; press Speak my answer without clicking the box; dictate | The phrase is added at the END of the answer (not the start), spaced after the last word | NOT RUN |
+| **RT-1: no gap after Undo.** Type a line, Bold, Enter, Bulleted list, type two items, Undo, Undo | No empty line ever appears between the first line and the list; each Undo takes back one step | NOT RUN |
+| **RT-2: caret after Undo.** Type "Some bold part"; select "bold", press B; click at the end of the text; press Undo | "bold" is plain again and the caret / selection is back on "bold" (where the change was made), not mid-word elsewhere | NOT RUN |
+| **RT-2: Indent then Undo.** Click mid-paragraph, press Indent, press Undo | The indent goes; the caret is where it was when Indent was pressed | NOT RUN |
+| **VoiceOver: toolbar.** VoiceOver ON before joining; move to (a)'s toolbar, Left / Right through it | "Formatting, toolbar"; each button by its name ("Bold", "Bulleted list", "Indent first line", …) with its state — selected / not selected for the six toggles, "dimmed" for Undo / Redo when there is nothing to undo / redo; one Tab stop for the strip | NOT RUN |
+| **VoiceOver: pressed state follows the caret.** In (a) put the caret in a bold word, VO to the Bold button | "Bold, selected" (and not selected outside bold text) | NOT RUN |
+| **VoiceOver: the box.** Tab into (a) | "Your answer, edit text" (multi-line), then the word count ("0 / 400 words") as its description; typing is echoed | NOT RUN |
+| **Real AAC — read and dictate.** Release build of 1.6.0, REAL lockdown: Read my answer and Speak my answer in (a) | Both behave as under simulation; the highlight paints inside the session | NOT RUN |

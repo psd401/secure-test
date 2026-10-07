@@ -2,7 +2,7 @@
 
 Design page, 2026-10-07. Source: an open-beta teacher asked for students
 to be able to bold, underline or italicize their own writing. Decisions
-marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slices 1–3 are built (see §Progress).
+marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slices 1–4 are built (see §Progress).
 
 ## Decided (James, 2026-10-07)
 
@@ -337,3 +337,92 @@ removed the list and the gap); **RT-2** the caret lands by character
 offset after Undo / Indent (seen mid-word: "bold |part"), as the agent
 flagged. Neither loses text. Shortcuts under real AAC remain the main
 unknown (rows in client/MANUAL-CHECKS.md).
+
+### Slice 4 — read aloud, dictation, VoiceOver, RT-1 / RT-2, the preview toolbar (BUILT 2026-10-07, not released / not deployed)
+
+- **"Read my answer" over the box, with the word highlight.** No mirror: the
+  box is real DOM with `user-select: text`, so a spoken word is a CSS Custom
+  Highlight range on the box's own text node. `richSpeechSegments(box, split)`
+  (pure, in `richTextFunctions`) reads the box as segments in the D-7 line
+  order — each text node as itself (`node`, `start`, `raw`; `$…$` split by the
+  page's `mathSegments` into a math segment marked whole), "\n" between lines,
+  and each list item's "• " / "1. " as a SAID segment. **Markers are spoken**
+  (the voice says the bullet / number, as the derived text always read) but
+  carry no node, so nothing is highlighted while one is said; empty lines are
+  not read; numbering counts only items with text, like the derived text.
+  `richSpeechRange(seg, offset, length)` (pure) maps the host's word (offset in
+  the segment's spoken text) back to `{node, start, end}` — `\$` spoken as `$`
+  mapped past the backslash, a word clamped to its node. `ttsHighlight` takes
+  that path for segments tagged `box`, then `ttsBoxReveal` scrolls the box
+  (overflow-y: auto) to keep the word in view; the stale-paint `ttsRepaint`
+  toggle runs on the box (the reading target). Kept: typing stops reading
+  (`ttsStopWhenTyping` on the box), the highlight and outline clear at the end
+  and on Stop, "No answer yet." for an empty box. A word split across two
+  nodes (`<b>bo</b>ld`) highlights only its first node's part — the question
+  reader's existing behaviour.
+- **Speak my answer, spaced at the caret.** `richCaretContext(box, …)` (pure)
+  reads the box as `richLinearText` — one string whose index IS a caret
+  position (text characters, "\n" for every `<br>` and paragraph / item
+  boundary) — and returns up to 16 characters before the selection's start and
+  the one after its end; the host's existing spacing rule then gives a
+  mid-paragraph phrase the right spaces and capitalises after a paragraph
+  boundary. A box with no caret (never focused): the context is the end, and
+  `__richInsert` now puts the caret at the end before inserting (WebKit would
+  have put it at the start).
+- **Accessibility.** Already there from slice 3 and kept: `role="toolbar"`
+  named "Formatting", every button named, `aria-pressed` on the six toggles,
+  `aria-disabled` on Undo / Redo, the box `role="textbox"` `aria-multiline`
+  "Your answer", one Tab stop for the strip. Added: the box is
+  `aria-describedby` its word count (when the essay has a limit) and the
+  toolbar `aria-controls` the box.
+- **RT-1 — cause found, fixed.** WebKit's list command can leave the paragraph
+  it converted behind as an empty `<p>` with no `<br>` — zero height, so the
+  student never sees it — and the DOM reader read it as an inner blank
+  paragraph, i.e. `<p><br></p>`, which an undo rebuilt as a visible empty line
+  (the second undo went to a state before the list, where a trailing blank is
+  dropped — exactly the look's sequence). `richInvisibleBlock` (a `p` / `div`
+  with no `<br>` and no non-collapsible text) is skipped by the DOM reader and
+  by the caret walk, so it is neither saved nor counted. The MARKUP reader is
+  unchanged, so the shared server table still holds. This also explains part
+  of RT-2: positions after the gap were off by one in the rebuild.
+- **RT-2 — fixed for the stale caret.** An undo restored the caret recorded
+  with the TARGET state's last edit, so a caret moved since (a click, a
+  selection made for a command) was ignored. `undoHistory` gains `moved()`:
+  on every `selectionchange` inside the box the current state takes the new
+  caret and the typing step closes, so an undo puts the caret / selection back
+  where the undone change was made, and typing elsewhere after a click is a
+  step of its own. The flat character position stays (with RT-1's skip it
+  matches the rebuild); a `(block, offset)` path was not needed. Plain fields
+  are unchanged (they do not call `moved`).
+- **D-8 preview toolbar — partial by design.** The preview page runs no script
+  (CSP `default-src 'none'`, no `script-src`, ADR 0009), so the buttons cannot
+  run commands: they render inert (`aria-disabled`, the Tier-1 toolbar's
+  pattern) with a note "Students can format their answer here with these
+  buttons. In this preview, type in the box and try Cmd-B, Cmd-I or Cmd-U;
+  nothing is saved." The box IS a working `contenteditable` (no script needed
+  to type; the browser's own Cmd-B / I / U work in it), styled like the
+  client's (paragraphs without margin, the first-line indent and list styles).
+  The preview route passes `rich_text` (essays only); print mode keeps the
+  blank write area. Lists, indent and undo cannot be tried in the preview.
+- Tests: `RendererRichTextTests` 31 → 44 (13 new, the slice-3 read-aloud test rewritten; segments = the derived lines; a word →
+  its node incl. `\$` and clamping; a formula whole; caret context mid-word /
+  paragraph start / selection / no caret; RT-1 skip in reader and positions;
+  `moved()` keeps the caret and closes the step, an unmoved caret keeps
+  coalescing; the page: lines read without a mirror, word highlighted in a
+  `<strong>` and an `<li>`, marker not, clear at the end; typing stops reading;
+  empty box; dictation context at the caret and to the end when unfocused;
+  toolbar / box names and links; undo puts the selection back on "bold").
+  `preview-render.test.ts` +2 (toolbar + editable box, no script; print keeps
+  the write area). Rows: client/MANUAL-CHECKS.md "Formatting in essays — read
+  aloud, dictation, VoiceOver (v1.6.0, RT slice 4)" (18), design-tool rows
+  542–546; NOT RUN. The slice-3 "Read my answer (degraded)" row is marked
+  superseded.
+
+**Slice 4 look (main session, 2026-10-07, Debug client rebuilt from the
+slice-4 tree, same sequence as the slice-3 look):** **RT-1 and RT-2 are
+NOT fixed in WebKit.** The first Undo after Bold → Return → Bulleted list
+→ "first item" still shows an empty line between the first paragraph and
+the list; Indent after two Undos still puts the caret mid-word ("bold
+|part" from "part|"). The slice-4 causes were inferred from code; the
+real WebKit DOM was not seen. Next step: inspect the box's DOM in WebKit
+(the Debug web view is not inspectable today) before another fix.

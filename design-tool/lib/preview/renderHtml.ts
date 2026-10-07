@@ -55,6 +55,9 @@ export interface PreviewItem {
   // Essay-only rubric (slice 33). Rendered read-only ONLY when the teacher
   // set student_visibility.during_test — mirroring what the student sees.
   rubric?: Rubric | null;
+  // RT slice 4 (docs/rich-text-essay-design.md D-8): "Let students format
+  // their answer" — the essay renders the formatting box and its toolbar.
+  rich_text?: boolean | null;
   // Match-only pair list (slice 47). Rights are displayed sorted so the
   // authored order (which IS the answer key) doesn't give matches away.
   pairs?: MatchPair[] | null;
@@ -296,6 +299,36 @@ function speechBar(...labels: string[]): string {
   return `<div class="speech-bar">${buttons}</div>`;
 }
 
+// RT slice 4 (docs/rich-text-essay-design.md D-8): a formatted essay in the
+// preview. The preview runs no script (strict CSP, ADR 0009), so the toolbar's
+// buttons cannot run commands here: they are inert like the Tier-1 toolbar and
+// a note says what they do. The box itself is a real `contenteditable` — typing
+// needs no script, and the browser's own Cmd-B / Cmd-I / Cmd-U work in it — so
+// a teacher can try formatting. Nothing typed here is saved or sent anywhere.
+const RICH_PREVIEW_TOOLS = [
+  ["B", "Bold", "tool-bold"],
+  ["I", "Italic", "tool-italic"],
+  ["U", "Underline", "tool-underline"],
+  ["• List", "Bulleted list", ""],
+  ["1. List", "Numbered list", ""],
+  ["Indent", "Indent first line", ""],
+  ["Undo", "Undo", ""],
+  ["Redo", "Redo", ""],
+] as const;
+
+function renderRichEssayBox(placeholder: string | null | undefined): string {
+  const buttons = RICH_PREVIEW_TOOLS.map(
+    ([text, label, cls]) =>
+      `<span class="tool-btn essay-tool${cls ? ` ${cls}` : ""}" role="button" aria-disabled="true" aria-label="${label}">${escapeHtml(text)}</span>`,
+  ).join("");
+  const hint = escapeHtml(placeholder || "(student response)");
+  return (
+    `<div class="essay-toolbar" role="toolbar" aria-label="Formatting">${buttons}</div>` +
+    `<div class="essay essay-rich" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Your answer" aria-placeholder="${hint}" data-placeholder="${hint}" spellcheck="false"><p><br></p></div>` +
+    `<p class="rich-note">Students can format their answer here with these buttons. In this preview, type in the box and try Cmd-B, Cmd-I or Cmd-U; nothing is saved.</p>`
+  );
+}
+
 function renderItem(
   item: PreviewItem,
   index: number,
@@ -496,6 +529,8 @@ function renderItem(
     if (printMode) {
       // Slice 34: a tall blank box to write the response on paper.
       body = `<div class="write-area" aria-hidden="true"></div>${limit}${rubric}`;
+    } else if (item.rich_text) {
+      body = `${renderRichEssayBox(item.placeholder)}${limit}${rubric}`;
     } else {
       const placeholder = item.placeholder
         ? escapeHtml(item.placeholder)
@@ -663,6 +698,18 @@ export function renderAssessmentHtml(
     .short-text { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     .essay { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; }
     .word-limit { color: #666; font-size: 12px; margin: 4px 0 0; }
+    /* RT slice 4 (D-8): the formatted essay box — the client's look (paragraphs
+       without margin, MLA first-line indent, one-level lists). */
+    .essay-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+    .essay-tool.tool-bold { font-weight: 700; }
+    .essay-tool.tool-italic { font-style: italic; }
+    .essay-tool.tool-underline { text-decoration: underline; }
+    .essay-rich { position: relative; min-height: 120px; line-height: 1.5; overflow-y: auto; resize: vertical; cursor: text; }
+    .essay-rich p { margin: 0; }
+    .essay-rich p[data-indent="first"] { text-indent: 2em; }
+    .essay-rich ul, .essay-rich ol { margin: 0; padding-left: 1.75em; }
+    .essay-rich:empty::before, .essay-rich:has(> p:only-child > br:only-child)::before { content: attr(data-placeholder); position: absolute; top: 6px; left: 8px; color: #999; pointer-events: none; }
+    .rich-note { color: #666; font-size: 12px; margin: 4px 0 0; }
     .rubric { margin: 10px 0 0; padding: 10px; background: #f7f8fa; border: 1px solid #e0e3ea; border-radius: 4px; }
     .rubric-title { font-weight: 600; font-size: 13px; margin: 0 0 6px; }
     .rubric-criterion { margin: 0 0 8px; }

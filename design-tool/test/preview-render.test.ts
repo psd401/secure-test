@@ -175,6 +175,39 @@ describe("renderAssessmentHtml — essay items (slice 32)", () => {
     const out = renderAssessmentHtml(assessment, [essay()]);
     expect(out).not.toContain("<script");
   });
+
+  // RT slice 4 (docs/rich-text-essay-design.md D-8).
+  test("a formatted essay shows the toolbar and an editable box instead of the textarea", () => {
+    const out = renderAssessmentHtml(assessment, [essay({ rich_text: true, placeholder: "Begin <here>" })]);
+    expect(out).not.toContain('<textarea class="essay"');
+    expect(out).toContain('<div class="essay-toolbar" role="toolbar" aria-label="Formatting">');
+    for (const label of [
+      "Bold",
+      "Italic",
+      "Underline",
+      "Bulleted list",
+      "Numbered list",
+      "Indent first line",
+      "Undo",
+      "Redo",
+    ]) {
+      expect(out).toContain(`aria-disabled="true" aria-label="${label}"`);
+    }
+    expect(out).toContain('class="essay essay-rich" contenteditable="true" role="textbox" aria-multiline="true"');
+    expect(out).toContain('data-placeholder="Begin &lt;here&gt;"');
+    expect(out).toContain("Students can format their answer here");
+    // Still no script: the box edits natively, the buttons are inert.
+    expect(out).not.toContain("<script");
+  });
+
+  test("a formatted essay still prints as a write area", () => {
+    const out = renderAssessmentHtml(assessment, [essay({ rich_text: true })], undefined, {
+      printMode: true,
+    });
+    expect(out).toContain('class="write-area"');
+    expect(out).not.toContain('contenteditable="true"');
+    expect(out).not.toContain('class="essay-toolbar"');
+  });
 });
 
 describe("renderAssessmentHtml — essay rubric visibility (slice 33)", () => {

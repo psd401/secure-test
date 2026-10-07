@@ -228,6 +228,8 @@ extension AssessmentPage {
               var value = (n.nodeValue !== undefined && n.nodeValue !== null) ? n.nodeValue : n.textContent;
               out.push({ kind: 'text', text: String(value === undefined || value === null ? '' : value) });
             } else if (n.nodeType === 1) {
+              // RT-1 (slice 4): a paragraph the student cannot see is not read.
+              if (richInvisibleBlock(n)) continue;
               var name = String(n.localName || n.nodeName || n.tagName || '').toLowerCase();
               var attrs = {};
               if (typeof n.getAttribute === 'function') {
@@ -564,6 +566,9 @@ extension AssessmentPage {
             } else if (k.nodeType === 1) {
               var name = richNodeName(k);
               if (name === 'br') { pos += 1; continue; }
+              // RT-1: skipped here as the DOM reader skips it, so a position
+              // taken in the live box lands in the same place in the rebuild.
+              if (richInvisibleBlock(k)) continue;
               if (RICH_LINE_TAGS[name] === true) {
                 if (seenLine) pos += 1;
                 seenLine = true;
@@ -648,6 +653,20 @@ extension AssessmentPage {
             lastAt = t;
           },
           close: function () { open = false; },
+          // RT-2 (slice 4): the caret moved without an edit — a click, an
+          // arrow key, a selection made for a command. The current state takes
+          // the new caret, so an undo of the NEXT change puts the caret back
+          // where that change was made (not where the typing before it ended),
+          // and the typing step closes: typing somewhere else is a new step.
+          // A caret equal to the recorded one is typing's own caret move.
+          moved: function () {
+            if (applying) return;
+            var state = capture();
+            if (state.key !== stack[index].key) { history.record(); return; }
+            if (JSON.stringify(state.sel) === JSON.stringify(stack[index].sel)) return;
+            stack[index].sel = state.sel;
+            open = false;
+          },
           step: function (delta) {
             // Anything typed since the last record is a step of its own first.
             history.record(true);
@@ -697,6 +716,211 @@ extension AssessmentPage {
           text = '';
         }
         return String(text).split(/\r\n|\r|\n/);
+      }
+
+      // ---- RT slice 4 ----
+
+      // RT-1 (slice 3 look): WebKit's list command can leave the paragraph it
+      // converted behind as an EMPTY paragraph. With no <br> and no text that
+      // renders it has no line box, so the student never sees it — but read as
+      // a blank paragraph it came back as a visible empty line after an undo
+      // rebuilt the box (and would have shown as one in the teacher's view).
+      // A paragraph like that is skipped by the DOM reader and the caret walk
+      // alike. The MARKUP reader is untouched: the server's table still holds.
+      function richInvisibleBlock(n) {
+        var name = richNodeName(n);
+        if (name !== 'p' && name !== 'div') return false;
+        return !(function shows(node) {
+          var kids = node.childNodes || node.children || [];
+          for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            if (!k) continue;
+            if (k.nodeType === 3) {
+              var v = (k.nodeValue !== undefined && k.nodeValue !== null) ? k.nodeValue : k.textContent;
+              if (!RICH_WS_ONLY.test(String(v || ''))) return true;
+            } else if (k.nodeType === 1) {
+              if (richNodeName(k) === 'br' || shows(k)) return true;
+            }
+          }
+          return false;
+        })(n);
+      }
+
+      function richNodeText(n) {
+        var v = (n.nodeValue !== undefined && n.nodeValue !== null) ? n.nodeValue : n.textContent;
+        return String(v === undefined || v === null ? '' : v);
+      }
+
+      // "Read my answer" over the box. The box is real DOM with
+      // user-select: text, so — unlike a textarea, which needs the mirror —
+      // a spoken word is highlighted with a range straight on the box's own
+      // text nodes. The box as read-aloud segments, in reading order:
+      //   - each text node as itself (`node`, `start` 0, `raw` = its text), so
+      //     an offset in the spoken text is an offset in that node;
+      //   - a list item's "• " / "1. " as a SAID segment (no node): spoken —
+      //     the voice says "bullet" or the number, as the derived text reads
+      //     (D-9) — but never highlighted, because it is not text on the page;
+      //   - "\n" between lines, said, never highlighted.
+      // Lines follow the D-7 text rule: one per paragraph, one per list item,
+      // a <br> ends a line; empty lines are not read; list numbering counts
+      // only the items that have text, as the derived text does. `split`, when
+      // given, is the page's math tokenizer (mathSegments): a `$…$` formula
+      // inside a node becomes a math segment over its characters, read through
+      // the math mapper and highlighted whole.
+      function richSpeechSegments(box, split) {
+        var lines = [];
+        var cur = null;
+        var list = null;
+        function newLine(prefix) {
+          cur = [];
+          lines.push(cur);
+          if (prefix) cur.push({ kind: 'text', text: prefix, said: true });
+        }
+        function hasText(node) {
+          var kids = node.childNodes || node.children || [];
+          for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            if (!k) continue;
+            if (k.nodeType === 3 && richNodeText(k).replace(/[ \t\n\r\f ]/g, '') !== '') return true;
+            if (k.nodeType === 1 && RICH_DROP_WITH_CONTENT[richNodeName(k)] !== true && hasText(k)) return true;
+          }
+          return false;
+        }
+        function addText(node) {
+          var raw = richNodeText(node);
+          if (!cur) {
+            if (RICH_WS_ONLY.test(raw)) return;
+            newLine();
+          }
+          var parts = typeof split === 'function' ? split(raw) : [{ text: raw, math: false }];
+          var at = 0;
+          parts.forEach(function (part) {
+            if (part.math) {
+              var open = part.text.slice(0, 2) === '$$' ? 2 : 1;
+              cur.push({
+                kind: 'math', tex: part.text.slice(open, part.text.length - open),
+                node: node, start: at, end: at + part.text.length
+              });
+            } else if (part.text) {
+              cur.push({ kind: 'text', text: part.text.replace(/\\\$/g, '$'), raw: part.text, node: node, start: at });
+            }
+            at += part.text.length;
+          });
+        }
+        function walk(node) {
+          var kids = node.childNodes || node.children || [];
+          for (var i = 0; i < kids.length; i++) {
+            var k = kids[i];
+            if (!k) continue;
+            if (k.nodeType === 3) {
+              // Pretty-printing straight inside the box or a list is not text.
+              var pn = richNodeName(node);
+              if ((node === box || pn === 'ul' || pn === 'ol') && RICH_WS_ONLY.test(richNodeText(k))) continue;
+              addText(k);
+              continue;
+            }
+            if (k.nodeType !== 1) continue;
+            var name = richNodeName(k);
+            if (RICH_DROP_WITH_CONTENT[name] === true || richInvisibleBlock(k)) continue;
+            if (name === 'br') { cur = null; continue; }
+            if (name === 'ul' || name === 'ol') {
+              if (list) { walk(k); continue; }   // D-9: a nested list's items join the outer list
+              cur = null;
+              list = { ordered: name === 'ol', n: 0 };
+              walk(k);
+              list = null;
+              cur = null;
+              continue;
+            }
+            if (name === 'li' && list) {
+              cur = null;
+              if (!hasText(k)) continue;   // an empty item is dropped, as the derived text drops it
+              list.n += 1;
+              newLine(list.ordered ? list.n + '. ' : '• ');
+              walk(k);
+              cur = null;
+              continue;
+            }
+            if (name === 'li' || RICH_BLOCKS[name] === true) {
+              if (!list) cur = null;
+              else if (cur && cur.some(function (s) { return !s.said; })) cur = null;   // a block inside an item: its own line, no marker
+              walk(k);
+              if (!list) cur = null;
+              continue;
+            }
+            walk(k);   // strong / em / u / span …
+          }
+        }
+        walk(box);
+        var segs = [];
+        lines.forEach(function (line) {
+          var words = line.some(function (s) {
+            return !s.said && (s.kind === 'math' || s.text.replace(/[ \t\n\r\f ]/g, '') !== '');
+          });
+          if (!words) return;
+          if (segs.length) segs.push({ kind: 'text', text: '\n', said: true });
+          line.forEach(function (s) { segs.push(s); });
+        });
+        return segs;
+      }
+
+      // A spoken word — `offset` / `length` inside segment `seg`'s SPOKEN text,
+      // as the host reports it — as a range on the box: { node, start, end } in
+      // that segment's text node, or null for a said segment (a list marker, a
+      // line break), which has nothing on the page to mark. `\$` is spoken as
+      // `$`, so offsets after one are mapped back to the node's characters. A
+      // formula is marked whole.
+      function richSpeechRange(seg, offset, length) {
+        if (!seg || !seg.node || seg.said) return null;
+        var text = richNodeText(seg.node);
+        if (seg.kind === 'math') {
+          return { node: seg.node, start: Math.min(seg.start, text.length), end: Math.min(seg.end, text.length) };
+        }
+        function raw(cleanPos) {
+          var r = seg.raw || '';
+          var clean = 0;
+          for (var i = 0; i < r.length; i++) {
+            if (clean === cleanPos) return i;
+            if (r.charAt(i) === '\\' && r.charAt(i + 1) === '$') continue;
+            clean += 1;
+          }
+          return r.length;
+        }
+        var start = Math.min(seg.start + raw(offset), text.length);
+        var end = Math.min(seg.start + raw(offset + length), text.length);
+        return { node: seg.node, start: start, end: Math.max(start, end) };
+      }
+
+      // The box's content as one string whose index IS a caret position
+      // (richWalk's count): each text node's characters, and "\n" for every
+      // <br> and every paragraph / item boundary.
+      function richLinearText(box) {
+        var out = '';
+        var total = richWalk(box, function () { return false; }, function (node, pos) {
+          while (out.length < pos) out += '\n';
+          out += richNodeText(node);
+          return false;
+        });
+        while (out.length < total) out += '\n';
+        return out;
+      }
+
+      // "Speak my answer" into the box (STT slice 3 spaced every phrase as if
+      // at the END of the answer). The host spaces a phrase from the text just
+      // before the caret and the character just after it; here they are read
+      // from the box at the caret: up to 16 characters before the selection's
+      // start (a paragraph boundary reads "\n", so a phrase at the start of a
+      // paragraph is capitalised and gets no leading space) and the one after
+      // its end. No caret (a box never focused): the end of the answer.
+      function richCaretContext(box, startContainer, startOffset, endContainer, endOffset) {
+        var linear = richLinearText(box);
+        var a = startContainer ? richPositionOf(box, startContainer, startOffset) : null;
+        var b = endContainer ? richPositionOf(box, endContainer, endOffset) : null;
+        if (a === null) a = linear.length;
+        if (b === null || b < a) b = a;
+        a = Math.min(a, linear.length);
+        b = Math.min(b, linear.length);
+        return { before: linear.slice(Math.max(0, a - 16), a), after: linear.charAt(b) };
       }
     """#
 }

@@ -127,6 +127,8 @@ export async function GET(req: Request, ctx: RouteContext) {
       max_word_count: r.config?.max_word_count ?? null,
       placeholder: r.config?.placeholder ?? null,
       rubric: r.config?.rubric ?? null,
+      // RT slice 4 (D-8): a formatted essay previews with its toolbar.
+      rich_text: r.type === "essay" && r.config?.rich_text === true,
       pairs: r.config?.pairs ?? null,
       sequence: r.config?.sequence ?? null,
       // Slice 49: the key (correct_region_ids) deliberately stays behind.
