@@ -36,6 +36,7 @@ import { ShareDialog } from "@/components/app/ShareDialog";
 import type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
 import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
 import type {
+  FillBlankBlank,
   HotspotRegion,
   MatchPair,
   Rubric,
@@ -71,6 +72,15 @@ import { MatchPairsEditor } from "./MatchPairsEditor";
 import { SequenceEditor } from "./SequenceEditor";
 import { HotspotEditor } from "./HotspotEditor";
 import { TableEditor } from "./TableEditor";
+import { FillBlankEditor, InsertBlankButton } from "./FillBlankEditor";
+import {
+  FILL_BLANK_SEED_STEM,
+  blanksForSave,
+  blanksWithoutKeys,
+  fillBlankIssueMessages,
+  hasKeyedBlank,
+  orderBlanksByStem,
+} from "@/lib/items/fillBlankEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
 import { GenerateQuestionsDialog } from "@/components/app/GenerateQuestionsDialog";
@@ -148,6 +158,11 @@ interface ItemView {
   rows: TableRow[] | null;
   corner: string | null;
   cell_keys: TableCellKeys | null;
+  // Fill-in-the-blank only (FB slice 2): one entry per `[[id]]` marker in
+  // the stem, kept in STEM order (docs/fill-in-blank-design.md §Progress —
+  // "Blank n" is the array position everywhere a teacher reads it). A
+  // dropdown's correct_option_id and a typed blank's keys are the key.
+  blanks: FillBlankBlank[] | null;
   // Short-text only (numeric equivalence, 2026-09-15): true = compare the
   // answer's exact form, false/null = equivalent numeric forms score.
   exact_form: boolean | null;
@@ -258,12 +273,6 @@ type AiProposal = {
 // the client ships drawing (finding 10.10).
 const TYPE_LABEL = ITEM_TYPE_LABEL;
 
-// FB slice 1 (docs/fill-in-blank-design.md) ships the type without its editor
-// form (slice 2), the E3 pattern: until then the picker does not offer it, so
-// no one can create a question this page cannot yet edit. Slice 2 deletes
-// this list.
-const NOT_YET_PICKABLE: readonly ItemType[] = ["fill_blank"];
-
 /** What the items routes return: the DB row, with the type-specific fields in `config`. */
 interface ItemRow {
   id: string;
@@ -294,6 +303,7 @@ interface ItemRow {
     rows?: TableRow[] | null;
     corner?: string | null;
     cell_keys?: TableCellKeys | null;
+    blanks?: FillBlankBlank[] | null;
     exact_form?: boolean | null;
     scoring_method?: ScoringMethod | null;
   } | null;
@@ -327,6 +337,8 @@ function rowToView(r: ItemRow): ItemView {
     rows: r.config?.rows ?? null,
     corner: r.config?.corner ?? null,
     cell_keys: r.config?.cell_keys ?? null,
+    // Stem order on the way in, so "Blank n" in the form is Blank n everywhere.
+    blanks: r.config?.blanks ? orderBlanksByStem(r.stem, r.config.blanks) : null,
     exact_form: r.config?.exact_form ?? null,
     scoring_method: r.config?.scoring_method ?? null,
     standards: r.standards ?? [],
@@ -405,6 +417,9 @@ function hasCellKeys(cellKeys: TableCellKeys | null): boolean {
 }
 function defaultScoringMethod(item: ItemView): ScoringMethod {
   if (item.type === "table") return hasCellKeys(item.cell_keys) ? "auto" : "human";
+  // FB slice 2: the same E3-F1 rule for fill_blank (lib/api/items.ts
+  // effectiveScoringMethod — no keyed blank → human).
+  if (item.type === "fill_blank") return hasKeyedBlank(item.blanks) ? "auto" : "human";
   return SCORING_DEFAULT[item.type];
 }
 
@@ -426,9 +441,19 @@ function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean 
   if (!before) return false;
   const b = before as unknown as Record<string, unknown>;
   const a = after as unknown as Record<string, unknown>;
-  return Object.keys(a).every(
-    (k) => ANSWER_KEY_FIELDS.has(k) || JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null),
-  );
+  return Object.keys(a).every((k) => {
+    if (ANSWER_KEY_FIELDS.has(k)) return true;
+    // FB slice 2: a fill_blank's key lives inside each blank — compare the
+    // blanks with correct_option_id / keys removed, as the server's
+    // isAnswerKeyOnlyPatch (lib/api/requireDraft.ts) does.
+    if (k === "blanks") {
+      return (
+        JSON.stringify(blanksWithoutKeys(after.blanks)) ===
+        JSON.stringify(blanksWithoutKeys(before.blanks))
+      );
+    }
+    return JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null);
+  });
 }
 
 function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
@@ -454,6 +479,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -481,6 +507,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -511,6 +538,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -541,6 +569,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -568,6 +597,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -595,6 +625,37 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       rows: null,
       corner: null,
       cell_keys: null,
+      blanks: null,
+      exact_form: null,
+      scoring_method: null,
+      standards: [],
+    };
+  }
+  if (type === "fill_blank") {
+    // FB slice 2: one typed blank to start; Add seeds the sentence that
+    // carries its marker (FILL_BLANK_SEED_STEM, flagged by readiness).
+    return {
+      type,
+      stem: "",
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      max_word_count: null,
+      placeholder: null,
+      rubric: null,
+      rubric_id: null,
+      pairs: null,
+      sequence: null,
+      image_asset_id: null,
+      regions: null,
+      correct_region_ids: null,
+      prompt_asset_id: null,
+      canvas: null,
+      columns: null,
+      rows: null,
+      corner: null,
+      cell_keys: null,
+      blanks: [{ id: "b1", kind: "text" }],
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -629,6 +690,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       ],
       corner: null,
       cell_keys: null,
+      blanks: null,
       exact_form: null,
       scoring_method: null,
       standards: [],
@@ -658,6 +720,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
     rows: null,
     corner: null,
     cell_keys: null,
+    blanks: null,
     exact_form: null,
     scoring_method: null,
     standards: [],
@@ -1130,6 +1193,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   { ...draft, stem: "New hotspot item" }
                 : addType === "drawing_upload"
                   ? { ...draft, stem: "New drawing prompt" }
+                  : addType === "fill_blank"
+                  ? { ...draft, stem: FILL_BLANK_SEED_STEM }
                   : addType === "table"
                     ? {
                         ...draft,
@@ -1165,6 +1230,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     if (body.rows == null) delete body.rows;
     if (body.corner == null) delete body.corner;
     if (body.cell_keys == null) delete body.cell_keys;
+    if (body.blanks == null) delete body.blanks;
     // short_text only, and only when ON: the other types' schemas don't
     // know the key, and `null` would fail the optional boolean.
     if (!body.exact_form) delete body.exact_form;
@@ -1234,6 +1300,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       if (item.corner) body.corner = item.corner;
       if (item.cell_keys) body.cell_keys = item.cell_keys;
     }
+    if (item.type === "fill_blank") {
+      // FB slice 2: stem order, keys only when set (blank accepted answers
+      // dropped) — what slice 1's compactBlanks stores anyway.
+      body.blanks = blanksForSave(item.stem, item.blanks ?? []);
+    }
     if (item.type === "drawing_upload") {
       body.prompt_asset_id = item.prompt_asset_id;
       // A half-filled pair saves as "no canvas" (the inline hint tells the
@@ -1270,7 +1341,16 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saved", at: new Date() } }));
     } catch (e) {
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "idle" } }));
-      setItemError(item.id, describe(e));
+      // FB slice 2: name the blank problem slice 1's write boundary found
+      // (the 400's detail) instead of only "isn't complete yet".
+      const blankIssues =
+        item.type === "fill_blank" && e instanceof ApiError && e.code === "invalid_body"
+          ? fillBlankIssueMessages(e.detail)
+          : [];
+      setItemError(
+        item.id,
+        blankIssues.length > 0 ? `${describe(e)} ${blankIssues.join("; ")}.` : describe(e),
+      );
     }
   }
 
@@ -2027,7 +2107,6 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             disabled={isLocked}
           >
             {(Object.keys(TYPE_LABEL) as ItemType[])
-              .filter((t) => !NOT_YET_PICKABLE.includes(t))
               .map((t) => (
                 <NativeSelectOption key={t} value={t}>
                   {TYPE_LABEL[t]}
@@ -2593,7 +2672,16 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     value={item.stem}
                     disabled={isLocked}
                     onChange={(e) =>
-                      updateItem(item.id, (i) => ({ ...i, stem: e.target.value }))
+                      updateItem(item.id, (i) => ({
+                        ...i,
+                        stem: e.target.value,
+                        // FB slice 2: keep blanks in stem order as the
+                        // teacher types (cut / paste can move a marker).
+                        blanks:
+                          i.type === "fill_blank"
+                            ? orderBlanksByStem(e.target.value, i.blanks ?? [])
+                            : i.blanks,
+                      }))
                     }
                     rows={2}
                     className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
@@ -2616,6 +2704,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       }
                     />
                     <EmphasisButtons apply={(next) => updateItem(item.id, (i) => ({ ...i, stem: next(i.stem) }))} />
+                    {item.type === "fill_blank" ? (
+                      <InsertBlankButton
+                        itemId={item.id}
+                        stem={item.stem}
+                        blanks={item.blanks ?? []}
+                        onChange={(patch) => updateItem(item.id, (i) => ({ ...i, ...patch }))}
+                        disabled={isLocked}
+                      />
+                    ) : null}
                   </div>
                   <MathPreview text={item.stem} />
                 </label>
@@ -2828,6 +2925,18 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       rows={item.rows ?? []}
                       corner={item.corner}
                       cellKeys={item.cell_keys}
+                      onChange={(patch) =>
+                        updateItem(item.id, (i) => ({ ...i, ...patch }))
+                      }
+                      disabled={isLocked}
+                    />
+                  </div>
+                ) : item.type === "fill_blank" ? (
+                  <div className="mt-3">
+                    <FillBlankEditor
+                      itemId={item.id}
+                      stem={item.stem}
+                      blanks={item.blanks ?? []}
                       onChange={(patch) =>
                         updateItem(item.id, (i) => ({ ...i, ...patch }))
                       }

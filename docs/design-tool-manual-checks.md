@@ -1491,3 +1491,22 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 490 | **Share** a test with period settings to a colleague who co-teaches one of those periods; they Add it | Their copy keeps that period only; their other periods unset; none of the sharer's other periods listed | NOT RUN — needs a second staff account (route-tested) |
 | 491 | Row 473 with Spell Check: a period given Spell Check through **Apply to all my periods**, a real student joins that period's session on the client | Spelling squiggles in the essay; a student in a period without it gets none | NOT RUN — needs the origin after the deploy |
 
+
+## Fill in the blank — slice 2: the editor (FB, 2026-10-07)
+
+`docs/fill-in-blank-design.md` §Progress "Slice 2" is the record. Fixture: a Draft test on local dev or the origin after the deploy; a Published copy for rows 502–503.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 492 | **Add a question** picker | "Fill in the blank" is offered; Add gives "New sentence with a [[b1]]." with one typed blank; the checklist says the question still has the placeholder text | NOT RUN |
+| 493 | Click inside the sentence, press **Insert blank** | `[[b2]]` appears at the cursor (spaced from neighbouring words), the caret sits after it, a typed Blank appears in the list in sentence order | NOT RUN |
+| 494 | Select a word in the sentence, press **Insert blank** | The word becomes the marker and the new blank's first accepted answer | NOT RUN |
+| 495 | Insert a blank BEFORE an existing one | The list renumbers: the new one is Blank 1, its legend shows its marker; Preview numbers them the same way | NOT RUN |
+| 496 | Switch a blank to **Dropdown**, fill three options, mark one correct; then a second dropdown → **Same options as** Blank 1 | Two empty options appear (a typed answer becomes option 1, marked correct); the copy has the same options in the same order and no correct option unless one with the same text was marked | NOT RUN |
+| 497 | Typed blank: two accepted answers, tick **Answer form matters**; Save; reload | Both answers and the tick survive; the live line reads "n blanks checked, one point each" | NOT RUN |
+| 498 | Delete a `[[b1]]` marker by hand in the textarea | Blank stays in the list as "Not in the question any more." with **Put it back (at the end)**; the checklist names it; Save shows the server's reason | NOT RUN |
+| 499 | **Remove blank** on a blank | The blank and its marker both go; the sentence keeps single spacing | NOT RUN |
+| 500 | Type `[[b9]]` by hand into the sentence | "[[b9]] in the question has no blank." with **Add a blank for it** / **Delete it from the question** | NOT RUN |
+| 501 | Scoring method select with no answer on any blank, then with one | "Default — Human (teacher scores)", then "Default — Auto (machine-scored)" | NOT RUN |
+| 502 | Publish; on the Published test change a dropdown's correct option and a typed blank's accepted answers; Save | Sentence, Insert blank, kind, options, Same options as, Remove and the Answer-form box are disabled; the radios and accepted answers are editable; Save lights up and succeeds | NOT RUN |
+| 503 | Same Published test: try an option-text edit | Not possible (the field is disabled) — the server's lock would refuse it anyway | NOT RUN |

@@ -10,6 +10,7 @@ import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
 import { markAssessmentGrantSeen } from "@/lib/api/grants";
 import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
+import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,8 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           rows: r.config?.rows ?? null,
           corner: r.config?.corner ?? null,
           cell_keys: r.config?.cell_keys ?? null,
+          // FB slice 2: stem order, as the editor keeps it (lib/items/fillBlankEditor.ts).
+          blanks: r.config?.blanks ? orderBlanksByStem(r.stem, r.config.blanks) : null,
           exact_form: r.config?.exact_form ?? null,
           scoring_method: r.config?.scoring_method ?? null,
           standards: Array.isArray(r.standards) ? r.standards : [],

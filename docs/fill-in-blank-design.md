@@ -208,3 +208,55 @@ migration (`items.type` is text; blanks live in `items.config.blanks`).
   (slice 2); the Swift fixture and the delivery version gate (slices 5–6).
 
 Tests: schema 135, design-tool 2969 (full suite, after review fixes), typecheck clean.
+
+**Slice 2 BUILT 2026-10-07 (not deployed).** The editor. Design-tool only;
+no schema change, no migration.
+
+- **Form** (`app/dashboard/[id]/FillBlankEditor.tsx`; pure logic in
+  `lib/items/fillBlankEditor.ts`). The sentence is the card's ordinary stem
+  textarea. **Insert blank** sits beside Bold / Italic. It puts `[[bN]]` at
+  the caret, or in place of a selection, and the selected text becomes the
+  new typed blank's first accepted answer. A space is added next to a word.
+  N is one past the highest `b<n>` in use, so a removed id is never handed
+  out again (an unpublished test's old responses may name it). Per blank:
+  Kind (Dropdown / Typed answer); a dropdown's options (2–12, the teacher's
+  order, D-6) with a radio for the optional correct one, "No correct
+  option", and **Same options as Blank n** (copies the list; the target
+  keeps its own answer only if an option with the same text exists); a
+  typed blank's accepted answers (1–10, "any one is accepted", D-5) and
+  **Answer form matters** with short text's wording. Switching kind carries
+  the answer across (the correct option's text becomes the accepted answer,
+  and back); a dropdown's wrong options are not kept.
+- **Stem order.** The `blanks` array is kept in the order its markers first
+  appear: on load (`rowToView`, `page.tsx`), on every keystroke in the
+  sentence, on insert, and in the save payload (`blanksForSave`, which also
+  drops blank accepted answers). So "Blank n" in the form is Blank n for
+  students and in every report.
+- **Deleted markers.** Deleting a `[[b1]]` by hand does NOT delete the blank
+  or its key. The blank stays in the list, last, marked "Not in the
+  question any more." with **Put it back (at the end)**. **Remove blank**
+  removes the blank AND its marker(s). A typed `[[b9]]` with no blank gets
+  **Add a blank for it** / **Delete it from the question**. Both states are
+  readiness gaps, and a Save in either state is refused by slice 1's
+  boundary; the card now shows the boundary's blank messages after "This
+  question isn't complete yet" (`fillBlankIssueMessages` reads the 400's
+  `detail`).
+- **Readiness** (`readiness.ts fillBlankGaps`): "needs at least one blank",
+  "has [[b9]] in its text but no blank for it", "uses [[b1]] more than
+  once", "blank n is not in the question text", "blank n needs at least 2
+  options", "blank n has an empty option". No key is not a gap (the table's
+  E3-F1 rule). The Add seed "New sentence with a [[b1]]." joins SEED_TEXT.
+- **Scoring label:** the unset method reads Human until a blank has a key,
+  then Auto (E3-F1, as the server's `effectiveScoringMethod`).
+- **Publish lock:** the sentence, Insert blank, kind, option text, Add /
+  Remove option, Same options as, Remove blank and Answer form matters are
+  disabled. The correct-option radios, "No correct option" and the
+  accepted answers stay editable. `answerKeyOnlyChange` compares blanks
+  without `correct_option_id` / `keys`, as the server's
+  `isAnswerKeyOnlyPatch` does, so Save lights up for exactly those edits.
+- **Picker:** `NOT_YET_PICKABLE` is gone; "Fill in the blank" is offered.
+- **Not done:** no rendered sentence preview in the card (the Preview
+  button shows it); option text has no inline math preview.
+
+Tests: design-tool 2997 (full suite), typecheck clean. Rows 492–503 in
+`docs/design-tool-manual-checks.md`, NOT RUN.

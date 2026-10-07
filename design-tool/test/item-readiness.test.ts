@@ -180,3 +180,57 @@ describe("questionGaps: table (E3)", () => {
     expect(questionGaps(item({ ...grid, rows: [{ label: "Row 1" }] }))).toEqual(["still has placeholder headings"]);
   });
 });
+
+// FB slice 2 (docs/fill-in-blank-design.md): marker ↔ blank pairing and the
+// dropdown's options; keys are optional (no key = hand-scored, E3-F1).
+describe("questionGaps: fill_blank (FB)", () => {
+  const sentence = {
+    type: "fill_blank" as const,
+    stem: "The [[b1]] side is wet and the [[b2]] side is dry.",
+    choices: [],
+    correct_choice_ids: [],
+    blanks: [
+      {
+        id: "b1",
+        kind: "dropdown" as const,
+        options: [
+          { id: "o1", text: "windward" },
+          { id: "o2", text: "leeward" },
+        ],
+      },
+      { id: "b2", kind: "text" as const },
+    ],
+  };
+  test("a complete keyless sentence has no gaps", () => {
+    expect(questionGaps(item(sentence))).toEqual([]);
+    expect(needsAnswerKey(sentence)).toBe(false);
+  });
+  test("the Add seed reads as placeholder text", () => {
+    expect(questionGaps(item({ ...sentence, stem: "New sentence with a [[b1]].", blanks: [{ id: "b1", kind: "text" }] }))).toEqual([
+      "still has the placeholder text",
+    ]);
+  });
+  test("no blank at all", () => {
+    expect(questionGaps(item({ ...sentence, stem: "No gaps here.", blanks: [] }))).toEqual(["needs at least one blank"]);
+  });
+  test("an orphan marker, a duplicate marker, a blank not in the text — numbered in stem order", () => {
+    expect(questionGaps(item({ ...sentence, stem: "The [[b1]] side and [[b9]]." }))).toEqual([
+      "has [[b9]] in its text but no blank for it",
+      "blank 2 is not in the question text",
+    ]);
+    expect(questionGaps(item({ ...sentence, stem: "[[b2]] and [[b1]] and [[b1]]" }))).toEqual([
+      "uses [[b1]] more than once",
+    ]);
+    // b1's marker gone: b2 becomes blank 1, the orphan b1 is listed last
+    expect(questionGaps(item({ ...sentence, stem: "Only [[b2]]." }))).toEqual(["blank 2 is not in the question text"]);
+  });
+  test("a dropdown with too few options or an empty option", () => {
+    const one = { ...sentence, blanks: [{ id: "b1", kind: "dropdown" as const, options: [{ id: "o1", text: "x" }] }, sentence.blanks[1]!] };
+    expect(questionGaps(item(one))).toEqual(["blank 1 needs at least 2 options"]);
+    const empty = {
+      ...sentence,
+      blanks: [{ id: "b1", kind: "dropdown" as const, options: [{ id: "o1", text: "x" }, { id: "o2", text: " " }] }, sentence.blanks[1]!],
+    };
+    expect(questionGaps(item(empty))).toEqual(["blank 1 has an empty option"]);
+  });
+});

@@ -1,4 +1,12 @@
 import type { ItemType } from "@/db/schema";
+import { fillBlankMarkerIds, type FillBlankBlank } from "@secure-test/schema";
+import {
+  FILL_BLANK_SEED_STEM,
+  MIN_OPTIONS,
+  duplicateMarkers,
+  orderBlanksByStem,
+  orphanMarkers,
+} from "@/lib/items/fillBlankEditor";
 
 /** The slice of an item the readiness checks need — a subset of the editor's ItemView. */
 export interface ReadinessItem {
@@ -16,6 +24,8 @@ export interface ReadinessItem {
   /** E3 slice 2: the table grid; keys are optional (a keyless table is hand-scored). */
   columns?: { label: string }[] | null;
   rows?: { label: string }[] | null;
+  /** FB slice 2: a fill_blank's blanks; keys are optional (no key = hand-scored, E3-F1). */
+  blanks?: FillBlankBlank[] | null;
 }
 
 export interface ReadinessCheck {
@@ -55,6 +65,7 @@ export const SEED_TEXT = new Set([
   "Right B",
   "First step",
   "Second step",
+  FILL_BLANK_SEED_STEM,
 ]);
 
 function placeholder(s: string | null | undefined): boolean {
@@ -129,10 +140,39 @@ export function questionGaps(item: ReadinessItem): string[] {
         gaps.push("still has placeholder headings");
       break;
     }
+    case "fill_blank":
+      gaps.push(...fillBlankGaps(item.stem, item.blanks ?? []));
+      break;
     case "essay":
     case "drawing_upload":
       break;
   }
+  return gaps;
+}
+
+/**
+ * FB slice 2 (docs/fill-in-blank-design.md, "Every marker has exactly one
+ * blank and every blank has exactly one marker (readiness check)"): the
+ * structural gaps slice 1's write boundary would refuse, in the teacher's
+ * words. "Blank n" counts in stem order, as the editor's list and every
+ * report do. No key is NOT a gap: a keyless blank is hand-scored, like a
+ * keyless table cell (E3-F1).
+ */
+export function fillBlankGaps(stem: string, blanks: FillBlankBlank[]): string[] {
+  const gaps: string[] = [];
+  if (blanks.length === 0 && fillBlankMarkerIds(stem).length === 0) {
+    return ["needs at least one blank"];
+  }
+  for (const id of orphanMarkers(stem, blanks)) gaps.push(`has [[${id}]] in its text but no blank for it`);
+  for (const id of duplicateMarkers(stem)) gaps.push(`uses [[${id}]] more than once`);
+  const markers = new Set(fillBlankMarkerIds(stem));
+  orderBlanksByStem(stem, blanks).forEach((b, i) => {
+    const n = i + 1;
+    if (!markers.has(b.id)) gaps.push(`blank ${n} is not in the question text`);
+    if (b.kind !== "dropdown") return;
+    if (b.options.length < MIN_OPTIONS) gaps.push(`blank ${n} needs at least ${MIN_OPTIONS} options`);
+    else if (b.options.some((o) => blank(o.text))) gaps.push(`blank ${n} has an empty option`);
+  });
   return gaps;
 }
 
