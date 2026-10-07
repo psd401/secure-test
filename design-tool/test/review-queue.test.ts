@@ -310,6 +310,35 @@ describe("GET review-queue", () => {
     ).toBeNull();
   });
 
+  // RT slice 2 (docs/rich-text-essay-design.md): a formatted essay rides the
+  // payload as essay_html, rendered by the one sanitising renderer (the
+  // stored html cleaned again); a plain essay carries none and the card shows
+  // response.text as before.
+  test("a formatted essay carries essay_html, re-cleaned; a plain essay and a short text do not", async () => {
+    const { assessment } = await seedQueueScenario();
+    type Entry = { item: { stem: string }; essay_html: string | null };
+    const before = (await (await getQueue(assessment.id)).json()) as { entries: Entry[] };
+    for (const e of before.entries) expect(e.essay_html).toBeNull();
+
+    const [essay] = await getDb().select().from(items).where(eq(items.stem, "Human essay"));
+    await getDb()
+      .update(responses)
+      .set({
+        response: {
+          type: "essay",
+          text: "Q-BOLD",
+          html: '<p><strong>Q-BOLD</strong><iframe src="https://x"></iframe></p><ol><li>Q-ONE</li></ol>',
+        },
+      })
+      .where(eq(responses.item_id, essay!.id));
+    const body = (await (await getQueue(assessment.id)).json()) as { entries: Entry[] };
+    const formatted = body.entries.find((e) => e.item.stem === "Human essay")!;
+    expect(formatted.essay_html).toBe(
+      '<div class="essay-rich"><p><strong>Q-BOLD</strong></p><ol><li>Q-ONE</li></ol></div>',
+    );
+    expect(body.entries.find((e) => e.item.stem === "Short human")!.essay_html).toBeNull();
+  });
+
   test("404 for another teacher", async () => {
     // Access slice 1 (D-3): another teacher's assessment is indistinguishable
     // from one that does not exist.

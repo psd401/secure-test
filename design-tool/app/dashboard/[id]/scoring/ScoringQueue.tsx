@@ -89,6 +89,12 @@ interface QueueEntry {
    */
   answer_html?: string | null;
   /**
+   * RT slice 2 (docs/rich-text-essay-design.md): a formatted essay, rendered
+   * server-side by renderEssayAnswerHtml (re-cleaned to the fixed subset).
+   * Null for a plain essay and every other type; absent from an older payload.
+   */
+  essay_html?: string | null;
+  /**
    * FB slice 3: a fill-in-the-blank answer as the sentence — the student's
    * answers in place, marked against the key — server-rendered by
    * renderFillBlankAnswerHtml. Null for every other type; absent from an
@@ -674,6 +680,14 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           <div
             className="mt-2 max-h-64 overflow-y-auto whitespace-pre-line rounded bg-muted p-2 text-sm"
             dangerouslySetInnerHTML={{ __html: entry.fill_blank_html }}
+          />
+        ) : entry.essay_html ? (
+          // RT slice 2: essay_html is the route's renderEssayAnswerHtml output —
+          // the stored html re-cleaned to p / br / strong / em / u / lists,
+          // every character of text escaped — so no injection vector.
+          <blockquote
+            className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm"
+            dangerouslySetInnerHTML={{ __html: entry.essay_html }}
           />
         ) : entry.answer_html ? (
           // Roadmap 4b-f: answer_html is server-rendered by

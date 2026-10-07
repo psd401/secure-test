@@ -23,6 +23,7 @@ const STATE: DialogState = {
   mode: "new",
   includeDrafts: true,
   transferOwnership: true,
+  doubleSpace: true,
 };
 
 const o = (status: SendOutcome["status"], reason?: string): SendOutcome => ({
@@ -79,6 +80,10 @@ describe("send dialog logic", () => {
     expect(parseSavedState("not json")).toBeNull();
     const { transferOwnership: _omit, ...older } = STATE;
     expect(parseSavedState(JSON.stringify(older))!.transferOwnership).toBe(false);
+    // RT D-10: a state saved before the double-space box reads as off.
+    const { doubleSpace: _omit2, ...beforeRt } = STATE;
+    expect(parseSavedState(JSON.stringify(beforeRt))!.doubleSpace).toBe(false);
+    expect(parseSavedState(JSON.stringify({ ...STATE, doubleSpace: "yes" }))!.doubleSpace).toBe(false);
     expect(parseSavedState(JSON.stringify({ ...STATE, mode: "everything" }))).toBeNull();
     expect(parseSavedState(JSON.stringify({ ...STATE, contents: { prompt: "yes" } }))!.contents).toEqual(
       DEFAULT_CONTENTS,

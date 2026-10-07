@@ -14,6 +14,7 @@ import {
   attempt_events,
   attempts,
   items,
+  response_revisions,
   responses,
   scores,
   scoring_runs,
@@ -577,6 +578,47 @@ describe("the per-student attempt page", () => {
     expect(html).toContain("Because the metal conducts.");
     expect(html).not.toContain('class="katex">Because');
     expect(html).not.toContain("short-text-plain");
+  });
+
+  // RT slice 2 (docs/rich-text-essay-design.md): a formatted essay shows its
+  // formatting on the page and in "Earlier versions", through the one
+  // sanitising renderer — the stored html is cleaned again at render.
+  test("a formatted essay and its earlier version render formatted, re-cleaned", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const [essayItem] = await db
+      .select()
+      .from(items)
+      .where(sql`${items.assessment_id} = ${scene.assessment.id} and ${items.type} = 'essay'`);
+    await db
+      .update(responses)
+      .set({
+        response: {
+          type: "essay",
+          text: "NOW-BOLD",
+          html: '<p data-indent="first"><strong>NOW-BOLD</strong><img src=x onerror="alert(1)"></p>',
+        },
+      })
+      .where(
+        sql`${responses.attempt_id} = ${scene.aliceAttempt.id} and ${responses.item_id} = ${essayItem!.id}`,
+      );
+    await db.insert(response_revisions).values({
+      attempt_id: scene.aliceAttempt.id,
+      item_id: essayItem!.id,
+      response: { type: "essay", text: "• THEN-ITEM", html: "<ul><li><em>THEN-ITEM</em></li></ul><script>x()</script>" },
+      saved_at: new Date("2026-09-07T21:10:00Z"),
+      reason: "interval",
+    });
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain(
+      '<div class="essay-rich"><p data-indent="first"><strong>NOW-BOLD</strong></p></div>',
+    );
+    expect(html).toContain("Earlier versions (1)");
+    expect(html).toContain('<div class="essay-rich"><ul><li><em>THEN-ITEM</em></li></ul></div>');
+    expect(html).not.toContain("onerror");
+    expect(html).not.toContain("x()");
+    // The plain essay of before is gone from this attempt; nothing else changed.
+    expect(html).not.toContain("Because the metal conducts.");
   });
 
   test("a drawing is served full size from the owner-scoped upload route", async () => {

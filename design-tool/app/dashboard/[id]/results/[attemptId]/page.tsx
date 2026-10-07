@@ -23,6 +23,7 @@ import {
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
+import { renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import {
   overallRationale,
   rubricScoreRows,
@@ -293,9 +294,19 @@ function AnswerHistory({
                   disabledReason={restoreDisabledReason}
                 />
               </div>
-              <blockquote className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm">
-                {text === "" ? "(blank)" : text}
-              </blockquote>
+              {/* RT slice 2: a formatted essay version shows its formatting
+                  through the one sanitising renderer (re-cleaned at render);
+                  Copy above still copies the plain `text` (D-7). */}
+              {item.type === "essay" && text !== "" ? (
+                <blockquote
+                  className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm"
+                  dangerouslySetInnerHTML={{ __html: renderEssayAnswerHtml(rev.response) }}
+                />
+              ) : (
+                <blockquote className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2 text-sm">
+                  {text === "" ? "(blank)" : text}
+                </blockquote>
+              )}
             </li>
           );
         })}
@@ -746,6 +757,19 @@ export default async function AttemptResultPage({ params }: PageProps) {
                         className="whitespace-pre-wrap rounded bg-muted p-2 text-sm"
                         dangerouslySetInnerHTML={{
                           __html: renderShortTextAnswer(view.text),
+                        }}
+                      />
+                    ) : item.type === "essay" && view.text !== "" ? (
+                      // RT slice 2 (docs/rich-text-essay-design.md): a
+                      // formatted essay shows its bold / italic / underline,
+                      // lists and first-line indents. renderEssayAnswerHtml
+                      // re-cleans the stored html to the fixed subset, and a
+                      // plain essay comes back as its escaped text — the
+                      // container's pre-wrap keeps its line breaks.
+                      <blockquote
+                        className="whitespace-pre-wrap rounded bg-muted p-2 text-sm"
+                        dangerouslySetInnerHTML={{
+                          __html: renderEssayAnswerHtml(response?.response),
                         }}
                       />
                     ) : (

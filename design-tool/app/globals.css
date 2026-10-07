@@ -83,6 +83,38 @@
   opacity: 0.8;
 }
 
+/* RT slice 2 (docs/rich-text-essay-design.md): a formatted essay answer
+   (lib/richText/renderEssayAnswer.ts) on the review queue, the per-student
+   page, "Earlier versions" and the work packet. Paragraphs carry no margin:
+   a contenteditable makes every Enter a paragraph, so this spaces the answer
+   the way the same keys spaced a plain textarea answer (a blank paragraph is
+   the blank line the student typed). `white-space: normal` undoes the
+   containers' pre-wrap / pre-line, which are for plain answers. Preflight
+   strips list markers, so the lists (D-9, one level) draw their own. */
+.essay-rich {
+  white-space: normal;
+}
+.essay-rich p {
+  margin: 0;
+}
+.essay-rich p[data-indent="first"] {
+  text-indent: 2em;
+}
+.essay-rich ul,
+.essay-rich ol {
+  margin: 0;
+  padding-left: 1.75em;
+}
+.essay-rich ul {
+  list-style: disc;
+}
+.essay-rich ol {
+  list-style: decimal;
+}
+.essay-rich u {
+  text-decoration: underline;
+}
+
 /* PSD palette (psd-branding skill) mapped onto shadcn's semantic tokens.
    Ratios in the proposal's token table are WCAG 2.x contrast, computed. */
 :root {

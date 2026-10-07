@@ -2,7 +2,7 @@
 
 Design page, 2026-10-07. Source: an open-beta teacher asked for students
 to be able to bold, underline or italicize their own writing. Decisions
-marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slice 1 is built (see §Progress).
+marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slices 1–2 are built (see §Progress).
 
 ## Decided (James, 2026-10-07)
 
@@ -185,4 +185,59 @@ None. All decided 2026-10-07 (D-1…D-8).
   ingest), items API (stored only when on, stripped elsewhere, publish
   lock, export/import), delivery bundle, the response PUT (four ingest
   cases + history), restore. Rows 526–533 in
+  `docs/design-tool-manual-checks.md`, NOT RUN.
+
+### Slice 2 — the teacher read side and double-spacing (BUILT 2026-10-07, not deployed)
+
+- **One renderer** (`design-tool/lib/richText/renderEssayAnswer.ts`).
+  `essayRichHtml(response)` re-cleans a stored essay's `html` with
+  `sanitizeEssayHtml` AT RENDER (a stored row may predate a sanitiser fix) and
+  returns null for a plain essay (no `html`, a non-essay, or html that cleans
+  to nothing). `renderEssayAnswerHtml(response)` wraps formatted html in
+  `<div class="essay-rich">`; a plain essay comes back as its escaped `text`
+  with the newlines left in, so each surface's own `pre-wrap` / `pre-line`
+  container shows it exactly as before. CSS in `app/globals.css`:
+  `white-space: normal` (undoes the containers' pre-wrap), paragraphs with no
+  margin (each Enter is a paragraph, so this spaces the answer the way the
+  same keys spaced a textarea), `p[data-indent="first"]` `text-indent: 2em`,
+  disc / decimal lists with 1.75em padding (preflight strips markers).
+- **Surfaces.** Scoring queue: the review-queue route adds `essay_html`
+  (formatted essays only; null otherwise, so a plain card is unchanged) and
+  `ScoringQueue.tsx` renders it in the card's box. Per-student page: the
+  essay answer and every "Earlier versions" entry go through the renderer;
+  **Copy** still copies `revisionText` = the plain `text` (D-7, tested). Work
+  packet: essays print in a `<div class="answer-text">` (was a `<p>`; a
+  formatted answer holds paragraphs and lists) through the renderer. Google
+  Docs: `release.ts` sets `EssaySection.answer_html` from `essayRichHtml`;
+  `content.ts` `docRichAnswerHtml` maps the sanitiser's canonical output tag
+  for tag (safe because text is already escaped and the tag set is fixed):
+  `<p>` → no margin (the student's own blank paragraphs space it),
+  `data-indent="first"` → `text-indent:36pt` (half an inch, MLA),
+  `strong` / `em` → `b` / `i`, `u` / lists kept. Left on `text` (D-7):
+  instant feedback (client-rendered), AI scoring, safeguarding (incl. the
+  queue's evidence quote), insights, word count, the CSV.
+- **Double-spacing (D-10, default off).** Work packet: `?spacing=double`
+  (`PacketQuery.doubleSpace`; any other value is single; kept by Select all),
+  a "Double-space essays" checkbox in the toolbar (unchecked submits nothing,
+  so no hidden field), class `answer-double` → `line-height: 2` on essay
+  answers only, plain and formatted. Google Docs: a "Double-space essays"
+  checkbox in the send dialog (`DialogState.doubleSpace`, saved across the
+  Google redirect; an older saved state reads as off), `double_space`
+  (optional boolean) on the POST, `ReleaseOptions.doubleSpace`,
+  `DocInput.doubleSpace` → `line-height:2.0` on the essay's paragraphs (plain:
+  `<p style="margin:0 0 10pt 0;line-height:2.0">`; formatted: on every `<p>`
+  and `<li>`). Prompt, sources and feedback keep normal spacing. That Drive
+  turns `line-height:2.0` into Double line spacing is the form Docs' own HTML
+  export uses — **unverified against Drive** until row 540.
+- **Help.** `public/help.html` topic 9's Print student work line mentions
+  double-spaced essays (text only). The help page has no Google Docs topic,
+  so nothing there for the dialog.
+- Tests: `test/rich-text-essay-render.test.ts` (renderer: formatted / plain /
+  re-cleaned / cleans to nothing; Docs mapping single and double; buildDocHtml
+  spacing only on essays; Copy stays plain), the packet query and page
+  (formatted re-cleaned, plain unchanged, `spacing=double` on both essays and
+  nothing else, the toolbar box), the per-student page (answer + earlier
+  version), the review queue payload, the Docs release (formatted Doc, double
+  spacing) and route (`double_space` reaches the upload; a non-boolean is
+  400), the dialog's saved state. Rows 534–541 in
   `docs/design-tool-manual-checks.md`, NOT RUN.

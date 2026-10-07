@@ -28,6 +28,12 @@ export interface PacketQuery {
   scores: PacketScoresMode;
   /** D-1: labels instead of names, with a teacher key page last. */
   anon: boolean;
+  /**
+   * RT D-10 (docs/rich-text-essay-design.md): `spacing=double` prints every
+   * essay answer double-spaced, formatted or not. A teacher-side display
+   * choice, default off (single); any other value is single.
+   */
+  doubleSpace: boolean;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -97,6 +103,7 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
     questions: flag(lastParam(searchParams.questions), true),
     scores,
     anon: flag(lastParam(searchParams.anon), false),
+    doubleSpace: (lastParam(searchParams.spacing) ?? "").trim().toLowerCase() === "double",
   };
 }
 

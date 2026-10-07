@@ -19,6 +19,7 @@ import {
 import { requireStaff } from "@/lib/api/requireSession";
 import { resolveSourceText } from "@/lib/api/setSources";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
+import { essayRichHtml, renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
@@ -273,6 +274,15 @@ export async function GET(_req: Request, ctx: RouteContext) {
         typeof (response.response as { text?: unknown }).text === "string" &&
         (response.response as { text: string }).text !== ""
           ? renderShortTextAnswer((response.response as { text: string }).text)
+          : null,
+      // RT slice 2 (docs/rich-text-essay-design.md): a FORMATTED essay as
+      // html, through the one sanitising renderer (the stored html is cleaned
+      // again here). Null for a plain essay — the card shows `response.text`
+      // as before — and for every other type. `response` still carries `text`
+      // and the stored `html`, but the card never renders the raw field.
+      essay_html:
+        response.response.type === "essay" && essayRichHtml(response.response) !== null
+          ? renderEssayAnswerHtml(response.response)
           : null,
       // FB slice 3 (docs/fill-in-blank-design.md): a fill-in-the-blank answer
       // as the sentence — the student's answers in place, ✓ / ✗ and the

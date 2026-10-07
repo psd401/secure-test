@@ -380,6 +380,49 @@ describe("releaseToGoogleDocs", () => {
     expect((await getDb().select().from(google_doc_releases)).length).toBe(2);
   });
 
+  // RT slice 2 (docs/rich-text-essay-design.md): a formatted essay goes into
+  // the Doc formatted (its stored html re-cleaned), a plain one as before;
+  // D-10 double spacing reaches both.
+  test("a formatted essay keeps its formatting in the Doc; double spacing reaches every essay", async () => {
+    const s = await scene();
+    await getDb()
+      .update(responses)
+      .set({
+        response: {
+          type: "essay",
+          text: "Ada bold.",
+          html: '<p data-indent="first"><strong>Ada bold.</strong><script>alert(1)</script></p>',
+        },
+      })
+      .where(eq(responses.id, s.ada.responses[0]!.id));
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: { ...OPTS, doubleSpace: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    const ada = drive.docs.find((d) => d.name.startsWith("Ada"))!.html;
+    const ben = drive.docs.find((d) => d.name.startsWith("Ben"))!.html;
+    expect(ada).toContain('<p style="margin:0;text-indent:36pt;line-height:2.0"><b>Ada bold.</b></p>');
+    expect(ada).not.toContain("script");
+    expect(ben).toContain('<p style="margin:0 0 10pt 0;line-height:2.0">Ben Sample writes.</p>');
+
+    // Off (the default): no line spacing, the formatting still there.
+    const single = new FakeDrive();
+    await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: { ...OPTS, mode: "new" },
+      drive: single,
+    });
+    expect(single.docs.every((d) => !d.html.includes("line-height"))).toBe(true);
+    expect(single.docs.find((d) => d.name.startsWith("Ada"))!.html).toContain("<b>Ada bold.</b>");
+  });
+
   test("skip vs new on a re-send; folders are reused, and remade when trashed", async () => {
     const s = await scene();
     const drive = new FakeDrive();
@@ -640,6 +683,28 @@ describe("POST /api/assessments/[id]/google-docs", () => {
     const s = await scene();
     const cookie = await mintDriveTokenCookie("ya29.t", OTHER, 600);
     expect((await post(s.assessment.id, body({ section: s.section }), cookie)).status).toBe(401);
+  });
+
+  test("double_space reaches the uploaded Doc; absent means single (RT D-10)", async () => {
+    const s = await scene();
+    const uploads: string[] = [];
+    let n = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("/upload/")) uploads.push(String(init?.body ?? ""));
+      return Response.json({ id: `id-${++n}` });
+    }) as typeof fetch;
+    const cookie = await mintDriveTokenCookie("ya29.t", OWNER, 600);
+    const res = await post(s.assessment.id, body({ section: s.section, double_space: true }), cookie);
+    expect(res.status).toBe(200);
+    expect(uploads.length).toBe(2);
+    expect(uploads.every((u) => u.includes("line-height:2.0"))).toBe(true);
+
+    uploads.length = 0;
+    const again = await post(s.assessment.id, body({ section: s.section, mode: "new" }), cookie);
+    expect(again.status).toBe(200);
+    expect(uploads.length).toBe(2);
+    expect(uploads.some((u) => u.includes("line-height"))).toBe(false);
+    expect((await post(s.assessment.id, body({ section: s.section, double_space: "yes" }), cookie)).status).toBe(400);
   });
 
   test("sends through real Drive calls (stubbed fetch)", async () => {

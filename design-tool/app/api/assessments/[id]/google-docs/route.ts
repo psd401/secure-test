@@ -28,6 +28,9 @@ const Body = z
     include_drafts: z.boolean(),
     // Slice 5: optional so a dialog from before it still posts.
     transfer_ownership: z.boolean().optional(),
+    // RT D-10 (docs/rich-text-essay-design.md): essays double-spaced in the
+    // Doc. Optional (default off) so an older dialog still posts.
+    double_space: z.boolean().optional(),
   })
   .refine((b) => (b.section === undefined) !== (b.attempt_id === undefined), {
     message: "exactly one of section or attempt_id",
@@ -91,6 +94,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       mode: body.mode,
       includeDrafts: body.include_drafts,
       transferOwnership: body.transfer_ownership ?? false,
+      doubleSpace: body.double_space ?? false,
     },
     drive: createDriveClient(token),
   });

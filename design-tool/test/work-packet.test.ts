@@ -26,7 +26,19 @@ describe("parsePacketQuery", () => {
       questions: true,
       scores: "none",
       anon: false,
+      doubleSpace: false,
     });
+  });
+
+  // RT D-10 (docs/rich-text-essay-design.md): double-spacing is a
+  // teacher-side print choice, default off.
+  test("spacing=double turns double-spaced essays on; anything else is single", () => {
+    expect(parsePacketQuery({}).doubleSpace).toBe(false);
+    expect(parsePacketQuery({ spacing: "double" }).doubleSpace).toBe(true);
+    expect(parsePacketQuery({ spacing: " DOUBLE " }).doubleSpace).toBe(true);
+    expect(parsePacketQuery({ spacing: "single" }).doubleSpace).toBe(false);
+    expect(parsePacketQuery({ spacing: "2" }).doubleSpace).toBe(false);
+    expect(parsePacketQuery({ spacing: ["double", "single"] }).doubleSpace).toBe(false);
   });
 
   test("section is trimmed, and blank is the same as absent", () => {

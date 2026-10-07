@@ -65,6 +65,7 @@ export function SendToGoogleDocsControl({
     mode: "skip",
     includeDrafts: false,
     transferOwnership: false,
+    doubleSpace: false,
   });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -127,6 +128,7 @@ export function SendToGoogleDocsControl({
           mode: state.mode,
           include_drafts: state.includeDrafts,
           transfer_ownership: state.transferOwnership,
+          double_space: state.doubleSpace,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -299,6 +301,19 @@ export function SendToGoogleDocsControl({
                   Make a new Doc (dated today)
                 </label>
               </fieldset>
+
+              {/* RT D-10 (docs/rich-text-essay-design.md): a teacher-side
+                  choice, default off. The Doc's essay paragraphs carry line
+                  spacing 2.0, so it stays double-spaced as the student edits. */}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={state.doubleSpace}
+                  disabled={busy}
+                  onChange={(e) => setState({ ...state, doubleSpace: e.target.checked })}
+                />
+                Double-space essays
+              </label>
 
               <label className="flex items-center gap-2">
                 <input

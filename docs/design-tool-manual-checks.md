@@ -1561,3 +1561,18 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 531 | The same PUT to (a) | Stored as `{type: "essay", text: "anything"}`, no `html` | NOT RUN |
 | 532 | Hand in; open the per-student page, the scoring queue, Score with AI, the work packet and the Google Docs send for (b) | Every surface shows the plain derived text (the formatted rendering is slice 2); nothing shows raw HTML or `<p>`; the word count is that of the text | NOT RUN |
 | 533 | On (b), save a long formatted answer, then a short one (a shrink); **Earlier versions** → Restore | The kept version's stored response carries its `html`; after Restore the current response has that `html` and `text` back | NOT RUN |
+
+## Formatting in a student's essay — slice 2: the teacher read side and double-spacing (RT, 2026-10-07)
+
+`docs/rich-text-essay-design.md` §Progress "Slice 2" is the record. Local dev; reuse slice 1's fixture after rows 526–533 (essay (b) answered with formatting through the `curl` PUT of row 530, essay (a) plain), handed in. For row 541 a stored row whose `html` holds markup the sanitiser would drop, written straight to the database (it stands for a row from before a sanitiser fix).
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 534 | **Per-student page**, essay (b) | **Bold** shows bold, the first paragraph is indented about two characters, the list draws bullets; line breaks as typed; no tags or `<p>` visible. Essay (a) reads exactly as before (its own line breaks, "(blank)" when empty) | NOT RUN |
+| 535 | **Scoring queue**, essay (b) (scoring method human or hybrid) | The card shows the same formatting in its scrolling box; essay (a)'s card is unchanged | NOT RUN |
+| 536 | Per-student page → **Earlier versions** on (b) (after row 533) | Each kept version shows its formatting; **Copy** puts the plain text on the clipboard ("• " list lines, no tags) | NOT RUN |
+| 537 | **Print student work** with neither box ticked | (b) prints formatted inside its bordered box, (a) as before; nothing double-spaced | NOT RUN |
+| 538 | Tick **Double-space essays** → Update | The URL gains `spacing=double`; both essays print double-spaced (formatted and plain); stems, short text and score blocks keep normal spacing; the box stays ticked; **Select all** keeps `spacing=double`; Save as PDF shows the spacing | NOT RUN |
+| 539 | **Send to Google Docs** for one student (b), Double-space essays OFF | The Doc shows bold / italic / underline, the first-line indent (half an inch) and the list; single line spacing | NOT RUN |
+| 540 | Send again (Make a new Doc) with **Double-space essays** ON; type a new line in the essay in the Doc | Format → Line & paragraph spacing reads Double on the essay's paragraphs; the new line is double-spaced too; prompt / feedback (if included) single. Leave the dialog for the Google reconnect once (no Drive cookie): the box is still ticked on return | NOT RUN |
+| 541 | The planted row (stored `html` with `<script>` / `onclick` / `<img onerror>`) on the per-student page, the queue, the packet and a Doc | None of the planted markup reaches any surface (view source / the Doc); the text around it shows | NOT RUN |

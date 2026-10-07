@@ -599,6 +599,60 @@ describe("work packet — one page per student, every item type", () => {
   });
 });
 
+// RT slice 2 (docs/rich-text-essay-design.md): a formatted essay prints with
+// its formatting through the one sanitising renderer; D-10 double spacing is
+// a toolbar option (`spacing=double`), off by default, on essays only.
+describe("work packet — formatted essays and double spacing (RT)", () => {
+  async function formatBens(benAttemptId: string, essayItemId: string) {
+    await getDb()
+      .update(responses)
+      .set({
+        response: {
+          type: "essay",
+          text: "BEN-BOLD",
+          html: '<p data-indent="first"><strong>BEN-BOLD</strong><script>alert(1)</script></p><ul><li>BEN-ITEM</li></ul>',
+        },
+      })
+      .where(sql`${responses.attempt_id} = ${benAttemptId} and ${responses.item_id} = ${essayItemId}`);
+  }
+
+  test("a formatted essay prints its formatting, re-cleaned; a plain essay prints as before", async () => {
+    const { assessment, items: itemRows, benAttempt } = await seedPacketScene();
+    await formatBens(benAttempt.id, itemRows[1]!.id);
+    const body = packetBody(await render(assessment.id, { section: SECTION }));
+    expect(body).toContain(
+      '<div class="essay-rich"><p data-indent="first"><strong>BEN-BOLD</strong></p><ul><li>BEN-ITEM</li></ul></div>',
+    );
+    expect(body).not.toContain("alert(1)");
+    // Ada's plain essay: escaped text, its newline kept for pre-line.
+    expect(body).toContain('<div class="answer-text">ADA-ESSAY-PROSE line one\nline two</div>');
+  });
+
+  test("spacing=double double-spaces every essay answer and nothing else; off by default", async () => {
+    const { assessment, items: itemRows, benAttempt } = await seedPacketScene();
+    await formatBens(benAttempt.id, itemRows[1]!.id);
+    const single = packetBody(await render(assessment.id, { section: SECTION }));
+    expect(single).not.toContain("answer-double");
+
+    const html = await render(assessment.id, { section: SECTION, spacing: "double" });
+    const body = packetBody(html);
+    // Both essays (plain and formatted) carry the class; the short text does not.
+    expect(body.match(/class="answer-text answer-double"/g)?.length).toBe(2);
+    expect(html).toContain(".packet .answer-double { line-height: 2; }");
+    expect(body).toMatch(/<p class="answer-text"><span class="katex/);
+  });
+
+  test("the toolbar's Double-space box follows ?spacing=, and Select all keeps it", async () => {
+    const { assessment } = await seedPacketScene();
+    const off = await render(assessment.id, { section: SECTION });
+    expect(off).toContain('name="spacing" value="double"/>');
+    const on = await render(assessment.id, { section: SECTION, spacing: "double" });
+    expect(on).toContain('name="spacing" checked="" value="double"/>');
+    expect(on).toContain("Double-space essays");
+    expect(on).toMatch(/href="[^"]*spacing=double[^"]*">Select all/);
+  });
+});
+
 describe("work packet — scores", () => {
   test("scores=both prints the teacher block and the AI proposal, never the research row", async () => {
     const { assessment } = await seedPacketScene();

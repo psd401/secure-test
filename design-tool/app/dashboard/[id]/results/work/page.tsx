@@ -17,6 +17,7 @@ import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemCon
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
+import { renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import {
   overallRationale,
   rubricScoreRows,
@@ -74,6 +75,7 @@ import { pageAssessment } from "@/lib/api/access";
  *     ?questions=0       answers only (no stems, stimulus or unselected choices)
  *     ?scores=none|teacher|ai|both
  *     ?anon=1            labels instead of names, key page last
+ *     ?spacing=double    every essay answer double-spaced (RT D-10; default single)
  *
  * The section packet is handed-in attempts only: an in-progress answer can
  * still change and a packet is a record. `?attempt=` (a pilot teacher,
@@ -118,6 +120,9 @@ const PRINT_CSS = `
 .packet .answer { margin-top: .25rem; }
 .packet .answer-text { white-space: pre-line; border: 1px solid #000;
   padding: .4rem .5rem; margin: 0; }
+/* RT D-10 (docs/rich-text-essay-design.md): ?spacing=double — essay answers
+   only, plain or formatted (line-height inherits into .essay-rich). */
+.packet .answer-double { line-height: 2; }
 .packet .choices, .packet .lines { list-style: none; padding: 0; margin: 0; }
 .packet .choices li, .packet .lines li { margin: 0 0 .1rem; }
 .packet .box { font-family: inherit; margin-right: .35rem; }
@@ -185,6 +190,7 @@ function packetHref(
   params.set("questions", query.questions ? "1" : "0");
   params.set("scores", query.scores);
   if (query.anon) params.set("anon", "1");
+  if (query.doubleSpace) params.set("spacing", "double");
   return `/dashboard/${assessmentId}/results/work?${params.toString()}`;
 }
 
@@ -682,6 +688,17 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           <input type="checkbox" name="anon" value="1" defaultChecked={query.anon} />
           Anonymous (labels + key page)
         </label>
+        <label className="toolbar-flag">
+          {/* RT D-10: off by default, so an unchecked box (which submits
+              nothing) is the default single spacing — no hidden field needed. */}
+          <input
+            type="checkbox"
+            name="spacing"
+            value="double"
+            defaultChecked={query.doubleSpace}
+          />
+          Double-space essays
+        </label>
         <button type="submit" className="rounded-md border px-3 py-1.5 text-sm self-start">
           Update
         </button>
@@ -814,6 +831,27 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                               __html: renderShortTextAnswer(view.text),
                             }}
                           />
+                        ) : item.type === "essay" ? (
+                          // RT slice 2 (docs/rich-text-essay-design.md): the
+                          // one sanitising renderer — a formatted essay keeps
+                          // its formatting, a plain one is its escaped text
+                          // (pre-line keeps the line breaks). A div, since the
+                          // formatted form holds paragraphs and lists. D-10:
+                          // ?spacing=double double-spaces it.
+                          view.text === "" ? (
+                            <div
+                              className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                            >
+                              (blank)
+                            </div>
+                          ) : (
+                            <div
+                              className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                              dangerouslySetInnerHTML={{
+                                __html: renderEssayAnswerHtml(responseJson),
+                              }}
+                            />
+                          )
                         ) : (
                           <p className="answer-text">
                             {view.text === "" ? "(blank)" : view.text}

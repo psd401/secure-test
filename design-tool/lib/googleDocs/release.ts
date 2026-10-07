@@ -18,6 +18,7 @@ import {
   type EssaySection,
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
+import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
 
 // Row GD slice 3 (docs/google-docs-release-design.md): one Google Doc per
@@ -42,6 +43,8 @@ export interface ReleaseOptions {
   includeDrafts: boolean;
   /** D-3 / slice 5: hand each Doc's ownership to its student. */
   transferOwnership?: boolean;
+  /** RT D-10 (docs/rich-text-essay-design.md): essays at line spacing 2.0. */
+  doubleSpace?: boolean;
 }
 
 export type SkipReason =
@@ -233,6 +236,10 @@ export async function releaseToGoogleDocs(
         stimulus: firstOfSet && set ? set.stimulus_text : null,
         sources: firstOfSet && set ? set.sources.map((s) => ({ label: s.label, text: s.text })) : [],
         answer: text,
+        // RT slice 2: a formatted essay goes into the Doc formatted — its
+        // stored html re-cleaned here (essayRichHtml), then mapped to
+        // Docs-friendly tags by buildDocHtml.
+        answer_html: text && resp ? essayRichHtml(resp.response) : null,
         score: score
           ? {
               points: score.points,
@@ -324,6 +331,7 @@ export async function releaseToGoogleDocs(
           draftAsOf: draft ? now : null,
           essays,
           contents: options.contents,
+          doubleSpace: options.doubleSpace ?? false,
         });
         const fileId = await drive.uploadDoc(title, sectionFolders.get(row.student.section ?? "")!, html);
         const permissionId = await drive.shareWriter(fileId, row.student.email!);

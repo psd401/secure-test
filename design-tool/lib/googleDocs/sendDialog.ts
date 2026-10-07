@@ -22,6 +22,8 @@ export interface DialogState {
   includeDrafts: boolean;
   /** Slice 5. */
   transferOwnership: boolean;
+  /** RT D-10 (docs/rich-text-essay-design.md): default off. */
+  doubleSpace: boolean;
 }
 
 export const DEFAULT_CONTENTS: ReleaseContents = {
@@ -140,6 +142,8 @@ export function parseSavedState(raw: string | null): DialogState | null {
       mode: v.mode,
       includeDrafts: v.includeDrafts,
       transferOwnership: v.transferOwnership === true,
+      // RT D-10: absent from a state saved before it — off, the default.
+      doubleSpace: v.doubleSpace === true,
     };
   } catch {
     return null;
