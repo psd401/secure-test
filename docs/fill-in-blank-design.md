@@ -403,3 +403,21 @@ change.
 
 Tests: design-tool 3040 (full suite), typecheck clean. Rows 515–522 in
 `docs/design-tool-manual-checks.md`, NOT RUN.
+
+**Slice 6 BUILT 2026-10-07 (not deployed): the delivery version gate
+(D-4).** `lib/items/clientSupport.ts` holds `MIN_CLIENT_VERSION_FOR_TYPE`
+(`fill_blank: "1.6.0"`) and `requiredClientUpgrade(version, types)`; a
+missing or unreadable `X-SecureTest-Version` counts as too old. The
+delivery route (the only route that builds a student bundle) checks the
+built bundle's item types and answers 409 `{error:
+"client_update_required", min_version}` before the client calls begin(),
+so nothing locks. A test without new types still reaches every client,
+headerless ones included. `buildDeliveryBundle` now returns a typed
+`DeliveryBundle`. The editor says "Students need Secure Test 1.6 or later
+for this question type…". Client: `JoinErrorCopy` maps the code to "This
+test needs a newer version of Secure Test. Open Self Service, update
+Secure Test, then join again." (rides v1.6.0; older clients show their
+generic "Could not join. Tell your teacher."). Rows 523–525 NOT RUN.
+**With slice 6 in, slices 1–4 can deploy before the client release:**
+teachers can author the type, and students on today's clients are
+refused cleanly until v1.6.0 reaches them.

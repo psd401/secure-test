@@ -231,6 +231,15 @@ final class JoinErrorMessageTests: XCTestCase {
         }
     }
 
+    /// FB slice 6 (D-4): an item type this build cannot render is refused
+    /// before begin(); the student can fix it alone in Self Service.
+    func testClientUpdateRequiredPointsAtSelfService() {
+        let text = message("client_update_required")
+        XCTAssertTrue(text.contains("Self Service"))
+        XCTAssertTrue(text.contains("newer version of Secure Test"))
+        XCTAssertNotEqual(text, message(nil))
+    }
+
     /// EX-2: a join refused as `time_expired` reads the same words as the
     /// sheet the app shows for the delivery route's refusal.
     func testTimeExpiredReadsTheTimeRanOutCopy() {

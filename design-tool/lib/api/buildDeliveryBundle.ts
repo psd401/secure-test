@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { DeliveryBundleSchema } from "@secure-test/schema";
+import { DeliveryBundleSchema, type DeliveryBundle } from "@secure-test/schema";
 import {
   items,
   ITEM_TYPES,
@@ -211,7 +211,7 @@ export async function buildDeliveryBundle(
    * still accepted and the two must not be able to disagree.
    */
   deadline: Date | null = null,
-): Promise<{ bundle: unknown; bundledCount: number }> {
+): Promise<{ bundle: DeliveryBundle; bundledCount: number }> {
   const itemRows = await db
     .select()
     .from(items)

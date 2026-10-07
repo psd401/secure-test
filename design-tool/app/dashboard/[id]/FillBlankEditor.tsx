@@ -104,6 +104,13 @@ export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled }: Pr
         one at the cursor (select a word first to make it the answer). Students see a menu or a box in
         its place.
       </p>
+      {/* FB slice 6 (docs/fill-in-blank-design.md, D-4): the delivery route
+          refuses a test with this type to an older client, so say so where
+          the teacher adds one. */}
+      <p className="text-xs text-muted-foreground">
+        Students need Secure Test 1.6 or later for this question type. An older version asks them to
+        update it in Self Service.
+      </p>
 
       {orphans.map((id) => (
         <div

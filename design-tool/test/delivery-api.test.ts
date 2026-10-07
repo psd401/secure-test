@@ -84,9 +84,11 @@ afterAll(async () => {
   else process.env.STORAGE_LOCAL_ROOT = originalStorageRoot;
 });
 
-async function getDelivery(id: string) {
+async function getDelivery(id: string, clientVersion: string | null = null) {
   const { GET } = await import("../app/api/assessments/[id]/delivery/route");
-  const req = new Request(`http://localhost/api/assessments/${id}/delivery`);
+  const req = new Request(`http://localhost/api/assessments/${id}/delivery`, {
+    headers: clientVersion ? { "X-SecureTest-Version": clientVersion } : {},
+  });
   return GET(req, { params: Promise.resolve({ id }) });
 }
 
@@ -371,7 +373,7 @@ describe("GET /api/assessments/:id/delivery — no answer key survives", () => {
       },
     });
     await admitStudent(a!.id);
-    const res = await getDelivery(a!.id);
+    const res = await getDelivery(a!.id, "1.6.0");
     expect(res.status).toBe(200);
     const body = await res.json();
     const raw = JSON.stringify(body);
@@ -385,6 +387,43 @@ describe("GET /api/assessments/:id/delivery — no answer key survives", () => {
       { id: "b1", kind: "dropdown", options: [{ id: "o2", text: "leeward" }, { id: "o1", text: "windward" }] },
       { id: "b2", kind: "text" },
     ]);
+  });
+
+  // FB slice 6 (D-4): a bundle with a fill_blank goes only to v1.6.0+; an
+  // older client (or one sending no version) gets a 409 it can show before
+  // begin(), never a bundle whose decode would fail.
+  test("FB: a fill_blank test is refused to a client older than 1.6.0", async () => {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Fill gate" })
+      .returning();
+    await db.insert(items).values({
+      assessment_id: a!.id,
+      position: 1,
+      type: "fill_blank",
+      stem: "The [[b1]] side.",
+      config: { blanks: [{ id: "b1", kind: "text" }] },
+    });
+    await admitStudent(a!.id);
+    for (const version of [null, "1.5.0", "1.5.9", "garbage"]) {
+      const res = await getDelivery(a!.id, version);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({
+        ok: false,
+        error: "client_update_required",
+        min_version: "1.6.0",
+      });
+    }
+    for (const version of ["1.6.0", "1.6.1", "2.0"]) {
+      expect((await getDelivery(a!.id, version)).status).toBe(200);
+    }
+  });
+
+  test("FB: a test without new item types still reaches a client with no version", async () => {
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    expect((await getDelivery(id, null)).status).toBe(200);
   });
 
   // docs/drawing-background-design.md: the field has no schema of its own on

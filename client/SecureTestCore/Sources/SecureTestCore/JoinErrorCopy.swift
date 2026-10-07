@@ -80,6 +80,12 @@ public enum JoinErrorCopy {
             // EX-2: the status line has room for one sentence pair; the same
             // words as the sheet.
             return "\(timeRanOutMessage) \(timeRanOutInformative)"
+        case "client_update_required":
+            // FB slice 6 (docs/fill-in-blank-design.md, D-4): the delivery
+            // route refuses a test with an item type this build cannot render,
+            // before begin(). Self Service already offers the update — no IT
+            // step — so the student can fix this alone.
+            return "This test needs a newer version of Secure Test. Open Self Service, update Secure Test, then join again."
         case "identity_conflict":
             return "There is a problem with your account. Tell your teacher."
         default:

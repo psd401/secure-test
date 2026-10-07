@@ -1,3 +1,4 @@
+import { requiredClientUpgrade } from "@/lib/items/clientSupport";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -125,6 +126,21 @@ export async function GET(req: Request, ctx: RouteContext) {
       // instant. Null — and no new bundle keys — when there is no limit.
       deadlineFor(attempt, assessment),
     );
+    // FB slice 6 (docs/fill-in-blank-design.md, D-4): a bundle carrying an
+    // item type this client cannot render would fail its whole decode, so
+    // refuse it here — before begin(), nothing locks. v1.6.0+ maps the code to
+    // "update Secure Test in Self Service"; older clients show their generic
+    // "could not be opened … tell your teacher".
+    const minVersion = requiredClientUpgrade(
+      req.headers.get(CLIENT_VERSION_HEADER),
+      bundle.items.map((i) => i.type),
+    );
+    if (minVersion) {
+      return NextResponse.json(
+        { ok: false, error: "client_update_required", min_version: minVersion },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(bundle, {
       status: 200,
       headers: { "x-bundled-asset-count": String(bundledCount) },
