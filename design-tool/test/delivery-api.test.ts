@@ -346,6 +346,27 @@ describe("GET /api/assessments/:id/delivery — no answer key survives", () => {
     expect(Object.keys(table).sort()).toEqual(["columns", "corner", "id", "rows", "stem", "type"]);
   });
 
+  // RT slice 1 (docs/rich-text-essay-design.md, D-1): the essay's formatting
+  // switch rides the delivery bundle only when on; it needs no version gate
+  // (an older client ignores the field and shows the plain box).
+  test("RT: an essay carries rich_text only when on, to any client version", async () => {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Rich text delivery" })
+      .returning();
+    await db.insert(items).values([
+      { assessment_id: a!.id, position: 1, type: "essay", stem: "Plain" },
+      { assessment_id: a!.id, position: 2, type: "essay", stem: "Formatted", config: { rich_text: true } },
+    ]);
+    await admitStudent(a!.id);
+    const res = await getDelivery(a!.id, "1.5.0");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items[0]).not.toHaveProperty("rich_text");
+    expect(body.items[1].rich_text).toBe(true);
+  });
+
   // FB slice 1 (docs/fill-in-blank-design.md, ADR 0016): a fill_blank ships
   // its stem and each blank's id, kind and dropdown options in the teacher's
   // order (D-6) — no correct_option_id, keys or exact_form, and no key VALUE.

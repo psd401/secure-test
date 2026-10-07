@@ -21,6 +21,7 @@ import {
   settlePendingUpload,
 } from "@/lib/api/responseUploads";
 import { captureBeforeWrite } from "@/lib/api/answerHistory";
+import { essayResponseForStorage } from "@/lib/richText/essayHtml";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -120,13 +121,17 @@ export async function PUT(req: Request, ctx: RouteContext) {
   // before storing, so what lands in the column is the authoring ids the scoring
   // code compares against — the sealing is a delivery concern and must not leak
   // into the data model.
-  const stored = unsealResponseIds(access.attempt.id, item, body.response);
-  if (stored === null) {
+  const unsealed = unsealResponseIds(access.attempt.id, item, body.response);
+  if (unsealed === null) {
     return NextResponse.json(
       { ok: false, error: "unknown_option_id" },
       { status: 400 },
     );
   }
+  // RT slice 1 (docs/rich-text-essay-design.md, D-7): a formatted essay's
+  // html is re-cleaned and its text derived from it here, before history or
+  // the upsert see it; a plain essay drops any html the client sent.
+  const stored = essayResponseForStorage(item, unsealed);
 
   // Slice 73: a student who redraws leaves the previous file referenced by
   // nothing. Pruned here rather than by a sweep, because this is the only moment

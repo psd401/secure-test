@@ -2,7 +2,7 @@
 
 Design page, 2026-10-07. Source: an open-beta teacher asked for students
 to be able to bold, underline or italicize their own writing. Decisions
-marked **D-n** are James's (D-1…D-10, all 2026-10-07). Nothing is built.
+marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slice 1 is built (see §Progress).
 
 ## Decided (James, 2026-10-07)
 
@@ -129,3 +129,60 @@ preview renders the toolbar and a working box (D-8).
 ## Open questions
 
 None. All decided 2026-10-07 (D-1…D-8).
+
+## Progress
+
+### Slice 1 — the flag and the server (BUILT 2026-10-07, not deployed)
+
+- **Item flag.** `rich_text?: boolean` on the essay in `ItemBundleSchema` and
+  `DeliveryItemSchema` (packages/schema), on the write boundary
+  (`lib/api/items.ts` `EssayItem`) and in `ItemConfig`. Stored only when
+  true (`itemConfigForWrite`), so existing rows and exports stay
+  byte-stable; a non-essay body's `rich_text` is stripped like any unknown
+  key (not refused). Export, import (so Duplicate and share-accept too) and
+  the delivery bundle carry it only when on; no version gate (an older
+  client ignores the field). The publish lock refuses a change to it:
+  `isAnswerKeyOnlyPatch` compares config whole and `rich_text` is not a key.
+  Editor: the checkbox under Max word count, disabled while Published.
+- **Response.** `EssayResponseSchema` gains `html?: string`, capped at
+  `ESSAY_HTML_MAX_LENGTH` = 200 000 characters; `text` stays required.
+- **Sanitiser + text** (`design-tool/lib/richText/essayHtml.ts`, hand-rolled,
+  no dependency). Tokenizer → small tree → normalised blocks
+  (paragraphs and one-level lists of marked text runs) → serialised from
+  scratch, so no client markup is ever copied through. Kept: `<p>` (only
+  `data-indent="first"`), `<br>`, `<strong>`, `<em>`, `<u>`, `<ul>`, `<ol>`,
+  `<li>`. Mapped: `<b>`→strong, `<i>`→em, `<span>`/`<font>` styles
+  (font-weight bold / ≥ 600, font-style italic / oblique, text-decoration
+  underline) → marks, `<div>` / headings / other blocks → paragraphs
+  (`<div>` keeps the indent), a nested list's items join the outer list,
+  a block inside an item → `<br>`, a stray `<li>` → paragraph, loose text →
+  paragraph. Dropped with content: script, style, iframe, svg, math, img,
+  input, video, audio, template, object, select … ; comments, doctype and
+  `<?…?>` vanish; anything else is unwrapped. Canonical mark nesting
+  (strong > em > u), adjacent runs merged, empty list items dropped,
+  leading / trailing blank paragraphs dropped (an inner one is kept as
+  `<p><br></p>`, an empty line). Idempotent; nesting deeper than 64 is
+  unwrapped.
+- **Text (D-7).** One line per paragraph joined by a single `\n` (a
+  contenteditable makes every Enter a paragraph, so this is what a textarea
+  would hold for the same keys; a blank paragraph is an empty line); `<br>`
+  is `\n` except a block's single trailing placeholder; list items read
+  "• " / "1. ", numbered within their list (D-9); the indent adds nothing;
+  entities decoded, no-break spaces read as spaces, source whitespace
+  collapses as it renders.
+- **Ingest** (`essayResponseForStorage`, called in
+  `PUT /api/attempts/[attemptId]/responses/[itemId]` after unsealing and
+  before answer history): `rich_text` on + `html` → the cleaned html and
+  the DERIVED text (the client's text is overwritten); cleans to nothing →
+  `{text: ""}` with no html; `rich_text` on, no html (an older client) →
+  stored as sent; `rich_text` off → html dropped.
+- **History.** `response_revisions.response` is the jsonb whole, so a kept
+  version carries its html and Restore writes it back — tested both ways.
+  Every reader of `text` (scoring, safeguarding, insights, Docs, work
+  packet, instant feedback) is unchanged; nothing renders `html` yet
+  (slice 2).
+- Tests: `test/rich-text-essay-html.test.ts` (sanitiser table, text,
+  ingest), items API (stored only when on, stripped elsewhere, publish
+  lock, export/import), delivery bundle, the response PUT (four ingest
+  cases + history), restore. Rows 526–533 in
+  `docs/design-tool-manual-checks.md`, NOT RUN.

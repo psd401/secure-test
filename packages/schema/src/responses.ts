@@ -31,9 +31,17 @@ export const ShortTextResponseSchema = z.object({
   text: z.string(),
 });
 
+// RT slice 1 (docs/rich-text-essay-design.md): an essay whose item has
+// `rich_text` may also carry `html`, a small fixed subset (<p>, <br>,
+// <strong>, <em>, <u>, one-level <ul>/<ol>/<li>). `text` stays required: the
+// server re-cleans `html` and derives `text` from it (D-7), and a response
+// without `html` is a plain essay, as before.
+export const ESSAY_HTML_MAX_LENGTH = 200_000;
+
 export const EssayResponseSchema = z.object({
   type: z.literal("essay"),
   text: z.string(),
+  html: z.string().max(ESSAY_HTML_MAX_LENGTH).optional(),
 });
 
 // Phase 4 slice 47: matching. Keys are the item's pair ids (the left

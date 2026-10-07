@@ -182,6 +182,9 @@ export type ItemType = (typeof ITEM_TYPES)[number];
 export type ItemConfig = {
   max_word_count?: number;
   placeholder?: string;
+  // RT slice 1 (docs/rich-text-essay-design.md, D-1): essay only — students
+  // may format their answer. Stored only when true.
+  rich_text?: boolean;
   rubric?: Rubric;
   // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
   // COPIED from, if any. Editor metadata only — `rubric` above stays the

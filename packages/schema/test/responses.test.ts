@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ItemResponseSchema } from "../src/index.js";
+import { ESSAY_HTML_MAX_LENGTH, ItemResponseSchema } from "../src/index.js";
 
 describe("ItemResponseSchema", () => {
   const valid = [
@@ -182,6 +182,25 @@ describe("FillBlankResponseSchema (via ItemResponseSchema)", () => {
     expect(ItemResponseSchema.safeParse({ type: "fill_blank", answers: { b1: 3 } }).success).toBe(false);
     expect(
       ItemResponseSchema.safeParse({ type: "fill_blank", answers: { b1: "x".repeat(501) } }).success,
+    ).toBe(false);
+  });
+
+  test("essay accepts an optional html beside text (RT slice 1)", () => {
+    const parsed = ItemResponseSchema.parse({
+      type: "essay",
+      text: "Hello",
+      html: "<p><strong>Hello</strong></p>",
+    });
+    expect(parsed).toHaveProperty("html", "<p><strong>Hello</strong></p>");
+    // text stays required on the wire.
+    expect(ItemResponseSchema.safeParse({ type: "essay", html: "<p>x</p>" }).success).toBe(false);
+    // capped
+    expect(
+      ItemResponseSchema.safeParse({
+        type: "essay",
+        text: "",
+        html: "x".repeat(ESSAY_HTML_MAX_LENGTH + 1),
+      }).success,
     ).toBe(false);
   });
 });

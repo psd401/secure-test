@@ -197,6 +197,25 @@ describe("POST /api/response-revisions/[revisionId]/restore", () => {
     expect(restoredRows.length).toBe(0);
   });
 
+  // RT slice 1 (docs/rich-text-essay-design.md): a kept version of a
+  // formatted essay carries its html, and restoring it brings the html back.
+  test("a formatted essay's kept version restores its html too", async () => {
+    const s = await scenario({ status: "in_progress", sitting: "closed", current: "" });
+    const formatted = {
+      type: "essay" as const,
+      text: "Bold claim\n• first",
+      html: "<p><strong>Bold</strong> claim</p><ul><li>first</li></ul>",
+    };
+    const db = getDb();
+    await db
+      .update(response_revisions)
+      .set({ response: formatted })
+      .where(eq(response_revisions.id, s.revision.id));
+    expect((await restore(s.revision.id)).status).toBe(200);
+    const [row] = await db.select().from(responses).where(eq(responses.attempt_id, s.attempt.id));
+    expect(row!.response).toEqual(formatted);
+  });
+
   test("refused while an open sitting holds an in-progress attempt", async () => {
     const s = await scenario({ status: "in_progress", sitting: "open", current: "" });
     const res = await restore(s.revision.id);

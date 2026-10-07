@@ -150,6 +150,14 @@ describe("ItemSchema discriminated union", () => {
     }
   });
 
+  test("essay carries rich_text when present (RT slice 1)", () => {
+    const parsed = ItemSchema.parse({ type: "essay", id: "qe4", stem: "Explain.", rich_text: true });
+    expect(parsed).toHaveProperty("rich_text", true);
+    expect(ItemSchema.parse({ type: "essay", id: "qe4", stem: "Explain." })).not.toHaveProperty(
+      "rich_text",
+    );
+  });
+
   test("essay rejects a non-positive max_word_count", () => {
     const result = ItemSchema.safeParse({
       type: "essay",

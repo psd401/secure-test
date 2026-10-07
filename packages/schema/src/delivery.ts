@@ -85,6 +85,10 @@ export const DeliveryEssayItemSchema = z.object({
   // Present only for rubrics the teacher marked visible during the test; the
   // route drops the rest before it ever gets here.
   rubric: RubricSchema.optional(),
+  // RT slice 1 (docs/rich-text-essay-design.md, D-1): show the formatting
+  // toolbar. Student-facing, not a key. Older clients ignore the unknown
+  // field and show the plain box — no version gate needed.
+  rich_text: z.boolean().optional(),
 });
 
 // `lefts` and `rights` are the same {id, text} shape as choices — reusing

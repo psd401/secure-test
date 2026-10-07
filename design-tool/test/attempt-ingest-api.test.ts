@@ -992,3 +992,78 @@ describe("answer history on the student write routes", () => {
     expect((await revisions()).length).toBe(0);
   });
 });
+
+// RT slice 1 (docs/rich-text-essay-design.md, D-7): a formatted essay's html
+// is re-cleaned at ingest and `text` is derived from it; a plain essay drops
+// any html the client sent.
+describe("PUT a formatted essay (RT slice 1)", () => {
+  async function started(richText: boolean) {
+    const s = await scenario();
+    if (richText) {
+      await getDb().update(items).set({ config: { rich_text: true } }).where(eq(items.id, s.essay.id));
+    }
+    asStudent();
+    const { attempt } = await (await start(s.sitting.id)).json();
+    return { ...s, attempt };
+  }
+  const stored = async (attemptId: string, itemId: string) => {
+    const [row] = await getDb()
+      .select()
+      .from(responses)
+      .where(and(eq(responses.attempt_id, attemptId), eq(responses.item_id, itemId)));
+    return row?.response;
+  };
+
+  test("rich_text on: html is cleaned and text is derived from it, whatever the client sent", async () => {
+    const s = await started(true);
+    const res = await put(s.attempt.id, s.essay.id, {
+      type: "essay",
+      text: "the client's own count — ignored",
+      html: '<div data-indent="first" style="color:red"><b>Bold</b> start<script>x()</script></div><ul><li>one</li><li>two</li></ul>',
+    });
+    expect(res.status).toBe(200);
+    expect(await stored(s.attempt.id, s.essay.id)).toEqual({
+      type: "essay",
+      text: "Bold start\n• one\n• two",
+      html: '<p data-indent="first"><strong>Bold</strong> start</p><ul><li>one</li><li>two</li></ul>',
+    });
+  });
+
+  test("rich_text on, html that cleans to nothing: stored as an empty text answer without html", async () => {
+    const s = await started(true);
+    expect(
+      (await put(s.attempt.id, s.essay.id, { type: "essay", text: "x", html: "<p><br></p><img src=x>" })).status,
+    ).toBe(200);
+    expect(await stored(s.attempt.id, s.essay.id)).toEqual({ type: "essay", text: "" });
+  });
+
+  test("rich_text on, no html (a client older than v1.6.0): stored as sent", async () => {
+    const s = await started(true);
+    expect((await put(s.attempt.id, s.essay.id, { type: "essay", text: "plain words" })).status).toBe(200);
+    expect(await stored(s.attempt.id, s.essay.id)).toEqual({ type: "essay", text: "plain words" });
+  });
+
+  test("rich_text off: any html is dropped and the text is kept as sent", async () => {
+    const s = await started(false);
+    expect(
+      (await put(s.attempt.id, s.essay.id, { type: "essay", text: "my words", html: "<p><b>my</b> words</p>" }))
+        .status,
+    ).toBe(200);
+    expect(await stored(s.attempt.id, s.essay.id)).toEqual({ type: "essay", text: "my words" });
+  });
+
+  test("answer history keeps the html with the version it replaced", async () => {
+    const s = await started(true);
+    const long = "<p><em>A thoughtful paragraph</em> about the causes of the war.</p>";
+    expect((await put(s.attempt.id, s.essay.id, { type: "essay", text: "", html: long })).status).toBe(200);
+    expect((await put(s.attempt.id, s.essay.id, { type: "essay", text: "", html: "<p>x</p>" })).status).toBe(200);
+    const kept = await getDb().select().from(response_revisions);
+    expect(kept.length).toBe(1);
+    expect(kept[0]!.reason).toBe("shrink");
+    expect(kept[0]!.response).toEqual({
+      type: "essay",
+      text: "A thoughtful paragraph about the causes of the war.",
+      html: long,
+    });
+  });
+});

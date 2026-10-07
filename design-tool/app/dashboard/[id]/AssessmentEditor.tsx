@@ -127,6 +127,10 @@ interface ItemView {
   // Essay-only authoring metadata (slice 32); null for every other type.
   max_word_count: number | null;
   placeholder: string | null;
+  // RT slice 1 (docs/rich-text-essay-design.md, D-1): essay only — true lets
+  // students format their answer; null = off (the stored absence). Optional
+  // so the per-type draft factories need not name it.
+  rich_text?: boolean | null;
   // Essay-only rubric (slice 33); null when unset / for other types.
   rubric: Rubric | null;
   // Rubric library slice 3 (D-4): which saved rubric the copy above came
@@ -286,6 +290,7 @@ interface ItemRow {
   config: {
     max_word_count?: number | null;
     placeholder?: string | null;
+    rich_text?: boolean | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -324,6 +329,7 @@ function rowToView(r: ItemRow): ItemView {
     correct_answer: r.correct_answer,
     max_word_count: r.config?.max_word_count ?? null,
     placeholder: r.config?.placeholder ?? null,
+    rich_text: r.config?.rich_text ? true : null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -1269,6 +1275,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       // number/string, so null/empty would fail validation.
       if (item.max_word_count != null) body.max_word_count = item.max_word_count;
       if (item.placeholder) body.placeholder = item.placeholder;
+      // RT slice 1 (D-1): only when on — absence is off.
+      if (item.rich_text) body.rich_text = true;
       if (item.rubric) body.rubric = item.rubric;
       // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
       // ways. The server detaches an omitted rubric_id whenever the rubric
@@ -3016,6 +3024,27 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         }
                         className="mt-1 w-40 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                       />
+                    </label>
+                    {/* RT slice 1 (docs/rich-text-essay-design.md): D-1 a
+                        per-essay switch, off by default; D-2 / D-4 / D-9 the
+                        formatting it allows. Student-facing, so locked
+                        while Published like the other essay fields. */}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={item.rich_text === true}
+                        onChange={(e) =>
+                          updateItem(item.id, (i) => ({
+                            ...i,
+                            rich_text: e.target.checked ? true : null,
+                          }))
+                        }
+                        disabled={isLocked}
+                      />
+                      <span>
+                        Let students format their answer (bold, italic,
+                        underline, lists, first-line indent)
+                      </span>
                     </label>
                     <label className="block">
                       <span className="block text-sm font-medium">

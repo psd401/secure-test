@@ -1546,3 +1546,18 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 523 | A Published test with a Fill in the blank question; a student joins on a client **older than 1.6.0** (today's fleet) | Before any lockdown: "This test could not be opened." with "Could not join. Tell your teacher." (the old client's generic copy); the Mac never locks; Cmd-Q quits. Server answers 409 `client_update_required`, `min_version` 1.6.0 | NOT RUN |
 | 524 | Same test, a **v1.6.0** client | The test opens and the blanks render; a v1.6.0 client refused for a newer type would read "This test needs a newer version of Secure Test. Open Self Service, update Secure Test, then join again." | NOT RUN |
 | 525 | Editor: add a Fill in the blank question | Under the blank help text: "Students need Secure Test 1.6 or later for this question type. An older version asks them to update it in Self Service." | NOT RUN |
+
+## Formatting in a student's essay — slice 1: the flag and the server (RT, 2026-10-07)
+
+`docs/rich-text-essay-design.md` §Progress "Slice 1" is the record. Local dev against the test or dev database; the student half is exercised with a minted student token and `curl` (no client builds the rich box until slice 3). Fixture: a Draft assessment with two essays, (a) plain and (b) with the new checkbox on.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 526 | **Editor**, essay (b): tick "Let students format their answer (bold, italic, underline, lists, first-line indent)" under Max word count, Save, reload | Still ticked; essay (a) unticked; the checkbox appears on essays only | NOT RUN |
+| 527 | Publish the assessment, open essay (b) | The checkbox is disabled like the other locked fields; a PATCH that flips `rich_text` answers 409 `assessment_published_editing_locked` | NOT RUN |
+| 528 | **Export** the assessment, then **Import** the file | (b) carries `"rich_text": true` in the file, (a) has no `rich_text` key; the imported copy has the box ticked on (b) only; **Duplicate** keeps it too | NOT RUN |
+| 529 | Delivery bundle for a student (any client version header, or none) | (b) carries `rich_text: true`; (a) has no such key; a v1.5.x client still opens the test and shows (b) as a plain box | NOT RUN |
+| 530 | PUT to (b) `{type: "essay", text: "anything", html: "<div data-indent=\"first\" style=\"color:red\"><b>Bold</b> start<script>x()</script></div><ul><li>one<ul><li>two</li></ul></li></ul>"}` | The stored row is `html` `<p data-indent="first"><strong>Bold</strong> start</p><ul><li>one</li><li>two</li></ul>` and `text` "Bold start\n• one\n• two" (the server's derivation replaces the client's text) | NOT RUN |
+| 531 | The same PUT to (a) | Stored as `{type: "essay", text: "anything"}`, no `html` | NOT RUN |
+| 532 | Hand in; open the per-student page, the scoring queue, Score with AI, the work packet and the Google Docs send for (b) | Every surface shows the plain derived text (the formatted rendering is slice 2); nothing shows raw HTML or `<p>`; the word count is that of the text | NOT RUN |
+| 533 | On (b), save a long formatted answer, then a short one (a shrink); **Earlier versions** → Restore | The kept version's stored response carries its `html`; after Restore the current response has that `html` and `text` back | NOT RUN |

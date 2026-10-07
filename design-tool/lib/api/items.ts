@@ -102,6 +102,10 @@ const EssayItem = z.object({
   correct_answer: z.null().optional(),
   max_word_count: z.number().int().positive().max(100000).optional(),
   placeholder: z.string().max(200).optional(),
+  // RT slice 1 (docs/rich-text-essay-design.md, D-1): let students format
+  // their answer. Essay only — the other types' shapes don't know the key,
+  // so Zod strips it from them like any unknown field.
+  rich_text: z.boolean().optional(),
   // Slice 33: reuse the shared wire schema so the rubric shape has a single
   // source of truth across API body and bundle.
   rubric: RubricSchema.optional(),
@@ -638,6 +642,10 @@ export function itemConfigForWrite(
   if (body.type !== "essay") return config;
   if (body.max_word_count !== undefined) config.max_word_count = body.max_word_count;
   if (body.placeholder) config.placeholder = body.placeholder;
+  // D-1: stored only when ON, so existing rows and exports stay byte-stable.
+  // Student-facing, so the publish lock (isAnswerKeyOnlyPatch) refuses a
+  // change to it — it is compared with the rest of config.
+  if (body.rich_text) config.rich_text = true;
   if (body.rubric !== undefined) config.rubric = body.rubric;
   const rubricId = resolveRubricId(body, existing);
   if (rubricId) config.rubric_id = rubricId;

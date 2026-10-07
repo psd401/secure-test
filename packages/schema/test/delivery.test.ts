@@ -178,6 +178,16 @@ describe("DeliveryItemSchema", () => {
     expect(DeliveryItemSchema.safeParse({ ...base, blanks: [] }).success).toBe(false);
   });
 
+  test("essay carries rich_text when set (RT slice 1)", () => {
+    const parsed = DeliveryItemSchema.parse({ type: "essay", id: "i4", stem: "s", rich_text: true });
+    expect(parsed).toHaveProperty("rich_text", true);
+    const plain = DeliveryItemSchema.parse({ type: "essay", id: "i4", stem: "s" });
+    expect(plain).not.toHaveProperty("rich_text");
+    expect(
+      DeliveryItemSchema.safeParse({ type: "essay", id: "i4", stem: "s", rich_text: "yes" }).success,
+    ).toBe(false);
+  });
+
   test("strips scoring_method on every type", () => {
     const parsed = DeliveryItemSchema.parse({
       type: "essay",
