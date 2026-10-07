@@ -2,7 +2,7 @@
 
 Design page, 2026-10-07. Source: an open-beta teacher asked for students
 to be able to bold, underline or italicize their own writing. Decisions
-marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slices 1–2 are built (see §Progress).
+marked **D-n** are James's (D-1…D-10, all 2026-10-07). Slices 1–3 are built (see §Progress).
 
 ## Decided (James, 2026-10-07)
 
@@ -241,3 +241,99 @@ None. All decided 2026-10-07 (D-1…D-8).
   spacing) and route (`double_space` reaches the upload; a non-boolean is
   400), the dialog's saved state. Rows 534–541 in
   `docs/design-tool-manual-checks.md`, NOT RUN.
+
+### Slice 3 — the client: formatted box, toolbar, undo everywhere (BUILT 2026-10-07, not released)
+
+- **Core.** `EssayItem.richText` (decodes `rich_text`, false when absent);
+  `ItemResponse.essay(text:html:)` with `html` optional — absent on the wire
+  when nil, so a plain essay posts exactly what it did.
+- **The rules, ported** (`AssessmentPageRichText.swift`, `richTextFunctions`,
+  spliced into the renderer like the math pass). The server's tokenizer, tree,
+  normaliser, tidy, serialiser and D-7 text rule in page JS, plus a reader that
+  walks the LIVE box as the same tree. The box is read through them on every
+  change, so the page posts the canonical subset and derives `text` the
+  server's way; the box is written only from canonical blocks built as DOM
+  (restore, undo / redo, the one-level repair) — never from markup, so the
+  renderer still has no `innerHTML`. The headless suite runs the server's own
+  sanitiser and text tables against this code.
+- **The box** (`richEssayField`, only when `rich_text` is true). A
+  `contenteditable` `role="textbox"` `aria-multiline`, named "Your answer"
+  (the textarea is named only by its placeholder, which a div lacks), the
+  placeholder painted from `data-placeholder` while empty, spell check on the
+  per-student gate as an attribute, selection re-enabled inside it (the page
+  turns selection off outside fields). WebKit's `defaultParagraphSeparator`
+  is `p` and `styleWithCSS` false, so Enter makes a paragraph (one line of
+  `text`, D-7) and B / I / U make elements.
+- **Toolbar** (`role="toolbar"`, "Formatting"): Bold, Italic, Underline,
+  Bulleted list, Numbered list, Indent first line, Undo, Redo; the six toggles
+  carry `aria-pressed` (WebKit's `queryCommandState` for B / I / U / lists,
+  the paragraph's attribute for the indent), Undo / Redo `aria-disabled`.
+  **One Tab stop** with Left / Right / Home / End inside it — the keypad's and
+  the drawing strip's pattern (D-3.1 / 4b-f) — rather than eight stops; a
+  pointer press keeps focus and the selection in the box. Shortcuts on the box:
+  Cmd-B / I / U, Shift-Cmd-8 / 7 (D-9), Cmd-] / Cmd-[ (D-4), Cmd-Z /
+  Shift-Cmd-Z. **Tab is never handled (D-5).**
+- **Commands.** B / I / U and lists are WebKit's `execCommand`. The indent
+  toggles `data-indent="first"` on the top-level paragraphs the selection
+  touches (a loose line is wrapped in a `<p>` first, only for the command).
+  D-9: any nested list — whatever made it — is flattened back to one level
+  on the next `input`, caret kept by position.
+- **Undo (D-6).** `undoHistory(capture, apply)`: keystrokes coalesce into one
+  step until a 1 s pause or a word boundary (whitespace / punctuation /
+  Enter / paste), a formatting command or a keypad key is a step of its own,
+  200 steps deep. The box's history holds canonical html + the caret as a
+  character position; plain fields hold value + selection. An undo / redo
+  runs the field's own `oninput` (word count, preview, read-aloud /
+  dictation stop) and then saves AT ONCE through the field's flush — a
+  programmatic value change fires no `change` on blur (the keypad's D-3.2
+  trap). Plain fields — essay textarea, short text, table cells, typed
+  blanks, the E12 outline — get it through `textAutosave` (Cmd-Z /
+  Shift-Cmd-Z only, no buttons). The math keypad records its insertion as a
+  step, so it is undoable and the undo is posted. The canvas's Cmd-Z is
+  scoped to its item's wrap and unaffected. No Edit-menu Undo was added
+  (ME-2 stands).
+- **Paste and drop.** Paste is intercepted: refused outright while the
+  clipboard is locked (slice 69 — the box must not be a back door), otherwise
+  only `text/plain` is read and inserted as typing (`insertText`, a paragraph
+  per line), so it takes the formatting at the caret and nothing from the
+  source. **Drop is refused** and formatted text cannot be dragged out — not
+  "insert the drop as plain text": that would need the drag payload, and the
+  page keeps no HTML5 drag path at all (S-1's guard test).
+- **Carried over.** Autosave (5 s / 30 s, flush on blur — a contenteditable
+  fires no `change`, so blur is the change — page turn, Finish, the host's
+  pre-teardown flush) compares canonical html, so a bold-only change saves;
+  the deferred spool and offline relabel are unchanged (the same `post`).
+  Resume restores `html` when present, else one paragraph per saved line;
+  nothing is posted at load and the restored answer is the undo baseline.
+  The word count reads the derived text without list markers (a "•" or "1."
+  is not a word the student wrote). The answered mark is the plain essay's
+  (any post). An emptied box posts `{text: ""}` with no `html` — what an
+  emptied textarea posts (it has never withdrawn). The closing math pass and
+  the question's read-aloud skip the box, as they skip a textarea.
+- **Read aloud / dictation, degraded until slice 4.** "Read my answer" reads
+  the derived text with no word highlight (the mirror maps textarea offsets
+  and has nothing to map here). "Speak my answer" inserts each phrase at the
+  box's caret as typing; its spacing context is the END of the text, so a
+  phrase dictated mid-paragraph may be spaced as if at the end.
+- Tests: `RendererRichTextTests` (31: decode / encode; the server's two
+  tables; DOM reader = markup reader; render with and without the flag; spell
+  check; autosave of html + text; blur; bold-only change saved; empty;
+  shortcuts and buttons → commands with stubbed `execCommand`; Tab and other
+  keys untouched; indent with a stubbed selection; nested-list repair; paste
+  plain / refused; undo / redo in the box incl. a command step and the
+  buttons; restore of html and of plain text; read-aloud without a mirror;
+  undo in short text (coalescing, boundary, cap), keypad, table cell, plain
+  essay, typed blank). JSC has no editing engine, selection or
+  contenteditable, so what WebKit's commands really emit, the caret after an
+  undo, and the chords under AAC are hand-run rows: "Formatting in essays +
+  undo (v1.6.0, RT slice 3)" in `client/MANUAL-CHECKS.md`, NOT RUN.
+
+**Slice 3 look (main session, 2026-10-07, Debug client, offline fixture
+copy with `rich_text` on, no lockdown):** toolbar renders with pressed
+states; typing, Bold, Return, Bulleted list, Undo (twice), and Indent
+all behave. Two quirks, proposals only: **RT-1** the first Undo left an
+empty paragraph between the first line and the list (the second Undo
+removed the list and the gap); **RT-2** the caret lands by character
+offset after Undo / Indent (seen mid-word: "bold |part"), as the agent
+flagged. Neither loses text. Shortcuts under real AAC remain the main
+unknown (rows in client/MANUAL-CHECKS.md).

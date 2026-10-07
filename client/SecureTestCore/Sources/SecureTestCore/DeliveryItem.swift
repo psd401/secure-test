@@ -82,10 +82,25 @@ public struct EssayItem: Decodable, Equatable, Sendable {
     /// The delivery route drops the rest server-side, so absence here means
     /// "hidden", never "not authored".
     public let rubric: Rubric?
+    /// RT slice 3 (docs/rich-text-essay-design.md, D-1): the teacher let
+    /// students format this answer. Absent on every essay where it is off, so
+    /// it decodes as false.
+    public let richText: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, stem, placeholder, rubric
         case maxWordCount = "max_word_count"
+        case richText = "rich_text"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        stem = try c.decode(String.self, forKey: .stem)
+        maxWordCount = try c.decodeIfPresent(Int.self, forKey: .maxWordCount)
+        placeholder = try c.decodeIfPresent(String.self, forKey: .placeholder)
+        rubric = try c.decodeIfPresent(Rubric.self, forKey: .rubric)
+        richText = try c.decodeIfPresent(Bool.self, forKey: .richText) ?? false
     }
 }
 

@@ -12,7 +12,11 @@ public enum ItemResponse: Codable, Equatable, Sendable {
     case multipleChoiceSingle(choiceID: String)
     case multipleChoiceMulti(choiceIDs: [String])
     case shortText(text: String)
-    case essay(text: String)
+    /// RT slice 3 (docs/rich-text-essay-design.md): `html` is the formatted
+    /// box's markup when the item has `rich_text` on, nil (absent on the wire)
+    /// for a plain essay. `text` stays required — the page derives it from the
+    /// box by the server's own rules (D-7), and the server re-derives it anyway.
+    case essay(text: String, html: String? = nil)
     /// Keys are the item's left ids; values are the id of the right the student
     /// attached to it. A fully correct response maps every id to itself — which
     /// is exactly why the delivery bundle must not ship the pairing.
@@ -41,6 +45,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case uploadID = "upload_id"
         case cells
         case answers
+        case html
     }
 
     public var typeName: String {
@@ -69,7 +74,10 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case "short_text":
             self = .shortText(text: try c.decode(String.self, forKey: .text))
         case "essay":
-            self = .essay(text: try c.decode(String.self, forKey: .text))
+            self = .essay(
+                text: try c.decode(String.self, forKey: .text),
+                html: try c.decodeIfPresent(String.self, forKey: .html)
+            )
         case "match":
             self = .match(matches: try c.decode([String: String].self, forKey: .matches))
         case "order":
@@ -97,7 +105,10 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         switch self {
         case .multipleChoiceSingle(let id): try c.encode(id, forKey: .choiceID)
         case .multipleChoiceMulti(let ids): try c.encode(ids, forKey: .choiceIDs)
-        case .shortText(let text), .essay(let text): try c.encode(text, forKey: .text)
+        case .shortText(let text): try c.encode(text, forKey: .text)
+        case .essay(let text, let html):
+            try c.encode(text, forKey: .text)
+            try c.encodeIfPresent(html, forKey: .html)
         case .match(let matches): try c.encode(matches, forKey: .matches)
         case .order(let ids): try c.encode(ids, forKey: .orderedIDs)
         case .hotspot(let ids): try c.encode(ids, forKey: .regionIDs)

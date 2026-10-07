@@ -44,7 +44,7 @@ public enum AssessmentPage {
         let accommodations = accommodations ?? accommodationsIn(bundleJSON)
         return PageShell.document(
             title: title,
-            styles: [katex.css, itemStyles],
+            styles: [katex.css, itemStyles, richTextStyles],
             scripts: [
                 // KaTeX first, so the renderer's closing math pass finds it.
                 // A pure library; it touches nothing until asked. C-2
@@ -689,6 +689,9 @@ public enum AssessmentPage {
           } else if (node.nodeType === 1) {
             var tag = (node.nodeName || '').toLowerCase();
             if (MATH_SKIP_TAGS[tag] === true) continue;
+            // RT slice 3: the formatted essay box is the student's own text,
+            // like a textarea — a typed `$x$` must stay what they typed.
+            if (typeof node.getAttribute === 'function' && node.getAttribute('contenteditable') === 'true') continue;
             // Never re-enter markup KaTeX itself produced.
             if ((' ' + (node.className || '') + ' ').indexOf(' katex ') !== -1) continue;
             renderMathIn(node);
@@ -869,18 +872,22 @@ public enum AssessmentPage {
       }
 
       // `el` is the input or textarea; `send` posts its current value exactly
-      // as that field's `change` handler does. Call it AFTER the field's own
+      // as that field's `change` handler does. `read` (RT slice 3) replaces
+      // `el.value` as "what this field holds" — the formatted essay box has no
+      // value, and a bold-only change must still count as a change, so it
+      // reads its canonical html. Call it AFTER the field's own
       // oninput / onchange are assigned (both are chained, not replaced) and
       // AFTER any P-1 restore: the restored text is the baseline, so a field
       // nobody touched never posts. Guarded on the timer API, as the drawing
       // auto-save is — a runtime without timers simply keeps today's
       // post-on-change behaviour.
-      function textAutosave(el, send) {
+      function textAutosave(el, send, read) {
         var idleTimer = null;
         var ceilingTimer = null;
         var dirty = false;
 
         function current() {
+          if (typeof read === 'function') return read();
           return (el.value === undefined || el.value === null) ? '' : String(el.value);
         }
 
@@ -910,6 +917,9 @@ public enum AssessmentPage {
         var priorInput = el.oninput;
         el.oninput = function (event) {
           if (typeof priorInput === 'function') priorInput.call(el, event);
+          // RT slice 3 (D-6): every keystroke is recorded in the field's own
+          // undo history (coalesced there); an undo's own replay is not.
+          if (el.__undo) el.__undo.record(undoBoundary(event));
           dirty = true;
           if (typeof setTimeout !== 'function') return;
           // The idle timer restarts from zero on every keystroke; the ceiling
@@ -961,6 +971,46 @@ public enum AssessmentPage {
           dirty = false;
           lastPosted = current();
         };
+        // RT slice 3 (D-6): plain fields get the page's own undo — Cmd-Z /
+        // Shift-Cmd-Z, no buttons. The formatted box builds its own history
+        // (html, not value) before calling here, and handles its own chords.
+        if (!el.__undo) plainUndo(el);
+      }
+
+      // D-6 (docs/rich-text-essay-design.md): undo / redo in every field a
+      // student types into — short text, plain essay, table cells, typed
+      // blanks, the E12 outline. There is no Edit -> Undo menu item (ME-2,
+      // AppDelegate, by design), so WebKit's own undo is unreachable and the
+      // chord used to beep; this is the page's own stack, like the canvas's.
+      // An undo is a change like any other: it runs the field's own `oninput`
+      // (word count, formula preview, read-aloud / dictation stop) and then
+      // saves AT ONCE through the field's flush — a programmatic value change
+      // fires no `change` on blur (the keypad's D-3.2 trap), so waiting for
+      // one would lose it. The drawing canvas's Cmd-Z is scoped to its own
+      // item's wrap and never sees a text field's keydown.
+      function plainUndo(el) {
+        el.__undo = undoHistory(function () {
+          var value = (el.value === undefined || el.value === null) ? '' : String(el.value);
+          var sel = typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number'
+            ? [el.selectionStart, el.selectionEnd] : null;
+          return { key: value, sel: sel };
+        }, function (state) {
+          el.value = state.key;
+          var at = state.sel ? state.sel : [state.key.length, state.key.length];
+          if (typeof el.setSelectionRange === 'function') el.setSelectionRange(at[0], at[1]);
+          if (typeof el.oninput === 'function') el.oninput({ type: 'input', inputType: 'historyUndo' });
+          if (typeof el.__flushText === 'function') el.__flushText();
+        });
+        var priorKeydown = el.onkeydown;
+        el.onkeydown = function (event) {
+          var chord = undoChord(event);
+          if (chord) {
+            if (typeof event.preventDefault === 'function') event.preventDefault();
+            if (chord === 'undo') el.__undo.undo(); else el.__undo.redo();
+            return;
+          }
+          if (typeof priorKeydown === 'function') return priorKeydown.call(el, event);
+        };
       }
 
       // E6 (decision James 2026-09-02): `**bold**` and `_italic_` in authored
@@ -981,6 +1031,7 @@ public enum AssessmentPage {
       // post-hand-in feedback page (`InstantFeedbackPage`) so both render a
       // `$…$` run by one rule. Spliced here unchanged.
     \#(mathPassFunctions)
+    \#(richTextFunctions)
 
       function italicNodes(text, into) {
         var last = 0, m;
@@ -1274,6 +1325,9 @@ public enum AssessmentPage {
               }
               var tag = String(n.nodeName || '').toLowerCase();
               if (TTS_SKIP_TAGS[tag] === true) continue;
+              // RT slice 3: the formatted box is an answer field, read only
+              // by "Read my answer" — never as part of the question.
+              if (typeof n.getAttribute === 'function' && n.getAttribute('contenteditable') === 'true') continue;
               if ((' ' + (n.className || '') + ' ').indexOf(' tts-bar ') !== -1) continue;
               if (tag === 'img') {
                 if (n.alt) segs.push({ kind: 'text', text: ' Picture: ' + n.alt + '. ', el: n });
@@ -1810,6 +1864,26 @@ public enum AssessmentPage {
         sttStop();
         ttsStop();
         var field = ctl.field;
+        // RT slice 3: the formatted box has no value or selection offsets; it
+        // hands over its derived text, and each phrase goes in at its caret
+        // (`__richInsert`). The spacing context is the end of that text, so
+        // a phrase dictated mid-paragraph may be spaced as if at the end —
+        // slice 4 (docs/rich-text-essay-design.md) revisits it.
+        if (typeof field.__richInsert === 'function') {
+          var richValue = field.__richText();
+          STT_SEQ += 1;
+          var richId = 'stt-' + STT_SEQ;
+          if (!sttPost({
+            action: 'listen', id: richId,
+            before: richValue.slice(Math.max(0, richValue.length - 16)),
+            after: '',
+            single_line: false
+          })) return;
+          sttActive = { id: richId, ctl: ctl, at: richValue.length, end: richValue.length };
+          sttFinishing = null;
+          sttPaint(ctl);
+          return;
+        }
         var value = String(field.value === undefined || field.value === null ? '' : field.value);
         var at = typeof field.selectionStart === 'number' ? field.selectionStart : value.length;
         var end = typeof field.selectionEnd === 'number' ? field.selectionEnd : at;
@@ -1839,6 +1913,10 @@ public enum AssessmentPage {
       // as the host spaced it; then the field's own input path.
       function sttInsert(state, text) {
         var field = state.ctl.field;
+        if (typeof field.__richInsert === 'function') {
+          field.__richInsert(text);
+          return;
+        }
         var value = String(field.value === undefined || field.value === null ? '' : field.value);
         var at = Math.min(state.at, value.length);
         var end = Math.min(Math.max(state.end, at), value.length);
@@ -2221,10 +2299,9 @@ public enum AssessmentPage {
           ? start + text.length - (wrappedBack || 0)
           : start + before.length;
         // setRangeText is standard WebKit; the splice is the fallback for a
-        // host without it. There is no Cmd-Z here: the host's Edit menu has no
-        // Undo (AppDelegate, by design), so the chord only beeps — accepted
-        // 2026-09-23 (finding ME-2). The drawing canvas's Cmd-Z is its own
-        // keydown handler and is unaffected.
+        // host without it. The host's Edit menu has no Undo (AppDelegate, by
+        // design, finding ME-2); since RT slice 3 (D-6) the field's own page
+        // undo takes the insertion back (the key records it as one step).
         if (typeof input.setRangeText === 'function') {
           input.setRangeText(text, start, end, 'end');
         } else {
@@ -2309,7 +2386,11 @@ public enum AssessmentPage {
             if (e && typeof e.preventDefault === 'function') e.preventDefault();
           };
           button.onclick = function (event) {
+            // RT slice 3 (D-6): what was typed before the key is its own undo
+            // step, and the insertion is one step after it.
+            if (input.__undo) input.__undo.close();
             insertMath(input, spec.before, spec.after, spec.wrappedBack);
+            if (input.__undo) input.__undo.record(true);
             renderFormulaPreview(preview, input.value);
             // D-3.2, the `change` trap: a programmatic value change fires
             // neither `input` nor `change`, so without this post a student who
@@ -2459,7 +2540,469 @@ public enum AssessmentPage {
         return box;
       }
 
+      // RT slice 3 (docs/rich-text-essay-design.md): the formatted essay —
+      // only where the teacher ticked "Let students format their answer"
+      // (D-1). A `contenteditable` box under a toolbar: Bold, Italic,
+      // Underline, Bulleted list, Numbered list (D-9, one level), Indent first
+      // line (D-4, a toggle on the paragraph or paragraphs under the
+      // selection), Undo, Redo (D-6). Shortcuts Cmd-B / Cmd-I / Cmd-U,
+      // Shift-Cmd-8 / Shift-Cmd-7, Cmd-] / Cmd-[, Cmd-Z / Shift-Cmd-Z. Tab is
+      // never taken (D-5): it moves focus, as everywhere else on the page.
+      //
+      // Bold / italic / underline / lists are WebKit's own editing commands
+      // (`execCommand`); the indent is the page's (one attribute on a <p>).
+      // The box is READ through the server's own rules (richBlocksFromDom, a
+      // port of the sanitiser) on every change, so what is posted is the
+      // canonical subset and `text` is derived exactly as the server derives
+      // it (D-7); the server re-cleans and re-derives anyway (slice 1). The
+      // box is WRITTEN only from canonical blocks, built as DOM — a restore,
+      // an undo / redo, and the one-level list repair — never from markup.
+      var RICH_TOOLS = [
+        { key: 'bold', label: 'Bold', text: 'B', shortcut: 'Meta+B', toggle: true },
+        { key: 'italic', label: 'Italic', text: 'I', shortcut: 'Meta+I', toggle: true },
+        { key: 'underline', label: 'Underline', text: 'U', shortcut: 'Meta+U', toggle: true },
+        { key: 'ul', label: 'Bulleted list', text: '\u2022 List', shortcut: 'Meta+Shift+8', toggle: true },
+        { key: 'ol', label: 'Numbered list', text: '1. List', shortcut: 'Meta+Shift+7', toggle: true },
+        { key: 'indent', label: 'Indent first line', text: 'Indent', shortcut: 'Meta+]', toggle: true },
+        { key: 'undo', label: 'Undo', text: 'Undo', shortcut: 'Meta+Z', gap: true },
+        { key: 'redo', label: 'Redo', text: 'Redo', shortcut: 'Meta+Shift+Z' }
+      ];
+
+      function richExec(name, value) {
+        if (typeof document.execCommand !== 'function') return false;
+        try {
+          return document.execCommand(name, false, value === undefined ? null : value);
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function richEssayField(item) {
+        var wrap = document.createElement('div');
+        wrap.className = 'essay-rich-wrap';
+        var toolbar = document.createElement('div');
+        toolbar.className = 'essay-toolbar';
+        toolbar.setAttribute('role', 'toolbar');
+        toolbar.setAttribute('aria-label', 'Formatting');
+        var box = document.createElement('div');
+        box.className = 'essay essay-rich';
+        box.setAttribute('contenteditable', 'true');
+        box.setAttribute('role', 'textbox');
+        box.setAttribute('aria-multiline', 'true');
+        // The textarea is named by nothing but its placeholder; a role=textbox
+        // div has no placeholder, so it is named outright.
+        box.setAttribute('aria-label', 'Your answer');
+        if (item.placeholder) {
+          box.setAttribute('data-placeholder', item.placeholder);
+          box.setAttribute('aria-placeholder', item.placeholder);
+        }
+        box.setAttribute('autocapitalize', 'off');
+        box.setAttribute('autocorrect', 'off');
+        // The same per-student spell-check gate as the textarea (slice 62):
+        // on a contenteditable it is the ATTRIBUTE WebKit reads.
+        box.spellcheck = !!ACCOMMODATIONS.spell_check;
+        box.setAttribute('spellcheck', ACCOMMODATIONS.spell_check ? 'true' : 'false');
+        // WebKit's editing defaults for the page: Enter makes a <p> (the
+        // server's paragraph is one line of text, D-7), and B / I / U make
+        // b / i / u elements rather than styled spans.
+        richExec('defaultParagraphSeparator', 'p');
+        richExec('styleWithCSS', false);
+
+        // P-1: the saved answer comes back formatted when it carries html; a
+        // plain one (saved before the teacher turned formatting on, or by an
+        // older client) fills one paragraph per line.
+        var savedEssay = savedFor(item);
+        if (savedEssay && typeof savedEssay.html === 'string' && savedEssay.html) {
+          richBuildDom(richBlocksFromHtml(savedEssay.html), box);
+        } else if (savedEssay && typeof savedEssay.text === 'string') {
+          richBuildDom(richBlocksFromText(savedEssay.text), box);
+        } else {
+          richBuildDom([], box);
+        }
+
+        function blocks() { return richBlocksFromDom(box); }
+        function html() { return richSerialize(blocks()); }
+
+        // ---- the selection, where the page has one (the harness has none) ----
+        function selectionRange() {
+          if (typeof window.getSelection !== 'function') return null;
+          var sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return null;
+          var range = sel.getRangeAt(0);
+          if (!range || !box.contains(range.startContainer)) return null;
+          return range;
+        }
+        function caret() {
+          var range = selectionRange();
+          if (!range) return null;
+          var a = richPositionOf(box, range.startContainer, range.startOffset);
+          var b = richPositionOf(box, range.endContainer, range.endOffset);
+          return (a === null || b === null) ? null : [a, b];
+        }
+        function setCaret(at) {
+          if (!at || typeof window.getSelection !== 'function' || typeof document.createRange !== 'function') return;
+          try {
+            var start = richPointAt(box, at[0]);
+            var end = richPointAt(box, at[1]);
+            var range = document.createRange();
+            range.setStart(start.node, start.offset);
+            range.setEnd(end.node, end.offset);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch (e) {}
+        }
+        // Rebuilds the box from canonical blocks and keeps the caret where it
+        // was, by position.
+        function rebuild(fromBlocks, at) {
+          richBuildDom(fromBlocks, box);
+          setCaret(at);
+        }
+
+        // ---- word count (D-7: the derived text; list markers never count) ----
+        var counter = null;
+        if (typeof item.max_word_count === 'number') {
+          counter = document.createElement('p');
+          counter.className = 'word-count';
+        }
+        function refresh() {
+          var b = blocks();
+          var empty = richText(b) === '';
+          box.setAttribute('data-empty', empty ? 'true' : 'false');
+          if (!counter) return;
+          var n = countWords(richText(b, true));
+          counter.textContent = n + ' / ' + item.max_word_count + ' words';
+          counter.className = n > item.max_word_count ? 'word-count over' : 'word-count';
+        }
+
+        function sendEssay() {
+          var b = blocks();
+          var markup = richSerialize(b);
+          // An emptied box posts what an emptied textarea posts — `text: ""`
+          // — and no html: there is no formatting to keep.
+          if (markup === '') post(item.id, { type: 'essay', text: '' });
+          else post(item.id, { type: 'essay', text: richText(b), html: markup });
+        }
+
+        box.oninput = function () {
+          // D-9 whatever made the nesting (WebKit's own list handling, a
+          // key we do not take): the box goes back to one level at once.
+          if (hasNestedList()) rebuild(blocks(), caret());
+          refresh();
+          refreshState();
+        };
+        box.onchange = sendEssay;
+        // A contenteditable fires no `change`; leaving the box is that moment.
+        box.onblur = function (event) {
+          if (typeof box.onchange === 'function') box.onchange(event);
+        };
+
+        // D-6: the box's own history, of canonical html + caret. Built before
+        // textAutosave, which records into it on every input.
+        box.__undo = undoHistory(function () {
+          return { key: html(), sel: caret() };
+        }, function (state) {
+          rebuild(richBlocksFromHtml(state.key), state.sel);
+          if (typeof box.oninput === 'function') box.oninput({ type: 'input', inputType: 'historyUndo' });
+          if (typeof box.__flushText === 'function') box.__flushText();
+        });
+        refresh();
+        // After the restore, so the saved answer is the baseline (D-3); the
+        // autosave compares canonical html, so a bold-only change saves.
+        textAutosave(box, sendEssay, html);
+
+        // ---- the commands ----
+        function focusBox() {
+          if (!selectionRange() && typeof box.focus === 'function') box.focus();
+        }
+        // The top-level paragraphs the selection touches (D-4). A loose line
+        // straight in the box (WebKit can leave one after select-all-delete)
+        // is wrapped in a <p> first so it can carry the attribute — only when
+        // `wrap` is asked for (a command), never for the pressed state, which
+        // runs on every selection change and must not edit the box.
+        function selectedParagraphs(wrap) {
+          var range = selectionRange();
+          if (!range) return [];
+          function top(node) {
+            var at = node;
+            while (at && at.parentNode !== box) at = at.parentNode;
+            return at;
+          }
+          var first = top(range.startContainer === box
+            ? (box.childNodes[range.startOffset] || box.lastChild) : range.startContainer);
+          var last = top(range.endContainer === box
+            ? (box.childNodes[Math.max(0, range.endOffset - 1)] || box.lastChild) : range.endContainer);
+          function isBlock(n) { return !!n && n.nodeType === 1 && /^(p|div|ul|ol)$/.test(richNodeName(n)); }
+          if (first && !isBlock(first)) {
+            if (!wrap) return [];
+            richExec('formatBlock', 'p');
+            range = selectionRange();
+            if (!range) return [];
+            first = top(range.startContainer);
+            last = top(range.endContainer);
+          }
+          var out = [];
+          var kids = box.childNodes || [];
+          var inside = false;
+          for (var i = 0; i < kids.length; i++) {
+            if (kids[i] === first) inside = true;
+            if (inside && kids[i].nodeType === 1 && /^(p|div)$/.test(richNodeName(kids[i]))) out.push(kids[i]);
+            if (kids[i] === last) break;
+          }
+          return out;
+        }
+        function indentState() {
+          var paras = selectedParagraphs();
+          return paras.length > 0 && paras.every(function (p) {
+            return p.getAttribute('data-indent') === 'first';
+          });
+        }
+        // 'on' (Cmd-]), 'off' (Cmd-[) or 'toggle' (the button).
+        function setIndent(mode) {
+          var paras = selectedParagraphs(true);
+          if (!paras.length) return;
+          var on = mode === 'on' ? true : mode === 'off' ? false : !paras.every(function (p) {
+            return p.getAttribute('data-indent') === 'first';
+          });
+          paras.forEach(function (p) {
+            if (on) p.setAttribute('data-indent', 'first');
+            else p.removeAttribute('data-indent');
+          });
+        }
+        // D-9, one level: WebKit can nest a list (a list command inside a
+        // list item of the other kind, or its own `indent`). A nested list is
+        // flattened the way the server flattens it, caret kept.
+        function hasNestedList() {
+          var nested = false;
+          (function walk(node, inList) {
+            var kids = node.childNodes || [];
+            for (var i = 0; i < kids.length && !nested; i++) {
+              var k = kids[i];
+              if (k.nodeType !== 1) continue;
+              var name = richNodeName(k);
+              var isList = name === 'ul' || name === 'ol';
+              if (isList && inList) { nested = true; return; }
+              walk(k, inList || isList);
+            }
+          })(box, false);
+          return nested;
+        }
+
+        function run(key, mode) {
+          focusBox();
+          box.__undo.close();
+          if (key === 'bold' || key === 'italic' || key === 'underline') {
+            richExec(key);
+          } else if (key === 'ul' || key === 'ol') {
+            // The one-level repair runs in oninput below.
+            richExec(key === 'ul' ? 'insertUnorderedList' : 'insertOrderedList');
+          } else if (key === 'indent') {
+            setIndent(mode || 'toggle');
+          }
+          // A command is one undo step of its own (D-6), and a change like
+          // any keystroke: word count, autosave, the pressed states.
+          if (typeof box.oninput === 'function') box.oninput({ type: 'input', inputType: 'format' });
+          box.__undo.record(true);
+          refreshState();
+        }
+
+        // ---- the toolbar ----
+        var buttons = {};
+        var order = [];
+        var roving = 0;
+        // The WAI-ARIA toolbar pattern the math keypad and the drawing strip
+        // use (D-3.1 / 4b-f): ONE Tab stop for the strip, Left / Right / Home
+        // / End inside it, so Tab goes from the strip straight to the box.
+        function setRoving(index) {
+          roving = index;
+          order.forEach(function (b, i) { b.setAttribute('tabindex', i === index ? '0' : '-1'); });
+        }
+        RICH_TOOLS.forEach(function (tool) {
+          if (tool.gap) {
+            var gap = document.createElement('span');
+            gap.className = 'essay-toolbar-gap';
+            gap.setAttribute('aria-hidden', 'true');
+            toolbar.appendChild(gap);
+          }
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'essay-tool-' + tool.key;
+          button.setAttribute('data-tool', tool.key);
+          button.setAttribute('aria-label', tool.label);
+          button.setAttribute('aria-keyshortcuts', tool.shortcut);
+          button.setAttribute('title', tool.label);
+          button.textContent = tool.text;
+          if (tool.toggle) button.setAttribute('aria-pressed', 'false');
+          // The keypad's rule (D-3.1): a pointer press must not take focus out
+          // of the box, or the selection the command is for is gone first.
+          button.onpointerdown = function (e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          };
+          button.onmousedown = function (e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+          };
+          button.onclick = function () {
+            if (tool.key === 'undo' || tool.key === 'redo') {
+              focusBox();
+              if (tool.key === 'undo') box.__undo.undo(); else box.__undo.redo();
+              refreshState();
+              return;
+            }
+            run(tool.key);
+          };
+          buttons[tool.key] = button;
+          order.push(button);
+          toolbar.appendChild(button);
+        });
+        setRoving(0);
+        toolbar.onkeydown = function (event) {
+          if (!event) return;
+          var next = -1;
+          if (event.key === 'ArrowRight') next = (roving + 1) % order.length;
+          else if (event.key === 'ArrowLeft') next = (roving + order.length - 1) % order.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = order.length - 1;
+          else return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          setRoving(next);
+          if (typeof order[next].focus === 'function') order[next].focus();
+        };
+
+        // What the caret is in, for aria-pressed. WebKit answers for B / I /
+        // U / lists (including a typing style toggled at a collapsed caret);
+        // where it cannot (the harness), the caret's ancestors do.
+        function ancestorIs(names) {
+          var range = selectionRange();
+          var at = range ? range.startContainer : null;
+          while (at && at !== box) {
+            if (names[richNodeName(at)] === true) return true;
+            at = at.parentNode;
+          }
+          return false;
+        }
+        function commandState(command, names) {
+          if (!selectionRange()) return false;
+          if (typeof document.queryCommandState === 'function') {
+            try { return !!document.queryCommandState(command); } catch (e) {}
+          }
+          return ancestorIs(names);
+        }
+        function pressed(key, on) {
+          buttons[key].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        function refreshState() {
+          pressed('bold', commandState('bold', { b: true, strong: true }));
+          pressed('italic', commandState('italic', { i: true, em: true }));
+          pressed('underline', commandState('underline', { u: true }));
+          pressed('ul', commandState('insertUnorderedList', { ul: true }));
+          pressed('ol', commandState('insertOrderedList', { ol: true }));
+          pressed('indent', !!selectionRange() && indentState());
+          buttons.undo.setAttribute('aria-disabled', box.__undo.canUndo() ? 'false' : 'true');
+          buttons.redo.setAttribute('aria-disabled', box.__undo.canRedo() ? 'false' : 'true');
+        }
+        if (typeof document.addEventListener === 'function') {
+          document.addEventListener('selectionchange', function () {
+            if (selectionRange()) refreshState();
+          });
+        }
+        box.onfocus = function () { refreshState(); };
+
+        // ---- shortcuts (D-5: Tab is never handled here) ----
+        box.onkeydown = function (event) {
+          if (!event) return;
+          var chord = undoChord(event);
+          if (chord) {
+            if (typeof event.preventDefault === 'function') event.preventDefault();
+            if (chord === 'undo') box.__undo.undo(); else box.__undo.redo();
+            refreshState();
+            return;
+          }
+          if (!event.metaKey || event.ctrlKey || event.altKey) return;
+          var key = String(event.key || '').toLowerCase();
+          var code = String(event.code || '');
+          var command = null;
+          var mode;
+          if (!event.shiftKey && (key === 'b' || code === 'KeyB')) command = 'bold';
+          else if (!event.shiftKey && (key === 'i' || code === 'KeyI')) command = 'italic';
+          else if (!event.shiftKey && (key === 'u' || code === 'KeyU')) command = 'underline';
+          else if (event.shiftKey && (key === '8' || key === '*' || code === 'Digit8')) command = 'ul';
+          else if (event.shiftKey && (key === '7' || key === '&' || code === 'Digit7')) command = 'ol';
+          else if (!event.shiftKey && (key === ']' || code === 'BracketRight')) { command = 'indent'; mode = 'on'; }
+          else if (!event.shiftKey && (key === '[' || code === 'BracketLeft')) { command = 'indent'; mode = 'off'; }
+          if (!command) return;
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          run(command, mode);
+        };
+        box.onkeyup = function () { refreshState(); };
+        box.onmouseup = function () { refreshState(); };
+
+        // ---- paste and drop: plain text only ("Paste is cleaned") ----
+        // Inserted as WebKit typing (insertText / insertParagraph), so it
+        // takes the formatting at the caret and nothing from the source.
+        function insertPlain(lines) {
+          box.__undo.close();
+          for (var i = 0; i < lines.length; i++) {
+            if (i > 0) richExec('insertParagraph');
+            if (lines[i]) richExec('insertText', lines[i]);
+          }
+          if (typeof box.oninput === 'function') box.oninput({ type: 'input', inputType: 'insertFromPaste' });
+          box.__undo.record(true);
+        }
+        box.onpaste = function (event) {
+          if (event && typeof event.preventDefault === 'function') event.preventDefault();
+          // Slice 69: with the clipboard locked the document's own handler
+          // refuses the paste; this box must not let it in by the back door.
+          if (!ALLOW_CLIPBOARD) return false;
+          insertPlain(richPlainLines(event && event.clipboardData));
+          return false;
+        };
+        // Drop is refused outright, and formatted text never leaves the box by
+        // drag (a drag-move would carry markup). Listeners rather than `on…`
+        // properties, and nothing reads the drag's payload: the order item's
+        // rule that no HTML5 drag path exists on the page (S-1) still holds —
+        // this only ever cancels one.
+        if (typeof box.addEventListener === 'function') {
+          var refuse = function (event) {
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+          };
+          box.addEventListener('dragstart', refuse);
+          box.addEventListener('drop', refuse);
+        }
+
+        // STT slice 3 over the box: a phrase goes in at the caret as typing.
+        box.__richText = function () { return richText(blocks()); };
+        box.__richInsert = function (text) {
+          focusBox();
+          sttInserting = true;
+          try {
+            richExec('insertText', text);
+            if (typeof box.oninput === 'function') box.oninput({ type: 'input', inputType: 'insertText', data: text });
+          } finally {
+            sttInserting = false;
+          }
+        };
+
+        wrap.appendChild(toolbar);
+        wrap.appendChild(box);
+        if (counter) wrap.appendChild(counter);
+        refreshState();
+        if (STT === 'ready') afterField(box, sttControl(box));
+        // TTS slice 2 over the box: the DERIVED text is read, without the
+        // word highlight — the mirror (ttsMirrorFor) maps offsets into a
+        // textarea's value and has nothing to map here. Highlighting through
+        // ranges in the box itself is slice 4.
+        if (TTS.responses === true) {
+          wrap.insertBefore(ttsAnswerBar(box, function () {
+            var text = box.__richText();
+            return ttsBlank(text) ? [ttsSay('No answer yet.')] : ttsTypedSegments(text, null);
+          }), box.nextSibling);
+        }
+        if (item.rubric) wrap.appendChild(rubricNode(item.rubric));
+        return wrap;
+      }
+
       function essayField(item) {
+        if (item.rich_text === true) return richEssayField(item);
         var wrap = document.createElement('div');
         var area = document.createElement('textarea');
         area.className = 'essay';

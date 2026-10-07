@@ -2156,3 +2156,56 @@ row says otherwise.
 | **VoiceOver.** VoiceOver ON before joining; move through (a) | Each control announces "Blank 1, pop-up button" / "Blank 2, edit text" (wording is VoiceOver's) with the current value; the text around reads in order | NOT RUN |
 | **Teacher side.** After hand-in, the per-student page and review queue | The filled sentence with the student's pick (as option text) and typed text — slice 3's rendering of what this client posted | NOT RUN |
 | **Real AAC session.** Release build of 1.6.0 against the origin, real lockdown: answer (a) and (c) with keyboard only, hand in | Selects open inside the session (a native popup is not blocked by AAC); posts and the hand-in succeed; `DID END` | NOT RUN |
+
+## Formatting in essays + undo (v1.6.0, RT slice 3, 2026-10-07)
+
+`docs/rich-text-essay-design.md` slice 3. An essay the teacher marked "Let
+students format their answer" (D-1) renders as a formatted box
+(`contenteditable`) under a toolbar — Bold, Italic, Underline, Bulleted list,
+Numbered list, Indent first line, Undo, Redo — with Cmd-B / Cmd-I / Cmd-U,
+Shift-Cmd-8 / Shift-Cmd-7, Cmd-] / Cmd-[, Cmd-Z / Shift-Cmd-Z. The toolbar is
+ONE Tab stop (Left / Right / Home / End inside it — the keypad / drawing
+strip pattern). Every other field the student types into (plain essay, short
+text, table cell, typed blank, E12 outline) gains the page's own Cmd-Z /
+Shift-Cmd-Z (D-6, closes ME-2 for text fields; no Edit-menu Undo is added).
+The headless suite (`RendererRichTextTests`) stubs WebKit's editing commands
+and the selection; everything below is what only WebKit and AAC can show.
+"Read my answer" over the formatted box reads the text WITHOUT the word
+highlight until slice 4.
+
+Fixture: a Published, paged test with (a) an essay with formatting ON and a
+max word count, (b) an essay with formatting OFF, (c) a short text with a `$`
+stem (math keys), (d) a table, (e) a fill-in-the-blank with a typed blank.
+Debug build under simulated lockdown unless the row says otherwise; rebuild
+first.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Toolbar only where asked.** Open (a), then (b) | (a): the toolbar above a white box, the placeholder in the box; (b): today's textarea, no toolbar | NOT RUN |
+| **Bold / italic / underline by button.** In (a) type a sentence, select a word, press B, then I, then U | The word becomes bold, italic, underlined; each button shows pressed while the caret is in the word and unpressed outside it; the caret / selection stays in the box | NOT RUN |
+| **Bold / italic / underline by key.** Select another word, Cmd-B, Cmd-I, Cmd-U; at a collapsed caret, Cmd-B then type | Same result as the buttons; typing after Cmd-B at a caret comes out bold; no beep | NOT RUN |
+| **Lists.** Shift-Cmd-8 on a line, Enter, type, Enter twice; Shift-Cmd-7 on another line | A bulleted list with two items, the double Enter leaves it; a numbered list "1." on the other line; the list buttons show pressed inside a list | NOT RUN |
+| **One level only (D-9).** Inside a list item press Tab; then Shift-Cmd-7 inside a bulleted item | Tab moves focus OUT of the box (no nested list, no tab character); the list command converts or toggles the list, never nests one inside an item | NOT RUN |
+| **Indent first line (D-4).** Caret in a paragraph, press Indent; Cmd-[ ; select across two paragraphs, Cmd-] | The paragraph's first line indents (about two characters' width) and the button shows pressed; Cmd-[ removes it; Cmd-] indents both selected paragraphs | NOT RUN |
+| **Tab keeps moving focus (D-5).** Keyboard navigation OFF (fleet default); Tab from the page heading through (a) | Focus goes to the toolbar (one stop, visible ring), Left / Right move between its buttons, Tab goes into the box, Tab again LEAVES the box to the next control; no keyboard trap | NOT RUN |
+| **Undo / Redo in the box.** Type two sentences with a pause, bold a word, then Cmd-Z three times, Shift-Cmd-Z once; then the Undo / Redo buttons | Each Cmd-Z takes back one step (the bold, then the second sentence, …), the caret lands near the change, Redo re-applies; the buttons do the same and dim when there is nothing to undo / redo; no beep | NOT RUN |
+| **Undo saves.** After an undo in (a), wait 0 s and check stderr | A response post for (a) right after the Cmd-Z, carrying the undone `html` | NOT RUN |
+| **Paste is plain.** Clipboard allowed for the test: copy formatted text from another field (or a styled source when simulated), paste into (a) | The words arrive with the formatting at the caret, none of the source's (no font, colour, size, link); line breaks become paragraphs | NOT RUN |
+| **Paste refused when locked.** Clipboard NOT allowed: Cmd-V and Edit → Paste in (a) | Nothing is inserted | NOT RUN |
+| **Drop refused.** Drag text from elsewhere onto (a); drag a selected word inside (a) | Nothing is inserted or moved | NOT RUN |
+| **Posted shape.** Format some text, leave the box; read stderr / the teacher's per-student page | One post with `text` (plain, list items as "• " / "1. ") and `html`; the teacher sees the same formatting (slice 2) | NOT RUN |
+| **Word count.** In (a) type five words, two of them in a bulleted list | The counter reads 5 (the bullet is not a word); over the limit it turns red and nothing is cut | NOT RUN |
+| **Empty again.** Select all in (a) and delete, leave the box | The placeholder returns; stderr: a post with `text: ""` and no `html` | NOT RUN |
+| **Resume.** Format (a) (bold, a list, an indent), Cmd-Q, relaunch, Resume | The box comes back formatted exactly, no posts at load, Undo dimmed (the restored answer is the start) | NOT RUN |
+| **Resume of a plain answer.** An attempt that saved (a) as plain text (older client, or before the teacher ticked the box) | Each saved line is a paragraph; the student can format from there | NOT RUN |
+| **Spell check.** A student WITH the spell-check grant types a misspelling in (a); one without | Underline only for the granted student | NOT RUN |
+| **Contrast / zoom / font.** A dark contrast set, 3X zoom, Atkinson | Box, toolbar and pressed buttons take the set's colours; the font applies inside the box; the toolbar wraps at 3X with no sideways scroll | NOT RUN |
+| **Undo in plain fields (D-6).** Type in (b), (c), a cell of (d) and the typed blank of (e), pause, type more, Cmd-Z, Shift-Cmd-Z in each | Each takes back the last step and redoes it; the word count / formula preview follow; stderr shows a post after each undo | NOT RUN |
+| **Math key undo.** In (c) type `x`, press the π key, Cmd-Z | Only the π goes; the preview and a post follow | NOT RUN |
+| **Drawing undo untouched.** Draw a stroke, then Cmd-Z with focus in the drawing item; then Cmd-Z in an essay | The stroke goes (the canvas's own undo); the essay's undo touches only the essay | NOT RUN |
+| **Read my answer (degraded until slice 4).** Responses read-aloud on; in (a) press "Read my answer" | The answer is read in full (list items with their markers); NO word highlight over the box; typing stops the reading | NOT RUN |
+| **Speak my answer.** Speech-to-text granted and ready; caret mid-paragraph in (a), dictate a phrase | The phrase is inserted at the caret as plain text in the surrounding formatting; it is saved | NOT RUN |
+| **VoiceOver.** VoiceOver ON before joining; move to (a)'s toolbar and box | "Formatting, toolbar"; each button by name with its pressed state ("Bold, toggle button, not selected" — wording is VoiceOver's); the box as "Your answer, edit text" | NOT RUN |
+| **Real AAC — format keys.** Release build of 1.6.0 against the origin, REAL lockdown: in (a) Cmd-B, Cmd-I, Cmd-U, Shift-Cmd-8, Cmd-] | Each works inside the session exactly as under simulation (the chords reach the page — the main unknown); no beep | NOT RUN |
+| **Real AAC — undo.** Same session: Cmd-Z / Shift-Cmd-Z in (a) and in (c) | Undo / redo work inside the session; the drawing canvas's own Cmd-Z still works | NOT RUN |
+| **Real AAC — paste / Tab / hand in.** Same session: Cmd-V (clipboard per the test's setting), Tab out of (a), hand in | Paste as above; Tab leaves the box; the hand-in succeeds and the teacher sees the formatting; `DID END` | NOT RUN |
