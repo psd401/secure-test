@@ -978,3 +978,14 @@ the editor's type labels (HC-2); the import rewrites instructions a
 student cannot do on screen (underline, circle) and reports every
 change, guessed symbols included, as a blue "Changed from the PDF"
 disclosure on the card. Bedrock evidence in the third commit's message.
+
+## Row RT — formatting in a student's essay (scoped 2026-10-07) — `docs/rich-text-essay-design.md` is the record
+
+Open-beta teacher request. Side: both (client v1.6.0 with row FB; v1.5.1
+is skipped). D-1 a per-essay "Let students format their answer"
+checkbox, D-2 bold / italic / underline / undo / indents only, D-3 in
+v1.6.0, D-4 MLA-style first-line indent, D-5 Tab keeps moving focus,
+D-6 undo / redo in every student text field (closes ME-2), D-7 word count
+reads plain text, D-8 the teacher preview has the toolbar. No version gate
+needed (older clients ignore the flag and show the plain box). Nothing
+built.
