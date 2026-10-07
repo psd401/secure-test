@@ -318,7 +318,7 @@ final class RendererTextAutosaveTests: XCTestCase {
         json.replaceSubrange(range, with: "\"layout\": \"paged\", \"test_id\":")
         let h = try RendererHarness(bundleJSON: json, prelude: Self.clock)
 
-        let unanswered = "0 of 9 answered. Go back to any question, or hand in."
+        let unanswered = "0 of 10 answered. Go back to any question, or hand in."
         XCTAssertEqual(try h.string("__first('.review-count').textContent"), unanswered)
 
         try type(h, essayArea, "one two three")
@@ -335,7 +335,7 @@ final class RendererTextAutosaveTests: XCTestCase {
         try advance(h, 5000)
         XCTAssertEqual(
             try h.string("__first('.review-count').textContent"),
-            "1 of 9 answered. Go back to any question, or hand in."
+            "1 of 10 answered. Go back to any question, or hand in."
         )
     }
 

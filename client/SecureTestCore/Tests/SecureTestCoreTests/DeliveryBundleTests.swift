@@ -19,7 +19,7 @@ final class DeliveryBundleTests: XCTestCase {
 
     func testDecodesEveryItemTypeTheDesignToolCanAuthor() throws {
         let bundle = try loadBundle()
-        XCTAssertEqual(bundle.items.count, 9)
+        XCTAssertEqual(bundle.items.count, 10)
         XCTAssertEqual(
             Set(bundle.items.map(\.kind)),
             Set(DeliveryItem.Kind.allCases),
@@ -141,6 +141,24 @@ final class DeliveryBundleTests: XCTestCase {
         let raw = String(decoding: try loadFixture(), as: UTF8.self)
         XCTAssertFalse(raw.contains("cell_keys"))
         XCTAssertFalse(raw.contains("\"12\""))
+    }
+
+    /// FB slice 5: the blanks arrive — a dropdown with its options in the
+    /// teacher's order (D-6), a typed blank with nothing but its id; neither
+    /// key does, and cannot: FillBlankBlank has no field for one.
+    func testFillBlankArrivesWithItsBlanksAndNoKeys() throws {
+        guard case .fillBlank(let fill)? = try loadBundle().items.first(where: {
+            $0.kind == .fillBlank
+        }) else { return XCTFail("no fill_blank item") }
+        XCTAssertTrue(fill.stem.contains("[[b1]]") && fill.stem.contains("[[b2]]"))
+        XCTAssertEqual(fill.blanks.map(\.id), ["b1", "b2"])
+        guard case .dropdown(_, let options) = fill.blanks[0] else { return XCTFail("b1 is not a dropdown") }
+        XCTAssertEqual(options.map(\.text), ["windward", "leeward", "_northern_"])
+        XCTAssertEqual(fill.blanks[1], .text(id: "b2"))
+        let raw = String(decoding: try loadFixture(), as: UTF8.self)
+        XCTAssertFalse(raw.contains("correct_option_id"))
+        XCTAssertFalse(raw.contains("\"keys\""))
+        XCTAssertFalse(raw.contains("rain shadow"))
     }
 
     func testHotspotKeepsNormalisedRegionsAndItsImageRef() throws {

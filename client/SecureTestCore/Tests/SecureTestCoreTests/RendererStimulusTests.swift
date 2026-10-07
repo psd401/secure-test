@@ -44,7 +44,7 @@ final class RendererStimulusTests: XCTestCase {
 
     func testAllItemsStillRenderAndOnlyMembersAreMarked() throws {
         let h = try harness()
-        XCTAssertEqual(try h.int("__count('.item')"), 9)
+        XCTAssertEqual(try h.int("__count('.item')"), 10)
         XCTAssertEqual(try h.int("__count('.in-set')"), 3)
     }
 
@@ -52,7 +52,7 @@ final class RendererStimulusTests: XCTestCase {
         let h = try harness(itemSets: "[]")
         XCTAssertEqual(try h.int("__count('.stimulus')"), 0)
         XCTAssertEqual(try h.int("__count('.in-set')"), 0)
-        XCTAssertEqual(try h.int("__count('.item')"), 9)
+        XCTAssertEqual(try h.int("__count('.item')"), 10)
     }
 
     func testUnknownLayoutRendersInlineAndUnknownIdsAreIgnored() throws {
@@ -71,7 +71,7 @@ final class RendererStimulusTests: XCTestCase {
     func testASetWhoseIdsAreAllUnknownRendersNothing() throws {
         let h = try harness(itemSets: #"[{"id":"s","stimulus":"Orphan","layout":"inline","item_ids":["nope"]}]"#)
         XCTAssertEqual(try h.int("__count('.stimulus')"), 0)
-        XCTAssertEqual(try h.int("__count('.item')"), 9)
+        XCTAssertEqual(try h.int("__count('.item')"), 10)
     }
 
     private func firstItemId() throws -> String {

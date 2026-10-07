@@ -338,7 +338,7 @@ final class RendererDrawingAutoSaveTests: XCTestCase {
         try h.eval("__all('button', __first('.pager-strip'))[8].onclick()")
         XCTAssertEqual(
             try h.string("__first('.pager-current').textContent"),
-            "Question 8 of 9"
+            "Question 8 of 10"
         )
         try draw(h)
         XCTAssertEqual(try h.postedUploads().count, 0)

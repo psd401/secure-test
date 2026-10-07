@@ -156,10 +156,10 @@ final class RendererSourcePaneTests: XCTestCase {
 
     func testWideBuildsOnePageWithTheSourcesBesideTheQuestion() throws {
         let h = try harness(paged: true, wide: true)
-        XCTAssertEqual(try h.int("__count('.page')"), 11)
+        XCTAssertEqual(try h.int("__count('.page')"), 12)
         let page = "__all('.page')[4]"
         XCTAssertEqual(try h.string("\(page).getAttribute('data-kind')"), "questions")
-        XCTAssertEqual(try h.string("__first('.page-label', \(page)).textContent"), "Question 4 of 9")
+        XCTAssertEqual(try h.string("__first('.page-label', \(page)).textContent"), "Question 4 of 10")
         XCTAssertEqual(try h.int("__count('.side-by-side', \(page))"), 1)
         // The stimulus and its sources left, the member question right.
         XCTAssertEqual(try h.int("__count('.stimulus', __first('.side-source', \(page)))"), 1)
@@ -170,18 +170,18 @@ final class RendererSourcePaneTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.passage-ref', \(page))"), 0)
         XCTAssertEqual(
             try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')"),
-            "question,passage,question,question,questions,question,question,question,question,question,review"
+            "question,passage,question,question,questions,question,question,question,question,question,question,review"
         )
     }
 
     func testNarrowFallsBackToAPassagePageAndAShowTheSourcesDisclosure() throws {
         let h = try harness(paged: true, wide: false)
         // One page more than wide: the sourced set gains a passage page.
-        XCTAssertEqual(try h.int("__count('.page')"), 12)
+        XCTAssertEqual(try h.int("__count('.page')"), 13)
         XCTAssertEqual(try h.int("__count('.side-by-side')"), 0)
         XCTAssertEqual(
             try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')"),
-            "question,passage,question,question,passage,question,question,question,question,question,question,review"
+            "question,passage,question,question,passage,question,question,question,question,question,question,question,review"
         )
         let passage = "__all('.page')[4]"
         XCTAssertEqual(try h.string("__first('.page-label', \(passage)).textContent"), "Passage for question 4")
@@ -202,7 +202,7 @@ final class RendererSourcePaneTests: XCTestCase {
         try h.eval("__all('button', __first('.pager-strip'))[4].onclick()")
         try h.eval("__all('.source-tab')[1].onclick()")
         try h.eval("__first('.pager-next').onclick()")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 4 of 9")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 4 of 10")
         XCTAssertEqual(
             try h.string("__all('.source-tab').map(function (t) { return t.getAttribute('aria-selected'); }).join(',')"),
             "false,true",

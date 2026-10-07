@@ -175,6 +175,49 @@ public struct TableItem: Decodable, Equatable, Sendable {
     public let corner: String?
 }
 
+/// FB slice 5 (docs/fill-in-blank-design.md): one gap in a fill-in-the-blank
+/// sentence. The stem carries `[[<id>]]` where it sits. A dropdown carries its
+/// options in the teacher's order (D-6); a typed blank carries nothing but its
+/// id. The authoring format's `correct_option_id` and `keys` — the answer —
+/// have no counterpart here.
+public enum FillBlankBlank: Decodable, Equatable, Sendable {
+    case dropdown(id: String, options: [Choice])
+    case text(id: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, options
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(String.self, forKey: .id)
+        let kind = try c.decode(String.self, forKey: .kind)
+        switch kind {
+        case "dropdown":
+            self = .dropdown(id: id, options: try c.decode([Choice].self, forKey: .options))
+        case "text":
+            self = .text(id: id)
+        default:
+            // Same posture as an unknown item type: a kind this build cannot
+            // render is version skew, and the whole decode fails loudly.
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind, in: c, debugDescription: "unknown blank kind \"\(kind)\"")
+        }
+    }
+
+    public var id: String {
+        switch self {
+        case .dropdown(let id, _), .text(let id): return id
+        }
+    }
+}
+
+public struct FillBlankItem: Decodable, Equatable, Sendable {
+    public let id: String
+    public let stem: String
+    public let blanks: [FillBlankBlank]
+}
+
 public enum DeliveryItem: Decodable, Equatable, Sendable {
     case multipleChoiceSingle(MultipleChoiceItem)
     case multipleChoiceMulti(MultipleChoiceItem)
@@ -185,6 +228,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
     case hotspot(HotspotItem)
     case drawingUpload(DrawingUploadItem)
     case table(TableItem)
+    case fillBlank(FillBlankItem)
 
     /// Wire discriminants, matching ITEM_TYPES in the design-tool schema.
     public enum Kind: String, Decodable, CaseIterable, Sendable {
@@ -197,6 +241,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case hotspot
         case drawingUpload = "drawing_upload"
         case table
+        case fillBlank = "fill_blank"
     }
 
     private enum DiscriminatorKey: String, CodingKey {
@@ -236,6 +281,8 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
             self = .drawingUpload(try DrawingUploadItem(from: decoder))
         case .table:
             self = .table(try TableItem(from: decoder))
+        case .fillBlank:
+            self = .fillBlank(try FillBlankItem(from: decoder))
         }
     }
 
@@ -250,6 +297,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .hotspot: return .hotspot
         case .drawingUpload: return .drawingUpload
         case .table: return .table
+        case .fillBlank: return .fillBlank
         }
     }
 
@@ -263,6 +311,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .hotspot(let i): return i.id
         case .drawingUpload(let i): return i.id
         case .table(let i): return i.id
+        case .fillBlank(let i): return i.id
         }
     }
 
@@ -276,6 +325,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .hotspot(let i): return i.stem
         case .drawingUpload(let i): return i.stem
         case .table(let i): return i.stem
+        case .fillBlank(let i): return i.stem
         }
     }
 }

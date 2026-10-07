@@ -63,7 +63,7 @@ final class OfflineBundleTests: XCTestCase {
         let data = try fixtureData()
         let loaded = try OfflineBundle.load(data)
         XCTAssertEqual(loaded.bundle, try DeliveryBundle.decode(from: data))
-        XCTAssertEqual(loaded.bundle.items.count, 9)
+        XCTAssertEqual(loaded.bundle.items.count, 10)
         XCTAssertEqual(loaded.json, String(decoding: data, as: UTF8.self))
     }
 

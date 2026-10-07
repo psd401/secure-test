@@ -2120,3 +2120,39 @@ Server half (one row per assessment, `time_ran_out`) is LIVE since rev 90
 | **Time ran out.** Timed test, let the time run out, quit, relaunch and sign in again | Row shows "Time ran out — ask your teacher" beside a disabled Resume; VoiceOver reads "<title>: Time ran out — ask your teacher" | NOT RUN |
 | **Cleared by the teacher.** From the row above, teacher Adjust time → a later time (or No time limit), student presses Refresh / relaunches | Row returns to an enabled Resume; joining works | NOT RUN |
 
+
+## Fill in the blank (v1.6.0, FB slice 5, 2026-10-07)
+
+`docs/fill-in-blank-design.md` slice 5: the sentence renders with its blanks
+inline — a dropdown blank is a native `<select>` ("Choose…" then the options
+in the teacher's order), a typed blank an inline text field. Posting, the
+answered mark, resume, keyboard reach, read-aloud and contrast / zoom /
+font all follow the existing rules (the match rule for the mark, the text
+autosave for typed blanks). **v1.5.1 is skipped by decision**: the version
+is 1.6.0, so the "U-12 + U-15" rows above run on this build too. Rebuild
+first; a v1.5.0 client is refused by the server before lockdown — that is
+row 523 in `docs/design-tool-manual-checks.md`, not a client row.
+
+Fixture: a Published, paged test with (a) one sentence carrying a dropdown
+blank and a typed blank with **bold** and a `$x^2$` in the text around them,
+(b) a dropdown whose options carry `_italic_` and `$\frac{1}{2}$`, (c) a
+sentence with three blanks. Debug build under simulated lockdown unless the
+row says otherwise.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Inline render.** Open (a) | The sentence reads as one line of prose with the select and the text field in place of the markers; bold and math render around them; no `[[b1]]` shows anywhere | NOT RUN |
+| **Option text.** Open (b)'s select | "Choose…", then the options in the teacher's order; `_italic_` shows without underscores; the fraction shows as its source `$\frac{1}{2}$` (native select holds text only — v1 limit, recorded) | NOT RUN |
+| **Pick posts.** Pick an option in (a) | stderr: one response post for the item with `answers` = {b1: <option id>}; the strip button stays unanswered (one of two blanks) | NOT RUN |
+| **Typed blank autosaves.** Type in (a)'s field and wait 5 s without leaving it | One post carrying both blanks; the field widens as the text grows; then the strip button turns answered | NOT RUN |
+| **Answered only when complete.** In (c), fill two of three blanks, turn the page, come back | Strip and review page show (c) as not answered; fill the third → answered; clear one → not answered again | NOT RUN |
+| **Clear everything withdraws.** In (a), set the select back to "Choose…" and empty the field, leave it | stderr: `withdraw: item=<id>`; teacher's results show no answer for the item | NOT RUN |
+| **Keyboard.** Keyboard navigation OFF (fleet default); Tab through (c) | Focus goes Blank 1 → Blank 2 → Blank 3 in sentence order, each with the visible ring; Space / arrows open and change a select; no mouse needed | NOT RUN |
+| **Resume.** Answer (a) and part of (c), Cmd-Q, relaunch, Resume | Every blank comes back as left (select and text), no new posts at load; (a) marked answered, (c) not | NOT RUN |
+| **Spell check.** A student WITH the spell-check grant types a misspelling in a typed blank; one without | Underline only for the granted student | NOT RUN |
+| **Contrast / zoom / font.** A student with a dark contrast set, 3X zoom and Atkinson | Select and field take the set's colours and the font; the sentence wraps at 3X with no sideways scroll; the field stays legible | NOT RUN |
+| **Read aloud — the question.** Items read-aloud on; Speak on (a) | Reads the sentence with "blank 1", "blank 2" in place of the gaps (never the pick), then "Blank 1 options: …" | NOT RUN |
+| **Read aloud — the answer.** Responses read-aloud on; answer (a), press "Read my answer" | "Blank 1: <picked option>. Blank 2: <typed text>." with the word highlight in the typed field; typing in a blank stops it | NOT RUN |
+| **VoiceOver.** VoiceOver ON before joining; move through (a) | Each control announces "Blank 1, pop-up button" / "Blank 2, edit text" (wording is VoiceOver's) with the current value; the text around reads in order | NOT RUN |
+| **Teacher side.** After hand-in, the per-student page and review queue | The filled sentence with the student's pick (as option text) and typed text — slice 3's rendering of what this client posted | NOT RUN |
+| **Real AAC session.** Release build of 1.6.0 against the origin, real lockdown: answer (a) and (c) with keyboard only, hand in | Selects open inside the session (a native popup is not blocked by AAC); posts and the hand-in succeed; `DID END` | NOT RUN |

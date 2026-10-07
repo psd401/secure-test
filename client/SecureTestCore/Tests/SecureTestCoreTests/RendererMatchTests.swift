@@ -158,7 +158,7 @@ final class RendererMatchTests: XCTestCase {
     private func stripClass(_ h: RendererHarness) throws -> String? {
         try h.string(
             "__all('button', __first('.pager-strip')).filter(function (b) {"
-            + " return (b.getAttribute('aria-label') || '').indexOf('Question 5 of 9') === 0; })[0].className"
+            + " return (b.getAttribute('aria-label') || '').indexOf('Question 5 of 10') === 0; })[0].className"
         )
     }
 

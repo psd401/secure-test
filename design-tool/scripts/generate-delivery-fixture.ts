@@ -217,6 +217,30 @@ const seededItems = await db.insert(items).values([
       cell_keys: { r1: { c1: "12" } },
     },
   },
+  {
+    // FB slice 5: a keyed fill-in-the-blank — one dropdown and one typed
+    // blank, with emphasis in the sentence. Neither key (correct_option_id,
+    // keys) may reach the fixture.
+    assessment_id: a.id,
+    position: 10,
+    type: "fill_blank",
+    stem: "Air rising on the [[b1]] side **cools**, so the dry side is called the [[b2]] side.",
+    config: {
+      blanks: [
+        {
+          id: "b1",
+          kind: "dropdown",
+          options: [
+            { id: "o1", text: "windward" },
+            { id: "o2", text: "leeward" },
+            { id: "o3", text: "_northern_" },
+          ],
+          correct_option_id: "o1",
+        },
+        { id: "b2", kind: "text", keys: ["rain shadow", "leeward"] },
+      ],
+    },
+  },
 ]).returning({ id: items.id, position: items.position });
 
 // E5 slice 2: one stimulus shared by positions 2–3 (the multi-select and the

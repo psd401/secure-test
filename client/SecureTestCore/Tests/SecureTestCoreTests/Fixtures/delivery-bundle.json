@@ -1,10 +1,10 @@
 {
-  "test_id": "3023b565-4aae-4332-8b66-8fa2eaff90f4",
+  "test_id": "fd5acaec-7837-4491-a9c9-f148026d8bba",
   "title": "Delivery Fixture",
   "items": [
     {
       "type": "multiple_choice_single",
-      "id": "bd4565b2-8053-41d9-849f-9df206381611",
+      "id": "c15585ea-aee6-4c1c-b781-f0c304166720",
       "stem": "Which organelle produces ATP?",
       "choices": [
         {
@@ -23,7 +23,7 @@
     },
     {
       "type": "multiple_choice_multi",
-      "id": "f62c1120-de76-48fd-83f4-7882ebd8efb0",
+      "id": "ffe7f388-2c7e-4e26-8c62-d836f2c4487e",
       "stem": "Select all prime numbers. </script><b>not markup</b>",
       "choices": [
         {
@@ -42,12 +42,12 @@
     },
     {
       "type": "short_text",
-      "id": "85457366-cea1-41c4-8e1d-e6d8aaa8d7d8",
+      "id": "16114532-42f8-4c01-b806-ea2bb883694c",
       "stem": "Name the process shown here: ![cell diagram](asset:33333333-3333-4333-8333-333333333333)"
     },
     {
       "type": "essay",
-      "id": "9a2b494b-bb19-4222-bedb-95fc2a8b46a1",
+      "id": "7a4b99ad-a4e3-48c1-a950-9e3cc9b61f0f",
       "stem": "Explain how the author builds their argument. Use $E = mc^2$ if relevant.",
       "max_word_count": 400,
       "placeholder": "Write your response here…",
@@ -80,63 +80,63 @@
     },
     {
       "type": "match",
-      "id": "6bb082ca-5165-47b2-b353-ba567fadb6c8",
+      "id": "dc5dcdee-9770-4a14-b0ca-a59c158651a6",
       "stem": "Match each animal to its young.",
       "lefts": [
         {
-          "id": "9d1c43b893fba3eff58c60a6",
+          "id": "5e6183b30dc0c30a4d5cc5e1",
           "text": "Dog"
         },
         {
-          "id": "bfe02bd44a633283cd47c0f3",
+          "id": "32c55432c25adb779eae29c7",
           "text": "Cat"
         },
         {
-          "id": "1f98e7d98530458abf8efd65",
+          "id": "9372e921af9181ae91ddf22b",
           "text": "Cow"
         }
       ],
       "rights": [
         {
-          "id": "00f064f06f864dfed34db582",
-          "text": "Puppy"
-        },
-        {
-          "id": "66e94ad54d7467a17bcb78fa",
+          "id": "4eb170b79f549e99cc7feb61",
           "text": "Kitten"
         },
         {
-          "id": "9486eb1199545282a6ee278e",
+          "id": "b6ffe1448c76e900f176cc08",
+          "text": "Puppy"
+        },
+        {
+          "id": "c81ae1ddf05fbc4b35d52f9e",
           "text": "Calf"
         }
       ]
     },
     {
       "type": "order",
-      "id": "3c92e133-f60d-41cc-bb4d-41a3787b0929",
+      "id": "ed8aa4da-014d-4df3-a922-d7d7889947d7",
       "stem": "Put the water-cycle stages in order.",
       "entries": [
         {
-          "id": "18d0eb9132da503521f32006",
+          "id": "8610a323c39e629b0832febd",
+          "label": "Collection"
+        },
+        {
+          "id": "948a361210129bc95be06dfa",
           "label": "Precipitation"
         },
         {
-          "id": "2aa903216ec6d750bbc53435",
+          "id": "9ce647e3afe6e3bc8dd63601",
           "label": "Condensation"
         },
         {
-          "id": "40f7883f6f10df6f9a732cd2",
+          "id": "b85f7218810123ba8bb93060",
           "label": "Evaporation"
-        },
-        {
-          "id": "adf6932046a23bf31dcc35e2",
-          "label": "Collection"
         }
       ]
     },
     {
       "type": "hotspot",
-      "id": "e39b5088-e68d-41a9-955c-7fc415a6f508",
+      "id": "3a21f022-9837-40ad-90d9-5d57358bfa0e",
       "stem": "Click the nucleus.",
       "image_asset_id": "33333333-3333-4333-8333-333333333333",
       "regions": [
@@ -158,7 +158,7 @@
     },
     {
       "type": "drawing_upload",
-      "id": "24ccafe1-260e-4dea-9ffd-f12e10f324d8",
+      "id": "0691cc38-a8fe-4d9e-a9a2-32e6ed66e1d3",
       "stem": "Sketch the free-body diagram.",
       "canvas": {
         "width": 1000,
@@ -168,7 +168,7 @@
     },
     {
       "type": "table",
-      "id": "5858f126-e2b0-488d-be3b-7d73190023dc",
+      "id": "5d6ab979-91a6-4bb5-be09-a989fc9c62d7",
       "stem": "Enter the counts from your chi-square work.",
       "columns": [
         {
@@ -191,6 +191,35 @@
         }
       ],
       "corner": "Chamber position"
+    },
+    {
+      "type": "fill_blank",
+      "id": "f770cdcf-7038-421a-a9fd-d398549154ad",
+      "stem": "Air rising on the [[b1]] side **cools**, so the dry side is called the [[b2]] side.",
+      "blanks": [
+        {
+          "id": "b1",
+          "kind": "dropdown",
+          "options": [
+            {
+              "id": "o1",
+              "text": "windward"
+            },
+            {
+              "id": "o2",
+              "text": "leeward"
+            },
+            {
+              "id": "o3",
+              "text": "_northern_"
+            }
+          ]
+        },
+        {
+          "id": "b2",
+          "kind": "text"
+        }
+      ]
     }
   ],
   "item_sets": [
@@ -200,8 +229,8 @@
       "layout": "own_page",
       "sources": [],
       "item_ids": [
-        "f62c1120-de76-48fd-83f4-7882ebd8efb0",
-        "85457366-cea1-41c4-8e1d-e6d8aaa8d7d8"
+        "ffe7f388-2c7e-4e26-8c62-d836f2c4487e",
+        "16114532-42f8-4c01-b806-ea2bb883694c"
       ]
     },
     {
@@ -219,7 +248,7 @@
         }
       ],
       "item_ids": [
-        "9a2b494b-bb19-4222-bedb-95fc2a8b46a1"
+        "7a4b99ad-a4e3-48c1-a950-9e3cc9b61f0f"
       ]
     }
   ],

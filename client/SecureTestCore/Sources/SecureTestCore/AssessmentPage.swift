@@ -456,6 +456,14 @@ public enum AssessmentPage {
     .fill-table th, .fill-table td { border: 1px solid var(--line-strong); padding: 4px 6px; text-align: left; vertical-align: middle; }
     .fill-table th { background: var(--panel); font-weight: 600; }
     .fill-table .table-cell { width: 7em; box-sizing: border-box; padding: 6px 8px; font: inherit; border: 1px solid var(--line-strong); border-radius: 4px; }
+    /* FB slice 5: fill in the blank — the controls sit inside the sentence. */
+    .fill-select, .fill-text {
+      font: inherit; box-sizing: border-box; padding: 2px 6px; margin: 2px 2px;
+      border: 1px solid var(--line-strong); border-radius: 4px; vertical-align: baseline;
+    }
+    .fill-select { max-width: 100%; }
+    .fill-text { min-width: 8ch; max-width: 100%; }
+    .fill-unplaced { margin: 6px 0; }
     /* Client paging: one page at a time, a bar fixed to the bottom to move between them. */
     .page[hidden] { display: none; }
     .page-label { margin: 0 0 12px; font-family: var(--font-heading); font-size: 0.8125rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
@@ -1258,6 +1266,12 @@ public enum AssessmentPage {
                 segs.push({ kind: 'math', tex: n.__tex, el: n });
                 continue;
               }
+              // FB slice 5: a blank in a fill-in-the-blank sentence is read
+              // as "blank n" — the gap, never what fills it.
+              if (typeof n.__ttsBlank === 'string') {
+                segs.push(ttsSay(' ' + n.__ttsBlank + ' '));
+                continue;
+              }
               var tag = String(n.nodeName || '').toLowerCase();
               if (TTS_SKIP_TAGS[tag] === true) continue;
               if ((' ' + (n.className || '') + ' ').indexOf(' tts-bar ') !== -1) continue;
@@ -1350,6 +1364,19 @@ public enum AssessmentPage {
           options.forEach(function (option) {
             out = out.concat(ttsLoose(option.textContent));
             out.push(ttsSay(', '));
+          });
+        } else if (type === 'fill_blank') {
+          // FB slice 5: each dropdown's options once, after the sentence, as a
+          // match's are — option text only, never the student's pick.
+          (answer.__fillControls || []).forEach(function (c) {
+            if (c.kind !== 'dropdown') return;
+            var opts = Array.prototype.filter.call(c.el.childNodes || [], function (o) { return o.value !== ''; });
+            if (!opts.length) return;
+            out.push(ttsSay(' Blank ' + c.n + ' options: '));
+            opts.forEach(function (o) {
+              out = out.concat(ttsLoose(o.textContent));
+              out.push(ttsSay(', '));
+            });
           });
         } else if (type === 'table') {
           // Header cells only — column headers, then each row's label; the
@@ -3860,6 +3887,212 @@ public enum AssessmentPage {
         return wrap;
       }
 
+      // FB slice 5 (docs/fill-in-blank-design.md): the sentence with its
+      // blanks INLINE. The stem is split at its `[[id]]` markers (the schema
+      // package's FILL_BLANK_MARKER_RE, copied); each text segment goes through
+      // textWithAssets — emphasis, pictures, and the closing math pass, which
+      // skips <select> / <input> (MATH_SKIP_TAGS) — and each marker becomes its
+      // blank's control, numbered in stem order. The design-tool preview's
+      // rule for odd stems: a marker naming no blank, and a repeated marker's
+      // second occurrence, stay literal text; a blank no marker places (the
+      // write boundary refuses one, an import might carry one) is still scored,
+      // so it is rendered after the sentence, numbered last.
+      //
+      // A dropdown is a native <select> ("Choose…", then the options in the
+      // teacher's order, D-6) — an <option> holds text only, so option math
+      // shows as its source (v1, recorded in §Progress). A typed blank is an
+      // inline text field on the same per-student spell-check gate as every
+      // field the student types into; no math keypad (short text only, v1).
+      //
+      // Posting: the whole map of the blanks that hold an answer — a select on
+      // change, a typed blank on change and through textAutosave (D-3 of the
+      // autosave note). Nothing answered is the ABSENCE of a response (the
+      // match rule); a student clearing every blank after something was saved
+      // withdraws it (the multi-select rule). The ANSWERED mark waits for every
+      // blank (the match rule, batch 0b slice 3). The client judges nothing:
+      // the bundle carries no key.
+      var FILL_BLANK_MARKER_RE = /\[\[([A-Za-z0-9_-]{1,40})\]\]/g;
+
+      function fillBlankField(item, stem) {
+        var wrap = document.createElement('div');
+        wrap.className = 'fill-blank';
+        var blanks = item.blanks || [];
+        var byId = {};
+        blanks.forEach(function (b) {
+          if (b && typeof b.id === 'string') byId[b.id] = b;
+        });
+        function blankFor(id) {
+          return Object.prototype.hasOwnProperty.call(byId, id) ? byId[id] : null;
+        }
+
+        // P-1: blank id → the saved option id or typed text. A saved option
+        // that names nothing on screen leaves its select on "Choose…".
+        var saved = savedFor(item);
+        var savedAnswers = (saved && saved.answers && typeof saved.answers === 'object')
+          ? saved.answers
+          : null;
+        function savedAnswer(id) {
+          if (!savedAnswers || !Object.prototype.hasOwnProperty.call(savedAnswers, id)) return null;
+          return typeof savedAnswers[id] === 'string' ? savedAnswers[id] : null;
+        }
+
+        // { id, kind, el, n } in number order.
+        var controls = [];
+        var hasPosted = !!savedAnswers;
+
+        function valueOf(c) {
+          var v = c.el.value;
+          return (v === undefined || v === null) ? '' : String(v);
+        }
+        function filled(c) {
+          return c.kind === 'dropdown' ? valueOf(c) !== '' : valueOf(c).trim() !== '';
+        }
+        function complete() {
+          return controls.length > 0 && controls.every(filled);
+        }
+
+        function emit() {
+          var answers = {};
+          var any = false;
+          controls.forEach(function (c) {
+            if (!filled(c)) return;
+            answers[c.id] = valueOf(c);
+            any = true;
+          });
+          if (complete()) markAnswered(item.id); else markUnanswered(item.id);
+          if (!any) {
+            if (hasPosted) {
+              hasPosted = false;
+              withdraw(item.id);
+            }
+            return;
+          }
+          hasPosted = true;
+          post(item.id, { type: 'fill_blank', answers: answers }, false);
+        }
+
+        // A typed blank grows with its text, within bounds, so a short answer
+        // reads as a gap in the sentence and a long one is not clipped.
+        function fit(input) {
+          var len = String(input.value === undefined || input.value === null ? '' : input.value).length;
+          input.style.width = Math.min(30, Math.max(8, len + 2)) + 'ch';
+        }
+
+        function control(blank, n) {
+          var el;
+          var prior = savedAnswer(blank.id);
+          if (blank.kind === 'dropdown') {
+            el = document.createElement('select');
+            el.className = 'fill-select';
+            var none = document.createElement('option');
+            none.value = '';
+            none.textContent = 'Choose…';
+            el.appendChild(none);
+            var values = [];
+            (blank.options || []).forEach(function (o) {
+              var option = document.createElement('option');
+              option.value = o.id;
+              option.textContent = stripEmphasis(o.text || '');
+              el.appendChild(option);
+              values.push(o.id);
+            });
+            if (prior !== null && values.indexOf(prior) !== -1) el.value = prior;
+            el.onchange = emit;
+          } else {
+            el = document.createElement('input');
+            el.type = 'text';
+            el.className = 'fill-text';
+            el.autocomplete = 'off';
+            el.autocapitalize = 'off';
+            // The server refuses an answer over 500 characters (slice 1).
+            el.maxLength = 500;
+            el.spellcheck = !!ACCOMMODATIONS.spell_check;
+            if (prior !== null) el.value = prior;
+            fit(el);
+            el.oninput = function () { fit(el); };
+            el.onchange = emit;
+            // After the restore, so the saved text is the baseline (D-3).
+            textAutosave(el, emit);
+          }
+          el.setAttribute('aria-label', 'Blank ' + n);
+          // Read-aloud of the question says the gap, never what fills it —
+          // the student's own answer is `tts_student_responses` (below).
+          el.__ttsBlank = 'blank ' + n;
+          controls.push({ id: blank.id, kind: blank.kind === 'dropdown' ? 'dropdown' : 'text', el: el, n: n });
+          return el;
+        }
+
+        var text = typeof item.stem === 'string' ? item.stem : '';
+        var placed = {};
+        var n = 0;
+        var last = 0;
+        var m;
+        FILL_BLANK_MARKER_RE.lastIndex = 0;
+        while ((m = FILL_BLANK_MARKER_RE.exec(text)) !== null) {
+          var blank = blankFor(m[1]);
+          // Literal: the marker stays in the next text segment.
+          if (!blank || placed[blank.id] === true) continue;
+          placed[blank.id] = true;
+          n += 1;
+          if (m.index > last) stem.appendChild(textWithAssets(text.slice(last, m.index), { caption: '' }));
+          last = m.index + m[0].length;
+          stem.appendChild(control(blank, n));
+        }
+        if (last < text.length) stem.appendChild(textWithAssets(text.slice(last), { caption: '' }));
+
+        blanks.forEach(function (b) {
+          if (!b || typeof b.id !== 'string' || placed[b.id] === true) return;
+          placed[b.id] = true;
+          n += 1;
+          var line = document.createElement('p');
+          line.className = 'fill-unplaced';
+          line.appendChild(document.createTextNode('Blank ' + n + ': '));
+          line.appendChild(control(b, n));
+          wrap.appendChild(line);
+        });
+
+        // The server marks ANY saved response answered; here the mark means
+        // "every blank", so a restored partial answer starts unmarked.
+        if (ANSWERED[item.id] === true && !complete()) delete ANSWERED[item.id];
+
+        // TTS slice 2: ONE "Read my answer" for the item, reading each
+        // answered blank in number order — a pick as its option text, a typed
+        // blank as typed (highlighted in the mirror over that field). Typing
+        // in any blank stops it, as a table cell does.
+        if (TTS.responses === true) {
+          var bar = ttsBar(stem, 'your answer', function () {
+            var out = [];
+            controls.forEach(function (c) {
+              if (!filled(c)) return;
+              out.push(ttsSay('Blank ' + c.n + ': '));
+              if (c.kind === 'dropdown') {
+                var picked = null;
+                Array.prototype.forEach.call(c.el.childNodes || [], function (o) {
+                  if (o.value === c.el.value) picked = o;
+                });
+                out = out.concat(ttsLoose(picked ? picked.textContent : ''));
+              } else {
+                out = out.concat(ttsTypedSegments(c.el.value, c.el));
+              }
+              out.push(ttsSay('. '));
+            });
+            return out.length ? out : [ttsSay('No answer yet.')];
+          }, stem, stem);
+          controls.forEach(function (c) {
+            if (c.kind !== 'text') return;
+            var priorInput = c.el.oninput;
+            c.el.oninput = function (event) {
+              if (ttsActive && ttsActive.target.el === stem) ttsStop();
+              if (typeof priorInput === 'function') return priorInput.call(c.el, event);
+            };
+          });
+          wrap.appendChild(bar);
+        }
+        // For the question's Speak (ttsOptionSegments).
+        wrap.__fillControls = controls;
+        return wrap;
+      }
+
       function unsupported(kind) {
         var p = document.createElement('p');
         p.className = 'unsupported';
@@ -4283,8 +4516,11 @@ public enum AssessmentPage {
         wrap.className = setOfItem[item.id] ? 'item in-set' : 'item';
         var stem = document.createElement('p');
         stem.className = 'stem';
+        // FB slice 5: a fill-in-the-blank stem IS the answer — its blanks sit
+        // inside the sentence, so fillBlankField fills the stem itself.
+        var fillBlank = item.type === 'fill_blank';
         // C-4: a stem's picture enlarges too, under its own alt text.
-        stem.appendChild(textWithAssets(item.stem, { caption: '' }));
+        if (!fillBlank) stem.appendChild(textWithAssets(item.stem, { caption: '' }));
         // TTS slice 1: the control sits above the stem, outside what is read.
         // One Speak reads the stem and then the options (`answer` is read when
         // Speak is pressed, by which time it exists); the whole question
@@ -4295,7 +4531,7 @@ public enum AssessmentPage {
           }, wrap));
         }
         wrap.appendChild(stem);
-        var answer = answerFor(item);
+        var answer = fillBlank ? fillBlankField(item, stem) : answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
         wrap.appendChild(answer);
         return wrap;

@@ -421,3 +421,67 @@ generic "Could not join. Tell your teacher."). Rows 523–525 NOT RUN.
 **With slice 6 in, slices 1–4 can deploy before the client release:**
 teachers can author the type, and students on today's clients are
 refused cleanly until v1.6.0 reaches them.
+
+**Slice 5 BUILT 2026-10-07 (not released): the client, v1.6.0.** Client only
+plus the fixture generator; no schema change, no migration.
+
+- **Core.** `DeliveryItem.fillBlank(FillBlankItem)` with `FillBlankBlank`
+  (`.dropdown(id, options)` / `.text(id)`) — an unknown blank kind fails the
+  decode, like an unknown item type; nothing can hold `correct_option_id` or
+  `keys`. `ItemResponse.fillBlank(answers: [String: String])`.
+- **Render** (`fillBlankField` in `AssessmentPage.swift`). `itemBlock` hands a
+  `fill_blank` stem to it instead of rendering the stem itself: the stem is
+  split at `[[id]]` (the schema's regex, copied), each text segment goes
+  through `textWithAssets` (emphasis, pictures; the closing math pass skips
+  `select` / `input`), each marker becomes its control, numbered in stem
+  order. Unknown and repeated markers stay literal (the preview's rule); a
+  blank no marker places renders after the sentence as "Blank n:", numbered
+  last (slice 3 scores it). Dropdown = native `<select>` ("Choose…", then the
+  options in the teacher's order, D-6, option text through `stripEmphasis`);
+  **option math shows as its source** (an `<option>` holds text only — the
+  match item's limit, v1). Typed = inline `<input type=text class=fill-text>`,
+  autocomplete off, `maxLength` 500 (the write boundary's limit), spell check
+  on the per-student gate, width follows the text (8–30 ch). **No math keypad
+  and no speech-to-text** on a typed blank (the table has neither either) —
+  follow-ups. `aria-label` "Blank n".
+- **Posting.** The whole map of answered blanks — a select on `change`, a
+  typed blank on `change` and through `textAutosave` (5 s idle / 30 s
+  ceiling, flushed on blur / page turn / Finish). A dropdown counts when an
+  option is picked, a typed blank when its text is not blank after trim
+  (whitespace-only is treated as empty, a small departure from the table,
+  which posts it). No answered blank → nothing posted; if something was
+  saved (this session or restored), the item is withdrawn through the
+  existing DELETE path.
+- **Answered mark: every blank** (the match rule); a restored partial answer
+  starts unmarked even when `answered_item_ids` names it.
+- **Keyboard.** Controls are in sentence order in the DOM; `reachByKeyboard`
+  gives each select `tabindex="0"`, text fields are native stops; the one
+  `select:focus-visible` ring applies, text fields keep WebKit's own.
+- **Read-aloud.** The question's Speak reads each blank as "blank n" (a
+  `__ttsBlank` expando `ttsSegments` honours — never the pick, the James
+  2026-10-01 rule for content read-aloud), then "Blank n options: …" for each
+  dropdown, as a match's options are read. "Read my answer" is ONE control
+  for the item (the table's pattern): "Blank n: <option text | typed text>."
+  for answered blanks, the mirror highlight on a typed blank, "No answer
+  yet." otherwise; typing in a blank stops it.
+- **Resume (P-1).** `saved_responses` restores each select (only to an
+  option that exists) and each field silently; the restored text is the
+  autosave baseline.
+- **Styling.** `.fill-select` / `.fill-text` take `font: inherit` and the
+  `--line-strong` token like the match select and short text, so contrast
+  sets, zoom and fonts reach them.
+- **Instant feedback:** unchanged — slice 3's "Blank n: …" lines.
+- **Fixture.** `generate-delivery-fixture.ts` seeds position 10: a keyed
+  sentence with `**cools**`, a dropdown (windward / leeward / `_northern_`,
+  keyed) and a typed blank (keys "rain shadow", "leeward"). Regenerated
+  through `buildDeliveryBundle`: 10 items, neither key in the bytes; every
+  item id churned as usual, and the match / order entries re-sorted by their
+  new ids (tests read labels, not positions). Existing suites updated from 9
+  items / 11 pages to 10 / 12.
+- **Version.** `MARKETING_VERSION` 1.6.0 (both configurations); 1.5.1 is
+  skipped by decision, so its U-15 change rides this release.
+
+Tests: swift 907 (RendererFillBlankTests 14, ItemResponseFillBlankTests 3,
+one DeliveryBundleTests case), `xcodebuild` Debug green, design-tool
+typecheck clean. Rows "Fill in the blank (v1.6.0)" in
+`client/MANUAL-CHECKS.md`, NOT RUN (one needs a real AAC session).

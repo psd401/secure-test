@@ -4,7 +4,7 @@ import Foundation
 // a student's answer looks like on the wire, discriminated by the same `type`
 // literals as the item it answers.
 //
-// Nine cases as of E3 slice 3 (eight as of slice 68). `drawing_upload` was absent until the server had
+// Ten cases as of FB slice 5 (nine as of E3 slice 3; eight as of slice 68). `drawing_upload` was absent until the server had
 // somewhere to put a file (slice 65): the response references an upload SLOT the
 // server minted, never the bytes, which is why it could not exist before the
 // attempt did.
@@ -25,6 +25,10 @@ public enum ItemResponse: Codable, Equatable, Sendable {
     /// An all-blank grid is the absence of a response, so the page never
     /// posts an empty map; a present cell may still be "".
     case table(cells: [String: [String: String]])
+    /// FB slice 5: blank id → the chosen option's id (dropdown) or the typed
+    /// text. A blank left empty is absent; an item with no answer at all is
+    /// the absence of a response (docs/fill-in-blank-design.md §Response).
+    case fillBlank(answers: [String: String])
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -36,6 +40,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case regionIDs = "region_ids"
         case uploadID = "upload_id"
         case cells
+        case answers
     }
 
     public var typeName: String {
@@ -49,6 +54,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case .hotspot: return "hotspot"
         case .drawingUpload: return "drawing_upload"
         case .table: return "table"
+        case .fillBlank: return "fill_blank"
         }
     }
 
@@ -74,6 +80,8 @@ public enum ItemResponse: Codable, Equatable, Sendable {
             self = .drawingUpload(uploadID: try c.decode(String.self, forKey: .uploadID))
         case "table":
             self = .table(cells: try c.decode([String: [String: String]].self, forKey: .cells))
+        case "fill_blank":
+            self = .fillBlank(answers: try c.decode([String: String].self, forKey: .answers))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -95,6 +103,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case .hotspot(let ids): try c.encode(ids, forKey: .regionIDs)
         case .drawingUpload(let id): try c.encode(id, forKey: .uploadID)
         case .table(let cells): try c.encode(cells, forKey: .cells)
+        case .fillBlank(let answers): try c.encode(answers, forKey: .answers)
         }
     }
 }

@@ -14,12 +14,12 @@ final class RendererBehaviourTests: XCTestCase {
     // Fixture order matches the seeded positions.
     private enum Index {
         static let mcSingle = 0, mcMulti = 1, shortText = 2, essay = 3
-        static let match = 4, order = 5, hotspot = 6, drawing = 7, table = 8
+        static let match = 4, order = 5, hotspot = 6, drawing = 7, table = 8, fillBlank = 9
     }
 
     func testRendersOneBlockPerItem() throws {
         let h = try harness()
-        XCTAssertEqual(try h.int("__count('.item')"), 9)
+        XCTAssertEqual(try h.int("__count('.item')"), 10)
     }
 
     func testStemsRenderAsText() throws {

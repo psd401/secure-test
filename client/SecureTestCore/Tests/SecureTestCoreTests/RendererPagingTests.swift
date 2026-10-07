@@ -25,26 +25,26 @@ final class RendererPagingTests: XCTestCase {
 
     func testPagedBuildsOnePagePerQuestionAPassagePageAndAReviewPage() throws {
         let h = try paged()
-        XCTAssertEqual(try h.int("__count('.page')"), 11)
-        XCTAssertEqual(try h.int("__count('.item')"), 9, "every question is still in the tree")
+        XCTAssertEqual(try h.int("__count('.page')"), 12)
+        XCTAssertEqual(try h.int("__count('.item')"), 10, "every question is still in the tree")
         let kinds = try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')")
         // Page 4 is the side_by_side set's shared page (multi-source slice 4);
         // the harness has no window metrics, so the renderer treats it as wide.
-        XCTAssertEqual(kinds, "question,passage,question,question,questions,question,question,question,question,question,review")
-        XCTAssertEqual(try h.string("__all('.page-label')[0].textContent"), "Question 1 of 9")
+        XCTAssertEqual(kinds, "question,passage,question,question,questions,question,question,question,question,question,question,review")
+        XCTAssertEqual(try h.string("__all('.page-label')[0].textContent"), "Question 1 of 10")
         XCTAssertEqual(try h.string("__all('.page-label')[1].textContent"), "Passage for questions 2\u{2013}3")
-        XCTAssertEqual(try h.string("__all('.page-label')[2].textContent"), "Question 2 of 9")
-        XCTAssertEqual(try h.string("__all('.page-label')[10].textContent"), "Review and hand in")
+        XCTAssertEqual(try h.string("__all('.page-label')[2].textContent"), "Question 2 of 10")
+        XCTAssertEqual(try h.string("__all('.page-label')[11].textContent"), "Review and hand in")
     }
 
     func testOnlyTheFirstPageIsVisibleAndTheBarSaysSo() throws {
         let h = try paged()
         let hidden = try h.string("__all('.page').map(function (p) { return p.getAttribute('hidden') === null ? 'v' : 'h'; }).join('')")
-        XCTAssertEqual(hidden, "vhhhhhhhhhh")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 1 of 9")
+        XCTAssertEqual(hidden, "vhhhhhhhhhhh")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 1 of 10")
         XCTAssertTrue(try h.bool("__first('.pager-prev').disabled"))
         XCTAssertFalse(try h.bool("__first('.pager-next').disabled"))
-        XCTAssertEqual(try h.int("__count('button', __first('.pager-strip'))"), 11)
+        XCTAssertEqual(try h.int("__count('button', __first('.pager-strip'))"), 12)
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[1].textContent"), "P")
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].getAttribute('aria-current')"), "page")
     }
@@ -54,10 +54,10 @@ final class RendererPagingTests: XCTestCase {
         try h.eval("__first('.pager-next').onclick()")
         XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Passage for questions 2\u{2013}3")
         let hidden = try h.string("__all('.page').map(function (p) { return p.getAttribute('hidden') === null ? 'v' : 'h'; }).join('')")
-        XCTAssertEqual(hidden, "hvhhhhhhhhh")
+        XCTAssertEqual(hidden, "hvhhhhhhhhhh")
         try h.eval("__first('.pager-prev').onclick()")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 1 of 9")
-        try h.eval("__all('button', __first('.pager-strip'))[10].onclick()")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 1 of 10")
+        try h.eval("__all('button', __first('.pager-strip'))[11].onclick()")
         XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Review and hand in")
         XCTAssertTrue(try h.bool("__first('.pager-next').disabled"))
         XCTAssertFalse(try h.bool("__first('.pager-prev').disabled"))
@@ -75,7 +75,7 @@ final class RendererPagingTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 1)
         XCTAssertEqual(try h.int("__count('.passage-ref', __all('.page')[1])"), 0)
         try h.eval("__first('.pager-next').onclick()")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 2 of 9")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 2 of 10")
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[2])"), 1)
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 0)
         XCTAssertEqual(try h.string("__first('summary', __all('.page')[2]).textContent"), "Show the passage")
@@ -101,15 +101,15 @@ final class RendererPagingTests: XCTestCase {
 
     func testTheReviewPageListsEveryQuestionAndCarriesTheHandIn() throws {
         let h = try paged()
-        let review = "__all('.page')[10]"
-        // Every page but the review itself: nine questions and the passage.
-        XCTAssertEqual(try h.int("__count('button', __first('.review-list', \(review)))"), 10)
+        let review = "__all('.page')[11]"
+        // Every page but the review itself: ten questions and the passage.
+        XCTAssertEqual(try h.int("__count('button', __first('.review-list', \(review)))"), 11)
         XCTAssertEqual(try h.string("__all('button', __first('.review-list', \(review)))[1].textContent"), "Passage for questions 2\u{2013}3")
         XCTAssertEqual(try h.string("__all('button', __first('.review-list', \(review)))[4].textContent"), "Question 4 \u{00b7} not answered")
         XCTAssertEqual(try h.int("__count('.finish', \(review))"), 1)
         XCTAssertEqual(try h.int("__count('.finish')"), 1)
         try h.eval("__all('button', __first('.review-list', \(review)))[4].onclick()")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 4 of 9")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 4 of 10")
     }
 
     /// E12: the writing area inside an own_page passage keeps posting after
@@ -155,23 +155,23 @@ final class RendererAnsweredMarksTests: XCTestCase {
         let h = try paged(answered: [0, 3])
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].className"), "answered")
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].textContent"), "1 \u{2713}")
-        XCTAssertEqual(try stripLabel(h, 0), "Question 1 of 9, answered")
+        XCTAssertEqual(try stripLabel(h, 0), "Question 1 of 10, answered")
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[2].className"), "unanswered")
-        XCTAssertEqual(try stripLabel(h, 2), "Question 2 of 9, not answered")
+        XCTAssertEqual(try stripLabel(h, 2), "Question 2 of 10, not answered")
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[1].className"), "", "a passage has nothing to answer")
         XCTAssertEqual(try stripLabel(h, 1), "Passage for questions 2\u{2013}3")
-        let review = "__all('.page')[10]"
-        XCTAssertEqual(try h.string("__first('.review-count', \(review)).textContent"), "2 of 9 answered. Go back to any question, or hand in.")
+        let review = "__all('.page')[11]"
+        XCTAssertEqual(try h.string("__first('.review-count', \(review)).textContent"), "2 of 10 answered. Go back to any question, or hand in.")
         XCTAssertEqual(try h.string("__all('button', __first('.review-list', \(review)))[0].textContent"), "Question 1 \u{00b7} answered")
         XCTAssertEqual(try h.string("__all('button', __first('.review-list', \(review)))[2].textContent"), "Question 2 \u{00b7} not answered")
     }
 
     func testPostingAnAnswerMarksItsPage() throws {
         let h = try paged(answered: [])
-        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "0 of 9 answered. Go back to any question, or hand in.")
+        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "0 of 10 answered. Go back to any question, or hand in.")
         try h.eval("__all('input', __item(0))[1].onchange()")
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].className"), "answered")
-        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "1 of 9 answered. Go back to any question, or hand in.")
+        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "1 of 10 answered. Go back to any question, or hand in.")
     }
 
     /// Client-fixes batch 1b (#3): Clear answer on an MC item withdraws it,
@@ -182,12 +182,12 @@ final class RendererAnsweredMarksTests: XCTestCase {
         // Item 0 (Q1, mc single) seeded answered; page index 0.
         let h = try paged(answered: [0])
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].className"), "answered")
-        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "1 of 9 answered. Go back to any question, or hand in.")
+        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "1 of 10 answered. Go back to any question, or hand in.")
 
         try h.eval("__first('.clear-answer', __item(0)).onclick()")
 
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].className"), "unanswered")
-        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "0 of 9 answered. Go back to any question, or hand in.")
+        XCTAssertEqual(try h.string("__first('.review-count').textContent"), "0 of 10 answered. Go back to any question, or hand in.")
         XCTAssertEqual(try h.postedWithdrawals().count, 1)
     }
 

@@ -140,7 +140,7 @@ final class RendererLayoutToggleTests: XCTestCase {
         let h = try harness(itemSets: try ownPageSet(), wide: true)
         XCTAssertEqual(
             try h.string("__all('.page').map(function (p) { return p.getAttribute('data-kind'); }).join(',')"),
-            "passage,question,question,question,question,question,question,question,question,question,review"
+            "passage,question,question,question,question,question,question,question,question,question,question,review"
         )
         XCTAssertEqual(
             try h.int("__count('.layout-toggle', __all('.page')[0])"), 0,
@@ -221,7 +221,7 @@ final class RendererLayoutToggleTests: XCTestCase {
         )
         // Turning to it brings the block into ITS left column, not a holder.
         try h.eval("__first('.pager-next').onclick()")
-        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 2 of 9")
+        XCTAssertEqual(try h.string("__first('.pager-current').textContent"), "Question 2 of 10")
         XCTAssertEqual(try h.int("__count('.stimulus', __first('.side-source', \(second)))"), 1)
         XCTAssertEqual(try h.int("__count('.stimulus', __all('.page')[1])"), 0)
         XCTAssertEqual(try h.int("__count('.stimulus')"), 1)

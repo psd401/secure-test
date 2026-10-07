@@ -27,7 +27,7 @@ final class RendererPrefillTests: XCTestCase {
 
     private func itemIDs() throws -> [String] {
         let p = try probe()
-        return try (0..<9).map { try XCTUnwrap(p.string("BUNDLE.items[\($0)].id")) }
+        return try (0..<10).map { try XCTUnwrap(p.string("BUNDLE.items[\($0)].id")) }
     }
 
     /// The fixture plus saved answers for the given item indexes (values are
@@ -256,7 +256,7 @@ final class RendererPrefillTests: XCTestCase {
         XCTAssertEqual(try h.string("__all('button', __first('.pager-strip'))[0].className"), "unanswered")
         XCTAssertEqual(
             try h.string("__first('.review-count').textContent"),
-            "0 of 9 answered. Go back to any question, or hand in."
+            "0 of 10 answered. Go back to any question, or hand in."
         )
         XCTAssertEqual(try checkedPattern(h, Index.mcSingle), ".x.", "the field is still restored")
     }
