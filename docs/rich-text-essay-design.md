@@ -453,3 +453,21 @@ Release with the rest of the File menu) showed the real WebKit DOM:
   `<p data-indent="first">Plain start <strong>bold partX</strong></p>`
   with the caret inside the text. Tests: three cases added to the shared
   sanitiser table (server) and both client tables.
+
+**Non-lockdown hand-run 2026-10-07 (main session, local `_demo`).**
+Design-tool rows 526–531, 533–535, 537, 538, 541, 543–545 ✅ (536 / 542 in
+part; 539 / 540 need a real Google Docs send with James's consent, 546
+VoiceOver). Client (Debug, simulated lockdown, against the local server):
+Cmd-B / Cmd-] / Shift-Cmd-8 apply and the autosave stores clean html with
+the derived text; resume restores the formatting; Tab leaves the box;
+Cmd-Z in a typed blank undoes and posts. Readings, proposals only:
+- **RT-3** the preview's inert toolbar LOOKS clickable (opacity 1, normal
+  colour) — dim it.
+- **RT-4** Return after a first-line-indented paragraph copies the indent
+  onto the next block (WebKit copies the attribute), so a list item started
+  there LOOKS indented and Indent shows pressed; the saved html carries no
+  indent on the item and a resume shows it correctly. Carrying the indent
+  to the next paragraph is the MLA behaviour; only the list case is off.
+- A stale Turbopack dev cache served the pre-slice `globals.css` (no
+  `.fb-*` / `.essay-rich` rules) until `.next` was moved aside — dev only,
+  the build is unaffected.

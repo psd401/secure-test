@@ -485,3 +485,17 @@ Tests: swift 907 (RendererFillBlankTests 14, ItemResponseFillBlankTests 3,
 one DeliveryBundleTests case), `xcodebuild` Debug green, design-tool
 typecheck clean. Rows "Fill in the blank (v1.6.0)" in
 `client/MANUAL-CHECKS.md`, NOT RUN (one needs a real AAC session).
+
+**Non-lockdown hand-run 2026-10-07 (main session, local `_demo`, fixture
+`FB + RT hand-run 2026-10-07`).** Design-tool rows 492–517, 519, 525 ✅
+(520 / 523 in part); client rows: inline render, pick posts, typed
+autosave, teacher side ✅, resume in part — Debug client under simulated
+lockdown. Readings, proposals only:
+- **FB-R1** the per-student page's type chip prints the raw id
+  (`fill_blank`, also `essay` — the page's convention for every type).
+- **FB-R3** a hand-scored item with only some blanks keyed is worth the
+  KEYED blanks (Q3: two blanks, one keyed → "Points (of 1)"), so a teacher
+  scoring by hand cannot award the unkeyed blank. A human / hybrid method
+  probably wants every blank as the denominator.
+- **FB-R4** the editor's live preview line shows the raw `[[b1]]`
+  markers (the student preview and print render them).
