@@ -606,12 +606,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // v1.5.0 smoke test: a press while the hand-in's session is still
             // ending would drop the instant feedback page. Wait for DID END;
             // the results page shows then, and its Done comes back here.
-            if BackToTests.decide(
+            switch BackToTests.decide(
                 feedbackPending: self.pendingFeedback != nil,
-                sessionActive: self.lockdown?.isActive == true
-            ) == .waitForSessionEnd {
+                sessionActive: self.lockdown?.isActive == true,
+                handedIn: self.attemptHandedIn
+            ) {
+            case .waitForSessionEnd:
                 Self.log("back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END; the results page shows then")
                 return
+            case .refuse:
+                // Bridge audit H-1 (B-1): leaving here would tear the attempt
+                // screen down with lockdown still active.
+                Self.log("BLOCKED home: the page asked to leave a live secure session that is not handed in")
+                Self.logError(kind: "blocked", message: "home during a live session", context: ["what": "home"])
+                return
+            case .leave:
+                break
             }
             Self.log("back to your tests pressed (in-page) — leaving the attempt screen")
             self.showEntry()

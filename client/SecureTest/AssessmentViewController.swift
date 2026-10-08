@@ -121,7 +121,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
     /// Kept so later slices can resolve an item id back to the item it answers
     /// (word caps, required-item checks) without re-parsing the payload.
-    private(set) var bundle: DeliveryBundle?
+    private(set) var bundle: DeliveryBundle? {
+        didSet { itemTable = nil }
+    }
+    /// Built once from `bundle` on the first page payload (bridge audit H-2).
+    private var itemTable: BridgeItemTable?
     /// When the server bundle arrived. The time limit counts from HERE
     /// (`DeliveryBundle.deadline(receivedAt:)`), not from the lockdown begin:
     /// the STT pre-flight (slice 3, up to 20 s) sits between the two, and a
@@ -689,9 +693,9 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// locked-down web view shows, follows the student's contrast set and zoom,
     /// and is captured into the peek frame like everything else they see.
     func updateTimeLimit(text: String, danger: Bool) {
-        let escaped = text.replacingOccurrences(of: "\"", with: "")
+        // Bridge audit H-5: JSON-quoted, not stripped of quotes.
         webView.evaluateJavaScript(
-            "window.__timeLimit && window.__timeLimit.update(\"\(escaped)\", \(danger));",
+            "window.__timeLimit && window.__timeLimit.update(\(JavaScriptString.quoted(text)), \(danger));",
             completionHandler: nil
         )
     }
@@ -894,6 +898,12 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             let parsed = try ItemResponseMessage.decode(fromMessageBody: message.body)
             guard !handedIn else {
                 log("response ignored: item=\(parsed.itemID) — the attempt is already handed in")
+                return
+            }
+            // Bridge audit H-2 / H-3: one of this bundle's items, the item's
+            // own response type, within the server's length limits.
+            if let refusal = bridgeCheck({ $0.check(parsed) }) {
+                blocked("response refused", detail: refusal.description)
                 return
             }
             log("response: item=\(parsed.itemID) type=\(parsed.response.typeName)")
@@ -1145,9 +1155,22 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
         guard let payload = body as? [String: Any],
               let itemID = payload["item_id"] as? String,
-              let dataURL = payload["data_url"] as? String,
-              let bytes = Self.pngBytes(fromDataURL: dataURL) else {
+              let dataURL = payload["data_url"] as? String else {
             blocked("malformed drawing message")
+            return
+        }
+        // Bridge audit H-2 / H-3: a drawing item of this bundle, and a PNG
+        // within the server's limit — checked before the base64 is decoded.
+        if let refusal = bridgeCheck({ $0.check(itemID: itemID, expecting: .drawingUpload) }) {
+            blocked("drawing refused", detail: refusal.description)
+            return
+        }
+        let bytes: Data
+        switch DrawingPayload.pngBytes(fromDataURL: dataURL) {
+        case .success(let decoded):
+            bytes = decoded
+        case .failure(let refusal):
+            blocked("drawing refused", detail: refusal.description)
             return
         }
 
@@ -1201,19 +1224,20 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
     }
 
-    /// Only a data: URL with base64 PNG bytes is accepted. The page is ours, so
-    /// anything else is a renderer bug — but this is a channel the document can
-    /// reach the host through, so it validates rather than trusts.
-    static func pngBytes(fromDataURL dataURL: String) -> Data? {
-        let prefix = "data:image/png;base64,"
-        guard dataURL.hasPrefix(prefix) else { return nil }
-        return Data(base64Encoded: String(dataURL.dropFirst(prefix.count)))
+    /// Bridge audit H-2: the item table of the bundle this controller fetched
+    /// (or, offline, read from the file). No bundle means nothing the page
+    /// names can be checked, so the payload is refused.
+    private func bridgeCheck(_ check: (BridgeItemTable) -> BridgeRefusal?) -> BridgeRefusal? {
+        guard let bundle else { return .unknownItem("(no bundle loaded)") }
+        let table = itemTable ?? BridgeItemTable(bundle: bundle)
+        itemTable = table
+        return check(table)
     }
 
     private func reportDrawing(itemID: String, ok: Bool) {
-        let escaped = itemID.replacingOccurrences(of: "\"", with: "")
+        // Bridge audit H-5: JSON-quoted, not stripped of quotes.
         webView.evaluateJavaScript(
-            "window.__secureTestDrawingResult(\"\(escaped)\", \(ok));",
+            "window.__secureTestDrawingResult(\(JavaScriptString.quoted(itemID)), \(ok));",
             completionHandler: nil
         )
     }
@@ -1268,6 +1292,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         guard let payload = body as? [String: Any],
               let itemID = payload["item_id"] as? String else {
             blocked("malformed withdraw message")
+            return
+        }
+        if let refusal = bridgeCheck({ $0.check(itemID: itemID) }) {
+            blocked("withdraw refused", detail: refusal.description)
             return
         }
         log("withdraw: item=\(itemID)")
@@ -1373,6 +1401,21 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     ) {
         blocked("js prompt")
         completionHandler(nil)
+    }
+
+    /// Bridge audit H-4 (B-4): the app holds `audio-input` for speech-to-text,
+    /// which runs natively; the page itself never gets the microphone or the
+    /// camera. Denied without a prompt, as the sign-in sheet does — a system
+    /// prompt inside a session hangs behind the lockout (finding #16).
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        blocked("media capture request")
+        decisionHandler(.deny)
     }
 
     // MARK: WKNavigationDelegate

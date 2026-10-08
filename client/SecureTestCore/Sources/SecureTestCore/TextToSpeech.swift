@@ -191,6 +191,8 @@ public enum SpeechCommand: Equatable, Sendable {
         case unknownAction(String)
         case unknownSegmentKind(String)
         case missingField(String)
+        /// Bridge audit H-6 (B-6): a request over `BridgeLimits`.
+        case tooLarge(String)
     }
 
     private struct Wire: Decodable {
@@ -215,6 +217,15 @@ public enum SpeechCommand: Equatable, Sendable {
         case "speak":
             guard let id = wire.id, !id.isEmpty else { throw DecodeError.missingField("id") }
             guard let raw = wire.segments else { throw DecodeError.missingField("segments") }
+            // H-6: bounded before any work is done on the main thread — the
+            // per-word span search and `MathSpeech` both scale with it.
+            guard raw.count <= BridgeLimits.speechMaxSegments else {
+                throw DecodeError.tooLarge("\(raw.count) segments")
+            }
+            let characters = raw.reduce(0) { $0 + ($1.text?.count ?? 0) + ($1.tex?.count ?? 0) }
+            guard characters <= BridgeLimits.speechMaxCharacters else {
+                throw DecodeError.tooLarge("\(characters) characters")
+            }
             let segments: [SpeechScript.Segment] = try raw.map { segment in
                 switch segment.kind {
                 case "text":

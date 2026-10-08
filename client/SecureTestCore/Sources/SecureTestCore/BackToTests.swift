@@ -13,9 +13,15 @@ public enum BackToTests {
         case leave
         /// Stay; the results page appears when the session has ended.
         case waitForSessionEnd
+        /// Bridge audit H-1 (2026-10-08, B-1): the page asked to go home in
+        /// the middle of a live, un-handed-in session. Going home there tore
+        /// the attempt screen down WITHOUT ending lockdown; the page has no
+        /// business asking, so the host refuses and logs it.
+        case refuse
     }
 
-    public static func decide(feedbackPending: Bool, sessionActive: Bool) -> Decision {
-        feedbackPending && sessionActive ? .waitForSessionEnd : .leave
+    public static func decide(feedbackPending: Bool, sessionActive: Bool, handedIn: Bool) -> Decision {
+        if sessionActive && !handedIn { return .refuse }
+        return feedbackPending && sessionActive ? .waitForSessionEnd : .leave
     }
 }

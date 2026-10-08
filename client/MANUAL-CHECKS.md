@@ -2309,3 +2309,29 @@ under simulated lockdown on a Debug build; row 4 is a real session.
 | **No false alarm.** Type into the essay in the second between Finish and the page change | stderr `response ignored … already handed in` (or `refused because the attempt is already handed in — expected, not reported`); the Monitor row reads Handed in, NOT "Needs attention" | ✅ 2026-10-08 with `SECURE_TEST_SIMULATE_LOCKDOWN=hangs` to hold the session open after the hand-in: typed into the essay AND the short answer — stderr `response ignored … already handed in` ×2, 0 `client_error` events on the attempt, the stored essay is the handed-in text. (`hangs` then exits at the 20 s grace — the existing unrecoverable path, so the handed-in page is not reached in that mode; row 1 covers it) |
 | **Feedback On unchanged.** Same with instant feedback on Score | The results page shows at `DID END`, as in v1.6.0 | ✅ 2026-10-08 Debug build of `1618d52`, simulated lockdown, local dev on the `_demo` DB, two demo students (Claude driving the client) — "Your results … 1 of 1 …" |
 | **Real AAC (signed 1.6.1).** Feedback Off, hand in | The handed-in page appears after the lock lifts; the test is not visible on the unlocked Mac | ✅ 2026-10-08 signed Release 1.6.1 (`703a18f2914`, the pkg build) in a REAL AAC session against the origin, demo student, fixture "v1.6.1 Release smoke 2026-10-08 (feedback off)" (James at the client, Claude on the teacher side) — "Handed in" page seen; attempt Submitted 11:08:58, `lockdown_end` 11:09:02, no `client_error` event |
+
+## Bridge hardening — server-delivered renderer slice 1 (v1.6.2, 2026-10-08)
+
+The host now validates every page payload (`docs/server-delivered-renderer-design.md`
+§Progress, B-1…B-7): `home` refused during a live, un-handed-in session
+(H-1); item ids and response types checked against the bundle (H-2); answer
+text, HTML, cells and drawings held to the server's limits, drawings checked
+for the PNG signature before upload (H-3, B-7); microphone / camera requests
+from the page denied (H-4); the drawing result and the time-limit text
+JSON-quoted into the page (H-5); read-aloud requests capped at 120,000
+characters / 2,000 segments (H-6). The refusals themselves are unit-tested
+(`BridgeChecksTests`, `BackToTestsTests`) — the shipped renderer never sends
+a refused payload, so the rows below check that NOTHING legitimate is now
+refused. Any `BLOCKED … refused` line in stderr during these rows is a
+failure. Rows 1–6 run under simulated lockdown on a Debug build; row 7 is a
+real session.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Every item type saves.** A fixture with every item type (MC single + multi, short text, essay with formatting, match, order, hotspot, drawing, table, fill in the blank); answer each, hand in | The results matrix shows every answer; stderr has no `BLOCKED` line; no `client_error` event on the attempt | NOT RUN |
+| **Drawing.** Draw, wait for the auto-save, then Save | "Saved" under the canvas (the drawing result callback, H-5); the teacher's queue shows the picture | NOT RUN |
+| **E12 inline outline.** A set whose source is missing, write the outline inline | The outline saves (stderr `response: item=<inline id> type=essay`); no `BLOCKED` | NOT RUN |
+| **Time-limit banner text.** A timed assessment | The banner reads e.g. "12 minutes left" with no stray quote marks; the 5-minute notice appears | NOT RUN |
+| **Read aloud, long.** A student granted read-aloud; Speak on the longest source, then "Read my answer" on a long essay | Both read, with the word highlight; no `BLOCKED malformed tts message` | NOT RUN |
+| **Ways home still work.** (a) Feedback Off: hand in → Done; (b) feedback On: Done on the results page; (c) Close the sitting from the Monitor → the sheet → home | Each reaches Your tests; stderr has no `BLOCKED home` | NOT RUN |
+| **Real AAC.** Signed build; join, answer two items, hand in | Normal session; stderr has no `BLOCKED` line; `DID END` | NOT RUN |
