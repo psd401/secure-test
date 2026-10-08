@@ -225,3 +225,38 @@ meets a cold cluster).
   D-2 sign the renderer; key storage deferred (2.a); signing decoupled
   from GitHub Actions. Sequencing against the roadmap recorded.
   Nothing built.
+- 2026-10-08 — **Slice 1 audit done (read-only), hardening decided: one
+  slice H-1…H-6 + B-7 (James).** Inventory: navigation allows only the
+  host's own loads; new windows, file pickers, alerts / confirms / prompts
+  refused; context menu suppressed; `nonPersistent()` store; the page CSP
+  blocks every fetch; speech / dictation callbacks JSON-quote their
+  strings; `tts` gated on the accommodation and `stt` on a ready
+  pre-flight; `response` decoded by shape (10 types) and ignored after
+  hand-in; the server re-validates (zod, 20 MB upload cap). Findings:
+  - **B-1** `home` is honoured at any time: mid-session with no feedback
+    pending, `BackToTests.decide` → `.leave` → `showEntry()` tears the
+    attempt screen down WITHOUT ending lockdown. Latent (the button shows
+    only after an end). → **H-1** honour `home` only when lockdown is not
+    active or the attempt is handed in.
+  - **B-2** `response` / `withdraw` / `upload` never check `item_id`
+    against the bundle or the response type against the item's type; the
+    server refuses, the client reports `responses_dropped`. → **H-2**.
+  - **B-3** `upload` decodes any size of base64 in memory and checks only
+    the data-URL prefix. → **H-3** 20 MB before decoding + PNG signature;
+    text / HTML / cell caps as the server's.
+  - **B-4** the test web view has no media-capture delegate (the sign-in
+    sheet denies) while the app holds `audio-input`. → **H-4** deny.
+  - **B-5** `reportDrawing` / `updateTimeLimit` strip only `"` from a
+    string. → **H-5** JSON quoting.
+  - **B-6** `tts` accepts any size: memory, a linear per-word span search
+    and `MathSpeech` on the main thread. → **H-6** 120,000 characters and
+    2,000 segments per request.
+  - **B-7** answer text has no maximum anywhere: `text: z.string()` for
+    essay and short text (`packages/schema/src/responses.ts`); only essay
+    HTML (200,000) and cells (500) are capped. Measured on Aurora
+    (read-only, lengths only): 789 essays, max 8,590 characters, p99
+    5,580; 21 short texts, max 13; the longest kept revision 23,790. →
+    essay text 100,000, short text 2,000, schema first (design-tool
+    deploy), the same limits in the client (H-3).
+  Accepted: `submit` without a native confirm (it is the student's
+  Finish); `timer` (hides the banner only); no per-message rate limit.
