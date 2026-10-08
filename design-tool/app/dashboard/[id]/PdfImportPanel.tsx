@@ -5,7 +5,7 @@ import { useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
 import { RenderedText } from "@/components/app/RenderedText";
 import { ChangedFromPdf } from "./ChangedFromPdf";
-import { attachFigure, figureUseLabel, stemSnippet } from "./pdfFigures";
+import { attachFigure, figureFileName, figureUseLabel, stemSnippet } from "./pdfFigures";
 import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
 import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
@@ -204,6 +204,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   );
   // E9 slice 2: the drafts Add all created, for the links under the notice.
   const [createdDrafts, setCreatedDrafts] = useState<{ id: string; name: string; count: number }[]>([]);
+  // Beta feedback 2026-10-08 slice 2: figures the teacher saved to the
+  // Images page from the strip (James 5.2: a teacher action, never automatic).
+  const [savedFigures, setSavedFigures] = useState<Set<number>>(new Set());
 
   const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
   const needFigure = sets.filter((s) => s.needs_figure && !addedSets.has(s.id)).length;
@@ -231,6 +234,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     setOpenSources(new Set());
     setFormChoice("all");
     setCreatedDrafts([]);
+    setSavedFigures(new Set());
     try {
       const form = new FormData();
       form.append("file", file);
@@ -314,7 +318,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     if (!fig?.data_url) throw new Error(`Figure ${n} has no image to upload`);
     const blob = await (await fetch(fig.data_url)).blob();
     const form = new FormData();
-    form.append("file", new File([blob], `figure-${n}.png`, { type: "image/png" }));
+    // Slice 2 (James 5.3): named after the printed caption when there is one,
+    // so the editor's Image… picker lists "Votes by state.png".
+    form.append("file", new File([blob], figureFileName(n, fig.caption), { type: "image/png" }));
     const res = await fetch("/api/uploads/image", { method: "POST", body: form });
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -324,6 +330,23 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     const id = body.asset?.id ?? body.id;
     if (!id) throw new Error("figure upload returned no asset id");
     return id;
+  }
+
+  /** Slice 2: "Save to Images" — the same upload Add does, on its own. */
+  async function saveFigures(ns: readonly number[]) {
+    setBusy(true);
+    setError(null);
+    try {
+      for (const n of ns) {
+        if (savedFigures.has(n)) continue;
+        await uploadFigure(n);
+        setSavedFigures((prev) => new Set(prev).add(n));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   /** Add a set: its figures become assets, its questions are posted in
@@ -772,9 +795,33 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             ))}
                           </select>
                         ) : null}
+                        {f.data_url ? (
+                          <button
+                            type="button"
+                            onClick={() => saveFigures([f.n])}
+                            disabled={disabled || busy || savedFigures.has(f.n)}
+                            className="mt-1 block w-full text-[11px] underline disabled:no-underline"
+                          >
+                            {savedFigures.has(f.n) ? "Saved to Images" : "Save to Images"}
+                          </button>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
+                  {(() => {
+                    const savable = result.figures.filter((f) => f.data_url).map((f) => f.n);
+                    const left = savable.filter((n) => !savedFigures.has(n));
+                    return savable.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => saveFigures(left)}
+                        disabled={disabled || busy || left.length === 0}
+                        className="mt-2 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-40"
+                      >
+                        {left.length === 0 ? "All figures saved to Images" : "Save all figures to Images"}
+                      </button>
+                    ) : null;
+                  })()}
                 </details>
               ) : null}
               {result.rejected.length > 0 ? (

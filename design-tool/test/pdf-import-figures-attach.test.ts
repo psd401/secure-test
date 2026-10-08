@@ -58,3 +58,14 @@ describe("stemSnippet", () => {
     expect(stemSnippet("a".repeat(80), 10)).toBe(`${"a".repeat(9)}…`);
   });
 });
+
+describe("figureFileName (slice 2)", () => {
+  test("the caption when there is one, else figure-n; unsafe characters go", async () => {
+    const { figureFileName } = await import("../app/dashboard/[id]/pdfFigures");
+    expect(figureFileName(3, "Votes cast by year")).toBe("Votes cast by year.png");
+    expect(figureFileName(3, undefined)).toBe("figure-3.png");
+    expect(figureFileName(3, "  ")).toBe("figure-3.png");
+    expect(figureFileName(4, 'Imports/exports: "2020"')).toBe("Imports exports 2020.png");
+    expect(figureFileName(5, "x".repeat(120))).toBe(`${"x".repeat(80)}.png`);
+  });
+});

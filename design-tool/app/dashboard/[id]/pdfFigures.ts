@@ -54,3 +54,16 @@ export function stemSnippet(stem: string, max = 60): string {
     .trim();
   return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
 }
+
+/** The file name a figure is uploaded under — the Images page and the
+ * editor's picker show it. The printed caption when the extractor found one
+ * (James 5.3), else "figure-n"; characters a file name cannot carry go. */
+export function figureFileName(n: number, caption?: string | null): string {
+  const base = (caption ?? "")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80)
+    .trim();
+  return `${base || `figure-${n}`}.png`;
+}
