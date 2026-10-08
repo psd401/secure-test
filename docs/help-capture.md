@@ -63,7 +63,9 @@ the help page shows. Files are in `design-tool/scripts/help-capture/content/`.
   file** → `sunday-hours.json` (three fictional sources, side by side).
 - **Photosynthesis Quiz**: New assessment → **Import items from PDF** with
   the file from `bun scripts/help-capture/make-pdf.ts <out.pdf>` (local dev
-  runs the mock extractor, which reads its markers) → **Add all**.
+  runs the mock extractor, which reads its markers) → **Add all**. The PDF
+  carries two charts (2026-10-08): one on question 1, one Not used — the
+  `import-pdf` still is taken BEFORE Add all.
 - **Students taking the test** (Monitor, scoring queue, results): with the
   session open on the Monitor,
   `bun --env-file=.env.local scripts/help-capture/sim-students.ts <CODE> scripts/help-capture/content/monitor-plan.json`
@@ -111,6 +113,13 @@ pointer off the page.
   `scripts/help-capture/anim.sh <name>-raw <name> <seconds-per-frame> <crop>`
   → 900 px wide, last frame held 3 s.
 
+- **Taller than the viewport** (2026-10-08, `import-pdf`: the figure strip
+  plus the stimulus card is ~790 px; Chrome's viewport is 595 and
+  `resize_window` does not change it). Take two Chrome screenshots with
+  `save_to_disk` (1016×595, 1:1) at `scrollTo(0, y0)` and
+  `scrollTo(0, y0 + 500)`, then stack them with ffmpeg: crop the first to
+  500 rows and the second to the rest, `vstack`, and the same palette filter
+  `still.sh` uses.
 - **Built-in browser pane instead of Chrome** (2026-10-05, when Chrome
   already holds a real local session on `localhost` and Next dev will not
   hydrate on `127.0.0.1`): set the pane's viewport to 800 px wide (its

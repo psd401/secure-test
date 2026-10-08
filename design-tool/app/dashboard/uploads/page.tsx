@@ -27,7 +27,7 @@ export default async function UploadsPage() {
       <PageHeader
         crumbs={[{ label: "Assessments", href: "/dashboard" }]}
         title="Images"
-        description="Images for your questions. PNG, JPG, GIF, WebP or SVG, up to 5 MB each. Pick one from inside a question with Image…."
+        description="Images for your questions. PNG, JPG, GIF, WebP or SVG, up to 5 MB each. Pick one from inside a question with its Image… button."
       />
       <UploadsPanel
         initialAssets={rows.map((r) => ({

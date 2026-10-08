@@ -5,7 +5,7 @@ import { useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
 import { RenderedText } from "@/components/app/RenderedText";
 import { ChangedFromPdf } from "./ChangedFromPdf";
-import { attachFigure, figureFileName, figureUseLabel, stemSnippet } from "./pdfFigures";
+import { attachFigure, figureFileName, figureUseLabel, itemRangeLabel, stemSnippet } from "./pdfFigures";
 import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
 import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
@@ -749,8 +749,8 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                       tell what the strip was for. */}
                   <p className="mt-1">
                     A figure marked <b>Not used</b> isn&apos;t on any question yet. Choose{" "}
-                    <b>Use with item…</b> to show it above that question, or <b>Save to Images</b> and
-                    add it later from the question with <b>Image…</b>.
+                    <b>Use with item…</b> to show it above that question, or <b>Save to Images</b> to
+                    add it later with the question&apos;s <b>Image…</b> button.
                   </p>
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {result.figures.map((f) => (
@@ -867,8 +867,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Stimulus · items {set.item_indexes[0]! + 1}
-                            {set.item_indexes.length > 1 ? `–${set.item_indexes[set.item_indexes.length - 1]! + 1}` : ""}
+                            Stimulus · {itemRangeLabel(set.item_indexes)}
                             {set.source === "adjacency" ? " · paired by position, please check" : ""}
                             {set.needs_figure ? " · figure not extracted" : ""}
                           </span>
