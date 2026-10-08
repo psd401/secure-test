@@ -192,6 +192,22 @@ describe("renderFilledSentenceHtml", () => {
   });
 });
 
+describe("renderFilledSentenceHtml — FB-S1 emphasis around a blank", () => {
+  test("bold around a blank renders, and the filled blank sits inside the <strong>", () => {
+    const html = renderFillBlankAnswerHtml("Air on the **[[b1]]** side.", BLANKS, { answers: { b1: "o1" } }, NO_ASSETS, {
+      showKey: false,
+    });
+    expect(html).not.toContain("**");
+    expect(html).toMatch(/<strong><span class="fb-blank [^"]*">.*?windward.*?<\/span><\/strong>/);
+  });
+
+  test("no sentinel ever reaches the markup, even when the teacher typed one", () => {
+    const html = renderFillBlankAnswerHtml("A \uE000 [[b1]] b.", BLANKS, { answers: {} }, NO_ASSETS, { showKey: false });
+    expect(html).not.toContain("\uE000");
+    expect(html).toContain('class="fb-blank');
+  });
+});
+
 describe("answerView — the answers-only lines", () => {
   test("numbered by the stem, a dropdown as its option text, marks from the scorer", () => {
     const view = describeAnswer(

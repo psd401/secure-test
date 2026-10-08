@@ -980,6 +980,27 @@ describe("renderAssessmentHtml: fill_blank (FB)", () => {
     expect(html).toContain("Circle one choice for each numbered blank.");
   });
 
+  test("FB-S1: emphasis around or spanning a blank renders, and the blank sits inside it", () => {
+    const html = renderAssessmentHtml(assessment, [
+      {
+        ...fill,
+        stem: "Air on the **[[b1]]** side and _the [[b2]] gap_.",
+      },
+    ]);
+    expect(html).not.toContain("**");
+    expect(html).not.toContain("_the");
+    expect(html).toMatch(/<strong><select class="fill-select" aria-label="Blank 1" disabled>.*?<\/select><\/strong>/);
+    expect(html).toMatch(/<em>the <span class="fill-gap" aria-label="Blank 2">.*?<\/span><\/span> gap<\/em>/);
+  });
+
+  test("FB-S1: a marker inside a formula falls back to segment rendering (well-formed, blank kept)", () => {
+    const html = renderAssessmentHtml(assessment, [{ ...fill, stem: "Solve $x + [[b2]] = 3$ now, [[b1]]." }]);
+    // b2's marker comes first, so it is Blank 1 (stem order).
+    expect(html).toContain('<span class="fill-gap" aria-label="Blank 1">');
+    expect(html).toContain('aria-label="Blank 2" disabled>');
+    expect(html).not.toContain("\uE000");
+  });
+
   test("previewBlanks drops every key field", async () => {
     const { previewBlanks } = await import("../lib/preview/renderHtml");
     const stripped = previewBlanks([

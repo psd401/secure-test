@@ -20,6 +20,7 @@ import {
   type FilledSentence,
 } from "@/lib/items/fillBlankAnswer";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
+import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import type { FillBlankBlank } from "@secure-test/schema";
 
 export interface FillBlankHtmlOptions {
@@ -76,14 +77,18 @@ export function renderFilledSentenceHtml(
   options: FillBlankHtmlOptions,
 ): string {
   const { showKey } = options;
-  let html = `<div class="fb-sentence">`;
+  // FB-S1: the text is rendered whole around the blanks (renderAroundBlanks),
+  // so emphasis spanning a blank renders and the blank sits inside it.
+  const texts: string[] = [""];
+  const slots: string[] = [];
   for (const seg of sentence.segments) {
-    html +=
-      seg.kind === "text"
-        ? renderItemContent(seg.text, resolved)
-        : blankHtml(seg.blank, sentence, resolved, showKey, options.handScored);
+    if (seg.kind === "text") texts[texts.length - 1] += seg.text;
+    else {
+      slots.push(blankHtml(seg.blank, sentence, resolved, showKey, options.handScored));
+      texts.push("");
+    }
   }
-  html += `</div>`;
+  let html = `<div class="fb-sentence">${renderAroundBlanks(texts, slots, resolved)}</div>`;
   if (sentence.unplaced.length > 0) {
     html +=
       `<p class="fb-unplaced">Not in the question text: ` +

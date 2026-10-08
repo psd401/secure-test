@@ -31,6 +31,7 @@ import type { ItemType } from "@/db/schema";
 import { assertNever } from "@/lib/assertNever";
 import { escapeHtml } from "@/lib/escapeHtml";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
+import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
 
@@ -108,8 +109,9 @@ export function previewBlanks(blanks: readonly FillBlankBlank[] | null | undefin
  * KaTeX and emphasis), so no stem text is ever injected raw; the blanks are
  * markup this function builds from escaped ids and option text. A marker
  * that names no blank stays as literal text (the write boundary refuses one,
- * an imported bundle might carry one). Math or emphasis that spans a marker
- * is split by it — author it on each side (v1 limit, recorded in §Progress).
+ * an imported bundle might carry one). FB-S1: the text is rendered whole
+ * around the blanks (renderAroundBlanks), so emphasis spanning a marker
+ * renders and the blank sits inside it.
  *
  * Screen: a dropdown is a disabled `<select>` listing its options in the
  * teacher's order (D-6) — an `<option>` holds text only, so option math
@@ -125,28 +127,32 @@ function renderFillBlankStem(
 ): { stemHtml: string; afterHtml: string } {
   const byId = new Map(blanks.map((b) => [b.id, b] as const));
   const numberOf = new Map<string, number>();
-  let html = "";
+  const texts: string[] = [];
+  const slots: string[] = [];
   let last = 0;
   for (const m of stem.matchAll(FILL_BLANK_MARKER_RE)) {
     const blank = byId.get(m[1]!);
     if (!blank || numberOf.has(blank.id)) continue;
     const n = numberOf.size + 1;
     numberOf.set(blank.id, n);
-    html += renderItemContent(stem.slice(last, m.index), resolved);
+    texts.push(stem.slice(last, m.index));
     last = m.index! + m[0].length;
     if (printMode || blank.kind === "text") {
-      html +=
+      slots.push(
         `<span class="fill-gap${printMode ? " fill-gap-print" : ""}" aria-label="Blank ${n}">` +
-        `<span class="fill-gap-num">${n}</span></span>`;
+          `<span class="fill-gap-num">${n}</span></span>`,
+      );
     } else {
-      html +=
+      slots.push(
         `<select class="fill-select" aria-label="Blank ${n}" disabled>` +
-        `<option value="">Choose…</option>` +
-        blank.options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.text)}</option>`).join("") +
-        `</select>`;
+          `<option value="">Choose…</option>` +
+          blank.options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.text)}</option>`).join("") +
+          `</select>`,
+      );
     }
   }
-  html += renderItemContent(stem.slice(last), resolved);
+  texts.push(stem.slice(last));
+  const html = renderAroundBlanks(texts, slots, resolved);
 
   let afterHtml = "";
   if (printMode) {
