@@ -1604,4 +1604,4 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 553 | A new PDF in the same panel | Saved marks and attachments reset | ✅ 2026-10-08 |
 | 554 | The teacher's booklet with Bedrock | 6 figures, every one "Used with" an item (5, 6, 8, 10, 14, 15), each card "paired by position, please check"; the pairs match the question text; the page-4 figure has a picture | ✅ 2026-10-08 |
 | 555 | `/help.html#import` and the FAQ; the Images page subtitle; `/roadmap.html` | The figures step, the "maps and charts show at the top" entry, "Image…", the 2026-10-08 milestone | NOT RUN (static pages, checked in the diff) |
-| 556 | The same booklet on the origin after the deploy | As row 554; the production log carries no `could not be rendered` line | NOT RUN |
+| 556 | The same booklet on the origin after the deploy | As row 554; the production log carries no `could not be rendered` line | ✅ 2026-10-08 (James): all six figures attached and right in the preview; two imports at 09:13 / 09:16 PT, `ai_usage` only — no `pdf-import:` warning, no error line |
