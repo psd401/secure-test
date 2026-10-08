@@ -462,7 +462,28 @@ public enum AssessmentPage {
       border: 1px solid var(--line-strong); border-radius: 4px; vertical-align: baseline;
     }
     .fill-select { max-width: 100%; }
-    .fill-text { min-width: 8ch; max-width: 100%; }
+    /* FB-S2: the dropdown blank is a button + an in-page listbox, so options
+       can carry emphasis and math. Colours from the theme tokens (contrast
+       sets), sizes in em so data-zoom scales them. */
+    .fill-pick { position: relative; display: inline-block; vertical-align: baseline; max-width: 100%; }
+    .fill-pick-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    button.fill-select { cursor: pointer; background: var(--paper); color: var(--ink); text-align: left; line-height: inherit; }
+    button.fill-select::after { content: "\\25BE"; margin-left: 0.4em; color: var(--ink-soft); }
+    .fill-select-empty { color: var(--ink-soft); }
+    .fill-list {
+      position: absolute; left: 0; top: 100%; z-index: 30; min-width: 100%; max-width: 90vw;
+      max-height: 50vh; overflow-y: auto; margin-top: 2px; padding: 4px 0;
+      background: var(--paper); color: var(--ink); border: 1px solid var(--line-strong);
+      border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); white-space: nowrap;
+      font-weight: normal; font-style: normal;
+    }
+    .fill-list[hidden] { display: none; }
+    .fill-list:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .fill-option { display: block; padding: 0.3em 0.8em; cursor: pointer; }
+    .fill-option[aria-selected="true"] { font-weight: 600; }
+    .fill-option.active { background: var(--accent); color: var(--accent-ink); }
+    /* FB-S4: the typed blank takes the contrast set's colours (it was the UA's white box). */
+    .fill-text { min-width: 8ch; max-width: 100%; background: var(--paper); color: var(--ink); }
     .fill-unplaced { margin: 6px 0; }
     /* Client paging: one page at a time, a bar fixed to the bottom to move between them. */
     .page[hidden] { display: none; }
@@ -1424,11 +1445,11 @@ public enum AssessmentPage {
           // match's are — option text only, never the student's pick.
           (answer.__fillControls || []).forEach(function (c) {
             if (c.kind !== 'dropdown') return;
-            var opts = Array.prototype.filter.call(c.el.childNodes || [], function (o) { return o.value !== ''; });
+            var opts = (c.el.__options || []).filter(function (o) { return o.id !== ''; });
             if (!opts.length) return;
             out.push(ttsSay(' Blank ' + c.n + ' options: '));
             opts.forEach(function (o) {
-              out = out.concat(ttsLoose(o.textContent));
+              out = out.concat(ttsLoose(stripEmphasis(o.text)));
               out.push(ttsSay(', '));
             });
           });
@@ -4587,26 +4608,199 @@ public enum AssessmentPage {
           input.style.width = Math.min(30, Math.max(8, len + 2)) + 'ch';
         }
 
+        // FB-S2 (James, 2026-10-07 sitting): a dropdown blank is the page's
+        // own pick-one control, not a native <select> — an <option> holds
+        // plain text only, and teachers write emphasis and math in options. A
+        // button in the sentence shows the pick (or "Choose…") rendered like
+        // the stem; it opens a listbox of the options, also rendered, with
+        // "Choose…" first so a pick can be taken back. The list is page
+        // content, never a native popup. `button.value` is the picked option
+        // id ('' for none) and `button.onchange()` posts — the interface the
+        // select had, so posting, the mark, resume and read-aloud are the
+        // same code. Keyboard: Down / Up on the button opens, Up / Down /
+        // Home / End move, Enter / Space pick, Escape closes, Tab closes and
+        // moves on, a letter jumps to the next option starting with it.
+        function optionContent(text) {
+          var span = document.createElement('span');
+          span.appendChild(emphasisNodes(text || ''));
+          renderMathIn(span);
+          return span;
+        }
+        function clear(node) {
+          while (node.firstChild) node.removeChild(node.firstChild);
+        }
+
+        function pickControl(blank, n, prior) {
+          var uid = 'fb-' + item.id + '-' + blank.id;
+          var host = document.createElement('span');
+          host.className = 'fill-pick';
+          // Named for VoiceOver through aria-labelledby; never shown or read
+          // twice (the question's Speak skips the whole host).
+          var label = document.createElement('span');
+          label.className = 'fill-pick-label';
+          label.id = uid + '-label';
+          label.setAttribute('aria-hidden', 'true');
+          label.appendChild(document.createTextNode('Blank ' + n));
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'fill-select';
+          button.setAttribute('aria-haspopup', 'listbox');
+          button.setAttribute('aria-expanded', 'false');
+          var shown = document.createElement('span');
+          shown.id = uid + '-value';
+          button.appendChild(shown);
+          button.setAttribute('aria-labelledby', label.id + ' ' + shown.id);
+          var list = document.createElement('span');
+          list.className = 'fill-list';
+          list.id = uid + '-list';
+          list.setAttribute('role', 'listbox');
+          list.setAttribute('aria-labelledby', label.id);
+          list.setAttribute('tabindex', '-1');
+          list.hidden = true;
+          button.setAttribute('aria-controls', list.id);
+
+          var options = [{ id: '', text: 'Choose…' }].concat((blank.options || []).map(function (o) {
+            return { id: o.id, text: o.text || '' };
+          }));
+          options.forEach(function (o, i) {
+            var opt = document.createElement('span');
+            opt.className = 'fill-option';
+            opt.id = uid + '-o' + i;
+            opt.setAttribute('role', 'option');
+            opt.setAttribute('aria-selected', 'false');
+            if (o.id === '') opt.appendChild(document.createTextNode(o.text));
+            else opt.appendChild(optionContent(o.text));
+            // Keep focus on the list while the pointer picks, so its blur is
+            // a real "focus went elsewhere".
+            opt.onmousedown = function (e) { if (e && e.preventDefault) e.preventDefault(); };
+            opt.onclick = function () { choose(i); };
+            list.appendChild(opt);
+            o.el = opt;
+          });
+          // For read-aloud: the options as authored, "Choose…" included (id '').
+          button.__options = options;
+
+          function indexOf(id) {
+            for (var i = 0; i < options.length; i++) if (options[i].id === id) return i;
+            return -1;
+          }
+          var active = -1;
+          function setActive(i) {
+            active = Math.max(0, Math.min(options.length - 1, i));
+            options.forEach(function (o, k) {
+              o.el.className = k === active ? 'fill-option active' : 'fill-option';
+            });
+            list.setAttribute('aria-activedescendant', options[active].el.id);
+            if (typeof options[active].el.scrollIntoView === 'function') {
+              options[active].el.scrollIntoView({ block: 'nearest' });
+            }
+          }
+          function render() {
+            clear(shown);
+            var at = indexOf(button.value);
+            if (at <= 0) {
+              shown.className = 'fill-select-value fill-select-empty';
+              shown.appendChild(document.createTextNode('Choose…'));
+            } else {
+              shown.className = 'fill-select-value';
+              shown.appendChild(optionContent(options[at].text));
+            }
+            options.forEach(function (o, k) {
+              o.el.setAttribute('aria-selected', k === at && at > 0 ? 'true' : 'false');
+            });
+          }
+          function isOpen() { return !list.hidden; }
+          function open() {
+            if (isOpen()) return;
+            list.hidden = false;
+            button.setAttribute('aria-expanded', 'true');
+            list.style.left = '';
+            list.style.right = '';
+            // At 3X zoom a blank near the right edge would push the list past
+            // the window (sideways scroll); open it leftwards instead.
+            if (typeof list.getBoundingClientRect === 'function' && typeof window.innerWidth === 'number') {
+              var r = list.getBoundingClientRect();
+              if (r.right > window.innerWidth) { list.style.left = 'auto'; list.style.right = '0'; }
+            }
+            var at = indexOf(button.value);
+            setActive(at === -1 ? 0 : at);
+            list.focus();
+          }
+          function close(refocus) {
+            if (!isOpen()) return;
+            list.hidden = true;
+            button.setAttribute('aria-expanded', 'false');
+            list.removeAttribute('aria-activedescendant');
+            if (refocus) button.focus();
+          }
+          function choose(i) {
+            var next = options[i] ? options[i].id : button.value;
+            var changed = next !== button.value;
+            button.value = next;
+            close(true);
+            if (changed) button.onchange(); else render();
+          }
+
+          // A mousedown on the button while the list is open blurs the list
+          // (closing it) before the click lands; remember that so the click
+          // means "close", not "open again".
+          var wasOpen = false;
+          button.onmousedown = function () { wasOpen = isOpen(); };
+          button.onclick = function () {
+            if (wasOpen) { wasOpen = false; button.focus(); return; }
+            if (isOpen()) close(true); else open();
+          };
+          button.onkeydown = function (e) {
+            var k = e && e.key;
+            if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Down' || k === 'Up') {
+              if (e.preventDefault) e.preventDefault();
+              open();
+            }
+          };
+          list.onkeydown = function (e) {
+            var k = e && e.key;
+            var handled = true;
+            if (k === 'ArrowDown' || k === 'Down') setActive(active + 1);
+            else if (k === 'ArrowUp' || k === 'Up') setActive(active - 1);
+            else if (k === 'Home') setActive(0);
+            else if (k === 'End') setActive(options.length - 1);
+            else if (k === 'Enter' || k === ' ' || k === 'Spacebar') choose(active);
+            else if (k === 'Escape' || k === 'Esc') close(true);
+            else if (k === 'Tab') { close(false); handled = false; }
+            else if (typeof k === 'string' && k.length === 1 && /\S/.test(k)) {
+              var want = k.toLowerCase();
+              for (var step = 1; step <= options.length; step++) {
+                var at = (active + step) % options.length;
+                if (at === 0) continue;
+                var plain = stripEmphasis(options[at].text).replace(/^[\s$\\{(]+/, '').toLowerCase();
+                if (plain.charAt(0) === want) { setActive(at); break; }
+              }
+            } else handled = false;
+            if (handled && e && e.preventDefault) {
+              e.preventDefault();
+              if (e.stopPropagation) e.stopPropagation();
+            }
+          };
+          list.onblur = function () { close(false); };
+
+          button.value = (prior !== null && indexOf(prior) > 0) ? prior : '';
+          button.onchange = function () { render(); emit(); };
+          render();
+
+          host.appendChild(label);
+          host.appendChild(button);
+          host.appendChild(list);
+          return { host: host, el: button };
+        }
+
         function control(blank, n) {
           var el;
+          var placedEl;
           var prior = savedAnswer(blank.id);
           if (blank.kind === 'dropdown') {
-            el = document.createElement('select');
-            el.className = 'fill-select';
-            var none = document.createElement('option');
-            none.value = '';
-            none.textContent = 'Choose…';
-            el.appendChild(none);
-            var values = [];
-            (blank.options || []).forEach(function (o) {
-              var option = document.createElement('option');
-              option.value = o.id;
-              option.textContent = stripEmphasis(o.text || '');
-              el.appendChild(option);
-              values.push(o.id);
-            });
-            if (prior !== null && values.indexOf(prior) !== -1) el.value = prior;
-            el.onchange = emit;
+            var pick = pickControl(blank, n, prior);
+            el = pick.el;
+            placedEl = pick.host;
           } else {
             el = document.createElement('input');
             el.type = 'text';
@@ -4622,32 +4816,71 @@ public enum AssessmentPage {
             el.onchange = emit;
             // After the restore, so the saved text is the baseline (D-3).
             textAutosave(el, emit);
+            el.setAttribute('aria-label', 'Blank ' + n);
+            placedEl = el;
           }
-          el.setAttribute('aria-label', 'Blank ' + n);
           // Read-aloud of the question says the gap, never what fills it —
           // the student's own answer is `tts_student_responses` (below).
-          el.__ttsBlank = 'blank ' + n;
+          placedEl.__ttsBlank = 'blank ' + n;
           controls.push({ id: blank.id, kind: blank.kind === 'dropdown' ? 'dropdown' : 'text', el: el, n: n });
-          return el;
+          return placedEl;
         }
 
-        var text = typeof item.stem === 'string' ? item.stem : '';
+        // FB-S1 (2026-10-07 sitting): the sentence is rendered WHOLE, with
+        // each placed marker swapped for a private-use sentinel, and the
+        // sentinels are then replaced by the controls. Splitting the stem at
+        // the markers first (slice 5) cut emphasis that spans a blank in two —
+        // `**[[b1]]**` or `_the [[b1]] side_` printed literal `**` / `_`. Now
+        // a control inside bold or italic text sits inside that <strong> /
+        // <em>. A sentinel that lands inside a formula (a marker written
+        // inside `$…$`) never surfaces as a text node; that blank is rendered
+        // after the sentence like an unplaced one, so it is still answerable.
+        var SENTINEL = '';
+        var text = (typeof item.stem === 'string' ? item.stem : '').split(SENTINEL).join('');
         var placed = {};
-        var n = 0;
-        var last = 0;
-        var m;
-        FILL_BLANK_MARKER_RE.lastIndex = 0;
-        while ((m = FILL_BLANK_MARKER_RE.exec(text)) !== null) {
-          var blank = blankFor(m[1]);
-          // Literal: the marker stays in the next text segment.
-          if (!blank || placed[blank.id] === true) continue;
+        var order = [];
+        var marked = text.replace(FILL_BLANK_MARKER_RE, function (whole, id) {
+          var blank = blankFor(id);
+          // Literal: a marker naming no blank, or a repeat, stays as written.
+          if (!blank || placed[blank.id] === true) return whole;
           placed[blank.id] = true;
-          n += 1;
-          if (m.index > last) stem.appendChild(textWithAssets(text.slice(last, m.index), { caption: '' }));
-          last = m.index + m[0].length;
-          stem.appendChild(control(blank, n));
-        }
-        if (last < text.length) stem.appendChild(textWithAssets(text.slice(last), { caption: '' }));
+          order.push(blank);
+          return SENTINEL;
+        });
+        var sentence = textWithAssets(marked, { caption: '' });
+        var n = 0;
+        var inSentence = {};
+        (function substitute(node) {
+          var kids = node.childNodes || [];
+          for (var i = 0; i < kids.length; i++) {
+            var kid = kids[i];
+            if (kid.nodeType === 3) {
+              var raw = kid.textContent || '';
+              if (raw.indexOf(SENTINEL) === -1) continue;
+              var frag = document.createDocumentFragment();
+              var parts = raw.split(SENTINEL);
+              for (var p = 0; p < parts.length; p++) {
+                if (parts[p]) frag.appendChild(document.createTextNode(parts[p]));
+                if (p < parts.length - 1 && n < order.length) {
+                  var b = order[n];
+                  n += 1;
+                  inSentence[b.id] = true;
+                  frag.appendChild(control(b, n));
+                }
+              }
+              var added = frag.childNodes.length;
+              node.replaceChild(frag, kid);
+              i += added - 1;
+            } else if (kid.nodeType === 1) {
+              if ((' ' + (kid.className || '') + ' ').indexOf(' katex ') !== -1) continue;
+              substitute(kid);
+            }
+          }
+        })(sentence);
+        stem.appendChild(sentence);
+        order.forEach(function (b) {
+          if (inSentence[b.id] !== true) placed[b.id] = false;
+        });
 
         blanks.forEach(function (b) {
           if (!b || typeof b.id !== 'string' || placed[b.id] === true) return;
@@ -4676,10 +4909,10 @@ public enum AssessmentPage {
               out.push(ttsSay('Blank ' + c.n + ': '));
               if (c.kind === 'dropdown') {
                 var picked = null;
-                Array.prototype.forEach.call(c.el.childNodes || [], function (o) {
-                  if (o.value === c.el.value) picked = o;
+                (c.el.__options || []).forEach(function (o) {
+                  if (o.id !== '' && o.id === c.el.value) picked = o;
                 });
-                out = out.concat(ttsLoose(picked ? picked.textContent : ''));
+                out = out.concat(ttsLoose(picked ? stripEmphasis(picked.text) : ''));
               } else {
                 out = out.concat(ttsTypedSegments(c.el.value, c.el));
               }
