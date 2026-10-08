@@ -169,6 +169,41 @@ never test content (the code is public in this repository anyway).
    Should v1.x page work pause near the cutover so the first served
    renderer equals the last bundled one?
 
+## Sequencing against the roadmap (James, 2026-10-08)
+
+After v2.0 only the native shell needs a release, so work that touches
+native code or the bridge goes before or with v2.0, and page-only work
+gets cheaper after it.
+
+**Before v2.0, or inside it**
+- The staging stack ("Environments" — now triggered by this change).
+- Signing-key storage (2.a), which blocks slice 3.
+- The bridge audit + hardening (slice 1, ships in a v1.x).
+- Anything needing new native code or a new bridge handler, so the v2.0
+  shell carries it: the handwriting spike (Vision, row 4b); the speech
+  candidates that live in the native engine (a speed change applied
+  mid-reading, a choice of voice — which may also need enhanced voices on
+  the fleet); a "See my results" entry on Your tests (row IF's follow-up,
+  native entry screen).
+- Notarization of the v2.0 build (Apple's 403 on IT's ticket).
+
+**After v2.0 — cheaper as a served renderer**
+- Further new item types.
+- The page halves of row 4b-f (keypad without a `$` stem, …).
+- Speech "start reading from a chosen point" and RT-S1 (Speak does not
+  read the toolbar).
+- UX pass 3's client half (the accessibility audit).
+- Small page fixes of the v1.3.1 / v1.3.5 kind.
+
+**Timing.** No large page refactors while the renderer source moves to
+the design tool (slice 5) — question 9.
+
+**Unaffected.** Design-tool-only rows (U-9, U-11, CI, EV, AC); DS-3
+(GitHub Actions deploys) is no longer a prerequisite now that signing is
+decoupled from it (D-2). With row AC's overnight Aurora pause, the
+renderer route must not touch the database (the bundle fetch already
+meets a cold cluster).
+
 ## Slices (draft, after the decisions)
 
 0. This note + ADR 0018 + decisions.
@@ -188,5 +223,5 @@ never test content (the code is public in this repository anyway).
 - 2026-10-08 — note + ADR 0018 (Proposed) written. Staging decided as a
   must. D-1 delivery = (B), verify-on-every-use cache; fleet is 1:1.
   D-2 sign the renderer; key storage deferred (2.a); signing decoupled
-  from GitHub Actions.
+  from GitHub Actions. Sequencing against the roadmap recorded.
   Nothing built.

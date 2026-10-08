@@ -855,6 +855,10 @@ built, build it scale-to-zero: Aurora min 0 ACU (auto-pause), ECS desired
 count 0 when idle, and no second interface endpoint unless the importer
 must run there — a few dollars a month instead of ~$95.
 
+**2026-10-08 (James): staging is now triggered by the v2.0 server-delivered
+renderer** — a must before the first served renderer
+(`docs/server-delivered-renderer-design.md` §Sequencing).
+
 ## Row AC — Aurora capacity schedule (possible change, 2026-10-01) — nothing built
 
 September's bill: 221 students, 28 sittings, and the production cluster
