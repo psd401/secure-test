@@ -542,6 +542,38 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(try h.string("__boxHTML(__box())"), "<ul><li>a</li><li>b</li></ul>")
     }
 
+    /// RT-S2 (2026-10-07 Release smoke): a line typed after leaving a list
+    /// lands inside WebKit's list wrapper (`<p><ol>…</ol><p>After</p></p>`,
+    /// read from the real DOM). The Indent button rebuilds the box into
+    /// sibling blocks and indents that line; plain input leaves the wrapper
+    /// alone (rebuilding on input lost a list being started).
+    func testALineTypedAfterAListIsIndentable() throws {
+        let h = try harness()
+        try h.eval("""
+        (function () {
+          var box = __box();
+          while (box.firstChild) box.removeChild(box.firstChild);
+          var p1 = document.createElement('p'); p1.appendChild(document.createTextNode('First line.'));
+          var wrap = document.createElement('p');
+          var ol = document.createElement('ol');
+          ['one', 'two'].forEach(function (t) { var li = document.createElement('li'); li.appendChild(document.createTextNode(t)); ol.appendChild(li); });
+          var after = document.createElement('p'); after.appendChild(document.createTextNode('After list.'));
+          wrap.appendChild(ol); wrap.appendChild(after);
+          box.appendChild(p1); box.appendChild(wrap);
+          __select(after.childNodes[0], 11);
+          box.oninput({ type: 'input' });
+        })();
+        """)
+        XCTAssertEqual(try h.string("__boxHTML(__box())"),
+                       "<p>First line.</p><p><ol><li>one</li><li>two</li></ol><p>After list.</p></p>",
+                       "input does not rebuild")
+        try h.eval("__first('.essay-tool-indent', __item(3)).onclick({});")
+        XCTAssertEqual(
+            try h.string("__boxHTML(__box())"),
+            "<p>First line.</p><ol><li>one</li><li>two</li></ol><p data-indent=\"first\">After list.</p>"
+        )
+    }
+
     // MARK: - Paste
 
     func testPasteInsertsPlainTextOnlyWhenTheClipboardIsOpen() throws {

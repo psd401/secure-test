@@ -2820,6 +2820,9 @@ public enum AssessmentPage {
         }
         // 'on' (Cmd-]), 'off' (Cmd-[) or 'toggle' (the button).
         function setIndent(mode) {
+          // RT-S2: a line typed after a list can sit inside WebKit's list
+          // wrapper, where the indent cannot see it; normalise first.
+          if (hasListWrapper()) rebuild(blocks(), caret());
           var paras = selectedParagraphs(true);
           if (!paras.length) return;
           var on = mode === 'on' ? true : mode === 'off' ? false : !paras.every(function (p) {
@@ -2829,6 +2832,24 @@ public enum AssessmentPage {
             if (on) p.setAttribute('data-indent', 'first');
             else p.removeAttribute('data-indent');
           });
+        }
+        // RT-S2 (2026-10-07 Release smoke): WebKit puts a list started in a
+        // paragraph INSIDE that paragraph, and the line typed after leaving
+        // the list lands inside the same wrapper (a p holding the ol AND a
+        // second p with the new line). selectedParagraphs skips a
+        // paragraph that wraps a list (RT-4), so Indent and the pressed state
+        // missed that line until a later Enter escaped the wrapper. When an
+        // indent command runs and a top-level paragraph wraps a list, the box
+        // is rebuilt into canonical sibling blocks (caret kept) first. Only
+        // then, never on input: a rebuild right after a list command, while
+        // its new item is still empty, mapped the caret back into the
+        // paragraph above and the list was lost (seen in the Debug client).
+        function hasListWrapper() {
+          var kids = box.childNodes || [];
+          for (var i = 0; i < kids.length; i++) {
+            if (kids[i].nodeType === 1 && richListWrapper(kids[i])) return true;
+          }
+          return false;
         }
         // D-9, one level: WebKit can nest a list (a list command inside a
         // list item of the other kind, or its own `indent`). A nested list is
