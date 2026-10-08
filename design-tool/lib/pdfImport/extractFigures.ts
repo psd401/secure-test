@@ -1,4 +1,10 @@
-import { extractImages, getDocumentProxy, getResolvedPDFJS, renderPageAsImage } from "unpdf";
+import {
+  createIsomorphicCanvasFactory,
+  extractImages,
+  getDocumentProxy,
+  getResolvedPDFJS,
+  renderPageAsImage,
+} from "unpdf";
 import { encodePng } from "./png";
 
 // E5 slice 4 (docs/stimulus-design.md; spike S1 made this the plan): the
@@ -414,6 +420,21 @@ export async function extractPdfLayout(
     }
     return canvas;
   };
+  // The page is rendered from a second copy of the document opened with
+  // unpdf's canvas factory, once per import. Rendering `doc` itself handed
+  // pdf.js its built-in Node factory — a stub that throws "@napi-rs/canvas is
+  // not available in this environment" — for any scratch canvas (transparency
+  // groups, soft masks, patterns), so a map page lost its figures (beta
+  // report 2026-10-08).
+  type RenderDoc = Awaited<ReturnType<typeof getDocumentProxy>>;
+  let renderDoc: RenderDoc | null = null;
+  const loadRenderDoc = async (): Promise<RenderDoc> => {
+    if (!renderDoc) {
+      const CanvasFactory = await createIsomorphicCanvasFactory(canvasImport);
+      renderDoc = await getDocumentProxy(bytes.slice(), { CanvasFactory });
+    }
+    return renderDoc;
+  };
 
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
@@ -527,7 +548,10 @@ export async function extractPdfLayout(
       const cv = await loadCanvas();
       if (cv) {
         try {
-          const rendered = await renderPageAsImage(doc, p, { canvasImport, scale: VECTOR_RENDER_SCALE });
+          const rendered = await renderPageAsImage(await loadRenderDoc(), p, {
+            canvasImport,
+            scale: VECTOR_RENDER_SCALE,
+          });
           pageImage = await cv.loadImage(Buffer.from(rendered));
         } catch (err) {
           console.warn(
@@ -623,5 +647,6 @@ export async function extractPdfLayout(
     pageTexts.push(interleaveMarkers(kept, pageFigures));
   }
 
+  await (renderDoc as RenderDoc | null)?.destroy();
   return { pageCount: doc.numPages, textWithMarkers: pageTexts.join("\n\n"), figures };
 }

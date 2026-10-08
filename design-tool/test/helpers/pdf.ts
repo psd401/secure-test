@@ -159,6 +159,10 @@ export interface VectorChartSpec {
   /** Fill a page-size rectangle first: the page background, which must not
    * count as a drawing. */
   pageRect?: boolean;
+  /** Draw the bars inside a Form XObject with a transparency group, as map
+   * and chart exporters do. pdf.js paints a group on a scratch canvas from
+   * the document's own canvas factory, not the one handed to render(). */
+  transparencyGroup?: boolean;
 }
 
 export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
@@ -170,12 +174,16 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
   // 12 pt cluster gap of the axes.
   const step = region.width / spec.bars;
   const barW = Math.max(2, step - 4);
+  const bars: string[] = [];
   for (let i = 0; i < spec.bars; i++) {
     const h = region.height * (0.3 + (0.6 * i) / Math.max(1, spec.bars - 1));
-    parts.push(
+    bars.push(
       `q 0 0 1 rg ${(region.x + i * step + 2).toFixed(2)} ${region.y.toFixed(2)} ${barW.toFixed(2)} ${h.toFixed(2)} re f Q`,
     );
   }
+  const form = bars.join("\n");
+  if (spec.transparencyGroup) parts.push("/Fm1 Do");
+  else parts.push(...bars);
   // Axes: the left and bottom edges, so the union of the painted paths is
   // exactly the region.
   parts.push(
@@ -189,13 +197,19 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
   spec.inside.forEach((l, i) => parts.push(text("F1", region.x + 10, region.y + region.height - 20 - i * 16, l)));
   spec.below.forEach((l, i) => parts.push(text("F1", 72, region.y - 20 - i * 16, l)));
   const content = parts.join("\n");
+  const xobject = spec.transparencyGroup ? "/XObject<</Fm1 7 0 R>>" : "";
   return buildPdf([
     "<</Type/Catalog/Pages 2 0 R>>",
     "<</Type/Pages/Kids[3 0 R]/Count 1>>",
-    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R/F2 6 0 R>>>>/Contents 4 0 R>>",
+    `<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R/F2 6 0 R>>${xobject}>>/Contents 4 0 R>>`,
     `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
     "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
     "<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold>>",
+    ...(spec.transparencyGroup
+      ? [
+          `<</Type/XObject/Subtype/Form/BBox[0 0 612 792]/Group<</S/Transparency/I true>>/Length ${form.length}>>\nstream\n${form}\nendstream`,
+        ]
+      : []),
   ]);
 }
 

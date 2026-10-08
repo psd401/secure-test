@@ -210,6 +210,20 @@ describe("extractPdfLayout: vector figures", () => {
     ]);
   });
 
+  test("a chart drawn in a transparency group still renders", async () => {
+    // Beta report 2026-10-08: a map page failed with "@napi-rs/canvas is not
+    // available in this environment" — pdf.js paints a group on a scratch
+    // canvas from the document's factory, which was pdf.js's throwing stub.
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, transparencyGroup: true }));
+    expect(layout.figures).toHaveLength(1);
+    const f = layout.figures[0]!;
+    expect(f.source).toBe("vector");
+    expect(f.omitted).toBeUndefined();
+    expect(f.data_url).toStartWith("data:image/png;base64,");
+    expect(f.bytes).toBeGreaterThan(500);
+    expect(layout.textWithMarkers).toContain("[FIGURE 1]");
+  });
+
   test("a lone rule, a page-size rect and a small drawing are not figures", async () => {
     // Only the rule and the page background: one painted path and one
     // page-cover rect, so nothing clusters into a figure.
