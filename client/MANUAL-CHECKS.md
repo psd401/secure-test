@@ -2335,3 +2335,20 @@ real session.
 | **Read aloud, long.** A student granted read-aloud; Speak on the longest source, then "Read my answer" on a long essay | Both read, with the word highlight; no `BLOCKED malformed tts message` | NOT RUN |
 | **Ways home still work.** (a) Feedback Off: hand in → Done; (b) feedback On: Done on the results page; (c) Close the sitting from the Monitor → the sheet → home | Each reaches Your tests; stderr has no `BLOCKED home` | NOT RUN |
 | **Real AAC.** Signed build; join, answer two items, hand in | Normal session; stderr has no `BLOCKED` line; `DID END` | NOT RUN |
+
+## Secure-start refusal — device detail + retry copy (v1.6.2, 2026-10-08)
+
+Field report 2026-10-08: `AEAssessmentErrorDomain` code 1 ("Unknown") refused
+17 students' secure sessions in 30 days on 1.3.5, 1.4.0 and 1.5.0. 15 of the 17
+got in by retrying within minutes (one took 36 minutes). Two changes:
+`lockdown_failed` now carries `os_version` and `model` beside `reason`
+(`DeviceInfo`), and the refusal sheet tells the student to wait a minute and
+try again before asking the teacher (`JoinErrorCopy.secureStartFailed*`).
+Unit-tested in `AttemptEventReporterTests` / `APIClientTests`; the rows check
+the real wiring. Debug build, `SECURE_TEST_SIMULATE_LOCKDOWN=refuses`.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Detail on the wire.** Join a sitting with the client launched `refuses` | The attempt's `lockdown_failed` row (read-only Aurora or local DB) has `reason`, `os_version` = this Mac's "26.x.y", `model` = its `hw.model` (`sysctl -n hw.model`) | NOT RUN |
+| **The sheet.** Same join | "Couldn't start a secure session" / "Your test didn't open. Wait a minute, then open it again from Your tests. If it still won't start, ask your teacher." — one sheet, Your tests behind it | NOT RUN |
+| **Retry works.** Relaunch without `refuses`, open the test again from Your tests | The test opens normally; the teacher's timeline shows Lockdown failed then Lockdown started | NOT RUN |

@@ -1284,8 +1284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // acts (F-A), so it cannot stack a second sheet either.
         showEntry()
         let alert = NSAlert()
-        alert.messageText = "Couldn't start a secure session"
-        alert.informativeText = "Your test didn't open. Ask your teacher for help."
+        alert.messageText = JoinErrorCopy.secureStartFailedMessage
+        alert.informativeText = JoinErrorCopy.secureStartFailedInformative
         alert.addButton(withTitle: "OK")
         presentOnEntryWindow(alert)
     }

@@ -442,4 +442,14 @@ final class UploadClientTests: XCTestCase {
             XCTAssertEqual(error as? APIError, .refused(status: 400, code: "invalid_body"))
         }
     }
+
+    /// Field report 2026-10-08: a refused secure start tells the student to
+    /// wait and retry before fetching the teacher — retrying is what worked.
+    func testSecureStartFailedCopySaysWaitAndRetry() {
+        XCTAssertEqual(JoinErrorCopy.secureStartFailedMessage, "Couldn't start a secure session")
+        let text = JoinErrorCopy.secureStartFailedInformative
+        XCTAssertTrue(text.contains("Wait a minute"))
+        XCTAssertTrue(text.contains("Your tests"))
+        XCTAssertTrue(text.contains("ask your teacher"))
+    }
 }

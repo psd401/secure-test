@@ -17,6 +17,15 @@ public enum JoinErrorCopy {
     public static let timeRanOutInformative =
         "Your answers are saved. Ask your teacher to adjust your time if you need to keep working."
 
+    /// Field report 2026-10-08: the sheet when macOS refused the secure
+    /// session (`AEAssessmentErrorDomain` code 1) or never answered. 15 of 17
+    /// students who hit the refusal in 30 days got in by trying again within a
+    /// few minutes; the old "Ask your teacher for help." sent them to the
+    /// teacher first instead.
+    public static let secureStartFailedMessage = "Couldn't start a secure session"
+    public static let secureStartFailedInformative =
+        "Your test didn't open. Wait a minute, then open it again from Your tests. If it still won't start, ask your teacher."
+
     public static func message(for error: Error, isPractice: Bool = false, isStaff: Bool = false) -> String {
         guard let apiError = error as? APIError else {
             return "Something went wrong. Tell your teacher."

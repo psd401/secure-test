@@ -70,6 +70,7 @@ final class AttemptEventReporterTests: XCTestCase {
         let recorder = Recorder()
         let reporter = AttemptEventReporter(
             log: { recorder.log($0) },
+            lockdownFailureDetail: ["os_version": "26.4.1", "model": "Mac15,12"],
             post: { kind, detail in recorder.post(kind, detail) }
         )
 
@@ -82,8 +83,20 @@ final class AttemptEventReporterTests: XCTestCase {
             .lockdownBegin, .lockdownEnd, .lockdownFailed, .lockdownInterrupted,
         ])
         XCTAssertEqual(recorder.posts[0].1, nil)
-        XCTAssertEqual(recorder.posts[2].1, ["reason": "no entitlement"])
+        // Field report 2026-10-08: a failed begin also says which macOS and
+        // which Mac; an interruption does not (it is not a start refusal).
+        XCTAssertEqual(recorder.posts[2].1, [
+            "reason": "no entitlement", "os_version": "26.4.1", "model": "Mac15,12",
+        ])
         XCTAssertEqual(recorder.posts[3].1, ["reason": "dropped"])
+    }
+
+    /// The real values are well-formed: "major.minor.patch" and a non-empty
+    /// model that is not a serial-number-shaped string.
+    func testDeviceInfoShape() {
+        XCTAssertNotNil(DeviceInfo.osVersion.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression))
+        XCTAssertFalse(DeviceInfo.model.isEmpty)
+        XCTAssertEqual(Set(DeviceInfo.lockdownFailureDetail.keys), ["os_version", "model"])
     }
 
     /// Every case the client can send is one the server's contract names —

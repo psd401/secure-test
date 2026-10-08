@@ -84,6 +84,10 @@ public final class AttemptEventReporter: @unchecked Sendable {
     /// Nanoseconds to wait before retry N (1-based). Injectable so the tests
     /// run without wall-clock sleeps; default 2s, 4s, 8s.
     private let retryDelay: @Sendable (Int) -> UInt64
+    /// Field report 2026-10-08: macOS version + Mac model, added to every
+    /// `lockdown_failed` beside `reason` (see `DeviceInfo`). Injectable so the
+    /// tests assert exact detail.
+    private let lockdownFailureDetail: [String: String]
 
     public convenience init(
         api: APIClient,
@@ -99,11 +103,13 @@ public final class AttemptEventReporter: @unchecked Sendable {
     public init(
         log: @escaping @Sendable (String) -> Void,
         retryDelay: @escaping @Sendable (Int) -> UInt64 = { UInt64(1 << $0) * 1_000_000_000 },
+        lockdownFailureDetail: [String: String] = DeviceInfo.lockdownFailureDetail,
         post: @escaping Post
     ) {
         self.post = post
         self.log = log
         self.retryDelay = retryDelay
+        self.lockdownFailureDetail = lockdownFailureDetail
     }
 
     /// Returns the task so a test can await it; production callers ignore it.
@@ -157,7 +163,10 @@ public final class AttemptEventReporter: @unchecked Sendable {
         case .didEnd:
             return report(.lockdownEnd)
         case .failedToBegin(let reason):
-            return report(.lockdownFailed, detail: ["reason": reason])
+            return report(
+                .lockdownFailed,
+                detail: lockdownFailureDetail.merging(["reason": reason]) { _, new in new }
+            )
         case .interrupted(let reason):
             return report(.lockdownInterrupted, detail: ["reason": reason])
         }
