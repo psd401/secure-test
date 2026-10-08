@@ -967,6 +967,8 @@ Ship the item-rendering page JS from the server so new item types need
 no client release; the native shell stays signed. Trade-off: the server
 controls code inside the locked web view (a bridge-hardening ADR). Not
 decided. `docs/fill-in-blank-design.md` §Release gating has the framing.
+**2026-10-08:** scoped in `docs/server-delivered-renderer-design.md` +
+ADR 0018 (Proposed); staging decided as a must; nothing built.
 
 ## Beta feedback batch A — PDF import (2026-10-07) — design-tool, BUILT
 
