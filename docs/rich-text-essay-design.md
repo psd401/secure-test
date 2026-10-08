@@ -471,3 +471,15 @@ Cmd-Z in a typed blank undoes and posts. Readings, proposals only:
 - A stale Turbopack dev cache served the pre-slice `globals.css` (no
   `.fb-*` / `.essay-rich` rules) until `.next` was moved aside — dev only,
   the build is unaffected.
+
+**Real-lockdown sitting 2026-10-07 evening** (same sitting as the
+fill-in-the-blank note's; results in `client/MANUAL-CHECKS.md` "Formatting in
+essays" ×2). Real AAC (Debug, local dev): the format chords, lists, indent,
+undo / redo, paste refused, Tab out, spell check, read-aloud highlight,
+dictation and hand-in all work inside a real session; VoiceOver reads the
+toolbar. Simulated with a dark set / 3X / Atkinson: themed; plain-field and
+math-key undo seen. Reading, proposal only:
+- **RT-S1** — the question's read-aloud (Speak) does not read the formatting
+  toolbar's buttons. Probably by design (the speech tool reads test content;
+  VoiceOver covers controls); no change unless James wants one.
+

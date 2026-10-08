@@ -324,21 +324,22 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v1.5.1** (set up 2026-10-05; `MARKETING_VERSION` = 1.5.1,
-  NOT built, NOT released). Scope DECIDED (James, 2026-10-05): U-15 only —
-  no other client work is ready and small (SI-1 / AS-1 / EX-1 / HS-1 / ME-1 /
-  ME-3 / M-1 already shipped; the read-aloud speed change stays a beta
-  question). Carries one change since v1.5.0 (`1bb469a`):
-  **U-15** (`6104c1c`) — a Your tests row whose in-progress attempt is past
-  its deadline + 30 s shows "Time ran out — ask your teacher" beside a
-  disabled Resume, from the server's `time_ran_out` (live since rev 90); a
-  server without the field reads as false. Before release: the four rows in
-  `client/MANUAL-CHECKS.md` "U-12 + U-15" on the v1.5.1 build (plus the two
-  unrun "EX-2" rows in the same sitting — same code, James 2026-10-05), then
-  psd-sign (bumps nothing — the version is already set) and `gh release
-  create` by James. Notarization is still blocked (Apple 403) — v1.5.1 goes
-  out un-notarized like v1.4.0 / v1.5.0 unless Apple has cleared by then;
-  Jamf / AutoPkg does not need it.
+- **Next release: v1.6.0** (`MARKETING_VERSION` = 1.6.0; v1.5.1 SKIPPED by
+  decision 2026-10-07, so its U-15 change rides this release). Carries:
+  **fill in the blank** (`docs/fill-in-blank-design.md` — sentence with inline
+  blanks; dropdowns are an in-page control with formatted options since
+  FB-S2), **formatting in essays + page-level undo / redo in every text field**
+  (`docs/rich-text-essay-design.md`), **U-15** (`6104c1c`, "Time ran out — ask
+  your teacher" beside a disabled Resume). The server refuses a
+  fill-in-the-blank test to any client below 1.6.0 before begin()
+  (`lib/items/clientSupport.ts`, 409 `client_update_required`, row 523), so
+  the design-tool deploy and this release go out the SAME day, deploy first.
+  Hand-run 2026-10-07: the v1.6.0 sections of `client/MANUAL-CHECKS.md` plus
+  "U-12 + U-15" (EX-2's two remaining rows not exercisable). Before psd-sign:
+  the Release smoke on the origin (real AAC: a formatted dropdown blank by
+  keyboard, a formatted essay with B / I / U, a list and an indent, hand in),
+  then rows 539 / 540 from that essay. Notarization: still blocked unless
+  Apple has cleared (Jamf / AutoPkg does not need it).
 
 - ~~No `LSApplicationCategoryType` yet (archive warning).~~ DONE 2026-09-15
   (v1.3.3): `INFOPLIST_KEY_LSApplicationCategoryType =

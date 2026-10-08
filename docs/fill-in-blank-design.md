@@ -499,3 +499,30 @@ lockdown. Readings, proposals only:
   probably wants every blank as the denominator.
 - **FB-R4** the editor's live preview line shows the raw `[[b1]]`
   markers (the student preview and print render them).
+
+**Real-lockdown sitting 2026-10-07 evening (local `_demo`, fixture `FB + RT
+sitting 2026-10-07`; James at the keyboard).** Pass 1 real AAC (Debug build of
+`e110de8` with the AAC entitlement against local dev — localhost survives
+finding 10.7), pass 2 simulated with Yellow on Black / 3X / Atkinson. Results
+in `client/MANUAL-CHECKS.md` "Fill in the blank (v1.6.0)" and the new "FB-S2 +
+FB-S1" table. Findings:
+- **FB-S1 FIXED** (`4fa4f41` client, `bf69d8f` teacher) — bold / italic around
+  or spanning a blank (`**[[b1]]**`) printed literal `**`: the stem was split
+  at the markers before emphasis was parsed, on both sides. Now rendered whole
+  with a private-use sentinel per placed blank, the controls swapped in after;
+  a marker inside a formula falls back to the old split (well-formed, blank
+  kept).
+- **FB-S2 FIXED** (James: must ship in v1.6.0; `4fa4f41` client, `79799566d0`
+  teacher preview) — options were plain text (native `<option>`), so
+  `_italic_` lost its italics and math showed as source (the recorded v1
+  limit). The client's dropdown is now a button in the sentence plus an
+  in-page role=listbox rendered like the stem; same `value` / `onchange`
+  interface, so posting, the mark, resume and read-aloud are unchanged. The
+  teacher preview shows a closed "Choose… ▾" box with the options rendered
+  after the sentence.
+- **FB-S3 reading, accepted** — in full screen macOS takes Escape before the
+  page sees it, so Escape does not close the list (Tab / click do). The image
+  overlay's Escape is probably in the same position in full screen; unchecked.
+- **FB-S4 FIXED** (`4fa4f41`) — the typed blank ignored the contrast set (the
+  UA's white box); now `--paper` / `--ink`.
+
