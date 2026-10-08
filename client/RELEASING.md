@@ -194,6 +194,27 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.6.0 — 2026-10-07** (built from `fdba1d927c98`, tag on `main` via
+  `--target`; v1.5.1 skipped by decision, so its U-15 rides here): fill in
+  the blank (dropdowns are the in-page pick-one control with formatted
+  options since FB-S2; emphasis around a blank, FB-S1; themed typed blank,
+  FB-S4), formatted essays + page-level undo / redo in every text field,
+  U-15 ("Time ran out — ask your teacher"), and RT-S2 (Indent reaches a line
+  typed right after a list — found by this release's own smoke, `fdba1d9`;
+  the first signed build from `84a30b2` was discarded). psd-sign 0.6.1:
+  pre-flight (clean tree, HEAD = `origin/main`, 1.6.0 > v1.5.0),
+  archive-only Developer ID + hardened runtime (no re-sign), all seven
+  entitlements = `expected-entitlements.txt`, profile "SecureTest Developer
+  ID" (expires 2044), `PSDBuildCommit` = HEAD, pkg Installer-signed
+  (`net.psd401.securetest.client`), `/releases/latest` → v1.6.0, asset
+  sha256 `82190e8e…254ee` = the Desktop pkg. NOT notarized (Apple 403,
+  unchanged). The design-tool deploy went first the same evening (rev 97,
+  `84a30b2`) — the server refuses a fill-in-the-blank test to clients below
+  1.6.0 (row 523). Smoke on THIS build in real AAC sessions against the
+  origin: formatted dropdowns picked by keyboard, a formatted essay with
+  lists and the Indent button after a numbered list, hand-in, `DID END`.
+  Records: `client/MANUAL-CHECKS.md` "Fill in the blank (v1.6.0)", "FB-S2 +
+  FB-S1", "Formatting in essays" ×2, "U-12 + U-15".
 - **v1.5.0 — 2026-10-05** (built from `1bb469ab9657`, tag on `main` via
   `--target`; a feature release): the instant feedback results page after
   `DID END` (IF slice 3, IF-2), EX-2 (an attempt already past its deadline
@@ -324,7 +345,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v1.6.0** (`MARKETING_VERSION` = 1.6.0; v1.5.1 SKIPPED by
+- ~~**Next release: v1.6.0**~~ PUBLISHED 2026-10-07 (see Released). (`MARKETING_VERSION` = 1.6.0; v1.5.1 SKIPPED by
   decision 2026-10-07, so its U-15 change rides this release). Carries:
   **fill in the blank** (`docs/fill-in-blank-design.md` — sentence with inline
   blanks; dropdowns are an in-page control with formatted options since

@@ -482,4 +482,15 @@ math-key undo seen. Reading, proposal only:
 - **RT-S1** — the question's read-aloud (Speak) does not read the formatting
   toolbar's buttons. Probably by design (the speech tool reads test content;
   VoiceOver covers controls); no change unless James wants one.
-
+- **RT-S2 FIXED** (`fdba1d9`, found by the v1.6.0 Release smoke on the
+  origin, real AAC) — the Indent button did nothing on a line typed right
+  after leaving a list. The real DOM (Debug "Dump Formatting Box to Log"):
+  `<p>First line.</p><p><ol>…</ol><p>After list.</p></p>` — WebKit keeps the
+  new line inside the list's wrapper paragraph, and `selectedParagraphs`
+  skips a paragraph that wraps a list (RT-4). Indent / Cmd-] / Cmd-[ now
+  rebuild the box into sibling blocks (caret kept) first. Not on input: a
+  rebuild right after Shift-Cmd-7, while the new item was empty, put the
+  caret back in the paragraph above and lost the list (seen in the Debug
+  client before the fix was narrowed). Left as is: before an indent command
+  the button's pressed state reads off on a wrapped line that is already
+  indented (such a line only gets its indent through a command).

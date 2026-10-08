@@ -2175,7 +2175,7 @@ Fixture `FB + RT sitting 2026-10-07` on the local `_demo` DB.
 | **Keyboard.** Down opens on the current pick; Down / Up / Home / End move; Enter picks; Tab closes; Escape closes (windowed only) | One post per pick; focus back on the button | ✅ same run; Escape not delivered in full screen (FB-S3, accepted) |
 | **Resume.** Quit, relaunch, Resume | Picks back on their buttons, no post at load | ✅ same run |
 | **VoiceOver.** VoiceOver on before joining | "Blank n" + the shown value, pop-up button; options with their state | ✅ 2026-10-07 evening, James, simulated |
-| **Real AAC.** Release build on the origin: pick from a formatted dropdown with the keyboard, hand in | As above inside the session; `DID END` | NOT RUN — the Release smoke before psd-sign |
+| **Real AAC.** Release build on the origin: pick from a formatted dropdown with the keyboard, hand in | As above inside the session; `DID END` | ✅ 2026-10-07 evening, the signed v1.6.0 build (`84a30b2`, then the shipped `fdba1d9`) against the origin, real AAC (James): bold around the blank renders, italic + typeset ½ in the list, keyboard picks, both auto-scored ✓, `DID END` |
 | **Teacher preview.** Open the preview | Closed "Choose… ▾" box per dropdown; options listed rendered after the sentence; print unchanged | ✅ 2026-10-07 evening (browser pane, the sitting fixture) |
 
 ## Formatting in essays + undo (v1.6.0, RT slice 3, 2026-10-07)
@@ -2230,6 +2230,16 @@ first.
 | **Real AAC — format keys.** Release build of 1.6.0 against the origin, REAL lockdown: in (a) Cmd-B, Cmd-I, Cmd-U, Shift-Cmd-8, Cmd-] | Each works inside the session exactly as under simulation (the chords reach the page — the main unknown); no beep | ✅ 2026-10-07 evening real AAC (Ethan; Debug build of e110de8 with the AAC entitlement, REAL lockdown, against local dev on the `_demo` DB — localhost survives 10.7; James at the keyboard) |
 | **Real AAC — undo.** Same session: Cmd-Z / Shift-Cmd-Z in (a) and in (c) | Undo / redo work inside the session; the drawing canvas's own Cmd-Z still works | ✅ 2026-10-07 evening real AAC (Ethan; Debug build of e110de8 with the AAC entitlement, REAL lockdown, against local dev on the `_demo` DB — localhost survives 10.7; James at the keyboard) |
 | **Real AAC — paste / Tab / hand in.** Same session: Cmd-V (clipboard per the test's setting), Tab out of (a), hand in | Paste as above; Tab leaves the box; the hand-in succeeds and the teacher sees the formatting; `DID END` | ◐ 2026-10-07 evening real AAC (Ethan; Debug build of e110de8 with the AAC entitlement, REAL lockdown, against local dev on the `_demo` DB — localhost survives 10.7; James at the keyboard): paste refused (clipboard off), Tab leaves the box, hand-in → `DID END`; paste-allowed not run in a real session |
+
+## RT-S2 — Indent after a list (v1.6.0, 2026-10-07 evening)
+
+Found by the Release smoke: Indent did nothing on the line typed right after
+leaving a list (WebKit had put the line inside the list's wrapper paragraph,
+`docs/rich-text-essay-design.md` §Progress). Fixed in `fdba1d9`.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Indent after a list.** A line, a numbered list of two items, Enter twice, a sentence, press the Indent button | The sentence indents at once; the list stays; typing continues at the caret; Undo takes the indent back | ✅ 2026-10-07 Debug, simulated (Claude via computer use, DOM dump: `<p>…</p><ol>…</ol><p data-indent="first">…</p>`); ✅ the signed `fdba1d9` build, real AAC on the origin (James): the button worked right away, stored answer ends `<ol>…</ol><p data-indent="first">…</p>` |
 
 ## Formatting in essays — read aloud, dictation, VoiceOver (v1.6.0, RT slice 4, 2026-10-07)
 
