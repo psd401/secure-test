@@ -194,6 +194,23 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.6.1 — 2026-10-08** (built from `703a18f2914`, tag on `main`): SS-1
+  (secure-start backstop 60 s with a "Still starting the secure session…"
+  notice after 20 s — a student's Mac began its session after ~36 s and was
+  sent home six times) and RD-1 (with instant feedback Off a hand-in replaces
+  the test page with a "Handed in" page at `DID END`; writes after a hand-in
+  are ignored and not reported — 10 attempts in 30 days had kept saving
+  after hand-in, one losing ~25 minutes of typing). psd-sign 0.6.1:
+  pre-flight (clean tree, HEAD = `origin/main`, 1.6.1 > v1.6.0),
+  archive-only Developer ID + hardened runtime (no re-sign), all seven
+  entitlements = `expected-entitlements.txt`, profile "SecureTest Developer
+  ID" (expires 2044), `PSDBuildCommit` = HEAD, pkg Installer-signed
+  (`net.psd401.securetest.client`), `/releases/latest` → v1.6.1, asset
+  sha256 `694c5fd5e516…` = the Desktop pkg. NOT notarized (Apple 403,
+  unchanged). No server change. Smoke on THIS build in a real AAC session
+  against the origin: normal start, hand-in, the "Handed in" page after the
+  lock lifted, no `client_error` (`client/MANUAL-CHECKS.md` "SS-1" row 1,
+  "RD-1" row 5); RD-1 rows 1–4 on a Debug build under simulated lockdown.
 - **v1.6.0 — 2026-10-07** (built from `fdba1d927c98`, tag on `main` via
   `--target`; v1.5.1 skipped by decision, so its U-15 rides here): fill in
   the blank (dropdowns are the in-page pick-one control with formatted
@@ -345,7 +362,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v1.6.1** (`MARKETING_VERSION` = 1.6.1). Carries
+- ~~**Next release: v1.6.1**~~ PUBLISHED 2026-10-08 (see Released). (`MARKETING_VERSION` = 1.6.1). Carries
   **SS-1** (the secure-start backstop is 60 s with a "Still starting the
   secure session…" notice after 20 s — a student's Mac began its session
   after ~36 s and was sent home six times on 2026-10-08) and **RD-1** (with
