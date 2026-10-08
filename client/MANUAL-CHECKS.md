@@ -2392,3 +2392,20 @@ Debug build, simulated lockdown, except the last row.
 | **Session ends under the sheet.** Open the confirm, then the teacher closes the sitting | The confirm goes; "Your teacher ended the test session." shows alone | NOT RUN |
 | **System quit.** In a test, Apple menu → Log Out (cancel the logout afterward if offered) | No Secure Test confirm holds the logout; the session ends | NOT RUN |
 | **Real AAC (signed 1.6.2).** In a real session, the button → Keep working → End session; then Cmd-Q → Quit | Sheets appear inside the lockdown; both exits work; `DID END` | NOT RUN |
+
+## Exit-70 evidence: sleep / wake on the unrecoverable report (v1.6.2, 2026-10-08)
+
+Field data 2026-10-08 (6.2 a): 60 of 61 `lockdown_unrecoverable` exits in 14
+days followed a teacher's Close; 83 of 198 Closes did not end the session
+within 30 s (hand-ins: 336 of 337 within 5 s); the exits landed 19 s to ~1.8 h
+after the Close although the backstop is 20 s — on the uptime clock, which
+stops in sleep. Reading: lids shut at the end of class before `DID END`. The
+client now logs `mac going to sleep` / `mac woke` and the exit report's
+context carries `slept_during_teardown`, `teardown_wall_s` and `woke_s_ago`
+(`SleepWakeRecorder`). No behaviour change. Debug build.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Sleep is logged.** Simulated lockdown, in a test; Apple menu → Sleep; wake | stderr `mac going to sleep (lockdown active)` then `mac woke (lockdown active)` | NOT RUN |
+| **Exit report after a sleep.** `SECURE_TEST_SIMULATE_LOCKDOWN=hangs`, join, End session (the end never confirms), Sleep within 20 s, wake after a minute | The app exits on wake; next launch drains a `lockdown_unrecoverable` whose context has `slept_during_teardown: "true"`, `teardown_wall_s` ≈ the minute plus, `woke_s_ago` small | NOT RUN |
+| **Exit report without sleep.** Same, no sleep | Exit at 20 s; context `slept_during_teardown: "false"`, `teardown_wall_s` ≈ 20 | NOT RUN |

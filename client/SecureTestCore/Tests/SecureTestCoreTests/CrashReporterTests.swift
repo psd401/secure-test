@@ -158,4 +158,32 @@ final class CrashReporterTests: XCTestCase {
         crashDescriptor = -1
         CrashReporter.writeTimedUnrecoverableLine(stamp: stamp, attemptID: nil)
     }
+
+    /// Field report 2026-10-08 (6.2 a): the sleep context rides in `context`
+    /// beside os_version, which it cannot overwrite.
+    func testTimedUnrecoverableLineCarriesExtraContext() throws {
+        let line = CrashReporter.timedUnrecoverableLine(
+            stamp: stamp, attemptID: "a", osVersion: "Version 26.7.1",
+            extraContext: ["slept_during_teardown": "true", "teardown_wall_s": "784", "os_version": "spoof"]
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+        let context = try XCTUnwrap(object["context"] as? [String: String])
+        XCTAssertEqual(context["slept_during_teardown"], "true")
+        XCTAssertEqual(context["teardown_wall_s"], "784")
+        XCTAssertEqual(context["os_version"], "Version 26.7.1")
+    }
+
+    func testSleepWakeRecorder() {
+        let recorder = SleepWakeRecorder()
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertEqual(recorder.teardownContext(now: t0), [:])
+        recorder.markSleep(at: t0)  // before any teardown: not counted
+        recorder.markTeardownStarted(at: t0)
+        XCTAssertEqual(recorder.teardownContext(now: t0.addingTimeInterval(20)),
+                       ["slept_during_teardown": "false", "teardown_wall_s": "20"])
+        recorder.markSleep(at: t0.addingTimeInterval(5))
+        recorder.markWake(at: t0.addingTimeInterval(770))
+        XCTAssertEqual(recorder.teardownContext(now: t0.addingTimeInterval(784)),
+                       ["slept_during_teardown": "true", "teardown_wall_s": "784", "woke_s_ago": "14"])
+    }
 }

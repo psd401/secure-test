@@ -90,6 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var exitConfirmAlert: NSAlert?
     /// Set once the student confirms Quit, so the re-issued terminate passes.
     private var quitConfirmed = false
+    /// Field report 2026-10-08 (6.2 a): sleep / wake and the teardown's start,
+    /// for the exit-70 report (`SleepWakeRecorder`).
+    private let sleepWake = SleepWakeRecorder()
     /// IF slice 3 (`docs/instant-feedback-design.md`, D-2): the instant
     /// feedback the student's own hand-in came back with, held until the
     /// secure session has ENDED (`.idle`, i.e. after `DID END`) and shown then
@@ -192,6 +195,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             selector: #selector(windowWasMiniaturized),
             name: NSWindow.didMiniaturizeNotification,
             object: nil
+        )
+
+        // Field report 2026-10-08 (6.2 a): sleep / wake arrive on the
+        // workspace's own notification center, not the default one.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(macWillSleep(_:)),
+            name: NSWorkspace.willSleepNotification, object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(macDidWake(_:)),
+            name: NSWorkspace.didWakeNotification, object: nil
         )
 
         let window = NSWindow(
@@ -1006,9 +1020,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // (occurred_at, os_version) instead of reused from the
             // install-time buffer; `ClientErrorLog.shared?.attemptID` is the
             // same value `CrashReporter.prepare` was last given.
+            let sleepContext = self.sleepWake.teardownContext()
+            Self.log("unrecoverable context: \(sleepContext)")
             CrashReporter.writeTimedUnrecoverableLine(
                 stamp: Self.buildStamp,
-                attemptID: ClientErrorLog.shared?.attemptID
+                attemptID: ClientErrorLog.shared?.attemptID,
+                extraContext: sleepContext
             )
             exit(70)
         }
@@ -1073,7 +1090,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func endLockdown(reason: String) {
         guard let lockdown, lockdown.isActive else { return }
         Self.log("lockdown ending: \(reason)")
+        sleepWake.markTeardownStarted()
         lockdown.endBeforeTeardown {}
+    }
+
+    // Field report 2026-10-08 (6.2 a): log sleep and wake, and feed the
+    // exit-70 report, so the "lid shut before DID END" reading can be tested.
+    @objc private func macWillSleep(_ note: Notification) {
+        Self.log("mac going to sleep (lockdown \(lockdown?.isActive == true ? "active" : "idle"))")
+        sleepWake.markSleep()
+    }
+
+    @objc private func macDidWake(_ note: Notification) {
+        Self.log("mac woke (lockdown \(lockdown?.isActive == true ? "active" : "idle"))")
+        sleepWake.markWake()
     }
 
     private func lockdownStateChanged(_ state: AssessmentLockdown.State, endOwedOnBegin: Bool = false) {
@@ -1461,6 +1491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         quitInProgress = true
         Self.log("quit requested with lockdown active — ending the session first")
+        sleepWake.markTeardownStarted()
         lockdown.endBeforeTeardown { [weak self] in
             // The confirmed path lands on main; the grace-expired path lands
             // on the backstop queue — hop, and if main is truly gone the

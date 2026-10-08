@@ -154,15 +154,19 @@ public enum CrashReporter {
         stamp: AppBuildStamp,
         attemptID: String?,
         occurredAt: Date = Date(),
-        osVersion: String = ProcessInfo.processInfo.operatingSystemVersionString
+        osVersion: String = ProcessInfo.processInfo.operatingSystemVersionString,
+        extraContext: [String: String] = [:]
     ) -> String {
+        // Field report 2026-10-08 (6.2 a): `extraContext` carries the
+        // SleepWakeRecorder fields; os_version always wins its own key.
+        let context = extraContext.merging(["os_version": osVersion]) { _, own in own }
         var object: [String: Any] = [
             "kind": unrecoverableKind,
             "message": "lockdown unrecoverable — exit(70)",
             "app_version": stamp.version,
             "app_commit": stamp.commit,
             "occurred_at": iso8601UTC(occurredAt),
-            "context": ["os_version": osVersion],
+            "context": context,
         ]
         if let attemptID { object["attempt_id"] = attemptID }
         guard
@@ -185,9 +189,15 @@ public enum CrashReporter {
     /// the process could still die mid-write — but the line itself is built
     /// as an ordinary Swift string first rather than parked ahead of time.
     /// A no-op if the sink was never installed (`crashDescriptor` unset).
-    public static func writeTimedUnrecoverableLine(stamp: AppBuildStamp, attemptID: String?) {
+    public static func writeTimedUnrecoverableLine(
+        stamp: AppBuildStamp,
+        attemptID: String?,
+        extraContext: [String: String] = [:]
+    ) {
         guard crashDescriptor >= 0 else { return }
-        let bytes = Array(timedUnrecoverableLine(stamp: stamp, attemptID: attemptID).utf8)
+        let bytes = Array(
+            timedUnrecoverableLine(stamp: stamp, attemptID: attemptID, extraContext: extraContext).utf8
+        )
         var offset = 0
         while offset < bytes.count {
             let written = bytes.withUnsafeBufferPointer { buffer in
