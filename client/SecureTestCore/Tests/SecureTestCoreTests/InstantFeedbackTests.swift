@@ -380,4 +380,27 @@ final class InstantFeedbackTests: XCTestCase {
         c.evaluateScript("window.__secureTestSpeech.finished('feedback');")
         XCTAssertEqual(c.evaluateScript("read.textContent")?.toString(), "Read aloud")
     }
+
+    // MARK: RD-1 — the handed-in page when feedback is Off
+
+    func testTheHandedInPageCarriesNoFieldAndADoneButton() {
+        let html = InstantFeedbackPage.handedInHTML()
+        XCTAssertTrue(html.contains("Handed in"))
+        XCTAssertTrue(html.contains("Your answers are saved."))
+        XCTAssertTrue(html.contains("id=\"feedback-done\""), "Done is the way to Your tests")
+        for field in ["<textarea", "<input", "contenteditable", "<select"] {
+            XCTAssertFalse(html.contains(field), "nothing on the page can be typed into: \(field)")
+        }
+        XCTAssertFalse(html.contains("feedback-read\""), "no Read aloud on a one-line page")
+    }
+
+    func testTheHandedInPageKeepsTheStudentsAccommodations() {
+        let map = ["color_contrast": "Yellow on Black", "zoom": "2X"]
+        let attributes = PageAccommodations.rootAttributes(map)
+        XCTAssertFalse(attributes.isEmpty, "the fixture must exercise at least one attribute")
+        let html = InstantFeedbackPage.handedInHTML(accommodations: map)
+        for (name, value) in attributes {
+            XCTAssertTrue(html.contains("\(name)=\"\(value)\""), "\(name) carried onto the page")
+        }
+    }
 }

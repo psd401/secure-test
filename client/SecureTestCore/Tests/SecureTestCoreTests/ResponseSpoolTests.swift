@@ -204,6 +204,26 @@ final class ResponseSpoolFlushTests: XCTestCase {
         XCTAssertEqual(result.sent, 1, "the second entry still went")
         XCTAssertEqual(result.remaining, 0, "the rejected one was not left to block the queue")
         XCTAssertEqual(result.dropped, 1, "finding 10.1: the drop is counted so the host can say so")
+        XCTAssertEqual(result.droppedAfterHandIn, 0, "a 400 is not the aftermath of a hand-in")
+    }
+
+    /// RD-1 (2026-10-08): a write refused because the attempt is already handed
+    /// in is still dropped, and counted apart so the host does not report it as
+    /// lost answers.
+    func testAnAttemptSubmittedRefusalIsCountedApart() async throws {
+        let spool = try ResponseSpool(path: path)
+        try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: pick)
+        try await spool.enqueue(attemptID: "at1", itemID: "i2", responseJSON: pick)
+
+        let transport = RecordingTransport(replies: [
+            .init(status: 409, body: #"{"ok":false,"error":"attempt_submitted"}"#),
+            .init(status: 400, body: #"{"ok":false,"error":"response_type_mismatch"}"#),
+        ])
+        let result = await spool.flush(using: client(transport))
+
+        XCTAssertEqual(result.dropped, 2)
+        XCTAssertEqual(result.droppedAfterHandIn, 1)
+        XCTAssertEqual(result.remaining, 0)
     }
 
     /// Row CS (D-5) as amended for v1.3.4: a 409 `sitting_closed` is the one

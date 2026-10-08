@@ -2292,3 +2292,20 @@ begin — so rows 1–2 are real sessions, row 3 a reading of stderr.
 | **Normal start (real AAC).** Release build of 1.6.1, join a sitting | The test opens within a few seconds; no "Still starting" notice; stderr `page load gate: opened` | NOT RUN |
 | **Slow start (real AAC, if a slow Mac is available).** Join on the reporting student's Mac or another slow one | After 20 s "Still starting the secure session…" with "This Mac is taking longer than usual…"; the test opens by itself when the session begins; stderr `still shut after 20 s` then `opened` | NOT RUN |
 | **Never starts.** Any run where `begin()` never answers | Home at 60 s with "Couldn't start a secure session"; stderr `TIMED OUT after 60 s`; `secure_start_refused` / `session_timeout` on the Monitor | NOT RUN |
+
+## RD-1 — after a hand-in with no feedback, the test page goes (v1.6.1, 2026-10-08)
+
+With instant feedback Off, a hand-in used to leave the test page on screen,
+editable, on an unlocked Mac; every later autosave was refused 409
+`attempt_submitted` and reported as `responses_dropped` ("Needs attention").
+10 attempts in 30 days, one with 25 minutes of lost typing
+(`docs/roadmap-2026-09.md` "Beta field report 2026-10-08"). Rows 1–3 run
+under simulated lockdown on a Debug build; row 4 is a real session.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Feedback Off.** An assessment with instant feedback Off and an essay; type, Finish, confirm | "Handed in. You can close the app." while the session ends, then at `DID END` the page is REPLACED by "Handed in" / "Your answers are saved. Your teacher will review them." / Done; no field left to type in; stderr `handed in: showing the handed-in page` | NOT RUN |
+| **Done.** On that page press Done (and once more with Return) | "Your tests"; the attempt reads Handed in | NOT RUN |
+| **No false alarm.** Type into the essay in the second between Finish and the page change | stderr `response ignored … already handed in` (or `refused because the attempt is already handed in — expected, not reported`); the Monitor row reads Handed in, NOT "Needs attention" | NOT RUN |
+| **Feedback On unchanged.** Same with instant feedback on Score | The results page shows at `DID END`, as in v1.6.0 | NOT RUN |
+| **Real AAC (signed 1.6.1).** Feedback Off, hand in | The handed-in page appears after the lock lifts; the test is not visible on the unlocked Mac | NOT RUN |

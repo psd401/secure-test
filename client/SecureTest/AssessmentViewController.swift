@@ -195,6 +195,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// so this object outlives the window it was built for.
     private(set) var isRetired = false
 
+    /// RD-1 (2026-10-08): set once the server has confirmed the hand-in. From
+    /// then on the page's response, drawing and withdraw messages are ignored:
+    /// the server refuses every write to a submitted attempt, and before this
+    /// a student still typing into the test page (instant feedback Off) had
+    /// each autosave spooled, refused and reported as lost answers.
+    private var handedIn = false
+
     /// Security slice 1: before the host tears the attempt screen down after a
     /// session end, give the page one chance to post what is still only in a
     /// field — an essay or short text posts on `change`, which needs a blur —
@@ -577,6 +584,20 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         view.window?.makeFirstResponder(webView)
     }
 
+    /// RD-1: the hand-in's landing when the assessment sends no feedback —
+    /// replaces the test page at the session's end, the way `showFeedback`
+    /// does, so nothing on screen can still be typed into.
+    func showHandedIn() {
+        guard !isRetired else { return }
+        stopSpeech(reason: "handed-in page")
+        stopListening(reason: "handed-in page")
+        log("handed in: showing the handed-in page (no instant feedback)")
+        loadHostPage(InstantFeedbackPage.handedInHTML(
+            accommodations: bundle?.accommodations ?? [:]
+        ))
+        view.window?.makeFirstResponder(webView)
+    }
+
     // MARK: zoom (C-4 / D-7)
 
     /// The three Session-menu items land here. They go through the MENU rather
@@ -871,6 +892,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         }
         do {
             let parsed = try ItemResponseMessage.decode(fromMessageBody: message.body)
+            guard !handedIn else {
+                log("response ignored: item=\(parsed.itemID) — the attempt is already handed in")
+                return
+            }
             log("response: item=\(parsed.itemID) type=\(parsed.response.typeName)")
             record(parsed)
         } catch {
@@ -925,8 +950,15 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             noteSittingClosed()
             return result
         }
-        if result.dropped > 0 {
-            log("responses DROPPED: \(result.dropped) refused permanently by the server (attempt already handed in?)")
+        // RD-1: a write refused because the attempt is already handed in is
+        // the aftermath of the hand-in, not a lost answer — logged, not
+        // reported, like `time_expired` and `sitting_closed`.
+        if result.droppedAfterHandIn > 0 {
+            log("responses DROPPED: \(result.droppedAfterHandIn) refused because the attempt is already handed in — expected, not reported")
+        }
+        let reportable = result.dropped - result.droppedAfterHandIn
+        if reportable > 0 {
+            log("responses DROPPED: \(reportable) refused permanently by the server")
             // Time limit slice 2: after the clock ran out the server answers
             // 409 `time_expired` to every answer, so a drop here is the
             // EXPECTED aftermath of a session that ended on time. Logged (the
@@ -942,8 +974,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
             // lights "Needs attention" on the teacher's monitor (D-4).
             AppDelegate.logError(
                 kind: "responses_dropped",
-                message: "\(result.dropped) response(s) refused permanently by the server",
-                context: ["dropped": String(result.dropped)]
+                message: "\(reportable) response(s) refused permanently by the server",
+                context: ["dropped": String(reportable)]
             )
         }
         return result
@@ -1001,6 +1033,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     return
                 }
                 let feedback = try await client.submit(attemptID: attemptID)
+                self.handedIn = true
                 // Now residue: the server has them, and the local copies are a
                 // second copy of a child's work sitting on a shared machine.
                 try await spool.clear(attemptID: attemptID)
@@ -1102,6 +1135,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// round would simply fail — and the student would be told their drawing was
     /// saved when nothing had been stored.
     private func handleDrawing(_ body: Any) {
+        guard !handedIn else {
+            log("drawing ignored: the attempt is already handed in")
+            return
+        }
         guard case .server(let client, _, let attemptID) = source else {
             log("drawing ignored: no server session")
             return
@@ -1220,6 +1257,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// so the shape is validated here the way `handleDrawing` validates its
     /// own page→host payload.
     private func handleWithdraw(_ body: Any) {
+        guard !handedIn else {
+            log("withdraw ignored: the attempt is already handed in")
+            return
+        }
         guard case .server(let client, _, let attemptID) = source else {
             log("withdraw ignored: no server session")
             return

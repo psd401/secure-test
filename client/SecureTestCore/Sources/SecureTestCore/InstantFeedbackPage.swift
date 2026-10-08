@@ -49,6 +49,32 @@ public enum InstantFeedbackPage {
         )
     }
 
+    /// RD-1 (2026-10-08): the page after a hand-in when the assessment sends
+    /// no feedback (instant feedback Off). It REPLACES the test page at the
+    /// session's end, as the results page does — before this, the test stayed
+    /// on screen, editable, on an unlocked Mac, and anything typed into it
+    /// after the hand-in was refused by the server and lost. Same shell (so
+    /// contrast / font / zoom apply), same Done → "Your tests" behaviour, no
+    /// Read aloud (there is nothing to read but the heading).
+    public static let handedInHeading = "Handed in"
+    public static let handedInLine = "Your answers are saved. Your teacher will review them."
+
+    public static func handedInHTML(accommodations: [String: String] = [:]) -> String {
+        PageShell.document(
+            title: handedInHeading,
+            styles: [styles],
+            scripts: [script],
+            body: """
+            <main id="feedback" class="feedback">
+            <h1 id="feedback-heading" tabindex="-1">\(HTMLEscape.text(handedInHeading))</h1>
+            <p class="feedback-score">\(HTMLEscape.text(handedInLine))</p>
+            <div class="feedback-actions"><button type="button" id="feedback-done" class="feedback-done" tabindex="0">\(HTMLEscape.text(InstantFeedbackPresentation.doneTitle))</button></div>
+            </main>
+            """,
+            accommodations: accommodations
+        )
+    }
+
     static func body(_ presentation: InstantFeedbackPresentation, readAloud: Bool) -> String {
         var html = """
         <main id="feedback" class="feedback">

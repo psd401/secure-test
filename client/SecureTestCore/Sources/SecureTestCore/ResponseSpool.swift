@@ -303,19 +303,25 @@ public actor ResponseSpool {
         /// not counted in `remaining`, because the normal queue will not try
         /// them again; `flushDeferred` will, after the next join.
         public let deferred: Int
+        /// RD-1 (2026-10-08): how many of `dropped` were refused with
+        /// `attempt_submitted` — the attempt was already handed in. Counted
+        /// in `dropped` too; the host reports only the rest.
+        public let droppedAfterHandIn: Int
 
         public init(
             sent: Int,
             remaining: Int,
             dropped: Int = 0,
             sittingClosed: Bool = false,
-            deferred: Int = 0
+            deferred: Int = 0,
+            droppedAfterHandIn: Int = 0
         ) {
             self.sent = sent
             self.remaining = remaining
             self.dropped = dropped
             self.sittingClosed = sittingClosed
             self.deferred = deferred
+            self.droppedAfterHandIn = droppedAfterHandIn
         }
     }
 
@@ -353,6 +359,7 @@ public actor ResponseSpool {
         var dropped = 0
         var deferred = 0
         var sittingClosed = false
+        var droppedAfterHandIn = 0
 
         for entry in queued {
             do {
@@ -388,6 +395,7 @@ public actor ResponseSpool {
                     }
                     try? remove(attemptID: entry.attemptID, itemID: entry.itemID)
                     dropped += 1
+                    if error.isAttemptSubmitted { droppedAfterHandIn += 1 }
                     continue
                 }
                 break
@@ -400,7 +408,8 @@ public actor ResponseSpool {
             remaining: (try? count()) ?? 0,
             dropped: dropped,
             sittingClosed: sittingClosed,
-            deferred: deferred
+            deferred: deferred,
+            droppedAfterHandIn: droppedAfterHandIn
         )
     }
 

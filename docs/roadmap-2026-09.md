@@ -995,3 +995,54 @@ D-6 undo / redo in every student text field (closes ME-2), D-7 word count
 reads plain text, D-8 the teacher preview has the toolbar. D-9 one-level bulleted / numbered lists, D-10 double-spacing as a teacher-side print / Google Docs option (default off). No version gate
 needed (older clients ignore the flag and show the plain box). Nothing
 built.
+
+## Beta field report 2026-10-08 — secure start on a slow Mac (SS-1) + writes after hand-in (RD-1)
+
+Open-beta teacher: a student "kept getting loading errors" and the Monitor
+showed "The app hit a problem". Read-only Aurora (`query-aurora.sh`, no
+names or answer text read).
+
+- **SS-1 — BUILT for v1.6.1 (James 2026-10-08: option A, release now).**
+  Six tries on v1.6.0 all ended `secure_start_refused` / `session_timeout`.
+  On one of them `lockdown_begin` (DID BEGIN) arrived ~36 s after the try
+  began — 16 s after the 20 s page-load backstop had sent the student
+  home — and the lock ended 0.7 s later. The Mac is slow to begin, not
+  hung; security slice 1's "a real begin() answers in about two seconds"
+  held for 587 other attempts that week but not this one. A deadline
+  adjustment did not help (one more refusal after it). The only
+  `session_timeout` on record; the other refusals since 2026-10-02 are
+  `session_refused` (failedToBegin). Fix: `PageLoadGate.wait(timeout:
+  slowAfter:onSlow:)` — 60 s backstop, and after 20 s the notice reads
+  "Still starting the secure session…"; only `.opened` builds the test, as
+  before. Rows in `client/MANUAL-CHECKS.md` "SS-1". Open: the Mac's model /
+  macOS version (ask IT if it recurs); a begin() slower than 60 s still
+  sends the student home.
+- **RD-1 — cause found + BUILT for v1.6.1 2026-10-08 (client).** Another
+  student's attempt (v1.6.0) was handed in by the student at 9:28:58 PT,
+  one second after its last essay save, and the secure session ended three
+  seconds later. For the next 25 minutes the client posted a NEW essay
+  save every 8–60 s (each drop removes its spool entry), each refused 409
+  and reported as `responses_dropped` — 56 rows, "Needs attention" on the
+  Monitor throughout. **Cause:** with instant feedback Off, a successful
+  hand-in leaves the TEST PAGE on screen. `__secureTestSubmitResult(true)`
+  (`AssessmentPage.swift`) only writes "Handed in. You can close the app."
+  under the Finish button and adds "Back to your tests"; every field stays
+  editable and autosave keeps running, and the host's response channel
+  still spools and posts. With feedback On the results page replaces the
+  test page, which is why every one of the 10 attempts with post-hand-in
+  drops in the last 30 days (v1.3.5 → v1.6.0, 1–56 drops each) is on an
+  assessment with feedback Off. **Consequences:** (1) whatever the student
+  typed after hand-in was lost — the server never had it (here the
+  student kept writing ~25 min and the teacher passed the attempt back an
+  hour later); (2) the test stays visible and editable on an UNLOCKED Mac
+  after `DID END` until the student leaves; (3) a false "Needs attention".
+  **Fix (James: in v1.6.1 with SS-1):** (a) with no feedback, the test
+  page is replaced at `DID END` by a "Handed in" page
+  (`InstantFeedbackPage.handedInHTML`, same shell, Done → Your tests);
+  (b) once the submit is confirmed the host ignores the page's response,
+  drawing and withdraw messages; (c) the spool counts 409
+  `attempt_submitted` refusals apart (`droppedAfterHandIn`) and the host
+  logs them without a `responses_dropped` report. Side effect of (c): a
+  student still writing when the TEACHER hands the attempt in no longer
+  lights "Needs attention" — the teacher did it, so it is expected. Rows in
+  `client/MANUAL-CHECKS.md` "RD-1".

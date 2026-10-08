@@ -78,6 +78,17 @@ extension APIError {
         if case .refused(_, let code) = self { return code == Self.timeExpiredCode }
         return false
     }
+
+    /// RD-1 (2026-10-08): the server's error string for "this attempt is
+    /// already handed in" — refused 409 on every write after a submit. The
+    /// spool still drops such writes; the host tells them apart so the
+    /// aftermath of a hand-in is not reported as lost answers.
+    public static let attemptSubmittedCode = "attempt_submitted"
+
+    public var isAttemptSubmitted: Bool {
+        if case .refused(_, let code) = self { return code == Self.attemptSubmittedCode }
+        return false
+    }
 }
 
 /// Server error bodies are `{ ok: false, error: "..." }` throughout the API.

@@ -91,6 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// any end that is not the student's hand-in — means exactly the old
     /// behaviour. Cleared once shown and whenever the attempt screen goes.
     private var pendingFeedback: InstantFeedback?
+    /// RD-1: a hand-in with no feedback still replaces the test page at the
+    /// session's end — with the handed-in page instead of the results page.
+    private var pendingHandedInPage = false
     /// Time limit slice 2 (`docs/time-limit-and-unfinished-attempts-design.md`,
     /// D-2 / D-3): this attempt's clock, or nil when the assessment has no
     /// limit. One per attempt, started from the bundle's deadline and stopped
@@ -456,6 +459,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller = nil
         attemptHandedIn = false
         pendingFeedback = nil
+        pendingHandedInPage = false
         // Client hygiene (audit #17): no attempt is on screen, so every row
         // still spooled belongs to one that is over — purge whatever is past
         // the 24-hour floor. Rows younger than that stay: a student who lost
@@ -554,6 +558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         attemptHandedIn = false
         pendingFeedback = nil
+        pendingHandedInPage = false
         countdown?.stop()
         countdown = nil
         sessionEndedByTimeLimit = false
@@ -646,6 +651,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // IF slice 3 (D-2): kept, not shown — the results page waits for
             // the session to end. The hand-in itself never waits on it.
             self.pendingFeedback = feedback
+            self.pendingHandedInPage = feedback == nil
             let wasActive = self.lockdown?.isActive == true
             self.endLockdown(reason: "hand-in confirmed")
             // No session was up (nothing to end, so no `.idle` is coming): the
@@ -1063,8 +1069,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // up, which is every ordinary end.
             refusePageLoadGate()
             // 10.3: after a HAND-IN the session goes down with the attempt
-            // still on screen (the handed-in notice), so the titlebar route
-            // home stays. Every other end sends the student home itself, just
+            // screen still up (the results page, or since RD-1 the handed-in
+            // page when there is no feedback), so the titlebar route home
+            // stays. Every other end sends the student home itself, just
             // below, and `showEntry` removes this accessory anyway.
             if attemptHandedIn {
                 installBackToTestsAccessoryIfNeeded()
@@ -1101,12 +1108,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// titlebar route or a session end that sends the student home first
     /// (`showEntry()` clears it) can still skip it.
     private func showPendingFeedback() {
-        guard let feedback = pendingFeedback else { return }
+        guard pendingFeedback != nil || pendingHandedInPage else { return }
         guard screen == .serverAttempt, attemptHandedIn, let controller,
               lockdown?.isActive != true
         else { return }
-        pendingFeedback = nil
-        controller.showFeedback(feedback)
+        if let feedback = pendingFeedback {
+            pendingFeedback = nil
+            pendingHandedInPage = false
+            controller.showFeedback(feedback)
+        } else {
+            pendingHandedInPage = false
+            controller.showHandedIn()
+        }
     }
 
     /// The always-visible, truthfully-labelled way out (AAC-1 decision 2.3).

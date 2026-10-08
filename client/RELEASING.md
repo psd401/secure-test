@@ -345,6 +345,15 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release: v1.6.1** (`MARKETING_VERSION` = 1.6.1). Carries
+  **SS-1** (the secure-start backstop is 60 s with a "Still starting the
+  secure session…" notice after 20 s — a student's Mac began its session
+  after ~36 s and was sent home six times on 2026-10-08) and **RD-1** (with
+  instant feedback Off a hand-in replaces the test page with a "Handed in"
+  page at `DID END`; writes after a hand-in are ignored and not reported).
+  No server change, no version gate. Before psd-sign: `client/MANUAL-CHECKS.md`
+  "RD-1" rows 1–4 on a Debug build, then "SS-1" row 1 and "RD-1" row 5 in
+  one real AAC session on the signed build.
 - ~~**Next release: v1.6.0**~~ PUBLISHED 2026-10-07 (see Released). (`MARKETING_VERSION` = 1.6.0; v1.5.1 SKIPPED by
   decision 2026-10-07, so its U-15 change rides this release). Carries:
   **fill in the blank** (`docs/fill-in-blank-design.md` — sentence with inline
