@@ -1588,3 +1588,20 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 544 | Click a toolbar button; reload the preview | Nothing happens on the click; after the reload the box is empty again (nothing was saved); DevTools console shows no CSP violation | ✅ 2026-10-07: nothing saved; no page-made CSP errors |
 | 545 | **Print / PDF** view of the same assessment | (b) prints as the blank write area like any essay — no toolbar, no editable box, no note | ✅ 2026-10-07: print view has no toolbar / box / note |
 | 546 | VoiceOver on the preview's (b) | "Formatting, toolbar"; each button by name, dimmed; the box as "Your answer, edit text" | NOT RUN |
+
+## PDF import figures — attach, Save to Images, pairing on AP-style booklets (beta report 2026-10-08)
+
+`docs/stimulus-design.md` "Figures that never reached a question" is the record. Local dev on `_demo`: a scratch three-figure PDF (gitignored `design-tool/samples/_build-figure-attach-fixture.ts`, mock extractor: one model set over items 1–2 with figure 1, figure 2 after the last question, a bar chart drawn in a transparency group on page 2) and the teacher's booklet (gitignored, Bedrock).
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 547 | Import the scratch PDF | 3 figures; figure 1 "Used with items 1–2", figures 2 and 3 "Not used" in the warning colour; the chart (transparency group) has a picture | ✅ 2026-10-08 |
+| 548 | Figure 3 → **Use with item…** → Item 3 | A new stimulus card over item 3 with figure 3; the strip tag reads "Used with item 3"; item 3 loses its own Add button | ✅ 2026-10-08 |
+| 549 | On the items 1–2 card, **Add a figure…** → Figure 2 | Figure 2 joins that card; its tag reads "Used with items 1–2"; the menu no longer lists it | ✅ 2026-10-08 |
+| 550 | **Add all** | Two sets saved: items 1–2 with figures 1 and 2 above the text, item 3 with figure 3; item 4 on its own | ✅ 2026-10-08: stimulus texts carry the asset refs |
+| 551 | **Save to Images** on one figure, then **Save all figures to Images** | The button reads "Saved to Images"; Save all saves the rest and settles to "All figures saved to Images"; `/api/assets` lists them | ✅ 2026-10-08 |
+| 552 | Save a captioned figure whose bytes were never uploaded | Stored as "<caption>.png" (bytes already uploaded keep their first name — the upload reuses the asset) | ✅ 2026-10-08: "Votes cast by year.png" |
+| 553 | A new PDF in the same panel | Saved marks and attachments reset | ✅ 2026-10-08 |
+| 554 | The teacher's booklet with Bedrock | 6 figures, every one "Used with" an item (5, 6, 8, 10, 14, 15), each card "paired by position, please check"; the pairs match the question text; the page-4 figure has a picture | ✅ 2026-10-08 |
+| 555 | `/help.html#import` and the FAQ; the Images page subtitle; `/roadmap.html` | The figures step, the "maps and charts show at the top" entry, "Image…", the 2026-10-08 milestone | NOT RUN (static pages, checked in the diff) |
+| 556 | The same booklet on the origin after the deploy | As row 554; the production log carries no `could not be rendered` line | NOT RUN |

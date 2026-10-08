@@ -321,3 +321,43 @@ pairing confirmed by the teacher in the panel before anything is written.
   (the blank answer grids, which the scan classed as answer space) on question 11 —
   exactly the case "show all + Discard" was chosen for.
 
+
+## Figures that never reached a question — beta report 2026-10-08
+
+An AP teacher imported an AP Classroom test booklet (AP Human Geography,
+16 questions, 6 maps and charts) and found every figure in the panel's strip
+with no way to put it on a question. Four causes and four fixes, one commit
+each:
+
+- **`c2be1ea` — a figure was dropped.** The production log for the import
+  read `page 4 could not be rendered for vector figures — @napi-rs/canvas is
+  not available in this environment`. `extractPdfLayout` handed unpdf a
+  document opened without a canvas factory, so pdf.js used its own Node
+  stub for any scratch canvas (transparency groups, soft masks, patterns).
+  The page is now rendered from a second copy opened with unpdf's factory,
+  once per import. DEPLOYED 2026-10-08 morning.
+- **`b7272c1` — nothing was paired.** A Bedrock run of the PDF: 0 model sets,
+  0 adjacency sets, numbering check 0. The booklet's numbers are bold
+  (`**5.**` after E6), which no number reader matched; and three of the six
+  figures sit under "8. CHART TITLE" with the question and its choices below
+  them, where "the first number below" is the next question. Numbers are now
+  read without emphasis markers, and answer choices between a figure and the
+  next number send it to the number just above. The same PDF: all six
+  figures paired (items 5, 6, 8, 10, 14, 15), checked against the question
+  text; numbering check 16.
+- **`ea3672b` — the strip was read-only.** Each figure says "Used with items
+  3–5" or "Not used"; "Use with item…" puts it into the set holding that
+  question or a new stimulus card of one (James 5.1: a stimulus card, not the
+  stem); each set card gets "Add a figure…". This is the attach action this
+  note promised in its proposed shape and never built.
+- **Slice 2 — Save to Images** (James 5.2: a teacher action, never
+  automatic; 5.3: named after the printed caption when there is one), per
+  figure and "Save all figures to Images".
+- **Slice 3 — the words.** A line under the strip, a step and an FAQ entry in
+  help topic 3, the Images page copy (it said "Choose image"; the button is
+  "Image…"), a roadmap milestone.
+
+Hand-run rows 547–556 in `docs/design-tool-manual-checks.md`. Open: the
+model itself still proposes no sets on that booklet (the adjacency rule
+does the pairing); the help topic's picture (`import-pdf.png`) predates the
+strip controls and was not re-captured.

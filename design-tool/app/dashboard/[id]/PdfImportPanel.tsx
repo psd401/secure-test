@@ -745,6 +745,13 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   <summary className="cursor-pointer underline">
                     {result.figure_count} figure{result.figure_count === 1 ? "" : "s"} found in the PDF
                   </summary>
+                  {/* Beta feedback 2026-10-08 slice 3: the teacher could not
+                      tell what the strip was for. */}
+                  <p className="mt-1">
+                    A figure marked <b>Not used</b> isn&apos;t on any question yet. Choose{" "}
+                    <b>Use with item…</b> to show it above that question, or <b>Save to Images</b> and
+                    add it later from the question with <b>Image…</b>.
+                  </p>
                   <ul className="mt-2 flex flex-wrap gap-2">
                     {result.figures.map((f) => (
                       <li key={f.n} className="w-28 rounded border border-border p-1 text-center">
