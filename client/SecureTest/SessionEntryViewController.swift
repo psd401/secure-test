@@ -426,7 +426,24 @@ final class SessionEntryViewController: NSObject {
             listStatusLabel.stringValue = "No test list for this account."
             log("my-sittings failed: \(error)")
             AppDelegate.logError(kind: "sittings_failed", message: "\(error)")
+            if (error as? APIError)?.isSessionExpired == true {
+                await signOutAfterExpiry()
+            }
         }
+    }
+
+    /// Field report 2026-10-08: the server refused the session token (401 —
+    /// the 8-hour session ran out while the app stayed open). Drop the token
+    /// and return to the sign-in card with a line saying why, instead of
+    /// leaving "No test list for this account." / "Could not join." on screen.
+    /// After the clear `refreshSignInState` sees no token, so it does not load
+    /// the list again — no loop.
+    private func signOutAfterExpiry() async {
+        log("session expired (server 401) — signing out")
+        try? await client.signOut()
+        signedInAs = nil
+        statusLabel.stringValue = JoinErrorCopy.sessionExpiredMessage
+        await refreshSignInState()
     }
 
     private func render(rows: [SittingRowModel]) {
@@ -595,8 +612,8 @@ final class SessionEntryViewController: NSObject {
                     message: "\(error)",
                     context: ["via": "list", "test_session_id": row.testSessionID]
                 )
-                if case APIError.notAuthenticated = error {
-                    await refreshSignInState()
+                if (error as? APIError)?.isSessionExpired == true {
+                    await signOutAfterExpiry()
                 }
             }
         }
@@ -686,8 +703,8 @@ final class SessionEntryViewController: NSObject {
                     message: "\(error)",
                     context: ["via": "code"]
                 )
-                if case APIError.notAuthenticated = error {
-                    await refreshSignInState()
+                if (error as? APIError)?.isSessionExpired == true {
+                    await signOutAfterExpiry()
                 }
             }
         }

@@ -452,4 +452,15 @@ final class UploadClientTests: XCTestCase {
         XCTAssertTrue(text.contains("Your tests"))
         XCTAssertTrue(text.contains("ask your teacher"))
     }
+
+    /// Field report 2026-10-08: a server 401 means signed out, like no token.
+    func testSessionExpiredCoversServer401() {
+        XCTAssertTrue(APIError.notAuthenticated.isSessionExpired)
+        XCTAssertTrue(APIError.refused(status: 401, code: "unauthenticated").isSessionExpired)
+        XCTAssertTrue(APIError.refused(status: 401, code: nil).isSessionExpired)
+        XCTAssertFalse(APIError.refused(status: 403, code: "forbidden").isSessionExpired)
+        XCTAssertFalse(APIError.refused(status: 404, code: "session_unavailable").isSessionExpired)
+        XCTAssertFalse(APIError.decoding("x").isSessionExpired)
+        XCTAssertEqual(JoinErrorCopy.sessionExpiredMessage, "Your sign-in has expired. Sign in again.")
+    }
 }

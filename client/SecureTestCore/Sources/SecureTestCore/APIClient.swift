@@ -68,6 +68,19 @@ extension APIError {
         return false
     }
 
+    /// Field report 2026-10-08: the session token is gone OR the server no
+    /// longer accepts it (401 — the 8-hour session ran out while the app stayed
+    /// open). Both mean "signed out"; before this, a server 401 read as a
+    /// refusal and left the student on "No test list for this account." /
+    /// "Could not join." with no way back to the sign-in button.
+    public var isSessionExpired: Bool {
+        switch self {
+        case .notAuthenticated: return true
+        case .refused(let status, _): return status == 401
+        default: return false
+        }
+    }
+
     /// EX-2 (2026-10-05): the server's error string for "this attempt's time
     /// ran out" — the delivery route answers it 409 for an attempt past its
     /// deadline + grace, so the client never begins a secure session for it.

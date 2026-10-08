@@ -26,6 +26,10 @@ public enum JoinErrorCopy {
     public static let secureStartFailedInformative =
         "Your test didn't open. Wait a minute, then open it again from Your tests. If it still won't start, ask your teacher."
 
+    /// Field report 2026-10-08: the line over the sign-in button after the
+    /// server refused an expired session (see `APIError.isSessionExpired`).
+    public static let sessionExpiredMessage = "Your sign-in has expired. Sign in again."
+
     public static func message(for error: Error, isPractice: Bool = false, isStaff: Bool = false) -> String {
         guard let apiError = error as? APIError else {
             return "Something went wrong. Tell your teacher."

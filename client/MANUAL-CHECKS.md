@@ -2352,3 +2352,20 @@ the real wiring. Debug build, `SECURE_TEST_SIMULATE_LOCKDOWN=refuses`.
 | **Detail on the wire.** Join a sitting with the client launched `refuses` | The attempt's `lockdown_failed` row (read-only Aurora or local DB) has `reason`, `os_version` = this Mac's "26.x.y", `model` = its `hw.model` (`sysctl -n hw.model`) | ✅ 2026-10-08 Debug build of `4769da7`, simulated lockdown, local dev on the `_demo` DB, fixture "Bridge hardening hand-run 2026-10-08" (Claude driving the client) — `{"model": "Mac16,12", "reason": "simulated refusal …", "os_version": "26.7.1"}`, both matching `sysctl` / `sw_vers` |
 | **The sheet.** Same join | "Couldn't start a secure session" / "Your test didn't open. Wait a minute, then open it again from Your tests. If it still won't start, ask your teacher." — one sheet, Your tests behind it | ✅ 2026-10-08 Debug build of `4769da7`, simulated lockdown, local dev on the `_demo` DB, fixture "Bridge hardening hand-run 2026-10-08" (Claude driving the client) — exactly that copy, one sheet, Your tests behind it with Resume |
 | **Retry works.** Relaunch without `refuses`, open the test again from Your tests | The test opens normally; the teacher's timeline shows Lockdown failed then Lockdown started | ✅ 2026-10-08 Debug build of `4769da7`, simulated lockdown, local dev on the `_demo` DB, fixture "Bridge hardening hand-run 2026-10-08" (Claude driving the client) — Resume opened the test; events `lockdown_failed` + `client_error` 15:46:21, `lockdown_begin` 15:46:45 |
+
+## Expired sign-in returns to the sign-in card (v1.6.2, 2026-10-08)
+
+Field data 2026-10-08: the session token lasts 8 hours; with the app left open
+longer, every request answered 401 and the entry screen said "No test list for
+this account." / "Could not join. Tell your teacher." with no sign-in button
+(30 students on Join, 18 on the list, 14 days). The client only treated a
+MISSING token as signed out. Now a server 401 drops the token and shows the
+sign-in card (`APIError.isSessionExpired`, `signOutAfterExpiry`). Debug build;
+to force a 401 without waiting 8 hours, launch with a token minted by a
+different `DESIGN_TOOL_SESSION_SECRET` (or any well-formed but invalid JWT).
+
+| Check | Expected | Result |
+|---|---|---|
+| **Expired on the list.** Launch with an invalid token | The test list does not show "No test list for this account."; the card shows "Your sign-in has expired. Sign in again." with Sign in with Google; stderr `session expired (server 401) — signing out` once (no loop) | NOT RUN |
+| **Expired on Join.** Signed in, then make the token invalid (relaunch with the invalid token and type a code before the list loads) and Join | Same card and line; no "Could not join." | NOT RUN |
+| **Sign in again.** Press Sign in with Google | Normal sign-in; Your tests lists the open sitting | NOT RUN |
