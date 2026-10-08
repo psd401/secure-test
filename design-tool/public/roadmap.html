@@ -303,11 +303,11 @@
 // ---------------------------------------------------------------------------
 // Content. Update these lists as work lands; the page is built from them.
 // ---------------------------------------------------------------------------
-const UPDATED = "2026-10-06";
+const UPDATED = "2026-10-07";
 
 const STATS = [
-  { value: "140", label: "days from first experiment" },
-  { value: "11", label: "student app releases" },
+  { value: "141", label: "days from first experiment" },
+  { value: "12", label: "student app releases" },
   { value: "60", label: "database migrations" },
   { value: "3,000+", label: "automated tests" },
 ];
@@ -374,17 +374,22 @@ const JOURNEY = [
     text: "Questions can carry Washington and NGSS standards. Generate questions drafts up to ten at a time from standards, an objective or a teacher's own material, including matching; Suggest standards proposes tags for untagged questions. Nothing is saved until the teacher adds it." },
   { date: "2026-10-03", star: true, title: "Class insights",
     text: "On the results page, the AI writes strengths, areas for growth, celebrations and next steps for the class, and a teacher can ask follow-up questions. Every number comes from the class's own scores, and names never reach the AI." },
+  { date: "2026-10-05", title: "Instant feedback at hand-in",
+    text: "When a teacher turns it on, students see their score, right / wrong, or the correct answers as soon as they hand in \u2014 only after the Mac unlocks. Student app 1.5.0." },
+  { date: "2026-10-05", title: "Essays to Google Docs",
+    text: "A teacher can send each student's essays to an editable Google Doc in the teacher's Drive, shared with the student, for revision or peer review." },
   { date: "2026-10-05", title: "Accommodations by class period, and for co-teachers",
     text: "From open-beta feedback: Who gets what shows each student's tools before the test; a class period can have its own list or give everyone a tool; co-teachers' records count for the students they teach. Students see each test once, however many sessions are open." },
   { date: "2026-10-06", title: "Earlier versions of an answer",
     text: "A student emptied an essay by accident and handed it in. Written answers now keep earlier versions while students work, and a teacher can restore one from the student's results page. That morning's essay was recovered from a backup the same day." },
   { date: "2026-10-06", title: "A tool for every class period at once",
     text: "From open-beta feedback: Apply to all my periods copies one period's accommodation settings to every period a teacher has, and Duplicate keeps them, so Spell Check for every student is set once instead of student by student." },
+  { date: "2026-10-07", star: true, title: "Fill in the blank and formatted essays",
+    text: "Student app 1.6.0: sentences with dropdown or typed blanks, with math and italics in the choices; essays a teacher lets students format, with bold, lists and a first-line indent that carry into Google Docs; undo and redo in every written answer." },
 ];
 
 // Planned order. wait = what it depends on outside the team.
 const AHEAD = [
-  { title: "Instant feedback at hand-in", text: "When a teacher turns it on, students see right / wrong on machine-scored questions as soon as they hand in." },
   { title: "Run the open beta and gather feedback", text: "Users across one school. Teacher and student feedback rounds; the questions at right are part of it." },
   { title: "District-wide rollout", text: "Every school, on district-managed Macs." },
   { title: "Send scores to Schoology", text: "The same Send to gradebook, for classes graded in Schoology.", wait: "Schoology app setup" },

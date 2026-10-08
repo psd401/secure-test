@@ -229,8 +229,9 @@
         <div>
           <ol class="steps">
             <li>On the home page press <b class="ui">New assessment</b> and give it a name.</li>
-            <li>Press <b class="ui">Add question</b> and choose a type: multiple choice (one or several answers), short answer, essay, matching, ordering, hotspot on a picture, drawing, or a table.</li>
+            <li>Press <b class="ui">Add question</b> and choose a type: multiple choice (one or several answers), short answer, essay, fill in the blank (dropdown or typed blanks inside a sentence), matching, ordering, hotspot on a picture, drawing, or a table.</li>
             <li>Write the question and its answer key. Math goes between dollar signs, for example <code>$\frac{1}{2}$</code>, and shows as you type.</li>
+            <li>On an essay, tick <b class="ui">Let students format their answer</b> for bold, italic, underline, bulleted and numbered lists and a first-line indent. Students on Secure Test 1.6.0 or later can use it; every student also gets undo and redo (Cmd-Z, Shift-Cmd-Z) in written answers.</li>
             <li>Upload pictures on the <b class="ui">Images</b> page (link at the top of the home page), then add them to a question.</li>
             <li>Press <b class="ui">Show preview</b> to see exactly what a student will see, without the lockdown.</li>
           </ol>
@@ -253,7 +254,7 @@
         <div>
           <ol class="steps">
             <li>Inside an assessment press <b class="ui">Import items from PDF</b> and choose the file. Scanned pages work too.</li>
-            <li>The tool proposes questions, answer keys and reading passages. Nothing is added until you accept it.</li>
+            <li>The tool proposes questions, answer keys and reading passages, including fill-in-the-blank questions. Nothing is added until you accept it. <b class="ui">Generate questions</b> can propose fill in the blank too.</li>
             <li>Check each proposal, fix what it got wrong, and add the ones you want.</li>
             <li>A colleague's exported test? Use <b class="ui">Import assessment file</b> on the home page.</li>
           </ol>
@@ -428,6 +429,7 @@
             <li>Open a student for their answers, scores and a timeline of their session.</li>
             <li><b class="ui">Print report</b> gives a class summary, or a single family-facing page for one student.</li>
             <li><b class="ui">Print student work</b> prints each student's answers, optionally anonymous with a key page or with essays double-spaced, for marking by hand.</li>
+            <li><b class="ui">Send to Google Docs</b> (on <b class="ui">Results</b> for a class, or on one student's page) makes an editable Google Doc of each student's essays in your Drive and shares it with the student. Choose what goes in the Doc (prompt, sources, score, feedback), <b class="ui">Skip</b> or <b class="ui">Make a new Doc</b> for students who already have one, and optionally <b class="ui">Double-space essays</b> or give the student ownership. Formatting from the test (bold, italics, lists, indents) carries over. Changes in the Doc do not come back here.</li>
             <li><b class="ui">Pass back</b> returns a handed-in test to a student to keep working; earlier scores are kept as a record.</li>
             <li><b class="ui">Send to gradebook</b> puts each student's total points into PowerSchool, one class section at a time. Pick the section and a category; the name and due date (today) can be changed before sending. It creates the assignment in PowerTeacher Pro, and publishing follows that category's default.</li>
             <li>Only fully scored work is sent. Anything still waiting in the scoring queue is held back, and a later send picks it up. After you change a score, <b class="ui">Send again</b> updates just the changed ones.</li>
@@ -512,6 +514,8 @@
         <dd>Their time limit ran out ("Time is up."), or the session was closed or ran out. Their answers are kept either way.</dd>
         <dt>"No tests assigned right now."</dt>
         <dd>No session is open for a section that student is in today. Read them the Session code.</dd>
+        <dt>"This test could not be opened. Could not join." on a test with fill in the blank.</dt>
+        <dd>That student's Secure Test is older than 1.6.0, which fill in the blank needs. The Mac updates on its own, usually by the next day; the student can also update Secure Test from Self Service. Other tests still open on the older version.</dd>
         <dt>"This Mac isn't set up for Secure Test yet."</dt>
         <dd>That Mac hasn't received its settings from IT yet. Contact IT, not the project.</dd>
         <dt>Wi-Fi drops mid-test.</dt>

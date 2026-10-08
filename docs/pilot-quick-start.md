@@ -34,7 +34,10 @@ time) and its rubric is attached.
 1. **Build or import.** *New assessment* for a blank one; *Import items from
    PDF* inside an assessment to read a paper test (it proposes questions and
    sources for you to accept); *Import assessment file* on the home page to
-   load a `.json` a colleague shared.
+   load a `.json` a colleague shared. Question types include **Fill in the
+   blank** (dropdown or typed blanks inside a sentence; needs Secure Test
+   1.6.0 or later on the student's Mac). An essay can **Let students format
+   their answer** (bold, italic, underline, lists, first-line indent).
 2. **Reading layout.** For a passage or sources shared by several questions,
    the stimulus card's layout select has three choices. *Side by side
    (sources beside the question)* is the default whenever a stimulus carries
@@ -206,6 +209,12 @@ its own.
   goes on a later send. After you change a score, **Send again** updates
   just the changed ones; the name and due date are then edited in
   PowerTeacher Pro, not here.
+- **Send to Google Docs** (Results page, or one student's page): each
+  student's essays go to an editable Google Doc in your Drive, shared with
+  the student. Pick what goes in (prompt, sources, score, feedback), Skip
+  or Make a new Doc for students who already have one, optionally
+  *Double-space essays*. Formatting carries over; edits in the Doc stay in
+  Drive.
 - **Scoring queue**: essays and hand-scored items wait here. A rubric can
   be uploaded on the question (PDF, Word, Markdown or plain text); with a rubric, *Score
   with AI* proposes a score and feedback you approve or change. Nothing
@@ -299,6 +308,10 @@ its own.
   unpublished first; an assessment with attempts can only be archived.
 - **"No tests assigned right now."** No session is open for a section the
   student is enrolled in today. Read them the Session code.
+- **"This test could not be opened. Could not join." on a fill-in-the-blank
+  test.** The student's Secure Test is older than 1.6.0. It updates on its
+  own, usually by the next day, or from Self Service; other tests still
+  open.
 - **"This Mac isn't set up for Secure Test yet."** The configuration
   profile hasn't reached that Mac. IT, not the teacher.
 - **Wi-Fi drops mid-test.** Answers are stored on the Mac and sent when the
