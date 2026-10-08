@@ -262,6 +262,12 @@ its own.
   saves only when the student leaves the box, so Idle is normal
   mid-essay; from v1.3.4 the autosave clears it. View screen shows what
   they are doing.
+- **"Couldn't start a secure session."** The Mac declined to lock for the
+  test (macOS reports it as an unknown error). It happens now and then,
+  often to a few students at once at the start of class, and clears on its
+  own: have the student wait a minute and open the test again from Your
+  tests — it usually works within a few tries. If it keeps failing,
+  restart the Mac. Answers already saved are kept.
 - **A student is still working after I closed the session.** Their Mac is
   on client v1.3.2 (About Secure Test). Nothing they type after Close is
   accepted; press **Hand in** on their row. On v1.3.3 the Mac returns them
