@@ -5,6 +5,7 @@ import { useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
 import { RenderedText } from "@/components/app/RenderedText";
 import { ChangedFromPdf } from "./ChangedFromPdf";
+import { attachFigure, figureUseLabel, stemSnippet } from "./pdfFigures";
 import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
 import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
@@ -206,6 +207,18 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
 
   const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
   const needFigure = sets.filter((s) => s.needs_figure && !addedSets.has(s.id)).length;
+  // The questions a figure can still go with: shown, not added, and not in
+  // a set that was added.
+  const attachable = result
+    ? result.candidates
+        .map((c, i) => ({ i, c }))
+        .filter(
+          ({ i }) =>
+            !hidden.has(i) &&
+            !added.has(i) &&
+            !sets.some((s) => addedSets.has(s.id) && s.item_indexes.includes(i)),
+        )
+    : [];
 
   async function extract(file: File) {
     setBusy(true);
@@ -521,6 +534,21 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   function discardFigure(id: string, n: number) {
     updateSet(id, (s) => ({ ...s, figures: s.figures.filter((f) => f !== n) }));
   }
+  /** Beta feedback 2026-10-08: put a figure with a question — the set that
+   * holds it, or a new stimulus card of one. */
+  function useFigureWith(n: number, index: number) {
+    setSets((prev) =>
+      attachFigure(prev, n, index, (i, figures) => ({
+        id: `local-${Date.now()}-${i}`,
+        stimulus: "",
+        figures,
+        item_indexes: [i],
+        source: "model",
+        sources: [],
+        layout: "inline",
+      })),
+    );
+  }
   /** A loose candidate right below a set can be pulled in; anything else
    * becomes its own set of one (a passage typed by hand). */
   function startSet(index: number) {
@@ -716,6 +744,34 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             <span className="ml-1 rounded bg-primary/10 px-1 py-0.5">chart</span>
                           ) : null}
                         </span>
+                        {(() => {
+                          const use = figureUseLabel(sets, f.n);
+                          return use ? (
+                            <span className="block text-[11px]">{use}</span>
+                          ) : (
+                            <span className="mt-0.5 block rounded bg-warning-foreground/10 px-1 py-0.5 text-[11px] text-warning-foreground">
+                              Not used
+                            </span>
+                          );
+                        })()}
+                        {f.data_url && attachable.length > 0 ? (
+                          <select
+                            value=""
+                            disabled={disabled || busy}
+                            onChange={(e) => {
+                              if (e.target.value !== "") useFigureWith(f.n, Number(e.target.value));
+                            }}
+                            aria-label={`Use figure ${f.n} with an item`}
+                            className="mt-1 w-full rounded border border-border bg-background px-0.5 py-0.5 text-[11px]"
+                          >
+                            <option value="">Use with item…</option>
+                            {attachable.map(({ i, c }) => (
+                              <option key={i} value={i}>
+                                Item {i + 1} — {stemSnippet(c.stem, 40)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -796,6 +852,29 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                               })}
                             </ul>
                           ) : null}
+                          {(() => {
+                            const others = result.figures.filter((f) => f.data_url && !set.figures.includes(f.n));
+                            return !setAdded && others.length > 0 ? (
+                              <select
+                                value=""
+                                disabled={disabled || busy}
+                                onChange={(e) => {
+                                  if (e.target.value !== "") useFigureWith(Number(e.target.value), set.item_indexes[0]!);
+                                }}
+                                aria-label="Add a figure to this stimulus"
+                                className="mt-1 block rounded border border-border bg-background px-1 py-0.5 text-[11px]"
+                              >
+                                <option value="">Add a figure…</option>
+                                {others.map((f) => (
+                                  <option key={f.n} value={f.n}>
+                                    Figure {f.n} · p{f.page}
+                                    {f.caption ? ` — ${f.caption}` : ""}
+                                    {figureUseLabel(sets, f.n) ? "" : " (not used)"}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null;
+                          })()}
                           <textarea
                             value={set.stimulus}
                             disabled={disabled || busy || setAdded}
