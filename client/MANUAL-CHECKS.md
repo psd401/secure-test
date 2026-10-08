@@ -2369,3 +2369,26 @@ different `DESIGN_TOOL_SESSION_SECRET` (or any well-formed but invalid JWT).
 | **Expired on the list.** Launch with an invalid token | The test list does not show "No test list for this account."; the card shows "Your sign-in has expired. Sign in again." with Sign in with Google; stderr `session expired (server 401) — signing out` once (no loop) | NOT RUN |
 | **Expired on Join.** Signed in, then make the token invalid (relaunch with the invalid token and type a code before the list loads) and Join | Same card and line; no "Could not join." | NOT RUN |
 | **Sign in again.** Press Sign in with Google | Normal sign-in; Your tests lists the open sitting | NOT RUN |
+
+## Confirm before leaving a test (v1.6.2, 2026-10-08)
+
+Field data 2026-10-08: "End secure session" pressed 409 times on 204 attempts
+in 14 days, 199 in a session's first 10 minutes, 148 repeats; 168 of those
+attempts were later handed in normally. Decision (James): confirm on the
+button, Cmd-E and Cmd-Q. `ExitConfirmation`: only while a test is open in a
+live session and not handed in; "Keep working" is the default button; a quit
+the SYSTEM sends (logout, restart, MDM) is never held. The window's close
+button asks too (`windowShouldClose`, 6.3).
+Debug build, simulated lockdown, except the last row.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Button.** In a test, press End secure session | Sheet "End the secure session?" / "Your answers are saved. You can come back to this test from Your tests." / Keep working (default) · End session. Keep working → back in the test, no `emergency_exit` event. Again → End session → the session ends as before, `emergency_exit` `via: button` | NOT RUN |
+| **Cmd-E.** Same with Session → End Secure Session (Cmd-E) | Same sheet and outcomes | NOT RUN |
+| **Repeat presses.** With the sheet up, press the button and Cmd-E again; press Return | One sheet only (stderr `exit confirm already showing`); Return = Keep working | NOT RUN |
+| **Cmd-Q.** In a test, Cmd-Q | Sheet "Quit Secure Test?" / "Your test is still open. Your answers are saved, and you can come back to it from Your tests." / Keep working · Quit. Keep working → still in the test. Quit → session ends, app quits (`quit` event) | NOT RUN |
+| **Close button.** In a test (window not full screen), press the red close button | The Quit sheet; Keep working keeps the window; Quit ends the session and quits | NOT RUN |
+| **No confirm outside a test.** Cmd-Q on Your tests; Cmd-Q after hand-in on the Handed in page | Quits at once, no sheet | NOT RUN |
+| **Session ends under the sheet.** Open the confirm, then the teacher closes the sitting | The confirm goes; "Your teacher ended the test session." shows alone | NOT RUN |
+| **System quit.** In a test, Apple menu → Log Out (cancel the logout afterward if offered) | No Secure Test confirm holds the logout; the session ends | NOT RUN |
+| **Real AAC (signed 1.6.2).** In a real session, the button → Keep working → End session; then Cmd-Q → Quit | Sheets appear inside the lockdown; both exits work; `DID END` | NOT RUN |

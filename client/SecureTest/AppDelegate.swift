@@ -19,7 +19,7 @@ import UniformTypeIdentifiers
 ///    worked, since that path is per-view. So the Edit menu below is what makes
 ///    Cmd-V behave — which matters for a student pasting assistive-tech output.
 @main
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var controller: AssessmentViewController?
     private var entry: SessionEntryViewController?
@@ -84,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// stretch after an emergency end is exactly when a teacher wants eyes.
     private var peekResponder: PeekResponder?
     private var attemptHandedIn = false
+    /// Field report 2026-10-08 (`ExitConfirmation`): the confirm currently on
+    /// screen, if any, so a second press does not stack another and a session
+    /// that ends underneath it (time up, teacher closed) can take it down.
+    private var exitConfirmAlert: NSAlert?
+    /// Set once the student confirms Quit, so the re-issued terminate passes.
+    private var quitConfirmed = false
     /// IF slice 3 (`docs/instant-feedback-design.md`, D-2): the instant
     /// feedback the student's own hand-in came back with, held until the
     /// secure session has ENDED (`.idle`, i.e. after `DID END`) and shown then
@@ -183,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // it straight back. The app never has a reason to be minimized.
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(windowDidMiniaturize),
+            selector: #selector(windowWasMiniaturized),
             name: NSWindow.didMiniaturizeNotification,
             object: nil
         )
@@ -198,6 +204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = "Secure Test"
+        // Field report 2026-10-08 (6.3): the close button asks first during a
+        // test, like Cmd-Q — `windowShouldClose` below.
+        window.delegate = self
         // Batch 4 slice D: the window's own ground is Pacific, so the frame
         // the student sees while a bundle loads, between screens, and after
         // "End secure session" is district colour rather than system grey
@@ -435,6 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showEntry() {
+        dismissExitConfirm()
         // 10.3: arriving here from Back to your tests (or any later caller)
         // tears the attempt surface down completely.
         backToTestsAccessory?.removeFromParent()
@@ -879,7 +889,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reporter.report(.focusLoss)
     }
 
-    @objc private func windowDidMiniaturize(_ note: Notification) {
+    @objc private func windowWasMiniaturized(_ note: Notification) {
         guard let minimized = note.object as? NSWindow, minimized === window else { return }
         Self.log("window minimized — restoring (MIN-1)")
         minimized.deminiaturize(nil)
@@ -1333,10 +1343,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func emergencyEndLockdown() {
+        // Field report 2026-10-08: ask first while a test is open (button and
+        // Cmd-E share this action). The exit itself is unchanged.
+        if needsExitConfirm() {
+            confirmExit(.endSession) { [weak self] in self?.performEmergencyEnd() }
+            return
+        }
+        performEmergencyEnd()
+    }
+
+    private func performEmergencyEnd() {
         // Slice 92 closes the AAC-1 TODO here: the button now shows up on the
         // teacher's monitor as well as in the [security] log.
         eventReporter?.report(.emergencyExit, detail: ["via": "button"])
         endLockdown(reason: "emergency end control pressed")
+    }
+
+    private func needsExitConfirm(systemInitiatedQuit: Bool = false) -> Bool {
+        ExitConfirmation.shouldConfirm(
+            lockdownActive: lockdown?.isActive == true,
+            onAttemptScreen: screen != .entry,
+            handedIn: attemptHandedIn,
+            systemInitiatedQuit: systemInitiatedQuit
+        )
+    }
+
+    /// One confirm at a time; "Keep working" is the default (Return) button so
+    /// a repeated press or a stray Return keeps the student in the test.
+    private func confirmExit(_ kind: ExitConfirmation.Kind, then action: @escaping () -> Void) {
+        guard exitConfirmAlert == nil else {
+            Self.log("exit confirm already showing — ignoring another \(kind) request")
+            return
+        }
+        // No visible window to hold a sheet (the close button fires the quit
+        // after the window is gone): act at once, as before, rather than stall
+        // an exit behind a dialog nobody can see.
+        guard let window, window.isVisible else {
+            action()
+            return
+        }
+        Self.log("exit confirm shown (\(kind))")
+        let alert = NSAlert()
+        alert.messageText = ExitConfirmation.messageText(kind)
+        alert.informativeText = ExitConfirmation.informativeText(kind)
+        alert.addButton(withTitle: ExitConfirmation.keepWorkingTitle)
+        alert.addButton(withTitle: ExitConfirmation.confirmTitle(kind))
+        exitConfirmAlert = alert
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            let wasCurrent = self.exitConfirmAlert === alert
+            self.exitConfirmAlert = nil
+            guard wasCurrent, response == .alertSecondButtonReturn else {
+                Self.log("exit confirm: kept working (\(kind))")
+                return
+            }
+            Self.log("exit confirm: confirmed (\(kind))")
+            action()
+        }
+    }
+
+    /// Field report 2026-10-08 (6.3): the window's close button is a quit
+    /// (`applicationShouldTerminateAfterLastWindowClosed`), but by the time the
+    /// quit arrives the window is gone and no sheet can attach. Ask here,
+    /// while the window still exists; on Quit the confirmed terminate passes
+    /// `applicationShouldTerminate` without a second dialog.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === window, !quitConfirmed, needsExitConfirm() else { return true }
+        confirmExit(.quit) { [weak self] in
+            self?.quitConfirmed = true
+            NSApp.terminate(nil)
+        }
+        return false
+    }
+
+    /// The session ended underneath an open confirm (time up, teacher closed,
+    /// hand-in): take the confirm down so it never stacks with the next sheet.
+    private func dismissExitConfirm() {
+        guard let alert = exitConfirmAlert else { return }
+        exitConfirmAlert = nil
+        window?.endSheet(alert.window, returnCode: .alertFirstButtonReturn)
+        Self.log("exit confirm dismissed — the session ended underneath it")
     }
 
     /// Cmd-Q during an active session is ALLOWED (decision 2.1): the session
@@ -1345,6 +1431,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// app with the session live (PoC-A RESULTS finding #11) — hence cancel
     /// and re-issue.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Field report 2026-10-08: a student's Cmd-Q (or the window's close
+        // button) asks first while a test is open. A quit the SYSTEM sends —
+        // logout, restart, shutdown, MDM — carries a quit Apple event and is
+        // never held up by a dialog.
+        let systemQuit = NSAppleEventManager.shared().currentAppleEvent != nil
+        if !quitConfirmed, !terminatingAfterLockdown, needsExitConfirm(systemInitiatedQuit: systemQuit) {
+            confirmExit(.quit) { [weak self] in
+                self?.quitConfirmed = true
+                NSApp.terminate(nil)
+            }
+            return .terminateCancel
+        }
         // Slice 92 closes the AAC-1 TODO here: a quit mid-attempt is reported
         // whether or not the lockdown is still up (a student who pressed the
         // emergency button and then quit is still a quit mid-attempt).
