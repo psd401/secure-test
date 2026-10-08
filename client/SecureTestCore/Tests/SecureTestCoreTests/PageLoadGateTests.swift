@@ -119,4 +119,63 @@ final class PageLoadGateTests: XCTestCase {
         let results = await [first, second]
         XCTAssertEqual(results, [.refused, .refused])
     }
+
+    // MARK: SS-1 — a slow begin() is waited out, with a "still starting" beat
+
+    private actor Counter {
+        var count = 0
+        func bump() { count += 1 }
+    }
+
+    func testASlowSessionStillOpensAfterTheSlowNotice() async throws {
+        let gate = PageLoadGate()
+        let slow = Counter()
+        Task {
+            // Past `slowAfter`, inside `timeout`: the 2026-10-08 Mac's shape.
+            try? await Task.sleep(for: .milliseconds(150))
+            await gate.open()
+        }
+        let outcome = await gate.wait(
+            timeout: .seconds(5), slowAfter: .milliseconds(50), onSlow: { await slow.bump() })
+        XCTAssertEqual(outcome, .opened, "a slow begin() must not be mistaken for a hung one")
+        let calls = await slow.count
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testAFastSessionNeverShowsTheSlowNotice() async throws {
+        let gate = PageLoadGate()
+        let slow = Counter()
+        Task {
+            try? await Task.sleep(for: .milliseconds(20))
+            await gate.open()
+        }
+        let outcome = await gate.wait(
+            timeout: .seconds(5), slowAfter: .seconds(2), onSlow: { await slow.bump() })
+        XCTAssertEqual(outcome, .opened)
+        let calls = await slow.count
+        XCTAssertEqual(calls, 0)
+    }
+
+    func testARefusalAfterTheSlowNoticeStillRefuses() async throws {
+        let gate = PageLoadGate()
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            await gate.refuse()
+        }
+        let outcome = await gate.wait(
+            timeout: .seconds(5), slowAfter: .milliseconds(50), onSlow: {})
+        XCTAssertEqual(outcome, .refused)
+    }
+
+    func testTheWholeBackstopStillTimesOut() async throws {
+        let gate = PageLoadGate()
+        let slow = Counter()
+        let started = ContinuousClock.now
+        let outcome = await gate.wait(
+            timeout: .milliseconds(200), slowAfter: .milliseconds(50), onSlow: { await slow.bump() })
+        XCTAssertEqual(outcome, .timedOut, "a hung session must still never build the test")
+        XCTAssertGreaterThanOrEqual(started.duration(to: .now), .milliseconds(200))
+        let calls = await slow.count
+        XCTAssertEqual(calls, 1)
+    }
 }

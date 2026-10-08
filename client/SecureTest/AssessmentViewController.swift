@@ -388,13 +388,24 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     // (`.refused`) used to open this gate like any other settled
                     // state and hand the whole test to an unlocked Mac; a
                     // session that never answers (`.timedOut`) used to be built
-                    // "anyway" after 5 s. A real begin() answers in about two
-                    // seconds, so the backstop is 20 s now — long enough that a
-                    // slow Mac is never mistaken for a hung one, and a hung one
-                    // costs the student a rejoin rather than the test's
-                    // protection.
+                    // "anyway" after 5 s. A real begin() usually answers in
+                    // about two seconds; SS-1 (2026-10-08) found a student's
+                    // Mac answering after ~36 s, which the old 20 s backstop
+                    // sent home six times. So the backstop is 60 s, and past
+                    // 20 s the notice says the session is still starting. A
+                    // hung one still costs the student a rejoin rather than
+                    // the test's protection.
                     if let gate = self.pageLoadGate {
-                        let outcome = await gate.wait(timeout: .seconds(20))
+                        let outcome = await gate.wait(
+                            timeout: .seconds(60),
+                            slowAfter: .seconds(20),
+                            onSlow: { @MainActor [weak self] in
+                                guard let self, !self.isRetired else { return }
+                                self.log("page load gate: still shut after 20 s — waiting up to 60 s")
+                                self.loadHostPage(Self.noticePage(
+                                    "Still starting the secure session…",
+                                    detail: "This Mac is taking longer than usual. Please wait — your test will open by itself."))
+                            })
                         guard !self.isRetired else {
                             self.log("page load gate settled after the attempt screen went away — discarded")
                             return
@@ -407,7 +418,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                             self.onCouldNotStartSecurely?("session_refused")
                             return
                         case .timedOut:
-                            self.log("page load gate: TIMED OUT after 20 s — the secure session never answered; the test is NOT being shown")
+                            self.log("page load gate: TIMED OUT after 60 s — the secure session never answered; the test is NOT being shown")
                             self.onCouldNotStartSecurely?("session_timeout")
                             return
                         }

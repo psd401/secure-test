@@ -92,6 +92,24 @@ public actor PageLoadGate {
         return outcome
     }
 
+    /// SS-1 (2026-10-08): a real student's Mac answered `begin()` about 36 s
+    /// after it was called, so the old 20 s backstop sent the student home six times
+    /// while the session was still coming up. Waits up to `timeout` in all,
+    /// and calls `onSlow` once if the gate is still shut after `slowAfter`, so
+    /// the student is told it is still starting rather than left wondering.
+    /// The outcome rules are unchanged: only `.opened` may build the test.
+    public func wait(
+        timeout: Duration,
+        slowAfter: Duration,
+        onSlow: @Sendable () async -> Void
+    ) async -> Outcome {
+        guard slowAfter < timeout else { return await wait(timeout: timeout) }
+        let first = await wait(timeout: slowAfter)
+        guard first == .timedOut else { return first }
+        await onSlow()
+        return await wait(timeout: timeout - slowAfter)
+    }
+
     private func giveUp(on id: UUID) {
         guard let continuation = waiters.removeValue(forKey: id) else { return }
         continuation.resume(returning: .timedOut)

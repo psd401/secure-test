@@ -2278,3 +2278,17 @@ build under simulated lockdown unless the row says otherwise; rebuild first.
 | **VoiceOver: pressed state follows the caret.** In (a) put the caret in a bold word, VO to the Bold button | "Bold, selected" (and not selected outside bold text) | NOT RUN |
 | **VoiceOver: the box.** Tab into (a) | "Your answer, edit text" (multi-line), then the word count ("0 / 400 words") as its description; typing is echoed | NOT RUN |
 | **Real AAC — read and dictate.** Release build of 1.6.0, REAL lockdown: Read my answer and Speak my answer in (a) | Both behave as under simulation; the highlight paints inside the session | ✅ 2026-10-07 evening real AAC (Ethan; Debug build of e110de8 with the AAC entitlement, REAL lockdown, against local dev on the `_demo` DB — localhost survives 10.7; James at the keyboard) |
+
+## SS-1 — a slow secure start is waited out (v1.6.1, 2026-10-08)
+
+A student's Mac answered `begin()` after ~36 s; the 20 s backstop sent them
+home six times (`docs/roadmap-2026-09.md` "Beta field report 2026-10-08").
+The backstop is 60 s now, with a "still starting" notice after 20 s. A slow
+`begin()` cannot be produced on demand — the `slow` simulator value is a 2 s
+begin — so rows 1–2 are real sessions, row 3 a reading of stderr.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Normal start (real AAC).** Release build of 1.6.1, join a sitting | The test opens within a few seconds; no "Still starting" notice; stderr `page load gate: opened` | NOT RUN |
+| **Slow start (real AAC, if a slow Mac is available).** Join on the reporting student's Mac or another slow one | After 20 s "Still starting the secure session…" with "This Mac is taking longer than usual…"; the test opens by itself when the session begins; stderr `still shut after 20 s` then `opened` | NOT RUN |
+| **Never starts.** Any run where `begin()` never answers | Home at 60 s with "Couldn't start a secure session"; stderr `TIMED OUT after 60 s`; `secure_start_refused` / `session_timeout` on the Monitor | NOT RUN |
