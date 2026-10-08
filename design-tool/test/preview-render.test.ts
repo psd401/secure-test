@@ -953,12 +953,16 @@ describe("renderAssessmentHtml: fill_blank (FB)", () => {
     ],
   };
 
-  test("screen: a disabled select with the options in order, an underlined gap, segments rendered", () => {
+  test("screen: a closed Choose… box with the options rendered after the sentence, an underlined gap, segments rendered", () => {
     const html = renderAssessmentHtml(assessment, [fill]);
-    expect(html).toContain(
-      '<select class="fill-select" aria-label="Blank 1" disabled><option value="">Choose…</option>' +
-        '<option value="o1">wind&lt;ward&gt;</option><option value="o2">$y$</option></select>',
-    );
+    // FB-S2: no native select (an <option> cannot hold math); the box mirrors
+    // the client's control and the options follow, rendered, in order.
+    expect(html).not.toContain("<select");
+    expect(html).toContain('<span class="fill-select" aria-label="Blank 1"><span class="fill-select-num">1</span>Choose…');
+    expect(html).toContain('<span class="fill-options-label">Blank 1:</span>');
+    expect(html).toContain('<span class="choice-letter">A.</span> wind&lt;ward&gt;');
+    expect(html).not.toContain(">$y$<");
+    expect(html).not.toContain("Circle one choice for each numbered blank.");
     expect(html).toContain('<span class="fill-gap" aria-label="Blank 2"><span class="fill-gap-num">2</span></span>');
     // Segment text goes through the stem renderer: KaTeX renders, raw HTML is
     // escaped, and a marker naming no blank stays as literal text.
@@ -989,7 +993,7 @@ describe("renderAssessmentHtml: fill_blank (FB)", () => {
     ]);
     expect(html).not.toContain("**");
     expect(html).not.toContain("_the");
-    expect(html).toMatch(/<strong><select class="fill-select" aria-label="Blank 1" disabled>.*?<\/select><\/strong>/);
+    expect(html).toMatch(/<strong><span class="fill-select" aria-label="Blank 1">.*?▾<\/span><\/span><\/strong>/);
     expect(html).toMatch(/<em>the <span class="fill-gap" aria-label="Blank 2">.*?<\/span><\/span> gap<\/em>/);
   });
 
@@ -997,7 +1001,7 @@ describe("renderAssessmentHtml: fill_blank (FB)", () => {
     const html = renderAssessmentHtml(assessment, [{ ...fill, stem: "Solve $x + [[b2]] = 3$ now, [[b1]]." }]);
     // b2's marker comes first, so it is Blank 1 (stem order).
     expect(html).toContain('<span class="fill-gap" aria-label="Blank 1">');
-    expect(html).toContain('aria-label="Blank 2" disabled>');
+    expect(html).toContain('<span class="fill-select" aria-label="Blank 2">');
     expect(html).not.toContain("\uE000");
   });
 

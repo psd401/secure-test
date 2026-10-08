@@ -113,11 +113,12 @@ export function previewBlanks(blanks: readonly FillBlankBlank[] | null | undefin
  * around the blanks (renderAroundBlanks), so emphasis spanning a marker
  * renders and the blank sits inside it.
  *
- * Screen: a dropdown is a disabled `<select>` listing its options in the
- * teacher's order (D-6) — an `<option>` holds text only, so option math
- * shows as its source here; a typed blank is an underlined gap. Paper: every
- * blank is a numbered gap, and each dropdown's options follow the sentence
- * as a lettered list to circle.
+ * Screen: a dropdown is a closed "Choose… ▾" box, as the student's client
+ * now draws it (FB-S2, an in-page pick-one control), and its options follow
+ * the sentence as a rendered list in the teacher's order (D-6) — emphasis and
+ * math render, which a native `<option>` never could; a typed blank is an
+ * underlined gap. Paper: every blank is a numbered gap, and each dropdown's
+ * options follow the sentence as a lettered list to circle.
  */
 function renderFillBlankStem(
   stem: string,
@@ -144,10 +145,8 @@ function renderFillBlankStem(
       );
     } else {
       slots.push(
-        `<select class="fill-select" aria-label="Blank ${n}" disabled>` +
-          `<option value="">Choose…</option>` +
-          blank.options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.text)}</option>`).join("") +
-          `</select>`,
+        `<span class="fill-select" aria-label="Blank ${n}">` +
+          `<span class="fill-select-num">${n}</span>Choose…<span class="fill-select-caret" aria-hidden="true">▾</span></span>`,
       );
     }
   }
@@ -155,7 +154,7 @@ function renderFillBlankStem(
   const html = renderAroundBlanks(texts, slots, resolved);
 
   let afterHtml = "";
-  if (printMode) {
+  {
     const lists = blanks
       .filter((b): b is Extract<PreviewBlank, { kind: "dropdown" }> => b.kind === "dropdown" && numberOf.has(b.id))
       .sort((a, b) => numberOf.get(a.id)! - numberOf.get(b.id)!)
@@ -171,9 +170,9 @@ function renderFillBlankStem(
           `</div>`,
       )
       .join("");
-    afterHtml = lists
+    afterHtml = lists && printMode
       ? `${lists}<p class="match-hint">Circle one choice for each numbered blank.</p>`
-      : "";
+      : lists;
   }
   return { stemHtml: html, afterHtml };
 }
@@ -519,7 +518,7 @@ function renderItem(
       `<thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
   } else if (item.type === "fill_blank") {
     // FB slice 1: the blanks are already in the stem (renderFillBlankStem
-    // above); paper adds each dropdown's options under the sentence.
+    // above); each dropdown's options follow the sentence (screen and paper).
     body = fill?.afterHtml ?? "";
   } else if (item.type === "essay") {
     const limit =
@@ -773,7 +772,9 @@ export function renderAssessmentHtml(
     .fill-gap { display: inline-block; min-width: 96px; border-bottom: 1px solid #333; height: 1.2em; vertical-align: baseline; position: relative; margin: 0 2px; }
     .fill-gap-num { position: absolute; left: 2px; bottom: -2px; font-size: 10px; color: #666; }
     .fill-gap-print { min-width: 120px; }
-    .fill-select { font-size: 14px; margin: 0 2px; max-width: 240px; }
+    .fill-select { display: inline-block; position: relative; font-size: 14px; margin: 0 2px; padding: 1px 6px 1px 18px; border: 1px solid #888; border-radius: 4px; color: #666; background: #fff; vertical-align: baseline; }
+    .fill-select-num { position: absolute; left: 4px; top: 1px; font-size: 10px; color: #666; }
+    .fill-select-caret { margin-left: 6px; }
     .fill-options { margin: 4px 0; font-size: 14px; }
     .fill-options-label { font-weight: 600; margin-right: 6px; }
     .fill-option { margin-right: 16px; }
