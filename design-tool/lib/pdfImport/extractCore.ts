@@ -615,7 +615,7 @@ export const MAX_NUMBERED_ITEMS = 300;
 export function countNumberedItems(text: string): number {
   const re = /(?:^|[\s(])(\d{1,3})[.)](?=\s|$)/g;
   let current = 0;
-  for (const m of text.matchAll(re)) {
+  for (const m of withoutEmphasis(text).matchAll(re)) {
     const n = Number(m[1]);
     if (n > current && n <= current + 2) {
       current = n;
@@ -990,19 +990,50 @@ export function validateProposedSets(
 }
 
 /**
- * The question number printed first after `[FIGURE n]` in the marked text —
- * the adjacency rule from the design doc ("the figure immediately above"):
- * a figure belongs to the first numbered question below it. Markers in
- * between are skipped, so two figures stacked above one question both
- * land on it. null when nothing numbered follows (a figure after the last
- * question, cover art on a title page).
+ * The E6 emphasis markers (`**bold**`, `_italic_`) taken back out, for
+ * reading printed numbers: a test that sets its question numbers in bold
+ * (AP Classroom's "**5.**") otherwise matches no number at all (beta report
+ * 2026-10-08 — the numbering check read 0 and no figure was paired).
+ */
+export function withoutEmphasis(text: string): string {
+  return text.replace(/\*\*|_/g, "");
+}
+
+const QUESTION_NUMBER_RE = /(?:^|[\s(])(\d{1,3})[.)](?=\s|$)/g;
+const CHOICE_LINE_RE = /^[ \t]*(?:\([A-Ea-e]\)|[A-E][.)])[ \t]/m;
+// Looking back, only a number that starts a line counts — "page 14." in the
+// question text above is not a question.
+const LINE_START_NUMBER_RE = /^[ \t]*(\d{1,3})[.)](?=\s)/gm;
+
+/**
+ * The printed question a figure belongs to — the adjacency rule from the
+ * design doc ("the figure immediately above"): normally the first numbered
+ * question below `[FIGURE n]`. Markers in between are skipped, so two
+ * figures stacked above one question both land on it.
+ *
+ * Beta report 2026-10-08: some tests print the number and a chart title
+ * ABOVE the figure and the question text and its choices BELOW it
+ * ("8. PERCENT OF …", picture, "Which of the following …", "(A) …"). When
+ * answer choices come after the figure and before the next number, the
+ * figure is inside the question numbered just above it.
+ *
+ * null when nothing numbered fits (a figure after the last question, cover
+ * art on a title page).
  */
 export function questionAfterFigure(textWithMarkers: string, n: number): number | null {
-  const at = textWithMarkers.indexOf(`[FIGURE ${n}]`);
+  const marker = `[FIGURE ${n}]`;
+  const marked = withoutEmphasis(textWithMarkers);
+  const at = marked.indexOf(marker);
   if (at < 0) return null;
-  const rest = textWithMarkers.slice(at + `[FIGURE ${n}]`.length).replace(/\[FIGURE \d+\]/g, " ");
-  const m = /(?:^|[\s(])(\d{1,3})[.)](?=\s|$)/.exec(rest);
-  return m ? Number(m[1]) : null;
+  const before = marked.slice(0, at).replace(/\[FIGURE \d+\]/g, " ");
+  const rest = marked.slice(at + marker.length).replace(/\[FIGURE \d+\]/g, " ");
+  const next = new RegExp(QUESTION_NUMBER_RE.source).exec(rest);
+  const upToNext = next ? rest.slice(0, next.index) : rest;
+  if (CHOICE_LINE_RE.test(upToNext)) {
+    const prev = [...before.matchAll(LINE_START_NUMBER_RE)].at(-1);
+    if (prev) return Number(prev[1]);
+  }
+  return next ? Number(next[1]) : null;
 }
 
 /**

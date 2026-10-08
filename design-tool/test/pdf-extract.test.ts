@@ -664,6 +664,40 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
     expect(adjacencyFallback(3, text, sourceNumbers, elsewhere)).toEqual([]);
   });
 
+  // Beta report 2026-10-08 (an AP Classroom test booklet): bold numbers, and
+  // two layouts in one document.
+  test("bold question numbers are read (the E6 markers come back out)", () => {
+    const bold = "**4.** Q4\n(A) a\n(B) b\n[FIGURE 1]\n**5.** The map above shows\n(A) a\n(B) b";
+    expect(questionAfterFigure(bold, 1)).toBe(5);
+    expect(countNumberedItems("**1.** a\n**2.** b\n**3.** _c_")).toBe(3);
+  });
+
+  test("number and title above the figure, the question and its choices below → the number above", () => {
+    const titled = [
+      "**7.** Q7",
+      "(A) a",
+      "(E) e",
+      "**8. PERCENT OF HOUSEHOLDS, 2020**",
+      "[FIGURE 1]",
+      "Source: a survey",
+      "Which of the following is shown?",
+      "(A) a",
+      "(B) b",
+      "**9.** Q9",
+    ].join("\n");
+    expect(questionAfterFigure(titled, 1)).toBe(8);
+    // The choices of the question ABOVE do not count: a figure followed
+    // directly by the next number still belongs to that number.
+    expect(questionAfterFigure("**7.** Q7\n(A) a\n[FIGURE 1]\n**8.** Q8\n(A) a", 1)).toBe(8);
+    // Looking back, only a number that starts a line is a question.
+    expect(questionAfterFigure("Read page 14. Then\n[FIGURE 1]\n(A) a\n(B) b", 1)).toBeNull();
+    // A figure inside the last question, with choices after and nothing numbered below.
+    expect(questionAfterFigure("**16. TITLE**\n[FIGURE 1]\nWhich?\n(A) a", 1)).toBe(16);
+    expect(adjacencyFallback(1, titled, [[7], [8], [9]], [])).toEqual([
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+    ]);
+  });
+
   test("two unplaced figures above the same question share one set", () => {
     const stacked = "[FIGURE 1]\n[FIGURE 2]\n1. Q1";
     expect(adjacencyFallback(2, stacked, [[1]], [])).toEqual([
