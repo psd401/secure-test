@@ -26,9 +26,21 @@ export const MultiChoiceResponseSchema = z.object({
   choice_ids: z.array(z.string().min(1)).min(1),
 });
 
+// Bridge audit B-7 (2026-10-08, docs/server-delivered-renderer-design.md):
+// answer text had no maximum anywhere. Measured on production the same day:
+// the longest essay was 8,590 characters, the longest kept revision 23,790,
+// the longest short answer 13. The client checks the same numbers
+// (`BridgeLimits` in client/SecureTestCore); design-tool
+// test/bridge-limits.test.ts fails if the two sides drift. Lengths are
+// UTF-16 code units — zod's and the client's measure.
+export const ESSAY_TEXT_MAX_LENGTH = 100_000;
+export const SHORT_TEXT_MAX_LENGTH = 2_000;
+/** A table cell or a fill-in-the-blank answer. */
+export const RESPONSE_CELL_MAX_LENGTH = 500;
+
 export const ShortTextResponseSchema = z.object({
   type: z.literal("short_text"),
-  text: z.string(),
+  text: z.string().max(SHORT_TEXT_MAX_LENGTH),
 });
 
 // RT slice 1 (docs/rich-text-essay-design.md): an essay whose item has
@@ -40,7 +52,7 @@ export const ESSAY_HTML_MAX_LENGTH = 200_000;
 
 export const EssayResponseSchema = z.object({
   type: z.literal("essay"),
-  text: z.string(),
+  text: z.string().max(ESSAY_TEXT_MAX_LENGTH),
   html: z.string().max(ESSAY_HTML_MAX_LENGTH).optional(),
 });
 
@@ -89,7 +101,10 @@ export const DrawingUploadResponseSchema = z.object({
 export const TableResponseSchema = z.object({
   type: z.literal("table"),
   cells: z
-    .record(z.string().min(1), z.record(z.string().min(1), z.string().max(500)))
+    .record(
+      z.string().min(1),
+      z.record(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH)),
+    )
     .refine(
       (cells) => Object.values(cells).some((row) => Object.keys(row).length > 0),
       { message: "a table response needs at least one cell" },
@@ -105,7 +120,7 @@ export const TableResponseSchema = z.object({
 export const FillBlankResponseSchema = z.object({
   type: z.literal("fill_blank"),
   answers: z
-    .record(z.string().min(1), z.string().max(500))
+    .record(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH))
     .refine((answers) => Object.keys(answers).length > 0, {
       message: "a fill-in-the-blank response needs at least one blank",
     }),
