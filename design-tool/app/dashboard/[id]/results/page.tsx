@@ -19,6 +19,7 @@ import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
 import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
+import { RescoreAndReload } from "./RescoreAndReload";
 import { canReleaseAnswers, showsReleasedLine } from "@/lib/feedback/settingsUi";
 import { ClassInsightsPanel } from "@/components/app/ClassInsightsPanel";
 import { questionAnchor } from "@/lib/insights/panelCopy";
@@ -149,6 +150,13 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   const resultsPath = `/dashboard/${assessment.id}/results${
     selectedSection ? `?section=${encodeURIComponent(selectedSection)}` : ""
   }`;
+  // E11 (docs/rescore-after-key-change-design.md, D-1 / D-4): edit level, once
+  // anything is handed in; the count (0 = disabled) is what the saved keys
+  // would change. The section filter does not narrow it — a key is the same
+  // for every section.
+  const showRescore =
+    levelSatisfies(access.level, "edit") &&
+    results.rows.some((r) => r.status === "submitted");
   const showHandInInProgress =
     inProgressRows.length > 0 && levelSatisfies(access.level, "run");
 
@@ -200,6 +208,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           ) : null}
           {showReleaseButton || showReleasedLine ? (
             <ReleaseAnswersAndReload assessmentId={assessment.id} releasedAt={releasedAtIso} />
+          ) : null}
+          {showRescore ? (
+            <RescoreAndReload
+              assessmentId={assessment.id}
+              studentsChanged={results.rescore_students}
+            />
           ) : null}
           {sendSections.length > 0 ? (
             <SendToGradebookAndReload

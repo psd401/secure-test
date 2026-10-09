@@ -8,7 +8,7 @@
 // Only sections the SENDER currently teaches are offered — the send route
 // refuses any other (authorizeSend), so listing it would be a dead option.
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { attempts, gradebook_pushes, test_sessions } from "@/db/schema";
+import { attempts, gradebook_push_scores, gradebook_pushes, test_sessions } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { normalizeEmail, sectionsCurrentlyTaughtBy, studentsEnrolledInSection } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
@@ -48,7 +48,11 @@ export async function loadSendDialogSections(
   const sectionBySitting = new Map(sittings.map((s) => [s.id, s.section_ps_id]));
 
   const pushes = await db
-    .select({ section_ps_id: gradebook_pushes.section_ps_id, last_sent_at: gradebook_pushes.last_sent_at })
+    .select({
+      id: gradebook_pushes.id,
+      section_ps_id: gradebook_pushes.section_ps_id,
+      last_sent_at: gradebook_pushes.last_sent_at,
+    })
     .from(gradebook_pushes)
     .where(
       and(
@@ -58,6 +62,34 @@ export async function loadSendDialogSections(
       ),
     );
   const lastSent = new Map(pushes.map((p) => [p.section_ps_id, p.last_sent_at]));
+
+  // E11 (D-3): what each attempt last sent, per live push, against the total
+  // the page now shows — a mismatch is a score changed since the send.
+  const sentRows =
+    pushes.length > 0
+      ? await db
+          .select({
+            push_id: gradebook_push_scores.push_id,
+            attempt_id: gradebook_push_scores.attempt_id,
+            points_sent: gradebook_push_scores.points_sent,
+          })
+          .from(gradebook_push_scores)
+          .where(
+            inArray(
+              gradebook_push_scores.push_id,
+              pushes.map((p) => p.id),
+            ),
+          )
+      : [];
+  const sectionByPush = new Map(pushes.map((p) => [p.id, p.section_ps_id]));
+  const totalByAttempt = new Map(submitted.map((r) => [r.attempt_id, r.total_points]));
+  const changedBySection = new Map<string, number>();
+  for (const sent of sentRows) {
+    const total = totalByAttempt.get(sent.attempt_id);
+    if (total === undefined || total === null || total === sent.points_sent) continue;
+    const section = sectionByPush.get(sent.push_id)!;
+    changedBySection.set(section, (changedBySection.get(section) ?? 0) + 1);
+  }
 
   const out: SendDialogSection[] = [];
   for (const section of taught) {
@@ -83,6 +115,7 @@ export async function loadSendDialogSections(
       scored,
       awaiting,
       last_sent_at: sent ? sent.toISOString() : null,
+      changed_since_send: changedBySection.get(section.ps_id) ?? 0,
     });
   }
   return out;

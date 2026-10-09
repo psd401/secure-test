@@ -88,6 +88,7 @@ import { SuggestStandardsDialog, type SuggestOutcome } from "@/components/app/Su
 import { StandardSuggestionChips } from "@/components/app/StandardSuggestionChips";
 import { removeSuggestion, suggestionCount, type SuggestEntry, type SuggestionMap } from "@/lib/ai/suggestForm";
 import { addTag, normalizeStandards } from "@/lib/standards/tags";
+import { KEY_FIXED_POINTER, answerKeyChanged } from "@/lib/scoring/rescoreDialog";
 
 // UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
 // and deep links land on the same panel. Param values are stable; the labels
@@ -802,6 +803,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     snapshotAll(initialItems),
   );
   const [itemSave, setItemSave] = useState<Record<string, SaveState>>({});
+  // E11: items whose answer key was fixed while Published (the Rescore pointer).
+  const [keyFixed, setKeyFixed] = useState<Record<string, boolean>>({});
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ItemView | null>(null);
@@ -1335,6 +1338,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     body.scoring_method = item.scoring_method;
     // BG slice 2: always sent whole — an empty list clears the tags.
     body.standards = item.standards;
+    // E11 (docs/rescore-after-key-change-design.md, D-4): a key fixed on a
+    // Published test points to Rescore on Results once it is saved.
+    const persistedBefore = persisted[item.id];
+    const keyChanged =
+      isLocked &&
+      answerKeyChanged(
+        persistedBefore ? (JSON.parse(persistedBefore) as Record<string, unknown>) : null,
+        item as unknown as Record<string, unknown>,
+      );
     setItemError(item.id, null);
     setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saving" } }));
     try {
@@ -1347,6 +1359,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       // flight keep the card dirty.
       setPersisted((prev) => ({ ...prev, [item.id]: fingerprint(item) }));
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saved", at: new Date() } }));
+      if (keyChanged) setKeyFixed((prev) => ({ ...prev, [item.id]: true }));
     } catch (e) {
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "idle" } }));
       // FB slice 2: name the blank problem slice 1's write boundary found
@@ -3288,6 +3301,17 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </Button>
                   <StatusLine state={save} />
                 </div>
+                {keyFixed[item.id] && !dirty ? (
+                  <p role="status" className="mt-2 text-sm text-muted-foreground">
+                    {KEY_FIXED_POINTER}{" "}
+                    <Link
+                      href={`/dashboard/${assessment.id}/results`}
+                      className="underline"
+                    >
+                      Rescore from Results
+                    </Link>
+                  </p>
+                ) : null}
               </li>
               </Fragment>
               );

@@ -192,3 +192,19 @@ Design-tool only. No client release, no migration.
   rescore under "Score changed by teacher". `test/rescore.test.ts` 14
   tests; the flip's `method = auto` guard inside the transaction is
   not exercised by a test.
+- 2026-10-08 — **slice 2 BUILT** (UI): `RescoreControl` +
+  `RescoreAndReload` in the Results toolbar (edit level, once anything
+  is handed in; "(0)" disabled with "Every handed-in answer matches the
+  current keys"); dry run → dialog with the per-question list → write →
+  reload, the result line ("Rescored 12 students · 3:05 PM." + the
+  sections already sent) carried across the reload in sessionStorage and
+  shown once. Editor: after a save on a Published item that changed its
+  key (`answerKeyChanged` — a standards-only save does not count), the
+  card reads "If students already handed this in, their scores used the
+  old key. Rescore from Results" (link). Send dialog:
+  `changed_since_send` per section (attempts whose current total differs
+  from `gradebook_push_scores.points_sent` on the live push) →
+  "Already sent on … · 3 scores have changed since then." Wording in
+  `lib/scoring/rescoreDialog.ts`, `test/rescore-dialog.test.ts` 7 tests;
+  `loadSendDialogSections`' new count has no DB test (hand-run row).
+  NOT checked in a browser yet — slice 3's rows.

@@ -103,6 +103,10 @@ describe("labels", () => {
     expect(sendButtonLabel("2026-09-28T20:00:00.000Z")).toBe("Sent to PowerSchool · Sep 28, 2026");
     expect(sendAgainNote(null)).toBeNull();
     expect(sendAgainNote("2026-09-28T20:00:00.000Z")).toContain("Sep 28, 2026");
+    expect(sendAgainNote("2026-09-28T20:00:00.000Z")).not.toContain("changed since");
+    // E11 (D-3): a rescore after the send is named.
+    expect(sendAgainNote("2026-09-28T20:00:00.000Z", 1)).toContain("· 1 score has changed since then");
+    expect(sendAgainNote("2026-09-28T20:00:00.000Z", 3)).toContain("· 3 scores have changed since then");
   });
 });
 
@@ -186,7 +190,7 @@ describe("SendToGradebookControl markup", () => {
       createElement(SendToGradebookControl, {
         assessmentId: "a",
         assessmentName: "Unit 3",
-        sections: [{ ps_id: "s1", label: "AP Seminar", scored: 2, awaiting: 0, last_sent_at: last }],
+        sections: [{ ps_id: "s1", label: "AP Seminar", scored: 2, awaiting: 0, last_sent_at: last, changed_since_send: 0 }],
         onDone: () => {},
       }),
     );

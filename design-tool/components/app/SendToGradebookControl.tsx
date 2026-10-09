@@ -171,7 +171,7 @@ export function SendToGradebookControl({
   }
 
   const mustPick = !loading && categories.length > 0 && !categoryId;
-  const note = sendAgainNote(section?.last_sent_at ?? null);
+  const note = sendAgainNote(section?.last_sent_at ?? null, section?.changed_since_send ?? 0);
 
   return (
     <>

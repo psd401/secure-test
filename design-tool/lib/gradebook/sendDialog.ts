@@ -22,6 +22,12 @@ export interface SendDialogSection {
   awaiting: number;
   /** ISO instant of the last send of THIS assessment to THIS section, or null. */
   last_sent_at: string | null;
+  /**
+   * Students already sent whose total now differs from what was sent — a
+   * rescore, a changed score or a pass back since the last send (E11, D-3).
+   * 0 when nothing was sent.
+   */
+  changed_since_send: number;
 }
 
 /** Edit level (owner, edit-level co-teacher, admin) — 8.4 confirmed. */
@@ -59,9 +65,15 @@ export function sendButtonLabel(lastSentAt: string | null): string {
 }
 
 /** The secondary line in the dialog once a push exists for the chosen section. */
-export function sendAgainNote(lastSentAt: string | null): string | null {
+export function sendAgainNote(lastSentAt: string | null, changedSinceSend = 0): string | null {
   if (!lastSentAt || Number.isNaN(Date.parse(lastSentAt))) return null;
-  return `Already sent on ${DAY.format(new Date(lastSentAt))}. Sending again updates changed scores and skips unchanged ones; the name and due date stay as they are in PowerSchool.`;
+  // E11 (docs/rescore-after-key-change-design.md, D-3): say how many sent
+  // scores no longer match, so a rescore is not left stale in the gradebook.
+  const changed =
+    changedSinceSend > 0
+      ? ` · ${changedSinceSend} ${changedSinceSend === 1 ? "score has" : "scores have"} changed since then`
+      : "";
+  return `Already sent on ${DAY.format(new Date(lastSentAt))}${changed}. Sending again updates changed scores and skips unchanged ones; the name and due date stay as they are in PowerSchool.`;
 }
 
 export interface CategoryOption {
