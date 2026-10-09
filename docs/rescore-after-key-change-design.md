@@ -217,3 +217,6 @@ Design-tool only. No client release, no migration.
   entry, quick start bullet (and the "Not in this open beta" line
   removed), `/roadmap.html` 2026-10-08 milestone. Fixture
   `Rescore hand-run 2026-10-08` stays on `_demo`.
+- 2026-10-09 — **DEPLOYED** with `0112ed4` (health stamp = HEAD, no
+  migration); row 565 ✅ on the origin against a real-AAC attempt from
+  the v1.6.2 smoke. The open-beta teacher's reply can go out.
