@@ -100,6 +100,22 @@ PSD macOS secure-testing browser + teacher-facing assessment-authoring "design-t
 - **Working rules learned 2026-09-02:** `bunx drizzle-kit generate` needs `DATABASE_URL` set even though it is offline (any value; the config asserts it) — then apply with `bun --env-file=.env.local db/migrate.ts` for dev and `DATABASE_URL=…_test bun db/migrate.ts` for test; a table that references a table that references it back needs `(): AnyPgColumn => …` on the new reference or every row type silently becomes `any` (shows up as phantom errors elsewhere); the auto-mode classifier blocks security-group changes, Secrets Manager reads, production DB writes and browser actions on pages naming students — write the exact script to the scratchpad with the Write tool and hand it to James (`! bash <path>` runs it as one shell); automation-driven Chrome tabs are hidden, so a page's client code does not hydrate until something paints it — take a screenshot before reading state; `git grep -E '<ids>'` before committing any doc that mentions a student; Bash `cd` persists between calls — use absolute paths.
 - **Working rules learned 2026-09-01:** deploy = `cd design-tool/infra && bunx cdk deploy` (no flags; run `bunx cdk diff` first; in auto mode the classifier blocks it — propose, then run when James says so); a deploy that carries new migrations is followed by `scripts/migrate-aurora.sh`, **deploy first** (the image carries its own migrations) — SUPERSEDED 2026-09-25 by DS-1: the container migrates at boot, `deploy.sh` has no migrate step, and DS-2 refuses migration-carrying deploys on weekdays 07:00–15:30 PT unless `--during-school`; `packages/schema` is consumed through `dist` — `bun run build` there after editing `src`; `cd client && bun scripts/vendor-katex.mjs` after a katex bump or a `macros.ts` edit (the schema package's macros test drift-checks it); `design-tool/samples/_run-import.ts` (gitignored, beside the teacher PDFs) mirrors the import route for Bedrock evidence — `PDF_EXTRACTOR_PROVIDER=bedrock bun --env-file=.env.local samples/_run-import.ts <name-filter>`; if `bun run dev` ever shows more than a handful of `postcss.js` processes, stop and `bun run dev:clean` (Turbopack cache → six kernel panics 2026-09-01); the district's egress address is the WSIPC/K-20 NAT shared by the whole network — never an SG rule; hand-built PDFs for tests live in `design-tool/test/helpers/pdf.ts` (no teacher PDF enters the repo).
 
+## Naming (James, 2026-10-09)
+
+- **Product name = `SecureTest`** in everything a person reads: UI, emails,
+  help / roadmap pages, release notes, living docs. Code takes it from ONE
+  constant per side — `design-tool/lib/brand.ts` (`PRODUCT_NAME`) and the
+  client's `Brand.productName` + the Xcode `PRODUCT_DISPLAY_NAME` build
+  setting. A drift test refuses a hand-typed `Secure Test` / `Secure-Test`.
+- **Identifiers keep their per-language forms and are NEVER renamed for a
+  brand change:** `secure-test` (repo, URLs, packages, cookies, issuers, infra
+  names), `SecureTest` (Swift, Xcode, `SecureTest.app`, pkg, HTTP header),
+  `securetest` (reverse-DNS: bundle id, managed-preferences domain). The
+  bundle id, prefs domain, app / pkg names and IT's AutoPkg recipe and Jamf
+  profile depend on them.
+- Dated records (design notes, hand-run checks, this file's ledger) keep the
+  name they were written with. `docs/roadmap-2026-09.md` row NM is the record.
+
 ## Contributing / what stays out of this repo
 
 This repository is public. `docs/public-release-plan.md` is the record of

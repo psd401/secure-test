@@ -1046,3 +1046,32 @@ names or answer text read).
   student still writing when the TEACHER hands the attempt in no longer
   lights "Needs attention" — the teacher did it, so it is expected. Rows in
   `client/MANUAL-CHECKS.md` "RD-1".
+
+## Row NM — one product name: SecureTest (James, 2026-10-09)
+
+The name had drifted: the website said "Secure-Test" (header, title, login,
+import / error copy, `proxy.ts`) and "Secure Test" (most other UI, help,
+emails); the client's display name was "Secure Test" while the app, pkg and
+bundle are `SecureTest`. Decisions (James): the product name is
+**SecureTest** at least through the 2026–27 school year, held in a brand
+constant so a later district decision is a two-line change; identifiers are
+never renamed (convention in `CLAUDE.md` "Naming").
+
+- Slice 0 — the convention (`CLAUDE.md`) + this row.
+- Slice 1 — `design-tool/lib/brand.ts` + every TS / TSX string + a drift
+  test over `app/`, `components/`, `lib/`, `public/`; the Google Drive root
+  folder becomes `SecureTest` for a teacher's FIRST send (3.1 — existing
+  folders are found by stored id and keep their name); the SNS alerts
+  display name in infra as a literal.
+- Slice 2 — `help.html` / `roadmap.html` text + RECAPTURE the pictures that
+  show the old header (3.2). Deploy 1 + 2 together, no migration.
+- Slice 3 — client `Brand.productName` + `PRODUCT_DISPLAY_NAME` build
+  setting (display name + both permission prompts) + a Core drift test;
+  rides the NEXT client release (3.3). Until AutoPkg delivers it, the
+  website says SecureTest and installed clients say "Secure Test".
+- Slice 4 — living docs only (quick start, RELEASING, client-release plan,
+  README) + the psd-sign release-notes template; dated records untouched
+  (3.4).
+- Outside the repo, for a batched IT ask: the Self Service listing name and
+  the real configuration profile's display name.
+
