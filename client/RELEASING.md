@@ -194,6 +194,28 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.6.2 — 2026-10-09** (built from `c179cfeed217`, tag on `main`):
+  exit confirms (End secure session, Cmd-E, Cmd-Q and the close button ask
+  first while a test is on screen — 409 presses on 204 attempts in 14 days,
+  most as "back"; system quits pass), expired sign-in returns to the
+  sign-in card (8-hour token; a 401 used to read as "Could not join"),
+  secure-start refusal copy + `os_version` / `model` on `lockdown_failed`,
+  bridge hardening H-1…H-6 (+ the B-7 schema limits on the server, already
+  live), and sleep / wake evidence on exit-70 reports (no behaviour
+  change). psd-sign 0.6.1: pre-flight (clean tree, HEAD = `origin/main`,
+  1.6.2 > v1.6.1), archive-only Developer ID + hardened runtime (no
+  re-sign), all seven entitlements = `expected-entitlements.txt`, profile
+  expires 2044, `PSDBuildCommit` = HEAD, pkg Installer-signed
+  (`net.psd401.securetest.client`), `/releases/latest` → v1.6.2, asset
+  sha256 `218b429263e6…` = the Desktop pkg. NOT notarized (Apple 403,
+  unchanged). No server change needed. Smoke: a Release archive of
+  `0112ed4` (the client is identical at `c179cfe` — only check rows
+  changed) in a real AAC session against the origin — clean starts /
+  ends, the Cmd-Q confirm inside the lock → Quit, Resume, hand-in, scores
+  stored (`client/MANUAL-CHECKS.md` v1.6.2 "Real AAC" rows, both in part:
+  stderr not captured from a Finder launch; the End-secure-session confirm
+  path not run in a real session, passed under simulated lockdown).
+
 - **v1.6.1 — 2026-10-08** (built from `703a18f2914`, tag on `main`): SS-1
   (secure-start backstop 60 s with a "Still starting the secure session…"
   notice after 20 s — a student's Mac began its session after ~36 s and was
