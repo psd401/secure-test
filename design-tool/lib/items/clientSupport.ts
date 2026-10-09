@@ -1,4 +1,4 @@
-// FB slice 6 (docs/fill-in-blank-design.md, D-4): the oldest Secure Test
+// FB slice 6 (docs/fill-in-blank-design.md, D-4): the oldest SecureTest
 // client that can render each item type. A client decodes a bundle as a
 // whole, and an item type it does not know fails the WHOLE decode — the
 // student sees "This test could not be opened" for a test with one new

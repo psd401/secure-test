@@ -104,7 +104,7 @@ describe("POST /api/feedback", () => {
     expect(stored[0]!.user_agent).toBe("TestAgent/1.0");
 
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]!.subject).toBe("[secure-test] Feedback from staff");
+    expect(notifications[0]!.subject).toBe("[SecureTest] Feedback from staff");
     expect(notifications[0]!.body).toContain(TEACHER_EMAIL);
     expect(notifications[0]!.body).toContain("/dashboard/abc");
     expect(notifications[0]!.body).toContain("The publish button did nothing.");

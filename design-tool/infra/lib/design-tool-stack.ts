@@ -232,7 +232,7 @@ export class DesignToolStack extends cdk.Stack {
     }
     const notifyTopic = new sns.Topic(this, "NotifyTopic", {
       topicName: `secure-test-notify-${envName}`,
-      displayName: "Secure Test alerts",
+      displayName: "SecureTest alerts",
     });
     notifyTopic.addSubscription(
       new snsSubscriptions.EmailSubscription(props.notifyEmail),

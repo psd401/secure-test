@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FeedbackDialog } from "@/components/app/FeedbackDialog";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 /**
@@ -94,7 +95,7 @@ export function AppHeader({
             height={28}
             priority
           />
-          Secure-Test
+          {PRODUCT_NAME}
         </Link>
         <nav aria-label="Primary">
           <ul className="flex gap-6">

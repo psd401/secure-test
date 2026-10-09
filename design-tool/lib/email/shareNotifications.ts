@@ -3,6 +3,7 @@
 // no assessment content. Sending is best effort: a failure is logged and never
 // fails the share or grant that triggered it.
 import { log, truncate } from "@/lib/log";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { getEmailSender } from "./provider";
 import type { EmailMessage } from "./types";
 
@@ -25,10 +26,10 @@ export function buildShareEmail(input: ShareEmailInput): EmailMessage {
       replyTo: who,
       subject: `${who} shared "${name}" with you`,
       text: [
-        `${who} shared the assessment "${name}" with you in Secure Test.`,
+        `${who} shared the assessment "${name}" with you in ${PRODUCT_NAME}.`,
         "",
         "Adding it gives you your own copy to edit; it does not change theirs.",
-        `Open Secure Test to add it: ${input.link}`,
+        `Open ${PRODUCT_NAME} to add it: ${input.link}`,
         "",
         `Reply to this email to reach ${who}.`,
       ].join("\n"),
@@ -39,7 +40,7 @@ export function buildShareEmail(input: ShareEmailInput): EmailMessage {
     replyTo: who,
     subject: `${who} added you as a co-teacher on "${name}"`,
     text: [
-      `${who} added you as a co-teacher on the assessment "${name}" in Secure Test.`,
+      `${who} added you as a co-teacher on the assessment "${name}" in ${PRODUCT_NAME}.`,
       "",
       "You can edit it with them, run test sessions for your own sections, and see every result.",
       `Open it: ${input.link}`,

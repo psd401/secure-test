@@ -346,7 +346,7 @@ say("due date", due);
 const MAX = 10;
 const createBody = payloads.buildAssignmentCreateBody({
   sectionDcid: sectionDcid!,
-  name: `Secure Test check ${record.run_on}`,
+  name: `SecureTest check ${record.run_on}`,
   dueDate: due,
   maxPoints: MAX,
   categoryId: category.id,

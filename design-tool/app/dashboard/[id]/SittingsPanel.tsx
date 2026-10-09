@@ -52,6 +52,7 @@ import {
 } from "@/components/app/StatusBadge";
 import { ApiError, attemptDeleteErrorCopy, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt, formatDate, formatWhen } from "@/lib/ui/format";
+import { PRODUCT_NAME } from "@/lib/brand";
 import {
   LIVE_INTERVAL_MS,
   ago,
@@ -795,7 +796,7 @@ export function SittingsPanel({
               showArchived
                 ? undefined
                 : isPublished
-                  ? "Start one above. Students open Secure Test and enter the code you read out."
+                  ? `Start one above. Students open ${PRODUCT_NAME} and enter the code you read out.`
                   : "Publish the assessment, then start a session — students join with a code you read out."
             }
           />

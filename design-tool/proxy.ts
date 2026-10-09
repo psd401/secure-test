@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { isStaff } from "@/lib/auth/roles";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/observability/requestId";
 
 // Access slice 5: `/admin` joins the dashboard at the edge so a signed-out
@@ -97,7 +98,7 @@ export function misconfiguredPage(requestId: string): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Secure-Test is not available</title>
+<title>${PRODUCT_NAME} is not available</title>
 <style>
   body { margin:0; font: 16px/1.5 system-ui, sans-serif; color:#1c2b33; background:#f4f6f7; }
   main { max-width: 34rem; margin: 4rem auto; padding: 0 1.5rem; }
@@ -107,7 +108,7 @@ export function misconfiguredPage(requestId: string): string {
   code { font-size:.8rem; color:#5a6b75; }
 </style></head>
 <body><main><div class="alert">
-<h1>Secure-Test can&rsquo;t start.</h1>
+<h1>${PRODUCT_NAME} can&rsquo;t start.</h1>
 <p>The server is missing part of its configuration. Nothing you did caused
 this, and trying again will not help until IT has looked at it.</p>
 <p><code>ref ${requestId}</code></p>

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { inter, josefinSans } from "./fonts";
+import { PRODUCT_NAME } from "@/lib/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Secure-Test", template: "%s · Secure-Test" },
+  title: { default: PRODUCT_NAME, template: `%s · ${PRODUCT_NAME}` },
   description: "PSD assessment authoring interface",
 };
 

@@ -6,6 +6,7 @@ import { OBSERVABILITY_TEXT_MAX, feedback } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { getNotifyPublisher } from "@/lib/notify/provider";
 import { log, truncate } from "@/lib/log";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 /**
  * Batch 3 slice 3 (docs/observability-design.md): "Send feedback" from the
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
 
   const [inserted] = await getDb().insert(feedback).values(row).returning({ id: feedback.id });
 
-  const subject = `[secure-test] Feedback from ${row.role}`;
+  const subject = `[${PRODUCT_NAME}] Feedback from ${row.role}`;
   const body = [
     `Who: ${row.email}`,
     `Where: ${row.path}`,

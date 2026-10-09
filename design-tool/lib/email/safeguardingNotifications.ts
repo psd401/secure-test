@@ -14,6 +14,7 @@ import { assessments, attempts, test_sessions, type SafeguardingAlertKind } from
 import { log, truncate } from "@/lib/log";
 import { ALERT_DISCLAIMER } from "@/lib/safeguarding/alertView";
 import { assessmentOwner } from "@/lib/scoring/results";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { getEmailSender } from "./provider";
 import type { EmailMessage } from "./types";
 
@@ -46,7 +47,7 @@ export function buildSafeguardingEmail(input: SafeguardingEmailInput): EmailMess
     cc: input.cc.length > 0 ? input.cc : undefined,
     subject: `A response on "${name}" needs your attention`,
     text: [
-      `A student's answer on "${name}" in Secure Test was flagged by the automated check:`,
+      `A student's answer on "${name}" in ${PRODUCT_NAME} was flagged by the automated check:`,
       "",
       ...kinds.map((k) => `- ${KIND_LINES[k]}`),
       "",

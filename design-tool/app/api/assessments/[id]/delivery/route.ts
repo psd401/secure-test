@@ -129,7 +129,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     // FB slice 6 (docs/fill-in-blank-design.md, D-4): a bundle carrying an
     // item type this client cannot render would fail its whole decode, so
     // refuse it here — before begin(), nothing locks. v1.6.0+ maps the code to
-    // "update Secure Test in Self Service"; older clients show their generic
+    // "update SecureTest in Self Service"; older clients show their generic
     // "could not be opened … tell your teacher".
     const minVersion = requiredClientUpgrade(
       req.headers.get(CLIENT_VERSION_HEADER),

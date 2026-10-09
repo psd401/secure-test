@@ -20,16 +20,20 @@ import {
 } from "@/lib/googleDocs/content";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 // Row GD slice 3 (docs/google-docs-release-design.md): one Google Doc per
 // student per assessment (D-10), holding every essay, in the sender's Drive
-// under secure-test / <assessment> / <section> (D-4), shared with the student
+// under SecureTest / <assessment> / <section> (D-4), shared with the student
 // as editor (D-1). Skips are decided before anything touches Drive, so a send
 // where everyone is skipped creates no folders.
 
 type Db = ReturnType<typeof getDb>;
 
-export const ROOT_FOLDER_NAME = "secure-test";
+// Row NM (3.1): a teacher's first send (or one whose root was deleted in
+// Drive) makes the folder under the product name; an existing root is found
+// by its stored id and keeps its old name.
+export const ROOT_FOLDER_NAME = PRODUCT_NAME;
 export const NO_SECTION_FOLDER_NAME = "No section";
 const CONCURRENCY = 3;
 
@@ -268,7 +272,7 @@ export async function releaseToGoogleDocs(
   }
   if (toSend.length === 0) return { ok: true, outcomes, drive_auth_needed: false };
 
-  // ── Folders: secure-test / <assessment> / <section>, made once per send.
+  // ── Folders: SecureTest / <assessment> / <section>, made once per send.
   let authLost = false;
   const sectionFolders = new Map<string, string>();
   let assessmentFolder: string;

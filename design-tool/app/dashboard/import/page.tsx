@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ItemBundleSchema } from "@secure-test/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { normalizeEmail } from "@/lib/roster/queries";
 import {
   importBundleForOwner,
@@ -82,7 +83,7 @@ export default async function ImportPage({ searchParams }: ImportPageProps) {
       <PageHeader
         crumbs={[{ label: "Assessments", href: "/dashboard" }]}
         title="Import assessment file"
-        description="Bring in an assessment exported from Secure-Test (.json). Its questions and images come along, and the copy is yours to edit."
+        description={`Bring in an assessment exported from ${PRODUCT_NAME} (.json). Its questions and images come along, and the copy is yours to edit.`}
       />
 
       {copy ? (

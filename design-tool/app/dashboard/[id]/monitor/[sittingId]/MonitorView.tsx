@@ -64,6 +64,7 @@ import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { ViewScreenDialog } from "@/components/app/ViewScreenDialog";
 import { ApiError, sessionErrorCopy } from "@/lib/ui/errorCopy";
 import { closesAt } from "@/lib/ui/format";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import {
   LIVE_INTERVAL_MS,
@@ -435,7 +436,7 @@ export function MonitorView({
           title="No one has joined yet"
           description={
             <>
-              Open to {scopeLabel}. Students open Secure Test, sign in, and
+              Open to {scopeLabel}. Students open {PRODUCT_NAME}, sign in, and
               enter code{" "}
               <span className="font-mono font-semibold tracking-widest">
                 {code}

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { PRODUCT_NAME } from "@/lib/brand";
 
 /**
  * UX pass 1, slice 6 (SM-03): the projector view. Nothing on it but the
@@ -35,7 +36,7 @@ export function ShowCodeDialog({
           {code}
         </p>
         <p className="max-w-3xl text-center text-2xl text-band-foreground/85 md:text-3xl">
-          Open Secure Test, sign in with your school Google account, and enter this code.
+          Open {PRODUCT_NAME}, sign in with your school Google account, and enter this code.
         </p>
         <Button
           type="button"

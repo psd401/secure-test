@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { authErrorCopy } from "@/lib/ui/errorCopy";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -59,7 +60,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             priority
           />
           <div>
-            <h1 className="text-2xl font-semibold">Sign in to Secure-Test</h1>
+            <h1 className="text-2xl font-semibold">Sign in to {PRODUCT_NAME}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Peninsula School District staff.
             </p>
@@ -97,7 +98,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </CardContent>
       </Card>
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        New here? <a href="/help.html" className="underline underline-offset-2">How Secure Test works</a>
+        New here? <a href="/help.html" className="underline underline-offset-2">How {PRODUCT_NAME} works</a>
       </p>
     </main>
   );

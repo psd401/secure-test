@@ -1,6 +1,7 @@
 "use client";
 
 import type { FillBlankBlank, FillBlankDropdown, FillBlankText } from "@secure-test/schema";
+import { PRODUCT_NAME } from "@/lib/brand";
 import {
   MAX_BLANKS,
   MAX_KEYS,
@@ -110,7 +111,7 @@ export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled, hand
           refuses a test with this type to an older client, so say so where
           the teacher adds one. */}
       <p className="text-xs text-muted-foreground">
-        Students need Secure Test 1.6 or later for this question type. An older version asks them to
+        Students need {PRODUCT_NAME} 1.6 or later for this question type. An older version asks them to
         update it in Self Service.
       </p>
 

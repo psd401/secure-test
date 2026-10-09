@@ -7,6 +7,8 @@
  * proxy.ts). Later slices add the API codes as their screens are reworked.
  */
 
+import { PRODUCT_NAME } from "@/lib/brand";
+
 export interface ErrorCopy {
   /** The sentence shown to the teacher. */
   message: string;
@@ -84,12 +86,12 @@ export function importErrorCopy(code: string): ErrorCopy {
       };
     case "invalid_json":
       return {
-        message: "That isn't a Secure-Test assessment file (.json).",
+        message: `That isn't a ${PRODUCT_NAME} assessment file (.json).`,
         showCode: false,
       };
     case "schema_invalid":
       return {
-        message: "That file isn't in the Secure-Test assessment format.",
+        message: `That file isn't in the ${PRODUCT_NAME} assessment format.`,
         showCode: true,
       };
     case "asset_content_type_not_allowed":
