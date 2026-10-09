@@ -75,7 +75,7 @@ on a zip of the app, `stapler staple`, `pkgbuild --root <payload>
 --identifier net.psd401.securetest.client --version <v> --install-location /
 --sign "Developer ID Installer: …"`, notarize + staple the pkg,
 `pkgutil --check-signature`. Step 9 prints the `gh release create v<v>
-<pkg> --repo psd401/secure-test --title "Secure Test v<v>" --notes-file …`
+<pkg> --repo psd401/secure-test --title "SecureTest v<v>" --notes-file …`
 command for the maintainer to run (the session's classifier denies it),
 then verifies `/releases/latest/download/` redirects to the NEW tag. Step
 10 appends the entry below.
@@ -140,7 +140,8 @@ launch), falling back to launch arguments and then the environment when no
 profile is installed — and a Finder or Jamf launch supplies neither argument
 nor environment. There is no longer a localhost fallback (v1.2.0 shipped one
 and district Macs came up with a blank card, 2026-09-11); an unconfigured Mac
-now shows "This Mac isn't set up for Secure Test yet."
+now shows "This Mac isn't set up for SecureTest yet." (builds before Row NM
+slice 3 say "Secure Test")
 
 Deploy a `com.apple.ManagedClient.preferences` profile alongside the pkg —
 `client/config-profile.example.mobileconfig` is the skeleton:

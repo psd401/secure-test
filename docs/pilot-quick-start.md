@@ -1,4 +1,4 @@
-# Secure Test — open-beta quick-start
+# SecureTest — open-beta quick-start
 
 For the teachers and students in the open beta (a whole school, following
 the first classroom pilot of 2026-09-17 on **2026 AP Seminar EOC B v2**). One page each: what to do, in the order you do it, and the
@@ -35,7 +35,7 @@ time) and its rubric is attached.
    PDF* inside an assessment to read a paper test (it proposes questions and
    sources for you to accept); *Import assessment file* on the home page to
    load a `.json` a colleague shared. Question types include **Fill in the
-   blank** (dropdown or typed blanks inside a sentence; needs Secure Test
+   blank** (dropdown or typed blanks inside a sentence; needs SecureTest
    1.6.0 or later on the student's Mac). An essay can **Let students format
    their answer** (bold, italic, underline, lists, first-line indent).
 2. **Reading layout.** For a passage or sources shared by several questions,
@@ -84,12 +84,12 @@ time) and its rubric is attached.
 ## Teacher — practise on your own Mac
 
 Sit your own test exactly as a student will, locked down, before your class
-does. **Needs Secure Test on your own Mac** — district IT is adding teacher
+does. **Needs SecureTest on your own Mac** — district IT is adding teacher
 Macs; until yours has it, this button has nothing to open.
 
 1. Open a **Published** assessment → **Test sessions** → **Practice on my
    Mac**. A practice session opens for the rest of the day, for you alone.
-2. Open **Secure Test** on your Mac and sign in with your school Google
+2. Open **SecureTest** on your Mac and sign in with your school Google
    account. The test is under **Your tests** (the session code works too).
    It is the real thing: full screen, locked, the same exits, time limit,
    paging and hand-in your students get.
@@ -99,7 +99,7 @@ Macs; until yours has it, this button has nothing to open.
 
 Practice never shows up in your results, Monitor, scoring queue, Students
 page or printouts, and nobody else sees it. It is deleted a week after the
-practice session ends. Until your Mac has the next Secure Test update, the
+practice session ends. Until your Mac has the next SecureTest update, the
 test's label under Your tests reads like a class test; nothing else differs.
 
 ## Three clocks — what actually ends a student's test
@@ -120,7 +120,7 @@ their work.
    they are done. Choose **No time limit** in the same dialog to take the
    limit away — from the header it also covers anyone who joins that
    session later; tick students on the Monitor and use **Adjust time for
-   selected** for just those. On Secure Test 1.3.5 or later, a student
+   selected** for just those. On SecureTest 1.3.5 or later, a student
    already in the test sees their countdown disappear within a few seconds,
    with a notice; on older versions it keeps counting until they leave and
    **Resume** (at zero the Mac ends the session as usual and they resume
@@ -147,7 +147,7 @@ minutes late is returned to Your tests when the session ends at minute 55;
 press **Hand in** on their row to finalise, or open another session and they
 continue where they left off.
 
-**Macs still on client v1.3.2** (About Secure Test shows the version; the
+**Macs still on client v1.3.2** (About SecureTest shows the version; the
 fleet updates to v1.3.3 on its own): the screen keeps going after Close, but
 nothing the student does after that is accepted. Say "Finish and hand in"
 before you close, or rely on the 55-minute limit, which ends the session on
@@ -229,7 +229,7 @@ its own.
 
 ## Student
 
-1. Open **Secure Test** from Applications (or the Dock). Press **Sign in
+1. Open **SecureTest** from Applications (or the Dock). Press **Sign in
    with Google** and sign in with your school account. You sign in every
    time the app opens.
 2. **Your tests** lists what is open for you right now. Press **Join**. If
@@ -273,7 +273,7 @@ its own.
   tests — it usually works within a few tries. If it keeps failing,
   restart the Mac. Answers already saved are kept.
 - **A student is still working after I closed the session.** Their Mac is
-  on client v1.3.2 (About Secure Test). Nothing they type after Close is
+  on client v1.3.2 (About SecureTest). Nothing they type after Close is
   accepted; press **Hand in** on their row. On v1.3.3 the Mac returns them
   to Your tests within a few seconds of Close (clock 2).
 - **A student's row still says In progress after I closed the session.**
@@ -309,7 +309,7 @@ its own.
   ran out ("Time is up." on the student's screen, answers kept), the
   session was closed or ran out ("Your teacher ended the test session."),
   or the Mac is still on client v1.3.1, which ends every session after
-  ten minutes. About Secure Test shows the version; v1.3.2 fixes it and
+  ten minutes. About SecureTest shows the version; v1.3.2 fixes it and
   the fleet updates on its own a few times a day.
 - **Sources appear above the question, not beside it.** The assessment's
   Settings is *One scrolling page*, or the stimulus layout is not *Side by
@@ -319,10 +319,10 @@ its own.
 - **"No tests assigned right now."** No session is open for a section the
   student is enrolled in today. Read them the Session code.
 - **"This test could not be opened. Could not join." on a fill-in-the-blank
-  test.** The student's Secure Test is older than 1.6.0. It updates on its
+  test.** The student's SecureTest is older than 1.6.0. It updates on its
   own, usually by the next day, or from Self Service; other tests still
   open.
-- **"This Mac isn't set up for Secure Test yet."** The configuration
+- **"This Mac isn't set up for SecureTest yet."** The configuration
   profile hasn't reached that Mac. IT, not the teacher.
 - **Wi-Fi drops mid-test.** Answers are stored on the Mac and sent when the
   connection returns; hand in again if the first attempt reports a

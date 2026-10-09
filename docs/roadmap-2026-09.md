@@ -1073,9 +1073,20 @@ never renamed (convention in `CLAUDE.md` "Naming").
   setting (display name + both permission prompts) + a Core drift test;
   rides the NEXT client release (3.3). Until AutoPkg delivers it, the
   website says SecureTest and installed clients say "Secure Test".
+  BUILT 2026-10-09: `Brand.swift`, `PRODUCT_DISPLAY_NAME = SecureTest` in
+  both app configs (display name + both usage descriptions read it; built
+  Info.plist checked for Debug + Release), `BrandTests` (setting = constant;
+  no old form in `SecureTest/`, Core `Sources/`, the pbxproj, the example
+  profile). Rows in `client/MANUAL-CHECKS.md` "One product name" NOT RUN.
+  The update-required copy now says "update SecureTest" in Self Service —
+  matches only once IT renames the listing.
 - Slice 4 — living docs only (quick start, RELEASING, client-release plan,
   README) + the psd-sign release-notes template; dated records untouched
-  (3.4).
+  (3.4). BUILT 2026-10-09: the quick start (12), RELEASING's release title
+  `SecureTest v<v>` and its not-set-up quote; the client-release plan's
+  mention is a dated slice record and stays; the repo has no README naming
+  it. The psd-sign skill takes the release title from RELEASING; its one
+  present-tense mention was edited (the skill lives outside the repo).
 - Outside the repo, for a batched IT ask: the Self Service listing name and
   the real configuration profile's display name.
 
