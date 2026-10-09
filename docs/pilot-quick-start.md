@@ -219,6 +219,10 @@ its own.
   be uploaded on the question (PDF, Word, Markdown or plain text); with a rubric, *Score
   with AI* proposes a score and feedback you approve or change. Nothing
   reaches the student until you approve it.
+- **Fixed an answer key after students handed in?** Save the question,
+  then press **Rescore with current key** on Results. Scores you set by
+  hand stay; the old scores stay on each student's page. If the class was
+  already sent to PowerSchool, **Send again**.
 - A student's row can be **deleted** (per-student results page or the
   Monitor) once the session is closed, for a false start. There is no
   undo.
@@ -330,6 +334,5 @@ its own.
 
 - Sending scores to Schoology (PowerSchool is available; a CSV works for
   anything else).
-- Rescoring already-scored answers after an answer key changes.
 - Handwriting or drawn math recognition (a keypad is available on short
   answers whose question contains math).

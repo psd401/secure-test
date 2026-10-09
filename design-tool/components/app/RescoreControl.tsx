@@ -144,7 +144,7 @@ export function RescoreControl({
         {rescoreButtonLabel(studentsChanged)}
       </Button>
       {done ? (
-        <p role="status" className="basis-full text-sm text-muted-foreground">
+        <p role="status" className="order-last basis-full text-sm text-muted-foreground">
           {doneLine(done)}
           {sentLine ? <span className="ml-1 text-foreground">{sentLine}</span> : null}
         </p>

@@ -208,3 +208,12 @@ Design-tool only. No client release, no migration.
   `lib/scoring/rescoreDialog.ts`, `test/rescore-dialog.test.ts` 7 tests;
   `loadSendDialogSections`' new count has no DB test (hand-run row).
   NOT checked in a browser yet — slice 3's rows.
+- 2026-10-08 — **slice 3 DONE**: rows 557–567 in
+  `docs/design-tool-manual-checks.md` (557–564 ✅ on `_demo` in Chrome;
+  565 origin and 566 second account not run; 567 ✅ locally). One finding
+  fixed in the run: the result line split the toolbar (the Send button
+  wrapped onto its own row) — `order-last` puts it under every button.
+  Help topic 8 "Fixed an answer key after students handed in" + FAQ
+  entry, quick start bullet (and the "Not in this open beta" line
+  removed), `/roadmap.html` 2026-10-08 milestone. Fixture
+  `Rescore hand-run 2026-10-08` stays on `_demo`.

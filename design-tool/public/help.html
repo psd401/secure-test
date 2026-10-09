@@ -411,6 +411,13 @@
           <figcaption>The scoring queue, with an AI proposal to review.</figcaption>
         </figure>
       </div>
+      <h3 class="sub">Fixed an answer key after students handed in</h3>
+      <ol class="steps">
+        <li>Fix the key on the question and press <b class="ui">Save question</b>. Questions with keys are scored when each student hands in, so work already handed in still has the old scores.</li>
+        <li>Open <b class="ui">Results</b>. <b class="ui">Rescore with current key</b> shows how many students' scores the saved keys would change; it is greyed out when every answer already matches.</li>
+        <li>Press it to see each question that changes, then <b class="ui">Rescore</b>. The earlier scores stay on each student's page under <b class="ui">Earlier scores</b>.</li>
+      </ol>
+      <p class="note">A score you set yourself, or an AI score you approved, is never changed by a rescore. If the class was already sent to PowerSchool, press <b class="ui">Send again</b> to update the changed scores. Students who saw instant feedback at hand-in saw the old score.</p>
       <h3 class="sub">Instant feedback when students hand in</h3>
       <ol class="steps">
         <li>On the <b class="ui">Settings</b> tab, choose <b class="ui">Instant feedback at hand-in</b>. <b class="ui">Score only</b> shows the points on the questions scored right away. <b class="ui">Right / wrong</b> adds a ✓ or ✗ for each question with the student's own answer. <b class="ui">Correct answers</b> also shows the right answer for each question they missed. <b class="ui">Off</b> shows nothing.</li>
@@ -501,6 +508,8 @@
         <dd>One with the same students is still open, and its code is shown. Use that one, or close it on the <b class="ui">Test sessions</b> tab and start again.</dd>
         <dt>A student deleted their essay by accident.</dt>
         <dd>Open the student from <b class="ui">Results</b>, find <b class="ui">Earlier versions</b> under the essay, and press <b class="ui">Restore this version</b> on the last full one. If the session is still open, close it first. See <a href="#results">Results and printing</a>.</dd>
+        <dt>I fixed an answer key, but the students' scores didn't change.</dt>
+        <dd>Scores are set when each student hands in. Open <b class="ui">Results</b> and press <b class="ui">Rescore with current key</b>. If it is greyed out, the fix may not be saved — press <b class="ui">Save question</b> on that question first. See <a href="#score">Score and give feedback</a>.</dd>
         <dt>A student keeps getting "Time is up." when they press Resume.</dt>
         <dd>Their time ran out, or a deadline you set with Adjust time has passed. Open <b class="ui">Adjust time</b> on their row and choose <b class="ui">No time limit</b> or a later time.</dd>
         <dt>A student's accommodation from the Students page didn't show up in the test.</dt>

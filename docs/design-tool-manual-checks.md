@@ -1605,3 +1605,21 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 554 | The teacher's booklet with Bedrock | 6 figures, every one "Used with" an item (5, 6, 8, 10, 14, 15), each card "paired by position, please check"; the pairs match the question text; the page-4 figure has a picture | ✅ 2026-10-08 |
 | 555 | `/help.html#import` and the FAQ; the Images page subtitle; `/roadmap.html` | The figures step, the "maps and charts show at the top" entry, "Image…", the 2026-10-08 milestone | NOT RUN (static pages, checked in the diff) |
 | 556 | The same booklet on the origin after the deploy | As row 554; the production log carries no `could not be rendered` line | ✅ 2026-10-08 (James): all six figures attached and right in the preview; two imports at 09:13 / 09:16 PT, `ai_usage` only — no `pdf-import:` warning, no error line |
+
+## Rescore with the current key (E11, 2026-10-08)
+
+`docs/rescore-after-key-change-design.md` is the record (D-1…D-4). Local dev on `_demo` with `GRADEBOOK_PROVIDER=mock`, Claude in Chrome as the demo teacher. Fixture `Rescore hand-run 2026-10-08` (Published, built by SQL): Q1 multiple choice keyed to the WRONG choice ("Nucleus"), Q2 short text keyed "7"; four handed-in Biology · 3(A) students, auto-scored against the wrong key; one of them (Q1, "Nucleus") already given 1/1 by hand; a synthetic earlier PowerSchool push of every total.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 557 | Results before any key change | "Rescore with current key (0)", greyed out; hover reads "Every handed-in answer matches the current keys" | ✅ 2026-10-08 |
+| 558 | Editor: mark "Mitochondrion" correct on Q1, **Save question** | "Saved"; under it "If students already handed this in, their scores used the old key. Rescore from Results" with a link | ✅ 2026-10-08 |
+| 559 | Follow the link | Results reads "Rescore with current key (3)" | ✅ 2026-10-08 |
+| 560 | Press it | Dialog: "Rescoring changes 3 students' scores … 1 score you set yourself stays as it is …" and "Q1 — 3 answers change · 1 score you set stays"; Cancel / Rescore | ✅ 2026-10-08 |
+| 561 | **Rescore** | Page reloads; Q1 column now scored by the fixed key for the three; the hand-set 1/1 untouched; button "(0)"; under the toolbar "Rescored 3 students · <time>. Biology · 3(A) was already sent to PowerSchool — send it again to update." | ✅ 2026-10-08 — first pass the line split the toolbar (Send button on its own row), fixed (`order-last`) and re-checked on a second rescore |
+| 562 | Reload Results | The rescore line is gone (shown once) | ✅ 2026-10-08 |
+| 563 | **Send again** (open the dialog, Cancel) | "Already sent on Oct 8, 2026 · 3 scores have changed since then." | ✅ 2026-10-08 (not sent: the push is synthetic) |
+| 564 | A changed student's page | Q1 shows the new score; Earlier scores "Q1: 1 / 1 (auto-scored) · <time> · rescored with the updated key to 0"; timeline "Rescored with the updated key <time> · 1 → 0 of 1" | ✅ 2026-10-08 |
+| 565 | The same flow on the origin after the deploy, on a scratch assessment | As 557–564 (Send dialog only if PowerSchool was used) | NOT RUN |
+| 566 | A co-teacher at view level / another teacher | No button; the route answers 404 | NOT RUN (second staff account; the 404 is covered by `test/rescore.test.ts`) |
+| 567 | `/help.html#score`, the FAQ entry, the quick start, `/roadmap.html` | "Fixed an answer key after students handed in", the FAQ entry, the 2026-10-08 milestone | ✅ 2026-10-08 on local dev (help sub-topic + FAQ entry render; roadmap milestone renders); quick start checked in the diff |
