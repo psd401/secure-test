@@ -78,7 +78,7 @@ a question for the feedback round, not a backlog item.
   keys only; digits, letters and `+ − = /` come from the keyboard. Ask
   students whether they reached for on-screen digits (touch / motor needs)
   and teachers whether any student needed them.
-- **E11 rescoring after a key change** — waits for teacher input (above).
+- **E11 rescoring after a key change** — teacher input arrived 2026-10-08 (open beta: a wrong MC key fixed after hand-in); SCOPED as a per-item "Rescore with the current key" button, D-1…D-3 decided, nothing built — `docs/rescore-after-key-change-design.md`.
 - **Gradebook CSV shape** (D-R3) — waits for sample PowerTeacher Pro /
   Schoology exports.
 
