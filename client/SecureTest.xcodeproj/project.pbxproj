@@ -310,10 +310,10 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
+				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "$(PRODUCT_DISPLAY_NAME) uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "$(PRODUCT_DISPLAY_NAME) uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -334,6 +334,10 @@
 				     codesign -d --entitlements - <built .app>
 				   must show the AAC key AND all three sandbox keys. */
 				PRODUCT_BUNDLE_IDENTIFIER = net.psd401.securetest.client;
+				/* Row NM: the name a student reads (Dock, menu bar, permission
+				   prompts). Must equal SecureTestCore Brand.productName — BrandTests
+				   checks. PRODUCT_NAME stays the identifier (SecureTest.app). */
+				PRODUCT_DISPLAY_NAME = SecureTest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -384,10 +388,10 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Secure Test";
+				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_DISPLAY_NAME)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Secure Test uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "$(PRODUCT_DISPLAY_NAME) uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "$(PRODUCT_DISPLAY_NAME) uses the microphone only when your teacher has turned on speech-to-text for you. Your voice stays on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -408,6 +412,10 @@
 				     codesign -d --entitlements - <built .app>
 				   must show the AAC key AND all three sandbox keys. */
 				PRODUCT_BUNDLE_IDENTIFIER = net.psd401.securetest.client;
+				/* Row NM: the name a student reads (Dock, menu bar, permission
+				   prompts). Must equal SecureTestCore Brand.productName — BrandTests
+				   checks. PRODUCT_NAME stays the identifier (SecureTest.app). */
+				PRODUCT_DISPLAY_NAME = SecureTest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

@@ -14,7 +14,7 @@ public enum ExitConfirmation {
     public enum Kind: Sendable, Equatable {
         /// The titlebar button and Session → End Secure Session (Cmd-E).
         case endSession
-        /// Secure Test → Quit (Cmd-Q) and the window's close button.
+        /// SecureTest → Quit (Cmd-Q) and the window's close button.
         case quit
     }
 
@@ -33,7 +33,7 @@ public enum ExitConfirmation {
     public static func messageText(_ kind: Kind) -> String {
         switch kind {
         case .endSession: return "End the secure session?"
-        case .quit: return "Quit Secure Test?"
+        case .quit: return "Quit \(Brand.productName)?"
         }
     }
 

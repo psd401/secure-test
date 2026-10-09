@@ -217,7 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Secure Test"
+        window.title = Brand.productName
         // Field report 2026-10-08 (6.3): the close button asks first during a
         // test, like Cmd-Q — `windowShouldClose` below.
         window.delegate = self
@@ -1651,7 +1651,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// only repeat `CURRENT_PROJECT_VERSION`.
     @objc private func showAboutPanel() {
         NSApp.orderFrontStandardAboutPanel(options: [
-            .applicationName: "Secure Test",
+            .applicationName: Brand.productName,
             .applicationVersion: AppVersion.buildStamp,
             .version: "",
         ])
@@ -1677,14 +1677,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // "1.0.0 (<git sha>)" — the sha is what an error report or a hand-run
         // row needs to name the exact binary (client-release-plan.md slice 1).
         let about = appMenu.addItem(
-            withTitle: "About Secure Test",
+            withTitle: "About \(Brand.productName)",
             action: #selector(showAboutPanel),
             keyEquivalent: ""
         )
         about.target = self
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit Secure Test",
+            withTitle: "Quit \(Brand.productName)",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )

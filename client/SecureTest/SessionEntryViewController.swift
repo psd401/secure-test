@@ -153,7 +153,7 @@ final class SessionEntryViewController: NSObject {
         // Josefin Sans is the PSD heading face but the app ships no font files
         // (the web page inlines its own); the system face at heading weight is
         // the AppKit stand-in, deliberately.
-        let wordmark = NSTextField(labelWithString: "Secure Test")
+        let wordmark = NSTextField(labelWithString: Brand.productName)
         wordmark.translatesAutoresizingMaskIntoConstraints = false
         wordmark.font = .systemFont(ofSize: 20, weight: .semibold)
         wordmark.textColor = PSDColor.skylight
@@ -264,13 +264,13 @@ final class SessionEntryViewController: NSObject {
         // has no server URL or no client id (managed-preference slice,
         // 2026-09-11). Warn rather than danger — nothing is broken, this Mac
         // just has not been set up yet — and word-wrapped inside the card.
-        setupLabel.stringValue = "This Mac isn't set up for Secure Test yet. Ask your teacher or IT for help."
+        setupLabel.stringValue = "This Mac isn't set up for \(Brand.productName) yet. Ask your teacher or IT for help."
         setupLabel.textColor = PSDColor.warn
         setupLabel.font = .systemFont(ofSize: 14, weight: .medium)
         setupLabel.maximumNumberOfLines = 3
         setupLabel.lineBreakMode = .byWordWrapping
         setupLabel.setAccessibilityRole(.staticText)
-        setupLabel.setAccessibilityLabel("This Mac isn't set up for Secure Test yet. Ask your teacher or IT for help.")
+        setupLabel.setAccessibilityLabel(setupLabel.stringValue)
         setupLabel.isHidden = true
 
         statusLabel.textColor = PSDColor.inkSoft

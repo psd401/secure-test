@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Secure Test — managed preferences (example)
+  SecureTest — managed preferences (example)
 
   The app reads two settings, in this order: launch arguments, then the
   environment, then the managed preferences below. A Finder or Jamf launch
   supplies neither argument nor environment, so on a district Mac THIS profile
   is the only thing that configures the app. Without it the app shows
-  "This Mac isn't set up for Secure Test yet." and nothing else — there is
+  "This Mac isn't set up for SecureTest yet." and nothing else — there is
   deliberately no fallback server.
 
     ServerURL       the design-tool origin the client talks to. Must be an
@@ -37,11 +37,11 @@
   <key>PayloadUUID</key>
   <string>&lt;profile-uuid&gt;</string>
   <key>PayloadDisplayName</key>
-  <string>Secure Test — settings</string>
+  <string>SecureTest — settings</string>
   <key>PayloadOrganization</key>
   <string>Peninsula School District</string>
   <key>PayloadDescription</key>
-  <string>Server origin and Google client id for the Secure Test student client.</string>
+  <string>Server origin and Google client id for the SecureTest student client.</string>
   <key>PayloadScope</key>
   <string>System</string>
   <key>PayloadContent</key>
@@ -56,7 +56,7 @@
       <key>PayloadUUID</key>
       <string>&lt;payload-uuid&gt;</string>
       <key>PayloadDisplayName</key>
-      <string>Secure Test preferences</string>
+      <string>SecureTest preferences</string>
       <key>PayloadContent</key>
       <dict>
         <key>net.psd401.securetest.client</key>

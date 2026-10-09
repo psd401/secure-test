@@ -236,7 +236,7 @@ final class JoinErrorMessageTests: XCTestCase {
     func testClientUpdateRequiredPointsAtSelfService() {
         let text = message("client_update_required")
         XCTAssertTrue(text.contains("Self Service"))
-        XCTAssertTrue(text.contains("newer version of Secure Test"))
+        XCTAssertTrue(text.contains("newer version of SecureTest"))
         XCTAssertNotEqual(text, message(nil))
     }
 

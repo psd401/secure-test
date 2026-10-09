@@ -2409,3 +2409,25 @@ context carries `slept_during_teardown`, `teardown_wall_s` and `woke_s_ago`
 | **Sleep is logged.** Simulated lockdown, in a test; Apple menu → Sleep; wake | stderr `mac going to sleep (lockdown active)` then `mac woke (lockdown active)` | NOT RUN |
 | **Exit report after a sleep.** `SECURE_TEST_SIMULATE_LOCKDOWN=hangs`, join, End session (the end never confirms), Sleep within 20 s, wake after a minute | The app exits on wake; next launch drains a `lockdown_unrecoverable` whose context has `slept_during_teardown: "true"`, `teardown_wall_s` ≈ the minute plus, `woke_s_ago` small | NOT RUN |
 | **Exit report without sleep.** Same, no sleep | Exit at 20 s; context `slept_during_teardown: "false"`, `teardown_wall_s` ≈ 20 | NOT RUN |
+
+## One product name: SecureTest (Row NM slice 3, next client release, 2026-10-09)
+
+The client's display name and every string a student reads come from
+`Brand.productName` (Core) and the `PRODUCT_DISPLAY_NAME` build setting
+(Info.plist display name + both permission prompts); `BrandTests` keeps the
+two equal. Identifiers are unchanged: `SecureTest.app`, the pkg, the bundle
+id, the managed-preferences domain. Already checked headlessly: `swift test`
+(BrandTests) and the built Info.plist of Debug + Release (display name and
+both usage descriptions read "SecureTest"). Debug build, simulated lockdown,
+except the last row.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Entry card.** Launch to Your tests | Wordmark "SecureTest"; window title "SecureTest" | NOT RUN |
+| **Menus.** App menu | "About SecureTest" → panel names "SecureTest" with the build stamp; "Quit SecureTest" | NOT RUN |
+| **Quit confirm.** In a test, Cmd-Q | Sheet "Quit SecureTest?" | NOT RUN |
+| **Not set up.** Launch with no server / client id (no profile, no env) | "This Mac isn't set up for SecureTest yet. Ask your teacher or IT for help." — VoiceOver reads the same | NOT RUN |
+| **Update required.** Join a test carrying an item type the server marks newer than this build (or a server forced to answer `client_update_required`) | "This test needs a newer version of SecureTest. Open Self Service, update SecureTest, then join again." | NOT RUN |
+| **Notice page.** Any in-page notice (e.g. a refused bundle) | Heading "SecureTest" | NOT RUN |
+| **Permission prompt.** A Mac that has never granted the microphone, a test with Speech-to-Text | The macOS prompt starts "SecureTest uses the microphone only when…" | NOT RUN |
+| **Finder / Dock (signed Release).** `/Applications` after the pkg installs; the Dock while running | "SecureTest" in both (was "Secure Test" in the Dock) | NOT RUN |

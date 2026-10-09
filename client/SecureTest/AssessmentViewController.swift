@@ -552,11 +552,11 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
 
     private static func noticePage(_ message: String, detail: String) -> String {
         PageShell.document(
-            title: "Secure Test",
+            title: Brand.productName,
             styles: [noticeStyles],
             body: """
             <div class="notice">
-              <h1>Secure Test</h1>
+              <h1>\(HTMLEscape.text(Brand.productName))</h1>
               <div class="notice-card">
                 <p class="notice-message">\(HTMLEscape.text(message))</p>
                 <p class="notice-detail">\(HTMLEscape.text(detail))</p>
