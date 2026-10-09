@@ -22,6 +22,7 @@ import {
 } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
+import { planRescore } from "@/lib/scoring/rescore";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
 // FINAL scores only. Proposed AI scores are deliberately excluded from
@@ -123,6 +124,10 @@ export interface AssessmentResults {
   // co-teacher's section, which the owner does not teach. Alphabetical. The
   // section filter offers these even before anyone in them has a row.
   sitting_sections: string[];
+  // E11 (docs/rescore-after-key-change-design.md, D-1): handed-in students
+  // whose score the SAVED keys would change — the "Rescore with current key
+  // (n)" count; 0 disables the button. Practice attempts never count.
+  rescore_students: number;
 }
 
 /** The section filter's options (the results matrix; the print report reads
@@ -445,6 +450,15 @@ export async function buildResults(
     scoreRows.filter((s) => s.status === "proposed").map((s) => s.response_id),
   );
 
+  const handedInIds = new Set(
+    attemptRows.filter((a) => a.status === "submitted" && !a.practice).map((a) => a.id),
+  );
+  const rescoreStudents = planRescore(
+    itemRows,
+    responseRows.filter((r) => handedInIds.has(r.attempt_id)),
+    finalByResponse,
+  ).students_changed;
+
   const rows: ResultsRow[] = submitted.map((attempt) => {
     const student = studentsById.get(attempt.student_id);
     const inProgress = attempt.status !== "submitted";
@@ -541,6 +555,7 @@ export async function buildResults(
     sitting_sections: [
       ...new Set((await sectionsNamedBySittings(db, assessmentId)).map(sectionLabel)),
     ].sort((a, b) => a.localeCompare(b)),
+    rescore_students: rescoreStudents,
   };
 }
 

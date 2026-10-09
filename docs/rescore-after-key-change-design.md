@@ -63,7 +63,7 @@ already):
 |---|---|
 | Final `auto`, new score differs | Supersede it, write a new `final` `auto` row |
 | Final `auto`, new score equal | Nothing (counted "unchanged") |
-| Final `human` / `ai` (D-2) | Nothing (counted "kept") |
+| Final `human` / `ai` (D-2) | Nothing (counted "kept" only when the new key scores it differently) |
 | No final, now scorable (was keyless) | Write a `final` `auto` row, as at hand-in |
 | No final, still unscorable | Nothing (counted "unscorable") |
 
@@ -177,3 +177,18 @@ Design-tool only. No client release, no migration.
 - 2026-10-08 — scoped; D-1…D-4 decided (6.1 / 6.2 answered by James:
   a test-level button on Results, active only when a key change would
   change a score).
+- 2026-10-08 — **slice 1 BUILT** (server): `lib/scoring/rescore.ts`
+  (`planRescore` pure, `loadRescorePlan`, `applyRescore` — re-plans
+  inside its transaction, so a Change between the dialog's dry run and
+  the confirm is kept), `POST /api/assessments/[id]/rescore`
+  (`dry_run`, edit level, 409 `nothing_to_rescore`, log line
+  `assessment_rescored`), `rescore_students` on `buildResults`, the
+  `rescored` cause + "rescored with the updated key to N" in Earlier
+  scores, timeline "Rescored with the updated key · 1 → 0 of 1" (and
+  "· scored 1 of 1" for a first score). Readings: a key CLEARED after
+  hand-in leaves the old scores standing (nothing to put in their
+  place); a rescore that scores a never-scored answer writes a
+  `score_changed` event with `from: null`; the print report counts a
+  rescore under "Score changed by teacher". `test/rescore.test.ts` 14
+  tests; the flip's `method = auto` guard inside the transaction is
+  not exercised by a test.

@@ -99,6 +99,12 @@ function lineText(event: TimelineEvent): string {
       // Gradebook push slice 4: PowerSchool is the only destination so far;
       // the points ride on `lineSuffix`.
       return event.detail?.target === "schoology" ? "Sent to Schoology" : "Sent to PowerSchool";
+    case "score_changed":
+      // E11 (docs/rescore-after-key-change-design.md): the same kind carries
+      // "Rescore with current key" as `detail.source = "rescore"`.
+      return event.detail?.source === "rescore"
+        ? "Rescored with the updated key"
+        : eventLabel(event.kind);
     case "lockdown_failed":
     case "lockdown_interrupted":
       // The monitor's words, deliberately shared rather than re-typed.
@@ -139,8 +145,12 @@ function lineSuffix(event: TimelineEvent): string {
     // without usable numbers gets the bare sentence.
     const from = finiteNumber(event.detail?.from);
     const to = finiteNumber(event.detail?.to);
-    if (from === null || to === null) return "";
     const max = finiteNumber(event.detail?.max);
+    // A rescore that scored a never-scored answer has no `from`.
+    if (from === null && to !== null && event.detail?.source === "rescore") {
+      return ` · scored ${to}${max === null ? "" : ` of ${max}`}`;
+    }
+    if (from === null || to === null) return "";
     return ` · ${from} → ${to}${max === null ? "" : ` of ${max}`}`;
   }
   if (event.kind === "feedback_shown") {

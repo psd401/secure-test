@@ -41,8 +41,8 @@ export interface SupersededScore {
   /** When the score was given (see the note above — NOT when it was superseded). */
   created_at: Date;
   /** Why the row stopped being the score. */
-  cause: "pass_back" | "changed" | "restored";
-  /** The score that replaced this one, present only when `cause` is "changed". */
+  cause: "pass_back" | "changed" | "rescored" | "restored";
+  /** The score that replaced this one, present when `cause` is "changed" or "rescored". */
   replaced_by?: { points: number; note?: string; created_at: Date };
 }
 
@@ -53,6 +53,15 @@ function changedFromId(rationale: unknown): string | null {
   if (!from || typeof from !== "object") return null;
   const id = (from as { score_id?: unknown }).score_id;
   return typeof id === "string" ? id : null;
+}
+
+/** True when the row was written by "Rescore with current key" (E11). */
+function isRescored(rationale: unknown): boolean {
+  return (
+    !!rationale &&
+    typeof rationale === "object" &&
+    (rationale as { rescored?: unknown }).rescored === true
+  );
 }
 
 function noteOf(rationale: unknown): string | undefined {
@@ -141,7 +150,15 @@ export async function listSupersededScores(
         method: row.method,
         scorer: row.scorer,
         created_at: row.created_at,
-        cause: next ? "changed" : setAsideByRestore.has(row.id) ? "restored" : "pass_back",
+        // E11 (docs/rescore-after-key-change-design.md): a successor written
+        // by "Rescore with current key" carries `rationale.rescored`.
+        cause: next
+          ? isRescored(next.rationale)
+            ? "rescored"
+            : "changed"
+          : setAsideByRestore.has(row.id)
+            ? "restored"
+            : "pass_back",
       };
       if (next) {
         const note = noteOf(next.rationale);
