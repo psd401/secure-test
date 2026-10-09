@@ -5,10 +5,10 @@ import { PRODUCT_NAME } from "../lib/brand";
 
 // Row NM (CLAUDE.md "Naming"): the product name a person reads comes from
 // `lib/brand.ts`. A hand-typed old form ("Secure Test", "Secure-Test") in
-// the app's own source is drift. Identifiers (`secure-test`, `SecureTest`)
-// are not product names and are not checked.
+// the app's own source or its public pages is drift. Identifiers
+// (`secure-test`, `SecureTest`) are not product names and are not checked.
 const ROOT = join(import.meta.dir, "..");
-const SCANNED = ["app", "components", "lib", "proxy.ts"];
+const SCANNED = ["app", "components", "lib", "public", "proxy.ts"];
 const OLD_FORMS = /Secure[ -]Test/;
 
 function files(path: string): string[] {

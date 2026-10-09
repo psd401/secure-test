@@ -1063,8 +1063,12 @@ never renamed (convention in `CLAUDE.md` "Naming").
   folder becomes `SecureTest` for a teacher's FIRST send (3.1 — existing
   folders are found by stored id and keep their name); the SNS alerts
   display name in infra as a literal.
-- Slice 2 — `help.html` / `roadmap.html` text + RECAPTURE the pictures that
-  show the old header (3.2). Deploy 1 + 2 together, no migration.
+- Slice 2 — `help.html` / `roadmap.html` text; the drift test covers
+  `public/`. Pictures (3.2): all 14 checked — 13 are cropped below the
+  header; `build-add-question.gif`'s first frame shows only a cut-off
+  "…Test", which still reads right, so NOT recaptured (James, 6.1). No
+  roadmap milestone for the rename (6.2). Deploy 1 + 2 together, no
+  migration.
 - Slice 3 — client `Brand.productName` + `PRODUCT_DISPLAY_NAME` build
   setting (display name + both permission prompts) + a Core drift test;
   rides the NEXT client release (3.3). Until AutoPkg delivers it, the
