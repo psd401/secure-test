@@ -1,0 +1,75 @@
+# OpenWiki: paths it must not read (gitignore syntax). See psd-dev-standards
+# standards/06-cicd-enforcement.md. The repo is public; this keeps the org
+# wiki from collecting operational and lockdown detail in one place.
+
+# Leak-prevention configs: the patterns name the prod hostname and the district IP prefix
+.github/identifier-sweep.txt
+.gitleaks.toml
+.githooks/
+.github/workflows/scan.yml
+.github/workflows/security-scan.yml
+
+# Env/config templates and CDK context
+**/.env*
+**/*.example
+**/*.example.*
+**/cdk.context.json*
+**/cdk.json
+client/config-profile.example.mobileconfig
+
+# Infra runbooks and operator scripts
+design-tool/infra/README.md
+design-tool/infra/scripts/
+docs/ecs-deploy-plan.md
+docs/unblock-checklist.md
+docs/public-release-plan.md
+client/RELEASING.md
+
+# Operator/debug scripts that reach prod systems (PowerSchool probes, student lookup, seeding)
+design-tool/scripts/ps-*.ts
+design-tool/scripts/student-lookup.ts
+design-tool/scripts/roster-health.ts
+design-tool/scripts/roster-import-local.ts
+design-tool/scripts/mint-student.ts
+design-tool/scripts/seed-*.ts
+design-tool/scripts/smoke-sign.mjs
+design-tool/scripts/mock-issuer.mjs
+
+# Lockdown/anti-cheating internals
+client/MANUAL-CHECKS.md
+docs/design-tool-manual-checks.md
+client/SecureTest/BuildPosture.swift
+poc-a-aac-capture/
+poc-b-test-loop/RESULTS.md
+poc-c-classlink-sso/RESULTS.md
+
+# Security review ledger and internal state log
+docs/phase-1-2-review.md
+CLAUDE.md
+docs/roadmap-2026-09.md
+
+# Student-data-shaped datasets and fixtures (synthetic, but data-shaped)
+**/*.xlsx
+**/*.csv
+design-tool/test/fixtures/
+design-tool/scripts/help-capture/content/
+design-tool/scripts/help-capture/sim-students.ts
+design-tool/lib/dev/demoRoster.ts
+
+# Assessment item fixtures and answer keys (synthetic, but answer-key-shaped)
+client/SecureTest/Resources/sample-delivery.json
+client/SecureTestCore/Tests/**/Fixtures/
+poc-b-test-loop/client/Sources/PocBClient/Resources/items.json
+**/*.pdf
+
+# Bulky, vendored or generated
+**/*.lock
+design-tool/db/migrations/meta/
+design-tool/lib/standards/catalog.json
+design-tool/lib/standards/crosswalk.json
+design-tool/lib/standards/sources/
+**/katex/
+**/*.woff2
+**/*.jpg
+**/*.png
+**/*.gif
