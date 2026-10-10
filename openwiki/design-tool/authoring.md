@@ -18,8 +18,10 @@ openwiki:
     - design-tool/lib/pdfImport/extractCore.ts
     - design-tool/lib/items/renderItemContent.ts
     - design-tool/lib/preview/renderHtml.ts
+    - design-tool/lib/richText/essayHtml.ts
+    - design-tool/lib/richText/renderEssayAnswer.ts
     - design-tool/app/api/assessments/[id]/items/import-pdf/route.ts
-  symbols: [CreateItemBody, UpdateItemBody, effectiveScoringMethod, requireDraft, isAnswerKeyOnlyPatch, buildExportBundle, importBundleForOwner, assertItemsAreBundleable, PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates]
+  symbols: [CreateItemBody, UpdateItemBody, effectiveScoringMethod, requireDraft, isAnswerKeyOnlyPatch, buildExportBundle, importBundleForOwner, assertItemsAreBundleable, PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, sanitizeEssayHtml, essayResponseForStorage, renderEssayAnswerHtml]
   test_paths:
     - design-tool/test/items-api.test.ts
     - design-tool/test/import-api.test.ts
@@ -28,6 +30,8 @@ openwiki:
     - design-tool/test/pdf-extract.test.ts
     - design-tool/test/pdf-import-route.test.ts
     - design-tool/test/duplicate-assessment.test.ts
+    - design-tool/test/rich-text-essay-html.test.ts
+    - design-tool/test/rich-text-essay-render.test.ts
   invariants:
     - A published assessment rejects item and metadata edits with 409 assessment_published_editing_locked, except status back to draft and answer-key-only or standards-only PATCHes.
     - Export carries answer keys (teacher to teacher); the student path never uses it.
@@ -71,6 +75,16 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 ## Preview and print
 
 `GET /preview/[id]` (`app/preview`, `lib/preview/renderHtml.ts`) renders a static, no-JS HTML view with CSP `default-src 'none'`, embedded in the editor as a sandboxed iframe (ADR 0006). It shows the Tier-1 accommodation toolbar chips as visual demo only. `?print=1` renders the paper variant for browser print / Save-as-PDF (ADR 0013, no server-side PDF). KaTeX CSS is inlined from `lib/preview/katexCss.ts`.
+
+## Rich-text essays
+
+An essay item with `config.rich_text` on lets students format their answer (bold, italic, underline, one-level lists, first-line indent). The client sends `{type: "essay", text, html}`, but the server never stores the client's html as sent:
+
+- **Ingest.** The answer-write route (`app/api/attempts/[attemptId]/responses/[itemId]/route.ts`) calls `essayResponseForStorage` (`lib/richText/essayHtml.ts`). It runs `sanitizeEssayHtml`, which rebuilds the html from a fixed tag subset and re-escapes all text, then overwrites `text` with `essayTextFromHtml` of the cleaned html. Word count, AI scoring, safeguarding, insights and answer history therefore read the same words the teacher sees formatted. With `rich_text` off, any `html` is dropped and the answer is stored as plain text.
+- **Render.** Teacher screens (scoring queue, per-student page, earlier versions, work packet) call `renderEssayAnswerHtml` (`lib/richText/renderEssayAnswer.ts`), which re-cleans stored html before output; a plain answer renders as escaped `text`. Reporting views are described in [reporting and packets](reporting-and-packets.md).
+- **Release.** Google Docs release maps the same cleaned html to Docs markup ([integrations](integrations.md)).
+
+Invariant: `text` is always derived from the sanitised html on the server, never from client-supplied `text`, when `rich_text` is on. Focused tests: `rich-text-essay-html.test.ts` (sanitiser, idempotence, `essayResponseForStorage`), `rich-text-essay-render.test.ts`. Run `cd design-tool && bun test test/rich-text-essay-html.test.ts` for a narrow check; neither file needs the database.
 
 ## Change recipes
 
