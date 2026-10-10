@@ -104,6 +104,16 @@ Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/
 - Attendance (`lib/api/sittingAttendance.ts`) resolves the sitting's expected students from the roster live and joins them to attempts. A joined student who left the scope stays visible, and `submitted_earlier` explains why a student who already handed in elsewhere cannot start a fresh attempt.
 - **Peek**: a teacher requests a screenshot (`peek_requests`); the client polls `peek/pending` every 5 seconds, shows the student a notice first, renders itself and uploads a JPEG. Windows in `lib/api/peek.ts`: 10 s rate limit per attempt, 30 s pending TTL, 60 s image TTL (delete-on-read, lazily swept), 2 MB base64 cap.
 
+## Drawing uploads
+
+Drawing-upload items (photo or scan of paper work) take bytes through a three-step slot, so the answer can only point at a file the server registered for that exact attempt and item:
+
+1. `POST .../responses/[itemId]/upload-url` (`registerUpload` in `lib/api/responseUploads.ts`) checks the content type against `ALLOWED_UPLOAD_TYPES` (PNG, JPEG, HEIC, PDF) and the declared `content_length` against `UPLOAD_MAX_BYTES` (20 MB), then inserts a `response_uploads` row and returns its id plus a target. The target is a presigned S3 URL where the storage backend supports one; otherwise it is the app's own `PUT .../upload?upload_id=` route. The size cap is applied here, before a URL exists, because a presigned PUT cannot enforce a maximum afterwards.
+2. The client sends the bytes. The fallback `PUT` route re-checks ownership of the slot, the size cap and the closed-sitting and deadline guards, because there is no signature to rely on.
+3. `markUploadComplete` marks the row settled. The response write then references that upload, and a resumed bundle returns the stored image bytes as `saved_uploads`, which the wire schema caps at 2 MB per drawing ([wire formats](../architecture/wire-formats.md)).
+
+Invariant: a slot is bound to one (attempt, item) and cannot be redeemed by another student. A refused completion after the grace period leaves the canvas unsaved, the same as a late text write. Focused test: `response-uploads-api.test.ts`; the delivery side is covered by `delivery-api.test.ts` ("a drawing answer carries its stored bytes").
+
 ## Change navigation
 
 - Start at the route for the verb you are changing, then `lib/api/studentAttempt.ts` (`loadOwnAttempt`, `loadItemForAttempt`, `loadJoinableSitting`) for shared student-side loading.
