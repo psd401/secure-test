@@ -17,12 +17,13 @@ openwiki:
     - client/SecureTestCore/Sources/SecureTestCore/DeliveryBundle.swift
     - client/SecureTestCore/Sources/SecureTestCore/DeliveryItem.swift
     - client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift
-  symbols: [APIClient, HTTPTransport, TokenStore, ResponseSpool, DeliveryBundle, DeliveryItem, AssessmentPage, AttemptEventKind, ClientConfiguration]
+  symbols: [APIClient, HTTPTransport, TokenStore, ResponseSpool, DeliveryBundle, DeliveryItem, AssessmentPage, AttemptEventKind, ClientConfiguration, OfflineBundle]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/APIClientTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/DeliveryBundleTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/ResponseSpoolTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/AssessmentPageTests.swift
+    - client/SecureTestCore/Tests/SecureTestCoreTests/OfflineBundleTests.swift
   invariants:
     - All decision logic lives in SecureTestCore so it is testable with swift test and no window server.
     - Answers are written to the local SQLite spool before they are sent.
@@ -91,10 +92,17 @@ The session JWT lives only in memory (`InMemoryTokenStore`): every launch is sig
 
 `AssessmentPage.html(...)` builds the whole document from the delivery bundle's **original JSON bytes** (not a re-encoding of the Swift model, so unknown fields are never dropped), vendored KaTeX, item styles and the renderer script, via `PageShell`. `JSONEmbedding.escapeForScriptElement` escapes `<`, `>`, `&`, U+2028/9. Page features are separate files: paging (`BackToTests`, layout), `PageAccommodations` (contrast, font, zoom as attributes on `<html>`), `TextToSpeech`/`SpeechToText`/`MathSpeech`, `TimeLimitCountdown`, `InstantFeedbackPage`, `PeekResponder`/`PeekNotice`. The renderer is compiled into the app today; ADR 0018 (serve it from the design tool, signed) is only Proposed, and `BridgeChecks.swift` already treats every page message as untrusted input.
 
+## Offline bundles (no server)
+
+A delivery bundle can also be opened from a file, with no server, attempt or lockdown. This lets the renderer be inspected outside a real sitting. Two entry points feed the same path: the `--bundle <path>` launch argument (`OfflineBundle.argumentPath`) and File → Open Test Bundle…, an open panel. `AssessmentViewController.loadPage` reads the file in the app process, because the sandbox grants read access to open-panel picks, and an argv path only from the app's own container. `OfflineBundle.load` (`SecureTestCore`) rejects non-UTF-8 bytes, decodes through `DeliveryBundle.decode` to prove the bundle is sound, and keeps the original JSON text for `AssessmentPage.html(..., offline: true)`. A decode failure is refused rather than rendered partially, because a student handed fewer items than assigned has no way to notice.
+
+The offline screen is a separate state from a server attempt. `OfflineBundle.canOpen(on:)` allows opening another bundle on the entry or offline screens, and never while a server attempt is on screen (`.serverAttempt`), because replacing the view would drop that attempt's event reporter and spool. Both the menu item and the open command are gated by the app's build-posture check (`BuildPosture.allowsOfflineBundle` in `AppDelegate`). The offline path is a look-at-the-renderer tool, not a delivery path: it sends no events and writes no answers. Its tests are `OfflineBundleTests`.
+
 ## Change navigation
 
 | Intent | Start at | Tests |
 |---|---|---|
+| Offline bundle open path or screen state | `OfflineBundle.swift`, `AssessmentViewController.loadPage`, `AppDelegate` open handlers | `OfflineBundleTests` |
 | New or changed item rendering | `AssessmentPage*.swift` renderer script, `DeliveryItem.swift` | `Renderer*Tests.swift` (e.g. `RendererMatchTests`, `RendererFillBlankTests`) run through `RendererHarness.swift` |
 | New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
 | Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |

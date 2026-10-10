@@ -32,6 +32,7 @@ secure-test is one school district's in-house secure assessment stack (MIT licen
 - [Authoring](../design-tool/authoring.md) — assessments, items, item sets, import/export, PDF import, preview.
 - [Sittings and attempts](../design-tool/sittings-and-attempts.md) — the student plane: codes, redeem, attempt, delivery, writes, deadlines, close, peek, events.
 - [Scoring and results](../design-tool/scoring-and-results.md) — auto/AI/human scoring, score statuses, results, instant feedback.
+- [Reporting and packets](../design-tool/reporting-and-packets.md) — teacher report views, the printable class work packet, and the scoring-corpus run comparison.
 - [Integrations](../design-tool/integrations.md) — PowerSchool/Schoology gradebook push, Google Docs release, class insights, email/SNS.
 - [Accommodations and roster](../design-tool/accommodations-and-roster.md) — TIDE/OSPI accommodations, effective-accommodation rule, warehouse roster mirror.
 - [AI and safeguarding](../design-tool/ai-and-safeguarding.md) — provider abstraction, guardrails, hand-in screening.
