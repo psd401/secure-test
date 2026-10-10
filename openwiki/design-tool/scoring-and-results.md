@@ -1,7 +1,7 @@
 ---
 type: Subsystem Reference
 title: Scoring, results and score corrections
-description: How responses become scores in the design tool, covering auto, AI and human scoring, the proposed/final/superseded/research score statuses, the results matrix, rescore, change score, pass back, instant feedback and reporting views.
+description: How responses become scores in the design tool, covering auto, AI and human scoring, the teacher review queue and approval, the proposed/final/superseded/research score statuses, the results matrix, rescore, change score, pass back, instant feedback and reporting views.
 tags: [scoring, results, rubrics, reporting]
 openwiki:
   roles: [domain, workflow]
@@ -76,6 +76,29 @@ Score statuses on a response row. `research` rows are written only by the scorin
 - **Answer restore** (`lib/api/restoreAnswer.ts`, `lib/api/answerHistory.ts`): a teacher can make an earlier saved text version current; dependent scores are superseded and an `answer_restored` event is written.
 
 Staff-only event kinds (`STAFF_ONLY_ATTEMPT_EVENT_KINDS`) are written by these routes and can never be posted by the client ([sittings and attempts](sittings-and-attempts.md#events-and-the-monitor)).
+
+## Teacher review queue and approval
+
+Human scoring is driven from a per-assessment queue rather than from each attempt.
+
+- `GET /api/assessments/[id]/review-queue` (`view` access) lists responses on the assessment's **submitted, non-practice** attempts whose item's effective method is not `auto` and that have no `final` row. Auto items never appear (they were finalised at hand-in), and neither do practice hand-ins. Each entry is grouped by `proposed`: `null` means "needs a manual score", a non-null proposal means "AI suggestion awaiting approve or override". Stems reach the queue rendered, so teachers score a fraction, not KaTeX source.
+- **Manual score** (`app/api/responses/[responseId]/score`) and **change score** share `checkManualScore` in `lib/api/reviewActions.ts`. `max_points` must equal the item's own maximum (rubric max, table cells, fill-blank count, otherwise 1), so every student's totals stay comparable. When `criterion_scores` are sent they are validated against the scoring view, which expands single-point rubrics into the derived `.below/.meets/.exceeds` levels the queue offers.
+- **Approve** (`app/api/scores/[scoreId]/approve`) inserts a new `final` row copying the AI proposal's numbers and rationale. The method stays `ai` and the scorer stays the model id, while `reviewed_by_sub` records the approving teacher. The proposal row stays as audit trail. Approve refuses a `research` row as `not_found`, a non-proposal as `not_a_proposal`, and a response that already has a final as `409 final_exists`; the insert uses `onConflictDoNothing` to close the race with a concurrent score.
+- Every action in this chain loads the response through `loadResponseChain`, which uses `authorizeAttempt(..., "edit")` and returns `404` for other teachers' rows, and `400 attempt_not_submitted` for unsubmitted attempts.
+
+Invariant: approval and manual scoring never edit a row. They only append a `final` and let the partial unique index arbitrate races. Test focus: `review-queue.test.ts` and `change-score.test.ts`.
+
+## Teacher review queue and approval
+
+`GET /api/assessments/[id]/review-queue` (view level, `authorizeAssessment`) lists what still needs a human on one assessment: responses of submitted, non-practice attempts whose effective method is not `auto` and that have no `final`. Auto items never appear, because they were finalised at hand-in, and a staff member's own practice attempt never waits in the class queue. The queue splits by the `proposed` score: `null` means a manual score is needed, and a non-null value is an AI proposal awaiting approve or override.
+
+The write paths share `lib/api/reviewActions.ts`:
+
+- `loadResponseChain` loads response, attempt and item. It authorises at `edit` level (another teacher gets 404), requires a submitted attempt (`attempt_not_submitted` otherwise), and ignores `research` rows when it checks for an existing final.
+- `checkManualScore` is the rule for a hand-given score, used by the manual score route (`app/api/responses/[responseId]/score`) and by change score. `max_points` must equal the item's own maximum (rubric total, table cells, fill-blank count, or 1), and any criterion picks are validated against the item's scoring view.
+- `POST /api/scores/[scoreId]/approve` (`app/api/scores/[scoreId]/approve/route.ts`) is append-only. It inserts a new `final` row that copies the proposal's points, maximum, rationale and scorer, keeps `method: ai` because the model did the scoring, and sets `reviewed_by_sub` to the approving teacher. The proposal row stays as audit trail. A `research` row answers 404, a row that is not a `proposed` score answers 400 `not_a_proposal`, and an existing final answers 409 `final_exists`. The insert is also `onConflictDoNothing`, which closes the race between the check and the write.
+
+Invariant: approval never edits the proposal, and an override goes through the manual score or change score path instead. Focused test: `review-queue.test.ts`; the change-score rules are in `change-score.test.ts`. An attempt enters the queue only once it is submitted, by student hand-in or teacher hand-in ([sittings and attempts](sittings-and-attempts.md)).
 
 ## Results and reporting
 

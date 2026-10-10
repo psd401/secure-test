@@ -39,7 +39,7 @@ The student app renders an assessment delivered by the design tool inside a lock
 
 | Target | Path | Contents |
 |---|---|---|
-| `SecureTestCore` (SwiftPM, macOS 14) | `client/SecureTestCore/Sources/SecureTestCore/` | Every decision: API client, bundle models, the spool, the lockdown state machine, the page generator, accommodation mapping, speech, countdown, event reporting. `swift test` runs it with no Xcode or window server. |
+| `SecureTestCore` (SwiftPM, macOS 14) | `client/SecureTestCore/Sources/SecureTestCore/` | Every decision: API client, bundle models, the spool, the lockdown state machine, the page generator, accommodation mapping, [speech](speech-accommodations.md), countdown, event reporting. `swift test` runs it with no Xcode or window server. |
 | `SecureTest` (Xcode app) | `client/SecureTest/` plus `SecureTest.xcodeproj` | Thin AppKit shell: `AppDelegate`, `SessionEntryViewController` (sign-in, "Your tests", code entry), `AssessmentViewController` (the web view), `LockedDownWebView`, `RealLockdownSession`, `SpeechListener`/`SpeechReader`, `WebViewAuthPresenter`. |
 
 Why an `.xcodeproj`: SwiftPM packages do not expose the Signing & Capabilities tab where the restricted Automatic Assessment Configuration (AAC) entitlement lives. `RealLockdownSession.swift` is the only file that touches `AutomaticAssessmentConfiguration`; `client/expected-entitlements.txt` records the entitlements a built app should carry (verify with `codesign -d --entitlements -`). The UI cannot be driven headlessly in this environment (per the comments in `APIClient.swift`), so anything not unit-testable in Core is a manual hand-check.
