@@ -33,6 +33,7 @@ interface ConverseResponse {
     };
   };
   usage?: unknown;
+  stopReason?: string;
   // ApplyGuardrail responses share this fake client + resolver (slice 29).
   action?: "NONE" | "GUARDRAIL_INTERVENED";
   assessments?: unknown[];
@@ -42,6 +43,9 @@ type Resolver =
   | { kind: "throw"; error: Error };
 
 let nextResolver: Resolver | null = null;
+// Responses staged after the next one, for calls that send more than once
+// (the essay scorer's one retry on an unreadable reply).
+let queuedResolvers: Resolver[] = [];
 const callLog: {
   modelId: string;
   system: unknown;
@@ -53,6 +57,11 @@ const callLog: {
 
 function setNextResponse(response: ConverseResponse) {
   nextResolver = { kind: "ok", response };
+}
+function setResponses(...responses: ConverseResponse[]) {
+  const [first, ...rest] = responses.map((response): Resolver => ({ kind: "ok", response }));
+  nextResolver = first ?? null;
+  queuedResolvers = rest;
 }
 function setNextError(error: Error) {
   nextResolver = { kind: "throw", error };
@@ -86,7 +95,7 @@ class FakeBedrockRuntimeClient {
     });
     if (!nextResolver) throw new Error("test forgot to stage a response");
     const r = nextResolver;
-    nextResolver = null;
+    nextResolver = queuedResolvers.shift() ?? null;
     if (r.kind === "throw") throw r.error;
     return r.response;
   }
@@ -796,3 +805,102 @@ describe("ai_usage log line (docs/rubric-upload-design.md D-7)", () => {
     });
   });
 });
+
+// 2026-10-09 alarm: one essay reply in ~25 was unreadable (stop reason
+// end_turn) and the teacher's own retry scored it. The scorer now tries once
+// more on an unreadable reply, and logs the reply's shape — never its text.
+describe("bedrockEssayScorer: one retry on an unreadable reply", () => {
+  const rubric = {
+    style: "analytic" as const,
+    criteria: [
+      {
+        id: "c1",
+        name: "Clarity",
+        levels: [
+          { id: "l1", label: "Below", points: 0 },
+          { id: "l2", label: "Meets", points: 2 },
+        ],
+      },
+    ],
+  };
+  const good = JSON.stringify({
+    criterion_scores: [{ criterion_id: "c1", level_id: "l2", points: 2, rationale: "ok" }],
+    points: 2,
+    max_points: 2,
+    overall_rationale: "Solid.",
+    confidence: 0.9,
+  });
+  // Unreadable, and carrying a phrase from the essay that must never be logged.
+  const garbled = '{"criterion_scores": [{"rationale": "quotes SECRET-ESSAY-PHRASE"';
+
+  beforeEach(() => {
+    logLines.length = 0;
+    callLog.length = 0;
+  });
+  afterEach(() => {
+    nextResolver = null;
+    queuedResolvers = [];
+  });
+
+  async function score() {
+    const { bedrockEssayScorer } = await import("../lib/ai/essayScorer/bedrockProvider");
+    return bedrockEssayScorer.scoreEssay({ stem: "Explain.", response_text: "Because.", rubric });
+  }
+  const unparsedLines = () => logLines.filter((l) => l.event === "essay_score_reply_unparsed");
+
+  test("unreadable then readable: scores on the second call, one warn line with the shape only", async () => {
+    setResponses(
+      { ...textResponse(garbled), stopReason: "end_turn" },
+      { ...textResponse(good), stopReason: "end_turn" },
+    );
+    const result = await score();
+    expect(result.points).toBe(2);
+    expect(callLog.length).toBe(2);
+    const lines = unparsedLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      level: "warn",
+      attempt: 1,
+      stop_reason: "end_turn",
+      retrying: true,
+      reply_chars: garbled.length,
+      fenced: false,
+      chars_before_first_brace: 0,
+      chars_after_last_brace: null,
+      open_braces: 2,
+      close_braces: 0,
+    });
+    expect(JSON.stringify(logLines)).not.toContain("SECRET-ESSAY-PHRASE");
+  });
+
+  test("unreadable twice: reported after 2 attempts", async () => {
+    setResponses(
+      { ...textResponse(garbled), stopReason: "end_turn" },
+      { ...textResponse(garbled), stopReason: "end_turn" },
+    );
+    await expect(score()).rejects.toThrow(
+      "bedrock: model did not return valid JSON (stopReason end_turn, after 2 attempts)",
+    );
+    expect(callLog.length).toBe(2);
+    expect(unparsedLines().map((l) => [l.attempt, l.retrying])).toEqual([
+      [1, true],
+      [2, false],
+    ]);
+  });
+
+  test("cut off at max_tokens: no retry", async () => {
+    setResponses({ ...textResponse(garbled), stopReason: "max_tokens" });
+    await expect(score()).rejects.toThrow(
+      "bedrock: model did not return valid JSON (stopReason max_tokens)",
+    );
+    expect(callLog.length).toBe(1);
+  });
+
+  test("readable but the wrong shape: no retry", async () => {
+    setResponses({ ...textResponse('{"points": "two"}'), stopReason: "end_turn" });
+    await expect(score()).rejects.toThrow("model JSON failed validation");
+    expect(callLog.length).toBe(1);
+    expect(unparsedLines()[0]).toMatchObject({ retrying: false });
+  });
+});
+

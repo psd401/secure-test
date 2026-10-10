@@ -5,6 +5,7 @@ import {
   ESSAY_SCORE_MAX_TOKENS,
   ESSAY_SCORE_SYSTEM_PROMPT,
   buildEssayScoreUserPrompt,
+  describeReplyShape,
   parseScoreResult,
   reconcileLevelIds,
   reconcilePointsTotal,
@@ -27,6 +28,14 @@ import type {
 
 const DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6";
 
+// 2026-10-09 alarm: one reply in ~25 came back unreadable with stop reason
+// end_turn, and the teacher's retry five minutes later scored the same
+// essay. So an unreadable reply gets ONE more try before it is reported. A
+// reply cut off at max_tokens would be cut off again, and a reply that reads
+// but fails the shape or the rubric is the model's answer, not noise — both
+// are reported at once, as before.
+const MAX_ATTEMPTS = 2;
+
 export const bedrockEssayScorer: EssayScorerProvider = {
   // Lazy so tests can configure BEDROCK_ESSAY_SCORE_MODEL after import.
   get id() {
@@ -43,23 +52,37 @@ export const bedrockEssayScorer: EssayScorerProvider = {
     // into the below/meets/exceeds ladder), and the returned selections are
     // bounds-checked against that same view.
     const rubric = scoringView(req.rubric);
-    const { text, stopReason } = await converseTextWithMeta({
-      modelId: process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL,
-      systemText: ESSAY_SCORE_SYSTEM_PROMPT,
-      userText: buildEssayScoreUserPrompt({ ...req, rubric }),
-      maxTokens: ESSAY_SCORE_MAX_TOKENS,
-      temperature: 0,
-      errPrefix: "bedrock",
-      surface: "essay-score",
-      ownerSub,
-    });
     let parsed;
-    try {
-      parsed = parseScoreResult(text, "bedrock");
-    } catch (err) {
-      // The stop reason is the tell between a truncated reply (max_tokens)
-      // and genuinely malformed output; it goes into the log line.
-      throw new Error(`${err instanceof Error ? err.message : String(err)} (stopReason ${stopReason ?? "unknown"})`);
+    for (let attempt = 1; ; attempt++) {
+      const { text, stopReason } = await converseTextWithMeta({
+        modelId: process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL,
+        systemText: ESSAY_SCORE_SYSTEM_PROMPT,
+        userText: buildEssayScoreUserPrompt({ ...req, rubric }),
+        maxTokens: ESSAY_SCORE_MAX_TOKENS,
+        temperature: 0,
+        errPrefix: "bedrock",
+        surface: "essay-score",
+        ownerSub,
+      });
+      try {
+        parsed = parseScoreResult(text, "bedrock");
+        break;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const unreadable = message.includes("did not return valid JSON");
+        const retry = unreadable && stopReason !== "max_tokens" && attempt < MAX_ATTEMPTS;
+        log.warn("essay_score_reply_unparsed", {
+          attempt,
+          stop_reason: stopReason ?? null,
+          retrying: retry,
+          ...describeReplyShape(text),
+        });
+        if (retry) continue;
+        // The stop reason is the tell between a truncated reply (max_tokens)
+        // and genuinely malformed output; it goes into the log line.
+        const tries = attempt > 1 ? `, after ${attempt} attempts` : "";
+        throw new Error(`${message} (stopReason ${stopReason ?? "unknown"}${tries})`);
+      }
     }
     const { result: levelled, repaired } = reconcileLevelIds(parsed, rubric);
     if (repaired > 0) {

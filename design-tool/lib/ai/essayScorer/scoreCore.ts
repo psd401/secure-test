@@ -193,6 +193,27 @@ export function parseScoreResult(text: string, errPrefix: string) {
   return parsed.data;
 }
 
+/**
+ * 2026-10-09 alarm (one "did not return valid JSON" in ~25 essays, stop
+ * reason end_turn; the teacher's own retry five minutes later scored it):
+ * what the unreadable reply LOOKED like, for the log line — counts and
+ * offsets only. The reply text itself is never logged: its rationales can
+ * quote the student's essay.
+ */
+export function describeReplyShape(text: string) {
+  const trimmed = text.trim();
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  return {
+    reply_chars: text.length,
+    fenced: trimmed.startsWith("```"),
+    chars_before_first_brace: first === -1 ? null : first,
+    chars_after_last_brace: last === -1 ? null : trimmed.length - 1 - last,
+    open_braces: trimmed.split("{").length - 1,
+    close_braces: trimmed.split("}").length - 1,
+  };
+}
+
 const EPS = 1e-6;
 
 export type RubricBoundsError = { valid: false; reason: string };
