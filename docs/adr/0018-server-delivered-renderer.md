@@ -41,6 +41,9 @@ against replay. Key storage and the compatibility contract are open in
   signs whatever is on `main`. A bad deploy reaches every Mac within
   minutes instead of over a day, so staging becomes mandatory. The server
   must keep serving renderer versions still in use by tests in progress.
-- Escape hatch: the v2.0 shell can keep a bundled renderer behind a
-  launch flag, and a later release can return to it if served renderers
-  prove unsafe or unreliable.
+- Escape hatch: a later release can return to a bundled renderer if
+  served renderers prove unsafe or unreliable. The v2.0 shell keeps a
+  bundled copy in Debug builds only, for offline development; a Release
+  build refuses the join when the renderer cannot be fetched, verified or
+  hosted (amended 2026-10-11 — a Release fallback would be a second,
+  untested path that restores the version skew).

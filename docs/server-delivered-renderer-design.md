@@ -152,16 +152,58 @@ never test content (the code is public in this repository anyway).
    3.2 The server keeps the renderer compatible with every shell still on
    the fleet (the `X-SecureTest-Version` header already tells it which).
    3.3 KaTeX: stay in the shell (proposal) or move with the renderer.
+   **DECIDED (D-4, James 2026-10-11):** 3.1 as written — the vocabulary is
+   bridge handlers plus host features (`stt`, `tts.word_ranges`,
+   `response.generic`, …). 3.2: Swift's decoder ignores unknown keys, so a
+   v1.x client ignores the bundle's `renderer` field; new item types stay
+   gated to ≥ 2.0 by `lib/items/clientSupport.ts`; from 2.0 on ONE renderer
+   serves every shell, guarded by the `requires` check, not per-shell
+   renderer lines. 3.3: the KaTeX library (~270 KB, rarely changes, also
+   used by Swift's `MathSpeech`) stays in the shell; the macros
+   (`GeneratedKatexMacros.swift`, generated from the design tool's
+   `macros.ts`) move with the renderer — they are data, and a macro edit
+   should not need a shell release.
 4. **Swift item decoding.** `DeliveryItem` today decodes and refuses
    unknown types. Proposal: the shell decodes only what IT uses (ids,
    paging, uploads, prefill) and passes items through; the renderer owns
    types. Check every Swift reader of `DeliveryItem` first.
+   **Audit (2026-10-11, read-only):** the page already receives the
+   delivery body verbatim (`AssessmentPage.html(bundleJSON:)`); Swift
+   rebuilds no item for it. The typed decode serves only (a) refusing an
+   unknown item type / blank kind — today's version gate, (b) the item
+   count in the log (`AssessmentViewController`), (c) `BridgeItemTable`'s
+   id → type map (H-2). Speech, peek, the countdown (deadline only),
+   lockdown planning and the instant-feedback decode read no item content.
+   **The hidden coupling is the answer channel:** `ItemResponse` is a
+   closed Swift union of 10 types, used by the `response` handler, the
+   per-type caps in `BridgeChecks` (B-7 / H-3), the spool, and the
+   bundle's `saved_responses` decode. Passing items through alone would
+   still make every new type a shell release.
+   **DECIDED (D-5, James 2026-10-11):** the v2.0 shell decodes items to
+   `{id, type}` plus what it uses itself (set inline ids, paging, uploads)
+   and lets unknown types through. Answers travel as a generic
+   `{item_id, type, value}`; the shell checks the item exists and the type
+   matches (H-2 kept), every string in `value` is within the essay cap and
+   the message within a byte cap; the known types keep their exact caps;
+   exact validation of a new type is the server's (zod already validates
+   every answer). `saved_responses` passes to the page as raw JSON.
+   Drawing uploads stay tied to `drawing_upload` (a future upload-type
+   item would need a shell change — accepted). Trade-off accepted: new
+   types get generic, not per-type, caps — the bridge protects the shell
+   (memory, state), which generic caps still do.
 5. **Fallback.** No fetch, bad hash or refused contract → refuse the join
    before `begin()` (proposal), or fall back to a copy bundled in the app.
    A bundled copy keeps tests running when the server is half-broken but
    reintroduces the version skew the change removes. Cmd-O / `--bundle`
    are Debug-only (security slice 2), so the offline path needs only a
    Debug answer.
+   **DECIDED (D-6, James 2026-10-11): refuse the join before `begin()`;
+   no bundled renderer in Release.** A Debug-only bundled copy serves
+   offline development. The renderer route never touches the database, so
+   it is at least as available as the bundle route — if it is down, the
+   bundle route almost certainly is too. A Release fallback would be a
+   second, untested path that restores the version skew. ADR 0018's
+   escape hatch is amended to match.
 6. **Bridge hardening (the ADR's condition).** Each handler validates its
    payload in Swift as untrusted input: shape, sizes, item ids that exist
    in the bundle, upload byte caps, `home` / `submit` only in the states
@@ -175,9 +217,22 @@ never test content (the code is public in this repository anyway).
    scale-to-zero CDK stack (the roadmap's plan) and 7.2 whether a client
    points at it by a launch argument in Debug only, or a second managed
    profile on a test Mac.
+   **DECIDED (D-7, James 2026-10-11):** 7.1 a second scale-to-zero CDK
+   stack. 7.2 both, by purpose: day-to-day work = a Debug launch with
+   `--server`; the release-candidate run = a signed build on a SECOND,
+   org-managed Mac carrying a staging profile (Release builds ignore
+   launch arguments and the managed profile wins — security slice 2 — so
+   this Mac's production profile rules it out). James has the Mac; its
+   staging profile is part of slice 2.
 8. **Tests.** The JSC renderer tests (`AssessmentPageTests`,
    `RendererPrefillTests`, …) move to the design-tool side; a contract test
    pins the bridge messages both sides agree on.
+   **DECIDED (D-8, James 2026-10-11):** the renderer source lives in its
+   own workspace package, `packages/renderer` (neither server code nor
+   Swift); the design tool serves its built file. Unit tests run under
+   bun with a DOM shim (e.g. happy-dom); a Swift contract test loads the
+   BUILT file in JavaScriptCore and checks the bridge messages (headless
+   browsers hang here — ADR 0013 — so JSC stays the in-process harness).
 9. **Release shape.** v2.0 = the shell that fetches; renderer changes
    meanwhile keep landing in Swift literals and move over unchanged.
    Should v1.x page work pause near the cutover so the first served
@@ -242,13 +297,16 @@ meets a cold cluster).
 
 0. This note + ADR 0018 + decisions.
 1. Bridge audit + hardening (shell, ships in a v1.x — useful anyway).
-2. Staging stack (infra).
-3. Server: renderer build + manifest + route (or bundle field), version
-   retention, `requires` list, signature + minimum version (D-2).
-4. Shell: fetch, verify, cache, contract check, refuse copy; `DeliveryItem`
-   pass-through. Ships as v2.0.
-5. Move the renderer source + its tests to the design tool; first served
-   renderer = the last bundled one, byte for byte.
+2. Staging stack (infra) + the second Mac's staging profile (D-7).
+3. Server: `packages/renderer` build + manifest + route, version
+   retention, `requires` list, signature + minimum version (D-2), the
+   bundle's `renderer` field behind a setting only staging turns on (D-3).
+4. Shell, on the `v2-renderer` branch: fetch, verify, cache, contract
+   check, refuse copy (D-6); `DeliveryItem` → `{id, type}` pass-through and
+   the generic answer channel (D-5). Ships as v2.0.
+5. Move the renderer source, the KaTeX macros (D-4) and its tests into
+   `packages/renderer` (D-8); first served renderer = the last bundled
+   one, byte for byte.
 6. Rows: staging sitting, real AAC session, deploy mid-test then resume,
    bad hash, missing capability, offline (Debug).
 
@@ -303,3 +361,11 @@ meets a cold cluster).
   the client on a `v2-renderer` branch, slice 5 last (question 9).
   Notarization (Apple's 403) blocks only the v2.0 release step, not the
   work. Nothing built.
+- 2026-10-11 — Q4 audit done (read-only): the shell already passes the
+  bundle to the page verbatim; the real coupling is the closed
+  `ItemResponse` union. D-4 (compatibility + KaTeX), D-5 (generic answer
+  channel), D-6 (refuse, no Release fallback; ADR 0018 amended), D-7
+  (staging stack + second Mac with a staging profile), D-8
+  (`packages/renderer`, bun + DOM shim, Swift JSC contract test) decided.
+  Every open question but 2.a (with IT leadership) is closed. Nothing
+  built.
