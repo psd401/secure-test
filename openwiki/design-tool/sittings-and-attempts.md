@@ -12,15 +12,17 @@ openwiki:
     - design-tool/app/api/attempts/route.ts
     - design-tool/lib/api/studentAttempt.ts
     - design-tool/lib/api/buildDeliveryBundle.ts
+    - design-tool/lib/api/savedResponses.ts
     - design-tool/lib/api/attemptDeadline.ts
     - design-tool/lib/api/sittingOver.ts
-  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId]
+  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, collectSavedAnswers, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId]
   test_paths:
     - design-tool/test/test-sessions-api.test.ts
     - design-tool/test/attempt-ingest-api.test.ts
     - design-tool/test/delivery-api.test.ts
     - design-tool/test/attempt-deadline.test.ts
     - design-tool/test/sitting-closed.test.ts
+    - client/SecureTestCore/Tests/SecureTestCoreTests/RendererPrefillTests.swift
   invariants:
     - A code alone never admits a student; roster scope is checked too, and misses collapse to session_unavailable.
     - There is one attempt per (assessment, student); rejoining through a new sitting rebinds the attempt.
@@ -67,7 +69,7 @@ Join, bundle fetch, answer writes and hand-in. The server runs auto-scoring and 
 
 1. **Redeem** (`app/api/test-sessions/redeem/route.ts`). The code is normalised (`normalizeCode`: trim, uppercase, drop spaces and dashes) and must be well formed against `CODE_ALPHABET`, which omits `0/O`, `1/I/L` and lowercase. The sitting must be `open` and `expires_at > now`. Then `resolveStudentForOwner` (`lib/api/resolveStudent.ts`) decides identity and scope. `not_on_roster` and `not_in_sitting` are both answered as `404 session_unavailable`, the same as an unknown code, so a student cannot probe which codes are live. `no_email` and `identity_conflict` are returned as-is because they are facts about the caller's own account.
 2. **Start or resume** (`app/api/attempts/route.ts`). It repeats the scope check against the sitting, inserts or finds the attempt, rebinds it to the new sitting (`rebindIfMoved`) and applies the sitting-wide "No time limit" flag (`applySittingNoLimit`).
-3. **Bundle** (`app/api/assessments/[id]/delivery/route.ts`, `lib/api/buildDeliveryBundle.ts`). Authorised by the existence of the caller's own attempt. The mapping is an exhaustive switch over `ITEM_TYPES` with an `assertNever` default, and the result is parsed through `DeliveryBundleSchema` as a last backstop ([wire formats](../architecture/wire-formats.md)). Match and order options get per-attempt ids from `opaqueId` (`lib/api/opaqueIds.ts`, HMAC keyed by `DESIGN_TOOL_DELIVERY_SECRET`), and the write routes translate them back before storing. `requiredClientUpgrade` (`lib/items/clientSupport.ts`) refuses a bundle the client's `X-SecureTest-Version` cannot render, before any lockdown begins. Effective accommodations are resolved here ([accommodations and roster](accommodations-and-roster.md)). The bundle also carries the attempt's saved answers and uploads, `time_limit_ends_at` plus `server_now`, and `allow_clipboard` only when true.
+3. **Bundle** (`app/api/assessments/[id]/delivery/route.ts`, `lib/api/buildDeliveryBundle.ts`). Authorised by the existence of the caller's own attempt. The mapping is an exhaustive switch over `ITEM_TYPES` with an `assertNever` default, and the result is parsed through `DeliveryBundleSchema` as a last backstop ([wire formats](../architecture/wire-formats.md)). Match and order options get per-attempt ids from `opaqueId` (`lib/api/opaqueIds.ts`, HMAC keyed by `DESIGN_TOOL_DELIVERY_SECRET`), and the write routes translate them back before storing. `requiredClientUpgrade` (`lib/items/clientSupport.ts`) refuses a bundle the client's `X-SecureTest-Version` cannot render, before any lockdown begins. Effective accommodations are resolved here ([accommodations and roster](accommodations-and-roster.md)). The bundle also carries the attempt's saved answers and uploads ([resume prefill](#resume-prefill)), `time_limit_ends_at` plus `server_now`, and `allow_clipboard` only when true.
 4. **Write** (`app/api/attempts/[attemptId]/responses/[itemId]/route.ts`). `PUT` is an upsert on `(attempt_id, item_id)`. Order of checks: `loadOwnAttempt` (404 for another student's attempt, never 403), `attemptAcceptsWrites`, `refuseIfSittingOver`, `refuseIfPastDeadline`, item lookup, then `response.type` must equal `item.type`. Text answers are copied into `response_revisions` first (`captureBeforeWrite`). Drawings reference an upload slot the server minted for that exact attempt and item (`response_uploads`, presigned S3 upload where available).
 5. **Submit** (`app/api/attempts/[attemptId]/submit/route.ts`). Idempotent: a repeat returns the attempt with `already_submitted`. After the guards it sets `status = submitted`, schedules safeguarding screening, runs the auto-scoring pass and builds instant feedback; failures in those three never fail the hand-in ([scoring](scoring-and-results.md), [AI and safeguarding](ai-and-safeguarding.md)).
 
@@ -114,10 +116,48 @@ Drawing-upload items (photo or scan of paper work) take bytes through a three-st
 
 Invariant: a slot is bound to one (attempt, item) and cannot be redeemed by another student. A refused completion after the grace period leaves the canvas unsaved, the same as a late text write. Focused test: `response-uploads-api.test.ts`; the delivery side is covered by `delivery-api.test.ts` ("a drawing answer carries its stored bytes").
 
+## Resume prefill
+
+A student who quits, or whose client restarts, rejoins the same attempt and must see the earlier answers in the fields, not blank boxes under a green "answered" mark. The delivery bundle carries that state, so the page is refilled from the first bundle fetch with no extra request. The design rationale is in `docs/resume-prefill-design.md` (slice P-1).
+
+`collectSavedAnswers(db, attemptId, itemRows)` in `lib/api/savedResponses.ts` runs one `responses` query for the attempt and returns three things from that single pass:
+
+- `answeredItemIds`: this assessment's items that have a row, in item order. An E12 outline written in place is keyed by another assessment's question and is excluded.
+- `savedResponses`: each stored value parsed with `ItemResponseSchema`, then re-sealed with `sealResponseIds` (`lib/api/studentAttempt.ts`) so match and order answers name the per-attempt ids the page shows.
+- `savedUploads`: the bytes of drawing answers, read by `readSavedUpload`.
+
+```mermaid
+flowchart TD
+    Q["One query: responses rows for this attempt"] --> A{"Item has a row?"}
+    A -- no --> N["Not answered: no mark, no value"]
+    A -- yes --> M["Mark in answered_item_ids"]
+    M --> P{"Value parses and re-seals?"}
+    P -- no --> X["Mark kept, value omitted"]
+    P -- yes --> V["Value in saved_responses"]
+    V --> D{"drawing_upload?"}
+    D -- yes --> U["readSavedUpload: complete slot, PNG or JPEG, at most SAVED_UPLOAD_MAX_BYTES"]
+    D -- no --> E["Done"]
+```
+
+Caption: how the server collector derives the three resume keys from one query.
+
+Invariants:
+
+- **One query, one pass** (D-4): a mark can never arrive without its value, or a value without its mark.
+- **Per field, not per bundle**: a stored row that no longer parses still counts as answered, but only its value is dropped, so one legacy row cannot stop the test from opening.
+- **Inline bytes are capped**: only PNG and JPEG drawings with a complete upload slot are inlined, and only up to `SAVED_UPLOAD_MAX_BYTES` (2 MB, D-5). Other types and oversized objects are listed without bytes.
+- **Read-only**: a still-pending upload slot is not settled from the GET; settling belongs to the write path that accepts the response.
+- **Additive keys**: `answered_item_ids`, `saved_responses` and `saved_uploads` are emitted by `buildDeliveryBundle` only when non-empty, so a fresh attempt's bundle is unchanged.
+
+The wire fields are defined in `DeliveryBundleSchema` (`packages/schema/src/delivery.ts`, see [wire formats](../architecture/wire-formats.md)). The macOS client reads `saved_responses` through its `DeliveryBundle` decoding, and the page script in `AssessmentPage.swift` uses it to fill fields under the answered marks ([client overview](../client/overview.md#the-page)).
+
+Focused tests: `delivery-api.test.ts`, describe "GET /api/assessments/:id/delivery — saved_responses / saved_uploads (P-1)" (includes "a drawing answer carries its stored bytes"); `packages/schema/test/delivery.test.ts`, describe "DeliveryBundleSchema answered_item_ids"; the Swift `RendererPrefillTests` injects `saved_responses` and `saved_uploads` into the fixture to exercise the page's restore path.
+
 ## Change navigation
 
 - Start at the route for the verb you are changing, then `lib/api/studentAttempt.ts` (`loadOwnAttempt`, `loadItemForAttempt`, `loadJoinableSitting`) for shared student-side loading.
 - Any new student write door must ask both clocks (`refuseIfSittingOver` then `refuseIfPastDeadline`); the three existing doors are the response write, the drawing-slot completion and submit.
 - New bundle fields must be additive and emitted only when meaningful, so older bundles stay byte-identical; add the field to `DeliveryBundleSchema` first.
+- A new response type must parse under `ItemResponseSchema`, or its saved value is silently dropped on resume ([resume prefill](#resume-prefill)); if its ids are sealed per attempt, `sealResponseIds` must map them too.
 - Focused tests: `test-sessions-api.test.ts` (codes, scope), `resolve-student.test.ts`, `attempt-ingest-api.test.ts` (write guards, 42 KB), `delivery-api.test.ts` (no answer key anywhere in the body; sealing round trips), `attempt-deadline.test.ts`, `sitting-closed.test.ts`, `sitting-over.test.ts`, `attempt-events-api.test.ts`, `peek-api.test.ts`, `attempt-pass-back-api.test.ts`, `attempt-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
 - These are DB-backed and require the `_test` database; see [testing](../testing/testing-and-validation.md). For roster scope see [accommodations and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
