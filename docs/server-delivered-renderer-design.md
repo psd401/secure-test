@@ -124,6 +124,20 @@ never test content (the code is public in this repository anyway).
      more broadly). Candidates: a non-exportable key in this Mac's Secure
      Enclave, a hardware token, a cloud KMS key the deploy role can use but
      the app task role cannot.
+     **Recommendation (2026-10-11), decision with the district's IT
+     leadership (asked the same day):** the working key in this Mac's
+     Secure Enclave, Touch ID for every signature (CryptoKit, a small
+     signing tool called from `deploy.sh`); the backup key generated
+     offline and printed, stored apart, only its public half compiled in.
+     Why not KMS: IAM Identity Center sessions carry no MFA condition keys
+     (`aws:MultiFactorAuthPresent` / `aws:MultiFactorAuthAge` are absent for
+     Identity Center identities), so no policy can demand fresh MFA per
+     `kms:Sign` — anyone holding the signed-in session (≤ 1 h) could sign.
+     Per-call MFA exists only for a classic IAM user assuming a role with a
+     TOTP code, which needs a long-term access key on disk and cannot use a
+     passkey or security key. Cost of the Enclave: signing only on this Mac,
+     where deploys already run. Slices 2–4 do not wait on this — they use a
+     throwaway dev key; only the production key does.
    - **Signing is decoupled from GitHub Actions.** `deploy.sh` can sign
      with a key held outside the server; moving deploys to Actions stays a
      separate roadmap question ("Environments"), with its own risks on a
@@ -168,6 +182,26 @@ never test content (the code is public in this repository anyway).
    meanwhile keep landing in Swift literals and move over unchanged.
    Should v1.x page work pause near the cutover so the first served
    renderer equals the last bundled one?
+   **DECIDED (D-3, James 2026-10-11) — where the work lives, so a blocker
+   never holds up v1.x releases or design-tool deploys:**
+   - **Server and infra on `main`, dark.** Slice 2 (staging) is its own
+     CDK stack. Slice 3 (renderer route, manifest, signature) is additive;
+     the delivery bundle carries `renderer` only when a setting is on, and
+     only staging turns it on — production deploys carry the code dormant
+     (the `GRADEBOOK_PROVIDER` pattern). `deploy.sh` ships `main`, so a
+     long-lived server branch would drift from every hotfix.
+   - **The client on a `v2-renderer` branch, in its own worktree.**
+     Slice 4 (fetch, verify, cache, contract check) stays off `main`
+     because every v1.x release is signed from `main` (psd-sign refuses
+     unless HEAD = origin/main) and no signed v1.x should carry half-built
+     fetch-and-verify code, dormant or not. Rebase the branch on `main`
+     after each v1.x release.
+   - **Slice 5 last, in one short sitting** during a page-work freeze
+     right before the v2.0 cut: every v1.x page fix edits
+     `AssessmentPage.swift`, the file slice 5 moves, so doing it early on
+     the branch guarantees conflicts.
+   - v1.x fixes and design-tool deploys continue from `main` unchanged
+     throughout.
 
 ## Sequencing against the roadmap (James, 2026-10-08)
 
@@ -260,3 +294,12 @@ meets a cold cluster).
     deploy), the same limits in the client (H-3).
   Accepted: `submit` without a native confirm (it is the student's
   Finish); `timer` (hides the banner only); no per-message rate limit.
+- 2026-10-09 — slice 1 shipped in client v1.6.2. Open: the real-AAC
+  row's "no `BLOCKED` line" half (a Finder launch captures no stderr —
+  run once through `launch-client.ts`).
+- 2026-10-11 — 2.a recommendation recorded (Secure Enclave + Touch ID,
+  printed offline backup) and put to the district's IT leadership, whose
+  call it is. D-3 decided: server / infra on `main` behind a setting,
+  the client on a `v2-renderer` branch, slice 5 last (question 9).
+  Notarization (Apple's 403) blocks only the v2.0 release step, not the
+  work. Nothing built.
