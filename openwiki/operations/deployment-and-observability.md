@@ -103,4 +103,3 @@ Names only (values never belong in the repo): `DATABASE_URL` (or `DB_*` in ECS),
 | Change logging or error capture | `lib/log.ts`, `lib/observability/serverError.ts`, `proxy.ts` | `log.test.ts`, `server-error-record.test.ts`, `health-route.test.ts` |
 
 CDK changes are validated by `cdk synth` in `design-tool/infra` (conditional: only when infra files change; it needs CDK context values). Do not run a full image build to check an app-only change.
-an app-only change.
