@@ -17,7 +17,11 @@ openwiki:
     - design-tool/lib/roster/importSnapshot.ts
     - design-tool/lib/roster/syncHandler.ts
     - design-tool/lib/roster/queries.ts
-  symbols: [explainAccommodations, resolveEffectiveAccommodations, isEnabledValue, resolveStudentForOwner, importSnapshot, validateExtract, handleS3Event, MockSnapshotSource, S3SnapshotSource]
+    - design-tool/lib/accommodations/coTeacherRecords.ts
+    - design-tool/lib/accommodations/sharedRecords.ts
+    - design-tool/lib/accommodations/pendingDiffs.ts
+    - design-tool/lib/accommodations/preview.ts
+  symbols: [explainAccommodations, resolveEffectiveAccommodations, isEnabledValue, resolveStudentForOwner, importSnapshot, validateExtract, handleS3Event, MockSnapshotSource, S3SnapshotSource, coTeacherEmailsFor, relatedTeacherEmails, pendingTideDiffs, buildAccommodationsPreview]
   test_paths:
     - design-tool/test/effective-accommodations.test.ts
     - design-tool/test/section-accommodations.test.ts
@@ -94,13 +98,20 @@ Nightly snapshot import path. A refused extract is recorded with counts and reas
 - Logging rule: counts and codes only, because Lambda logs go to CloudWatch and must never name a student.
 - Section teacher roles drive `lib/roster/coTeachers.ts` suggestions ([auth and access](auth-and-access.md#the-access-ladder-docsaccess-model-designmd)). `lib/roster/teacherRoster.ts` supplies display names and section labels used by results and attendance.
 
+## Co-teacher records and the "who gets what" preview
+
+Because `students` is a per-teacher overlay, one child can carry a record under several teachers. `coTeacherEmailsFor` (`lib/accommodations/coTeacherRecords.ts`) decides which colleagues' records count for an assessment besides the owner's: holders of a live assessment-scoped grant, plus the owner's roster co-teachers from `coTeachersOf`. Under the U-17 rule a colleague's record counts for a child only while that colleague currently teaches the child (`teachersCurrentlyTeaching`, which checks roster enrollment dates). Delivery and the preview share this rule, so a student's supports are the owner's record plus the current colleague records; a tool that came from a colleague is marked `from_record_of` in the preview.
+
+- **Symmetric "Also on X's record"**: `relatedTeacherEmails` (`lib/accommodations/sharedRecords.ts`) finds the other teachers related to the caller: roster co-teachers, grantees of live grants on the caller's tests, and owners of tests the caller holds a grant on. `otherTeachersRecords` returns their records for children the caller shares, and `alsoOnRecordLine` (`lib/accommodations/previewView.ts`) words each one. Only records for children the other teacher currently teaches are shown.
+- **Pending TIDE changes**: `pendingTideDiffs` (`lib/accommodations/pendingDiffs.ts`) finds `tide_then_edited` rows that a later import changed to a different value. Each entry carries the kept value and the value TIDE now asserts. A row whose stored TIDE code no longer resolves against the catalogue is dropped, because the page cannot state what TIDE says. The accommodations page counts these; the `accept-tide` and `keep-mine` routes under `app/api/accommodations/import/diff/[accId]/` resolve each one.
+- **Preview**: `buildAccommodationsPreview` (`lib/accommodations/preview.ts`) is served by `GET /api/assessments/[id]/accommodations-preview` (`app/api/assessments/[id]/accommodations-preview/route.ts`) and accepts `?section=<ps_id>` for one class period. It runs the same `explainAccommodations` rule as delivery, in a fixed number of queries. It lists only students the rule has something to say about and counts the rest in `others_count`. The route needs `edit` access, the same level as the overrides list.
+
+Invariant: a colleague's record never supplies a tool for a child the colleague no longer teaches. Focused tests: `coteach-accommodations.test.ts` (the U-17 "co-teachers' records count" and "F-1" exception cases, the U-17 slice 2 "who an exception can be added for" and "Also on X's record" cases), `accommodations-preview.test.ts` (the preview route), `accommodations-preview-view.test.ts` (the wording), and `accommodation-visibility.test.ts`.
+
 ## Change navigation
 
 - Changing which tools a student gets: edit the pure rule in `explainAccommodations`, then confirm `delivery-api.test.ts` and `accommodations-preview*.test.ts` still agree.
 - Adding a tool: add it to `catalog.ts`; a client only honours tools it knows. If it changes rendering, handle it in the client's `PageAccommodations` or lockdown plan ([lockdown and security](../client/lockdown-and-security.md)).
 - Changing the extract: bump `format_version`, update `docs/roster-extract.md`, `lib/roster/extract.ts` and its tests together. The importer must keep refusing versions it does not know.
-- Do not add a hard delete to roster sync; deactivation is how last-known-good survives a bad night.
-- Tests: `effective-accommodations.test.ts`, `section-accommodations.test.ts`, `coteach-accommodations.test.ts`, `tide-import.test.ts`, `tide-catalog.test.ts`, `student-accommodations-api.test.ts`, `resolve-student.test.ts`, `roster-extract*.test.ts`, `roster-import.test.ts`, `roster-queries.test.ts`, `roster-sync-handler.test.ts`. Test fixtures use synthetic ids (`roster-fixture-synthetic-ids.test.ts`), and no real student data may be committed.
-.ts` and its tests together. The importer must keep refusing versions it does not know.
 - Do not add a hard delete to roster sync; deactivation is how last-known-good survives a bad night.
 - Tests: `effective-accommodations.test.ts`, `section-accommodations.test.ts`, `coteach-accommodations.test.ts`, `tide-import.test.ts`, `tide-catalog.test.ts`, `student-accommodations-api.test.ts`, `resolve-student.test.ts`, `roster-extract*.test.ts`, `roster-import.test.ts`, `roster-queries.test.ts`, `roster-sync-handler.test.ts`. Test fixtures use synthetic ids (`roster-fixture-synthetic-ids.test.ts`), and no real student data may be committed.
