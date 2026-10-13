@@ -180,7 +180,6 @@ final class RendererStartTests: XCTestCase {
 
     func testEveryOtherRefusalReadsTryAgain() {
         let tryAgain: [RendererStart.Refusal] = [
-            .missing,
             .failed(.unavailable("offline")),
             .failed(.integrity("hash")),
             .failed(.refused(.badSignature)),
@@ -194,6 +193,11 @@ final class RendererStartTests: XCTestCase {
                 refusal.sheetInformative,
                 "Check your connection, then open it again from Your tests. If it still won't open, ask your teacher.")
         }
+        // A bundle with no renderer is a server configuration problem: the
+        // student is sent to the teacher, not told to retry (James, 2026-10-13).
+        XCTAssertFalse(RendererStart.Refusal.missing.needsUpdate)
+        XCTAssertEqual(RendererStart.Refusal.missing.sheetMessage, "Your test couldn't load.")
+        XCTAssertEqual(RendererStart.Refusal.missing.sheetInformative, "Ask your teacher.")
         XCTAssertEqual(RendererStart.Refusal.missing.reason, "missing")
         XCTAssertEqual(RendererStart.Refusal.failed(.unavailable("x")).reason, "unavailable")
         XCTAssertEqual(RendererStart.Refusal.failed(.integrity("x")).reason, "integrity")

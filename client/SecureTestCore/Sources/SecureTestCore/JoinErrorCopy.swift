@@ -33,6 +33,9 @@ public enum JoinErrorCopy {
     public static let rendererLoadFailedMessage = "Your test couldn't load."
     public static let rendererLoadFailedInformative =
         "Check your connection, then open it again from Your tests. If it still won't open, ask your teacher."
+    /// The bundle names no renderer (a Release build cannot fall back): the
+    /// server is not configured to serve one, so a retry cannot help.
+    public static let rendererMissingInformative = "Ask your teacher."
 
     /// Field report 2026-10-08: the line over the sign-in button after the
     /// server refused an expired session (see `APIError.isSessionExpired`).

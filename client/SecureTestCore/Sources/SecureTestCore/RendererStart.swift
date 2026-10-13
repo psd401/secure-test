@@ -44,9 +44,12 @@ public enum RendererStart {
 
         /// The sheet's second line.
         public var sheetInformative: String {
-            needsUpdate
-                ? JoinErrorCopy.message(forCode: "client_update_required")
-                : JoinErrorCopy.rendererLoadFailedInformative
+            if needsUpdate { return JoinErrorCopy.message(forCode: "client_update_required") }
+            // A bundle with no renderer is a server configuration problem
+            // (James, 2026-10-13): retrying will not help, so the student is
+            // sent to the teacher rather than told to check the connection.
+            if case .missing = self { return JoinErrorCopy.rendererMissingInformative }
+            return JoinErrorCopy.rendererLoadFailedInformative
         }
 
         /// stderr / errors.log text. Ids, versions and reasons only.
