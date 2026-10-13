@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Signed renderer delivery
-description: Signed renderer manifest, verification, signing CLI and staging delivery through the design tool.
+description: Signed renderer manifest, verification, signing CLI and delivery through the design tool, which names the renderer in delivery bundles behind RENDERER_DELIVERY=on and serves its files.
 tags: [renderer, signing, delivery]
 openwiki:
   roles: [architecture, delivery, integration]
@@ -19,7 +19,7 @@ This page covers the server-delivered renderer: the signed manifest, how the des
 
 ## Status
 
-- **Server side (implemented, staging only).** The design tool resolves a current signed renderer from storage and names it in the delivery bundle, and serves its files. Both are gated by `RENDERER_DELIVERY=on`, which the staging stack sets (`design-tool/infra/lib/app-service.ts`).
+- **Server side (implemented).** The design tool resolves a current signed renderer from storage and names it in the delivery bundle only when `RENDERER_DELIVERY=on`. The flag is set for both the staging and production stacks (`design-tool/infra/lib/app-service.ts`), because a v2.0 client refuses a bundle without the field (D-11). The file route `GET /api/renderer/[sha256]/[file]` is not behind that flag: it serves any stored signed file to a signed-in student or staff session, and returns 404 for anything else.
 - **Client side (not implemented).** The macOS shell still bundles its own renderer script. It does not read the bundle's `renderer` field, fetch `/api/renderer/...`, or verify a manifest signature. The client's `SecureTestCore` sources contain no manifest code; only the separate `tools/renderer-sign` package does.
 - **Placeholder content.** `packages/renderer/src/renderer.js` is a placeholder. The real student page is planned to move in later, byte for byte, from the client.
 
@@ -129,7 +129,7 @@ The bundle's `renderer` field is optional, and `RendererRefSchema` is strict. Th
 - **Client adoption.** Starting the shell side (reading `renderer`, fetching by hash, verifying in Swift) is a new seam, not a bug fix. It depends on the ADR 0018 decision and needs its own tests in `client/SecureTestCore`.
 - **Conditional checks.** `swift test` in `tools/renderer-sign` runs on macOS only. Run it only when `RendererSignCore` or its fixtures change.
 
-Scope boundaries: the signing and deployment scripts are not documented here. The deploy orchestration is in `design-tool/infra`, which this wiki does not cover in detail; see [deployment and observability](../operations/deployment-and-observability.md) for the staging stack.
+Scope boundaries: the signing and deployment scripts are not documented here. The deploy orchestration is in `design-tool/infra`, which this wiki does not cover in detail; see [deployment and observability](../operations/deployment-and-observability.md) for the stacks.
 
 The design-tool tests use `design-tool/test/helpers/renderer.ts`, which generates a throwaway P-256 key in memory and writes a signed renderer into a local storage root. No key file is written to the repository.
 

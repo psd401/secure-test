@@ -21,6 +21,8 @@ openwiki:
     - design-tool/lib/richText/essayHtml.ts
     - design-tool/lib/richText/renderEssayAnswer.ts
     - design-tool/app/api/assessments/[id]/items/import-pdf/route.ts
+    - design-tool/app/api/assessments/[id]/items/import/route.ts
+    - design-tool/lib/api/importItemsCsv.ts
     - design-tool/app/dashboard/[id]/readiness.ts
   symbols: [CreateItemBody, UpdateItemBody, effectiveScoringMethod, requireDraft, isAnswerKeyOnlyPatch, buildExportBundle, importBundleForOwner, assertItemsAreBundleable, PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, sanitizeEssayHtml, essayResponseForStorage, renderEssayAnswerHtml]
   test_paths:
@@ -30,6 +32,8 @@ openwiki:
     - design-tool/test/preview-render.test.ts
     - design-tool/test/pdf-extract.test.ts
     - design-tool/test/pdf-import-route.test.ts
+    - design-tool/test/import-items-csv.test.ts
+    - design-tool/test/csv-parse.test.ts
     - design-tool/test/duplicate-assessment.test.ts
     - design-tool/test/rich-text-essay-html.test.ts
     - design-tool/test/rich-text-essay-render.test.ts
@@ -69,7 +73,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 | Import bundle | `POST /api/assessments/import` (JSON or multipart, 50 MB cap) → `importBundleForOwner`, also the `/dashboard/import` page | validates `ItemBundleSchema`, re-uploads bundled assets (sha256 dedup) and rewrites `asset:` ids, validates accommodation ids leniently and reports dropped counters; E12 set sources kept only when the same owner owns the source assessment |
 | Duplicate | `POST /api/assessments/[id]/duplicate` → `duplicateAssessment.ts` | copies section accommodations whole; answers-release stamp never copied |
 | Share | `lib/api/shares.ts`, `/api/assessments/[id]/shares`, `/api/shares/[shareId]/accept` | **copy semantics**: the recipient accepts and gets an independent assessment built from the lossless export; share notification email via `lib/email/shareNotifications.ts`; a Co-teach grant (an `access_grants` row, not a share) shows "New" on the grantee's home list until they open it ([auth and access](auth-and-access.md)) |
-| Items CSV / items import | `lib/api/importItemsCsv.ts`, `POST …/items/import` | |
+| Items CSV / items import | `POST /api/assessments/[id]/items/import` → `parseItemsCsv` in `lib/api/importItemsCsv.ts` (header-driven parse via `parseCsvRecords` in `lib/api/csvParse.ts`) | Draft-only (`requireDraft`), `edit` access. One row per question with the columns in `ITEM_CSV_COLUMNS`. Each row is validated through the same `CreateItemBody` as the editor, so errors are reported per row. `commit: false` (the default) is a preview that writes nothing; `commit: true` appends only the valid rows after the current max position and never replaces existing items. The CSV template covers `multiple_choice_single`, `multiple_choice_multi`, `short_text` and `essay` only. `match`, `order`, `hotspot`, `drawing_upload`, `table` and `fill_blank` are refused with a message to author them in the editor. |
 | PDF import | `POST …/items/import-pdf` → `lib/pdfImport/*` | text via `unpdf` (`extractText.ts`), figures via `extractFigures.ts`; scanned PDFs go to Bedrock document blocks (ADR 0015); model returns candidate items validated through `CreateItemBody` (`validatePdfCandidates`), capped at `MAX_PDF_CANDIDATES`; typed failures (`PdfExtractError` truncated/invalid_json/not_array) map to 422 with teacher hints |
 | AI generation | `POST /api/ai/generate-item(s)` | gated by `allow_llm_authoring`; see [AI and safeguarding](ai-and-safeguarding.md). Batch drafts are unsaved until added through the items route: [batch AI item generation](batch-item-generation.md) |
 | Rubrics | `/api/rubrics`, `/api/assessments/[id]/rubrics/extract` | library rubrics are *copied* into `items.config.rubric` (fresh ids); no FK, so a library edit never rescores an item |
@@ -107,6 +111,12 @@ Invariant: a library edit never changes a rubric already copied into an item, an
 ## Change recipes
 
 - **Add an item type**: this is a cross-system change — follow [wire formats](../architecture/wire-formats.md#add-an-item-type-cross-system-expensive) first, then here: add the type to `ITEM_TYPES`, extend `CreateItemBody`/`UpdateItemBody` and `ItemConfig`, handle it in `exportBundle`/`importBundle`, `mapItemForDelivery`, `lib/scoring/auto.ts` (`scoreResponse`, max-points helpers), `lib/preview/renderHtml.ts`, the editor components, and `MIN_CLIENT_VERSION_FOR_TYPE` (`lib/items/clientSupport.ts`) if older clients cannot decode it. `assertNever` switches make the compiler list what you missed.
+- **Add a config field**: needs no migration (jsonb) but must be allowed in `itemConfigForWrite`, kept byte-stable in export when default, and — if it is an answer key — added to the key-only-PATCH set and dropped by the delivery mapping.
+- **Change the publish lock**: edit `requireDraft.ts`; tests in `items-api.test.ts` and `answer-key-only-patch.test.ts`.
+
+Scope boundaries: do not hand-edit `lib/preview/katexCss.ts`/`katex.min.css.ts` (vendored by `bun run vendor:katex-css`) or `lib/standards/catalog.json` (generated).
+.json` (generated).
+nts cannot decode it. `assertNever` switches make the compiler list what you missed.
 - **Add a config field**: needs no migration (jsonb) but must be allowed in `itemConfigForWrite`, kept byte-stable in export when default, and — if it is an answer key — added to the key-only-PATCH set and dropped by the delivery mapping.
 - **Change the publish lock**: edit `requireDraft.ts`; tests in `items-api.test.ts` and `answer-key-only-patch.test.ts`.
 
