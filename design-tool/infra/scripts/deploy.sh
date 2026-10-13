@@ -89,6 +89,24 @@ cd "$REPO"
 [ -z "$(git status --porcelain)" ] || fail "working tree is not clean — commit or stash first"
 HEAD_SHA="$(git rev-parse HEAD)"
 git fetch -q origin
+# The OpenWiki bot pushes a docs commit after every push to main, which left
+# HEAD one behind origin/main before nearly every deploy (2026-10-13).
+# Fast-forward ONLY when HEAD is an ancestor of origin/main and every commit
+# past it is the bot's and touches nothing outside openwiki/ — anything else
+# (a person's commit, local work, a bot commit touching code) still stops.
+if [ "$(git rev-parse origin/main)" != "$HEAD_SHA" ] \
+  && git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+  BOT_ONLY=1
+  for c in $(git rev-list "$HEAD_SHA..origin/main"); do
+    [ "$(git log -1 --format=%an "$c")" = "psd-automation[bot]" ] || BOT_ONLY=0
+    [ -z "$(git diff-tree --no-commit-id --name-only -r "$c" | grep -v '^openwiki/' || true)" ] || BOT_ONLY=0
+  done
+  if [ "$BOT_ONLY" -eq 1 ]; then
+    git merge -q --ff-only origin/main
+    echo "fast-forwarded over OpenWiki bot commit(s): $HEAD_SHA → $(git rev-parse HEAD)"
+    HEAD_SHA="$(git rev-parse HEAD)"
+  fi
+fi
 [ "$(git rev-parse origin/main)" = "$HEAD_SHA" ] || fail "HEAD ($HEAD_SHA) is not origin/main — push first (the image stamps APP_COMMIT from HEAD)"
 echo "HEAD = origin/main = $HEAD_SHA"
 
