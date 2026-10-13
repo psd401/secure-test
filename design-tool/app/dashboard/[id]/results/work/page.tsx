@@ -15,7 +15,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
-import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
+import { renderFillBlankAnswerHtml, renderFillBlankGapsHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import {
@@ -26,6 +26,7 @@ import {
 import {
   anonymousLabels,
   choiceCheckboxLines,
+  packetHidesAnswers,
   packetOrdering,
   packetScoreHeading,
   parsePacketQuery,
@@ -76,6 +77,9 @@ import { pageAssessment } from "@/lib/api/access";
  *     ?scores=none|teacher|ai|both
  *     ?anon=1            labels instead of names, key page last
  *     ?spacing=double    every essay answer double-spaced (RT D-10; default single)
+ *     ?answers=0         feedback without the answer (U-23): the question and the
+ *                        score blocks print, what the student wrote or chose does
+ *                        not. Ignored with `scores=none` (nothing would print).
  *
  * The section packet is handed-in attempts only: an in-progress answer can
  * still change and a packet is a record. `?attempt=` (a pilot teacher,
@@ -191,6 +195,7 @@ function packetHref(
   params.set("scores", query.scores);
   if (query.anon) params.set("anon", "1");
   if (query.doubleSpace) params.set("spacing", "double");
+  if (!query.answers) params.set("answers", "0");
   return `/dashboard/${assessmentId}/results/work?${params.toString()}`;
 }
 
@@ -550,6 +555,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   // W-1 (hand-run 2026-09-14): the teacher's key — ✓ / ✗ on keyed lines and
   // the "expected" cell under a table — prints only with the teacher's side.
   const showKey = query.scores === "teacher" || query.scores === "both";
+  const hideAnswers = packetHidesAnswers(query);
 
   const scoreRows =
     query.scores !== "none" && responseRows.length > 0
@@ -699,6 +705,18 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           />
           Double-space essays
         </label>
+        <label className="toolbar-flag">
+          {/* U-23: on by default, so the box submits `answers=0` only when
+              checked — no hidden field. */}
+          <input type="checkbox" name="answers" value="0" defaultChecked={!query.answers} />
+          Leave out answers (scores and feedback only)
+        </label>
+        {!query.answers && query.scores === "none" ? (
+          <p className="meta" role="status">
+            Leaving out answers needs a score choice above — answers are
+            printed until you pick teacher, ai or both.
+          </p>
+        ) : null}
         <button type="submit" className="rounded-md border px-3 py-1.5 text-sm self-start">
           Update
         </button>
@@ -766,7 +784,8 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                 ...(response ? (scoresByResponse.get(response.id) ?? []) : []),
               ]);
               const rubric = item.config.rubric ?? null;
-              const isText = view.kind === "text";
+              // U-23: a hidden answer has nothing to paginate.
+              const isText = view.kind === "text" && !hideAnswers;
               return (
                 <div key={item.id}>
                   {/* A set's stimulus and sources print once, above the first
@@ -785,7 +804,14 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                         "expected" only with the teacher's side (W-1). An
                         answers-only packet prints the "Blank n: …" lines
                         below instead. */}
-                    {query.questions && item.type === "fill_blank" ? (
+                    {query.questions && item.type === "fill_blank" && hideAnswers ? (
+                      <div
+                        className="stem"
+                        dangerouslySetInnerHTML={{
+                          __html: renderFillBlankGapsHtml(item.stem, resolvedAssets),
+                        }}
+                      />
+                    ) : query.questions && item.type === "fill_blank" ? (
                       <div
                         className="stem"
                         dangerouslySetInnerHTML={{
@@ -817,6 +843,17 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                       />
                     ) : null}
 
+                    {/* U-23: answers=0 — the choices still print for
+                        context (no ticks), nothing the student wrote does. */}
+                    {hideAnswers ? (
+                      boxes.length > 0 ? (
+                        <ul className="choices">
+                          {boxes.map((b) => (
+                            <li key={b.id}>{b.text}</li>
+                          ))}
+                        </ul>
+                      ) : null
+                    ) : (
                     <div className="answer">
                       {view.kind === "none" ? (
                         <p className="meta muted">No answer.</p>
@@ -889,6 +926,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                         <AnswerLines lines={view.lines} showKey={showKey} />
                       ) : null}
                     </div>
+                    )}
 
                     {query.scores === "none" ? null : (
                       // Two columns only for `both`, and only while both sides

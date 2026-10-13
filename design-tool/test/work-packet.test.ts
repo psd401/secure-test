@@ -7,6 +7,7 @@ import {
   anonymousLabels,
   choiceCheckboxLines,
   packetOrdering,
+  packetHidesAnswers,
   packetScoreHeading,
   parsePacketQuery,
   selectPacketScores,
@@ -27,6 +28,7 @@ describe("parsePacketQuery", () => {
       scores: "none",
       anon: false,
       doubleSpace: false,
+      answers: true,
     });
   });
 
@@ -102,6 +104,26 @@ describe("parsePacketQuery", () => {
     expect(parsePacketQuery({ scores: "none" }).scores).toBe("none");
     expect(parsePacketQuery({ scores: "everything" }).scores).toBe("none");
     expect(parsePacketQuery({ scores: "" }).scores).toBe("none");
+  });
+});
+
+describe("answers=0 — feedback without the answer (U-23)", () => {
+  test("defaults on; 0 / false / no turn it off; last value wins", () => {
+    expect(parsePacketQuery({}).answers).toBe(true);
+    expect(parsePacketQuery({ answers: "0" }).answers).toBe(false);
+    expect(parsePacketQuery({ answers: "false" }).answers).toBe(false);
+    expect(parsePacketQuery({ answers: "1" }).answers).toBe(true);
+    expect(parsePacketQuery({ answers: ["0", "1"] }).answers).toBe(true);
+    expect(parsePacketQuery({ answers: "" }).answers).toBe(true);
+  });
+
+  test("answers are hidden only when a score side prints (decision 1.5)", () => {
+    expect(packetHidesAnswers(parsePacketQuery({ answers: "0", scores: "none" }))).toBe(false);
+    expect(packetHidesAnswers(parsePacketQuery({ answers: "0" }))).toBe(false);
+    for (const scores of ["teacher", "ai", "both"]) {
+      expect(packetHidesAnswers(parsePacketQuery({ answers: "0", scores }))).toBe(true);
+      expect(packetHidesAnswers(parsePacketQuery({ scores }))).toBe(false);
+    }
   });
 });
 

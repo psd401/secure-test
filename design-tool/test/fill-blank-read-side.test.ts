@@ -9,7 +9,11 @@ import { describe, expect, test } from "bun:test";
 import type { FillBlankBlank, ItemResponse } from "@secure-test/schema";
 import type { ItemRow } from "../db/schema";
 import { fillBlankAnswer, filledBlankAnswerText } from "../lib/items/fillBlankAnswer";
-import { renderFillBlankAnswerHtml, renderFilledSentenceHtml } from "../lib/reporting/fillBlankView";
+import {
+  renderFillBlankAnswerHtml,
+  renderFillBlankGapsHtml,
+  renderFilledSentenceHtml,
+} from "../lib/reporting/fillBlankView";
 import { describeAnswer } from "../lib/reporting/answerView";
 import { correctAnswerText, yourAnswerText, type FeedbackItemInput } from "../lib/feedback/buildFeedback";
 import { buildEvidencePackFromData, type EvidencePackInput } from "../lib/insights/evidencePack";
@@ -205,6 +209,17 @@ describe("renderFilledSentenceHtml — FB-S1 emphasis around a blank", () => {
     const html = renderFillBlankAnswerHtml("A \uE000 [[b1]] b.", BLANKS, { answers: {} }, NO_ASSETS, { showKey: false });
     expect(html).not.toContain("\uE000");
     expect(html).toContain('class="fb-blank');
+  });
+});
+
+describe("renderFillBlankGapsHtml — the packet's answers=0 sentence (U-23)", () => {
+  test("numbered empty gaps, no answer and no \"(blank)\"", () => {
+    const html = renderFillBlankGapsHtml("Water is [[b1]] and salt is [[b2]].", NO_ASSETS);
+    expect(html).toContain('aria-label="Blank 1"');
+    expect(html).toContain("(2)");
+    expect(html).toContain("Water is");
+    expect(html).not.toContain("[[b1]]");
+    expect(html).not.toContain("(blank)");
   });
 });
 

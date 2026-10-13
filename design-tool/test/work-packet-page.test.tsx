@@ -653,6 +653,53 @@ describe("work packet — formatted essays and double spacing (RT)", () => {
   });
 });
 
+// U-23 (beta teachers, 2026-10-13): `answers=0` prints the questions and the
+// score / feedback blocks and leaves out what the student wrote or chose —
+// a feedback sheet to hand back. Ignored with scores=none (decision 1.5).
+describe("work packet — feedback without the answer (U-23)", () => {
+  test("answers=0 keeps stems, choices and feedback; drops every answer", async () => {
+    const { assessment } = await seedPacketScene();
+    const body = packetBody(
+      await render(assessment.id, { section: SECTION, scores: "both", answers: "0" }),
+    );
+    // The question and the feedback stay.
+    expect(body).toContain("STEM-ESSAY");
+    expect(body).toContain("STEM-MC-MULTI");
+    expect(body).toContain("CHOICE-NEON");
+    expect(body).toContain("HUMAN-WHY");
+    expect(body).toContain("AI-OVERALL");
+    // Nothing the student wrote or chose: no essay, no ticks, no drawing, no
+    // table grid, no short-text math, no "No answer." placeholder.
+    expect(body).not.toContain("ADA-ESSAY-PROSE");
+    expect(body).not.toContain("BEN-ESSAY-PROSE");
+    expect(body).not.toContain("☑");
+    expect(body).not.toContain("☐");
+    expect(body).not.toContain("/upload");
+    expect(body).not.toContain("expected 12");
+    expect(body).not.toContain('class="katex"');
+    expect(body).not.toContain("No answer.");
+    expect(body).not.toContain("answer-text");
+  });
+
+  test("answers=0 with scores=none prints the answers and says why", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION, answers: "0" });
+    expect(packetBody(html)).toContain("ADA-ESSAY-PROSE");
+    expect(html).toContain("Leaving out answers needs a score choice");
+  });
+
+  test("the toolbar box follows ?answers=, and Select all keeps it", async () => {
+    const { assessment } = await seedPacketScene();
+    const off = await render(assessment.id, { section: SECTION });
+    expect(off).toContain('name="answers" value="0"/>');
+    expect(off).toContain("Leave out answers (scores and feedback only)");
+    expect(off).not.toContain("Leaving out answers needs a score choice");
+    const on = await render(assessment.id, { section: SECTION, scores: "ai", answers: "0" });
+    expect(on).toContain('name="answers" checked="" value="0"/>');
+    expect(on).toMatch(/href="[^"]*answers=0[^"]*">Select all/);
+  });
+});
+
 describe("work packet — scores", () => {
   test("scores=both prints the teacher block and the AI proposal, never the research row", async () => {
     const { assessment } = await seedPacketScene();

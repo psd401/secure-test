@@ -1623,3 +1623,17 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 565 | The same flow on the origin after the deploy, on a scratch assessment | As 557–564 (Send dialog only if PowerSchool was used) | ✅ 2026-10-09 on the origin (`0112ed4`), fixture `v1.6.2 Release smoke + E11 2026-10-08` (Q1 keyed to the wrong choice), the demo student's real-AAC attempt from the v1.6.2 smoke: Q1 0/1 and "(0)" before the fix; Save question → the editor pointer → Results "(1)" → dialog "Rescoring changes 1 student's score … Q1 — 1 answer changes" → Rescore → Q1 1/1, total 2 of 3 (essay awaiting), button "(0)", "Rescored 1 student · 8:32 AM." No gradebook send (none earlier on this fixture) |
 | 566 | A co-teacher at view level / another teacher | No button; the route answers 404 | NOT RUN (second staff account; the 404 is covered by `test/rescore.test.ts`) |
 | 567 | `/help.html#score`, the FAQ entry, the quick start, `/roadmap.html` | "Fixed an answer key after students handed in", the FAQ entry, the 2026-10-08 milestone | ✅ 2026-10-08 on local dev (help sub-topic + FAQ entry render; roadmap milestone renders); quick start checked in the diff |
+
+## Print feedback without the answer (U-23, 2026-10-13)
+
+`docs/roadmap-2026-09.md` row U-23 is the record (decisions 1.1–1.6). Local dev on `_demo`, Claude in Chrome as the demo teacher, on an assessment with a scored essay (rubric + AI feedback), an MC, a short text and a fill-in-the-blank, handed in.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 568 | Results → **Print student work** → a section, Scores **both**, tick **Leave out answers**, Update | Each student's page: Q numbers, stems, MC choices with no ☐ / ☑, the fill-in-the-blank sentence with numbered empty gaps, the teacher and AI blocks with criterion rows and feedback; no essay text, no short-text answer, no drawing, no table | NOT RUN |
+| 569 | The same with **Show questions** unticked | Q numbers and score blocks only | NOT RUN |
+| 570 | **Leave out answers** with Scores **none** | The answers print as usual; the toolbar says "Leaving out answers needs a score choice…" | NOT RUN |
+| 571 | **Anonymous** + **Leave out answers**, Save as PDF | Labels on the pages, key page last, one student per sheet, an inch of margin | NOT RUN |
+| 572 | One student (the Student picker) + **Leave out answers** | That student's one page, no answer | NOT RUN |
+| 573 | **Select all** after ticking it; reload the URL | `answers=0` kept in the link; the box stays ticked | NOT RUN |
+| 574 | `/help.html#results` and the quick start | The packet line names "Leave out answers" | NOT RUN |

@@ -34,6 +34,13 @@ export interface PacketQuery {
    * choice, default off (single); any other value is single.
    */
   doubleSpace: boolean;
+  /**
+   * U-23 (beta teachers, 2026-10-13): `answers=0` leaves out what the student
+   * wrote or chose, keeping the question and the score / feedback blocks — a
+   * feedback sheet to hand back. Default on. Read it through
+   * `packetHidesAnswers`, never directly: with `scores=none` it is ignored.
+   */
+  answers: boolean;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -104,7 +111,19 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
     scores,
     anon: flag(lastParam(searchParams.anon), false),
     doubleSpace: (lastParam(searchParams.spacing) ?? "").trim().toLowerCase() === "double",
+    answers: flag(lastParam(searchParams.answers), true),
   };
+}
+
+/**
+ * U-23 decision 1.5: answers are left out only when a score side prints —
+ * `answers=0` with `scores=none` would print question numbers and nothing
+ * else, so the answers print as usual and the toolbar says why. A rule
+ * rather than a disabled checkbox because the toolbar is a plain GET form
+ * with no client JS (the page's FERPA posture).
+ */
+export function packetHidesAnswers(query: Pick<PacketQuery, "answers" | "scores">): boolean {
+  return !query.answers && query.scores !== "none";
 }
 
 /**

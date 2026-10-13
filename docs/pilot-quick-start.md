@@ -199,7 +199,9 @@ its own.
   percent. *Download CSV*, *Print report* (a printable summary; add
   `?attempt=…` from a student's row for a family-facing single page),
   *Print student work* (each student's answers with the key on a last
-  page, for scoring by hand or evidence).
+  page, for scoring by hand or evidence; with a score choice and *Leave out
+  answers* it prints the scores and feedback without the student's writing,
+  to hand back).
 - **Send to gradebook** (Results page, since 2026-09-29): each student's
   total points go to PowerSchool for one section at a time. Pick the
   section and a category; the assignment name and due date (today) can be

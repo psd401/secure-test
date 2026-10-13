@@ -21,7 +21,7 @@ import {
 } from "@/lib/items/fillBlankAnswer";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
-import type { FillBlankBlank } from "@secure-test/schema";
+import { FILL_BLANK_MARKER_RE, type FillBlankBlank } from "@secure-test/schema";
 
 export interface FillBlankHtmlOptions {
   /** Marks, expected answers and the key notes (W-1). */
@@ -124,4 +124,26 @@ export function renderFillBlankAnswerHtml(
       ? (response.answers as Record<string, unknown>)
       : null;
   return renderFilledSentenceHtml(fillBlankAnswer(stem, blanks, answers), resolved, options);
+}
+
+/**
+ * U-23: the sentence with numbered empty gaps, for a work packet printed with
+ * `answers=0` — the question for context, no answer in it. Not
+ * `renderFillBlankAnswerHtml` with no response: that prints "(blank)", which
+ * reads as a student who left the blank empty.
+ */
+export function renderFillBlankGapsHtml(
+  stem: string,
+  resolved: Map<string, ResolvedAsset>,
+): string {
+  const texts: string[] = [];
+  const slots: string[] = [];
+  let last = 0;
+  for (const m of stem.matchAll(FILL_BLANK_MARKER_RE)) {
+    texts.push(stem.slice(last, m.index));
+    last = m.index! + m[0].length;
+    slots.push(`<span class="fb-blank" aria-label="Blank ${slots.length + 1}">&ensp;(${slots.length + 1})&emsp;&emsp;</span>`);
+  }
+  texts.push(stem.slice(last));
+  return `<div class="fb-sentence">${renderAroundBlanks(texts, slots, resolved)}</div>`;
 }
