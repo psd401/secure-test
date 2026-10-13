@@ -33,6 +33,13 @@ public enum ItemResponse: Codable, Equatable, Sendable {
     /// text. A blank left empty is absent; an item with no answer at all is
     /// the absence of a response (docs/fill-in-blank-design.md §Response).
     case fillBlank(answers: [String: String])
+    /// Slice 4d (docs/server-delivered-renderer-design.md D-5): an answer of a
+    /// type this shell does not know — every field of the wire object but
+    /// `type`, carried as raw JSON and spooled as it arrived. The bridge gives
+    /// it generic caps (`BridgeItemTable.lengthRefusal`); the server's schema
+    /// validates it exactly. Never produced for one of the ten known types: a
+    /// known type with a bad shape still fails to decode.
+    case generic(type: String, fields: [String: JSONValue])
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -60,6 +67,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case .drawingUpload: return "drawing_upload"
         case .table: return "table"
         case .fillBlank: return "fill_blank"
+        case .generic(let type, _): return type
         }
     }
 
@@ -91,15 +99,23 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case "fill_blank":
             self = .fillBlank(answers: try c.decode([String: String].self, forKey: .answers))
         default:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: c,
-                debugDescription: "unknown response type \"\(type)\""
-            )
+            // Slice 4d: the served renderer may post a type this shell has
+            // never heard of. Keep the whole object (less `type`) verbatim.
+            guard case .object(var fields) = try JSONValue(from: decoder) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .type, in: c, debugDescription: "response is not an object")
+            }
+            fields.removeValue(forKey: "type")
+            self = .generic(type: type, fields: fields)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
+        if case .generic(let type, var fields) = self {
+            fields["type"] = .string(type)
+            try JSONValue.object(fields).encode(to: encoder)
+            return
+        }
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(typeName, forKey: .type)
         switch self {
@@ -115,6 +131,7 @@ public enum ItemResponse: Codable, Equatable, Sendable {
         case .drawingUpload(let id): try c.encode(id, forKey: .uploadID)
         case .table(let cells): try c.encode(cells, forKey: .cells)
         case .fillBlank(let answers): try c.encode(answers, forKey: .answers)
+        case .generic: break // encoded above
         }
     }
 }
