@@ -487,3 +487,18 @@ meets a cold cluster).
   `Application Support/SecureTest/renderers/`, evicted on the existing
   24 h purge hooks; strict decodes to loosen in 4d = `DeliveryItem`,
   `ItemResponse` (incl. `saved_responses`), `ItemSet.Layout`.
+- 2026-10-13 — **Slice 4e BUILT (server side of v2.0, on `main`), not
+  deployed.** Bridge mode (D-9): `packages/renderer` has no renderer source;
+  `scripts/extract-swift.ts` extracts `renderer.js` =
+  `AssessmentPage.rendererScript` (math + rich-text functions spliced) and
+  `renderer.css` = `itemStyles + "\n" + richTextStyles` (the v2.0 shell
+  inlines it as one `<style>`), refusing any literal construct it does not
+  implement; `scripts/check-extraction.sh` proves byte equality against
+  Swift itself (`@testable import SecureTestCore`) and runs before every
+  signature. `requires` = `BRIDGE_REQUIRES` (the eight handlers +
+  `tts.word_ranges`, not `response.generic`). D-12 in `deploy.sh`: staging
+  AND production keep the renderer current; a new signature only when the
+  files or `requires` change or `not_after` is within 14 days (margin = 14
+  days, James); production's template gains only `RENDERER_DELIVERY=on`
+  (D-11). The first production deploy after this signs (Touch ID) — D-13's
+  minimum version comes from that renderer.

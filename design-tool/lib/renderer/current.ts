@@ -14,7 +14,8 @@
  * Everything under a hash prefix is immutable and kept forever: a student who
  * resumes after a deploy is handed the CURRENT renderer, but a shell that
  * already holds an older bundle can still fetch what that bundle names.
- * `deploy.sh --staging` signs (Touch ID), uploads the four files, and writes
+ * `deploy.sh` (staging and production, D-12: only when a signature is due)
+ * signs (Touch ID), uploads the four files, and writes
  * the pointer LAST.
  *
  * The pointer is trusted for nothing: before naming a renderer this module

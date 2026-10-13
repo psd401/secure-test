@@ -33,7 +33,7 @@ function notFound(): NextResponse {
  * paused overnight (row AC), so a shell's fetch never waits on a cold
  * cluster. Storage is the only source.
  *
- * Files under a hash are immutable (`deploy.sh --staging` never rewrites
+ * Files under a hash are immutable (`deploy.sh` never rewrites
  * one), hence the year-long immutable cache. A name or hash outside the
  * allowed shapes is 404, the same as a missing object, so the route says
  * nothing about what exists.

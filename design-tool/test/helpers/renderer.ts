@@ -9,7 +9,7 @@ import {
   canonicalManifestBytes,
   sha256Hex,
 } from "@secure-test/renderer/manifest";
-import { PLACEHOLDER_REQUIRES } from "@secure-test/renderer/requires";
+import { BRIDGE_REQUIRES } from "@secure-test/renderer/requires";
 
 export type TestKey = { privateKey: KeyObject; publicPem: string };
 
@@ -60,7 +60,7 @@ export async function writeSignedRenderer(
     files,
     version: opts.version ?? 1_760_000_000,
     commit: TEST_COMMIT,
-    requires: PLACEHOLDER_REQUIRES,
+    requires: BRIDGE_REQUIRES,
     issuedAt: opts.issuedAt ?? new Date(),
     validityDays: opts.validityDays,
   });

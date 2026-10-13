@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   buildManifest,
   canonicalManifestBytes,
   parseManifest,
   type RendererManifest,
 } from "../src/manifest";
-import { PLACEHOLDER_REQUIRES, REQUIREMENTS } from "../src/requires";
+import { BRIDGE_REQUIRES, REQUIREMENTS } from "../src/requires";
 
 const enc = new TextEncoder();
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
@@ -57,9 +55,9 @@ describe("buildManifest", () => {
     expect(() => sample({ requires: ["response", "camera"] })).toThrow(/unknown requirement/);
   });
 
-  test("the placeholder's requirements are all in the vocabulary", () => {
+  test("the bridge renderer's requirements are all in the vocabulary", () => {
     expect(REQUIREMENTS).toHaveLength(10);
-    expect(() => sample({ requires: PLACEHOLDER_REQUIRES })).not.toThrow();
+    expect(() => sample({ requires: BRIDGE_REQUIRES })).not.toThrow();
   });
 
   test("a bad commit is rejected", () => {
@@ -153,12 +151,5 @@ describe("parseManifest", () => {
   test("rejects non-canonical bytes of a valid manifest", () => {
     const pretty = enc.encode(JSON.stringify(sample(), null, 2));
     expect(() => parseManifest(pretty)).toThrow(/canonical/);
-  });
-});
-
-describe("src/renderer.js", () => {
-  test("never contains </ (the client inlines it into a <script>)", () => {
-    const js = readFileSync(join(import.meta.dir, "..", "src", "renderer.js"), "utf8");
-    expect(js.includes("</")).toBe(false);
   });
 });

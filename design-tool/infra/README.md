@@ -164,67 +164,18 @@ What staging leaves out, and why:
 ### Day to day
 
 ```sh
-design-tool/infra/scripts/deploy.sh --staging        # ci gate, sign the renderer (Touch ID), deploy HEAD, start a task, wait for health = HEAD
-design-tool/infra/scripts/deploy.sh --staging --no-renderer  # the same without signing (infra-only changes)
+design-tool/infra/scripts/deploy.sh --staging        # renderer (signed only when due, Touch ID), deploy HEAD, start a task, wait for health = HEAD
+design-tool/infra/scripts/deploy.sh --staging --no-renderer  # the same without the renderer step (infra-only changes)
 design-tool/infra/scripts/staging.sh status          # counts + /api/health
 design-tool/infra/scripts/staging.sh up | down       # start / stop the one task
 ```
 
 `deploy.sh --staging` is the production recipe (clean tree, HEAD pushed,
 schema rebuilt, diff, deploy, health stamp = HEAD) without the school-hours
-guard, plus the renderer signing step below. Deploys never change the
+guard (the renderer step, "The signed renderer" below, runs on both).
+Deploys never change the
 staging task count; stop it with `staging.sh down` when finished. Idle cost
 is roughly the ALB, the Secrets Manager endpoint, public IPv4 and storage.
-
-### The signed renderer (renderer slice 3, `docs/server-delivered-renderer-design.md`)
-
-Staging's task carries `RENDERER_DELIVERY=on`, so its delivery bundles name
-the current signed renderer as `renderer: {version, sha256}`; production
-carries the code dormant (no variable, no pointer, no bundle field).
-
-`deploy.sh --staging` signs and uploads the renderer between the diff and
-`cdk deploy`:
-
-1. **CI gate** (in pre-flight) — `gh run list --workflow ci --commit HEAD`
-   must show a completed, successful run. Still running → "wait for ci";
-   failed → refused. When HEAD has no run at all and is only OpenWiki bot
-   commits (`openwiki/` only) past the last person's commit, that commit's
-   green run is used instead (the bot's commits change nothing the renderer
-   build or the tests read). Needs `gh auth login`.
-2. **Build** — `bun run build` in `packages/renderer` (dist/ holds
-   `renderer.js`, `renderer.css`, `manifest.json`); builds
-   `tools/renderer-sign` (`swift build -c release`) if it is missing.
-3. **Sign — Touch ID.** The script prints a line first, then
-   `renderer-sign sign` asks for a fingerprint: the working key lives in this
-   Mac's Secure Enclave, so signing works only here, unlocked, at the
-   keyboard. Then `renderer-sign verify` against
-   `packages/renderer/keys/working.pub.pem`; any failure stops the deploy.
-4. **Upload** to the staging asset bucket (output `AssetBucketName`), then
-   the pointer last.
-
-Storage layout (the asset bucket; `STORAGE_LOCAL_ROOT` in dev):
-
-```text
-renderers/<manifest sha256>/manifest.json   canonical, signed bytes
-renderers/<manifest sha256>/manifest.sig    DER ECDSA P-256 / SHA-256
-renderers/<manifest sha256>/renderer.js
-renderers/<manifest sha256>/renderer.css
-renderers/current.json                      {"sha256":"<manifest sha256>","version":<int>}
-```
-
-Files under a hash are immutable and kept forever (a hash already stored is
-not uploaded again), so a shell holding an older bundle can still fetch what
-it names; a resume gets whatever `current.json` names now. The app re-checks
-the pointer before naming it (manifest hash, signature against the
-compiled-in public keys, validity window, file hashes), caches the answer
-60 s, and logs `renderer_current_invalid` at WARN when a pointer fails. The
-shell fetches `GET /api/renderer/<sha256>/<file>` (any student or staff
-session, JWT only, no database — it must answer while Aurora is paused).
-
-`deploy.sh --staging --no-renderer` skips the gate, build, Touch ID and
-upload — for an infra-only staging deploy; the pointer keeps naming the
-last signed renderer. The renderer's 60-day validity window means a
-renderer nobody re-signs stops being named after 60 days.
 
 ### Seeding the roster
 
@@ -249,6 +200,82 @@ script refuses unless the task carries `SECURE_TEST_DEPLOYMENT=staging`
   managed profile names the staging origin **instead of** production's (IT
   scopes it; two profiles for the same domain on one Mac give an undefined
   `ServerURL`).
+
+## The signed renderer (staging and production; renderer slices 3 / 4e, `docs/server-delivered-renderer-design.md`)
+
+Both stacks' tasks carry `RENDERER_DELIVERY=on`, so delivery bundles name
+the current signed renderer as `renderer: {version, sha256}` (D-11: a v2.0
+client refuses a bundle without it; v1.x clients ignore it). Until a stack's
+first signed renderer is uploaded, its bundles simply omit the field.
+
+**Bridge mode (D-9).** `packages/renderer`'s build extracts `renderer.js` and
+`renderer.css` from the client's Swift literals (`AssessmentPage.rendererScript`,
+`itemStyles` + `richTextStyles`), byte-identical to the page a v1.x client
+builds; page edits keep landing in Swift until slice 5. See
+`packages/renderer/README.md`.
+
+Every `deploy.sh` (staging, or production with no flag) runs the renderer
+step between the diff and `cdk deploy`:
+
+1. **Build** — `bun run build` in `packages/renderer` (dist/ holds
+   `renderer.js`, `renderer.css`, `manifest.json`); builds
+   `tools/renderer-sign` (`swift build -c release`) if it is missing.
+2. **Is a signature due? (D-12)** — read `renderers/current.json` and the
+   manifest + signature it names from the stack's asset bucket (output
+   `AssetBucketName`), check the manifest hashes to the pointer and verifies
+   against `keys/working.pub.pem`. When the new `renderer.js` and
+   `renderer.css` have the same sha256 as that manifest's files, `requires`
+   is the same, and `not_after` is more than **14 days** away
+   (`RENDERER_RESIGN_MARGIN_DAYS`, James) → *"renderer unchanged — keeping
+   <sha> (valid until …)"*: nothing signed or uploaded, no Touch ID, no ci
+   gate. Anything missing or unreadable means a signature is due. A deploy
+   every ~46 days is enough to keep a renderer named; one that sits longer
+   expires after 60 days and the next deploy re-signs it.
+3. **CI gate** — `gh run list --workflow ci --commit HEAD` must show a
+   completed, successful run. Still running → "wait for ci"; failed →
+   refused. When HEAD has no run at all and is only OpenWiki bot commits
+   (`openwiki/` only) past the last person's commit, that commit's green run
+   is used instead (the bot's commits change nothing the renderer build or
+   the tests read). Needs `gh auth login` (checked in pre-flight).
+4. **Extraction check** — `packages/renderer/scripts/check-extraction.sh`
+   compiles SecureTestCore and confirms, with Swift itself, that
+   `dist/renderer.{js,css}` equal the page's strings; a mismatch stops the
+   deploy.
+5. **Sign — Touch ID.** The script prints a line first, then
+   `renderer-sign sign` asks for a fingerprint: the working key lives in this
+   Mac's Secure Enclave, so signing works only here, unlocked, at the
+   keyboard. Then `renderer-sign verify` against
+   `packages/renderer/keys/working.pub.pem`; any failure stops the deploy.
+6. **Upload** to the stack's asset bucket, then the pointer last.
+
+Staging and production sign separately (each bucket has its own pointer), so
+the first production deploy after slice 4e signs once even when staging
+already carries the same files. D-13: v2.0's compiled-in minimum renderer
+version is the first production-signed renderer's version. DS-2 (the
+school-hours rule for migrations) is unchanged.
+
+Storage layout (the asset bucket; `STORAGE_LOCAL_ROOT` in dev):
+
+```text
+renderers/<manifest sha256>/manifest.json   canonical, signed bytes
+renderers/<manifest sha256>/manifest.sig    DER ECDSA P-256 / SHA-256
+renderers/<manifest sha256>/renderer.js
+renderers/<manifest sha256>/renderer.css
+renderers/current.json                      {"sha256":"<manifest sha256>","version":<int>}
+```
+
+Files under a hash are immutable and kept forever (a hash already stored is
+not uploaded again), so a shell holding an older bundle can still fetch what
+it names; a resume gets whatever `current.json` names now. The app re-checks
+the pointer before naming it (manifest hash, signature against the
+compiled-in public keys, validity window, file hashes), caches the answer
+60 s, and logs `renderer_current_invalid` at WARN when a pointer fails. The
+shell fetches `GET /api/renderer/<sha256>/<file>` (any student or staff
+session, JWT only, no database — it must answer while Aurora is paused).
+
+`deploy.sh --no-renderer` (either stack) skips the whole step — for an
+infra-only deploy, or a deploy from anywhere but the signing Mac; the pointer
+keeps naming the last signed renderer. `--diff` never signs.
 
 ## Migrations
 

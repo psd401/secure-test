@@ -36,38 +36,50 @@
 #   design-tool/infra/scripts/deploy.sh                  # the whole recipe
 #   design-tool/infra/scripts/deploy.sh --diff           # pre-flight + diff only
 #   design-tool/infra/scripts/deploy.sh --during-school  # override DS-2
-#   design-tool/infra/scripts/deploy.sh --staging        # the STAGING stack (+ renderer)
-#   design-tool/infra/scripts/deploy.sh --staging --no-renderer  # staging, no signing
+#   design-tool/infra/scripts/deploy.sh --staging        # the STAGING stack
+#   design-tool/infra/scripts/deploy.sh --no-renderer    # either stack, no signing
 # --staging (renderer slice 2, D-7) deploys SecureTestDesignToolStaging with
 # --context env=staging, reads the origin from cdk.context.json's
 # staging.domainName, skips DS-2 (no classes run on staging) and runs
 # `staging.sh up` before the health wait (its task count is 0 between uses);
 # `staging.sh down` afterwards when done. Everything else is the same recipe.
 #
-# --staging also SIGNS AND UPLOADS THE RENDERER (renderer slice 3 commit 4,
-# docs/server-delivered-renderer-design.md D-1 / D-2 / 2.a), between the diff
-# and `cdk deploy`:
-#   a. CI gate (in pre-flight): HEAD must have a completed, successful `ci`
-#      run on GitHub (`gh run list`); in progress → "wait for ci", failed →
-#      refused. A HEAD that is only OpenWiki bot commits past the last
-#      person's commit may use that commit's green run (see ci_gate below).
-#   b. `bun run build` in packages/renderer → dist/{renderer.js,
-#      renderer.css, manifest.json}; builds tools/renderer-sign if missing.
-#   c. `renderer-sign sign` — a TOUCH ID PROMPT on this Mac (the working key
+# EVERY deploy (staging and production) also keeps THE SIGNED RENDERER
+# current (renderer slices 3 / 4e, docs/server-delivered-renderer-design.md
+# D-1 / D-2 / 2.a / D-9 / D-11 / D-12), between the diff and `cdk deploy`:
+#   a. `bun run build` in packages/renderer -> dist/{renderer.js,
+#      renderer.css, manifest.json}. Bridge mode (D-9): the two files are
+#      extracted from the client's Swift literals (byte-identical to the page
+#      a v1.x client builds).
+#   b. D-12 skip rule: read renderers/current.json and the manifest it names
+#      from the target stack's asset bucket (stack output AssetBucketName) and
+#      verify that manifest's signature. When the new renderer.js and
+#      renderer.css have the SAME sha256 as the current manifest's files, its
+#      `requires` is the same, and its not_after is more than
+#      RENDERER_RESIGN_MARGIN_DAYS (14, James) away -> "renderer unchanged",
+#      nothing signed or uploaded, no Touch ID. Otherwise c-f.
+#   c. CI gate: HEAD must have a completed, successful `ci` run on GitHub
+#      (`gh run list`); in progress -> "wait for ci", failed -> refused. A HEAD
+#      that is only OpenWiki bot commits past the last person's commit may use
+#      that commit's green run (see ci_gate below).
+#   d. packages/renderer/scripts/check-extraction.sh: Swift itself confirms
+#      dist/renderer.{js,css} equal AssessmentPage's strings; refused on a
+#      mismatch.
+#   e. `renderer-sign sign` - a TOUCH ID PROMPT on this Mac (the working key
 #      lives in its Secure Enclave), then `renderer-sign verify` against
 #      packages/renderer/keys/working.pub.pem; refused on failure.
-#   d. upload to the staging asset bucket (stack output AssetBucketName):
-#      renderers/<manifest sha256>/{manifest.json, manifest.sig, renderer.js,
-#      renderer.css} — skipped when that manifest is already stored (same
-#      hash = same bytes; files under a hash are never rewritten) — then
-#      renderers/current.json = {"sha256": …, "version": …} LAST, so the
-#      pointer never names a half-uploaded renderer.
-# --no-renderer (with --staging only) skips a–d: an infra-only staging
-# deploy, no Touch ID; the pointer keeps naming the last signed renderer.
-# Production deploys never sign, upload or need Touch ID.
+#   f. upload: renderers/<manifest sha256>/{manifest.json, manifest.sig,
+#      renderer.js, renderer.css} - skipped when that manifest is already
+#      stored (same hash = same bytes; files under a hash are never
+#      rewritten) - then renderers/current.json = {"sha256": ..., "version": ...}
+#      LAST, so the pointer never names a half-uploaded renderer.
+# --no-renderer skips a-f on either stack: an infra-only deploy, no Touch ID;
+# the pointer keeps naming the last signed renderer. --diff never signs.
+# Production's school-hours rule (DS-2) is unchanged by any of this.
 # Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool,
 #      or SecureTestDesignToolStaging with --staging),
-#      DEPLOY_HEALTH_WAIT (seconds, default 600).
+#      DEPLOY_HEALTH_WAIT (seconds, default 600),
+#      RENDERER_RESIGN_MARGIN_DAYS (default 14; D-12).
 #
 # Exit codes: 1 pre-flight refused; the cdk exit code otherwise; 1 when the
 # health stamp never reaches HEAD.
@@ -94,15 +106,16 @@ for arg in "$@"; do
     *) echo "deploy: unknown flag $arg" >&2; exit 2 ;;
   esac
 done
-if [ "$NO_RENDERER" -eq 1 ] && [ "$STAGING" -eq 0 ]; then
-  echo "deploy: --no-renderer only applies with --staging (production never signs a renderer)" >&2
-  exit 2
-fi
-# The renderer is signed and uploaded on a real staging deploy only.
+# The renderer is kept current on every real deploy, staging and production
+# (D-11 / D-12); --no-renderer and --diff skip it.
 RENDERER=0
-if [ "$STAGING" -eq 1 ] && [ "$NO_RENDERER" -eq 0 ] && [ "$DIFF_ONLY" -eq 0 ]; then
+if [ "$NO_RENDERER" -eq 0 ] && [ "$DIFF_ONLY" -eq 0 ]; then
   RENDERER=1
 fi
+RESIGN_MARGIN_DAYS="${RENDERER_RESIGN_MARGIN_DAYS:-14}"
+case "$RESIGN_MARGIN_DAYS" in
+  ''|*[!0-9]*) echo "deploy: RENDERER_RESIGN_MARGIN_DAYS must be a whole number of days" >&2; exit 2 ;;
+esac
 if [ "$STAGING" -eq 1 ]; then
   STACK="${STACK:-SecureTestDesignToolStaging}"
   CDK_CTX=(--context env=staging)
@@ -194,7 +207,11 @@ fi
 echo "HEAD = origin/main = $HEAD_SHA"
 
 if [ "$RENDERER" -eq 1 ]; then
-  ci_gate
+  # Signing needs this Mac (Touch ID, the Secure Enclave key, Swift for the
+  # extraction check) and gh for the ci gate; the gate itself runs only when
+  # a new signature is due (3b).
+  [ "$(uname -s)" = "Darwin" ] || fail "renderer signing needs the Mac with the working key - deploy with --no-renderer elsewhere"
+  command -v gh >/dev/null 2>&1 || fail "gh (GitHub CLI) is required for the renderer's ci gate - install it and run: gh auth login (or deploy with --no-renderer)"
 fi
 
 aws sts get-caller-identity --query Account --output text >/dev/null 2>&1 \
@@ -248,13 +265,14 @@ cd "$INFRA"
 bunx cdk diff ${CDK_CTX[@]+"${CDK_CTX[@]}"} || true
 [ "$DIFF_ONLY" -eq 1 ] && exit 0
 
-# ---------- 3b. renderer: build, sign (Touch ID), verify, upload (staging) ----------
+# ---------- 3b. renderer: build, D-12 skip, ci gate, check, sign (Touch ID), upload ----------
 RENDERER_SHA=""
 RENDERER_VERSION=""
 if [ "$RENDERER" -eq 1 ]; then
-  say "renderer: build + sign + upload"
+  say "renderer: build"
   DIST="$REPO/packages/renderer/dist"
   SIGNER="$REPO/tools/renderer-sign/.build/release/renderer-sign"
+  WORKING_PUB="$REPO/packages/renderer/keys/working.pub.pem"
   (cd "$REPO/packages/renderer" && bun run build) || fail "renderer build failed"
   [ -f "$DIST/manifest.json" ] || fail "renderer build wrote no dist/manifest.json"
   if [ ! -x "$SIGNER" ]; then
@@ -264,33 +282,91 @@ if [ "$RENDERER" -eq 1 ]; then
   RENDERER_VERSION="$(jq -r '.version' "$DIST/manifest.json")"
   RENDERER_COMMIT="$(jq -r '.commit' "$DIST/manifest.json")"
   [ "$RENDERER_COMMIT" = "$HEAD_SHA" ] || fail "the renderer manifest names $RENDERER_COMMIT, not HEAD $HEAD_SHA"
-  echo "Touch ID: a prompt to sign SecureTest renderer $RENDERER_VERSION @ ${HEAD_SHA:0:10} is coming — touch the sensor to sign."
-  "$SIGNER" sign "$DIST/manifest.json" --out "$DIST/manifest.sig" || fail "signing refused or failed (Touch ID cancelled?)"
-  "$SIGNER" verify "$DIST/manifest.json" "$DIST/manifest.sig" \
-    --public-key "$REPO/packages/renderer/keys/working.pub.pem" \
-    || fail "the signature does not verify against keys/working.pub.pem — not uploading"
-  RENDERER_SHA="$(shasum -a 256 "$DIST/manifest.json" | awk '{print $1}')"
 
   BUCKET="$(aws cloudformation describe-stacks --stack-name "$STACK" \
     --query "Stacks[0].Outputs[?OutputKey=='AssetBucketName'].OutputValue" --output text 2>/dev/null || true)"
   if [ -z "$BUCKET" ] || [ "$BUCKET" = "None" ]; then
-    fail "no AssetBucketName output on $STACK — deploy once with --no-renderer first"
+    fail "no AssetBucketName output on $STACK - deploy once with --no-renderer first"
   fi
-  PREFIX="renderers/$RENDERER_SHA"
-  if aws s3api head-object --bucket "$BUCKET" --key "$PREFIX/manifest.json" >/dev/null 2>&1; then
-    echo "s3://$BUCKET/$PREFIX/ already stored — files under a hash are never rewritten"
+
+  # D-12: re-sign only when the files, the requires list or the validity
+  # window call for it. Anything unreadable about the current renderer means
+  # sign (the server would refuse it anyway).
+  say "renderer: is a new signature due? (D-12)"
+  CUR_DIR="$(mktemp -d "${TMPDIR:-/tmp}/renderer-current.XXXXXX")"
+  SIGN_REASON=""
+  CUR_SHA=""
+  CUR_VERSION=""
+  CUR_NOT_AFTER=""
+  if ! aws s3 cp --only-show-errors "s3://$BUCKET/renderers/current.json" "$CUR_DIR/current.json" >/dev/null 2>&1; then
+    SIGN_REASON="no renderers/current.json in s3://$BUCKET (the first signed renderer on $STACK)"
   else
-    aws s3 cp --only-show-errors "$DIST/manifest.json" "s3://$BUCKET/$PREFIX/manifest.json" --content-type application/json
-    aws s3 cp --only-show-errors "$DIST/manifest.sig" "s3://$BUCKET/$PREFIX/manifest.sig" --content-type application/octet-stream
-    aws s3 cp --only-show-errors "$DIST/renderer.js" "s3://$BUCKET/$PREFIX/renderer.js" --content-type text/javascript
-    aws s3 cp --only-show-errors "$DIST/renderer.css" "s3://$BUCKET/$PREFIX/renderer.css" --content-type text/css
-    echo "uploaded s3://$BUCKET/$PREFIX/ (manifest.json, manifest.sig, renderer.js, renderer.css)"
+    CUR_SHA="$(jq -r '.sha256 // empty' "$CUR_DIR/current.json" 2>/dev/null || true)"
+    if ! printf '%s' "$CUR_SHA" | grep -Eq '^[0-9a-f]{64}$'; then
+      SIGN_REASON="renderers/current.json names no manifest sha256"
+    elif ! aws s3 cp --only-show-errors "s3://$BUCKET/renderers/$CUR_SHA/manifest.json" "$CUR_DIR/manifest.json" >/dev/null 2>&1 \
+      || ! aws s3 cp --only-show-errors "s3://$BUCKET/renderers/$CUR_SHA/manifest.sig" "$CUR_DIR/manifest.sig" >/dev/null 2>&1; then
+      SIGN_REASON="the current renderer's manifest or signature is missing"
+    elif [ "$(shasum -a 256 "$CUR_DIR/manifest.json" | awk '{print $1}')" != "$CUR_SHA" ]; then
+      SIGN_REASON="the current manifest's bytes do not hash to the pointer's sha256"
+    elif ! "$SIGNER" verify "$CUR_DIR/manifest.json" "$CUR_DIR/manifest.sig" --public-key "$WORKING_PUB" >/dev/null 2>&1; then
+      SIGN_REASON="the current manifest's signature does not verify against keys/working.pub.pem"
+    else
+      CUR_JS="$(jq -r '.files["renderer.js"].sha256 // empty' "$CUR_DIR/manifest.json")"
+      CUR_CSS="$(jq -r '.files["renderer.css"].sha256 // empty' "$CUR_DIR/manifest.json")"
+      CUR_REQ="$(jq -c '.requires' "$CUR_DIR/manifest.json")"
+      CUR_NOT_AFTER="$(jq -r '.not_after' "$CUR_DIR/manifest.json")"
+      CUR_VERSION="$(jq -r '.version' "$CUR_DIR/manifest.json")"
+      # Whole seconds left before not_after (jq's fromdateiso8601 takes no
+      # fractional seconds, so the .mmm is dropped first).
+      CUR_LEFT="$(jq -r '(.not_after | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) - now | floor' "$CUR_DIR/manifest.json" 2>/dev/null || true)"
+      case "$CUR_LEFT" in ''|*[!0-9-]*) CUR_LEFT=0 ;; esac
+      NEW_JS="$(shasum -a 256 "$DIST/renderer.js" | awk '{print $1}')"
+      NEW_CSS="$(shasum -a 256 "$DIST/renderer.css" | awk '{print $1}')"
+      NEW_REQ="$(jq -c '.requires' "$DIST/manifest.json")"
+      if [ "$CUR_JS" != "$NEW_JS" ] || [ "$CUR_CSS" != "$NEW_CSS" ]; then
+        SIGN_REASON="the renderer files changed"
+      elif [ "$CUR_REQ" != "$NEW_REQ" ]; then
+        SIGN_REASON="requires changed ($CUR_REQ -> $NEW_REQ)"
+      elif [ "$CUR_LEFT" -le "$((RESIGN_MARGIN_DAYS * 86400))" ]; then
+        SIGN_REASON="the current signature expires $CUR_NOT_AFTER (within $RESIGN_MARGIN_DAYS days)"
+      fi
+    fi
   fi
-  # The pointer LAST, so it never names a renderer whose files are not all there.
-  printf '{"sha256":"%s","version":%s}' "$RENDERER_SHA" "$RENDERER_VERSION" \
-    | aws s3 cp --only-show-errors - "s3://$BUCKET/renderers/current.json" --content-type application/json
-  echo "renderers/current.json → manifest sha256 $RENDERER_SHA, version $RENDERER_VERSION"
-  echo "(the running task picks it up within 60 s; bundles name it only with RENDERER_DELIVERY=on)"
+  rm -rf "$CUR_DIR"
+
+  if [ -z "$SIGN_REASON" ]; then
+    RENDERER_SHA="$CUR_SHA"
+    RENDERER_VERSION="$CUR_VERSION"
+    echo "renderer unchanged - keeping $CUR_SHA (version $CUR_VERSION, valid until $CUR_NOT_AFTER); nothing signed or uploaded"
+  else
+    echo "a new signature is due: $SIGN_REASON"
+    say "renderer: ci gate, extraction check, sign, upload"
+    ci_gate
+    "$REPO/packages/renderer/scripts/check-extraction.sh" \
+      || fail "the extracted renderer is not byte-identical to the Swift page - not signing"
+    echo "Touch ID: a prompt to sign SecureTest renderer $RENDERER_VERSION @ ${HEAD_SHA:0:10} for $STACK is coming - touch the sensor to sign."
+    "$SIGNER" sign "$DIST/manifest.json" --out "$DIST/manifest.sig" || fail "signing refused or failed (Touch ID cancelled?)"
+    "$SIGNER" verify "$DIST/manifest.json" "$DIST/manifest.sig" --public-key "$WORKING_PUB" \
+      || fail "the signature does not verify against keys/working.pub.pem - not uploading"
+    RENDERER_SHA="$(shasum -a 256 "$DIST/manifest.json" | awk '{print $1}')"
+
+    PREFIX="renderers/$RENDERER_SHA"
+    if aws s3api head-object --bucket "$BUCKET" --key "$PREFIX/manifest.json" >/dev/null 2>&1; then
+      echo "s3://$BUCKET/$PREFIX/ already stored - files under a hash are never rewritten"
+    else
+      aws s3 cp --only-show-errors "$DIST/manifest.json" "s3://$BUCKET/$PREFIX/manifest.json" --content-type application/json
+      aws s3 cp --only-show-errors "$DIST/manifest.sig" "s3://$BUCKET/$PREFIX/manifest.sig" --content-type application/octet-stream
+      aws s3 cp --only-show-errors "$DIST/renderer.js" "s3://$BUCKET/$PREFIX/renderer.js" --content-type text/javascript
+      aws s3 cp --only-show-errors "$DIST/renderer.css" "s3://$BUCKET/$PREFIX/renderer.css" --content-type text/css
+      echo "uploaded s3://$BUCKET/$PREFIX/ (manifest.json, manifest.sig, renderer.js, renderer.css)"
+    fi
+    # The pointer LAST, so it never names a renderer whose files are not all there.
+    printf '{"sha256":"%s","version":%s}' "$RENDERER_SHA" "$RENDERER_VERSION" \
+      | aws s3 cp --only-show-errors - "s3://$BUCKET/renderers/current.json" --content-type application/json
+    echo "renderers/current.json -> manifest sha256 $RENDERER_SHA, version $RENDERER_VERSION"
+    echo "(the running task picks it up within 60 s; bundles name it with RENDERER_DELIVERY=on)"
+  fi
 fi
 
 # ---------- 4. deploy ----------

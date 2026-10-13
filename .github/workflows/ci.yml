@@ -9,8 +9,11 @@ name: ci
 # Actions are pinned by commit SHA (the tag in the comment): a moved tag must
 # not change what decides whether a commit can be signed.
 #
-# Not covered here: the Swift client (`swift test` needs a macOS runner — the
-# shell, not the signed renderer), and anything that needs AWS.
+# Not covered here: the Swift client (`swift test` needs a macOS runner), and
+# anything that needs AWS. The signed renderer's code IS covered: in bridge
+# mode (D-9) the renderer build extracts it from the client's Swift source as
+# text, which runs here; the Swift-compiler equality check
+# (packages/renderer/scripts/check-extraction.sh) runs in deploy.sh on macOS.
 
 on:
   push:

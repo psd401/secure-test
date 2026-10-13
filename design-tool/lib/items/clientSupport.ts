@@ -5,6 +5,8 @@
 // question. So the delivery route refuses such a bundle up front, before the
 // client calls begin() (nothing locks), and v1.6.0+ tells the student to
 // update in Self Service. A type absent from this map works on every client.
+// A type only a served renderer can draw (v2.0, docs/server-delivered-
+// renderer-design.md) is added here as "2.0.0"; v2.0 itself needs no entry.
 export const MIN_CLIENT_VERSION_FOR_TYPE: Readonly<Record<string, string>> = {
   fill_blank: "1.6.0",
 };

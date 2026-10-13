@@ -32,10 +32,23 @@ export function isRequirement(value: unknown): value is Requirement {
   );
 }
 
-// What the placeholder renderer (src/renderer.js) uses. Slice 5 replaces
-// both with the real page code and its real list.
-export const PLACEHOLDER_REQUIRES: readonly Requirement[] = [
-  "response",
-  "submit",
+// What the bridge-mode renderer (D-9 — the page code extracted from the
+// client's `AssessmentPage.rendererScript`) uses: each
+// `window.webkit.messageHandlers.<name>.postMessage` in the page (response,
+// withdraw, upload, submit, timer, home, tts, stt) plus `tts.word_ranges`
+// (the page defines `window.__secureTestSpeech.word`, which the host calls
+// with each spoken word's range). Not `response.generic`: the page still
+// posts the typed `response` shapes; the generic channel arrives with D-5.
+// test/extract.test.ts re-derives the handler list from the extracted page
+// and fails when the two drift.
+export const BRIDGE_REQUIRES: readonly Requirement[] = [
   "home",
+  "response",
+  "stt",
+  "submit",
+  "timer",
+  "tts",
+  "tts.word_ranges",
+  "upload",
+  "withdraw",
 ];
