@@ -462,3 +462,28 @@ meets a cold cluster).
   name or unknown hash; no `renderer_current_*` warnings. Not yet seen
   live: the bundle's `renderer` field (needs a student sitting) and the
   shell's own verification (slice 4).
+- 2026-10-13 — **Slice 4 planned; decisions D-9…D-14 (James).** D-9
+  *bridge mode*: until slice 5, `packages/renderer`'s build EXTRACTS
+  `renderer.js` / `renderer.css` from the Swift literals
+  (`AssessmentPage.rendererScript` with its spliced math + rich-text
+  functions, `itemStyles`, `richTextStyles`), so the served renderer is
+  byte-identical to the bundled one and page edits keep landing in Swift
+  with no merge conflict; slice 5 then moves ownership and deletes the
+  literals. D-10 the instant-feedback page stays in the shell for v2.0.
+  D-11 v2.0 REQUIRES the bundle's `renderer` field (absent = refuse), so
+  production serves the signed renderer before v2.0 ships; v1.x clients
+  ignore the field throughout. D-12 production signs only when the
+  renderer files change (or the current signature is near `not_after`),
+  not on every deploy. D-13 v2.0's compiled-in minimum renderer version =
+  the first production-signed renderer's version. D-14 build order:
+  4a Core verifier → 4b loader + cache → 4d generic channels ∥ 4e server
+  (bridge-mode extraction, production signing, production
+  `RENDERER_DELIVERY`, clientSupport 2.0) → 4c app wiring → 4f rows +
+  v2.0.0. Client commits on the `v2-renderer` branch (D-3); 4e on `main`.
+  Mapping notes for the build: fetch / verify / `requires` belong between
+  the bundle decode and `onBundleLoaded` (`AssessmentViewController`
+  :341–388, before `begin()`); the refusal follows the
+  `onTimeRanOutBeforeStart` pattern; cache beside the spool in
+  `Application Support/SecureTest/renderers/`, evicted on the existing
+  24 h purge hooks; strict decodes to loosen in 4d = `DeliveryItem`,
+  `ItemResponse` (incl. `saved_responses`), `ItemSet.Layout`.
