@@ -502,6 +502,25 @@ public actor APIClient {
         }
     }
 
+    // MARK: renderer (server-delivered renderer slice 4b)
+
+    /// One of the signed renderer's four files, by the SHA-256 of its manifest
+    /// (`GET /api/renderer/<sha256>/<file>`). Bearer-authenticated like every
+    /// other student-plane call. A 404 — an unknown hash, or a name the route
+    /// does not serve — is `RendererFetchError.notFound`, so the loader can
+    /// tell "the server does not have it" from a refusal or an outage. The
+    /// bytes are returned unchecked: verifying them is RendererLoader's job.
+    public func fetchRendererFile(sha256: String, file: String) async throws -> Data {
+        guard isLowerHex(sha256, length: 64), RendererFileName.all.contains(file) else {
+            throw RendererFetchError.badRequest
+        }
+        do {
+            return try await sendRaw(path: "/api/renderer/\(sha256)/\(file)", method: "GET", rawBody: nil)
+        } catch APIError.refused(let status, _) where status == 404 {
+            throw RendererFetchError.notFound(file: file)
+        }
+    }
+
     // MARK: plumbing
 
     private func send<T: Decodable>(
@@ -559,3 +578,5 @@ public actor APIClient {
         return data
     }
 }
+
+extension APIClient: RendererFetching {}

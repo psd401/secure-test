@@ -127,6 +127,43 @@ public struct ItemSet: Decodable, Equatable, Sendable {
     }
 }
 
+/// Server-delivered renderer (D-1): the bundle NAMES the signed renderer —
+/// mirrors @secure-test/schema's RendererRefSchema (`.strict()`): exactly
+/// `version` (a positive integer) and `sha256` (64 lowercase hex, the SHA-256
+/// of the signed manifest's bytes). Names the code, never carries it.
+public struct RendererRef: Decodable, Equatable, Hashable, Sendable {
+    public let version: Int
+    public let sha256: String
+
+    public init(version: Int, sha256: String) {
+        self.version = version
+        self.sha256 = sha256
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: AnyKey.self)
+        let keys = c.allKeys.map(\.stringValue).sorted()
+        guard keys == ["sha256", "version"] else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "renderer must have exactly version and sha256"))
+        }
+        let version = try c.decode(Int.self, forKey: AnyKey("version"))
+        let sha256 = try c.decode(String.self, forKey: AnyKey("sha256"))
+        guard version > 0 else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "renderer.version must be positive"))
+        }
+        guard isLowerHex(sha256, length: 64) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "renderer.sha256 must be 64 lowercase hex characters"))
+        }
+        self.version = version
+        self.sha256 = sha256
+    }
+}
+
 /// The student-facing bundle — @secure-test/schema's DeliveryBundleSchema.
 ///
 /// Deliberately NOT the same type as the teacher's ItemBundle: that one carries
@@ -207,6 +244,12 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
     /// The server's own clock at the instant the bundle was built. Rides only
     /// alongside `timeLimitEndsAt`; see `deadline(receivedAt:)`.
     public let serverNow: String?
+    /// Server-delivered renderer (docs/server-delivered-renderer-design.md
+    /// D-1, slice 4b): which signed renderer this bundle was built for — the
+    /// SHA-256 of its manifest and the manifest's version. Nil when the server
+    /// sent none (delivery off, or an older server); what v2.0 does with nil
+    /// (refuse, D-11) is the app's decision in slice 4c, not this decode's.
+    public let renderer: RendererRef?
 
     /// The deadline to count down to, in THIS Mac's clock.
     ///
@@ -251,7 +294,7 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case title, items, assets, accommodations, layout
+        case title, items, assets, accommodations, layout, renderer
         case testId = "test_id"
         case timeLimitEndsAt = "time_limit_ends_at"
         case serverNow = "server_now"
@@ -299,6 +342,11 @@ public struct DeliveryBundle: Decodable, Equatable, Sendable {
         // deadline rather than failing to decode at all.
         timeLimitEndsAt = try c.decodeIfPresent(String.self, forKey: .timeLimitEndsAt)
         serverNow = try c.decodeIfPresent(String.self, forKey: .serverNow)
+        // Strict like the schema's RendererRefSchema: absent is nil, but a
+        // present key must be a well-formed ref — null included — or the
+        // bundle fails to decode rather than naming a renderer it cannot.
+        renderer = c.contains(.renderer)
+            ? try c.decode(RendererRef.self, forKey: .renderer) : nil
     }
 
     public static func decode(from data: Data) throws -> DeliveryBundle {

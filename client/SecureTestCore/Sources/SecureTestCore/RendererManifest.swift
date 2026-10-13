@@ -149,7 +149,7 @@ private func pathString(_ path: [CodingKey]) -> String {
     path.isEmpty ? "the top level" : path.map(\.stringValue).joined(separator: ".")
 }
 
-private func isLowerHex(_ s: String, length: Int) -> Bool {
+func isLowerHex(_ s: String, length: Int) -> Bool {
     s.utf8.count == length && s.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
 }
 
