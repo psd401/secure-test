@@ -158,6 +158,14 @@ describe("ItemSchema discriminated union", () => {
     );
   });
 
+  test("essay carries show_word_count when present (U-22)", () => {
+    const parsed = ItemSchema.parse({ type: "essay", id: "qe5", stem: "Explain.", show_word_count: true });
+    expect(parsed).toHaveProperty("show_word_count", true);
+    expect(ItemSchema.parse({ type: "essay", id: "qe5", stem: "Explain." })).not.toHaveProperty(
+      "show_word_count",
+    );
+  });
+
   test("essay rejects a non-positive max_word_count", () => {
     const result = ItemSchema.safeParse({
       type: "essay",

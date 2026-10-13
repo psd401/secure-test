@@ -188,6 +188,16 @@ describe("DeliveryItemSchema", () => {
     ).toBe(false);
   });
 
+  test("essay carries show_word_count when set (U-22)", () => {
+    const parsed = DeliveryItemSchema.parse({ type: "essay", id: "i5", stem: "s", show_word_count: true });
+    expect(parsed).toHaveProperty("show_word_count", true);
+    const plain = DeliveryItemSchema.parse({ type: "essay", id: "i5", stem: "s" });
+    expect(plain).not.toHaveProperty("show_word_count");
+    expect(
+      DeliveryItemSchema.safeParse({ type: "essay", id: "i5", stem: "s", show_word_count: "yes" }).success,
+    ).toBe(false);
+  });
+
   test("strips scoring_method on every type", () => {
     const parsed = DeliveryItemSchema.parse({
       type: "essay",

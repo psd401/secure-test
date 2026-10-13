@@ -97,6 +97,8 @@ function mapItemForDelivery(row: ItemRow, attemptId: string) {
         // RT slice 1 (D-1): the formatting toolbar is student-facing, not a
         // key, so it rides the delivery bundle. Older clients ignore it.
         ...(config.rich_text ? { rich_text: true } : {}),
+        // U-22: a running word count with no maximum.
+        ...(config.show_word_count ? { show_word_count: true } : {}),
         // Mirrors the export route's B8 gate, minus the teacher opt-in:
         // there is no include_hidden_rubrics on the student path. Level
         // descriptors routinely spell out what a correct answer contains.

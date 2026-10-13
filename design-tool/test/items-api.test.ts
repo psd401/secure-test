@@ -1790,3 +1790,101 @@ describe("essay rich_text (RT slice 1)", () => {
     expect(rows[1]?.config.rich_text).toBe(true);
   });
 });
+
+// U-22 (beta teachers, 2026-10-13): the word-count switch follows show_word_count's
+// conventions exactly — stored only when on, essay only, publish-locked,
+// carried by export / import.
+describe("essay show_word_count (U-22)", () => {
+  const ESSAY = { type: "essay", stem: "Argue your position." };
+
+  async function publishAssessment(aid: string) {
+    const { PATCH } = await import("../app/api/assessments/[id]/route");
+    const res = await PATCH(
+      new Request(`http://localhost/api/assessments/${aid}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "published" }),
+      }),
+      { params: Promise.resolve({ id: aid }) },
+    );
+    expect(res.status).toBe(200);
+  }
+
+  async function importBundleBody(body: unknown) {
+    const { POST } = await import("../app/api/assessments/import/route");
+    return POST(
+      new Request("http://localhost/api/assessments/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  const configOf = async (res: Response) =>
+    ((await res.json()) as { item: { id: string; config: Record<string, unknown> } }).item;
+
+  test("absent by default; stored only when true; cleared when unchecked", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("word count");
+    const created = await configOf(await createItem(aid, ESSAY));
+    expect(created.config.show_word_count).toBeUndefined();
+
+    const on = await patchItem(aid, created.id, { ...ESSAY, show_word_count: true });
+    expect(on.status).toBe(200);
+    expect((await configOf(on)).config.show_word_count).toBe(true);
+
+    const off = await patchItem(aid, created.id, { ...ESSAY, show_word_count: false });
+    expect(off.status).toBe(200);
+    expect((await configOf(off)).config.show_word_count).toBeUndefined();
+  });
+
+  test("a non-essay item never stores it (the key is stripped); a non-boolean is refused", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("word count other types");
+    const res = await createItem(aid, {
+      type: "short_text",
+      stem: "Capital?",
+      correct_answer: "Olympia",
+      show_word_count: true,
+    });
+    expect(res.status).toBe(201);
+    expect((await configOf(res)).config.show_word_count).toBeUndefined();
+    expect((await createItem(aid, { ...ESSAY, show_word_count: "yes" })).status).toBe(400);
+  });
+
+  test("the publish lock refuses turning it on or off (student-facing, not a key)", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("word count lock");
+    const plain = await configOf(await createItem(aid, ESSAY));
+    const rich = await configOf(await createItem(aid, { ...ESSAY, show_word_count: true }));
+    await publishAssessment(aid);
+    expect((await patchItem(aid, plain.id, { ...ESSAY, show_word_count: true })).status).toBe(409);
+    expect((await patchItem(aid, rich.id, { ...ESSAY, show_word_count: false })).status).toBe(409);
+  });
+
+  test("export emits it only when on, and import brings it back", async () => {
+    asUser("teacher-1");
+    const aid = await createAssessment("word count export");
+    expect((await createItem(aid, ESSAY)).status).toBe(201);
+    expect((await createItem(aid, { ...ESSAY, show_word_count: true })).status).toBe(201);
+
+    const exp = await exportAssessment(aid);
+    expect(exp.status).toBe(200);
+    const bundle = ItemBundleSchema.parse(await exp.json());
+    const [plain, rich] = bundle.items;
+    expect(plain).not.toHaveProperty("show_word_count");
+    expect(rich).toHaveProperty("show_word_count", true);
+
+    const res = await importBundleBody(bundle);
+    expect(res.status).toBe(201);
+    const { assessment } = (await res.json()) as { assessment: { id: string } };
+    const rows = await getDb()
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, assessment.id))
+      .orderBy(asc(items.position));
+    expect(rows[0]?.config.show_word_count).toBeUndefined();
+    expect(rows[1]?.config.show_word_count).toBe(true);
+  });
+});

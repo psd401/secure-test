@@ -1637,3 +1637,16 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 572 | One student (the Student picker) + **Leave out answers** | That student's one page, no answer | NOT RUN |
 | 573 | **Select all** after ticking it; reload the URL | `answers=0` kept in the link; the box stays ticked | NOT RUN |
 | 574 | `/help.html#results` and the quick start | The packet line names "Leave out answers" | NOT RUN |
+
+## Word count without a limit (U-22, 2026-10-13)
+
+`docs/roadmap-2026-09.md` row U-22 is the record (decisions 2.1–2.6). Local dev on `_demo`, Claude in Chrome as the demo teacher. The student half is in `client/MANUAL-CHECKS.md` "Word count without a limit".
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 575 | Editor, an essay: **Show students a word count** | Unticked by default; ticking it and saving keeps it after a reload | NOT RUN |
+| 576 | Type a **Max word count** | The box shows ticked and greyed, "(always on with a maximum)"; clearing the maximum restores the saved choice | NOT RUN |
+| 577 | Preview with the count on, no maximum | "0 words" under the essay box; with a maximum, "Limit: N words" as before; the print preview shows neither "0 words" | NOT RUN |
+| 578 | Publish, then try to change the box | Locked like the other essay settings (the API answers 409) | NOT RUN |
+| 579 | Duplicate, and Export → Import | The copy keeps the setting | NOT RUN |
+| 580 | `/help.html#build` and the quick start | The essay line names the word count and the client version it needs | NOT RUN |

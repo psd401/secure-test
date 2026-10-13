@@ -176,6 +176,21 @@ describe("renderAssessmentHtml — essay items (slice 32)", () => {
     expect(out).not.toContain("<script");
   });
 
+  // U-22 (decision 2.4): the no-script preview shows the counter's starting
+  // line on screen; a maximum keeps its "Limit" line; paper gets neither.
+  test("show_word_count shows a static \"0 words\" line on screen only", () => {
+    expect(renderAssessmentHtml(assessment, [essay({ show_word_count: true })])).toContain(
+      '<p class="word-limit">0 words</p>',
+    );
+    expect(
+      renderAssessmentHtml(assessment, [essay({ show_word_count: true })], undefined, { printMode: true }),
+    ).not.toContain(">0 words<");
+    const capped = renderAssessmentHtml(assessment, [essay({ show_word_count: true, max_word_count: 300 })]);
+    expect(capped).toContain("Limit: 300 words");
+    expect(capped).not.toContain(">0 words<");
+    expect(renderAssessmentHtml(assessment, [essay()])).not.toContain(">0 words<");
+  });
+
   // RT slice 4 (docs/rich-text-essay-design.md D-8).
   test("a formatted essay shows the toolbar and an editable box instead of the textarea", () => {
     const out = renderAssessmentHtml(assessment, [essay({ rich_text: true, placeholder: "Begin <here>" })]);

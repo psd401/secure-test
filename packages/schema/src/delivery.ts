@@ -89,6 +89,9 @@ export const DeliveryEssayItemSchema = z.object({
   // toolbar. Student-facing, not a key. Older clients ignore the unknown
   // field and show the plain box — no version gate needed.
   rich_text: z.boolean().optional(),
+  // U-22: show a running word count with no maximum ("n words"). Older
+  // clients ignore it and show no counter — no version gate (decision 2.5).
+  show_word_count: z.boolean().optional(),
 });
 
 // `lefts` and `rights` are the same {id, text} shape as choices — reusing

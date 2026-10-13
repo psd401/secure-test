@@ -132,6 +132,9 @@ interface ItemView {
   // students format their answer; null = off (the stored absence). Optional
   // so the per-type draft factories need not name it.
   rich_text?: boolean | null;
+  // U-22: essay only — true shows the student a running word count with no
+  // maximum; null = off. Optional like rich_text.
+  show_word_count?: boolean | null;
   // Essay-only rubric (slice 33); null when unset / for other types.
   rubric: Rubric | null;
   // Rubric library slice 3 (D-4): which saved rubric the copy above came
@@ -292,6 +295,7 @@ interface ItemRow {
     max_word_count?: number | null;
     placeholder?: string | null;
     rich_text?: boolean | null;
+    show_word_count?: boolean | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -331,6 +335,7 @@ function rowToView(r: ItemRow): ItemView {
     max_word_count: r.config?.max_word_count ?? null,
     placeholder: r.config?.placeholder ?? null,
     rich_text: r.config?.rich_text ? true : null,
+    show_word_count: r.config?.show_word_count ? true : null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -1280,6 +1285,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       if (item.placeholder) body.placeholder = item.placeholder;
       // RT slice 1 (D-1): only when on — absence is off.
       if (item.rich_text) body.rich_text = true;
+      // U-22: only when on — absence is off.
+      if (item.show_word_count) body.show_word_count = true;
       if (item.rubric) body.rubric = item.rubric;
       // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
       // ways. The server detaches an omitted rubric_id whenever the rubric
@@ -3038,6 +3045,33 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         }
                         className="mt-1 w-40 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                       />
+                    </label>
+                    {/* U-22 (decisions 2.1 / 2.2): a per-essay switch, off by
+                        default. A maximum always shows its count, so with one
+                        set the box reads ticked and cannot be changed. */}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={
+                          item.max_word_count != null || item.show_word_count === true
+                        }
+                        onChange={(e) =>
+                          updateItem(item.id, (i) => ({
+                            ...i,
+                            show_word_count: e.target.checked ? true : null,
+                          }))
+                        }
+                        disabled={isLocked || item.max_word_count != null}
+                      />
+                      <span>
+                        Show students a word count
+                        {item.max_word_count != null ? (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            (always on with a maximum)
+                          </span>
+                        ) : null}
+                      </span>
                     </label>
                     {/* RT slice 1 (docs/rich-text-essay-design.md): D-1 a
                         per-essay switch, off by default; D-2 / D-4 / D-9 the

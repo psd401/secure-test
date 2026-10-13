@@ -377,6 +377,26 @@ describe("GET /api/assessments/:id/delivery — no answer key survives", () => {
     expect(body.items[1].rich_text).toBe(true);
   });
 
+  // U-22 (decision 2.5): the word-count switch rides the bundle only when on,
+  // to any client version — an older client ignores it and shows no counter.
+  test("U-22: an essay carries show_word_count only when on, to any client version", async () => {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, name: "Word count delivery" })
+      .returning();
+    await db.insert(items).values([
+      { assessment_id: a!.id, position: 1, type: "essay", stem: "Plain" },
+      { assessment_id: a!.id, position: 2, type: "essay", stem: "Counted", config: { show_word_count: true } },
+    ]);
+    await admitStudent(a!.id);
+    const res = await getDelivery(a!.id, "1.5.0");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items[0]).not.toHaveProperty("show_word_count");
+    expect(body.items[1].show_word_count).toBe(true);
+  });
+
   // FB slice 1 (docs/fill-in-blank-design.md, ADR 0016): a fill_blank ships
   // its stem and each blank's id, kind and dropdown options in the teacher's
   // order (D-6) — no correct_option_id, keys or exact_form, and no key VALUE.

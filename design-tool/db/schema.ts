@@ -185,6 +185,9 @@ export type ItemConfig = {
   // RT slice 1 (docs/rich-text-essay-design.md, D-1): essay only — students
   // may format their answer. Stored only when true.
   rich_text?: boolean;
+  // U-22: essay only — show a running word count without a maximum. Stored
+  // only when true.
+  show_word_count?: boolean;
   rubric?: Rubric;
   // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
   // COPIED from, if any. Editor metadata only — `rubric` above stays the

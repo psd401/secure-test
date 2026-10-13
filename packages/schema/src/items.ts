@@ -142,6 +142,9 @@ export const EssayItemSchema = z.object({
   // students format this answer. Optional and emitted only when true, so
   // every existing essay and bundle stays byte-stable.
   rich_text: z.boolean().optional(),
+  // U-22 (beta teachers, 2026-10-13): show the student a running word count
+  // with no maximum. A maximum always shows its count. Emitted only when true.
+  show_word_count: z.boolean().optional(),
 });
 
 // Phase 4 slice 47: matching item. `pairs` is the answer key — each left

@@ -59,6 +59,9 @@ export interface PreviewItem {
   // RT slice 4 (docs/rich-text-essay-design.md D-8): "Let students format
   // their answer" — the essay renders the formatting box and its toolbar.
   rich_text?: boolean | null;
+  // U-22: a running word count with no maximum. The preview is no-script, so
+  // it shows the counter's starting line, "0 words", on screen only.
+  show_word_count?: boolean | null;
   // Match-only pair list (slice 47). Rights are displayed sorted so the
   // authored order (which IS the answer key) doesn't give matches away.
   pairs?: MatchPair[] | null;
@@ -524,7 +527,9 @@ function renderItem(
     const limit =
       item.max_word_count != null
         ? `<p class="word-limit">Limit: ${item.max_word_count} words</p>`
-        : "";
+        : item.show_word_count && !printMode
+          ? `<p class="word-limit">0 words</p>`
+          : "";
     // Show the rubric to students only when the teacher opted in for during
     // the assessment (slice 33). with_feedback visibility is Phase 3.
     const rubric =

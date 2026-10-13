@@ -347,6 +347,7 @@ export async function importBundleForOwner(
                 ...(it.placeholder ? { placeholder: it.placeholder } : {}),
                 // RT slice 1 (D-1): stored only when on.
                 ...(it.rich_text ? { rich_text: true } : {}),
+                ...(it.show_word_count ? { show_word_count: true } : {}),
                 ...(it.rubric ? { rubric: it.rubric } : {}),
                 ...clampAndCount(it.type, it.scoring_method, it.rubric != null),
               },

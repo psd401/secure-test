@@ -106,6 +106,8 @@ const EssayItem = z.object({
   // their answer. Essay only — the other types' shapes don't know the key,
   // so Zod strips it from them like any unknown field.
   rich_text: z.boolean().optional(),
+  // U-22: a running word count with no maximum. Essay only, like rich_text.
+  show_word_count: z.boolean().optional(),
   // Slice 33: reuse the shared wire schema so the rubric shape has a single
   // source of truth across API body and bundle.
   rubric: RubricSchema.optional(),
@@ -646,6 +648,9 @@ export function itemConfigForWrite(
   // Student-facing, so the publish lock (isAnswerKeyOnlyPatch) refuses a
   // change to it — it is compared with the rest of config.
   if (body.rich_text) config.rich_text = true;
+  // U-22: stored only when ON, the same as rich_text; student-facing, so the
+  // publish lock refuses a change to it with the rest of config.
+  if (body.show_word_count) config.show_word_count = true;
   if (body.rubric !== undefined) config.rubric = body.rubric;
   const rubricId = resolveRubricId(body, existing);
   if (rubricId) config.rubric_id = rubricId;

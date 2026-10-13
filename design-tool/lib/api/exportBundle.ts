@@ -126,6 +126,7 @@ export async function buildExportBundle(
           ...(config.placeholder ? { placeholder: config.placeholder } : {}),
           // RT slice 1 (D-1): only when on, like every optional field here.
           ...(config.rich_text ? { rich_text: true } : {}),
+          ...(config.show_word_count ? { show_word_count: true } : {}),
           // B8: mirror the preview renderer's during_test gate. Omitted
           // outright rather than shipped with a "hidden" flag — the bundle is
           // a file on the student's machine, so a flag only holds if every
