@@ -100,4 +100,3 @@ Invariant: every `stop` path is also a teardown path. `AssessmentViewController.
 - Scope boundary: the speech grants are data the server already emits in the bundle's accommodation map. Changing which keys or values that map carries is a wire change; see [wire formats](../architecture/wire-formats.md). Pure rule changes inside `SecureTestCore` do not need a server change.
 
 Related: [client overview](overview.md) (the SwiftPM split and the page pipeline), [lockdown and security](lockdown-and-security.md) (how the lockdown session and the `speech_preflight` event fit into begin and teardown).
- and the `speech_preflight` event fit into begin and teardown).
