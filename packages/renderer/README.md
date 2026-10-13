@@ -72,6 +72,11 @@ uploads the built files on staging and production when a signature is due
   signature verification and the use checks, and a cross-language fixture
   signed by the Swift tool.
 
+The persistent DEV public key lives in `dev-keys/dev.pub.pem`, deliberately
+OUTSIDE `keys/`, so `bun run keys` never compiles it into the server's
+accepted keys; only the client's Debug build may trust it (slice 4). Its
+private half stays outside the repository.
+
 ## Manifest
 
 | Field | Meaning |
