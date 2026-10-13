@@ -1,0 +1,23 @@
+{
+  "name": "@secure-test/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./manifest": "./src/manifest.ts",
+    "./requires": "./src/requires.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}

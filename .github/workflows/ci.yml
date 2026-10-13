@@ -52,6 +52,13 @@ jobs:
       - name: Schema — build + test
         working-directory: packages/schema
         run: bun run build && bun test
+      # The build stamps the manifest with `git rev-parse HEAD` and
+      # `git log -1 --format=%ct` (version). Both read only the HEAD commit,
+      # which the default fetch-depth-1 checkout has, so no deeper clone is
+      # needed.
+      - name: Renderer — build + test
+        working-directory: packages/renderer
+        run: bun run build && bun test
       - name: Design tool — typecheck
         working-directory: design-tool
         run: bun run typecheck

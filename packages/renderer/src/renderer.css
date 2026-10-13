@@ -1,0 +1,13 @@
+/* PLACEHOLDER stylesheet. Slice 5 replaces it with the real page styles,
+   moved in byte for byte from the client. */
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: -apple-system, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+button {
+  font: inherit;
+  padding: 8px 16px;
+}

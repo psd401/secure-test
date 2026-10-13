@@ -47,6 +47,15 @@
         "typescript": "^5.5.0",
       },
     },
+    "packages/renderer": {
+      "name": "@secure-test/renderer",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@types/bun": "^1.1.0",
+        "@types/node": "^20.14.0",
+        "typescript": "^5.5.0",
+      },
+    },
     "packages/schema": {
       "name": "@secure-test/schema",
       "version": "0.1.0",
@@ -432,6 +441,8 @@
     "@radix-ui/rect": ["@radix-ui/rect@1.1.3", "", {}, "sha512-JtyZR+mqgBibTo8xea3B6ZRmzZiM/YeVBtUkas6zMuXjAlfIFIW2FgqeM9eLyvEaYX66vr6DJMK+4U6LV0KhNw=="],
 
     "@secure-test/design-tool": ["@secure-test/design-tool@workspace:design-tool"],
+
+    "@secure-test/renderer": ["@secure-test/renderer@workspace:packages/renderer"],
 
     "@secure-test/schema": ["@secure-test/schema@workspace:packages/schema"],
 
