@@ -84,6 +84,8 @@ An essay item with `config.rich_text` on lets students format their answer (bold
 - **Render.** Teacher screens (scoring queue, per-student page, earlier versions, work packet) call `renderEssayAnswerHtml` (`lib/richText/renderEssayAnswer.ts`), which re-cleans stored html before output; a plain answer renders as escaped `text`. Reporting views are described in [reporting and packets](reporting-and-packets.md).
 - **Release.** Google Docs release maps the same cleaned html to Docs markup ([integrations](integrations.md)).
 
+The student's editor is a port of these rules on the page: the [formatted essay editor](../client/rich-text-essay.md) builds the html it posts and mirrors the same sanitiser and text table, but the server never trusts that copy.
+
 Invariant: `text` is always derived from the sanitised html on the server, never from client-supplied `text`, when `rich_text` is on. Focused tests: `rich-text-essay-html.test.ts` (sanitiser, idempotence, `essayResponseForStorage`), `rich-text-essay-render.test.ts`. Run `cd design-tool && bun test test/rich-text-essay-html.test.ts` for a narrow check; neither file needs the database.
 
 ## Rubric library and extraction
