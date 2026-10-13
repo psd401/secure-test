@@ -4,6 +4,9 @@
 **/.next
 **/.env*
 .git
+# Claude Code worktrees (.claude/worktrees/*) are full repo copies — one holds a
+# client DerivedData folder — and must never ride along in the build context.
+.claude
 client
 docs
 poc-a-aac-capture
