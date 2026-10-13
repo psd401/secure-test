@@ -2423,13 +2423,13 @@ except the last row.
 
 | Check | Expected | Result |
 |---|---|---|
-| **Entry card.** Launch to Your tests | Wordmark "SecureTest"; window title "SecureTest" | NOT RUN |
-| **Menus.** App menu | "About SecureTest" → panel names "SecureTest" with the build stamp; "Quit SecureTest" | NOT RUN |
-| **Quit confirm.** In a test, Cmd-Q | Sheet "Quit SecureTest?" | NOT RUN |
-| **Not set up.** Launch with no server / client id (no profile, no env) | "This Mac isn't set up for SecureTest yet. Ask your teacher or IT for help." — VoiceOver reads the same | NOT RUN |
-| **Update required.** Join a test carrying an item type the server marks newer than this build (or a server forced to answer `client_update_required`) | "This test needs a newer version of SecureTest. Open Self Service, update SecureTest, then join again." | NOT RUN |
-| **Notice page.** Any in-page notice (e.g. a refused bundle) | Heading "SecureTest" | NOT RUN |
-| **Permission prompt.** A Mac that has never granted the microphone, a test with Speech-to-Text | The macOS prompt starts "SecureTest uses the microphone only when…" | NOT RUN |
+| **Entry card.** Launch to Your tests | Wordmark "SecureTest"; window title "SecureTest" | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` |
+| **Menus.** App menu | "About SecureTest" → panel names "SecureTest" with the build stamp; "Quit SecureTest" | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` — "About SecureTest" → "SecureTest Version 1.6.3 (189b0a36b2)"; "Quit SecureTest" |
+| **Quit confirm.** In a test, Cmd-Q | Sheet "Quit SecureTest?" | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` (menu Quit inside the test; Keep working returned to it) |
+| **Not set up.** Launch with no server / client id (no profile, no env) | "This Mac isn't set up for SecureTest yet. Ask your teacher or IT for help." — VoiceOver reads the same | NOT EXERCISABLE on this Mac 2026-10-13 — the managed-preference profile configures every launch (`config: … from managed preference`); needs a Mac without the profile |
+| **Update required.** Join a test carrying an item type the server marks newer than this build (or a server forced to answer `client_update_required`) | "This test needs a newer version of SecureTest. Open Self Service, update SecureTest, then join again." | NOT EXERCISABLE 2026-10-13 — no item type is newer than 1.6.3; the string comes from `JoinErrorCopy` through `Brand.productName` |
+| **Notice page.** Any in-page notice (e.g. a refused bundle) | Heading "SecureTest" | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` — `--bundle` at a missing file: heading "SecureTest", "No assessment bundle available." |
+| **Permission prompt.** A Mac that has never granted the microphone, a test with Speech-to-Text | The macOS prompt starts "SecureTest uses the microphone only when…" | NOT EXERCISABLE on this Mac (microphone already granted); the built Info.plist carries the string |
 | **Finder / Dock (signed Release).** `/Applications` after the pkg installs; the Dock while running | "SecureTest" in both (was "Secure Test" in the Dock) | NOT RUN |
 
 ## Word count without a limit (U-22, next client release, 2026-10-13)
@@ -2444,9 +2444,9 @@ count + maximum, neither.
 
 | Check | Expected | Result |
 |---|---|---|
-| Plain essay with the count on, no maximum: type, paste a long passage, delete it all | "0 words" → the running count ("1 word" for one) → "0 words"; never red | NOT RUN |
-| Formatted essay with the count on: two paragraphs and a bulleted list | List markers never count; the count matches the words typed | NOT RUN |
-| Count on AND a maximum of 50 | "n / 50 words", red past 50, text never cut | NOT RUN |
-| Neither | No counter (as before) | NOT RUN |
+| Plain essay with the count on, no maximum: type, paste a long passage, delete it all | "0 words" → the running count ("1 word" for one) → "0 words"; never red | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` — "0 words" → "1 word" → "100 words" (hand-counted) → "0 words", never red. Paste is disabled in this assessment, so the long passage was typed |
+| Formatted essay with the count on: two paragraphs and a bulleted list | List markers never count; the count matches the words typed | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` — two paragraphs + an empty bullet = "8 words"; two bullet items added = "11 words" |
+| Count on AND a maximum of 50 | "n / 50 words", red past 50, text never cut | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` — "50 / 50 words" → "52 / 50 words", text never cut (264 characters saved). Not red at first: **finding WC-1** — the page set class `word-count over` but no stylesheet rule existed for it, and none had since v1.0.0. **Fixed the same day** (`.word-count.over` = `--danger`, bold; stylesheet test) and re-run on a rebuilt Debug as a second demo student: "50 / 50 words" neutral, "51 / 50 words" red and bold ✅ |
+| Neither | No counter (as before) | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` |
 | VoiceOver into the formatted box with the count on | The count is read as the box's description | NOT RUN |
 | v1.6.2 (or older) client against the same bundle | The counted essay shows no counter, nothing else differs | NOT RUN |

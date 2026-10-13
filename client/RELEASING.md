@@ -389,7 +389,9 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
   — cut ahead of v2.0 because IT's backup signing key has no date). Carries
   **U-22** — "n words" under an essay with `show_word_count` and no maximum
   (`client/MANUAL-CHECKS.md` "Word count without a limit", NOT RUN) — and
-  Row NM slice 3 (one product name, "One product name" rows, NOT RUN). The
+  Row NM slice 3 (one product name, "One product name" rows, NOT RUN), and
+  **WC-1** (an over-limit word count is red; the class had no rule since
+  v1.0.0 — found in this release's hand-run 2026-10-13). The
   server half of U-22 is live (2026-10-13, task def rev 108). Before
   psd-sign: both row sections on a Debug build against the origin, then a
   Release smoke in one real AAC session (word count while typing, the

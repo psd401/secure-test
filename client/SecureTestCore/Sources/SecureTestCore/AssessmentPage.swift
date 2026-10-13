@@ -112,6 +112,10 @@ public enum AssessmentPage {
       width: 100%; box-sizing: border-box; min-height: 240px; padding: 8px 10px;
       font: inherit; border: 1px solid var(--line-strong); border-radius: 6px; resize: vertical;
     }
+    /* WC-1 (2026-10-13): the counter has carried `word-count over` past the
+       maximum since v1.0.0, but no rule ever styled it, so "52 / 50 words"
+       read like any other count. --danger is redefined by every contrast set. */
+    .word-count.over { color: var(--danger); font-weight: 600; }
     /* Multi-source stimulus slice 1 (2026-09-09, docs/multi-source-stimulus-design.md):
        authored newlines were plain whitespace, so a poem or a paragraphed passage
        collapsed into one run of prose. pre-line keeps the breaks and still wraps. */

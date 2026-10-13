@@ -173,6 +173,13 @@ final class RendererBehaviourTests: XCTestCase {
         XCTAssertEqual(try h.int("__first('textarea', \(item)).value.split(' ').length"), 401)
     }
 
+    /// WC-1 (2026-10-13): the `over` class above had no rule, so an
+    /// over-limit count looked like any other count.
+    func testTheStylesheetColoursAnOverLimitCount() throws {
+        let css = AssessmentPage.html(title: "T", bundleJSON: "{}")
+        XCTAssertTrue(css.contains(".word-count.over { color: var(--danger); font-weight: 600; }"))
+    }
+
     /// Slice 62: spell-check follows THIS STUDENT's effective accommodations,
     /// so two children sitting the same assessment can get different answers.
     /// macOS AAC does not restrict spell-check the way iPadOS does, which makes
