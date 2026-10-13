@@ -120,34 +120,31 @@ never test content (the code is public in this repository anyway).
      collides with Securly's proxying.
    - *Key rotation without a client release:* compile in two public keys,
      a working key and a backup kept offline.
-   - **2.a Key storage — WORKING KEY DECIDED (Kris Hagel, IT leadership,
-     2026-10-11): this Mac's Secure Enclave, Touch ID for every signature,
-     as recommended below. BACKUP KEY DECIDED (Brad White with James,
-     2026-10-12)**, replacing the printed key below: one of Brad's FIPS
-     YubiKeys, key generated on the token (PIV, PIN policy Always, touch
-     policy Always), kept on the privileged-accounts lanyard in the safe.
-     Safe access: James and Brad; the PIN is held by Kris in the sealed
-     privileged-account PIN envelope — no one person can sign with the
-     backup. Used only if James's Mac is lost or replaced, and any use
-     starts a rotation in the next release (new working key, new backup,
-     old public keys removed).
+   - **2.a Key storage — WORKING KEY DECIDED (the district's IT
+     leadership, 2026-10-11): this Mac's Secure Enclave, Touch ID for every
+     signature, as recommended below. BACKUP KEY DECIDED (an IT security
+     administrator with James, 2026-10-12)**, replacing the printed key
+     below: a FIPS hardware security key, the key generated on the token
+     (PIV, PIN and touch required on every use), held offline under
+     two-person control — no one person can sign with the backup. Custody
+     details live in the ops repository, not here. Used only if James's
+     Mac is lost or replaced, and any use starts a rotation in the next
+     release (new working key, new backup, old public keys removed).
      **Algorithm: ECDSA P-256 / SHA-256** — the Secure Enclave only does
      P-256, so the backup is PIV `ECCP256`; the app verifies DER-encoded
      ECDSA P-256 / SHA-256 over the manifest bytes, one code path for both
-     keys. Brad sends the backup's public key (PEM) once generated.
+     keys. IT sends the backup's public key (PEM) once generated.
      **Manifest (slice 3):** the signature carries a **60-day validity
-     window** (James, 2026-10-12, from Brad) so an unwanted renderer expires
+     window** (James, 2026-10-12, from IT review) so an unwanted renderer expires
      without an app release; refreshing it needs a new Touch ID signature,
      not just a deploy, so long gaps (summer) need a scheduled re-sign. The
      signed manifest records the commit SHA, and only a commit that passed
-     CI on `main` is signed. Brad will review the verification + bridge
-     code read-only once that slice exists.
-     **Standard:** no district policy on code-signing keys exists yet; Kris
-     drafts one in psd-dev-standards from this (hardware-only keys, one
-     two-person backup per app, rotation on backup use, an exposure
-     runbook: a release with that public key removed + the minimum
-     renderer version raised). Collab thread "SecureTest v2.0 signing key:
-     backup storage, and an org standard for code-signing keys".
+     CI on `main` is signed. IT will review the verification + bridge code
+     read-only once that slice exists.
+     **Standard:** no district policy on code-signing keys exists yet; IT
+     leadership drafts one from this (hardware-only keys, one two-person
+     backup per app, rotation on backup use, an exposure runbook: a release
+     with that public key removed + the minimum renderer version raised).
      History: deferred 2026-10-08 (James: consider authenticator options
      more broadly). Candidates: a non-exportable key in this Mac's Secure
      Enclave, a hardware token, a cloud KMS key the deploy role can use but
@@ -295,7 +292,7 @@ gets cheaper after it.
 **Before v2.0, or inside it**
 - The staging stack ("Environments" — now triggered by this change).
 - Signing-key storage (2.a), which blocks slice 3 — DECIDED 2026-10-12
-  (working key 2026-10-11, backup key 2026-10-12); waiting on Brad's
+  (working key 2026-10-11, backup key 2026-10-12); waiting on IT's
   backup public key.
 - The bridge audit + hardening (slice 1, ships in a v1.x).
 - Anything needing new native code or a new bridge handler, so the v2.0
@@ -400,7 +397,9 @@ meets a cold cluster).
   Every open question but 2.a (with IT leadership) is closed. Nothing
   built.
 - 2026-10-12 — 2.a DECIDED: working key in the Secure Enclave + Touch ID
-  (Kris Hagel, 2026-10-11); backup key on a FIPS YubiKey in the safe, PIN
-  with Kris (Brad White, 2026-10-12); ECDSA P-256 / SHA-256; slice 3's
+  (IT leadership, 2026-10-11); backup key on a FIPS hardware key under
+  two-person control (2026-10-12); ECDSA P-256 / SHA-256; slice 3's
   manifest gains a 60-day validity window and the commit SHA. Waiting on
-  Brad's backup public key. Nothing built.
+  IT's backup public key. Nothing built.
+- 2026-10-13 — names and backup-key custody details replaced with roles
+  (public-repository rule); custody recorded in the ops repository.
