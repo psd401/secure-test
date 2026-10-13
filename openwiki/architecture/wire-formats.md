@@ -37,7 +37,7 @@ Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on ei
 
 ## Item types
 
-`multiple_choice_single`, `multiple_choice_multi`, `short_text`, `essay` (optional rubric, `rich_text`), `match`, `order`, `hotspot`, `drawing_upload`, `table`, `fill_blank`. The DB mirror is `ITEM_TYPES` in `design-tool/db/schema.ts`; type-specific extras live in `items.config` (jsonb, see [data model](../design-tool/data-model.md)).
+`multiple_choice_single`, `multiple_choice_multi`, `short_text`, `essay` (optional rubric, `rich_text`), `match`, `order`, `hotspot`, `drawing_upload`, `table`, `fill_blank`. The DB mirror is `ITEM_TYPES` in `design-tool/db/schema.ts`; type-specific extras live in `items.config` (jsonb, see [data model](../design-tool/data-model.md)). The `fill_blank` shape, which keeps its keys out of the delivery schema, is described in [fill-in-the-blank items](../design-tool/fill-in-the-blank.md).
 
 ## Two bundles (ADR 0016)
 
