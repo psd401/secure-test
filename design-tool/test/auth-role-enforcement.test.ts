@@ -73,6 +73,10 @@ const STUDENT_ROUTES = new Set([
   // attempt-scoped — a failed sign-in or a crash on the previous launch has
   // no attempt to post against.
   join("api", "client-errors"),
+  // Renderer slice 3 (docs/server-delivered-renderer-design.md): the signed
+  // renderer's files, fetched by the shell before begin(). A student or a
+  // practising staff member; the session check is the JWT alone.
+  join("api", "renderer", "[sha256]", "[file]"),
 ]);
 
 /**

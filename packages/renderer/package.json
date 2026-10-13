@@ -6,7 +6,8 @@
   "exports": {
     "./manifest": "./src/manifest.ts",
     "./requires": "./src/requires.ts",
-    "./verify": "./src/verify.ts"
+    "./verify": "./src/verify.ts",
+    "./keys": "./src/keys.ts"
   },
   "files": [
     "dist",
@@ -14,6 +15,7 @@
   ],
   "scripts": {
     "build": "bun scripts/build.ts",
+    "keys": "bun scripts/gen-keys.ts",
     "test": "bun test"
   },
   "devDependencies": {

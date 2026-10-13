@@ -486,3 +486,34 @@ describe("DeliveryBundleSchema saved_responses / saved_uploads", () => {
     ).toBe(false);
   });
 });
+
+describe("DeliveryBundleSchema renderer (server-delivered renderer, slice 3)", () => {
+  const base = { test_id: "t", title: "t", items: [] };
+  const sha = "a".repeat(64);
+
+  test("absent is fine, and a well-formed reference is accepted", () => {
+    expect(DeliveryBundleSchema.safeParse(base).success).toBe(true);
+    const parsed = DeliveryBundleSchema.parse({
+      ...base,
+      renderer: { version: 1760000000, sha256: sha },
+    });
+    expect(parsed.renderer).toEqual({ version: 1760000000, sha256: sha });
+  });
+
+  test("refuses a bad version, a bad hash, null and extra keys", () => {
+    for (const renderer of [
+      { version: 0, sha256: sha },
+      { version: -1, sha256: sha },
+      { version: 1.5, sha256: sha },
+      { version: "1", sha256: sha },
+      { version: 1, sha256: "A".repeat(64) },
+      { version: 1, sha256: "a".repeat(63) },
+      { version: 1, sha256: "g".repeat(64) },
+      { version: 1 },
+      { version: 1, sha256: sha, script: "alert(1)" },
+      null,
+    ]) {
+      expect(DeliveryBundleSchema.safeParse({ ...base, renderer }).success).toBe(false);
+    }
+  });
+});

@@ -77,6 +77,10 @@ const STUDENT_ROUTES = new Set([
   join("attempts", "[attemptId]", "responses", "[itemId]", "upload-url"),
   join("attempts", "[attemptId]", "responses", "[itemId]", "upload"),
   join("client-errors"),
+  // Renderer slice 3 (docs/server-delivered-renderer-design.md): the signed
+  // renderer's files by manifest hash. Any student or staff session; no
+  // owned row, no database — the files are public code.
+  join("renderer", "[sha256]", "[file]"),
 ]);
 
 /**

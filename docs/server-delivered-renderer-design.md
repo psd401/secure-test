@@ -444,3 +444,13 @@ meets a cold cluster).
   (backup-key PIV signing + one rehearsal) added before the v2.0 shell.
   Next: commit 4 (sign at deploy, S3 by hash, the route, the bundle field —
   staging only).
+- 2026-10-13 — **Slice 3 commit 4 BUILT, not deployed:** `deploy.sh
+  --staging` gates on a green `ci` run, builds, signs (Touch ID), verifies
+  and uploads to `renderers/<manifest sha256>/…` then `renderers/current.json`
+  (`--no-renderer` skips it); `lib/renderer/current.ts` re-verifies the
+  pointer (hash, signature vs the generated `packages/renderer/src/keys.ts`,
+  window, files; 60 s cache, WARN on failure); `GET
+  /api/renderer/<sha256>/<file>` (student or staff JWT, no database,
+  immutable caching); the bundle's optional `renderer: {version, sha256}`
+  only with `RENDERER_DELIVERY=on`, set on staging alone (production template
+  unchanged bar the image hash).

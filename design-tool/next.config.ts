@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   // vector figures are rasterised through @napi-rs/canvas, whose `.node`
   // binary must be traced into the standalone output rather than bundled.
   serverExternalPackages: ["@napi-rs/canvas"],
+  // Renderer slice 3 (docs/server-delivered-renderer-design.md): the renderer
+  // package exports its TypeScript source (manifest, verify, keys) with no
+  // build step of its own, so Next compiles it like app code.
+  transpilePackages: ["@secure-test/renderer"],
   // 2026-09-15: the runtime image runs as `node` with a read-only app tree,
   // and next/image's optimizer tried to mkdir .next/cache for the header
   // emblem — "EACCES … Failed to write image to cache" as an

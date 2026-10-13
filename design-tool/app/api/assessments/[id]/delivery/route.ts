@@ -20,6 +20,7 @@ import {
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
 import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { UUID_RE } from "@/lib/uuid";
+import { currentRenderer } from "@/lib/renderer/current";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -140,6 +141,15 @@ export async function GET(req: Request, ctx: RouteContext) {
         { ok: false, error: "client_update_required", min_version: minVersion },
         { status: 409 },
       );
+    }
+    // Server-delivered renderer (docs/server-delivered-renderer-design.md,
+    // D-3): name the current signed renderer, ONLY where the deployment turns
+    // delivery on (staging today) and only when it verifies — otherwise the
+    // key is absent, never null. The lookup reads storage, not the database,
+    // and is cached for 60 s. A resume gets whatever is current now.
+    if (process.env.RENDERER_DELIVERY === "on") {
+      const renderer = await currentRenderer();
+      if (renderer) bundle.renderer = renderer;
     }
     return NextResponse.json(bundle, {
       status: 200,

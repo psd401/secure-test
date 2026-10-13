@@ -197,6 +197,17 @@ export const DeliveryItemSetSchema = ItemSetSchema.extend({
 });
 export type DeliveryItemSet = z.infer<typeof DeliveryItemSetSchema>;
 
+// Server-delivered renderer (docs/server-delivered-renderer-design.md D-1):
+// the bundle NAMES the signed renderer by the SHA-256 of its manifest
+// (64 lowercase hex) and the manifest's version (a positive integer).
+export const RendererRefSchema = z
+  .object({
+    version: z.number().int().positive(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type RendererRef = z.infer<typeof RendererRefSchema>;
+
 export const DeliveryBundleSchema = z
   .object({
     test_id: z.string().min(1),
@@ -270,6 +281,14 @@ export const DeliveryBundleSchema = z
     // — it has no meaning on its own and emitting it unconditionally would
     // change every bundle (and make them unrepeatable byte-for-byte).
     server_now: z.string().datetime().optional(),
+    // Server-delivered renderer (docs/server-delivered-renderer-design.md
+    // D-1, slice 3): which signed renderer the shell should fetch from
+    // `/api/renderer/<sha256>/…` — the SHA-256 of its signed manifest and the
+    // manifest's version. Names the code, never carries it. Emitted only when
+    // the deployment turns renderer delivery on (staging, D-3) and a current
+    // renderer verifies; absent otherwise, never null. A v1.x client ignores
+    // the key (Swift's decoder skips unknown keys).
+    renderer: RendererRefSchema.optional(),
   })
   .superRefine((bundle, ctx) => {
     if (bundle.item_sets) {

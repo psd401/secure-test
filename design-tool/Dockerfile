@@ -15,6 +15,10 @@ WORKDIR /repo
 # Workspace manifests first so the install layer caches across src edits.
 COPY package.json bun.lock ./
 COPY packages/schema/package.json packages/schema/package.json
+# Renderer slice 3: the design tool imports @secure-test/renderer (manifest
+# verification, the compiled-in public keys), so the workspace link must
+# exist at install time or the frozen install refuses.
+COPY packages/renderer/package.json packages/renderer/package.json
 COPY design-tool/package.json design-tool/package.json
 RUN bun install --frozen-lockfile
 

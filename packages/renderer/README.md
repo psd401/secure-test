@@ -7,13 +7,19 @@ to the macOS shell, plus their manifest
 **The renderer here is a PLACEHOLDER.** Slice 5 moves the real page code,
 the KaTeX macros and their tests in from the client, byte for byte.
 Signing is done by `tools/renderer-sign` (Secure Enclave working key,
-Touch ID per signature) and checked by `src/verify.ts`; serving the files
-(the next commit) is not built yet.
+Touch ID per signature) and checked by `src/verify.ts`. `deploy.sh
+--staging` signs and uploads the built files and the design tool serves
+them at `/api/renderer/<manifest sha256>/<file>` (staging only — see
+`design-tool/infra/README.md` "The signed renderer").
 
 ## Scripts
 
 - `bun run build` — writes `dist/renderer.js`, `dist/renderer.css` and
   `dist/manifest.json` (gitignored), and prints a one-line summary.
+- `bun run keys` — regenerates `src/keys.ts` (the trusted public keys as
+  string constants, so the design tool's standalone build carries them with
+  no file path) from `keys/*.pub.pem`. Run it after adding or replacing a
+  key; `test/keys.test.ts` fails while the two drift.
 - `bun test` — manifest building, canonical bytes, parsing, the
   no-`</` rule for `src/renderer.js`, signature verification and the
   use checks, and a cross-language fixture signed by the Swift tool.

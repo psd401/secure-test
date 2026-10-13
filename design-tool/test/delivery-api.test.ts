@@ -16,7 +16,17 @@ import {
   responses,
   students,
 } from "../db/schema";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { MATCH_LEFT, MATCH_RIGHT, opaqueId } from "../lib/api/opaqueIds";
+import { setLogSink } from "../lib/log";
+import {
+  createRendererResolver,
+  setRendererResolver,
+  type RendererResolver,
+} from "../lib/renderer/current";
+import { makeTestKey, writeSignedRenderer } from "./helpers/renderer";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import {
@@ -744,6 +754,82 @@ describe("GET /api/assessments/:id/delivery — layout (client paging)", () => {
     body = await (await getDelivery(id)).json();
     expect(body.layout).toBe("paged");
     expect(DeliveryBundleSchema.parse(body).layout).toBe("paged");
+  });
+});
+
+// Server-delivered renderer (docs/server-delivered-renderer-design.md D-3,
+// slice 3 commit 4): the bundle names the signed renderer only where
+// RENDERER_DELIVERY=on AND a current renderer verifies; otherwise the key is
+// absent (never null), so production bundles are unchanged.
+describe("GET /api/assessments/:id/delivery — renderer", () => {
+  let tmp: string;
+  let previousResolver: RendererResolver | undefined;
+  let originalFlag: string | undefined;
+  const key = makeTestKey();
+
+  beforeAll(async () => {
+    tmp = await mkdtemp(join(tmpdir(), "secure-test-delivery-renderer-"));
+    originalFlag = process.env.RENDERER_DELIVERY;
+  });
+  afterEach(() => {
+    if (previousResolver) setRendererResolver(previousResolver);
+    previousResolver = undefined;
+    if (originalFlag === undefined) delete process.env.RENDERER_DELIVERY;
+    else process.env.RENDERER_DELIVERY = originalFlag;
+  });
+  afterAll(async () => {
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  function resolverOver(dir: string, publicKeys: string[]) {
+    return createRendererResolver({
+      storage: () => ({
+        id: "test",
+        put: async () => ({ storage_key: "" }),
+        delete: async () => {},
+        get: async (k: string) => new Uint8Array(await readFile(join(dir, k))),
+      }),
+      publicKeys,
+    });
+  }
+
+  test("present with RENDERER_DELIVERY=on and a verifying renderer", async () => {
+    const r = await writeSignedRenderer(tmp, key, { issuedAt: new Date(Date.now() - 1000) });
+    previousResolver = setRendererResolver(resolverOver(tmp, [key.publicPem]));
+    process.env.RENDERER_DELIVERY = "on";
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    const body = await (await getDelivery(id)).json();
+    expect(body.renderer).toEqual({ sha256: r.sha256, version: r.version });
+    expect(DeliveryBundleSchema.parse(body).renderer).toEqual({ sha256: r.sha256, version: r.version });
+  });
+
+  test("absent when the flag is off, whatever is stored", async () => {
+    await writeSignedRenderer(tmp, key, { issuedAt: new Date(Date.now() - 1000) });
+    previousResolver = setRendererResolver(resolverOver(tmp, [key.publicPem]));
+    delete process.env.RENDERER_DELIVERY;
+    const id = await seedAllTypes();
+    await admitStudent(id);
+    expect(await (await getDelivery(id)).json()).not.toHaveProperty("renderer");
+    process.env.RENDERER_DELIVERY = "true"; // only the exact value "on" turns it on
+    expect(await (await getDelivery(id)).json()).not.toHaveProperty("renderer");
+  });
+
+  test("absent (not null) when the stored renderer does not verify", async () => {
+    await writeSignedRenderer(tmp, key, { issuedAt: new Date(Date.now() - 1000) });
+    const restoreSink = setLogSink(() => {});
+    try {
+      // Trust a different key: the stored signature no longer verifies.
+      previousResolver = setRendererResolver(resolverOver(tmp, [makeTestKey().publicPem]));
+      process.env.RENDERER_DELIVERY = "on";
+      const id = await seedAllTypes();
+      await admitStudent(id);
+      const res = await getDelivery(id);
+      expect(res.status).toBe(200);
+      expect(await res.json()).not.toHaveProperty("renderer");
+    } finally {
+      setLogSink(restoreSink);
+    }
   });
 });
 

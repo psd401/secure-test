@@ -272,6 +272,12 @@ export class AppService extends Construct {
       ...(props.staging ? {} : { GRADEBOOK_PROVIDER: "live" }),
       // Staging only: the marker scripts/seed-staging.ts requires.
       ...(props.staging ? { SECURE_TEST_DEPLOYMENT: "staging" } : {}),
+      // Renderer slice 3 (docs/server-delivered-renderer-design.md D-3):
+      // delivery bundles name the signed renderer (renderers/current.json in
+      // the asset bucket, uploaded by `deploy.sh --staging`). Staging only —
+      // production carries the code dormant. The task role's asset-access
+      // policy (Get on every object) already covers renderers/*.
+      ...(props.staging ? { RENDERER_DELIVERY: "on" } : {}),
       // Share notifications slice 3: the ses grant above is scoped to this
       // sender's domain identity. Staging has no identity, so no email.
       ...(props.staging
