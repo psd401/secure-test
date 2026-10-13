@@ -17,6 +17,8 @@ openwiki:
     - client/SecureTestCore/Sources/SecureTestCore/DeliveryBundle.swift
     - client/SecureTestCore/Sources/SecureTestCore/DeliveryItem.swift
     - client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift
+    - client/scripts/vendor-katex.mjs
+    - client/scripts/vendor-fonts.mjs
   symbols: [APIClient, HTTPTransport, TokenStore, ResponseSpool, DeliveryBundle, DeliveryItem, AssessmentPage, AttemptEventKind, ClientConfiguration, OfflineBundle]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/APIClientTests.swift
@@ -90,7 +92,17 @@ The session JWT lives only in memory (`InMemoryTokenStore`): every launch is sig
 
 ## The page
 
-`AssessmentPage.html(...)` builds the whole document from the delivery bundle's **original JSON bytes** (not a re-encoding of the Swift model, so unknown fields are never dropped), vendored KaTeX, item styles and the renderer script, via `PageShell`. `JSONEmbedding.escapeForScriptElement` escapes `<`, `>`, `&`, U+2028/9. Page features are separate files: paging (`BackToTests`, layout), `PageAccommodations` (contrast, font, zoom as attributes on `<html>`), `TextToSpeech`/`SpeechToText`/`MathSpeech`, `TimeLimitCountdown`, [`InstantFeedbackPage`](instant-feedback.md), `PeekResponder`/`PeekNotice`. The renderer is compiled into the app today; ADR 0018 (serve it from the design tool, signed) is only Proposed, and `BridgeChecks.swift` already treats every page message as untrusted input. On a resumed attempt the page refills fields from the bundle's `saved_responses` and `saved_uploads`, as described in [resume prefill](../design-tool/sittings-and-attempts.md#resume-prefill).
+`AssessmentPage.html(...)` builds the whole document from the delivery bundle's **original JSON bytes** (not a re-encoding of the Swift model, so unknown fields are never dropped), vendored KaTeX, item styles and the renderer script, via `PageShell`. `JSONEmbedding.escapeForScriptElement` escapes `<`, `>`, `&`, U+2028/9. Page features are separate files: paging (`BackToTests`, layout), `PageAccommodations` (contrast, font, zoom as attributes on `<html>`), `TextToSpeech`/`SpeechToText`/`MathSpeech`, `TimeLimitCountdown`, [`InstantFeedbackPage`](instant-feedback.md), `PeekResponder`/`PeekNotice`, and the drawing canvas ([drawing canvas](drawing-canvas.md)). The renderer is compiled into the app today; ADR 0018 (serve it from the design tool, signed) is only Proposed, and `BridgeChecks.swift` already treats every page message as untrusted input. On a resumed attempt the page refills fields from the bundle's `saved_responses` and `saved_uploads`, as described in [resume prefill](../design-tool/sittings-and-attempts.md#resume-prefill).
+
+## Vendored and generated resources
+
+Three scripts in `client/scripts/` produce files that the Swift package ships. The package never runs Bun, so every output is checked in:
+
+- `vendor-katex.mjs` copies KaTeX's JS, CSS, auto-render script and woff2 faces from the design tool's `node_modules/katex` into `SecureTestCore/Sources/SecureTestCore/Resources/katex/`. That is the same version the design tool renders with, so a stem looks the same in the preview and on the student's screen. It also writes `GeneratedKatexMacros.swift` from `K12_MACROS` in `packages/schema/src/macros.ts`. Re-run it after bumping KaTeX or editing the macros: `cd client && bun scripts/vendor-katex.mjs`.
+- `vendor-fonts.mjs` copies the brand faces (Inter and Josefin Sans) from `design-tool/app/fonts`. It also downloads the Atkinson Hyperlegible release, which backs the `optional_font` accommodation, at a version pinned in the script. The download is the only network step, and it runs only when re-vendoring. The script fetches before it clears the output directory, so a failed fetch leaves the existing fonts in place. It writes a `MANIFEST` of byte count and SHA-256 per file.
+- `launch-client.ts` is a developer-only launcher. It starts a built `SecureTest.app` against a local server and derives the native Google client id from `OIDC_AUDIENCE`. It also passes through development variables such as `SECURE_TEST_SIMULATE_LOCKDOWN`, `SECURE_TEST_DEBUG_CRASH` and `SECURE_TEST_NO_FULLSCREEN`. It is not part of the delivered app or the test path.
+
+Drift is checked by `KatexBundleTests.testVendoredVersionMatchesTheGeneratedConstant`, `PageFontsTests.testVendoredFilesMatchTheManifestAndTheDesignToolOriginals` and the schema package's `packages/schema/test/macros.test.ts`. Never hand-edit `GeneratedKatexMacros.swift`, `Resources/katex` or `Resources/fonts`.
 
 ## Offline bundles (no server)
 
@@ -99,6 +111,21 @@ A delivery bundle can also be opened from a file, with no server, attempt or loc
 The offline screen is a separate state from a server attempt. `OfflineBundle.canOpen(on:)` allows opening another bundle on the entry or offline screens, and never while a server attempt is on screen (`.serverAttempt`), because replacing the view would drop that attempt's event reporter and spool. Both the menu item and the open command are gated by the app's build-posture check (`BuildPosture.allowsOfflineBundle` in `AppDelegate`). The offline path is a look-at-the-renderer tool, not a delivery path: it sends no events and writes no answers. Its tests are `OfflineBundleTests`.
 
 ## Change navigation
+
+| Intent | Start at | Tests |
+|---|---|---|
+| Offline bundle open path or screen state | `OfflineBundle.swift`, `AssessmentViewController.loadPage`, `AppDelegate` open handlers | `OfflineBundleTests` |
+| New or changed item rendering | `AssessmentPage*.swift` renderer script, `DeliveryItem.swift` | `Renderer*Tests.swift` (e.g. `RendererMatchTests`, `RendererFillBlankTests`) run through `RendererHarness.swift` |
+| New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
+| Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
+| Offline/durability behaviour | `ResponseSpool.swift`, `UploadGate.swift` | `ResponseSpoolTests`, `UploadGateTests` |
+| Time limit or closed-sitting UX | `TimeLimitCountdown.swift`, `AttemptEventReporter.swift` | `TimeLimitCountdownTests`, `RendererTimeLimitTests`, `AttemptEventReporterTests` |
+| Drawing canvas tools, auto-save, paper background | `AssessmentPage.swift` drawing section, `PageShell.swift` | `RendererDrawingToolsTests`, `RendererDrawingAutoSaveTests`, `RendererDrawingBackgroundTests` ([drawing canvas](drawing-canvas.md)) |
+| Vendored KaTeX, fonts or macros | `client/scripts/vendor-katex.mjs`, `vendor-fonts.mjs` | `KatexBundleTests`, `PageFontsTests`, `packages/schema/test/macros.test.ts` |
+
+Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
+
+Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
 
 | Intent | Start at | Tests |
 |---|---|---|

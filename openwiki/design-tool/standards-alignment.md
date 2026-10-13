@@ -68,7 +68,7 @@ The catalog is generated, not hand-edited. The committed inputs live in `lib/sta
 
 `lib/standards/catalog.ts` builds in-memory indexes once: by tag, by bare code and by crosswalk pair. Its exported functions are `lookup`, `findByBareCode`, `search`, `gradeBands`, `courses` and `counterparts`. `counterparts` follows the crosswalk, so a 2011 tag lists its 2026 links and the reverse.
 
-`lib/standards/search.ts` shapes results for the API. `searchStandards` ranks exact code, then code prefix, then code substring, then text, and with `prefer` it brings the preferred scheme's counterparts forward at the same rank. `resolveBareCode` turns a typed code into a tag only when exactly one scheme owns that code. `lookupTags` resolves a list of stored tags for display.
+`lib/standards/search.ts` shapes results for the API. `searchStandards` ranks exact code, then code prefix, then code substring, then text, and with `prefer` it brings the preferred scheme's counterparts forward at the same rank. `resolveBareCode` turns a typed code into a tag only when exactly one scheme owns that code. `lookupTags` resolves a list of stored tags for display. The staff-only `GET /api/standards/lookup?tags=a,b` route (`app/api/standards/lookup/route.ts`) returns that data as chip entries (`{ code, scheme, text }`, or `null` for a custom designation or an unknown code). It accepts at most `LOOKUP_MAX_TAGS` tags and answers `400 too_many_tags` above that. The route's own comment describes it as the chip data for an item's stored tags, which the editor shows as typed when the entry is `null`.
 
 ## Picker route
 
