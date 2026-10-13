@@ -502,3 +502,18 @@ meets a cold cluster).
   days, James); production's template gains only `RENDERER_DELIVERY=on`
   (D-11). The first production deploy after this signs (Touch ID) — D-13's
   minimum version comes from that renderer.
+- 2026-10-13 — **Rollout timing + two slice 4f must-haves (James).**
+  Order: staging serves the real page (4e) → a v1.6.2 Debug client against
+  staging proves v1.x ignores the bundle's `renderer` field → production
+  deploy of 4e after 15:30 PT on a weekday (first production signature) →
+  v2.0 built with the minimum version = that renderer (D-13), the backup
+  key (3b) and an RC run on staging → release on a light-testing day; no
+  new item types or large page edits until the fleet is on v2.0 (the mixed
+  fleet is safe: AutoPkg never updates a running app, bridge mode makes
+  the two pages identical, `clientSupport` holds new types for ≥ 2.0).
+  **Must-haves before the v2.0 release (4f):** (1) an expiry warning — the
+  server logs at a level the alarm emails when the current renderer is
+  within 14 days of `not_after`, plus a scheduled re-sign before school
+  resumes after summer (60 days with no deploy would make every v2.0 Mac
+  refuse every test); (2) a rollback script that points `current.json` back
+  to an earlier stored hash (`renderer-pointer.sh set <sha>`).
