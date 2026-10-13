@@ -1,0 +1,63 @@
+name: ci
+
+# Typecheck + tests on every push to main and every pull request (renderer
+# slice 3, docs/server-delivered-renderer-design.md 2.a): a served renderer is
+# signed only from a commit whose `ci` run on main is green, so this workflow
+# is part of the signing gate, not just a convenience. Before it, the only
+# workflows on main were the scanners.
+#
+# Actions are pinned by commit SHA (the tag in the comment): a moved tag must
+# not change what decides whether a commit can be signed.
+#
+# Not covered here: the Swift client (`swift test` needs a macOS runner — the
+# shell, not the signed renderer), and anything that needs AWS.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: secure_test_design_tool_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/secure_test_design_tool_test_ci
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install
+        run: bun install --frozen-lockfile
+      # The design tool consumes @secure-test/schema through its gitignored
+      # dist, so the package is built before anything that imports it.
+      - name: Schema — build + test
+        working-directory: packages/schema
+        run: bun run build && bun test
+      - name: Design tool — typecheck
+        working-directory: design-tool
+        run: bun run typecheck
+      - name: Design tool — migrate the test database
+        working-directory: design-tool
+        run: bun db/migrate.ts
+      - name: Design tool — test
+        working-directory: design-tool
+        run: bun test
