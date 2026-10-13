@@ -14,6 +14,8 @@ import { Construct } from "constructs";
 
 export interface RosterSyncProps {
   readonly envName: string;
+  /** Renderer slice 2 (D-7): staging has no warehouse feed and no alarms. */
+  readonly staging?: boolean;
   /** The design-tool cluster's credentials secret; the importer connects
    * with it. */
   readonly databaseSecret: secretsmanager.ISecret;
@@ -195,19 +197,21 @@ export class RosterSync extends Construct {
     // Observability slice 1: one or more importer failures in a 5-minute
     // window is worth an email — a bad or missing snapshot means the
     // roster silently goes stale.
-    new cloudwatch.Alarm(this, "ImporterErrorsAlarm", {
-      metric: this.fn.metricErrors({
-        statistic: "sum",
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription:
-        "One or more roster importer Lambda errors in the last 5 minutes.",
-    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+    if (!props.staging) {
+      new cloudwatch.Alarm(this, "ImporterErrorsAlarm", {
+        metric: this.fn.metricErrors({
+          statistic: "sum",
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          "One or more roster importer Lambda errors in the last 5 minutes.",
+      }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+    }
 
     new cdk.CfnOutput(this, "RosterBucketName", {
       value: this.bucket.bucketName,

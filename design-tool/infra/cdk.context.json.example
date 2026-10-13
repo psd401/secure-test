@@ -13,5 +13,9 @@
   "domainName": "example.invalid",
   "guardrailId": "abcdefghijkl",
   "notifyEmail": "<your-email>",
-  "adminEmails": ""
+  "adminEmails": "",
+  "_staging_comment": "Used only with --context env=staging (renderer slice 2, D-7). domainName is required and must differ from the production one; notifyEmail / adminEmails fall back to the top-level values when left out.",
+  "staging": {
+    "domainName": "staging.example.invalid"
+  }
 }

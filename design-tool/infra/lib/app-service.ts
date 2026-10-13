@@ -67,6 +67,12 @@ export interface AppServiceProps {
    * lasts — the maintainer address the `notifyEmail` context key already
    * holds (James, 2026-10-01). "" = nobody. */
   readonly safeguardingCcEmails: string;
+  /** Renderer slice 2 (D-7): the staging service. Deploys leave its task
+   * count where `staging.sh up | down` put it, no alarms (a scaled-down service
+   * would page), no gradebook (staging must never write to the live
+   * PowerSchool) and no email (the SES identity needs DKIM records in the
+   * zone). False = production, unchanged. */
+  readonly staging: boolean;
 }
 
 /** Name of the James-created app secret (slice 3). Keys:
@@ -172,17 +178,21 @@ export class AppService extends Construct {
     // aligns for DMARC. Until the CNAMEs verify and SES leaves the sandbox a
     // send fails; lib/email/shareNotifications.ts logs that as a warn and the
     // share itself still succeeds.
-    const emailIdentity = new ses.EmailIdentity(this, "EmailIdentity", {
-      identity: ses.Identity.domain(props.domainName),
-    });
-    this.taskRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["ses:SendEmail"],
-        resources: [
-          `arn:aws:ses:${stack.region}:${stack.account}:identity/${props.domainName}`,
-        ],
-      }),
-    );
+    const emailIdentity = props.staging
+      ? undefined
+      : new ses.EmailIdentity(this, "EmailIdentity", {
+          identity: ses.Identity.domain(props.domainName),
+        });
+    if (emailIdentity) {
+      this.taskRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["ses:SendEmail"],
+          resources: [
+            `arn:aws:ses:${stack.region}:${stack.account}:identity/${props.domainName}`,
+          ],
+        }),
+      );
+    }
 
     // Observability slice 1: an explicit log group (30-day retention —
     // logs may carry student ids per request/session, the DB tables are
@@ -257,11 +267,14 @@ export class AppService extends Construct {
       // Gradebook push: Send to gradebook is shown only when this is set
       // explicitly (GB-1). `live` = the production PowerSchool plugin, for
       // every teacher with edit access (James, 2026-09-29).
-      GRADEBOOK_PROVIDER: "live",
+      // Staging leaves it unset: no Send button, and no path to the live
+      // PowerSchool.
+      ...(props.staging ? {} : { GRADEBOOK_PROVIDER: "live" }),
       // Share notifications slice 3: the ses grant above is scoped to this
-      // sender's domain identity.
-      EMAIL_PROVIDER: "ses",
-      EMAIL_FROM: `no-reply@${props.domainName}`,
+      // sender's domain identity. Staging has no identity, so no email.
+      ...(props.staging
+        ? {}
+        : { EMAIL_PROVIDER: "ses", EMAIL_FROM: `no-reply@${props.domainName}` }),
       // Safeguarding alerts slice 4: the maintainer's CC on alert emails.
       SAFEGUARDING_CC_EMAILS: props.safeguardingCcEmails,
     };
@@ -302,24 +315,31 @@ export class AppService extends Construct {
         appSecret,
         "OIDC_CLIENT_SECRET",
       ),
-      // Gradebook push (docs/gradebook-push-design.md): the PRODUCTION
-      // PowerSchool plugin, added to the app secret by the maintainer's
-      // hidden-prompt script. The base URL rides in the secret too so the
-      // district hostname stays out of the repo. A key missing from the
-      // secret stops the task from starting — add all three before a deploy.
-      POWERSCHOOL_BASE_URL: ecs.Secret.fromSecretsManager(
-        appSecret,
-        "POWERSCHOOL_BASE_URL",
-      ),
-      POWERSCHOOL_CLIENT_ID: ecs.Secret.fromSecretsManager(
-        appSecret,
-        "POWERSCHOOL_CLIENT_ID",
-      ),
-      POWERSCHOOL_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
-        appSecret,
-        "POWERSCHOOL_CLIENT_SECRET",
-      ),
     };
+
+    // Gradebook push secrets — production only (staging's secret never
+    // carries the PowerSchool credentials).
+    if (!props.staging) {
+      Object.assign(secrets, {
+        // Gradebook push (docs/gradebook-push-design.md): the PRODUCTION
+        // PowerSchool plugin, added to the app secret by the maintainer's
+        // hidden-prompt script. The base URL rides in the secret too so the
+        // district hostname stays out of the repo. A key missing from the
+        // secret stops the task from starting — add all three before a deploy.
+        POWERSCHOOL_BASE_URL: ecs.Secret.fromSecretsManager(
+          appSecret,
+          "POWERSCHOOL_BASE_URL",
+        ),
+        POWERSCHOOL_CLIENT_ID: ecs.Secret.fromSecretsManager(
+          appSecret,
+          "POWERSCHOOL_CLIENT_ID",
+        ),
+        POWERSCHOOL_CLIENT_SECRET: ecs.Secret.fromSecretsManager(
+          appSecret,
+          "POWERSCHOOL_CLIENT_SECRET",
+        ),
+      });
+    }
 
     this.service = new ecsPatterns.ApplicationLoadBalancedFargateService(
       this,
@@ -375,6 +395,17 @@ export class AppService extends Construct {
       },
     );
 
+    // Staging (D-7): no DesiredCount in the template, so CloudFormation
+    // keeps whatever count `staging.sh up | down` last set instead of
+    // resetting it on every deploy. A first create starts one task (the
+    // ECS default); `staging.sh down` stops it. The pattern refuses an
+    // explicit 0, hence the override rather than the prop.
+    if (props.staging) {
+      (this.service.service.node.defaultChild as ecs.CfnService).addPropertyDeletionOverride(
+        "DesiredCount",
+      );
+    }
+
     // Dedicated no-auth no-DB endpoint (app/api/health/route.ts) — the
     // health check must not depend on the DB or a 0.5-ACU hiccup recycles
     // the task, and it should not cost an SSR render every probe.
@@ -409,52 +440,56 @@ export class AppService extends Construct {
       metricValue: "1",
     });
 
-    new cloudwatch.Alarm(this, "ServerErrorsAlarm", {
-      metric: errorMetricFilter.metric({
-        statistic: "sum",
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription:
-        'One or more `level: "error"` log lines in the last 5 minutes.',
-    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+    // No alarms on staging (D-7): its service is scaled to zero between
+    // uses, and HealthyHostCount would page on every scale-down.
+    if (!props.staging) {
+      new cloudwatch.Alarm(this, "ServerErrorsAlarm", {
+        metric: errorMetricFilter.metric({
+          statistic: "sum",
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          'One or more `level: "error"` log lines in the last 5 minutes.',
+      }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
 
-    new cloudwatch.Alarm(this, "TargetGroup5xxAlarm", {
-      metric: this.service.targetGroup.metrics.httpCodeTarget(
-        elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
-        { statistic: "sum", period: cdk.Duration.minutes(5) },
-      ),
-      threshold: 5,
-      evaluationPeriods: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription:
-        "5 or more ALB target-group 5xx responses in the last 5 minutes.",
-    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+      new cloudwatch.Alarm(this, "TargetGroup5xxAlarm", {
+        metric: this.service.targetGroup.metrics.httpCodeTarget(
+          elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+          { statistic: "sum", period: cdk.Duration.minutes(5) },
+        ),
+        threshold: 5,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          "5 or more ALB target-group 5xx responses in the last 5 minutes.",
+      }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
 
-    // "Is anything serving?" — the ALB's HealthyHostCount on the target
-    // group, which is free and already there (RunningTaskCount would need
-    // Container Insights on the cluster). 2 x 1-minute periods: a deploy's
-    // stop-then-start (minHealthyPercent 100 / maxHealthyPercent 200 above)
-    // must not itself page. Missing data = breaching: no datapoints means
-    // the target group is gone, which is the worst case.
-    new cloudwatch.Alarm(this, "HealthyHostCountAlarm", {
-      metric: this.service.targetGroup.metrics.healthyHostCount({
-        statistic: "Minimum",
-        period: cdk.Duration.minutes(1),
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-      alarmDescription:
-        "Fewer than 1 healthy target behind the ALB for 2 consecutive minutes.",
-    }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+      // "Is anything serving?" — the ALB's HealthyHostCount on the target
+      // group, which is free and already there (RunningTaskCount would need
+      // Container Insights on the cluster). 2 x 1-minute periods: a deploy's
+      // stop-then-start (minHealthyPercent 100 / maxHealthyPercent 200 above)
+      // must not itself page. Missing data = breaching: no datapoints means
+      // the target group is gone, which is the worst case.
+      new cloudwatch.Alarm(this, "HealthyHostCountAlarm", {
+        metric: this.service.targetGroup.metrics.healthyHostCount({
+          statistic: "Minimum",
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+        alarmDescription:
+          "Fewer than 1 healthy target behind the ALB for 2 consecutive minutes.",
+      }).addAlarmAction(new cwActions.SnsAction(props.notifyTopic));
+    }
 
     new cdk.CfnOutput(this, "AlbDnsName", {
       value: this.service.loadBalancer.loadBalancerDnsName,
@@ -463,16 +498,18 @@ export class AppService extends Construct {
 
     // The three Easy DKIM CNAMEs for IT to add in the zone (IT, 2026-09-30:
     // "send me the 3 DKIM CNAME name/value pairs").
-    [
-      [emailIdentity.dkimDnsTokenName1, emailIdentity.dkimDnsTokenValue1],
-      [emailIdentity.dkimDnsTokenName2, emailIdentity.dkimDnsTokenValue2],
-      [emailIdentity.dkimDnsTokenName3, emailIdentity.dkimDnsTokenValue3],
-    ].forEach(([name, value], i) => {
-      new cdk.CfnOutput(this, `EmailDkimCname${i + 1}`, {
-        value: cdk.Fn.join(" CNAME ", [name, value]),
-        description: `SES DKIM record ${i + 1} of 3 for ${props.domainName} — IT adds it.`,
+    if (emailIdentity) {
+      [
+        [emailIdentity.dkimDnsTokenName1, emailIdentity.dkimDnsTokenValue1],
+        [emailIdentity.dkimDnsTokenName2, emailIdentity.dkimDnsTokenValue2],
+        [emailIdentity.dkimDnsTokenName3, emailIdentity.dkimDnsTokenValue3],
+      ].forEach(([name, value], i) => {
+        new cdk.CfnOutput(this, `EmailDkimCname${i + 1}`, {
+          value: cdk.Fn.join(" CNAME ", [name, value]),
+          description: `SES DKIM record ${i + 1} of 3 for ${props.domainName} — IT adds it.`,
+        });
       });
-    });
+    }
 
     new cdk.CfnOutput(this, "AppOrigin", {
       value: `https://${props.domainName}`,

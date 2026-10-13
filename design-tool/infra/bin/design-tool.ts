@@ -9,9 +9,51 @@ const app = new cdk.App();
 // SG admits only the importer Lambda and the Fargate service, SG→SG.
 // Migrations run inside the VPC — README "Migrating Aurora".
 
-// Environment suffix for the per-env asset bucket (default "dev"). Pass via:
-//   bunx cdk deploy --context env=prod
+// Which ONE stack this app builds (renderer slice 2, D-7 —
+// docs/server-delivered-renderer-design.md).
+//
+// No `env` context = production: the stack `SecureTestDesignTool`, whose
+// resources carry the historical suffix "dev" (the bucket, the app secret,
+// the log group). That default is unchanged, so `deploy.sh` and every script
+// that names the stack behave exactly as before.
+//
+// `--context env=staging` = the separate `SecureTestDesignToolStaging` stack:
+// its own VPC, Aurora, buckets, secret, log group and topic, a fictional
+// roster only. Its per-env values come from the `staging` object in
+// cdk.context.json (see cdk.context.json.example).
+//
+// Any other value is refused. Before this slice the stack id was fixed, so
+// `--context env=<anything>` re-targeted the PRODUCTION stack and renamed its
+// buckets and secret in place.
 const envName = (app.node.tryGetContext("env") as string | undefined) ?? "dev";
+if (envName !== "dev" && envName !== "staging") {
+  throw new Error(
+    `Unknown env "${envName}". Omit --context env for production (the "dev" ` +
+      `stack), or pass --context env=staging.`,
+  );
+}
+const isStaging = envName === "staging";
+
+// Staging's own values. Anything it leaves out falls back to the
+// production value from the top level of cdk.context.json.
+interface StagingContext {
+  domainName?: string;
+  notifyEmail?: string;
+  adminEmails?: string;
+}
+const staging = (app.node.tryGetContext("staging") as StagingContext | undefined) ?? {};
+if (isStaging && !staging.domainName) {
+  throw new Error(
+    "env=staging requires staging.domainName in cdk.context.json — see " +
+      "cdk.context.json.example. It must differ from the production domainName.",
+  );
+}
+if (isStaging && staging.domainName === app.node.tryGetContext("domainName")) {
+  throw new Error("staging.domainName must differ from the production domainName.");
+}
+const contextValue = (key: keyof StagingContext): string | undefined =>
+  (isStaging ? staging[key] : undefined) ??
+  (app.node.tryGetContext(key) as string | undefined);
 
 // ECS slice 3: OAuth client ids for the task env. Public identifiers (the
 // web id is in every Google login redirect, the native id ships in the app
@@ -38,16 +80,21 @@ const oidcNativeClientId = app.node.tryGetContext("oidcNativeClientId") as strin
 const mwaaProducerRoleArn = app.node.tryGetContext("mwaaProducerRoleArn") as
   | string
   | undefined;
-const producerRoleArns = mwaaProducerRoleArn ? [mwaaProducerRoleArn] : [];
+// Staging never receives the warehouse feed: no producer role on its
+// roster bucket (its roster is the fictional demo one).
+const producerRoleArns = mwaaProducerRoleArn && !isStaging ? [mwaaProducerRoleArn] : [];
 
-new DesignToolStack(app, "SecureTestDesignTool", {
+new DesignToolStack(app, isStaging ? "SecureTestDesignToolStaging" : "SecureTestDesignTool", {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION ?? "us-west-2",
   },
   description:
-    "Design tool — Aurora Postgres Serverless v2 cluster (Slice 24), S3 asset bucket (Slice 31), roster sync (Slice 76), Fargate app service (ADR 0014).",
+    isStaging
+      ? "Design tool STAGING — no student data; renderer slice 2 (docs/server-delivered-renderer-design.md, D-7)."
+      : "Design tool — Aurora Postgres Serverless v2 cluster (Slice 24), S3 asset bucket (Slice 31), roster sync (Slice 76), Fargate app service (ADR 0014).",
   envName,
+  staging: isStaging,
   producerRoleArns,
   oidcWebClientId,
   oidcNativeClientId,
@@ -55,7 +102,7 @@ new DesignToolStack(app, "SecureTestDesignTool", {
   // DesignToolStack's constructor and cdk.context.json.example). Set
   // `domainName` in cdk.context.json, or override with `--context
   // domainName=…` for a one-off (e.g. a prod pair, a rename).
-  domainName: app.node.tryGetContext("domainName") as string | undefined,
+  domainName: contextValue("domainName"),
   // Bedrock guardrail id (ADR 0011) — a district resource id, read from
   // context like the others; the stack refuses to synth without it.
   guardrailId: app.node.tryGetContext("guardrailId") as string | undefined,
@@ -63,11 +110,11 @@ new DesignToolStack(app, "SecureTestDesignTool", {
   // that gets alarm + feedback email. A personal address, so it lives in
   // context rather than tracked source; the stack refuses to synth without
   // it — see cdk.context.json.example.
-  notifyEmail: app.node.tryGetContext("notifyEmail") as string | undefined,
+  notifyEmail: contextValue("notifyEmail"),
   // Access slice 2 (docs/access-model-design.md, D-1): the system-admin list,
   // comma-separated. Personal addresses, so context rather than tracked source
   // — but UNLIKE domainName / guardrailId / notifyEmail the stack does NOT
   // require it: an empty list is the correct default (nobody is an admin), and
   // a deploy that forgets it is degraded, not broken.
-  adminEmails: (app.node.tryGetContext("adminEmails") as string | undefined) ?? "",
+  adminEmails: contextValue("adminEmails") ?? "",
 });

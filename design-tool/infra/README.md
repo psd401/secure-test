@@ -48,7 +48,10 @@ bunx cdk bootstrap aws://<account-id>/us-west-2
 # source per the public-release scrub); --context oidcWebClientId=… /
 # oidcNativeClientId=… / domainName=… overrides them for a one-off, e.g. a
 # prod pair.
-# Optional: --context env=prod to name the asset bucket for prod (default dev).
+# No `env` context = production (the stack SecureTestDesignTool, whose
+# resources carry the historical "dev" suffix). `--context env=staging`
+# builds the separate SecureTestDesignToolStaging stack instead; any other
+# env value is refused (renderer slice 2, docs/server-delivered-renderer-design.md D-7).
 bunx cdk deploy
 
 # Migrations need no separate step since DS-1 (2026-09-25): the new task

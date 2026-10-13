@@ -35,6 +35,10 @@ export interface DesignToolStackProps extends cdk.StackProps {
    * addresses that get system-admin access. Defaults to "" — nobody. Personal
    * addresses, so it comes from cdk context, not source. */
   readonly adminEmails?: string;
+  /** Renderer slice 2 (D-7): the staging stack — Aurora may pause (0 ACU),
+   * its task count set by `staging.sh up | down`, not by deploys, no alarms, no gradebook, no
+   * email. Default false = production, unchanged. */
+  readonly staging?: boolean;
 }
 
 // Aurora Postgres Serverless v2 cluster for the design tool (Slice 24).
@@ -129,7 +133,9 @@ export class DesignToolStack extends cdk.Stack {
       // took 15-90s — first request after idle would 500. A few $/day;
       // revisit post-pilot. The importer's waitForDatabase goes dormant but
       // stays (right again if this ever returns to 0).
-      serverlessV2MinCapacity: 0.5,
+      // Staging pauses when idle (renderer slice 2, D-7): a cold first
+      // request may fail while the cluster wakes, accepted there.
+      serverlessV2MinCapacity: props.staging ? 0 : 0.5,
       serverlessV2MaxCapacity: 1,
       writer: rds.ClusterInstance.serverlessV2("writer", {
         publiclyAccessible: true,
@@ -253,6 +259,7 @@ export class DesignToolStack extends cdk.Stack {
       producerRoleArns: props.producerRoleArns,
       notifyTopic,
       assetBucket,
+      staging: props.staging ?? false,
     });
 
     // --- App compute (ECS deploy slices 2-4, docs/ecs-deploy-plan.md):
@@ -295,6 +302,7 @@ export class DesignToolStack extends cdk.Stack {
       adminEmails: props.adminEmails ?? "",
       notifyTopic,
       safeguardingCcEmails: props.notifyEmail,
+      staging: props.staging ?? false,
     });
   }
 }
