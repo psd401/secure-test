@@ -2565,7 +2565,9 @@ build falls back to the bundled page. Any load failure refuses the join with
 no secure session: "Your test couldn't load." plus either the
 `client_update_required` line (a renderer needing a capability this build
 lacks) or "Check your connection, then open it again from Your tests. If it
-still won't open, ask your teacher."; the failure lands in errors.log /
+still won't open, ask your teacher." (a bundle with NO renderer field reads
+"Ask your teacher." instead — a server configuration problem, James
+2026-10-13); the failure lands in errors.log /
 stderr and on the teacher's timeline as a `client_error` event
 (`kind: renderer_load_failed`). Already checked headlessly: `swift test`
 (`RendererStartTests` — byte-identical bundled page, the served page's
@@ -2577,9 +2579,10 @@ key.
 
 | Check | Expected | Result |
 |---|---|---|
-| **Served renderer loads.** Debug build against staging, join a sitting | stderr `renderer: served v<version> <sha12>` before `tts:` / the begin line; the test renders and saves as on v1.x; the cache directory holds `<sha256>/` with four files | NOT RUN |
-| **Second start comes from cache.** Back to Your tests, join again (same renderer) | `renderer: from cache v<version> <sha12>`; no `/api/renderer/` requests in the server log for that start | NOT RUN |
-| **Cache tampering → refetch.** Quit; edit one byte of the cached `renderer.js`; join | stderr `renderer cache <sha12> discarded: renderer integrity: renderer.js does not match the manifest`, then `renderer: served …`; the test renders; the cached file is the server's again | NOT RUN |
+| **A v1.x client ignores the bundle's `renderer` field.** The RELEASED v1.6.2 (a Debug build of the `v1.6.2` tag, own DerivedData) against staging, where every bundle carries `renderer` | The test loads, answers save, hand-in works — a v1.x decoder that failed on the field would stop at "Loading your test…" | ✅ 2026-10-13 Debug build of tag `v1.6.2`, simulated lockdown, against staging, demo student A, sitting UPJZYF — `bundle fetched: 2 items` → `DID BEGIN` → both answers → handed in → `DID END`; staging results: submitted, 2 of 2 answered, the MC auto-scored; no staging warnings. That the bundle carried the field is shown by the next row (the v2.0 client read it from the same server) |
+| **Served renderer loads.** Debug build against staging, join a sitting | stderr `renderer: served v<version> <sha12>` before `tts:` / the begin line; the test renders and saves as on v1.x; the cache directory holds `<sha256>/` with four files | ✅ 2026-10-13 Debug build of `v2-renderer` (969b10a + 7dd3ffe), simulated lockdown, against staging (`f759488`, renderer v1791922087 `c281e8db…` = the real page in bridge mode), demo student B, sitting UPJZYF — `bundle fetched: 2 items` → `renderer: served v1791922087 c281e8db63e0` → `DID BEGIN` → both answers recorded → handed in → `DID END`; no error / `BLOCKED` lines |
+| **Second start comes from cache.** Back to Your tests, join again (same renderer) | `renderer: from cache v<version> <sha12>`; no `/api/renderer/` requests in the server log for that start | ✅ 2026-10-13 same build, same student, a second test (sitting MW7UB4, not yet handed in): `bundle fetched: 1 items` → `renderer: from cache v1791922087 c281e8db63e0` → `DID BEGIN` → page loaded |
+| **Cache tampering → refetch.** Quit; edit one byte of the cached `renderer.js`; join | stderr `renderer cache <sha12> discarded: renderer integrity: renderer.js does not match the manifest`, then `renderer: served …`; the test renders; the cached file is the server's again | ✅ 2026-10-13 same build, same student: Cmd-Q, one byte appended to the cached `renderer.js` (263,468 → 263,469 B), relaunch, a fresh test (sitting FRRS3S — a handed-in test is refused before the renderer step, so the cache stays untouched there): `renderer cache c281e8db63e0 discarded: renderer integrity: renderer.js does not match the manifest` → `renderer: served v1791922087 c281e8db63e0` → `DID BEGIN`; the cached file is back to 263,468 B with the signed hash |
 | **No field, Release refuses.** Release build against a server WITHOUT `RENDERER_DELIVERY` (local dev, `SECURE_TEST_SERVER` set, sign in) | No secure session starts (no `DID BEGIN`); sheet "Your test couldn't load." / "Ask your teacher."; stderr `renderer missing: …`; errors.log `renderer_load_failed` with `reason: missing`; teacher timeline shows a client error | NOT RUN |
 | **No field, Debug falls back.** Debug build against local dev | `renderer: bundled (Debug fallback) — the bundle names no renderer …`; the test renders as before | NOT RUN |
 | **Unknown capability → update sheet.** A staging renderer signed with `requires` naming a term this build lacks (dev-key signed, Debug) | No secure session; sheet "Your test couldn't load." / "This test needs a newer version of SecureTest. Open Self Service, update SecureTest, then join again."; `reason: update_needed` | NOT RUN |
