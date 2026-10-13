@@ -1093,3 +1093,25 @@ never renamed (convention in `CLAUDE.md` "Naming").
 - Outside the repo, for a batched IT ask: the Self Service listing name and
   the real configuration profile's display name.
 
+
+## Findings from the v1.6.3 hand-run (2026-10-13) — client, proposals only
+
+- **WC-1 — FIXED in v1.6.3.** Past an essay's maximum the counter carried
+  class `word-count over` since v1.0.0 but no stylesheet rule existed; now
+  `--danger`, bold (`b8e06aa`).
+- **WC-2 — VoiceOver does not read the word count in the formatted box.**
+  `box.setAttribute('aria-describedby', counter.id)` (RT slice 4, v1.6.0)
+  was never verified; in a real session VoiceOver skips it. The plain
+  essay's textarea is unverified too. Next: check what WebKit exposes for
+  `aria-describedby` on a `contenteditable` (AXHelp vs AXDescription, read
+  only as a delayed hint?) and pick a mechanism VoiceOver speaks on arrival
+  (e.g. `aria-label` carrying the count, or a polite live region on
+  change). Shipped in v1.6.3 as a known issue (James). Side: client.
+- **VO-1 — Cmd-F5 during a real secure session restarted the Mac.** v1.6.3
+  smoke, 16:03 → 16:05 PT: the attempt logged `lockdown_begin` with no
+  end; the Mac booted at 16:05:28. No SecureTest crash report; the panic
+  report needs admin and was not read (James: no IT ask now). Not
+  version-specific; the existing rule "VoiceOver on BEFORE lockdown" now
+  has a reason, and the release notes say so. If it recurs on a student
+  Mac: the panic report from IT, then Apple Feedback against Automatic
+  Assessment Configuration.

@@ -195,6 +195,31 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v1.6.3 — 2026-10-13** (built from `b8e06aa74f29`, tag on `main`):
+  U-22 ("n words" under an essay with `show_word_count` and no maximum),
+  WC-1 (an over-limit count is red and bold; the `over` class had no rule
+  since v1.0.0) and Row NM slice 3 ("SecureTest" everywhere a person
+  reads). Cut ahead of v2.0 because IT's backup signing key has no date.
+  psd-sign 0.6.1: pre-flight clean (HEAD = `origin/main`, 1.6.3 > v1.6.2),
+  archive-only Developer ID + hardened runtime (no re-sign), all seven
+  entitlements = `expected-entitlements.txt`, profile `SecureTest
+  Developer ID` to 2044, `PSDBuildCommit` = HEAD. **Notarized + stapled**
+  (app and pkg Accepted — the first notarized release since v1.3.5; Apple's
+  agreement block is cleared). pkg sha256 `ffbab824…7d71fa`, verified
+  against the downloaded asset; `/releases/latest` → v1.6.3. Smoke: Debug
+  rows on local `_demo`, then the Release payload (run from
+  `~/Desktop/st-smoke-*`, James has no admin) in real AAC sessions on the
+  origin — v1.6.2 first against the same bundle (no counter on A, "n / 50"
+  on C), then v1.6.3 (counter on A, red on C, Finder / Dock "SecureTest").
+  Known issues carried in the notes: **WC-2** (VoiceOver does not read the
+  count in the formatted box — linked since v1.6.0, never verified) and
+  **VO-1** (Cmd-F5 during a real secure session restarted the Mac; panic
+  report not read — needs admin; not version-specific). **Notarization
+  backfill the same evening:** the v1.4.0, v1.5.0, v1.6.0, v1.6.1 and
+  v1.6.2 pkgs (each byte-identical to its published asset) were all
+  Accepted; not stapled and assets not replaced, so Gatekeeper finds the
+  ticket online ("Notarized Developer ID" on 1.4.0 and 1.6.2).
+
 - **v1.6.2 — 2026-10-09** (built from `c179cfeed217`, tag on `main`):
   exit confirms (End secure session, Cmd-E, Cmd-Q and the close button ask
   first while a test is on screen — 409 presses on 204 attempts in 14 days,
@@ -385,21 +410,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v1.6.3** (`MARKETING_VERSION` = 1.6.3; decided 2026-10-13
-  — cut ahead of v2.0 because IT's backup signing key has no date). Carries
-  **U-22** — "n words" under an essay with `show_word_count` and no maximum
-  (`client/MANUAL-CHECKS.md` "Word count without a limit", NOT RUN) — and
-  Row NM slice 3 (one product name, "One product name" rows, NOT RUN), and
-  **WC-1** (an over-limit word count is red; the class had no rule since
-  v1.0.0 — found in this release's hand-run 2026-10-13). The
-  server half of U-22 is live (2026-10-13, task def rev 108). Before
-  psd-sign: both row sections on a Debug build against the origin, then a
-  Release smoke in one real AAC session (word count while typing, the
-  "SecureTest" name, hand in, `DID END`). After publishing: the help page
-  and quick start say "a SecureTest newer than 1.6.2" — change it to
-  "1.6.3 or later" and deploy right away. Notarization is working again:
-  notarize v1.6.3 normally, then backfill the v1.4.0–v1.6.2 pkgs (no
-  staple, no asset replacement).
+- ~~**Next release: v1.6.3**~~ PUBLISHED 2026-10-13 (see Released).
 - ~~**Next release: v1.6.1**~~ PUBLISHED 2026-10-08 (see Released). (`MARKETING_VERSION` = 1.6.1). Carries
   **SS-1** (the secure-start backstop is 60 s with a "Still starting the
   secure session…" notice after 20 s — a student's Mac began its session

@@ -38,8 +38,8 @@ time) and its rubric is attached.
    blank** (dropdown or typed blanks inside a sentence; needs SecureTest
    1.6.0 or later on the student's Mac). An essay can **Let students format
    their answer** (bold, italic, underline, lists, first-line indent) and
-   **Show students a word count** without a maximum (a SecureTest newer
-   than 1.6.2; a maximum always shows its count).
+   **Show students a word count** without a maximum (SecureTest 1.6.3 or
+   later; a maximum always shows its count).
 2. **Reading layout.** For a passage or sources shared by several questions,
    the stimulus card's layout select has three choices. *Side by side
    (sources beside the question)* is the default whenever a stimulus carries
