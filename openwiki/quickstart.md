@@ -31,6 +31,8 @@ All design-tool test commands need `DATABASE_URL=postgres://$USER@localhost:5432
 |---|---|---|---|---|---|
 | Role, session, route authorization, grants | [auth](design-tool/auth-and-access.md) | `design-tool/proxy.ts`, `lib/auth/*`, `lib/api/access.ts`, `lib/api/grants.ts` | `roleForEmail`, `requireStaff`, `authorizeAssessment`, `levelSatisfies` | `access-enforcement`, `auth-roles`, `share-notifications` (grant "New" mark) | `cd design-tool && $TESTDB bun test test/access-enforcement.test.ts` |
 | Assessment draft/published status, publish lock, archive, delete draft, duplicate | [assessment lifecycle](design-tool/assessment-lifecycle.md) | `design-tool/app/api/assessments/[id]/route.ts`, `app/api/assessments/[id]/duplicate/route.ts`, `lib/api/requireDraft.ts`, `lib/api/duplicateAssessment.ts`, `lib/api/visibleAssessments.ts` | `UpdateAssessmentBody`, `requireDraft`, `isUnlockOnlyPatch`, `duplicateAssessment`, `visibleAssessments` | `assessments-api`, `duplicate-assessment`, `reporting-views` | `cd design-tool && $TESTDB bun test test/assessments-api.test.ts` |
+| Student's "Your tests" list (pre-assignment), one row per assessment, `time_ran_out` | [sittings](design-tool/sittings-and-attempts.md#join-and-answer-flow) | `design-tool/app/api/me/sittings/route.ts`, `lib/api/mySittings.ts`, `client/SecureTestCore/Sources/SecureTestCore/MySittings.swift` | `listMySittings`, `onePerAssessment`, `isAdmittedToSitting`, `MySittings` | `my-sittings-api`, `practice-sitting`, `MySittingsTests` | `cd design-tool && $TESTDB bun test test/my-sittings-api.test.ts` |
+| Forced hand-in (single attempt, sitting-wide, assessment-level) | [sittings](design-tool/sittings-and-attempts.md#clocks) | `lib/api/handInAttempt.ts`, `app/api/attempts/[attemptId]/hand-in/route.ts`, `app/api/test-sessions/[sessionId]/hand-in-all/route.ts` | `handInAttempt` | `attempt-hand-in-api`, `session-hand-in-all-api`, `assessment-hand-in-in-progress-api` | `cd design-tool && $TESTDB bun test test/attempt-hand-in-api.test.ts` |
 | Table, column or status vocabulary | [data model](design-tool/data-model.md) | `design-tool/db/schema.ts`, `db/migrations/` | `ATTEMPT_EVENT_KINDS`, `SCORE_STATUSES` | `items-api`, `superseded-scores` | `cd design-tool && bun run typecheck` |
 | Item types, import/export, PDF import, preview | [authoring](design-tool/authoring.md), [wire formats](architecture/wire-formats.md) | `lib/api/items.ts`, `lib/api/exportBundle.ts`, `lib/pdfImport/`, `packages/schema/src/items.ts` | `CreateItemBody`, `requireDraft`, `ItemSchema` | `items-api`, `import-api`, `pdf-extract` | `cd packages/schema && bun run build && bun test` |
 | Join, attempt, delivery bundle, deadlines, close, peek | [sittings](design-tool/sittings-and-attempts.md) | `lib/api/testSessions.ts`, `lib/api/studentAttempt.ts`, `lib/api/buildDeliveryBundle.ts` | `loadOwnAttempt`, `buildDeliveryBundle`, `deadlineFor` | `attempt-ingest-api`, `delivery-api`, `sitting-closed` | `cd design-tool && $TESTDB bun test test/attempt-ingest-api.test.ts` |
@@ -67,11 +69,6 @@ Cross-boundary rule: a change to a wire format, event kind or payload limit touc
 - Closed vocabularies live in one TypeScript constant, are mirrored in SQL `CHECK` constraints and route Zod enums, and are mirrored again in Swift where the client uses them.
 - Generated and vendored files (`packages/schema/dist`, `db/migrations`, the client's `GeneratedKatexMacros.swift` and `Resources/`) come from their generators; do not hand-edit them.
 - The wiki covers `design-tool/`, `packages/schema/` and `client/`. The `poc-*` spike directories are historical records and are not maintained here.
-
-## Backlog
-
-- No deferred areas at this update. The teacher UI is covered in [teacher dashboard](design-tool/teacher-dashboard.md).
-cords and are not maintained here.
 
 ## Backlog
 
