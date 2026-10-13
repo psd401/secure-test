@@ -54,7 +54,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 
 ## Draft/published lock
 
-`lib/api/requireDraft.ts` returns a 409 `assessment_published_editing_locked` for any mutation of a published assessment. The unlock is a PATCH of the assessment itself to `status: "draft"` (its body is validated before the guard fires). Two deliberate exceptions let teachers finish work after publishing: `isAnswerKeyOnlyPatch` (only keys change: `correct_*`, hotspot `correct_region_ids`, table `cell_keys`, fill-blank keys) and standards tags, since neither reaches students. Keyless items can be published (the PDF importer proposes them); the readiness checklist flags them.
+`lib/api/requireDraft.ts` returns a 409 `assessment_published_editing_locked` for any mutation of a published assessment. The unlock is a PATCH of the assessment itself to `status: "draft"` (its body is validated before the guard fires). Two deliberate exceptions let teachers finish work after publishing: `isAnswerKeyOnlyPatch` (only keys change: `correct_*`, hotspot `correct_region_ids`, table `cell_keys`, fill-blank keys) and standards tags, since neither reaches students. Keyless items can be published (the PDF importer proposes them); the readiness checklist flags them. Archive, delete and duplicate, which also depend on status, are described in [assessment lifecycle](assessment-lifecycle.md).
 
 ## Getting content in and out
 

@@ -30,6 +30,7 @@ secure-test is one school district's in-house secure assessment stack (MIT licen
 - [Auth and access](../design-tool/auth-and-access.md) — Google OIDC, domain-derived roles, session JWT, the `view < run < edit < own` access ladder, grants, admin, impersonation.
 - [Data model](../design-tool/data-model.md) — tables, invariants, migrations.
 - [Authoring](../design-tool/authoring.md) — assessments, items, item sets, import/export, PDF import, preview.
+- [Assessment lifecycle](../design-tool/assessment-lifecycle.md) — draft and published status, the publish lock, archive, delete-draft guard, duplicate.
 - [Standards alignment](../design-tool/standards-alignment.md) — the generated standards catalog, `scheme:code` item tags, the picker API and AI standards suggestion.
 - [Storage and assets](../design-tool/storage-and-assets.md) — the object-store provider contract, asset library, and drawing-upload object keys.
 - [Sittings and attempts](../design-tool/sittings-and-attempts.md) — the student plane: codes, redeem, attempt, delivery, writes, deadlines, close, peek, events.
