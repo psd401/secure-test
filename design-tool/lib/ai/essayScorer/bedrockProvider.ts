@@ -32,8 +32,15 @@ const DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6";
 // end_turn, and the teacher's retry five minutes later scored the same
 // essay. So an unreadable reply gets ONE more try before it is reported. A
 // reply cut off at max_tokens would be cut off again, and a reply that reads
-// but fails the shape or the rubric is the model's answer, not noise — both
-// are reported at once, as before.
+// but fails the shape is the model's answer, not noise — both are reported
+// at once, as before.
+//
+// 2026-10-13 alarm: in a class batch of ~20, one reply chose a valid level
+// but wrote points that disagree with it (6.5 for a level worth 8.5). The
+// validator cannot know which the model meant, so it refuses — and that
+// reply now also gets ONE more try (James, option a: retry rather than pick
+// a score for the teacher). The two retries share the budget: at most two
+// calls per essay, whatever went wrong.
 const MAX_ATTEMPTS = 2;
 
 export const bedrockEssayScorer: EssayScorerProvider = {
@@ -52,7 +59,6 @@ export const bedrockEssayScorer: EssayScorerProvider = {
     // into the below/meets/exceeds ladder), and the returned selections are
     // bounds-checked against that same view.
     const rubric = scoringView(req.rubric);
-    let parsed;
     for (let attempt = 1; ; attempt++) {
       const { text, stopReason } = await converseTextWithMeta({
         modelId: process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL,
@@ -64,9 +70,9 @@ export const bedrockEssayScorer: EssayScorerProvider = {
         surface: "essay-score",
         ownerSub,
       });
+      let parsed;
       try {
         parsed = parseScoreResult(text, "bedrock");
-        break;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         const unreadable = message.includes("did not return valid JSON");
@@ -83,19 +89,23 @@ export const bedrockEssayScorer: EssayScorerProvider = {
         const tries = attempt > 1 ? `, after ${attempt} attempts` : "";
         throw new Error(`${message} (stopReason ${stopReason ?? "unknown"}${tries})`);
       }
+      const { result: levelled, repaired } = reconcileLevelIds(parsed, rubric);
+      if (repaired > 0) {
+        console.warn(`bedrock essay score: repaired ${repaired} level id(s) by points`);
+      }
+      const { result, corrected } = reconcilePointsTotal(levelled, rubric);
+      if (corrected) {
+        log.warn("essay_score_total_corrected", corrected);
+      }
+      const bounds = validateAgainstRubric(result, rubric);
+      if (bounds.valid) return result;
+      // The reason names criterion / level ids and numbers only — never the
+      // essay or the model's rationale — so it is safe in the log.
+      const retry = attempt < MAX_ATTEMPTS;
+      log.warn("essay_score_rubric_mismatch", { attempt, retrying: retry, reason: bounds.reason });
+      if (retry) continue;
+      const tries = attempt > 1 ? ` (after ${attempt} attempts)` : "";
+      throw new Error(`bedrock: model score failed rubric bounds: ${bounds.reason}${tries}`);
     }
-    const { result: levelled, repaired } = reconcileLevelIds(parsed, rubric);
-    if (repaired > 0) {
-      console.warn(`bedrock essay score: repaired ${repaired} level id(s) by points`);
-    }
-    const { result, corrected } = reconcilePointsTotal(levelled, rubric);
-    if (corrected) {
-      log.warn("essay_score_total_corrected", corrected);
-    }
-    const bounds = validateAgainstRubric(result, rubric);
-    if (!bounds.valid) {
-      throw new Error(`bedrock: model score failed rubric bounds: ${bounds.reason}`);
-    }
-    return result;
   },
 };

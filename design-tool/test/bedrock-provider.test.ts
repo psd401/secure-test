@@ -809,7 +809,7 @@ describe("ai_usage log line (docs/rubric-upload-design.md D-7)", () => {
 // 2026-10-09 alarm: one essay reply in ~25 was unreadable (stop reason
 // end_turn) and the teacher's own retry scored it. The scorer now tries once
 // more on an unreadable reply, and logs the reply's shape — never its text.
-describe("bedrockEssayScorer: one retry on an unreadable reply", () => {
+describe("bedrockEssayScorer: one retry on an unreadable or rubric-mismatched reply", () => {
   const rubric = {
     style: "analytic" as const,
     criteria: [
@@ -901,6 +901,51 @@ describe("bedrockEssayScorer: one retry on an unreadable reply", () => {
     await expect(score()).rejects.toThrow("model JSON failed validation");
     expect(callLog.length).toBe(1);
     expect(unparsedLines()[0]).toMatchObject({ retrying: false });
+  });
+
+  // 2026-10-13 alarm: a valid level with points that disagree with it.
+  const mismatched = JSON.stringify({
+    criterion_scores: [{ criterion_id: "c1", level_id: "l2", points: 1, rationale: "SECRET-ESSAY-PHRASE" }],
+    points: 1,
+    max_points: 2,
+    overall_rationale: "Mixed.",
+    confidence: 0.6,
+  });
+  const mismatchLines = () => logLines.filter((l) => l.event === "essay_score_rubric_mismatch");
+
+  test("level and points disagree, then a valid reply: scores on the second call", async () => {
+    setResponses(
+      { ...textResponse(mismatched), stopReason: "end_turn" },
+      { ...textResponse(good), stopReason: "end_turn" },
+    );
+    const result = await score();
+    expect(result.points).toBe(2);
+    expect(callLog.length).toBe(2);
+    expect(mismatchLines()).toHaveLength(1);
+    expect(mismatchLines()[0]).toMatchObject({ level: "warn", attempt: 1, retrying: true });
+    expect(JSON.stringify(logLines)).not.toContain("SECRET-ESSAY-PHRASE");
+  });
+
+  test("level and points disagree twice: reported after 2 attempts", async () => {
+    setResponses(
+      { ...textResponse(mismatched), stopReason: "end_turn" },
+      { ...textResponse(mismatched), stopReason: "end_turn" },
+    );
+    await expect(score()).rejects.toThrow(/model score failed rubric bounds: .* \(after 2 attempts\)$/);
+    expect(callLog.length).toBe(2);
+    expect(mismatchLines().map((l) => [l.attempt, l.retrying])).toEqual([
+      [1, true],
+      [2, false],
+    ]);
+  });
+
+  test("unreadable, then a mismatch: the shared budget stops at two calls", async () => {
+    setResponses(
+      { ...textResponse(garbled), stopReason: "end_turn" },
+      { ...textResponse(mismatched), stopReason: "end_turn" },
+    );
+    await expect(score()).rejects.toThrow("(after 2 attempts)");
+    expect(callLog.length).toBe(2);
   });
 });
 
