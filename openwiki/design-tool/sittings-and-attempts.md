@@ -108,7 +108,7 @@ Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/
 
 ## Drawing uploads
 
-Drawing-upload items (photo or scan of paper work) take bytes through a three-step slot, so the answer can only point at a file the server registered for that exact attempt and item (the object store behind the slot is described in [storage and assets](storage-and-assets.md)):
+The student's canvas, its idle auto-save and its flush points are described in [drawing canvas](../client/drawing-canvas.md). Drawing-upload items (photo or scan of paper work) take bytes through a three-step slot, so the answer can only point at a file the server registered for that exact attempt and item (the object store behind the slot is described in [storage and assets](storage-and-assets.md)):
 
 1. `POST .../responses/[itemId]/upload-url` (`registerUpload` in `lib/api/responseUploads.ts`) checks the content type against `ALLOWED_UPLOAD_TYPES` (PNG, JPEG, HEIC, PDF) and the declared `content_length` against `UPLOAD_MAX_BYTES` (20 MB), then inserts a `response_uploads` row and returns its id plus a target. The target is a presigned S3 URL where the storage backend supports one; otherwise it is the app's own `PUT .../upload?upload_id=` route. The size cap is applied here, before a URL exists, because a presigned PUT cannot enforce a maximum afterwards.
 2. The client sends the bytes. The fallback `PUT` route re-checks ownership of the slot, the size cap and the closed-sitting and deadline guards, because there is no signature to rely on.
