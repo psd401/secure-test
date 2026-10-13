@@ -120,6 +120,10 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 | Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
 | Offline/durability behaviour | `ResponseSpool.swift`, `UploadGate.swift` | `ResponseSpoolTests`, `UploadGateTests` |
 | Time limit or closed-sitting UX | `TimeLimitCountdown.swift`, `AttemptEventReporter.swift` | `TimeLimitCountdownTests`, `RendererTimeLimitTests`, `AttemptEventReporterTests` |
+| Student's list of sittings (home screen, `/api/me/sittings`) | `MySittings.swift`, `APIClient.swift` | `MySittingsTests` |
+| Teacher peek (screenshot request, notice, poll) | `PeekResponder.swift`, `PeekNotice.swift` (see [lockdown and security](lockdown-and-security.md#telemetry-and-diagnostics)) | `PeekResponderTests`, `PeekNoticeTests` |
+| Error log, crash lines, error upload | `ClientErrorLog.swift`, `ClientErrorDrain.swift`, `CrashReporter.swift` | `ClientErrorLogTests`, `ClientErrorDrainTests`, `CrashReporterTests` |
+| Fill-in-the-blank or table answer capture | `ItemResponse.swift`, `AssessmentPage.swift` | `ItemResponseFillBlankTests`, `ItemResponseTableTests`, `RendererFillBlankTests`, `RendererTableTests` |
 | Drawing canvas tools, auto-save, paper background | `AssessmentPage.swift` drawing section, `PageShell.swift` | `RendererDrawingToolsTests`, `RendererDrawingAutoSaveTests`, `RendererDrawingBackgroundTests` ([drawing canvas](drawing-canvas.md)) |
 | Vendored KaTeX, fonts or macros | `client/scripts/vendor-katex.mjs`, `vendor-fonts.mjs` | `KatexBundleTests`, `PageFontsTests`, `packages/schema/test/macros.test.ts` |
 
