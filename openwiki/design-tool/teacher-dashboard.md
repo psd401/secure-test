@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Teacher dashboard
-description: Route map, page guards, assessment editor tabs, live sitting monitor, results and scoring entry points, and shared components of the staff-facing teacher UI under design-tool/app/dashboard.
+description: Route map, page guards, assessment editor tabs, live sitting monitor, results and scoring entry points, the system-admin console (/admin, district-wide open sittings and safeguarding alerts), and shared components of the staff-facing teacher UI under design-tool/app.
 tags: [teacher-ui, dashboard, navigation, design-tool]
 openwiki:
   roles: [domain, architecture]
@@ -17,8 +17,12 @@ openwiki:
     - design-tool/app/dashboard/[id]/scoring/page.tsx
     - design-tool/app/dashboard/accommodations/page.tsx
     - design-tool/components/app/AppChrome.tsx
-  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome]
+    - design-tool/app/admin/page.tsx
+    - design-tool/app/admin/safeguarding/page.tsx
+  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome, AdminPage, AdminSafeguardingPage, adminAlertMode]
   test_paths:
+    - design-tool/test/admin.test.ts
+    - design-tool/test/safeguarding-alerts-ui.test.tsx
     - design-tool/test/all-teachers-ui.test.ts
     - design-tool/test/reporting-views.test.tsx
     - design-tool/test/co-teach-ui.test.tsx
@@ -102,6 +106,15 @@ The monitor polls only while there is something left to watch, and each control 
 ## Accommodations pages
 
 `accommodations/page.tsx` loads the teacher's student records together with `pendingTideDiffs` and `otherTeachersRecords`, and shows the count of changes to review. The TIDE import flow is `accommodations/import/ImportTidePanel.tsx`, and review is `import/review/DiffReviewPanel.tsx`. The student editor is `[studentId]/StudentEditor.tsx`. The rules and data behind these pages are in [accommodations and roster](accommodations-and-roster.md).
+
+## System admin pages
+
+`/admin` is the one deliberately unscoped page in the staff UI. `AdminPage` lists every test session whose status is `open` and whose `expires_at` is in the future, across all teachers, newest first. Each row shows the code, assessment, owning teacher, section (or "Practice" for a practice sitting) and start time. Its actions are a **Monitor** link to the sitting's monitor and an **Act as** button for a sitting owned by someone else. Its header line counts open safeguarding alerts district-wide and links to `/admin/safeguarding`, where the list is open alerts by default (`adminAlertMode`, `?show=all` for every alert). Acknowledging an alert is a teacher action, not an admin one.
+
+<!-- openwiki: broken internal link [auth-and-access.md#roles-and-the-access-ladder] heading anchor "roles-and-the-access-ladder" does not exist in "auth-and-access.md". Fix the href or restore the target, then delete this comment. -->
+Admin status comes from `ADMIN_EMAILS` through `isAdmin` (`lib/auth/admin.ts`), as described in [auth and access](auth-and-access.md#roles-and-the-access-ladder). Both pages return 404 to a non-admin, and an impersonated session is never admin, so the act-as banner hides the admin surface until the session ends. The grants console is not on these pages; the page source records that the `/api/grants` route has no UI yet. Safeguarding alert rules are in [AI and safeguarding](ai-and-safeguarding.md#hand-in-screening-and-alerts).
+
+Focused tests: `test/admin.test.ts` (the admin and impersonation predicate) and `test/safeguarding-alerts-ui.test.tsx` (`adminAlertMode` and the admin alert page). The page itself needs the test database for the render test.
 
 ## Shared components
 
