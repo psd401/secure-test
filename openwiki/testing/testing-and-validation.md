@@ -80,5 +80,4 @@ Background: [wire formats](../architecture/wire-formats.md), [client overview](.
 | Full design-tool suite | `cd design-tool && DATABASE_URL=... bun test` | conditional: shared helpers, auth, schema or migration changes |
 | `next build`, CDK synth | see [deployment and observability](../operations/deployment-and-observability.md) | conditional: only for build, Dockerfile or infra edits |
 
-CI in `.github/workflows/` runs an automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`); no workflow runs the test suites, so local validation is the gate.
-`openwiki-update.yml`); no workflow runs the test suites, so local validation is the gate.
+CI in `.github/workflows/ci.yml` runs on every push to `main` and on every pull request. It builds and tests `packages/schema` and `packages/renderer`, typechecks and tests the design tool against a Postgres service, and runs `bun db/migrate.ts` first. It does not run the Swift packages (the workflow header says `swift test` needs a macOS runner). A green `ci` run on `main` is also the signing gate for renderer manifests ([signed renderer delivery](../client/signed-renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.

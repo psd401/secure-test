@@ -22,6 +22,7 @@ secure-test is one school district's in-house secure assessment stack (MIT licen
 | `design-tool/` | Next.js 16 / React 19 app + REST API. Teachers author, run sittings, monitor, score, export. Drizzle on Postgres. | [design-tool pages](#design-tool-pages) |
 | `packages/schema/` | `@secure-test/schema` — Zod wire formats shared by server and (by mirror) the client. | [Wire formats](wire-formats.md) |
 | `client/` | macOS AppKit shell around a locked-down `WKWebView`, inside an Apple `AEAssessmentSession`. All logic in the `SecureTestCore` SwiftPM package. | [Client overview](../client/overview.md) |
+| `packages/renderer/`, `tools/renderer-sign/` | Scaffold for a signed student-page renderer: manifest and signature verification (TypeScript) and a Secure Enclave signing CLI (Swift). Not yet served or verified by the client. | [Signed renderer delivery](../client/signed-renderer.md) |
 | `docs/` | Plan, 18 ADRs (`docs/adr/`), one design doc per feature (`docs/*-design.md`), slice trackers (`docs/phase-*-slices.md`). Code comments cite these as "docs/x-design.md, D-n". | read for rationale, not for current behaviour |
 | `poc-b-test-loop/`, `poc-c-classlink-sso/` | Feasibility spikes. Kept as empirical record, **not maintained**. `poc-b`'s `items.json` is still parsed by a schema test. | out of scope |
 
