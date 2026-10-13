@@ -21,6 +21,7 @@ openwiki:
     - design-tool/lib/richText/essayHtml.ts
     - design-tool/lib/richText/renderEssayAnswer.ts
     - design-tool/app/api/assessments/[id]/items/import-pdf/route.ts
+    - design-tool/app/dashboard/[id]/readiness.ts
   symbols: [CreateItemBody, UpdateItemBody, effectiveScoringMethod, requireDraft, isAnswerKeyOnlyPatch, buildExportBundle, importBundleForOwner, assertItemsAreBundleable, PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, sanitizeEssayHtml, essayResponseForStorage, renderEssayAnswerHtml]
   test_paths:
     - design-tool/test/items-api.test.ts
@@ -47,7 +48,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 ## Concepts
 
 - **Assessment** (`assessments` table): name, description, `time_limit_seconds`, `allow_clipboard`, `allow_llm_authoring`, `student_layout` (`scroll`/`paged`), instant-feedback settings, accommodation lists, `status` (`draft` | `published`), `archived_at`. Columns are explained in [data model](data-model.md).
-- **Item** (`items`): `type` is one of `ITEM_TYPES` (`multiple_choice_single`, `multiple_choice_multi`, `short_text`, `essay`, `match`, `order`, `hotspot`, `drawing_upload`, `table`, `fill_blank`). Type-specific fields live in the `items.config` jsonb bag (`ItemConfig` in `db/schema.ts`): rubric, pairs, sequence, regions, cell keys, blanks, `scoring_method`, `exact_form`, `rich_text`. The write boundary (`lib/api/items.ts`: `CreateItemBody`, `UpdateItemBody`, `itemConfigForWrite`) decides which keys may be persisted; the column itself enforces nothing.
+- **Item** (`items`): `type` is one of `ITEM_TYPES` (`multiple_choice_single`, `multiple_choice_multi`, `short_text`, `essay`, `match`, `order`, `hotspot`, `drawing_upload`, `table`, `fill_blank`). Type-specific fields live in the `items.config` jsonb bag (`ItemConfig` in `db/schema.ts`): rubric, pairs, sequence, regions, cell keys, blanks, `scoring_method`, `exact_form`, `rich_text`. The write boundary (`lib/api/items.ts`: `CreateItemBody`, `UpdateItemBody`, `itemConfigForWrite`) decides which keys may be persisted; the column itself enforces nothing. The `fill_blank` type (sentence with dropdown or typed blanks) is documented in [fill-in-the-blank items](fill-in-the-blank.md).
 - **Item set** (`item_sets`, `lib/api/itemSets.ts`): one stimulus (passage, figure, data table, or several labelled sources) shared by consecutive items. A set has no position of its own; its items must be contiguous and the reorder route refuses an order that splits one. Layout is `inline`, `own_page` or `side_by_side` (teacher's choice, never inferred). A set can be "source-backed" (E12): its stimulus is each student's own earlier answer (`lib/api/setSources.ts`).
 - **Scoring method**: `auto | ai | human | hybrid`. Absent means the type default via `effectiveScoringMethod` (MC and short text auto, essay human). See [scoring](scoring-and-results.md).
 - **Content syntax** (stems, choices, stimuli): KaTeX `$…$` / `$$…$$` plus `![alt](asset:<uuid>)` image refs, rendered server-side by `lib/items/renderItemContent.ts` (`lib/math/renderLatex.ts` for math, K-12 macros from `@secure-test/schema` `K12_MACROS`). Unresolved refs render as an inline red placeholder.
@@ -55,6 +56,10 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 ## Draft/published lock
 
 `lib/api/requireDraft.ts` returns a 409 `assessment_published_editing_locked` for any mutation of a published assessment. The unlock is a PATCH of the assessment itself to `status: "draft"` (its body is validated before the guard fires). Two deliberate exceptions let teachers finish work after publishing: `isAnswerKeyOnlyPatch` (only keys change: `correct_*`, hotspot `correct_region_ids`, table `cell_keys`, fill-blank keys) and standards tags, since neither reaches students. Keyless items can be published (the PDF importer proposes them); the readiness checklist flags them. Archive, delete and duplicate, which also depend on status, are described in [assessment lifecycle](assessment-lifecycle.md).
+
+## Publish readiness checklist
+
+`app/dashboard/[id]/readiness.ts` holds the pure checks the editor shows before publishing. `questionGaps(item)` returns teacher-facing gap strings per question type (for example "needs at least 2 pairs" for match, "needs a correct region" for hotspot, "needs at least one column and one row" for table), and `stimulusGaps` reports stimulus sets that are empty or whose source assessment is not published. A question still carrying a seeded placeholder such as "New question" is flagged as "still has the placeholder text" so it cannot reach a student unwritten. A multiple-choice or short-text question with no key is a gap ("needs a correct answer"), while keyless table cells and fill-in-the-blank blanks are not, because they are hand-scored. For fill-in-the-blank markers, see [fill-in-the-blank items](fill-in-the-blank.md#authoring-and-publish-checks). Focused tests: `design-tool/test/item-readiness.test.ts` (no database needed).
 
 ## Getting content in and out
 
