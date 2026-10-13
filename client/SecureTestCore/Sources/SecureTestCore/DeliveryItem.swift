@@ -86,11 +86,16 @@ public struct EssayItem: Decodable, Equatable, Sendable {
     /// students format this answer. Absent on every essay where it is off, so
     /// it decodes as false.
     public let richText: Bool
+    /// U-22 (beta teachers, 2026-10-13): show a running word count with no
+    /// maximum. Absent when off, so it decodes as false; a maximum always
+    /// shows its count whatever this says.
+    public let showWordCount: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, stem, placeholder, rubric
         case maxWordCount = "max_word_count"
         case richText = "rich_text"
+        case showWordCount = "show_word_count"
     }
 
     public init(from decoder: Decoder) throws {
@@ -101,6 +106,7 @@ public struct EssayItem: Decodable, Equatable, Sendable {
         placeholder = try c.decodeIfPresent(String.self, forKey: .placeholder)
         rubric = try c.decodeIfPresent(Rubric.self, forKey: .rubric)
         richText = try c.decodeIfPresent(Bool.self, forKey: .richText) ?? false
+        showWordCount = try c.decodeIfPresent(Bool.self, forKey: .showWordCount) ?? false
     }
 }
 

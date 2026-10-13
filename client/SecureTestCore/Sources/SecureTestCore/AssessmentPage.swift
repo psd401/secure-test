@@ -2556,6 +2556,21 @@ public enum AssessmentPage {
         return trimmed.split(/\s+/).length;
       }
 
+      // U-22 (beta teachers, 2026-10-13): a maximum always shows its count
+      // ("n / max words"); without one, the teacher's show_word_count shows
+      // a plain running count ("n words") that is never "over".
+      function hasWordCount(item) {
+        return typeof item.max_word_count === 'number' || item.show_word_count === true;
+      }
+      function wordCountText(n, item) {
+        if (typeof item.max_word_count === 'number') return n + ' / ' + item.max_word_count + ' words';
+        return n + (n === 1 ? ' word' : ' words');
+      }
+      function wordCountClass(n, item) {
+        return typeof item.max_word_count === 'number' && n > item.max_word_count
+          ? 'word-count over' : 'word-count';
+      }
+
       function rubricNode(rubric) {
         var box = document.createElement('div');
         box.className = 'rubric';
@@ -2713,7 +2728,7 @@ public enum AssessmentPage {
 
         // ---- word count (D-7: the derived text; list markers never count) ----
         var counter = null;
-        if (typeof item.max_word_count === 'number') {
+        if (hasWordCount(item)) {
           counter = document.createElement('p');
           counter.className = 'word-count';
           // RT slice 4: VoiceOver reads the count as the box's description,
@@ -2727,8 +2742,8 @@ public enum AssessmentPage {
           box.setAttribute('data-empty', empty ? 'true' : 'false');
           if (!counter) return;
           var n = countWords(richText(b, true));
-          counter.textContent = n + ' / ' + item.max_word_count + ' words';
-          counter.className = n > item.max_word_count ? 'word-count over' : 'word-count';
+          counter.textContent = wordCountText(n, item);
+          counter.className = wordCountClass(n, item);
         }
 
         function sendEssay() {
@@ -3127,7 +3142,7 @@ public enum AssessmentPage {
         wrap.appendChild(area);
 
         var counter = null;
-        if (typeof item.max_word_count === 'number') {
+        if (hasWordCount(item)) {
           counter = document.createElement('p');
           counter.className = 'word-count';
           wrap.appendChild(counter);
@@ -3136,13 +3151,12 @@ public enum AssessmentPage {
         function refresh() {
           if (!counter) return;
           var n = countWords(area.value);
-          counter.textContent = n + ' / ' + item.max_word_count + ' words';
+          counter.textContent = wordCountText(n, item);
           // Over-limit is SHOWN, never truncated. Silently deleting a student's
           // words is a worse failure than an over-length response, and the
           // submit-time gate belongs with submission (slice 64) where there is
           // something to gate.
-          if (n > item.max_word_count) counter.className = 'word-count over';
-          else counter.className = 'word-count';
+          counter.className = wordCountClass(n, item);
         }
 
         area.oninput = refresh;

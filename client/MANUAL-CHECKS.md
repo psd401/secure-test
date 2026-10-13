@@ -2431,3 +2431,22 @@ except the last row.
 | **Notice page.** Any in-page notice (e.g. a refused bundle) | Heading "SecureTest" | NOT RUN |
 | **Permission prompt.** A Mac that has never granted the microphone, a test with Speech-to-Text | The macOS prompt starts "SecureTest uses the microphone only when…" | NOT RUN |
 | **Finder / Dock (signed Release).** `/Applications` after the pkg installs; the Dock while running | "SecureTest" in both (was "Secure Test" in the Dock) | NOT RUN |
+
+## Word count without a limit (U-22, next client release, 2026-10-13)
+
+`docs/roadmap-2026-09.md` row U-22 is the record (decisions 2.1–2.6). An
+essay with `show_word_count` and no `max_word_count` shows "n words" below
+the box (plain and formatted alike), never flagged over; a maximum keeps
+"n / max words". Already checked headlessly: `swift test` (the plain and
+formatted counters, the decode). Debug build, simulated lockdown, against
+local dev; a fixture with four essays — plain + count, formatted + count,
+count + maximum, neither.
+
+| Check | Expected | Result |
+|---|---|---|
+| Plain essay with the count on, no maximum: type, paste a long passage, delete it all | "0 words" → the running count ("1 word" for one) → "0 words"; never red | NOT RUN |
+| Formatted essay with the count on: two paragraphs and a bulleted list | List markers never count; the count matches the words typed | NOT RUN |
+| Count on AND a maximum of 50 | "n / 50 words", red past 50, text never cut | NOT RUN |
+| Neither | No counter (as before) | NOT RUN |
+| VoiceOver into the formatted box with the count on | The count is read as the box's description | NOT RUN |
+| v1.6.2 (or older) client against the same bundle | The counted essay shows no counter, nothing else differs | NOT RUN |

@@ -385,6 +385,11 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release (after v1.6.2):** carries **U-22** — "n words" under an
+  essay with `show_word_count` and no maximum (`client/MANUAL-CHECKS.md`
+  "Word count without a limit", NOT RUN) — and Row NM slice 3 (one product
+  name). The help page and quick start say "a SecureTest newer than 1.6.2";
+  name the version there once it is cut.
 - ~~**Next release: v1.6.1**~~ PUBLISHED 2026-10-08 (see Released). (`MARKETING_VERSION` = 1.6.1). Carries
   **SS-1** (the secure-start backstop is 60 s with a "Still starting the
   secure session…" notice after 20 s — a student's Mac began its session

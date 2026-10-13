@@ -218,6 +218,35 @@ final class RendererBehaviourTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.word-count')"), 1)
     }
 
+    /// U-22: the teacher's "Show students a word count" with no maximum —
+    /// a plain running count, never flagged over.
+    func testEssayShowWordCountWithoutACapCountsWithNoLimit() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","show_word_count":true}]}
+        """)
+        XCTAssertEqual(try h.int("__count('.word-count')"), 1)
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "0 words")
+        try h.eval("var area = __first('textarea', __item(0)); area.value = 'one'; area.oninput();")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "1 word")
+        try h.eval("""
+        var area = __first('textarea', __item(0));
+        var words = [];
+        for (var i = 0; i < 5000; i++) words.push('word');
+        area.value = words.join(' ');
+        area.oninput();
+        """)
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "5000 words")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).className"), "word-count")
+    }
+
+    /// U-22 decision 2.2: a maximum always shows "n / max", flag or not.
+    func testEssayShowWordCountWithACapKeepsTheLimitCounter() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":50,"show_word_count":true}]}
+        """)
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "0 / 50 words")
+    }
+
     func testEssayWithoutAWordCapShowsNoCounter() throws {
         let h = try RendererHarness(bundleJSON: """
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s"}]}

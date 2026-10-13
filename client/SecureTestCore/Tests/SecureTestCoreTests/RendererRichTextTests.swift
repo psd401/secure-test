@@ -150,6 +150,12 @@ final class RendererRichTextTests: XCTestCase {
         )
         guard case .essay(let r) = rich else { return XCTFail("not an essay") }
         XCTAssertTrue(r.richText)
+        XCTAssertFalse(r.showWordCount)
+        let counted = try JSONDecoder().decode(
+            DeliveryItem.self, from: Data(#"{"type":"essay","id":"e1","stem":"Why?","show_word_count":true}"#.utf8)
+        )
+        guard case .essay(let w) = counted else { return XCTFail("not an essay") }
+        XCTAssertTrue(w.showWordCount)
     }
 
     func testTheEssayResponseCarriesHtmlOnlyWhenPresent() throws {
@@ -404,6 +410,24 @@ final class RendererRichTextTests: XCTestCase {
         // D-7: the counter reads the text, and a list marker is not a word.
         XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "5 / 400 words")
         XCTAssertEqual(try h.string("__box().getAttribute('data-empty')"), "false")
+    }
+
+    /// U-22: the formatted essay's counter follows the same rule — with no
+    /// maximum and show_word_count on, "n words", still described to VoiceOver.
+    func testAFormattedEssayShowsAPlainCountWithoutACap() throws {
+        let h = try harness(extra: "delete BUNDLE.items[3].max_word_count; BUNDLE.items[3].show_word_count = true;")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "0 words")
+        try h.eval("__typeBox(['One two', 'three']);")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "3 words")
+        XCTAssertEqual(
+            try h.string("__box().getAttribute('aria-describedby')"),
+            try h.string("__first('.word-count', __item(3)).id")
+        )
+    }
+
+    func testAFormattedEssayWithNeitherShowsNoCounter() throws {
+        let h = try harness(extra: "delete BUNDLE.items[3].max_word_count;")
+        XCTAssertEqual(try h.int("__count('.word-count', __item(3))"), 0)
     }
 
     func testLeavingTheBoxPostsAtOnce() throws {
