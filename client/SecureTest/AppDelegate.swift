@@ -166,6 +166,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Client hygiene (audit #17): last session's abandoned answers do not
         // wait on this Mac for the next student to find.
         Self.purgeStaleSpooledResponses(keeping: nil)
+        // Renderer slice 4c: no test is open at launch, so nothing to keep.
+        Self.evictUnusedRenderers(keeping: nil)
         Self.resolveConfiguration()
         installMainMenu()
 
@@ -395,6 +397,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    /// Server-delivered renderer slice 4c: drop cached renderers not used for
+    /// 30 days (`RendererCache.defaultUnusedFor`), never `keeping`. Same two
+    /// call sites and the same posture as the spool purge — detached, never
+    /// awaited, a log line on success. The cache re-verifies every use, so a
+    /// stale entry is only disk, never trust.
+    private static func evictUnusedRenderers(keeping sha256: String?) {
+        Task.detached(priority: .utility) {
+            let removed = RendererCache().evict(keeping: sha256.map { [$0] } ?? [])
+            if removed > 0 {
+                log("renderer cache: \(removed) unused entr\(removed == 1 ? "y" : "ies") removed")
+            }
+        }
+    }
+
     private func seedTokenFromLaunchArgumentsIfPresent() {
         // Security slice 2: a seeded bearer token is a dev/CI affordance — in
         // Release the only way to a session is Google sign-in.
@@ -479,6 +495,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // detached view. Answers already spooled are untouched: the spool is a
         // SQLite file in Application Support, written before it is sent, and
         // the next attempt's flush carries whatever is still queued.
+        let rendererInUse = controller?.loadedRenderer?.ref.sha256
         controller?.retire()
         controller = nil
         attemptHandedIn = false
@@ -489,6 +506,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // the 24-hour floor. Rows younger than that stay: a student who lost
         // the network hands in when it comes back.
         Self.purgeStaleSpooledResponses(keeping: nil)
+        // Renderer slice 4c: the cache is swept at the same two moments. The
+        // renderer the attempt just used was touched when it loaded, so the
+        // 30-day rule already keeps it; naming it is belt and braces.
+        Self.evictUnusedRenderers(keeping: rendererInUse)
         // Time limit: the attempt is gone, and so is its clock.
         countdown?.stop()
         countdown = nil
@@ -659,6 +680,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // `onBundleLoaded`, so lockdown was never begun.
         controller.onTimeRanOutBeforeStart = { [weak self] source in
             self?.timeRanOutBeforeStart(via: source)
+        }
+        // Renderer slice 4c (D-6, D-11): the served renderer could not be
+        // loaded, or (Release) the bundle named none. Fired before
+        // `onBundleLoaded`, so lockdown was never begun.
+        controller.onRendererRefused = { [weak self] refusal in
+            self?.rendererRefused(refusal)
         }
         controller.onTimerDismissed = { [weak self] in
             // D-3: the banner is hidden for the rest of the attempt. The clock
@@ -1354,6 +1381,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let alert = NSAlert()
         alert.messageText = JoinErrorCopy.timeRanOutMessage
         alert.informativeText = JoinErrorCopy.timeRanOutInformative
+        alert.addButton(withTitle: "OK")
+        presentOnEntryWindow(alert)
+    }
+
+    /// Server-delivered renderer slice 4c (D-6, D-11): the test's signed page
+    /// code could not be fetched or verified, or a Release build was handed a
+    /// bundle that names no renderer. Like EX-2, nothing began: the controller
+    /// returned before `onBundleLoaded` and the page-load gate, so there is no
+    /// session, countdown or page. The failure goes to errors.log and stderr,
+    /// and — through `logError`'s hook while the attempt's reporter is still
+    /// up — to the teacher's timeline as a `client_error` event
+    /// (`kind: renderer_load_failed`). The student goes home with the "update"
+    /// sheet when a newer app could run the renderer, otherwise "try again".
+    private func rendererRefused(_ refusal: RendererStart.Refusal) {
+        guard screen == .serverAttempt, !quitInProgress else { return }
+        Self.log("renderer refused (\(refusal.reason)) — no secure session, back to Your tests")
+        Self.logError(
+            kind: "renderer_load_failed",
+            message: refusal.logLine,
+            context: ["reason": refusal.reason]
+        )
+        // Defensive, as in EX-2: lockdown is never begun on this path.
+        endLockdown(reason: "renderer refused before start")
+        showEntry()
+        let alert = NSAlert()
+        alert.messageText = refusal.sheetMessage
+        alert.informativeText = refusal.sheetInformative
         alert.addButton(withTitle: "OK")
         presentOnEntryWindow(alert)
     }

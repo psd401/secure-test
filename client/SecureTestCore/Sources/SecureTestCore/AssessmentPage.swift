@@ -33,18 +33,29 @@ public enum AssessmentPage {
     ///     lockdown, only for a student granted `speech_to_text`) came back
     ///     with; the page draws the "Speak my answer" control only for
     ///     `.ready`. Every caller without a pre-flight leaves it `.off`.
+    ///   - renderer: server-delivered renderer slice 4c
+    ///     (docs/server-delivered-renderer-design.md, packages/renderer
+    ///     README). A verified served renderer replaces exactly two things:
+    ///     `rendererScript` (by `renderer.script`, same position — last) and
+    ///     the two adjacent `itemStyles` / `richTextStyles` elements (by ONE
+    ///     element holding `renderer.styles`, same position). KaTeX, the page
+    ///     globals, `PageShell`'s base and accommodation styles, the CSP and
+    ///     the body are unchanged. nil — the offline path, and a Debug build
+    ///     against a server that names no renderer — is the bundled page,
+    ///     byte for byte.
     public static func html(
         title: String,
         bundleJSON: String,
         offline: Bool = false,
         katex: KatexBundle.Assets = KatexBundle.shared,
         accommodations: [String: String]? = nil,
-        speechToText: SpeechToTextAvailability = .off
+        speechToText: SpeechToTextAvailability = .off,
+        renderer: LoadedRenderer? = nil
     ) -> String {
         let accommodations = accommodations ?? accommodationsIn(bundleJSON)
         return PageShell.document(
             title: title,
-            styles: [katex.css, itemStyles, richTextStyles],
+            styles: renderer.map { [katex.css, $0.styles] } ?? [katex.css, itemStyles, richTextStyles],
             scripts: [
                 // KaTeX first, so the renderer's closing math pass finds it.
                 // A pure library; it touches nothing until asked. C-2
@@ -60,7 +71,7 @@ public enum AssessmentPage {
                 // before lockdown; `.off` for every student not granted it.
                 speechToText.pageScript,
                 KatexBundle.macrosScript,
-                rendererScript,
+                renderer?.script ?? rendererScript,
             ],
             body: """
             <h1>\(HTMLEscape.text(title))</h1>
