@@ -16,9 +16,14 @@ openwiki:
     - design-tool/lib/api/attemptDeadline.ts
     - design-tool/lib/api/sittingOver.ts
     - design-tool/lib/api/extendAttempt.ts
-  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, collectSavedAnswers, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId, extendAttempt, applySittingNoLimit]
+    - design-tool/app/api/test-sessions/route.ts
+    - design-tool/app/api/roster/sections/route.ts
+    - design-tool/app/api/roster/students/route.ts
+    - design-tool/lib/roster/queries.ts
+  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, collectSavedAnswers, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId, extendAttempt, applySittingNoLimit, sectionsCurrentlyTaughtBy, studentsInTeachersSections, studentIsInTeachersSection]
   test_paths:
     - design-tool/test/test-sessions-api.test.ts
+    - design-tool/test/roster-queries.test.ts
     - design-tool/test/attempt-ingest-api.test.ts
     - design-tool/test/delivery-api.test.ts
     - design-tool/test/attempt-deadline.test.ts
@@ -43,6 +48,23 @@ The student plane is the set of routes a signed-in student (or a staff member pr
 - **Sitting** (`test_sessions`): one teacher-started run of one assessment. It owns a 6-character join code, a scope (all the owner's current sections, one `section_ps_id`, or an explicit `student_ps_ids` list) and an `expires_at`. Status is `open` or `closed`. `kind` is `class` or `practice`.
 - **Attempt** (`attempts`): one student's work on one assessment. There is a unique constraint on `(assessment_id, student_id)`, so joining a second sitting of the same assessment resumes the same attempt and rebinds `test_session_id` to the new sitting.
 - **Practice sitting**: a staff member sitting their own test on their own Mac. The attempt has `practice = true`, the student row is a `practice_for_sub` overlay, and every class reader (results, CSV, print, review queue, analytics, hand-in-all, corpus) filters practice attempts out. The design note is `docs/practice-sitting-design.md`.
+
+## Starting a sitting: scope and roster pickers
+
+The teacher starts a sitting with `POST /api/test-sessions` (`app/api/test-sessions/route.ts`). The route needs `run` access on the assessment, and refuses a draft (`not_published`, 409) or an archived assessment (`archived`, 409), because items must be frozen before students sit them.
+
+Scope is chosen from two staff-only picker routes, both reading the signed-in teacher's current roster:
+
+- `GET /api/roster/sections` (`app/api/roster/sections/route.ts`) lists the sections the teacher currently teaches, each with a live student count. It uses `sectionsCurrentlyTaughtBy` (`lib/roster/queries.ts`), which applies the current-assignment date window to `roster_section_teachers`.
+- `GET /api/roster/students` (`app/api/roster/students/route.ts`) lists one row per student with the sections they share, from `studentsInTeachersSections`, optionally narrowed with `?section_ps_id=`.
+
+The POST body then picks one of three scopes. Omitting `section_ps_id` and `student_ps_ids` means "all my sections". A named `section_ps_id` must be a section the owner currently teaches (`section_not_taught`, 400). A `student_ps_ids` list must be made only of students enrolled in a section the owner teaches (`students_not_taught`, 400). Sending both is `scope_conflict` (400). A practice sitting takes no scope at all. A scope narrows the roster and never widens it.
+
+Before inserting, the route sweeps the owner's expired sittings to free join codes (`sweepExpired`). It refuses a second identical open sitting with `sitting_already_open` (409) and returns the existing code, so pressing Start twice does not open a duplicate. A substitute's sitting, covered by a teacher-scoped grant, is created under the granting teacher's identity, as the route comments explain.
+
+Invariant: scope is checked when the sitting is created and again when a student redeems, because redemption re-reads current enrolment through `studentIsInTeachersSection` ([join and answer flow](#join-and-answer-flow)). A child who has left the section cannot join through an older code.
+
+Focused tests: `roster-queries.test.ts` (the picker queries and current-enrolment rules) and `test-sessions-api.test.ts` (codes, scope and the 409 guards). Both need the test database.
 
 ## Join and answer flow
 
@@ -107,7 +129,7 @@ Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/
 - Clients post telemetry to `POST /api/attempts/[attemptId]/events`. The accepted kinds are the closed set `CLIENT_ATTEMPT_EVENT_KINDS` in `db/schema.ts`; the Swift mirror is `AttemptEventKind` in the client ([lockdown and security](../client/lockdown-and-security.md)). Kinds recording staff actions (`teacher_hand_in`, `deadline_extended`, `passed_back`, `gradebook_sent`, `score_changed`, `feedback_shown`, `answer_restored`) are server-written only.
 - `ALERT_EVENT_KINDS` (`quit`, `emergency_exit`, `focus_loss`, `lockdown_failed`, `lockdown_interrupted`, `client_error`) light "Needs attention"; `focus_regained` clears only `focus_loss`.
 - Attendance (`lib/api/sittingAttendance.ts`) resolves the sitting's expected students from the roster live and joins them to attempts. A joined student who left the scope stays visible, and `submitted_earlier` explains why a student who already handed in elsewhere cannot start a fresh attempt.
-- **Peek**: a teacher requests a screenshot (`peek_requests`); the client polls `peek/pending` every 5 seconds, shows the student a notice first, renders itself and uploads a JPEG. Windows in `lib/api/peek.ts`: 10 s rate limit per attempt, 30 s pending TTL, 60 s image TTL (delete-on-read, lazily swept), 2 MB base64 cap.
+- **Peek**: a teacher requests a screenshot (`POST attempts/[attemptId]/peek`, `peek_requests`); the client polls `GET .../peek/pending` every 5 seconds, shows the student a notice first, renders itself and uploads a JPEG to `POST .../peek/upload`. The teacher collects it from `GET .../peek/image`, which deletes the image on read (`app/api/attempts/[attemptId]/peek/*`). Windows in `lib/api/peek.ts`: 10 s rate limit per attempt, 30 s pending TTL, 60 s image TTL (delete-on-read, lazily swept), 2 MB base64 cap.
 
 ## Drawing uploads
 
@@ -164,9 +186,5 @@ Focused tests: `delivery-api.test.ts`, describe "GET /api/assessments/:id/delive
 - A new response type must parse under `ItemResponseSchema`, or its saved value is silently dropped on resume ([resume prefill](#resume-prefill)); if its ids are sealed per attempt, `sealResponseIds` must map them too.
 - Focused tests: `test-sessions-api.test.ts` (codes, scope), `my-sittings-api.test.ts` (the "Your tests" list: admission, one row per assessment, `time_ran_out`), `resolve-student.test.ts`, `attempt-ingest-api.test.ts` (write guards, 42 KB), `delivery-api.test.ts` (no answer key anywhere in the body; sealing round trips), `attempt-deadline.test.ts`, `sitting-closed.test.ts`, `sitting-over.test.ts`, `attempt-events-api.test.ts`, `peek-api.test.ts`, `attempt-pass-back-api.test.ts`, `attempt-extend-api.test.ts`, `session-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `attempt-hand-in-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
 - These are DB-backed and require the `_test` database; see [testing](../testing/testing-and-validation.md). For roster scope see [accommodations and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
-n-hand-in-all-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
-- These are DB-backed and require the `_test` database; see [testing](../testing/testing-and-validation.md). For roster scope see [accommodations and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
-ns and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
- `session-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
 - These are DB-backed and require the `_test` database; see [testing](../testing/testing-and-validation.md). For roster scope see [accommodations and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
 ns and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
