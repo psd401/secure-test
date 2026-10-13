@@ -26,6 +26,14 @@ public enum JoinErrorCopy {
     public static let secureStartFailedInformative =
         "Your test didn't open. Wait a minute, then open it again from Your tests. If it still won't start, ask your teacher."
 
+    /// Server-delivered renderer slice 4c (D-6): the sheet when the test's
+    /// signed page code could not be fetched or verified before begin() — no
+    /// secure session was started. A renderer that needs a newer app keeps
+    /// this title and reads the `client_update_required` line instead.
+    public static let rendererLoadFailedMessage = "Your test couldn't load."
+    public static let rendererLoadFailedInformative =
+        "Check your connection, then open it again from Your tests. If it still won't open, ask your teacher."
+
     /// Field report 2026-10-08: the line over the sign-in button after the
     /// server refused an expired session (see `APIError.isSessionExpired`).
     public static let sessionExpiredMessage = "Your sign-in has expired. Sign in again."

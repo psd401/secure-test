@@ -2483,3 +2483,39 @@ formatted with a maximum, a count with no maximum, neither.
 | VoiceOver cursor (VO-arrows) across the page | The count is read once, in its spoken form; the visible "12 / 50 words" is not read separately | NOT RUN |
 | Sighted check: contrast set + 3X zoom | The visible counter looks as in v1.6.3 (red past the maximum); no stray hidden text shows | NOT RUN |
 | Real AAC session on the signed v1.6.4 build | The first five rows hold inside the lock | NOT RUN |
+
+## v2.0 — served renderer (slice 4c)
+
+`docs/server-delivered-renderer-design.md` D-6 / D-11. After the bundle
+arrives and its deadline is checked — before the STT pre-flight and
+`onBundleLoaded` (which begins lockdown) — the client loads the signed
+renderer the bundle names (`RendererLoader`, cache in
+`~/Library/Containers/net.psd401.securetest.client/Data/Library/Application Support/SecureTest/renderers/<sha256>/`)
+and builds the page from it (`AssessmentPage.html(renderer:)`: the served
+`renderer.js` replaces the bundled script, `renderer.css` is ONE style
+element). A Release build refuses a bundle with no `renderer` field; a Debug
+build falls back to the bundled page. Any load failure refuses the join with
+no secure session: "Your test couldn't load." plus either the
+`client_update_required` line (a renderer needing a capability this build
+lacks) or "Check your connection, then open it again from Your tests. If it
+still won't open, ask your teacher."; the failure lands in errors.log /
+stderr and on the teacher's timeline as a `client_error` event
+(`kind: renderer_load_failed`). Already checked headlessly: `swift test`
+(`RendererStartTests` — byte-identical bundled page, the served page's
+shape, the bridge-mode page differing only at the style boundary, the
+plan / resolve / copy / log line; `RendererLoaderTests` for cache and
+verification). Staging rows need a staging sitting with
+`RENDERER_DELIVERY=on`; the Debug rows can use local dev signed with the dev
+key.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Served renderer loads.** Debug build against staging, join a sitting | stderr `renderer: served v<version> <sha12>` before `tts:` / the begin line; the test renders and saves as on v1.x; the cache directory holds `<sha256>/` with four files | NOT RUN |
+| **Second start comes from cache.** Back to Your tests, join again (same renderer) | `renderer: from cache v<version> <sha12>`; no `/api/renderer/` requests in the server log for that start | NOT RUN |
+| **Cache tampering → refetch.** Quit; edit one byte of the cached `renderer.js`; join | stderr `renderer cache <sha12> discarded: renderer integrity: renderer.js does not match the manifest`, then `renderer: served …`; the test renders; the cached file is the server's again | NOT RUN |
+| **No field, Release refuses.** Release build against a server WITHOUT `RENDERER_DELIVERY` (local dev, `SECURE_TEST_SERVER` set, sign in) | No secure session starts (no `DID BEGIN`); sheet "Your test couldn't load." / "Check your connection…"; stderr `renderer missing: …`; errors.log `renderer_load_failed` with `reason: missing`; teacher timeline shows a client error | NOT RUN |
+| **No field, Debug falls back.** Debug build against local dev | `renderer: bundled (Debug fallback) — the bundle names no renderer …`; the test renders as before | NOT RUN |
+| **Unknown capability → update sheet.** A staging renderer signed with `requires` naming a term this build lacks (dev-key signed, Debug) | No secure session; sheet "Your test couldn't load." / "This test needs a newer version of SecureTest. Open Self Service, update SecureTest, then join again."; `reason: update_needed` | NOT RUN |
+| **Server down at start → try again.** Block `/api/renderer/` (stop the server after the bundle, or a proxy rule) and join with an empty cache | No secure session; sheet "Your test couldn't load." / "Check your connection…"; stderr `renderer unavailable: …`; reopening once the server is back opens the test | NOT RUN |
+| **Offline Debug path unchanged.** Debug, File → Open Test Bundle… / `--bundle` | Bundled page as before; no `renderer:` line, no `/api/renderer/` request | NOT RUN |
+| **Eviction.** Set a cached entry's modification date 31 days back (`touch -t`), plus a stray file in `renderers/`; relaunch | stderr `renderer cache: N unused entries removed`; the old entry and the stray file are gone; an entry used today stays | NOT RUN |

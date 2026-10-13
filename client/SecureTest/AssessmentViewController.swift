@@ -188,6 +188,17 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// token for the log ("bundle" or "server").
     var onTimeRanOutBeforeStart: ((String) -> Void)?
 
+    /// Server-delivered renderer slice 4c (D-6, D-11): the signed renderer the
+    /// bundle names could not be fetched or verified, or (Release) the bundle
+    /// named none. Fired BEFORE `onBundleLoaded`, so no secure session is
+    /// begun and no page is built; the host goes home and says so.
+    var onRendererRefused: ((RendererStart.Refusal) -> Void)?
+
+    /// Slice 4c: the verified served renderer this attempt's page is built
+    /// from; nil until it loads, and nil on the bundled paths (offline, Debug
+    /// fallback). The host keeps its hash out of the cache eviction.
+    private(set) var loadedRenderer: LoadedRenderer?
+
     /// Security slice 1: set by the host when this controller leaves the
     /// screen (`showEntry`). The fetch Task below checks it after every
     /// suspension, so a gate that opens late — after an emergency end has
@@ -362,6 +373,47 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                         self.onTimeRanOutBeforeStart?("bundle")
                         return
                     }
+                    // Server-delivered renderer slice 4c (D-6, D-11): the
+                    // page's code is fetched and verified HERE — after the
+                    // bundle and the deadline check, before the STT pre-flight
+                    // and `onBundleLoaded` (which begins lockdown) — so a
+                    // refusal never starts a secure session or asks for the
+                    // microphone. The "Loading your test…" notice stays up
+                    // meanwhile. A failure refuses in Debug too; only a bundle
+                    // that names NO renderer falls back to the bundled page,
+                    // and only in Debug (local dev servers do not set
+                    // RENDERER_DELIVERY).
+                    let isDebug = BuildPosture.isDebug
+                    let rendererOutcome = await RendererStart.resolve(
+                        ref: bundle.renderer,
+                        allowsBundledFallback: isDebug
+                    ) { ref in
+                        await RendererLoader.load(
+                            ref: ref,
+                            fetcher: client,
+                            cache: RendererCache(),
+                            publicKeysPEM: RendererStart.trustedKeys(includeDevKey: isDebug),
+                            minimumVersion: RendererPolicy.minimumVersion,
+                            supported: RendererCapabilities.supported,
+                            log: { AppDelegate.log($0) }
+                        )
+                    }
+                    guard !self.isRetired else {
+                        self.log("renderer load completed after the attempt screen went away — discarded")
+                        return
+                    }
+                    switch rendererOutcome {
+                    case .served(let renderer):
+                        self.loadedRenderer = renderer
+                        self.log(RendererStart.logLine(for: renderer))
+                    case .bundled:
+                        self.log(RendererStart.logLine(for: nil)
+                            + " — the bundle names no renderer (server without RENDERER_DELIVERY)")
+                    case .refused(let refusal):
+                        self.log("renderer: REFUSED — \(refusal.logLine); not starting the secure session")
+                        self.onRendererRefused?(refusal)
+                        return
+                    }
                     self.log("tts: \(TextToSpeechScope(accommodations: bundle.accommodations).logDescription)")
                     // STT slice 3 (PoC-A finding #16): the microphone and
                     // speech-recognition prompts and the transcriber's assets
@@ -435,7 +487,8 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                         }
                     }
                     self.loadHostPage(AssessmentPage.html(
-                        title: bundle.title, bundleJSON: json, speechToText: self.speechToText))
+                        title: bundle.title, bundleJSON: json, speechToText: self.speechToText,
+                        renderer: self.loadedRenderer))
                 } catch let error as APIError where error.isTimeExpired {
                     // EX-2: the delivery route refused the attempt as past its
                     // deadline. Not a fetch failure — the expected answer for a
