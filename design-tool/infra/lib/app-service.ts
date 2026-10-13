@@ -270,6 +270,8 @@ export class AppService extends Construct {
       // Staging leaves it unset: no Send button, and no path to the live
       // PowerSchool.
       ...(props.staging ? {} : { GRADEBOOK_PROVIDER: "live" }),
+      // Staging only: the marker scripts/seed-staging.ts requires.
+      ...(props.staging ? { SECURE_TEST_DEPLOYMENT: "staging" } : {}),
       // Share notifications slice 3: the ses grant above is scoped to this
       // sender's domain identity. Staging has no identity, so no email.
       ...(props.staging

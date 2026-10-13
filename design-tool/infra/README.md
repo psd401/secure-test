@@ -126,6 +126,79 @@ Outputs printed:
 - `AssetBucketName` — S3 bucket for image assets (set as `S3_BUCKET` in `.env.local`).
 - `AssetBucketAccessPolicyArn` — managed policy to attach for Put/Get/Delete on the bucket.
 
+## Staging (renderer slice 2, `docs/server-delivered-renderer-design.md` D-7)
+
+A second, separate stack — `SecureTestDesignToolStaging` — for rehearsing a
+change on the exact signed client before production. Its own VPC, Aurora,
+buckets, app secret, log group and SNS topic; a **fictional roster only**.
+Built from the same code with `--context env=staging`; production (no `env`)
+is unchanged.
+
+What staging leaves out, and why:
+
+| | Production | Staging |
+|---|---|---|
+| Aurora min capacity | 0.5 ACU | 0 (pauses; a cold first request may fail) |
+| Task count | 1, set by the template | set only by `staging.sh up \| down` |
+| Alarms (app + importer) | on | none — a scaled-down service would page |
+| Gradebook (PowerSchool) | `live` + its secrets | unset — never the live PowerSchool |
+| Email (SES) | `ses` | unset — no identity, no DKIM records |
+| Warehouse roster feed | the MWAA producer role | none — `seed-staging` loads the demo roster |
+| Database | `secure_test_design_tool` | `secure_test_design_tool_staging` |
+
+### Before the first staging deploy
+
+1. `cdk.context.json` gains `"staging": {"domainName": "staging.<origin>"}`
+   (see the `.example`); `notifyEmail` / `adminEmails` fall back to the
+   top-level values unless the block sets them.
+2. The app secret `secure-test-design-tool/staging/app-env` exists with
+   `DESIGN_TOOL_SESSION_SECRET`, `DESIGN_TOOL_PKCE_SECRET`,
+   `DESIGN_TOOL_DELIVERY_SECRET` (fresh values — never production's) and
+   `OIDC_CLIENT_SECRET` (the same web client's). No `POWERSCHOOL_*` keys.
+3. The web OAuth client in Google Cloud lists
+   `https://staging.<origin>/api/auth/callback` as a redirect URI.
+4. IT adds two CNAMEs in the zone: the ACM validation record (the first
+   deploy waits in `CREATE_IN_PROGRESS` on the certificate until it exists)
+   and `staging.<origin>` → the `AlbDnsName` output.
+
+### Day to day
+
+```sh
+design-tool/infra/scripts/deploy.sh --staging        # deploy HEAD, start a task, wait for health = HEAD
+design-tool/infra/scripts/staging.sh status          # counts + /api/health
+design-tool/infra/scripts/staging.sh up | down       # start / stop the one task
+```
+
+`deploy.sh --staging` is the production recipe (clean tree, HEAD pushed,
+schema rebuilt, diff, deploy, health stamp = HEAD) without the school-hours
+guard. Deploys never change the staging task count; stop it with
+`staging.sh down` when finished. Idle cost is roughly the ALB, the Secrets
+Manager endpoint, public IPv4 and storage.
+
+### Seeding the roster
+
+```sh
+STACK=SecureTestDesignToolStaging design-tool/infra/scripts/oneoff-aurora.sh \
+  seed-staging --teacher <your staff email> \
+  --student <demo student email>=<student number> [--student …]
+```
+
+Loads the help page's fictional roster (`lib/dev/demoRoster.ts`) through the
+real importer, plus: each `--teacher` as Lead Teacher on every demo section,
+each `--student` enrolled in the first one under a fictional name. The real
+addresses and numbers are typed at run time — never put them in a tracked
+file. Re-run with the **same** flags (each run is the whole roster). The
+script refuses unless the task carries `SECURE_TEST_DEPLOYMENT=staging`
+(only the staging stack sets it) AND the database name ends in `_staging`.
+
+### Pointing a client at staging
+
+- Daily work: a Debug build launched with `--server https://staging.<origin>`.
+- The release-candidate run: the signed build on the staging test Mac, whose
+  managed profile names the staging origin **instead of** production's (IT
+  scopes it; two profiles for the same domain on one Mac give an undefined
+  `ServerURL`).
+
 ## Migrations
 
 Run from inside the VPC — see "Migrating Aurora" below. There is no laptop

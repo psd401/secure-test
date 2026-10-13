@@ -23,6 +23,9 @@
 #   oneoff-aurora.sh roster-health [teacher@psd401.net]
 #   oneoff-aurora.sh ps-reach [teacher@psd401.net]   # read-only PowerSchool check
 #   oneoff-aurora.sh student-lookup <email | student-number>  # read-only
+#   STACK=SecureTestDesignToolStaging oneoff-aurora.sh seed-staging \
+#       --teacher <staff email> --student <demo student email>=<number>
+#       # STAGING only (README "Staging"); refuses on production
 #
 # Every argument after the mode passes through to the bundled script
 # untouched (quoted args survive — the overrides JSON is built with jq when
@@ -37,7 +40,7 @@ set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
   echo "usage: oneoff-aurora.sh <mode> [args…]" >&2
-  echo "  modes: migrate, corpus, compare, seed-essays, roster-health, ps-reach, student-lookup" >&2
+  echo "  modes: migrate, corpus, compare, seed-essays, roster-health, ps-reach, student-lookup, seed-staging" >&2
   exit 2
 fi
 MODE="$1"

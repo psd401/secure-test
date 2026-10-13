@@ -143,7 +143,11 @@ export class DesignToolStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroups: [securityGroup],
-      defaultDatabaseName: "secure_test_design_tool",
+      // Staging's name ends in _staging: scripts/seed-staging.ts refuses any
+      // other, so production's database can never be seeded.
+      defaultDatabaseName: props.staging
+        ? "secure_test_design_tool_staging"
+        : "secure_test_design_tool",
       credentials: rds.Credentials.fromGeneratedSecret("secure_test_admin"),
       storageEncrypted: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -158,7 +162,7 @@ export class DesignToolStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, "DatabaseName", {
-      value: "secure_test_design_tool",
+      value: props.staging ? "secure_test_design_tool_staging" : "secure_test_design_tool",
       description: "Initial database to use in DATABASE_URL.",
     });
 

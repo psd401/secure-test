@@ -80,14 +80,42 @@ function csv(header: string[], rows: string[][]): string {
  * `MockSnapshotSource.add`. Assignments run from `start` to the next
  * June 30 after it, so the roster stays current all school year.
  */
-export function buildDemoExtract(now: Date = new Date()): {
+/**
+ * Real accounts added to the fictional roster on the STAGING stack only
+ * (renderer slice 2, D-7; scripts/seed-staging.ts). Passed on the command
+ * line at run time and never tracked: the maintainer's own staff address,
+ * so he can run sittings, and the district's demo student accounts, so the
+ * signed client can join them. Every name stays fictional.
+ */
+export type StagingExtras = {
+  /** Staff addresses taught as Lead Teacher on every demo section. */
+  teachers?: string[];
+  /** Demo student accounts, enrolled in the first demo section. */
+  students?: { email: string; ps_id: string }[];
+};
+
+export function buildDemoExtract(
+  now: Date = new Date(),
+  extras: StagingExtras = {},
+): {
   snapshotId: string;
   files: Map<string, Uint8Array>;
 } {
   const year = now.getUTCMonth() >= 6 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
   const start = `${year - 1}-08-25`;
   const end = `${year}-06-30`;
-  const students = demoStudents();
+  const students: DemoStudent[] = [
+    ...demoStudents(),
+    ...(extras.students ?? []).map((s, i) => ({
+      ps_id: s.ps_id,
+      ssid: `WA-STAGING-${i + 1}`,
+      email: s.email.toLowerCase(),
+      first_name: "Staging",
+      last_name: `Student ${String.fromCharCode(65 + i)}`,
+      grade: "10",
+      sections: [DEMO_SECTIONS[0].ps_id],
+    })),
+  ];
 
   const tables: Record<string, string> = {
     students: csv(
@@ -103,6 +131,9 @@ export function buildDemoExtract(now: Date = new Date()): {
       [
         ...DEMO_SECTIONS.map((s) => [s.ps_id, "401", DEMO_TEACHER.email, "Lead Teacher", "1", start, end]),
         [DEMO_SECTIONS[2].ps_id, "402", DEMO_CO_TEACHER_EMAIL, "Co-teacher", "2", start, end],
+        ...(extras.teachers ?? []).flatMap((email, i) =>
+          DEMO_SECTIONS.map((s) => [s.ps_id, String(410 + i), email.toLowerCase(), "Lead Teacher", "1", start, end]),
+        ),
       ],
     ),
     enrollments: csv(
@@ -141,4 +172,43 @@ export function isDemoDatabaseUrl(url: string | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+/** The staging seed only ever writes to a database whose name ends in
+ * `_staging` — the staging stack's database; production's never does. */
+export function isStagingDatabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return /_staging$/.test(new URL(url).pathname.replace(/^\//, ""));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `--teacher <staff email>` and `--student <student email>=<student number>`,
+ * each repeatable, into StagingExtras — or the reason they are refused.
+ * Staff must be psd401.net, students edtools.psd401.net (the domains
+ * lib/auth/roles.ts maps to each role), student numbers digits only.
+ */
+export function parseStagingArgs(argv: string[]): StagingExtras | { error: string } {
+  const teachers: string[] = [];
+  const students: { email: string; ps_id: string }[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    const value = argv[i + 1];
+    if ((flag !== "--teacher" && flag !== "--student") || value === undefined) {
+      return { error: `expected --teacher <email> or --student <email>=<number>, got "${flag}"` };
+    }
+    i++;
+    if (flag === "--teacher") {
+      if (!/^[^@\s]+@psd401\.net$/i.test(value)) return { error: `not a staff address: ${value}` };
+      teachers.push(value.toLowerCase());
+    } else {
+      const m = /^([^@\s=]+@edtools\.psd401\.net)=(\d+)$/i.exec(value);
+      if (!m) return { error: `expected <student email>=<student number>, got "${value}"` };
+      students.push({ email: m[1]!.toLowerCase(), ps_id: m[2]! });
+    }
+  }
+  return { teachers, students };
 }

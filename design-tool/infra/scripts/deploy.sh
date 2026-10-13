@@ -36,7 +36,14 @@
 #   design-tool/infra/scripts/deploy.sh                  # the whole recipe
 #   design-tool/infra/scripts/deploy.sh --diff           # pre-flight + diff only
 #   design-tool/infra/scripts/deploy.sh --during-school  # override DS-2
-# Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool),
+#   design-tool/infra/scripts/deploy.sh --staging        # the STAGING stack
+# --staging (renderer slice 2, D-7) deploys SecureTestDesignToolStaging with
+# --context env=staging, reads the origin from cdk.context.json's
+# staging.domainName, skips DS-2 (no classes run on staging) and runs
+# `staging.sh up` before the health wait (its task count is 0 between uses);
+# `staging.sh down` afterwards when done. Everything else is the same recipe.
+# Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool,
+#      or SecureTestDesignToolStaging with --staging),
 #      DEPLOY_HEALTH_WAIT (seconds, default 600).
 #
 # Exit codes: 1 pre-flight refused; the cdk exit code otherwise; 1 when the
@@ -50,17 +57,28 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 INFRA="$(cd "$HERE/.." && pwd)"
 REPO="$(cd "$INFRA/../.." && pwd)"
 export AWS_REGION="${AWS_REGION:-us-west-2}"
-STACK="${STACK:-SecureTestDesignTool}"
 
 DIFF_ONLY=0
 DURING_SCHOOL=0
+STAGING=0
 for arg in "$@"; do
   case "$arg" in
     --diff) DIFF_ONLY=1 ;;
     --during-school) DURING_SCHOOL=1 ;;
+    --staging) STAGING=1 ;;
     *) echo "deploy: unknown flag $arg" >&2; exit 2 ;;
   esac
 done
+if [ "$STAGING" -eq 1 ]; then
+  STACK="${STACK:-SecureTestDesignToolStaging}"
+  CDK_CTX=(--context env=staging)
+  DOMAIN_KEY=".staging.domainName"
+else
+  STACK="${STACK:-SecureTestDesignTool}"
+  CDK_CTX=()
+  DOMAIN_KEY=".domainName"
+fi
+export STACK
 
 say() { printf '\n== %s\n' "$*"; }
 fail() { echo "deploy: $*" >&2; exit 1; }
@@ -88,8 +106,9 @@ echo "colima OK"
 echo "packages/schema dist rebuilt"
 
 [ -f "$INFRA/cdk.context.json" ] || fail "$INFRA/cdk.context.json missing (copy the .example and fill it)"
-ORIGIN="https://$(jq -r '.domainName' "$INFRA/cdk.context.json")"
-[ "$ORIGIN" != "https://null" ] || fail "domainName missing from cdk.context.json"
+ORIGIN="https://$(jq -r "$DOMAIN_KEY" "$INFRA/cdk.context.json")"
+[ "$ORIGIN" != "https://null" ] || fail "${DOMAIN_KEY#.} missing from cdk.context.json"
+echo "stack $STACK → $ORIGIN"
 
 # ---------- 2. what is live ----------
 say "live now"
@@ -111,7 +130,7 @@ if [ -n "$NEW_MIGRATIONS" ]; then
   # DS-2: school hours = Mon–Fri 07:00–15:30 Pacific.
   DOW="$(TZ=America/Los_Angeles date +%u)"
   HM="$(TZ=America/Los_Angeles date +%H%M)"
-  if [ "$DOW" -le 5 ] && [ "$((10#$HM))" -ge 700 ] && [ "$((10#$HM))" -lt 1530 ] && [ "$DURING_SCHOOL" -eq 0 ]; then
+  if [ "$STAGING" -eq 0 ] && [ "$DOW" -le 5 ] && [ "$((10#$HM))" -ge 700 ] && [ "$((10#$HM))" -lt 1530 ] && [ "$DURING_SCHOOL" -eq 0 ]; then
     fail "this deploy carries migrations and it is school hours (weekday 07:00–15:30 PT) — deploy after 15:30, or pass --during-school if every migration is additive"
   fi
 else
@@ -121,13 +140,13 @@ fi
 # ---------- 3. diff ----------
 say "cdk diff"
 cd "$INFRA"
-bunx cdk diff || true
+bunx cdk diff ${CDK_CTX[@]+"${CDK_CTX[@]}"} || true
 [ "$DIFF_ONLY" -eq 1 ] && exit 0
 
 # ---------- 4. deploy ----------
 say "cdk deploy"
 set +e
-bunx cdk deploy --require-approval never
+bunx cdk deploy ${CDK_CTX[@]+"${CDK_CTX[@]}"} --require-approval never
 CDK_EXIT=$?
 set -e
 [ "$CDK_EXIT" -eq 0 ] || echo "deploy: cdk exited $CDK_EXIT — checking the stack anyway (see the Signature-expired quirk above)"
@@ -146,6 +165,11 @@ wait_for_head() {
   done
 }
 say "verify"
+# Staging runs no task between uses; start one so there is something to
+# answer the health check (staging.sh down when finished).
+if [ "$STAGING" -eq 1 ]; then
+  "$HERE/staging.sh" up || echo "deploy: staging.sh up failed — the health wait will tell"
+fi
 HEAD_LIVE=0
 wait_for_head && HEAD_LIVE=1
 echo "health: $(curl -fsS --max-time 15 "$ORIGIN/api/health" || echo '{}')"

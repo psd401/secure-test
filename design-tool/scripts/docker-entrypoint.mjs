@@ -27,6 +27,7 @@
 //   roster-health → roster-health.mjs
 //   ps-reach      → ps-reach.mjs      (read-only PowerSchool check)
 //   student-lookup → student-lookup.mjs (read-only; README "Student lookup")
+//   seed-staging  → seed-staging.mjs  (STAGING only; README "Staging")
 //
 // A one-off ECS run-task on the service's own task definition is how any of
 // these reaches Aurora now that the cluster SG has no laptop CIDR
@@ -59,6 +60,11 @@ const MODES = {
   // Why can't this student get in? (roadmap U-11, 2026-09-30): the join
   // routes' own resolution for one address or student number. Read-only.
   "student-lookup": "./student-lookup.mjs",
+  // Renderer slice 2 (D-7): the fictional demo roster plus the rehearsal's
+  // real accounts, on the STAGING stack only — the script itself refuses
+  // anywhere SECURE_TEST_DEPLOYMENT is not "staging" or the database name
+  // does not end in _staging.
+  "seed-staging": "./seed-staging.mjs",
 };
 
 const mode = process.argv[2];
