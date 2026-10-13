@@ -454,3 +454,11 @@ meets a cold cluster).
   immutable caching); the bundle's optional `renderer: {version, sha256}`
   only with `RENDERER_DELIVERY=on`, set on staging alone (production template
   unchanged bar the image hash).
+- 2026-10-13 afternoon — **Slice 3 DONE and deployed to staging** (`e8542c2`):
+  the first `deploy.sh --staging` passed the CI gate, signed renderer
+  `v1791914636` with Touch ID, uploaded `renderers/a72e9498…/` and
+  `current.json`; staging serves all four files (200, hashes match the
+  manifest, `private, immutable`), 401 without a session, 404 for a bad
+  name or unknown hash; no `renderer_current_*` warnings. Not yet seen
+  live: the bundle's `renderer` field (needs a student sitting) and the
+  shell's own verification (slice 4).
