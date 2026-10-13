@@ -517,3 +517,14 @@ meets a cold cluster).
   resumes after summer (60 days with no deploy would make every v2.0 Mac
   refuse every test); (2) a rollback script that points `current.json` back
   to an earlier stored hash (`renderer-pointer.sh set <sha>`).
+- 2026-10-13 evening — **Slice 4 status.** On `v2-renderer` (pushed): 4a
+  verifier, 4b loader + cache, 4d generic answer channel, 4c app wiring
+  (+ the missing-field copy 'Ask your teacher.', James). On `main`: 4e
+  (bridge mode, D-12 signing on every stack, production
+  `RENDERER_DELIVERY=on`) — not deployed to production. Staging serves the
+  real page as signed renderer v1791922087. Hand-run 9 of 10 v2.0 rows ✅
+  (`client/MANUAL-CHECKS.md` on the branch); 'No field, Release refuses'
+  moves to 4f. 4f before release: the expiry warning, the rollback script,
+  the server-side generic caps contract, the host-callback `requires`
+  terms, D-13's minimum version, 3b, the staging-profile RC run, the
+  rebase onto `main`, 2.0.0.
