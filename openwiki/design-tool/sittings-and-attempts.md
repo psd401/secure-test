@@ -15,13 +15,16 @@ openwiki:
     - design-tool/lib/api/savedResponses.ts
     - design-tool/lib/api/attemptDeadline.ts
     - design-tool/lib/api/sittingOver.ts
-  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, collectSavedAnswers, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId]
+    - design-tool/lib/api/extendAttempt.ts
+  symbols: [createSessionWithCode, normalizeCode, loadOwnAttempt, loadJoinableSitting, buildDeliveryBundle, collectSavedAnswers, deadlineFor, refuseIfPastDeadline, sittingIsOver, refuseIfSittingOver, opaqueId, extendAttempt, applySittingNoLimit]
   test_paths:
     - design-tool/test/test-sessions-api.test.ts
     - design-tool/test/attempt-ingest-api.test.ts
     - design-tool/test/delivery-api.test.ts
     - design-tool/test/attempt-deadline.test.ts
     - design-tool/test/sitting-closed.test.ts
+    - design-tool/test/attempt-extend-api.test.ts
+    - design-tool/test/session-extend-api.test.ts
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererPrefillTests.swift
   invariants:
     - A code alone never admits a student; roster scope is checked too, and misses collapse to session_unavailable.
@@ -39,7 +42,7 @@ The student plane is the set of routes a signed-in student (or a staff member pr
 
 - **Sitting** (`test_sessions`): one teacher-started run of one assessment. It owns a 6-character join code, a scope (all the owner's current sections, one `section_ps_id`, or an explicit `student_ps_ids` list) and an `expires_at`. Status is `open` or `closed`. `kind` is `class` or `practice`.
 - **Attempt** (`attempts`): one student's work on one assessment. There is a unique constraint on `(assessment_id, student_id)`, so joining a second sitting of the same assessment resumes the same attempt and rebinds `test_session_id` to the new sitting.
-- **Practice sitting**: a staff member sitting their own test on their own Mac. The attempt has `practice = true`, the student row is a `practice_for_sub` overlay, and every class reader (results, CSV, print, review queue, analytics, hand-in-all, corpus) filters practice attempts out.
+- **Practice sitting**: a staff member sitting their own test on their own Mac. The attempt has `practice = true`, the student row is a `practice_for_sub` overlay, and every class reader (results, CSV, print, review queue, analytics, hand-in-all, corpus) filters practice attempts out. The design note is `docs/practice-sitting-design.md`.
 
 ## Join and answer flow
 
@@ -82,7 +85,7 @@ Two independent clocks refuse student writes, and each has a grace period for th
 | Time limit | `deadlineFor(attempt, assessment)` in `lib/api/attemptDeadline.ts` | `DEADLINE_GRACE_SECONDS` = 30 | Per attempt. Order of precedence: `time_limit_removed` (null), then `deadline_override_at`, then `started_at + time_limit_seconds`. A non-positive limit means no limit. |
 | Sitting over | `sittingIsOver` in `lib/api/sittingOver.ts` | `SITTING_CLOSE_GRACE_SECONDS` = 10 for writes, none for the peek poll and submit | The teacher pressed Close, or `expires_at` passed. Expiry is read lazily, with no timer. |
 
-Neither clock hands the attempt in. The client ends the secure session, the attempt stays `in_progress` and resumable through a later sitting, and finalising is the teacher's hand-in (`app/api/attempts/[attemptId]/hand-in`, `app/api/test-sessions/[sessionId]/hand-in-all`) or the student's Finish later. A student's own submit after the deadline is refused (409), so only the teacher's route stays open.
+The design note for this behaviour is `docs/time-limit-and-unfinished-attempts-design.md`. Neither clock hands the attempt in. The client ends the secure session, the attempt stays `in_progress` and resumable through a later sitting, and finalising is the teacher's hand-in (`app/api/attempts/[attemptId]/hand-in`, `app/api/test-sessions/[sessionId]/hand-in-all`) or the student's Finish later. A student's own submit after the deadline is refused (409), so only the teacher's route stays open.
 
 ## Attempt lifecycle
 
@@ -97,7 +100,7 @@ stateDiagram-v2
 
 Attempt status. Extending, removing the limit and rebinding to a new sitting change deadline columns, not status. Pass back supersedes final scores in the same transaction ([scoring](scoring-and-results.md#score-status-lifecycle)).
 
-Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/*` (`close`, `extend`, `attendance`, `hand-in-all`) and `app/api/attempts/[attemptId]/*` (`extend`, `hand-in`, `pass-back`). Each authorizes through `authorizeSitting` or `authorizeAttempt` at `run` level; deleting an attempt requires `own` and leaves an `attempt_deletions` audit row (`lib/api/deleteAttempt.ts`).
+Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/*` (`close`, `extend`, `attendance`, `hand-in-all`) and `app/api/attempts/[attemptId]/*` (`extend`, `hand-in`, `pass-back`). Each authorizes through `authorizeSitting` or `authorizeAttempt` at `run` level; deleting an attempt requires `own` and leaves an `attempt_deletions` audit row (`lib/api/deleteAttempt.ts`). Both extend routes call `extendAttempt` in `lib/api/extendAttempt.ts`, which takes exactly one target (a new end instant or "no limit"; `toExtendTarget` builds it from the request body).
 
 ## Events and the monitor
 
@@ -159,5 +162,6 @@ Focused tests: `delivery-api.test.ts`, describe "GET /api/assessments/:id/delive
 - Any new student write door must ask both clocks (`refuseIfSittingOver` then `refuseIfPastDeadline`); the three existing doors are the response write, the drawing-slot completion and submit.
 - New bundle fields must be additive and emitted only when meaningful, so older bundles stay byte-identical; add the field to `DeliveryBundleSchema` first.
 - A new response type must parse under `ItemResponseSchema`, or its saved value is silently dropped on resume ([resume prefill](#resume-prefill)); if its ids are sealed per attempt, `sealResponseIds` must map them too.
-- Focused tests: `test-sessions-api.test.ts` (codes, scope), `resolve-student.test.ts`, `attempt-ingest-api.test.ts` (write guards, 42 KB), `delivery-api.test.ts` (no answer key anywhere in the body; sealing round trips), `attempt-deadline.test.ts`, `sitting-closed.test.ts`, `sitting-over.test.ts`, `attempt-events-api.test.ts`, `peek-api.test.ts`, `attempt-pass-back-api.test.ts`, `attempt-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
+- Focused tests: `test-sessions-api.test.ts` (codes, scope), `resolve-student.test.ts`, `attempt-ingest-api.test.ts` (write guards, 42 KB), `delivery-api.test.ts` (no answer key anywhere in the body; sealing round trips), `attempt-deadline.test.ts`, `sitting-closed.test.ts`, `sitting-over.test.ts`, `attempt-events-api.test.ts`, `peek-api.test.ts`, `attempt-pass-back-api.test.ts`, `attempt-extend-api.test.ts`, `session-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`.
 - These are DB-backed and require the `_test` database; see [testing](../testing/testing-and-validation.md). For roster scope see [accommodations and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
+ns and roster](accommodations-and-roster.md); for the persisted columns see [data model](data-model.md).
