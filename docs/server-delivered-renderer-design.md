@@ -403,3 +403,22 @@ meets a cold cluster).
   IT's backup public key. Nothing built.
 - 2026-10-13 — names and backup-key custody details replaced with roles
   (public-repository rule); custody recorded in the ops repository.
+- 2026-10-13 — **Slice 2 BUILT (staging stack), not deployed.** IT
+  leadership approved the staging approach. Decisions (James): own VPC,
+  kept running for now (`cdk destroy` may come later), task count set by
+  script, hostname `staging.<origin>`. `0d75ef9`: the CDK app builds one
+  stack chosen by `env` — none = production, unchanged (template
+  byte-identical before / after); `env=staging` =
+  `SecureTestDesignToolStaging` (0 ACU, no DesiredCount in the template,
+  no alarms, no gradebook / PowerSchool secrets, no SES, no warehouse
+  producer); any other value refused (before, `env=<x>` re-targeted the
+  production stack in place). `c36db05`: `deploy.sh --staging`,
+  `staging.sh up | down | status`, the `seed-staging` one-off mode (the
+  fictional demo roster + run-time-only staff / demo-student accounts,
+  guarded by `SECURE_TEST_DEPLOYMENT=staging` AND a `_staging` database
+  name), README "Staging". **Before the first staging deploy:** the
+  staging app secret (fresh session / PKCE / delivery values — a
+  hidden-prompt script outside the repo), the staging redirect URI on the
+  web OAuth client, and IT's two CNAMEs (ACM validation + the ALB); then
+  `seed-staging`, then the staging profile on the student test Mac
+  (D-7). Next build slice: 3 (renderer route + signing, dev key).
