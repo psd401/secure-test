@@ -385,11 +385,19 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release (after v1.6.2):** carries **U-22** — "n words" under an
-  essay with `show_word_count` and no maximum (`client/MANUAL-CHECKS.md`
-  "Word count without a limit", NOT RUN) — and Row NM slice 3 (one product
-  name). The help page and quick start say "a SecureTest newer than 1.6.2";
-  name the version there once it is cut.
+- **Next release: v1.6.3** (`MARKETING_VERSION` = 1.6.3; decided 2026-10-13
+  — cut ahead of v2.0 because IT's backup signing key has no date). Carries
+  **U-22** — "n words" under an essay with `show_word_count` and no maximum
+  (`client/MANUAL-CHECKS.md` "Word count without a limit", NOT RUN) — and
+  Row NM slice 3 (one product name, "One product name" rows, NOT RUN). The
+  server half of U-22 is live (2026-10-13, task def rev 108). Before
+  psd-sign: both row sections on a Debug build against the origin, then a
+  Release smoke in one real AAC session (word count while typing, the
+  "SecureTest" name, hand in, `DID END`). After publishing: the help page
+  and quick start say "a SecureTest newer than 1.6.2" — change it to
+  "1.6.3 or later" and deploy right away. Notarization is working again:
+  notarize v1.6.3 normally, then backfill the v1.4.0–v1.6.2 pkgs (no
+  staple, no asset replacement).
 - ~~**Next release: v1.6.1**~~ PUBLISHED 2026-10-08 (see Released). (`MARKETING_VERSION` = 1.6.1). Carries
   **SS-1** (the secure-start backstop is 60 s with a "Still starting the
   secure session…" notice after 20 s — a student's Mac began its session
