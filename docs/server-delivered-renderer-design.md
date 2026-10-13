@@ -336,6 +336,15 @@ meets a cold cluster).
    one, byte for byte.
 6. Rows: staging sitting, real AAC session, deploy mid-test then resume,
    bad hash, missing capability, offline (Debug).
+3b. **Backup-key signing, before the v2.0 shell is built** (James,
+   2026-10-13): `renderer-sign` signs only with the Secure Enclave or a dev
+   key; it has no hardware-token (PIV) mode. Add `sign --piv` (or a
+   documented PKCS#11 / PIV-tool path producing the same DER signature over
+   the same manifest bytes), then ONE rehearsal: the two-person backup
+   custody signs a test manifest and `renderer-sign verify` accepts it
+   against the backup's public key. Blocks slice 4's release, not its
+   build: the shell compiles in both public keys, so the backup's must
+   exist first.
 
 ## Progress
 
@@ -422,3 +431,16 @@ meets a cold cluster).
   web OAuth client, and IT's two CNAMEs (ACM validation + the ALB); then
   `seed-staging`, then the staging profile on the student test Mac
   (D-7). Next build slice: 3 (renderer route + signing, dev key).
+- 2026-10-13 — Slice 2 deployed: staging LIVE at `https://staging.<origin>`
+  (first create failed on Aurora 16.6, which AWS no longer creates; staging
+  now uses 16.11, the version production actually runs). `ci` workflow
+  live (the signing gate). **Slice 3 commits 2–3 BUILT:** `packages/renderer`
+  (placeholder renderer, `requires`, canonical manifest, build) and
+  `tools/renderer-sign` + `src/verify.ts` (Secure Enclave signer, dev key,
+  cross-language fixture). **Working key CREATED** on this Mac (Secure
+  Enclave, `.biometryAny`): an unsigned SwiftPM build needs no entitlement;
+  Touch ID prompts on `sign` with the version and commit; a real signature
+  verified against `packages/renderer/keys/working.pub.pem`. Slice 3b
+  (backup-key PIV signing + one rehearsal) added before the v2.0 shell.
+  Next: commit 4 (sign at deploy, S3 by hash, the route, the bundle field —
+  staging only).
