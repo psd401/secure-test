@@ -9,6 +9,7 @@ openwiki:
   source_paths:
     - design-tool/Dockerfile
     - design-tool/scripts/docker-entrypoint.mjs
+    - design-tool/infra/bin/design-tool.ts
     - design-tool/infra/lib/design-tool-stack.ts
     - design-tool/infra/lib/app-service.ts
     - design-tool/infra/lib/roster-sync.ts
@@ -47,7 +48,7 @@ At boot it assembles `DATABASE_URL` from `DB_*` variables that ECS injects from 
 
 | File | Owns |
 |---|---|
-| `bin/design-tool.ts` | App entry. Account-specific values (OAuth client ids, hostname, guardrail id, notify and admin emails, producer role ARNs) are read from the gitignored CDK context, never committed. |
+| `bin/design-tool.ts` | App entry. Builds one stack chosen by the `env` context: none means production (`SecureTestDesignTool`), `env=staging` means `SecureTestDesignToolStaging`, and any other value is refused. Account-specific values (OAuth client ids, hostname, guardrail id, notify and admin emails, producer role ARNs) are read from the gitignored CDK context, never committed. |
 | `lib/design-tool-stack.ts` | `DesignToolStack`: VPC without NAT, Aurora Postgres Serverless v2 (min 0 ACU, security-group-gated, no CIDR ingress), the per-env asset bucket (`secure-test-design-tool-<envName>`, retained only for `prod`), the SNS alarm/feedback topic, and wiring to the two constructs below. |
 | `lib/app-service.ts` | The Fargate service and ALB; maps secret keys to `DB_*` env vars and pins the production provider choices: `STORAGE_PROVIDER=s3`, the AI/PDF/rubric/essay-scorer/math/guardrail/screener providers = `bedrock`, `NOTIFY_PROVIDER=sns`, `GRADEBOOK_PROVIDER=live`, `EMAIL_PROVIDER=ses`; `ADMIN_EMAILS` comes from context. |
 | `lib/roster-sync.ts` + `lambda/roster-sync.ts` | The roster snapshot bucket (S3 notification on the `manifest.json` key only), the in-VPC importer Lambda that calls `lib/roster/syncHandler.ts`, an errors alarm to SNS, and cross-account put-only access for the warehouse DAG. |
@@ -70,6 +71,10 @@ flowchart LR
 ```
 
 The roster path is a push from the warehouse; the web app and the Lambda share Aurora but only the app can reach Bedrock.
+
+### Staging stack
+
+The same CDK app builds a second, isolated stack when `env=staging` is passed (`bin/design-tool.ts`, `lib/design-tool-stack.ts`). It has its own VPC, Aurora cluster (minimum 0 ACU, so it can pause), buckets, app secret, log group and topic, and its database is `secure_test_design_tool_staging`. Staging is a rehearsal target for the signed renderer ([signed renderer delivery](../client/signed-renderer.md)) and carries fictional data only. Relative to production, the `props.staging` branches in `lib/app-service.ts` and `lib/roster-sync.ts` do three things: the Fargate task count is left to the operator scripts rather than deploys (the code comment names `staging.sh up | down`), the service gets no alarms, the roster importer has no warehouse feed and no alarms (`lib/roster-sync.ts`), and the gradebook (PowerSchool) secrets and `GRADEBOOK_PROVIDER=live` are omitted. The `seed-staging` one-off mode seeds the demo roster and refuses unless `SECURE_TEST_DEPLOYMENT=staging` and the database name ends in `_staging`. The rollout log is in `docs/server-delivered-renderer-design.md`.
 
 ## Retention sweep
 
@@ -101,5 +106,8 @@ Names only (values never belong in the repo): `DATABASE_URL` (or `DB_*` in ECS),
 | New operator one-off | add a `bun build` line in `Dockerfile` and a `MODES` entry in `docker-entrypoint.mjs` | `test/docker-entrypoint.test.ts` |
 | Change roster Lambda or sweeps | `lib/roster/syncHandler.ts`, `lib/retention/sweep.ts` | `roster-sync-handler.test.ts`, `retention-sweep.test.ts`, `practice-sweep-asset-delete.test.ts` |
 | Change logging or error capture | `lib/log.ts`, `lib/observability/serverError.ts`, `proxy.ts` | `log.test.ts`, `server-error-record.test.ts`, `health-route.test.ts` |
+
+CDK changes are validated by `cdk synth` in `design-tool/infra` (conditional: only when infra files change; it needs CDK context values). Do not run a full image build to check an app-only change.
+es) |
 
 CDK changes are validated by `cdk synth` in `design-tool/infra` (conditional: only when infra files change; it needs CDK context values). Do not run a full image build to check an app-only change.
