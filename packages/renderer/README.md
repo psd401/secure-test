@@ -5,16 +5,18 @@ to the macOS shell, plus their manifest
 (`docs/server-delivered-renderer-design.md`, slice 3).
 
 **The renderer here is a PLACEHOLDER.** Slice 5 moves the real page code,
-the KaTeX macros and their tests in from the client, byte for byte. Signing
-the manifest (next commit) and serving it (the commit after) are not built
-yet.
+the KaTeX macros and their tests in from the client, byte for byte.
+Signing is done by `tools/renderer-sign` (Secure Enclave working key,
+Touch ID per signature) and checked by `src/verify.ts`; serving the files
+(the next commit) is not built yet.
 
 ## Scripts
 
 - `bun run build` — writes `dist/renderer.js`, `dist/renderer.css` and
   `dist/manifest.json` (gitignored), and prints a one-line summary.
-- `bun test` — manifest building, canonical bytes, parsing, and the
-  no-`</` rule for `src/renderer.js`.
+- `bun test` — manifest building, canonical bytes, parsing, the
+  no-`</` rule for `src/renderer.js`, signature verification and the
+  use checks, and a cross-language fixture signed by the Swift tool.
 
 ## Manifest
 
@@ -34,6 +36,21 @@ JSON, no insignificant whitespace, object keys sorted recursively, arrays
 in order, safe integers only. `parseManifest` refuses bytes that are not
 the canonical form of what they parse to, so one manifest has exactly one
 byte form.
+
+## Verifying (`src/verify.ts`)
+
+- `verifyManifestSignature(bytes, derSignature, publicKeysPem)` — true when
+  ANY of the keys (working, backup) verifies an ECDSA P-256 / SHA-256 DER
+  signature over the exact bytes. A malformed signature is false; a key that
+  is not P-256 throws.
+- `checkManifestUse(manifest, { now, minVersion })` — refuses
+  `below_min_version`, `not_yet_valid` (before `issued_at`) and `expired`
+  (after `not_after`); both window ends are inclusive.
+
+Order: verify the bytes, then `parseManifest`, then `checkManifestUse`.
+`test/fixtures/cross-language/` holds a manifest signed by
+`tools/renderer-sign` with a throwaway dev key (only its public half is
+committed); `test/verify.test.ts` says how to regenerate it.
 
 ## Rules for `src/renderer.js`
 

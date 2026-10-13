@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./manifest": "./src/manifest.ts",
-    "./requires": "./src/requires.ts"
+    "./requires": "./src/requires.ts",
+    "./verify": "./src/verify.ts"
   },
   "files": [
     "dist",
