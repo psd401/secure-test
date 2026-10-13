@@ -126,7 +126,14 @@ export class DesignToolStack extends cdk.Stack {
 
     const cluster = new rds.DatabaseCluster(this, "Cluster", {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_16_6,
+        // Production stays as written: its cluster was created on 16.6 and
+        // auto-minor-upgrade has since moved it (16.11 on 2026-10-13), so
+        // changing this would only ask CloudFormation to modify a live
+        // cluster. AWS no longer creates 16.6 clusters, so staging — created
+        // fresh — takes the version production actually runs.
+        version: props.staging
+          ? rds.AuroraPostgresEngineVersion.VER_16_11
+          : rds.AuroraPostgresEngineVersion.VER_16_6,
       }),
       // 0.5 min for the pilot (ECS deploy plan decision 1.2, 2026-08-31):
       // the web app has no waitForDatabase equivalent, and the 0-ACU resume
