@@ -42,13 +42,13 @@ public enum RendererKeys {
 }
 
 /// The `requires` terms (packages/renderer/src/requires.ts) this shell can
-/// answer for: the eight bridge handlers plus word-range callbacks from
-/// read-aloud. `response.generic` joins in slice 4d with the generic answer
-/// channel (D-5). RendererVerifierTests pins this against requires.ts.
+/// answer for: the eight bridge handlers, word-range callbacks from
+/// read-aloud, and (slice 4d) the generic answer channel (D-5) — the full
+/// REQUIREMENTS list. RendererVerifierTests pins this against requires.ts.
 public enum RendererCapabilities {
     public static let supported: Set<String> = [
         "response", "withdraw", "upload", "submit", "timer", "home", "tts", "stt",
-        "tts.word_ranges",
+        "tts.word_ranges", "response.generic",
     ]
 }
 

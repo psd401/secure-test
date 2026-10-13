@@ -204,6 +204,11 @@ public struct TableItem: Decodable, Equatable, Sendable {
 public enum FillBlankBlank: Decodable, Equatable, Sendable {
     case dropdown(id: String, options: [Choice])
     case text(id: String)
+    /// Slice 4d (D-5): a blank kind this shell does not know. The shell reads
+    /// nothing of a blank but its id; the page (the served renderer) decides
+    /// how to show it, and its answer is still a string in the item's
+    /// `answers` map, so the fill_blank caps still apply.
+    case other(id: String, kind: String)
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, options
@@ -219,16 +224,15 @@ public enum FillBlankBlank: Decodable, Equatable, Sendable {
         case "text":
             self = .text(id: id)
         default:
-            // Same posture as an unknown item type: a kind this build cannot
-            // render is version skew, and the whole decode fails loudly.
-            throw DecodingError.dataCorruptedError(
-                forKey: .kind, in: c, debugDescription: "unknown blank kind \"\(kind)\"")
+            // Slice 4d: no longer version skew — the served renderer owns
+            // blank kinds. Carried opaquely; the item stays a fill_blank.
+            self = .other(id: id, kind: kind)
         }
     }
 
     public var id: String {
         switch self {
-        case .dropdown(let id, _), .text(let id): return id
+        case .dropdown(let id, _), .text(let id), .other(let id, _): return id
         }
     }
 }
@@ -237,6 +241,25 @@ public struct FillBlankItem: Decodable, Equatable, Sendable {
     public let id: String
     public let stem: String
     public let blanks: [FillBlankBlank]
+}
+
+/// Slice 4d (docs/server-delivered-renderer-design.md D-5): an item of a type
+/// this shell does not know. The shell needs only its id and type (the bridge
+/// checks answers against them); the page receives the bundle verbatim and
+/// the served renderer draws it. `stem` is read when it is a string, else "".
+public struct OtherItem: Decodable, Equatable, Sendable {
+    public let id: String
+    public let type: String
+    public let stem: String
+
+    private enum CodingKeys: String, CodingKey { case id, type, stem }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decode(String.self, forKey: .type)
+        stem = (try? c.decodeIfPresent(String.self, forKey: .stem)) ?? ""
+    }
 }
 
 public enum DeliveryItem: Decodable, Equatable, Sendable {
@@ -250,6 +273,8 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
     case drawingUpload(DrawingUploadItem)
     case table(TableItem)
     case fillBlank(FillBlankItem)
+    /// Slice 4d: a type this shell does not know (D-5).
+    case other(OtherItem)
 
     /// Wire discriminants, matching ITEM_TYPES in the design-tool schema.
     public enum Kind: String, Decodable, CaseIterable, Sendable {
@@ -273,15 +298,13 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: DiscriminatorKey.self)
         let raw = try container.decode(String.self, forKey: .type)
         guard let kind = Kind(rawValue: raw) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                // A type this build does not know is a version skew between the
-                // client and the design tool, not a malformed item. Fail the
-                // decode loudly rather than skipping the item: silently
-                // presenting a student a short test is worse than not starting.
-                debugDescription: "unknown item type \"\(raw)\""
-            )
+            // Slice 4d (D-5): the served renderer owns item types, so a type
+            // this shell does not know passes through as `.other` — the page
+            // draws it. Which shells may receive a new type is the server's
+            // call (lib/items/clientSupport.ts). A KNOWN type still decodes
+            // strictly below: malformed structure fails the bundle.
+            self = .other(try OtherItem(from: decoder))
+            return
         }
         switch kind {
         case .multipleChoiceSingle:
@@ -307,7 +330,8 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         }
     }
 
-    public var kind: Kind {
+    /// Nil for a type this shell does not know; `typeName` always answers.
+    public var kind: Kind? {
         switch self {
         case .multipleChoiceSingle: return .multipleChoiceSingle
         case .multipleChoiceMulti: return .multipleChoiceMulti
@@ -319,7 +343,14 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .drawingUpload: return .drawingUpload
         case .table: return .table
         case .fillBlank: return .fillBlank
+        case .other: return nil
         }
+    }
+
+    /// The wire `type` — a `Kind`'s raw value, or the unknown type's own name.
+    public var typeName: String {
+        if case .other(let i) = self { return i.type }
+        return kind?.rawValue ?? ""
     }
 
     public var id: String {
@@ -333,6 +364,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .drawingUpload(let i): return i.id
         case .table(let i): return i.id
         case .fillBlank(let i): return i.id
+        case .other(let i): return i.id
         }
     }
 
@@ -347,6 +379,7 @@ public enum DeliveryItem: Decodable, Equatable, Sendable {
         case .drawingUpload(let i): return i.stem
         case .table(let i): return i.stem
         case .fillBlank(let i): return i.stem
+        case .other(let i): return i.stem
         }
     }
 }

@@ -178,12 +178,20 @@ final class ItemResponseTests: XCTestCase {
         XCTAssertEqual(message.response, .shortText(text: "answer"))
     }
 
-    func testRejectsAnUnknownResponseTypeAtTheBoundary() {
+    /// Slice 4d (D-5): an unknown response type decodes as a generic answer;
+    /// the bridge table then refuses it unless an item of that type is in the
+    /// bundle (GenericAnswerChannelTests). The boundary still refuses a known
+    /// type with the wrong shape.
+    func testAnUnknownResponseTypeDecodesGenericallyAtTheBoundary() throws {
         let body: [String: Any] = [
             "item_id": "i1",
             "response": ["type": "telepathy", "text": "x"],
         ]
-        XCTAssertThrowsError(try ItemResponseMessage.decode(fromMessageBody: body))
+        let message = try ItemResponseMessage.decode(fromMessageBody: body)
+        XCTAssertEqual(message.response, .generic(type: "telepathy", fields: ["text": .string("x")]))
+        XCTAssertThrowsError(try ItemResponseMessage.decode(fromMessageBody: [
+            "item_id": "i1", "response": ["type": "short_text", "text": 1],
+        ]))
     }
 
     func testRejectsAMessageMissingItsItemID() {

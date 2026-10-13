@@ -238,11 +238,11 @@ final class RendererVerifierTests: XCTestCase {
 
     func testMissingCapabilitiesListsTheTerms() {
         let signer = Signer()
-        let bytes = manifestJSON(requires: ["home", "response", "response.generic", "submit", "zz.future"])
+        let bytes = manifestJSON(requires: ["home", "response", "response.generic", "submit", "zz.future", "zz.later"])
         let r = refusal(verify(bytes, signer: signer))
-        XCTAssertEqual(r, .missingCapabilities(["response.generic", "zz.future"]))
+        XCTAssertEqual(r, .missingCapabilities(["zz.future", "zz.later"]))
         XCTAssertTrue(r!.isUpdateNeeded)
-        XCTAssertTrue(r!.logLine.contains("response.generic"))
+        XCTAssertTrue(r!.logLine.contains("zz.future"))
     }
 
     func testOnlyMissingCapabilitiesNeedsAnUpdate() {
@@ -300,8 +300,8 @@ final class RendererVerifierTests: XCTestCase {
             .filter { $0.hasPrefix("\"") }
             .map { String($0.dropFirst().prefix { $0 != "\"" }) }
         XCTAssertEqual(terms.count, 10, "parsed \(terms)")
-        // response.generic joins in slice 4d (the generic answer channel).
-        XCTAssertEqual(RendererCapabilities.supported, Set(terms).subtracting(["response.generic"]))
+        // Slice 4d: the shell answers for the full vocabulary.
+        XCTAssertEqual(RendererCapabilities.supported, Set(terms))
     }
 
     func testPolicyMinimumVersionIsOpenUntilD13() {

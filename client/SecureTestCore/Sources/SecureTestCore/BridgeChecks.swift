@@ -27,6 +27,14 @@ public enum BridgeLimits {
     /// works on the longest essay a student can save, with room for the stem.
     public static let speechMaxCharacters = 120_000
     public static let speechMaxSegments = 2_000
+    /// Slice 4d (D-5): an answer of a type this shell does not know gets
+    /// generic caps instead of per-type ones — every string inside (object
+    /// keys included) within `essayTextMaxLength`, containers nested at most
+    /// this deep (the answer object itself is 1), and the encoded answer at
+    /// most `genericAnswerMaxBytes`. They protect the shell's memory and spool;
+    /// the server's schema validates the shape.
+    public static let genericAnswerMaxDepth = 8
+    public static let genericAnswerMaxBytes = 256 * 1024
 }
 
 /// Why the host refused a page payload. The description is what the
@@ -37,6 +45,8 @@ public enum BridgeRefusal: Error, Equatable, CustomStringConvertible, Sendable {
     case tooLong(field: String, length: Int, max: Int)
     case notPNG
     case tooLarge(bytes: Int, max: Int)
+    case tooDeep(depth: Int, max: Int)
+    case answerTooLarge(bytes: Int, max: Int)
 
     public var description: String {
         switch self {
@@ -50,6 +60,10 @@ public enum BridgeRefusal: Error, Equatable, CustomStringConvertible, Sendable {
             return "drawing is not a base64 PNG"
         case .tooLarge(let bytes, let max):
             return "drawing is \(bytes) bytes (max \(max))"
+        case .tooDeep(let depth, let max):
+            return "answer nests \(depth) deep (max \(max))"
+        case .answerTooLarge(let bytes, let max):
+            return "answer is \(bytes) bytes (max \(max))"
         }
     }
 }
@@ -57,28 +71,30 @@ public enum BridgeRefusal: Error, Equatable, CustomStringConvertible, Sendable {
 /// H-2: what the page may answer, from the bundle the host fetched itself —
 /// each item's id and type, plus every set's inline outline id, which the
 /// page posts as an essay (E12) although it is not one of the items.
+/// Slice 4d: types are kept as their wire names, so an item of a type this
+/// shell does not know is answerable too — by that type and no other.
 public struct BridgeItemTable: Equatable, Sendable {
-    private let kinds: [String: DeliveryItem.Kind]
+    private let types: [String: String]
 
     public init(bundle: DeliveryBundle) {
-        var kinds: [String: DeliveryItem.Kind] = [:]
-        for item in bundle.items { kinds[item.id] = item.kind }
+        var types: [String: String] = [:]
+        for item in bundle.items { types[item.id] = item.typeName }
         for set in bundle.itemSets {
-            if let inline = set.inlineItemId, !inline.isEmpty, kinds[inline] == nil {
-                kinds[inline] = .essay
+            if let inline = set.inlineItemId, !inline.isEmpty, types[inline] == nil {
+                types[inline] = DeliveryItem.Kind.essay.rawValue
             }
         }
-        self.kinds = kinds
+        self.types = types
     }
 
-    public func contains(_ itemID: String) -> Bool { kinds[itemID] != nil }
+    public func contains(_ itemID: String) -> Bool { types[itemID] != nil }
 
     /// A response message the host may spool, or the reason it may not.
     public func check(_ message: ItemResponseMessage) -> BridgeRefusal? {
-        guard let kind = kinds[message.itemID] else { return .unknownItem(message.itemID) }
+        guard let expected = types[message.itemID] else { return .unknownItem(message.itemID) }
         let got = message.response.typeName
-        guard got == kind.rawValue else {
-            return .wrongResponseType(itemID: message.itemID, expected: kind.rawValue, got: got)
+        guard got == expected else {
+            return .wrongResponseType(itemID: message.itemID, expected: expected, got: got)
         }
         return Self.lengthRefusal(message.response)
     }
@@ -86,9 +102,9 @@ public struct BridgeItemTable: Equatable, Sendable {
     /// A withdrawal or a drawing names an item; it must be one of ours, and a
     /// drawing must name a drawing item.
     public func check(itemID: String, expecting kind: DeliveryItem.Kind? = nil) -> BridgeRefusal? {
-        guard let actual = kinds[itemID] else { return .unknownItem(itemID) }
-        if let kind, actual != kind {
-            return .wrongResponseType(itemID: itemID, expected: actual.rawValue, got: kind.rawValue)
+        guard let actual = types[itemID] else { return .unknownItem(itemID) }
+        if let kind, actual != kind.rawValue {
+            return .wrongResponseType(itemID: itemID, expected: actual, got: kind.rawValue)
         }
         return nil
     }
@@ -119,6 +135,22 @@ public struct BridgeItemTable: Equatable, Sendable {
         case .fillBlank(let answers):
             for value in answers.values {
                 if let refusal = over("blank", value, BridgeLimits.cellMaxLength) { return refusal }
+            }
+            return nil
+        case .generic(let type, let fields):
+            let value = JSONValue.object(fields)
+            let depth = value.depth
+            if depth > BridgeLimits.genericAnswerMaxDepth {
+                return .tooDeep(depth: depth, max: BridgeLimits.genericAnswerMaxDepth)
+            }
+            let longest = value.longestString
+            if longest > BridgeLimits.essayTextMaxLength {
+                return .tooLong(field: "\(type) answer string", length: longest, max: BridgeLimits.essayTextMaxLength)
+            }
+            // Measured as the spool will store it.
+            let bytes = (try? JSONEncoder().encode(response).count) ?? Int.max
+            if bytes > BridgeLimits.genericAnswerMaxBytes {
+                return .answerTooLarge(bytes: bytes, max: BridgeLimits.genericAnswerMaxBytes)
             }
             return nil
         case .multipleChoiceSingle, .multipleChoiceMulti, .match, .order, .hotspot, .drawingUpload:

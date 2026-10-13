@@ -28,10 +28,22 @@ final class ItemResponseFillBlankTests: XCTestCase {
         )
     }
 
-    /// A blank kind this build cannot render is version skew: the decode
-    /// fails, as an unknown item type does.
-    func testAnUnknownBlankKindFailsTheItemDecode() {
-        let json = #"{"type":"fill_blank","id":"f","stem":"A [[b1]]","blanks":[{"id":"b1","kind":"slider"}]}"#
+    /// Slice 4d (D-5): a blank kind this shell does not know no longer fails
+    /// the bundle — the served renderer owns blank kinds. The blank is carried
+    /// opaquely and the item stays a fill_blank, so its answers keep the
+    /// fill_blank caps.
+    func testAnUnknownBlankKindIsCarriedOpaquely() throws {
+        let json = #"{"type":"fill_blank","id":"f","stem":"A [[b1]] [[b2]]","blanks":[{"id":"b1","kind":"slider","min":0},{"id":"b2","kind":"text"}]}"#
+        let item = try JSONDecoder().decode(DeliveryItem.self, from: Data(json.utf8))
+        guard case .fillBlank(let fb) = item else { return XCTFail("\(item)") }
+        XCTAssertEqual(fb.blanks, [.other(id: "b1", kind: "slider"), .text(id: "b2")])
+        XCTAssertEqual(fb.blanks.map(\.id), ["b1", "b2"])
+        XCTAssertEqual(item.typeName, "fill_blank")
+    }
+
+    /// Only the vocabulary opened up: a blank with no id still fails.
+    func testABlankWithoutAnIdStillFails() {
+        let json = #"{"type":"fill_blank","id":"f","stem":"A","blanks":[{"kind":"slider"}]}"#
         XCTAssertThrowsError(try JSONDecoder().decode(DeliveryItem.self, from: Data(json.utf8)))
     }
 }

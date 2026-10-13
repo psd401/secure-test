@@ -21,7 +21,7 @@ final class DeliveryBundleTests: XCTestCase {
         let bundle = try loadBundle()
         XCTAssertEqual(bundle.items.count, 10)
         XCTAssertEqual(
-            Set(bundle.items.map(\.kind)),
+            Set(bundle.items.compactMap(\.kind)),
             Set(DeliveryItem.Kind.allCases),
             "fixture must exercise every case, or a broken decoder could pass"
         )
@@ -265,13 +265,18 @@ final class DeliveryBundleTests: XCTestCase {
 }
 
 final class DeliveryDecodingEdgeCaseTests: XCTestCase {
-    func testUnknownItemTypeFailsTheWholeDecode() {
+    /// Slice 4d (D-5): an unknown item type no longer fails the bundle — the
+    /// served renderer owns types, so the item passes through as `.other`
+    /// (never skipped: the student still gets every item). Which shells may
+    /// receive a new type is the server's gate (lib/items/clientSupport.ts).
+    func testUnknownItemTypePassesThroughAsOther() throws {
         let json = """
         {"test_id":"t","title":"T","items":[{"type":"essay_v2","id":"i","stem":"s"}]}
         """
-        // Failing the bundle beats skipping the item: silently handing a student
-        // a shorter test than the teacher assigned is the worse outcome.
-        XCTAssertThrowsError(try DeliveryBundle.decode(from: Data(json.utf8)))
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        XCTAssertEqual(bundle.items.count, 1)
+        XCTAssertEqual(bundle.items[0].typeName, "essay_v2")
+        XCTAssertEqual(bundle.items[0].id, "i")
     }
 
     func testOmittedOptionalCollectionsNormaliseToEmpty() throws {
@@ -377,14 +382,24 @@ final class DeliveryDecodingEdgeCaseTests: XCTestCase {
         XCTAssertEqual(blob.dataURI, "data:image/png;base64,SEVMTE8=")
     }
 
-    /// The union is the gate: a value that is not a response type fails the
-    /// whole decode rather than being carried as something unrecognised.
-    func testASavedValueThatIsNotAResponseTypeFailsTheDecode() {
+    /// Slice 4d (D-5): a saved value of a type this shell does not know is
+    /// carried as a generic answer rather than failing the bundle — the server
+    /// builds `saved_responses` from the student's own stored answers and the
+    /// page receives the bundle verbatim either way. A KNOWN type with a bad
+    /// shape still fails the whole decode.
+    func testASavedValueOfAnUnknownTypeIsCarriedGenerically() throws {
         let json = #"""
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"e","stem":"s"}],
-         "saved_responses":{"e":{"type":"answer_key","text":"42"}}}
+         "saved_responses":{"e":{"type":"number_line","point":1}}}
         """#
-        XCTAssertThrowsError(try DeliveryBundle.decode(from: Data(json.utf8)))
+        let bundle = try DeliveryBundle.decode(from: Data(json.utf8))
+        XCTAssertEqual(bundle.savedResponses["e"], .generic(type: "number_line", fields: ["point": .int(1)]))
+
+        let bad = #"""
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"e","stem":"s"}],
+         "saved_responses":{"e":{"type":"essay","text":42}}}
+        """#
+        XCTAssertThrowsError(try DeliveryBundle.decode(from: Data(bad.utf8)))
     }
 
     // MARK: time limit (slice 2)
