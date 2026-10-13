@@ -126,16 +126,3 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
 
 Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
-
-| Intent | Start at | Tests |
-|---|---|---|
-| Offline bundle open path or screen state | `OfflineBundle.swift`, `AssessmentViewController.loadPage`, `AppDelegate` open handlers | `OfflineBundleTests` |
-| New or changed item rendering | `AssessmentPage*.swift` renderer script, `DeliveryItem.swift` | `Renderer*Tests.swift` (e.g. `RendererMatchTests`, `RendererFillBlankTests`) run through `RendererHarness.swift` |
-| New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
-| Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
-| Offline/durability behaviour | `ResponseSpool.swift`, `UploadGate.swift` | `ResponseSpoolTests`, `UploadGateTests` |
-| Time limit or closed-sitting UX | `TimeLimitCountdown.swift`, `AttemptEventReporter.swift` | `TimeLimitCountdownTests`, `RendererTimeLimitTests`, `AttemptEventReporterTests` |
-
-Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
-
-Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).

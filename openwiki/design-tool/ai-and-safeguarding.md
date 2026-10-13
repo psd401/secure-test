@@ -81,7 +81,7 @@ Screening after hand-in. The submit response never waits for it.
 - Two alert kinds in `safeguarding_alerts`: `wellbeing` (the screener names any non-`none` category, with no confidence threshold) and `prompt_injection` (the screener's injection half **or** the guardrail's PROMPT_ATTACK filter, because they miss different things).
 - A prompt-injection alert withholds AI scoring for that answer. `injectionAlertFor` (`lib/safeguarding/alerts.ts`) finds it; acknowledging does not release the score, only an explicit "Score with AI anyway" (`ai_forced_at`) does. The Google Docs release also skips students with open alerts (see [integrations](integrations.md#google-docs-release)).
 - Retry: `register()` in `instrumentation.ts` calls `startScreeningRetry` (`screening/retry.ts`), an hourly in-app timer (`RETRY_INTERVAL_MS`) over hand-ins from the last 14 days, 200 per run, after a 10-minute grace. It lives in the app and not the roster Lambda because the Lambda sits in isolated subnets with no route to Bedrock. Lazy screening also happens just before a teacher's Score with AI.
-- Surfaces: `app/api/admin/safeguarding-alerts`, `app/api/assessments/[id]/safeguarding-alerts`, `app/api/safeguarding-alerts/[alertId]/acknowledge`, pages `app/admin/safeguarding` and the per-assessment alert views; staff email via `lib/email/safeguardingNotifications.ts`.
+- Surfaces: `app/api/admin/safeguarding-alerts`, `app/api/assessments/[id]/safeguarding-alerts`, `app/api/safeguarding-alerts/[alertId]/acknowledge`, pages `app/admin/safeguarding` and the per-assessment alert views; staff email via `lib/email/safeguardingNotifications.ts`. The design note is `docs/safeguarding-alerts-design.md`.
 
 ## Change navigation
 

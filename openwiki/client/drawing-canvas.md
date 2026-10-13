@@ -32,7 +32,7 @@ openwiki:
 
 # Drawing canvas in the macOS client
 
-A `drawing_upload` item asks the student to answer on a canvas, typically by drawing working or sketching on it. The canvas is part of the renderer script that `AssessmentPage` writes into the in-app page (see [client overview](overview.md#the-page)). The server side of the same answer, the upload slot and the stored bytes, is described in [sittings and attempts: drawing uploads](../design-tool/sittings-and-attempts.md#drawing-uploads) and [storage and assets](../design-tool/storage-and-assets.md). This page covers the client behaviour that decides when a picture is sent.
+A `drawing_upload` item asks the student to answer on a canvas, typically by drawing working or sketching on it. The canvas is part of the renderer script that `AssessmentPage` writes into the in-app page (see [client overview](overview.md#the-page)). The server side of the same answer, the upload slot and the stored bytes, is described in [sittings and attempts: drawing uploads](../design-tool/sittings-and-attempts.md#drawing-uploads) and [storage and assets](../design-tool/storage-and-assets.md). This page covers the client behaviour that decides when a picture is sent. The design notes are `docs/drawing-tools-design.md` (tools and auto-save) and `docs/drawing-background-design.md` (paper background).
 
 ## Tools and controls
 
