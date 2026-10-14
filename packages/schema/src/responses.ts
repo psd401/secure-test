@@ -38,6 +38,18 @@ export const SHORT_TEXT_MAX_LENGTH = 2_000;
 /** A table cell or a fill-in-the-blank answer. */
 export const RESPONSE_CELL_MAX_LENGTH = 500;
 
+// The generic answer channel (server-delivered renderer D-5, v2.0 slice 4d):
+// a v2.0 shell passes an answer for an item type it does not know as
+// `{type, ...fields}`, checked only against these generic caps — every
+// string (object keys included) within ESSAY_TEXT_MAX_LENGTH, containers
+// nested at most GENERIC_RESPONSE_MAX_DEPTH, the JSON at most
+// GENERIC_RESPONSE_MAX_BYTES. The client's `BridgeLimits` carries the same
+// numbers (test/bridge-limits.test.ts). A NEW response schema must fit inside
+// them — cap every string at ESSAY_TEXT_MAX_LENGTH or lower — or a v2.0
+// shell refuses answers the server would take.
+export const GENERIC_RESPONSE_MAX_DEPTH = 8;
+export const GENERIC_RESPONSE_MAX_BYTES = 256 * 1024;
+
 export const ShortTextResponseSchema = z.object({
   type: z.literal("short_text"),
   text: z.string().max(SHORT_TEXT_MAX_LENGTH),
