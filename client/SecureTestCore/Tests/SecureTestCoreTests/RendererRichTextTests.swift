@@ -334,7 +334,9 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(try h.string("__box().getAttribute('contenteditable')"), "true")
         XCTAssertEqual(try h.string("__box().getAttribute('role')"), "textbox")
         XCTAssertEqual(try h.string("__box().getAttribute('aria-multiline')"), "true")
-        XCTAssertEqual(try h.string("__box().getAttribute('aria-label')"), "Your answer")
+        // WC-2: named by labelledby — "Your answer" + the spoken count.
+        XCTAssertNil(try h.string("__box().getAttribute('aria-label')"))
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 0 of 400 words")
         XCTAssertEqual(try h.string("__box().getAttribute('data-placeholder')"), "Write your response here…")
         XCTAssertEqual(try h.string("__first('.essay-toolbar', \(item)).getAttribute('role')"), "toolbar")
         XCTAssertEqual(
@@ -413,16 +415,25 @@ final class RendererRichTextTests: XCTestCase {
     }
 
     /// U-22: the formatted essay's counter follows the same rule — with no
-    /// maximum and show_word_count on, "n words", still described to VoiceOver.
+    /// maximum and show_word_count on, "n words", still heard by VoiceOver
+    /// (in the box's name since WC-2).
     func testAFormattedEssayShowsAPlainCountWithoutACap() throws {
         let h = try harness(extra: "delete BUNDLE.items[3].max_word_count; BUNDLE.items[3].show_word_count = true;")
         XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "0 words")
         try h.eval("__typeBox(['One two', 'three']);")
         XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "3 words")
-        XCTAssertEqual(
-            try h.string("__box().getAttribute('aria-describedby')"),
-            try h.string("__first('.word-count', __item(3)).id")
-        )
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 3 words")
+    }
+
+    /// WC-2: over the maximum is said in words (red alone is no cue), and
+    /// crossing it is announced once each way, never word by word.
+    func testAFormattedEssaySaysAndAnnouncesCrossingTheLimit() throws {
+        let h = try harness(extra: "BUNDLE.items[3].max_word_count = 3;")
+        let live = "__all('.sr-only', __item(3)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0].textContent"
+        XCTAssertEqual(try h.string(live), "")
+        try h.eval("__typeBox(['one two three four']);")
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 4 of 3 words, over the limit")
+        XCTAssertEqual(try h.string(live), "Over the 3-word limit")
     }
 
     func testAFormattedEssayWithNeitherShowsNoCounter() throws {
@@ -997,13 +1008,16 @@ final class RendererRichTextTests: XCTestCase {
             try h.string("__all('button', \(toolbar)).map(function (b) { return b.getAttribute('aria-label'); }).join('|')"),
             "Bold|Italic|Underline|Bulleted list|Numbered list|Indent first line|Undo|Redo"
         )
-        // The word count describes the box.
-        let counter = try XCTUnwrap(h.string("__first('.word-count', \(item)).id"))
-        XCTAssertFalse(counter.isEmpty)
-        XCTAssertEqual(try h.string("__box().getAttribute('aria-describedby')"), counter)
-        // No limit, no description.
+        // WC-2: the word count is part of the box's NAME (read on arrival),
+        // not a description (a delayed hint VoiceOver did not speak), and the
+        // visible counter is hidden from VoiceOver so it is heard once.
+        XCTAssertNil(try h.string("__box().getAttribute('aria-describedby')"))
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 0 of 400 words")
+        XCTAssertEqual(try h.string("__first('.word-count', \(item)).getAttribute('aria-hidden')"), "true")
+        // No count at all: still named.
         let none = try harness(extra: "delete BUNDLE.items[3].max_word_count;")
         XCTAssertNil(try none.string("__box().getAttribute('aria-describedby')"))
+        XCTAssertEqual(try none.string("__accessibleName(__box())"), "Your answer")
     }
 
     /// RT-2 through the page: an undo after a click puts the caret at the click.

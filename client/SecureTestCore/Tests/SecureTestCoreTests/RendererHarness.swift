@@ -523,6 +523,18 @@ final class RendererHarness {
       return all.length > 0 ? all[0] : null;
     }
 
+    // WC-2: the name VoiceOver reads for a field named by `aria-labelledby`
+    // — each referenced node's text, joined as WebKit joins them (a space).
+    // The referenced nodes are the page's `.sr-only` spans.
+    function __accessibleName(field) {
+      var ids = (field.getAttribute('aria-labelledby') || '').split(' ').filter(function (s) { return s; });
+      var nodes = __all('.sr-only');
+      return ids.map(function (id) {
+        for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) return nodes[i].textContent;
+        return '<missing ' + id + '>';
+      }).join(' ');
+    }
+
     function __count(sel, node) { return __all(sel, node).length; }
 
     /// The nth rendered item wrapper, so tests can scope to one item.

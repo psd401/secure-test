@@ -471,6 +471,8 @@ public enum AssessmentPage {
        sets), sizes in em so data-zoom scales them. */
     .fill-pick { position: relative; display: inline-block; vertical-align: baseline; max-width: 100%; }
     .fill-pick-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* WC-2: text only VoiceOver reads (an essay box's name and its spoken count). */
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     button.fill-select { cursor: pointer; background: var(--paper); color: var(--ink); text-align: left; line-height: inherit; }
     button.fill-select::after { content: "\\25BE"; margin-left: 0.4em; color: var(--ink-soft); }
     .fill-select-empty { color: var(--ink-soft); }
@@ -2575,6 +2577,65 @@ public enum AssessmentPage {
           ? 'word-count over' : 'word-count';
       }
 
+      // WC-2 (2026-10-14): VoiceOver reads a field's NAME every time the
+      // student arrives in it; the count as a description (aria-describedby)
+      // was never heard in a real session, and the plain essay's textarea had
+      // no name at all. So both essay boxes are named "Your answer" plus the
+      // count worded for listening — "12 of 50 words, over the limit", since
+      // red alone is no cue (WCAG 1.4.1). The visible counter is hidden from
+      // VoiceOver so the page reads the count once, and crossing the maximum
+      // is announced once each way, never word by word.
+      function wordCountSpoken(n, item) {
+        if (typeof item.max_word_count === 'number') {
+          var s = n + ' of ' + item.max_word_count + ' words';
+          return n > item.max_word_count ? s + ', over the limit' : s;
+        }
+        return n + (n === 1 ? ' word' : ' words');
+      }
+      function hiddenText(id) {
+        var span = document.createElement('span');
+        span.className = 'sr-only';
+        span.id = id;
+        span.setAttribute('id', id);
+        return span;
+      }
+      // Names `field` and returns { nodes, update }: the caller appends
+      // `nodes` to the field's wrap and calls update(n) from its refresh.
+      // `counter` is the visible count, or null when the essay shows none.
+      function essayFieldA11y(field, counter, item) {
+        var label = hiddenText('essay-label-' + item.id);
+        label.textContent = 'Your answer';
+        var nodes = [label];
+        field.removeAttribute('aria-label');
+        field.removeAttribute('aria-describedby');
+        if (!counter) {
+          field.setAttribute('aria-labelledby', label.id);
+          return { nodes: nodes, update: function () {} };
+        }
+        counter.setAttribute('aria-hidden', 'true');
+        var spoken = hiddenText('essay-count-spoken-' + item.id);
+        var live = hiddenText('essay-count-live-' + item.id);
+        live.setAttribute('aria-live', 'polite');
+        nodes.push(spoken, live);
+        field.setAttribute('aria-labelledby', label.id + ' ' + spoken.id);
+        var max = item.max_word_count;
+        var wasOver = null;
+        return {
+          nodes: nodes,
+          update: function (n) {
+            spoken.textContent = wordCountSpoken(n, item);
+            if (typeof max !== 'number') return;
+            var over = n > max;
+            // The first call (building, or a restored answer) sets the state
+            // without announcing it: the name already says it on arrival.
+            if (wasOver !== null && over !== wasOver) {
+              live.textContent = over ? 'Over the ' + max + '-word limit' : 'Back within the limit';
+            }
+            wasOver = over;
+          }
+        };
+      }
+
       function rubricNode(rubric) {
         var box = document.createElement('div');
         box.className = 'rubric';
@@ -2657,9 +2718,7 @@ public enum AssessmentPage {
         box.setAttribute('contenteditable', 'true');
         box.setAttribute('role', 'textbox');
         box.setAttribute('aria-multiline', 'true');
-        // The textarea is named by nothing but its placeholder; a role=textbox
-        // div has no placeholder, so it is named outright.
-        box.setAttribute('aria-label', 'Your answer');
+        // Named "Your answer" (+ its word count) by essayFieldA11y below (WC-2).
         // RT slice 4: the strip names the box it formats.
         box.id = 'essay-box-' + item.id;
         toolbar.setAttribute('aria-controls', box.id);
@@ -2735,11 +2794,10 @@ public enum AssessmentPage {
         if (hasWordCount(item)) {
           counter = document.createElement('p');
           counter.className = 'word-count';
-          // RT slice 4: VoiceOver reads the count as the box's description,
-          // so the limit is heard on arriving in the box.
           counter.id = 'essay-count-' + item.id;
-          box.setAttribute('aria-describedby', counter.id);
         }
+        // WC-2: the count is heard in the box's name, not as a description.
+        var a11y = essayFieldA11y(box, counter, item);
         function refresh() {
           var b = blocks();
           var empty = richText(b) === '';
@@ -2748,6 +2806,7 @@ public enum AssessmentPage {
           var n = countWords(richText(b, true));
           counter.textContent = wordCountText(n, item);
           counter.className = wordCountClass(n, item);
+          a11y.update(n);
         }
 
         function sendEssay() {
@@ -3107,6 +3166,7 @@ public enum AssessmentPage {
         wrap.appendChild(toolbar);
         wrap.appendChild(box);
         if (counter) wrap.appendChild(counter);
+        a11y.nodes.forEach(function (node) { wrap.appendChild(node); });
         refreshState();
         if (STT === 'ready') afterField(box, sttControl(box));
         // TTS slice 2 over the box, with the word highlight (RT slice 4): the
@@ -3151,6 +3211,9 @@ public enum AssessmentPage {
           counter.className = 'word-count';
           wrap.appendChild(counter);
         }
+        // WC-2: the textarea was named by nothing but its placeholder.
+        var a11y = essayFieldA11y(area, counter, item);
+        a11y.nodes.forEach(function (node) { wrap.appendChild(node); });
 
         function refresh() {
           if (!counter) return;
@@ -3161,6 +3224,7 @@ public enum AssessmentPage {
           // submit-time gate belongs with submission (slice 64) where there is
           // something to gate.
           counter.className = wordCountClass(n, item);
+          a11y.update(n);
         }
 
         area.oninput = refresh;

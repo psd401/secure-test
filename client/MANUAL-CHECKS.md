@@ -2450,3 +2450,36 @@ count + maximum, neither.
 | Neither | No counter (as before) | ✅ 2026-10-13, Debug `189b0a36b2` (1.6.3), simulated lockdown, local `_demo` |
 | VoiceOver into the formatted box with the count on | The count is read as the box's description | ❌ 2026-10-13, Release payload of `b8e06aa74f29` (1.6.3), real AAC session on the origin, James — **finding WC-2**: VoiceOver skips the count arriving in the formatted box. `aria-describedby` has pointed at the counter since RT slice 4 (v1.6.0) and was never verified (the RT row "VoiceOver: the box" is unrun too). Shipped as a known issue (James). **VO-1**: pressing Cmd-F5 to turn VoiceOver on DURING the real secure session restarted the Mac (16:05 PT; the attempt logged `lockdown_begin` 16:03:57 with no end); no app crash report, the panic report needs admin and was not read — turn VoiceOver on BEFORE joining |
 | v1.6.2 (or older) client against the same bundle | The counted essay shows no counter, nothing else differs | ✅ 2026-10-13, Release payload of v1.6.2 (`c179cfeed217`) on the origin, real AAC session, James — no counter on Essay A, "n / 50 words" on Essay C (grey, as v1.6.2 always drew it), answers saved |
+
+## Word count VoiceOver hears (WC-2, client v1.6.4, 2026-10-14)
+
+`docs/roadmap-2026-09.md` "Findings from the v1.6.3 hand-run" → WC-2 is the
+record. Both essay boxes are named by `aria-labelledby`: "Your answer" + the
+count worded for listening ("12 of 50 words", "12 of 50 words, over the
+limit", "12 words" with no maximum). The visible counter is `aria-hidden`
+and `aria-describedby` is gone. A polite live region says "Over the 50-word
+limit" / "Back within the limit" once per crossing. Already checked
+headlessly: `swift test` (999; six new — the name in all three states for
+the plain and formatted box, one announcement per crossing, none with no
+maximum, a still-named box with no count, the `.sr-only` rule). Also checked
+on a Debug build without lockdown (2026-10-14): the accessibility tree
+names the plain textarea "Your answer 0 of 50 words" → "Your answer 3 of 50
+words" after typing, and the formatted box "Your answer 4 of 3 words, over
+the limit" past a maximum of 3 — WebKit exposes the labelledby name as
+written. Not yet heard: what VoiceOver SPEAKS.
+
+**Turn VoiceOver on BEFORE joining (VO-1 — Cmd-F5 during a real secure
+session restarted the Mac).** Fixture: four essays — plain with a maximum,
+formatted with a maximum, a count with no maximum, neither.
+
+| Check | Expected | Result |
+|---|---|---|
+| VoiceOver into the plain essay with a maximum | Arriving speaks "Your answer, 0 of 50 words, edit text" (VoiceOver's own wording around the name); the placeholder may follow | NOT RUN |
+| VoiceOver into the formatted essay with a maximum | Arriving speaks "Your answer, 0 of 50 words" and its text-entry role; the count is heard once, not twice | NOT RUN |
+| Type past the maximum in either box | VoiceOver says "Over the 50-word limit" once, not on every word; leaving and re-entering the box speaks "… 52 of 50 words, over the limit" | NOT RUN |
+| Delete back under the maximum | "Back within the limit" once | NOT RUN |
+| Count with no maximum | Arriving speaks "Your answer, 3 words"; nothing is announced while typing | NOT RUN |
+| An essay with no count | Arriving speaks "Your answer" (the plain textarea used to have no name) | NOT RUN |
+| VoiceOver cursor (VO-arrows) across the page | The count is read once, in its spoken form; the visible "12 / 50 words" is not read separately | NOT RUN |
+| Sighted check: contrast set + 3X zoom | The visible counter looks as in v1.6.3 (red past the maximum); no stray hidden text shows | NOT RUN |
+| Real AAC session on the signed v1.6.4 build | The first five rows hold inside the lock | NOT RUN |

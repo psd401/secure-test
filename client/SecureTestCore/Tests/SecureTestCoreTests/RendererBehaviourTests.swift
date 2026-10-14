@@ -173,6 +173,73 @@ final class RendererBehaviourTests: XCTestCase {
         XCTAssertEqual(try h.int("__first('textarea', \(item)).value.split(' ').length"), 401)
     }
 
+    // MARK: - WC-2: the word count VoiceOver hears
+
+    private static let liveJS = "__all('.sr-only', __item(0)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0].textContent"
+
+    /// The textarea was named only by its placeholder and linked to its count
+    /// by nothing. Now its name is "Your answer" + the count worded for
+    /// listening, and the visible counter is hidden from VoiceOver.
+    func testAPlainEssayIsNamedWithItsSpokenCount() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":50}]}
+        """)
+        let area = "__first('textarea', __item(0))"
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 0 of 50 words")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).getAttribute('aria-hidden')"), "true")
+        XCTAssertNil(try h.string("\(area).getAttribute('aria-describedby')"))
+        try h.eval("var a = \(area); a.value = 'one two three'; a.oninput();")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 3 of 50 words")
+        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "3 / 50 words")
+    }
+
+    /// Over the maximum is SAID ("over the limit"), not only coloured, and
+    /// crossing it is announced once each way — staying over says nothing new.
+    func testAPlainEssayAnnouncesCrossingTheLimitOnceEachWay() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":3}]}
+        """)
+        let area = "__first('textarea', __item(0))"
+        XCTAssertEqual(try h.string(Self.liveJS), "")
+        try h.eval("var a = \(area); a.value = 'one two three four'; a.oninput();")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 4 of 3 words, over the limit")
+        XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
+        // Still over: the live text is unchanged, so nothing is re-announced.
+        try h.eval("var a = \(area); a.value = 'one two three four five'; a.oninput();")
+        XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
+        try h.eval("var a = \(area); a.value = 'one two'; a.oninput();")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 2 of 3 words")
+        XCTAssertEqual(try h.string(Self.liveJS), "Back within the limit")
+    }
+
+    /// U-22's count without a maximum: "n words" in the name, never "over",
+    /// never announced.
+    func testAPlainEssayWithACountButNoMaximumNeverAnnounces() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","show_word_count":true}]}
+        """)
+        let area = "__first('textarea', __item(0))"
+        try h.eval("var a = \(area); a.value = 'one'; a.oninput();")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 1 word")
+        XCTAssertEqual(try h.string(Self.liveJS), "")
+    }
+
+    /// No count at all: the textarea is still named, and nothing else is added.
+    func testAPlainEssayWithoutACountIsStillNamed() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s"}]}
+        """)
+        XCTAssertEqual(try h.string("__accessibleName(__first('textarea', __item(0)))"), "Your answer")
+        XCTAssertEqual(try h.int("__count('.sr-only', __item(0))"), 1)
+    }
+
+    /// The hidden text is hidden by a stylesheet rule, not by display:none
+    /// (which would take it out of what VoiceOver reads).
+    func testTheStylesheetHasTheScreenReaderOnlyRule() throws {
+        let css = AssessmentPage.html(title: "T", bundleJSON: "{}")
+        XCTAssertTrue(css.contains(".sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }"))
+    }
+
     /// WC-1 (2026-10-13): the `over` class above had no rule, so an
     /// over-limit count looked like any other count.
     func testTheStylesheetColoursAnOverLimitCount() throws {
