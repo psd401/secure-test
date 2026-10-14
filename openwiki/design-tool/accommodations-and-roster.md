@@ -62,7 +62,7 @@ The **By class period** panel has an "Apply to all my periods" action (`applyToA
 
 ## TIDE import and the overlay
 
-`students` is a **per-teacher overlay** keyed by `(owner_sub, ssid)` and, once a student has joined, `(owner_sub, roster_ps_id)`. The same child has a different overlay row under each teacher, which is why `loadOwnAttempt` resolves against the assessment owner (`sittingTenantSub`) and not the sitting owner, so co-teacher sittings still find the right row.
+`students` is a **per-teacher overlay** keyed by `(owner_sub, ssid)` and, once a student has joined, `(owner_sub, roster_ps_id)`. The same child has a different overlay row under each teacher, which is why `loadOwnAttempt` resolves against the assessment owner (`sittingTenantSub`) and not the sitting owner, so co-teacher sittings still find the right row. A student who joins a co-teacher's sitting gets their overlay row under the **assessment** owner, not the co-teacher; filing it under the co-teacher made the delivery route (which resolves under `assessments.owner_sub`) answer 404. The regression test is `co-teacher-tenant.test.ts`.
 
 `POST /api/accommodations/import` (`lib/api/importTide.ts`, `exceljs`) applies fixed merge semantics: values from a TIDE import overwrite `tide_import` rows, a teacher-edited row (`tide_then_edited`) is preserved and surfaced as a diff to accept or keep (`accept-tide`, `keep-mine` routes, review page `app/dashboard/accommodations/import/review`), `manual` rows are never touched, rows absent from the new import are soft-removed, and unknown tool ids are dropped. Deleting a TIDE-origin row returns 409. Soft-deleted ledger rows do not block re-insertion (partial unique index).
 
