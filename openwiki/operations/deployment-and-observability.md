@@ -85,6 +85,7 @@ The same CDK app builds a second, isolated stack when `env=staging` is passed (`
 - `sweepAnswerHistory` prunes `response_revisions` (`ANSWER_HISTORY_RETENTION_DAYS`, 30 days after hand-in).
 - Peek images are swept lazily from the peek routes (60 s TTL) so no scheduler is needed ([sittings and attempts](../design-tool/sittings-and-attempts.md#events-and-the-monitor)).
 - The hourly safeguarding screening retry runs inside the web app (`instrumentation.ts` `register`), because the Lambda has no route to Bedrock ([AI and safeguarding](../design-tool/ai-and-safeguarding.md)).
+- When `RENDERER_DELIVERY=on`, the same `register` hook starts the renderer expiry watch (`lib/renderer/expiryWatch.ts`, `startRendererExpiryWatch`), which resolves the current renderer once two minutes after boot and then hourly. This makes `renderer_expiring` and expiry failures reach the error alarm even when no student requests a bundle ([signed renderer delivery](../client/signed-renderer.md#expiry-watch)).
 
 ## Request ids, logs and error capture
 
