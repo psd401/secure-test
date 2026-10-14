@@ -1099,14 +1099,37 @@ never renamed (convention in `CLAUDE.md` "Naming").
 - **WC-1 — FIXED in v1.6.3.** Past an essay's maximum the counter carried
   class `word-count over` since v1.0.0 but no stylesheet rule existed; now
   `--danger`, bold (`b8e06aa`).
-- **WC-2 — VoiceOver does not read the word count in the formatted box.**
-  `box.setAttribute('aria-describedby', counter.id)` (RT slice 4, v1.6.0)
-  was never verified; in a real session VoiceOver skips it. The plain
-  essay's textarea is unverified too. Next: check what WebKit exposes for
-  `aria-describedby` on a `contenteditable` (AXHelp vs AXDescription, read
-  only as a delayed hint?) and pick a mechanism VoiceOver speaks on arrival
-  (e.g. `aria-label` carrying the count, or a polite live region on
-  change). Shipped in v1.6.3 as a known issue (James). Side: client.
+- **WC-2 — VoiceOver does not read an essay's word count. SCOPED
+  2026-10-14 (decisions James: 9.1 announce crossing the limit, 9.2 ship
+  as client v1.6.4, 9.3 recorded here); nothing built.** Side: client.
+  - *Found:* in the v1.6.3 real-session smoke, VoiceOver skipped the count
+    arriving in the formatted box. Reading the code: the formatted box is
+    `aria-label="Your answer"` + `aria-describedby` → the counter (RT slice
+    4, v1.6.0); the **plain** essay's textarea is named only by its
+    placeholder and is linked to its counter by nothing, so WC-2 covers
+    both essay kinds. No `aria-describedby` in the client has ever been
+    confirmed by ear (the order list's hint row is also unrun). Likely
+    cause, unconfirmed: WebKit hands the description to VoiceOver as a
+    delayed hint, spoken only after a pause and only with hints on. And
+    since WC-1, colour alone says "over the limit" (WCAG 1.4.1).
+  - *Fix:* put the count in the box's NAME, worded for listening. Both
+    boxes get `aria-labelledby` = a "Your answer" label + a visually hidden
+    span reading "12 of 50 words" / "12 of 50 words, over the limit" /
+    "12 words" (no maximum). A name is read on every arrival, hints or not.
+    The visible counter is unchanged ("12 / 50 words", red past the max).
+    `aria-describedby` is removed so the count is not heard twice. Plus
+    (9.1) ONE polite announcement when the count crosses the maximum
+    ("Over the 50-word limit") and when it drops back ("Back within the
+    limit") — never word by word.
+  - *Slices:* (1) spike on a Debug build without lockdown: Accessibility
+    Inspector on both boxes — which attribute carries the count today, and
+    that the labelledby name reads as intended; (2) build: one shared helper
+    for both essay kinds + JSC harness tests (name text in all three states,
+    plain and formatted, the crossing announcement fires once each way);
+    (3) rows in `client/MANUAL-CHECKS.md`: VoiceOver on BEFORE joining
+    (VO-1), arrive in each box, cross the limit both ways, a contrast set
+    and zoom, one real AAC session on the signed build. Then v1.6.4 via
+    psd-sign (`MARKETING_VERSION` 1.6.4).
 - **VO-1 — Cmd-F5 during a real secure session restarted the Mac.** v1.6.3
   smoke, 16:03 → 16:05 PT: the attempt logged `lockdown_begin` with no
   end; the Mac booted at 16:05:28. No SecureTest crash report; the panic
