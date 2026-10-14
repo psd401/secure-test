@@ -18,9 +18,17 @@ public enum RendererKeys {
 
     """
 
-    /// The backup key (the hardware token IT holds). Slice 3b fills it once
-    /// IT sends the public half; until then only the working key verifies.
-    public static let backup: String? = nil
+    /// The backup key (the hardware token IT holds, slice 3b). Used only when
+    /// the working key is unavailable; any use starts a key rotation.
+    /// Byte-for-byte packages/renderer/keys/backup.pub.pem;
+    /// RendererVerifierTests fails if the two drift.
+    public static let backup = """
+    -----BEGIN PUBLIC KEY-----
+    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEicV/w0mEUKmBkbT4xxrOMP73EoeW
+    n747FnR5+IhI0GNP1Bwj0yxG9NtDQ5SYGFr9mlNOgroLqES03x59ugSQbQ==
+    -----END PUBLIC KEY-----
+
+    """
 
     /// The persistent DEV key for local and Debug use — its private half lives
     /// outside the repository on the maintainer's Mac. Byte-for-byte
@@ -35,8 +43,8 @@ public enum RendererKeys {
 
     """
 
-    /// What a Release build trusts: the working key, plus the backup once set.
-    public static var releaseKeys: [String] { [working] + (backup.map { [$0] } ?? []) }
+    /// What a Release build trusts: the working key and the backup.
+    public static var releaseKeys: [String] { [working, backup] }
 
     public static var devKey: String { dev }
 }
