@@ -11,6 +11,7 @@ openwiki:
     - design-tool/package.json
     - packages/schema/package.json
     - design-tool/test/bridge-limits.test.ts
+    - design-tool/lib/dev/seedEssays.ts
     - design-tool/test/helpers/roster.ts
     - client/SecureTestCore/Package.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererHarness.swift
@@ -49,6 +50,12 @@ The `bunfig.toml` root matters: without it `bun test` also sweeps CDK image-asse
 - **UI tests** (`*.test.tsx`: monitor controls, reporting print, editors) use static markup (`renderToStaticMarkup`) and pure copy functions; there is no DOM or testing-library harness, so clicks are hand-run checks.
 - **Synthetic roster guard.** `roster-fixture-synthetic-ids.test.ts` fails if fixtures or `test/helpers/roster.ts` contain real-shaped student ids. Keep fixture data synthetic ([roster](../design-tool/accommodations-and-roster.md)).
 - **Operations helpers** have unit tests too: `docker-entrypoint.test.ts`, `delete-stored-upload.test.ts` (imports `infra/lambda/deleteStoredUpload`), `log.test.ts`, `server-error-record.test.ts`; see [deployment and observability](../operations/deployment-and-observability.md).
+
+## Pilot seeding helpers
+
+`design-tool/lib/dev/` holds helpers that write realistic submitted work into a database without the macOS client. `lib/dev/seedEssays.ts` (`seedEssays`, `SeedEssaysError`) is the one that matters for pilots: it writes submitted essay attempts for students named explicitly by student number, using `SAMPLE_ESSAYS` text from `lib/dev/sampleEssays.ts` at the chosen quality level. It reuses the real student path rather than a shortcut. It binds the overlay through `findOrBindOverlay` (`lib/api/resolveStudent.ts`), writes one attempt and one response per essay item, and runs `runAutoScoringPass` (`lib/scoring/runAutoScoring.ts`), which is the same hand-in pass a student triggers ([sittings and attempts](../design-tool/sittings-and-attempts.md#join-and-answer-flow)).
+
+Invariant: validation runs in full before any write. The helper refuses, and leaves the database untouched, when a student number is not 5 to 8 digits or is given twice, when the assessment is not `published`, when no open, unexpired sitting matches the code, when the assessment has no essay items, when a number is not on `roster_students`, or when the overlay hits `identity_conflict`. Students are never discovered; the number list is the whole input. Tests: `seed-essays.test.ts`, in the suites `seedEssays — the happy path mirrors join + answer + hand in`, `seedEssays — --dry-run`, and `seedEssays — refusals leave the database untouched`. `attempts-responses.test.ts` (suite `seedAttempts`) covers the older `lib/dev/seedAttempts.ts` seeder. Narrow check: `cd design-tool && $TESTDB bun test test/seed-essays.test.ts`. Do not run these helpers against production data without a human deciding the student list; the production image runs them through an operator one-off task (see [deployment and observability](../operations/deployment-and-observability.md)).
 
 ## Cross-language drift tests
 
