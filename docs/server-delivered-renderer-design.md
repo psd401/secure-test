@@ -369,6 +369,16 @@ Custody and the token's details are in the ops repository.
    valid 60 days from step 1, so step 3 follows step 1 within that window and
    with no new commit on `main`.
 
+## Rolling back the renderer
+
+`design-tool/infra/scripts/renderer-pointer.sh [--staging] show | list |
+set <manifest sha256>`. Every signed renderer stays stored under its hash;
+`set` points `renderers/current.json` back at one after the server's own
+checks (hash, signature by either key, files, not expired) — no build, no
+signing, no deploy; bundles name it within 60 s. A v2.0 shell refuses a
+renderer below `RendererPolicy.minimumVersion` (D-13, v1791926804), so a
+rollback past the first production renderer reaches no v2.0 Mac.
+
 ## Progress
 
 - 2026-10-08 — note + ADR 0018 (Proposed) written. Staging decided as a
@@ -566,3 +576,20 @@ Custody and the token's details are in the ops repository.
   flag refusals; NOT run end to end (no backup signature exists yet — the
   rehearsal does that). Open: IT's exact signing command, the rehearsal,
   and the client half (`RendererKeys.backup` on `v2-renderer`).
+- 2026-10-14 — **Slice 4f BUILT** (James: "proceed through 4f"), one
+  commit each. On `main`: 4f-1 expiry alarm — a renderer within 14 days of
+  `not_after` logs `renderer_expiring` at ERROR on every resolution, an
+  expired one logs `renderer_current_invalid` at ERROR (both reach the
+  AppServerErrors email), and `lib/renderer/expiryWatch.ts` resolves hourly
+  where `RENDERER_DELIVERY=on` so it fires with no traffic; 4f-2
+  `renderer-pointer.sh` ("Rolling back the renderer" above; not yet run
+  against a bucket). On `v2-renderer`: 4f-3 `minimumVersion = 1791926804`
+  (staging still points at an older renderer — deploy staging before the
+  RC run); 4f-4 `GENERIC_RESPONSE_MAX_DEPTH` / `_BYTES` in
+  `packages/schema` + drift lines in `bridge-limits.test.ts`; 4f-5 the
+  host-called page functions belong to existing terms (`HOST_CALLBACKS`
+  in `requires.ts`, no new term) and a test fails if the page stops
+  defining one; 4f-6 `MARKETING_VERSION` 2.0.0 + `client/RELEASING.md`.
+  Tests: design-tool 3225, schema 142, renderer 60, swift 1080. Left
+  before release: the 3b rehearsal, a staging deploy, the "No field,
+  Release refuses" row, the RC run on the staging Mac, rebase + merge.
