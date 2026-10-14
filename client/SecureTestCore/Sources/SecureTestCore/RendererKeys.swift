@@ -61,8 +61,10 @@ public enum RendererCapabilities {
 }
 
 public enum RendererPolicy {
-    /// The lowest renderer `version` this shell runs. 0 = any, for now: D-13
-    /// sets it to the first production-signed renderer's version before
-    /// v2.0 ships.
-    public static let minimumVersion = 0
+    /// The lowest renderer `version` this shell runs (D-13): the first
+    /// production-signed renderer, v1791926804 — signed 2026-10-13 at
+    /// commit 0098a60 (a renderer's version is its commit's committer time).
+    /// Anything older was signed before production delivery existed. Raise
+    /// it in a release to retire a renderer for good (the exposure runbook).
+    public static let minimumVersion = 1_791_926_804
 }
