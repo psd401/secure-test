@@ -4,6 +4,8 @@ import { join } from "node:path";
 import {
   ESSAY_HTML_MAX_LENGTH,
   ESSAY_TEXT_MAX_LENGTH,
+  GENERIC_RESPONSE_MAX_BYTES,
+  GENERIC_RESPONSE_MAX_DEPTH,
   ItemResponseSchema,
   RESPONSE_CELL_MAX_LENGTH,
   SHORT_TEXT_MAX_LENGTH,
@@ -45,6 +47,11 @@ describe("client BridgeLimits match the server", () => {
 
   test("drawing limit", () => {
     expect(swiftLimit("drawingMaxBytes")).toBe(UPLOAD_MAX_BYTES);
+  });
+
+  test("generic answer channel limits (D-5)", () => {
+    expect(swiftLimit("genericAnswerMaxDepth")).toBe(GENERIC_RESPONSE_MAX_DEPTH);
+    expect(swiftLimit("genericAnswerMaxBytes")).toBe(GENERIC_RESPONSE_MAX_BYTES);
   });
 });
 
