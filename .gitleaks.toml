@@ -20,6 +20,11 @@ description = "A student Google account (digit-only local part @edtools.psd401.n
 regex = '''\b[0-9]{4,10}@edtools\.psd401\.net\b'''
 tags = ["student-pii"]
 
+  [[rules.allowlists]]
+  description = "Synthetic student ids (1000xxx), the documented replacement"
+  regexTarget = "match"
+  regexes = ['''\b1000[0-9]{3}@edtools\.psd401\.net\b''']
+
 [[rules]]
 id = "roster-id-near-keyword"
 description = "A 9-digit number near an SSID/student-number/PowerSchool-id field name"
@@ -32,6 +37,11 @@ description = "A 7- or 9-digit run in a markdown file — the shapes a PowerScho
 regex = '''\b[0-9]{7}\b|\b[0-9]{9}\b'''
 path = '''\.md$'''
 tags = ["student-pii"]
+
+  [[rules.allowlists]]
+  description = "Synthetic student ids (1000xxx), the documented replacement"
+  regexTarget = "match"
+  regexes = ['''^1000[0-9]{3}$''']
 
 [[rules]]
 id = "aws-account-id-in-context"
