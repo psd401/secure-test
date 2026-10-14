@@ -8,7 +8,7 @@ import {
   findStringLiterals,
   resolveLiteral,
 } from "../scripts/extract-swift";
-import { BRIDGE_REQUIRES } from "../src/requires";
+import { BRIDGE_REQUIRES, HOST_CALLBACKS } from "../src/requires";
 
 // Expected values below were produced by `swift` itself (Swift 6, macOS) on
 // the same snippets, 2026-10-13 — the TS extractor must agree byte for byte.
@@ -217,5 +217,12 @@ describe("the client's renderer", () => {
     expect(js).toContain("window.__secureTestSpeech = {");
     expect(js).toMatch(/__secureTestSpeech = \{[\s\S]*?\bword: function/);
     expect<string[]>([...BRIDGE_REQUIRES].sort()).toEqual([...handlers, "tts.word_ranges"].sort());
+  });
+
+  test("the page defines every function the host calls, each under a term it requires", () => {
+    for (const [name, term] of Object.entries(HOST_CALLBACKS)) {
+      expect(js).toContain(`window.${name} =`);
+      expect(BRIDGE_REQUIRES).toContain(term);
+    }
   });
 });
