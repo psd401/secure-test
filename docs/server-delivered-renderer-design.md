@@ -124,7 +124,7 @@ never test content (the code is public in this repository anyway).
      leadership, 2026-10-11): this Mac's Secure Enclave, Touch ID for every
      signature, as recommended below. BACKUP KEY DECIDED (an IT security
      administrator with James, 2026-10-12)**, replacing the printed key
-     below: a FIPS hardware security key, the key generated on the token
+     below: a YubiKey hardware security key, the key generated on the token
      (PIV, PIN and touch required on every use), held offline under
      two-person control — no one person can sign with the backup. Custody
      details live in the ops repository, not here. Used only if James's
@@ -292,8 +292,8 @@ gets cheaper after it.
 **Before v2.0, or inside it**
 - The staging stack ("Environments" — now triggered by this change).
 - Signing-key storage (2.a), which blocks slice 3 — DECIDED 2026-10-12
-  (working key 2026-10-11, backup key 2026-10-12); waiting on IT's
-  backup public key.
+  (working key 2026-10-11, backup key 2026-10-12); backup public key
+  received and verified 2026-10-14, compiled in with slice 3.
 - The bridge audit + hardening (slice 1, ships in a v1.x).
 - Anything needing new native code or a new bridge handler, so the v2.0
   shell carries it: the handwriting spike (Vision, row 4b); the speech
@@ -406,7 +406,7 @@ meets a cold cluster).
   Every open question but 2.a (with IT leadership) is closed. Nothing
   built.
 - 2026-10-12 — 2.a DECIDED: working key in the Secure Enclave + Touch ID
-  (IT leadership, 2026-10-11); backup key on a FIPS hardware key under
+  (IT leadership, 2026-10-11); backup key on a YubiKey hardware key under
   two-person control (2026-10-12); ECDSA P-256 / SHA-256; slice 3's
   manifest gains a 60-day validity window and the commit SHA. Waiting on
   IT's backup public key. Nothing built.
@@ -528,3 +528,7 @@ meets a cold cluster).
   the server-side generic caps contract, the host-callback `requires`
   terms, D-13's minimum version, 3b, the staging-profile RC run, the
   rebase onto `main`, 2.0.0.
+- 2026-10-14 — backup public key received from IT (YubiKey, ECDSA
+  P-256) and verified offline: P-256 curve, DER SHA-256 fingerprint as
+  sent, and IT's signed test vector verifies with SHA-256 / DER ECDSA. It
+  is compiled in next to the working key with slice 3. Nothing built.
