@@ -309,7 +309,9 @@ final class RendererVerifierTests: XCTestCase {
         XCTAssertEqual(RendererCapabilities.supported, Set(terms))
     }
 
-    func testPolicyMinimumVersionIsOpenUntilD13() {
-        XCTAssertEqual(RendererPolicy.minimumVersion, 0)
+    /// D-13: the first production-signed renderer (2026-10-13, commit
+    /// 0098a60). Changing it is a deliberate release decision.
+    func testPolicyMinimumVersionIsTheFirstProductionRenderer() {
+        XCTAssertEqual(RendererPolicy.minimumVersion, 1_791_926_804)
     }
 }
