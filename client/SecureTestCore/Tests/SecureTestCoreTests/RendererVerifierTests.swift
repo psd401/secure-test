@@ -177,8 +177,9 @@ final class RendererVerifierTests: XCTestCase {
 
     func testCompiledInKeysParse() {
         XCTAssertNotNil(try? P256.Signing.PublicKey(pemRepresentation: RendererKeys.working))
+        XCTAssertNotNil(try? P256.Signing.PublicKey(pemRepresentation: RendererKeys.backup))
         XCTAssertNotNil(try? P256.Signing.PublicKey(pemRepresentation: RendererKeys.dev))
-        XCTAssertEqual(RendererKeys.releaseKeys, [RendererKeys.working])
+        XCTAssertEqual(RendererKeys.releaseKeys, [RendererKeys.working, RendererKeys.backup])
         XCTAssertFalse(RendererKeys.releaseKeys.contains(RendererKeys.devKey))
     }
 
@@ -284,6 +285,10 @@ final class RendererVerifierTests: XCTestCase {
 
     func testWorkingKeyMatchesRepoPEM() throws {
         XCTAssertEqual(RendererKeys.working, try repoText("packages/renderer/keys/working.pub.pem"))
+    }
+
+    func testBackupKeyMatchesRepoPEM() throws {
+        XCTAssertEqual(RendererKeys.backup, try repoText("packages/renderer/keys/backup.pub.pem"))
     }
 
     func testDevKeyMatchesRepoPEM() throws {
