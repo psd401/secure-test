@@ -9,7 +9,8 @@ import type { Instrumentation } from "next";
  * The work is in `lib/observability/serverError.ts` so it is testable without
  * a Next server; this file stays the thin registration Next looks for at the
  * application root. There is no OTel exporter; `register` below starts the
- * one background job the app owns (the safeguarding screening retry).
+ * background jobs the app owns (the safeguarding screening retry, the
+ * renderer expiry watch).
  *
  * Node runtime only: the recorder hashes the stack with `node:crypto` and
  * writes a Postgres row, neither of which exists in the Edge runtime. Next
@@ -41,4 +42,8 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { startScreeningRetry } = await import("@/lib/safeguarding/screening/retry");
   startScreeningRetry();
+  // The renderer expiry watch (server-delivered renderer slice 4f): hourly, so
+  // a renderer near its `not_after` alarms even with no student traffic.
+  const { startRendererExpiryWatch } = await import("@/lib/renderer/expiryWatch");
+  startRendererExpiryWatch();
 }

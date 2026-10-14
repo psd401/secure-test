@@ -54,6 +54,10 @@ function warnings() {
   return lines.filter((l) => l.level === "warn");
 }
 
+function errors() {
+  return lines.filter((l) => l.level === "error");
+}
+
 describe("current renderer resolution", () => {
   test("no pointer → null, and nothing logged", async () => {
     expect(await resolver().current()).toBeNull();
@@ -104,19 +108,41 @@ describe("current renderer resolution", () => {
     expect(warnings()[0]).toMatchObject({ reason: "bad_signature" });
   });
 
-  test("an expired renderer → null + warn expired; not yet valid → not_yet_valid", async () => {
+  test("an expired renderer → null + ERROR expired; not yet valid → warn not_yet_valid", async () => {
     clock = Date.now();
     await writeSignedRenderer(root, key, {
       issuedAt: new Date(clock - 61 * 24 * 3600 * 1000),
       validityDays: 60,
     });
     expect(await resolver().current()).toBeNull();
-    expect(warnings()[0]).toMatchObject({ reason: "expired" });
+    expect(errors()[0]).toMatchObject({ event: "renderer_current_invalid", reason: "expired" });
+    expect(warnings()).toEqual([]);
 
     lines = [];
     await writeSignedRenderer(root, key, { issuedAt: new Date(clock + 3600 * 1000) });
     expect(await resolver().current()).toBeNull();
     expect(warnings()[0]).toMatchObject({ reason: "not_yet_valid" });
+  });
+
+  test("within 14 days of not_after → still named, ERROR renderer_expiring; 15 days → nothing", async () => {
+    clock = Date.now();
+    const day = 24 * 3600 * 1000;
+    const r = await writeSignedRenderer(root, key, {
+      issuedAt: new Date(clock - 47 * day),
+      validityDays: 60,
+    });
+    expect(await resolver().current()).toEqual({ sha256: r.sha256, version: r.version });
+    expect(errors()).toEqual([
+      expect.objectContaining({ event: "renderer_expiring", sha256: r.sha256, days_left: 13 }),
+    ]);
+
+    lines = [];
+    await writeSignedRenderer(root, key, {
+      issuedAt: new Date(clock - 45 * day),
+      validityDays: 60,
+    });
+    expect(await resolver().current()).not.toBeNull();
+    expect(lines).toEqual([]);
   });
 
   test("a served file that does not match the manifest → null + warn file_mismatch", async () => {

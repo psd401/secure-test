@@ -28,6 +28,14 @@
  *
  * No database: the renderer route and this lookup must work while Aurora is
  * paused (row AC), so storage is the only source.
+ *
+ * Expiry (slice 4f, James 2026-10-13): a v2.0 shell refuses every test once
+ * the current renderer's signature passes `not_after`, so a renderer within
+ * RENDERER_EXPIRY_WARNING_DAYS of it logs `renderer_expiring` at ERROR on
+ * every resolution, and an expired one logs `renderer_current_invalid` at
+ * ERROR — both reach the AppServerErrors alarm's email. The fix is a deploy
+ * that re-signs (D-12 re-signs within 14 days on its own). `expiryWatch.ts`
+ * resolves hourly so this fires with no student traffic (summer).
  */
 import { parseManifest, sha256Hex } from "@secure-test/renderer/manifest";
 import { checkManifestUse, verifyManifestSignature } from "@secure-test/renderer/verify";
@@ -76,6 +84,9 @@ export function isMissingObject(err: unknown): boolean {
 }
 
 export type CurrentRenderer = { sha256: string; version: number };
+
+/** Days before `not_after` from which every resolution logs at ERROR. */
+export const RENDERER_EXPIRY_WARNING_DAYS = 14;
 
 export interface RendererResolverOptions {
   storage?: () => StorageProvider;
@@ -157,6 +168,16 @@ export function createRendererResolver(options: RendererResolverOptions = {}): R
     if (manifest.version !== version) throw new InvalidRenderer("version_mismatch", sha256);
     const use = checkManifestUse(manifest, { now: now(), minVersion: 0 });
     if (!use.ok) throw new InvalidRenderer(use.reason, sha256);
+    const msLeft = Date.parse(manifest.not_after) - now().getTime();
+    if (msLeft <= RENDERER_EXPIRY_WARNING_DAYS * 86_400_000) {
+      log.error("renderer_expiring", {
+        sha256,
+        version: manifest.version,
+        not_after: manifest.not_after,
+        days_left: Math.floor(msLeft / 86_400_000),
+        fix: "deploy.sh re-signs the renderer (Touch ID)",
+      });
+    }
 
     // Every listed file must be one the route serves, and stored with the
     // listed bytes — so the bundle never names a half-uploaded renderer.
@@ -180,7 +201,10 @@ export function createRendererResolver(options: RendererResolverOptions = {}): R
       if (cached && t - cached.at < ttlMs) return cached.value;
       const value = resolve().catch((err: unknown) => {
         if (err instanceof InvalidRenderer) {
-          log.warn("renderer_current_invalid", { reason: err.reason, sha256: err.sha256 });
+          // Expired is the one invalid state a routine gap (no deploy for 60
+          // days) produces, and every v2.0 shell then refuses every test.
+          const level = err.reason === "expired" ? log.error : log.warn;
+          level("renderer_current_invalid", { reason: err.reason, sha256: err.sha256 });
         } else {
           log.warn("renderer_current_unreadable", {
             message: err instanceof Error ? err.message.slice(0, 500) : String(err),
