@@ -52,3 +52,21 @@ export const BRIDGE_REQUIRES: readonly Requirement[] = [
   "upload",
   "withdraw",
 ];
+
+// The page functions the HOST calls (slice 4f, the host-callback question):
+// each belongs to the `requires` term whose feature calls it, so no term of
+// its own — a shell that answers for the term also calls the function, and a
+// renderer that names the term must define it. The host guards every call
+// (`window.__x && …`), so a missing one is silent — e.g. no
+// `__secureTestFlushInput` means the last unsaved typing is lost when a
+// session ends. test/extract.test.ts fails when the bridge-mode page stops
+// defining one. (`__forceWide` is a test-harness hook, not a host call;
+// `__secureTestFeedbackSegments` lives on the host's own feedback page.)
+export const HOST_CALLBACKS: Readonly<Record<string, Requirement>> = {
+  __secureTestSpeech: "tts.word_ranges",
+  __secureTestDictation: "stt",
+  __timeLimit: "timer",
+  __secureTestSubmitResult: "submit",
+  __secureTestDrawingResult: "upload",
+  __secureTestFlushInput: "response",
+};
