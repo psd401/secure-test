@@ -410,6 +410,18 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release: v2.0.0** (`MARKETING_VERSION` = 2.0.0, branch
+  `v2-renderer`) — the server-delivered renderer
+  (`docs/server-delivered-renderer-design.md` slices 4a–4f). Carries WC-2
+  (VoiceOver hears the essay word count, no v1.6.4) and everything else on
+  `main` at the rebase. Before psd-sign, in order: (1) the slice-3b
+  rehearsal with IT (backup key signs a test manifest); (2) a staging
+  deploy so staging serves a renderer at or above the minimum version
+  (v1791926804 — staging still points at an older one); (3) the "v2.0 —
+  served renderer" row "No field, Release refuses"; (4) the RC run on the
+  staging Mac (Self Service "Switch to Staging"), real AAC session;
+  (5) rebase onto `main`, merge, and release on a light-testing day. No new
+  item types or large page edits until the fleet is on v2.0.
 - ~~**Next release: v1.6.3**~~ PUBLISHED 2026-10-13 (see Released).
 - ~~**Next release: v1.6.1**~~ PUBLISHED 2026-10-08 (see Released). (`MARKETING_VERSION` = 1.6.1). Carries
   **SS-1** (the secure-start backstop is 60 s with a "Still starting the
