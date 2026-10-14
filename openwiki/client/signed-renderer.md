@@ -6,7 +6,7 @@ tags: [renderer, signing, delivery]
 openwiki:
   roles: [architecture, delivery, integration]
   change_kinds: [renderer-delivery, signing, public-api]
-  source_paths: [packages/renderer/src/manifest.ts, packages/renderer/src/verify.ts, packages/renderer/src/requires.ts, packages/renderer/scripts/build.ts, design-tool/lib/renderer/current.ts, "design-tool/app/api/renderer/[sha256]/[file]/route.ts", packages/schema/src/delivery.ts, tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift]
+  source_paths: [packages/renderer/src/manifest.ts, packages/renderer/src/verify.ts, packages/renderer/src/requires.ts, packages/renderer/scripts/build.ts, design-tool/lib/renderer/current.ts, design-tool/lib/renderer/expiryWatch.ts, "design-tool/app/api/renderer/[sha256]/[file]/route.ts", packages/schema/src/delivery.ts, tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift]
   symbols: [buildManifest, canonicalManifestBytes, parseManifest, verifyManifestSignature, checkManifestUse, REQUIREMENTS, createRendererResolver, currentRenderer, RENDERER_FILE_TYPES, rendererObjectKey, RendererRefSchema]
   test_paths: [packages/renderer/test/manifest.test.ts, packages/renderer/test/verify.test.ts, design-tool/test/renderer-current.test.ts, design-tool/test/renderer-route.test.ts, design-tool/test/delivery-api.test.ts]
   invariants: ["The server names a renderer only when RENDERER_DELIVERY is exactly on and every stored file re-verifies.", "A manifest signature covers the exact canonical bytes; parseManifest rejects non-canonical bytes.", "Only renderer.js and renderer.css are published as signed files."]
@@ -79,6 +79,10 @@ renderers/current.json                      {"sha256": "...", "version": N}
 ```
 
 Everything under a hash is immutable. The pointer is written last, so a bundle never names a half-uploaded renderer. The resolver trusts the pointer for nothing. It re-checks, in order: pointer shape, manifest hash against the pointer's `sha256`, signature against `RENDERER_PUBLIC_KEYS`, manifest parse, pointer `version` against manifest `version`, the validity window, the file-name allow-list, and each listed file's size and hash. Any failure logs `renderer_current_invalid` (or `renderer_current_unreadable`) at WARN and the bundle names no renderer. A missing pointer is not an error. Results, including failures, are cached for 60 seconds, and `reset()` drops the cache. The resolver uses `minVersion: 0`, so there is no server-side version floor. The shell's floor is the one that applies.
+
+### Expiry watch
+
+A renderer inside `RENDERER_EXPIRY_WARNING_DAYS` of its `not_after` logs `renderer_expiring` at ERROR on every resolution, and an expired one logs `renderer_current_invalid` at ERROR. Because a v2.0 shell refuses every test after expiry, the fix is a re-signing deploy, so the design tool must surface the warning without waiting for student traffic. `startRendererExpiryWatch` in `lib/renderer/expiryWatch.ts` is started from `instrumentation.ts` only when `RENDERER_DELIVERY=on`. It calls `currentRenderer()` two minutes after boot and then every hour, with timers unref'd. Failures log `renderer_expiry_watch_failed`. The scheduler and alarm side are in [deployment and observability](../operations/deployment-and-observability.md#retention-sweep). Test coverage for the resolver's expiry branches is in `renderer-current.test.ts`.
 
 The file route is open to any signed-in student or practice session (`requireStudentOrPractice`). It reads storage only, not the database, so it answers while Aurora is paused. It returns `Cache-Control: private, max-age=31536000, immutable`. Any unknown name or malformed hash returns 404, the same as a missing object.
 

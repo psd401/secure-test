@@ -12,6 +12,7 @@ openwiki:
     - design-tool/lib/accommodations/sections.ts
     - design-tool/lib/accommodations/applyToAllPeriods.ts
     - design-tool/lib/api/importTide.ts
+    - design-tool/lib/accommodations/tideCatalog.ts
     - design-tool/lib/api/resolveStudent.ts
     - design-tool/lib/roster/extract.ts
     - design-tool/lib/roster/importSnapshot.ts
@@ -65,6 +66,8 @@ The **By class period** panel has an "Apply to all my periods" action (`applyToA
 `students` is a **per-teacher overlay** keyed by `(owner_sub, ssid)` and, once a student has joined, `(owner_sub, roster_ps_id)`. The same child has a different overlay row under each teacher, which is why `loadOwnAttempt` resolves against the assessment owner (`sittingTenantSub`) and not the sitting owner, so co-teacher sittings still find the right row. A student who joins a co-teacher's sitting gets their overlay row under the **assessment** owner, not the co-teacher; filing it under the co-teacher made the delivery route (which resolves under `assessments.owner_sub`) answer 404. The regression test is `co-teacher-tenant.test.ts`.
 
 `POST /api/accommodations/import` (`lib/api/importTide.ts`, `exceljs`) applies fixed merge semantics: values from a TIDE import overwrite `tide_import` rows, a teacher-edited row (`tide_then_edited`) is preserved and surfaced as a diff to accept or keep (`accept-tide`, `keep-mine` routes, review page `app/dashboard/accommodations/import/review`), `manual` rows are never touched, rows absent from the new import are soft-removed, and unknown tool ids are dropped. Deleting a TIDE-origin row returns 409. Soft-deleted ledger rows do not block re-insertion (partial unique index).
+
+The vocabulary bridge is `lib/accommodations/tideCatalog.ts`. It loads the generated `tide-catalog.json` rows and maps a TIDE `(subject, tool, value)` triple to a design-tool catalog id and TDS code through `mapTideToCatalogId` and `tideToolNameToCatalogId`. The tool-name map `TIDE_TOOL_TO_ID` is hand-curated. Non-embedded tools (Non-Embedded Accommodations and Designated Supports) are intentionally absent because they need out-of-band handling, so they map to `null` and the import counts them as dropped. The reverse direction (`mapCatalogIdToTide`, used by the `accept-tide` route) and `tideValueForCode` (used by `pendingDiffs.ts` to state what TIDE now asserts) go through the same module. When a TIDE tool is new, add it to `TIDE_TOOL_TO_ID` rather than editing the generated JSON. Tests: `tide-catalog.test.ts` (mapping and parity) and `tide-import.test.ts`.
 
 ## Student identity binding
 
