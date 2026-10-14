@@ -346,6 +346,29 @@ meets a cold cluster).
    build: the shell compiles in both public keys, so the backup's must
    exist first.
 
+## Signing with the backup key
+
+Only when the working key is unavailable (the maintainer's Mac lost or
+replaced). Any use starts a key rotation in the next client release (2.a).
+Custody and the token's details are in the ops repository.
+
+1. On a Mac with the repository at `origin/main`, AWS signed in and `gh`
+   signed in: `design-tool/infra/scripts/deploy.sh --backup-prepare DIR`
+   (add `--staging` for staging; DIR outside the repository, new). It runs
+   the ci gate and the extraction check, writes `manifest.json` +
+   `renderer.{js,css}` to DIR, and stops — nothing uploaded or deployed.
+2. The two custodians sign `DIR/manifest.json` byte for byte on the YubiKey
+   (PIV slot 9c, PIN and touch) and save the DER ECDSA P-256 / SHA-256
+   signature as `DIR/manifest.sig`. TODO: the exact command — asked of IT
+   2026-10-14 (the one that signed the 210-byte test vector).
+3. `design-tool/infra/scripts/deploy.sh --backup-signed DIR` (same
+   `--staging` choice). It rebuilds and refuses unless DIR's manifest names
+   HEAD, matches this build's files and `requires`, and has not expired; it
+   verifies the signature against `packages/renderer/keys/backup.pub.pem`,
+   uploads, moves `current.json`, and finishes the deploy. The manifest is
+   valid 60 days from step 1, so step 3 follows step 1 within that window and
+   with no new commit on `main`.
+
 ## Progress
 
 - 2026-10-08 — note + ADR 0018 (Proposed) written. Staging decided as a
@@ -532,3 +555,14 @@ meets a cold cluster).
   P-256) and verified offline: P-256 curve, DER SHA-256 fingerprint as
   sent, and IT's signed test vector verifies with SHA-256 / DER ECDSA. It
   is compiled in next to the working key with slice 3. Nothing built.
+- 2026-10-14 — **Slice 3b, server half BUILT.** `packages/renderer/keys/backup.pub.pem` (DER SHA-256
+  `39395eda…2608f`) + regenerated `src/keys.ts`, so the server accepts
+  either key; `test/keys.test.ts` checks its DER SHA-256 against the
+  fingerprint IT sent. IT's test vector is not committed (it names the
+  token's serial); the rehearsal's signed manifest becomes the fixture. `deploy.sh` gains the two-step
+  backup path (`--backup-prepare DIR` / `--backup-signed DIR`, "Signing with
+  the backup key" above), and its D-12 check accepts a current renderer
+  signed by either key. Checked: renderer tests 59 pass, `bash -n`, the
+  flag refusals; NOT run end to end (no backup signature exists yet — the
+  rehearsal does that). Open: IT's exact signing command, the rehearsal,
+  and the client half (`RendererKeys.backup` on `v2-renderer`).

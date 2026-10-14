@@ -38,6 +38,8 @@
 #   design-tool/infra/scripts/deploy.sh --during-school  # override DS-2
 #   design-tool/infra/scripts/deploy.sh --staging        # the STAGING stack
 #   design-tool/infra/scripts/deploy.sh --no-renderer    # either stack, no signing
+#   design-tool/infra/scripts/deploy.sh --backup-prepare DIR  # backup key, step 1
+#   design-tool/infra/scripts/deploy.sh --backup-signed DIR   # backup key, step 2
 # --staging (renderer slice 2, D-7) deploys SecureTestDesignToolStaging with
 # --context env=staging, reads the origin from cdk.context.json's
 # staging.domainName, skips DS-2 (no classes run on staging) and runs
@@ -73,6 +75,16 @@
 #      stored (same hash = same bytes; files under a hash are never
 #      rewritten) - then renderers/current.json = {"sha256": ..., "version": ...}
 #      LAST, so the pointer never names a half-uploaded renderer.
+# Backup key (slice 3b; only when the working key is unavailable - a lost or
+# replaced Mac): --backup-prepare DIR runs a-d, writes manifest.json +
+# renderer.{js,css} to DIR (outside the repository) and stops - nothing
+# uploaded or deployed. The custodians sign DIR/manifest.json on the YubiKey
+# and save the DER signature as DIR/manifest.sig. --backup-signed DIR then
+# rebuilds, refuses unless DIR's manifest names HEAD, matches this build's
+# files and requires and is unexpired, verifies the signature against
+# keys/backup.pub.pem, and continues with f and the deploy. Any use starts a
+# key rotation (2.a). The D-12 check accepts a current renderer signed by
+# either key.
 # --no-renderer skips a-f on either stack: an infra-only deploy, no Touch ID;
 # the pointer keeps naming the last signed renderer. --diff never signs.
 # Production's school-hours rule (DS-2) is unchanged by any of this.
@@ -97,13 +109,35 @@ DIFF_ONLY=0
 DURING_SCHOOL=0
 STAGING=0
 NO_RENDERER=0
-for arg in "$@"; do
-  case "$arg" in
+BACKUP_PREPARE=""
+BACKUP_SIGNED=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --diff) DIFF_ONLY=1 ;;
     --during-school) DURING_SCHOOL=1 ;;
     --staging) STAGING=1 ;;
     --no-renderer) NO_RENDERER=1 ;;
-    *) echo "deploy: unknown flag $arg" >&2; exit 2 ;;
+    --backup-prepare|--backup-signed)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "deploy: $1 needs a directory" >&2; exit 2; }
+      if [ "$1" = "--backup-prepare" ]; then BACKUP_PREPARE="$2"; else BACKUP_SIGNED="$2"; fi
+      shift ;;
+    *) echo "deploy: unknown flag $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+if [ -n "$BACKUP_PREPARE" ] && [ -n "$BACKUP_SIGNED" ]; then
+  echo "deploy: pass --backup-prepare or --backup-signed, not both" >&2; exit 2
+fi
+if { [ -n "$BACKUP_PREPARE" ] || [ -n "$BACKUP_SIGNED" ]; } && { [ "$NO_RENDERER" -eq 1 ] || [ "$DIFF_ONLY" -eq 1 ]; }; then
+  echo "deploy: the backup-key flags sign a renderer - not with --no-renderer or --diff" >&2; exit 2
+fi
+# The backup directory lives outside the repository: inside it, step two's
+# clean-tree check would refuse the files step one wrote.
+for d in "$BACKUP_PREPARE" "$BACKUP_SIGNED"; do
+  [ -z "$d" ] && continue
+  case "$(cd "$(dirname "$d")" 2>/dev/null && pwd)/" in
+    "$(cd "$(dirname "$0")/../../.." && pwd)/"*)
+      echo "deploy: $d is inside the repository - use a directory outside it (e.g. ~/renderer-backup-<date>)" >&2; exit 2 ;;
   esac
 done
 # The renderer is kept current on every real deploy, staging and production
@@ -273,6 +307,7 @@ if [ "$RENDERER" -eq 1 ]; then
   DIST="$REPO/packages/renderer/dist"
   SIGNER="$REPO/tools/renderer-sign/.build/release/renderer-sign"
   WORKING_PUB="$REPO/packages/renderer/keys/working.pub.pem"
+  BACKUP_PUB="$REPO/packages/renderer/keys/backup.pub.pem"
   (cd "$REPO/packages/renderer" && bun run build) || fail "renderer build failed"
   [ -f "$DIST/manifest.json" ] || fail "renderer build wrote no dist/manifest.json"
   if [ ! -x "$SIGNER" ]; then
@@ -309,8 +344,9 @@ if [ "$RENDERER" -eq 1 ]; then
       SIGN_REASON="the current renderer's manifest or signature is missing"
     elif [ "$(shasum -a 256 "$CUR_DIR/manifest.json" | awk '{print $1}')" != "$CUR_SHA" ]; then
       SIGN_REASON="the current manifest's bytes do not hash to the pointer's sha256"
-    elif ! "$SIGNER" verify "$CUR_DIR/manifest.json" "$CUR_DIR/manifest.sig" --public-key "$WORKING_PUB" >/dev/null 2>&1; then
-      SIGN_REASON="the current manifest's signature does not verify against keys/working.pub.pem"
+    elif ! "$SIGNER" verify "$CUR_DIR/manifest.json" "$CUR_DIR/manifest.sig" --public-key "$WORKING_PUB" >/dev/null 2>&1 \
+      && ! "$SIGNER" verify "$CUR_DIR/manifest.json" "$CUR_DIR/manifest.sig" --public-key "$BACKUP_PUB" >/dev/null 2>&1; then
+      SIGN_REASON="the current manifest's signature verifies against neither keys/working.pub.pem nor keys/backup.pub.pem"
     else
       CUR_JS="$(jq -r '.files["renderer.js"].sha256 // empty' "$CUR_DIR/manifest.json")"
       CUR_CSS="$(jq -r '.files["renderer.css"].sha256 // empty' "$CUR_DIR/manifest.json")"
@@ -334,6 +370,11 @@ if [ "$RENDERER" -eq 1 ]; then
     fi
   fi
   rm -rf "$CUR_DIR"
+  # The backup-key path always signs: it exists for a renderer that has to
+  # change while the working key is unavailable.
+  if [ -n "$BACKUP_PREPARE" ] || [ -n "$BACKUP_SIGNED" ]; then
+    SIGN_REASON="${SIGN_REASON:-backup-key signing requested}"
+  fi
 
   if [ -z "$SIGN_REASON" ]; then
     RENDERER_SHA="$CUR_SHA"
@@ -345,10 +386,51 @@ if [ "$RENDERER" -eq 1 ]; then
     ci_gate
     "$REPO/packages/renderer/scripts/check-extraction.sh" \
       || fail "the extracted renderer is not byte-identical to the Swift page - not signing"
-    echo "Touch ID: a prompt to sign SecureTest renderer $RENDERER_VERSION @ ${HEAD_SHA:0:10} for $STACK is coming - touch the sensor to sign."
-    "$SIGNER" sign "$DIST/manifest.json" --out "$DIST/manifest.sig" || fail "signing refused or failed (Touch ID cancelled?)"
-    "$SIGNER" verify "$DIST/manifest.json" "$DIST/manifest.sig" --public-key "$WORKING_PUB" \
-      || fail "the signature does not verify against keys/working.pub.pem - not uploading"
+    if [ -n "$BACKUP_PREPARE" ]; then
+      # Step one of the backup-key path: hand the exact manifest bytes to the
+      # custodians and stop. The manifest's validity window is stamped at
+      # build time, so the same file must come back signed.
+      [ ! -e "$BACKUP_PREPARE" ] || fail "$BACKUP_PREPARE already exists - give a new directory"
+      mkdir -p "$BACKUP_PREPARE"
+      cp "$DIST/manifest.json" "$DIST/renderer.js" "$DIST/renderer.css" "$BACKUP_PREPARE/"
+      echo
+      echo "prepared $BACKUP_PREPARE/manifest.json (renderer $RENDERER_VERSION @ ${HEAD_SHA:0:10}, not_after $(jq -r '.not_after' "$DIST/manifest.json"))"
+      echo "next: the backup-key custodians sign manifest.json byte for byte on the YubiKey"
+      echo "(docs/server-delivered-renderer-design.md, 'Signing with the backup key'),"
+      echo "save the DER signature as $BACKUP_PREPARE/manifest.sig, then run:"
+      STAGING_FLAG=""
+      [ "$STAGING" -eq 1 ] && STAGING_FLAG="--staging "
+      echo "  design-tool/infra/scripts/deploy.sh ${STAGING_FLAG}--backup-signed $BACKUP_PREPARE"
+      echo "nothing was uploaded or deployed."
+      exit 0
+    elif [ -n "$BACKUP_SIGNED" ]; then
+      # Step two: the manifest must be the one prepared from THIS commit's
+      # files, still valid, and signed by the backup key.
+      [ -f "$BACKUP_SIGNED/manifest.json" ] || fail "$BACKUP_SIGNED/manifest.json missing"
+      [ -f "$BACKUP_SIGNED/manifest.sig" ] || fail "$BACKUP_SIGNED/manifest.sig missing (the custodians' DER signature)"
+      [ "$(jq -r '.commit' "$BACKUP_SIGNED/manifest.json")" = "$HEAD_SHA" ] \
+        || fail "$BACKUP_SIGNED/manifest.json names $(jq -r '.commit' "$BACKUP_SIGNED/manifest.json"), not HEAD $HEAD_SHA - prepare again from HEAD"
+      for f in renderer.js renderer.css; do
+        [ "$(jq -r --arg f "$f" '.files[$f].sha256 // empty' "$BACKUP_SIGNED/manifest.json")" = "$(shasum -a 256 "$DIST/$f" | awk '{print $1}')" ] \
+          || fail "$f in this build does not match the prepared manifest - prepare again"
+      done
+      [ "$(jq -c '.requires' "$BACKUP_SIGNED/manifest.json")" = "$(jq -c '.requires' "$DIST/manifest.json")" ] \
+        || fail "requires in this build does not match the prepared manifest - prepare again"
+      LEFT="$(jq -r '(.not_after | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) - now | floor' "$BACKUP_SIGNED/manifest.json" 2>/dev/null || true)"
+      case "$LEFT" in ''|*[!0-9-]*) LEFT=0 ;; esac
+      [ "$LEFT" -gt 0 ] || fail "the prepared manifest has expired - prepare again"
+      "$SIGNER" verify "$BACKUP_SIGNED/manifest.json" "$BACKUP_SIGNED/manifest.sig" --public-key "$BACKUP_PUB" \
+        || fail "the signature does not verify against keys/backup.pub.pem - not uploading"
+      cp "$BACKUP_SIGNED/manifest.json" "$DIST/manifest.json"
+      cp "$BACKUP_SIGNED/manifest.sig" "$DIST/manifest.sig"
+      RENDERER_VERSION="$(jq -r '.version' "$DIST/manifest.json")"
+      echo "backup-key signature verified - a key rotation is now due (docs/server-delivered-renderer-design.md 2.a)"
+    else
+      echo "Touch ID: a prompt to sign SecureTest renderer $RENDERER_VERSION @ ${HEAD_SHA:0:10} for $STACK is coming - touch the sensor to sign."
+      "$SIGNER" sign "$DIST/manifest.json" --out "$DIST/manifest.sig" || fail "signing refused or failed (Touch ID cancelled?)"
+      "$SIGNER" verify "$DIST/manifest.json" "$DIST/manifest.sig" --public-key "$WORKING_PUB" \
+        || fail "the signature does not verify against keys/working.pub.pem - not uploading"
+    fi
     RENDERER_SHA="$(shasum -a 256 "$DIST/manifest.json" | awk '{print $1}')"
 
     PREFIX="renderers/$RENDERER_SHA"

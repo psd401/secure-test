@@ -7,6 +7,7 @@
 // Enclave) and, once IT sends it, the backup.
 
 export const RENDERER_PUBLIC_KEYS_BY_NAME: Readonly<Record<string, string>> = {
+  "backup": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEicV/w0mEUKmBkbT4xxrOMP73EoeW\nn747FnR5+IhI0GNP1Bwj0yxG9NtDQ5SYGFr9mlNOgroLqES03x59ugSQbQ==\n-----END PUBLIC KEY-----\n",
   "working": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWw0Zqv0pxXtFFIss2RMfOisDekKG\nIdc6LUJyUtbcvwwNHmB6/0jgwtyMgvCZ9b2u5oq3KxsZytvNrfNpOUdHAQ==\n-----END PUBLIC KEY-----\n",
 };
 
