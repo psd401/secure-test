@@ -11,6 +11,12 @@ title = "secure-test gitleaks config"
 # "Contributing" section (slice 5). This is a backstop, not a substitute
 # for review: a hostname or a person's name has no fixed shape the way a
 # private key does, so these rules catch common cases, not every case.
+#
+# Synthetic student ids: PSD dev standards 04 and 05 reserve the 1000xxx
+# range (seven digits starting 1000) for synthetic students, as numbers and
+# as 1000xxx@edtools.psd401.net addresses, and the shared org scan exempts
+# it. The two student-pii rules below carry the same exemption; any other
+# digit-only student address or 7-digit run is still flagged.
 [extend]
 useDefault = true
 
