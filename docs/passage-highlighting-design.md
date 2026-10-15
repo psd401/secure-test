@@ -171,4 +171,11 @@ interaction, and whether the build fits before v2.0 or follows it.
   - Still open: 4 (paging — becomes a JSC-harness test in the build), 6
     (a real AAC session — joins the build's hand-run rows), read-aloud
     with marks present.
+- 2026-10-14 night — **keyboard model DECIDED (James): (b) the sentence
+  cursor.** A "Highlight mode" on the passage: arrow keys move sentence by
+  sentence (the current sentence outlined), Space marks or unmarks it,
+  Escape leaves the mode; VoiceOver hears the sentence and its highlighted
+  state. Mouse selection stays alongside. The spike worktree and branch
+  are deleted. Next: the build, slices 1–4 above (server setting gated to
+  2.0+ → page marking → sentence cursor → rows).
 
