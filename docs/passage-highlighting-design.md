@@ -127,3 +127,28 @@ interaction, and whether the build fits before v2.0 or follows it.
 ## Progress
 
 - 2026-10-14 — note drafted; H-1 decided (do not refuse); spike next.
+- 2026-10-14 evening — **spike, mouse half** (Debug build of `main` +
+  throwaway code on branch `spike/highlight`, offline `--bundle` with a
+  three-paragraph passage containing inline KaTeX; windowed, clipboard
+  locked). Results:
+  - **1 ✅ Selecting inside the locked page works** once `.stimulus-body` /
+    `.source-body` opt in to `user-select: text`; a drag across paragraphs
+    and a double-click on one word both make a normal selection, and the
+    rest of the page stays unselectable.
+  - **2 ◐ Wrapping works, two details for the build.** A whole word marks
+    exactly ("captured"); a drag across two paragraphs marked them in one
+    `<mark>`, since a `pre-line` body is one text node — so remove-by-click
+    removes all of it. The build should split marks at paragraph breaks.
+    The spike skipped text inside KaTeX on purpose, which left a visible
+    gap over the formula; the build wraps a `.katex` span whole. One drag
+    marked from the start of its paragraph rather than the first word
+    selected — the boundary test must compare range points, not containers.
+  - **Remove ✅** one click on a mark unwraps it and normalises the text.
+  - **3 not run** — the automation refuses Edit → Copy; moves to the
+    hands-on half (expected refused: `document.oncopy` denies it).
+  - **4 not run** — the offline path renders scroll, not paged; a paged
+    run needs local dev or the origin.
+  - **5 / 6 not run** — VoiceOver and the real AAC session need James at
+    the keyboard.
+  - Read-aloud with marks present not yet tried (marks split text nodes).
+
