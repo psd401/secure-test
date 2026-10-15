@@ -623,6 +623,48 @@ describe("clipboard policy on the wire", () => {
   });
 });
 
+// Passage highlighting (docs/passage-highlighting-design.md, H-1): the field
+// rides only to a 2.0+ client, and an older client is never refused for it.
+describe("passage highlighting on the wire", () => {
+  async function seedWithHighlighting(on: boolean) {
+    const id = await seedAllTypes();
+    await getDb()
+      .update(assessments)
+      .set({ allow_highlighting: on })
+      .where(eq(assessments.id, id));
+    await admitStudent(id);
+    return id;
+  }
+
+  test("on + client 2.0.0 → allow_highlighting: true", async () => {
+    const id = await seedWithHighlighting(true);
+    const res = await getDelivery(id, "2.0.0");
+    expect(res.status).toBe(200);
+    expect((await res.json()).allow_highlighting).toBe(true);
+  });
+
+  test("on + client 1.6.3 → absent, and the test still opens", async () => {
+    const id = await seedWithHighlighting(true);
+    const res = await getDelivery(id, "1.6.3");
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty("allow_highlighting");
+  });
+
+  test("on + no version header → absent, and the test still opens", async () => {
+    const id = await seedWithHighlighting(true);
+    const res = await getDelivery(id);
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty("allow_highlighting");
+  });
+
+  test("off + client 2.0.0 → absent", async () => {
+    const id = await seedWithHighlighting(false);
+    const res = await getDelivery(id, "2.0.0");
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty("allow_highlighting");
+  });
+});
+
 // E5 slice 1: stimuli are student-facing — the delivery bundle carries the
 // sets with the same item ids the items use, and nothing key-shaped.
 describe("item sets on the delivery bundle (E5 slice 1)", () => {

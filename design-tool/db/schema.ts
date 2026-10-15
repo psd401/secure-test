@@ -118,6 +118,12 @@ export const assessments = pgTable(
     // = not released. Never carried by export / duplicate (a copy starts
     // unreleased).
     answers_released_at: timestamp("answers_released_at", { withTimezone: true }),
+    // Passage highlighting (docs/passage-highlighting-design.md): may students
+    // mark text in stimulus passages and sources? Page memory only on the
+    // client — nothing is stored or shown to the teacher. Reaches the delivery
+    // bundle only for a client reporting 2.0+ (lib/items/clientSupport.ts).
+    // Changeable while Published (requireDraft.ts, isFeedbackSettingsOnlyPatch).
+    allow_highlighting: boolean("allow_highlighting").notNull().default(false),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

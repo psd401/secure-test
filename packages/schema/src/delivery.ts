@@ -241,6 +241,12 @@ export const DeliveryBundleSchema = z
     // client that has not heard of this flag stays closed rather than open,
     // which is the correct direction for a default in a secure-testing browser.
     allow_clipboard: z.boolean().optional(),
+    // Passage highlighting (docs/passage-highlighting-design.md): may the
+    // student mark text in stimulus passages and sources? Emitted only when
+    // TRUE and only to a client reporting 2.0 or later (H-1: an older client
+    // is never refused, it simply gets no field and no tool). Highlights live
+    // in page memory only — nothing is posted back.
+    allow_highlighting: z.boolean().optional(),
     // Client paging (docs/client-paging-design.md): emitted only as "paged".
     // Absent means one scrolling page — a client that predates the field
     // renders as it always has.

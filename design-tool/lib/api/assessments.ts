@@ -22,6 +22,8 @@ export const CreateAssessmentBody = z
     // Instant feedback (docs/instant-feedback-design.md, D-1 / D-4).
     student_feedback: z.enum(STUDENT_FEEDBACK_LEVELS).optional().default("off"),
     answers_release: z.enum(ANSWERS_RELEASE_MODES).optional().default("on_release"),
+    // Passage highlighting (docs/passage-highlighting-design.md).
+    allow_highlighting: z.boolean().optional().default(false),
     allowed_accommodations: AllowedAccommodations.optional().default([]),
     construct_altering: ConstructAltering.optional().default([]),
   })
@@ -53,6 +55,9 @@ export const UpdateAssessmentBody = z
     // here: only `POST /api/assessments/[id]/release-answers` stamps it.
     student_feedback: z.enum(STUDENT_FEEDBACK_LEVELS).optional(),
     answers_release: z.enum(ANSWERS_RELEASE_MODES).optional(),
+    // Passage highlighting (docs/passage-highlighting-design.md): also passes
+    // the publish lock — see isFeedbackSettingsOnlyPatch.
+    allow_highlighting: z.boolean().optional(),
     allowed_accommodations: AllowedAccommodations.optional(),
     construct_altering: ConstructAltering.optional(),
     // U-18: the whole per-period value, replaced on every PATCH (the Allowed

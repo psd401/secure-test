@@ -421,6 +421,13 @@
       "when": 1791302431980,
       "tag": "0059_answer_restored_event",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792029775138,
+      "tag": "0060_allow_highlighting",
+      "breakpoints": true
     }
   ]
 }

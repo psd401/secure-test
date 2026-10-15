@@ -17,6 +17,16 @@ export function parseClientVersion(value: string | null | undefined): number[] |
   return m ? [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] : null;
 }
 
+/**
+ * Passage highlighting (docs/passage-highlighting-design.md, "The rollout
+ * gate", decision H-1 — James, 2026-10-14): the oldest client that draws the
+ * highlighting tool (a v2.0 served renderer). Below it the delivery bundle
+ * simply carries no `allow_highlighting` field; such a client is NEVER
+ * refused for it — highlighting is an aid, not part of answering. To refuse
+ * instead, the decision would move to a 409 like MIN_CLIENT_VERSION_FOR_TYPE.
+ */
+export const MIN_CLIENT_VERSION_FOR_HIGHLIGHTING = "2.0.0";
+
 function atLeast(have: number[], need: number[]): boolean {
   for (let i = 0; i < 3; i++) {
     if (have[i]! !== need[i]!) return have[i]! > need[i]!;
@@ -43,4 +53,13 @@ export function requiredClientUpgrade(
     if (!needed || atLeast(parseClientVersion(min)!, parseClientVersion(needed)!)) needed = min;
   }
   return needed;
+}
+
+/**
+ * Does this client (its `X-SecureTest-Version`, null when absent) draw the
+ * passage-highlighting tool? A missing or unreadable version reads as too old.
+ */
+export function clientSupportsHighlighting(clientVersion: string | null): boolean {
+  const have = parseClientVersion(clientVersion);
+  return have !== null && atLeast(have, parseClientVersion(MIN_CLIENT_VERSION_FOR_HIGHLIGHTING)!);
 }

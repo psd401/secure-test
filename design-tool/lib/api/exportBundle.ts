@@ -274,6 +274,8 @@ export async function buildExportBundle(
     ...(assessmentRow.answers_release !== "on_release"
       ? { answers_release: assessmentRow.answers_release }
       : {}),
+    // Passage highlighting: only when on, so older bundles stay byte-stable.
+    ...(assessmentRow.allow_highlighting ? { allow_highlighting: true } : {}),
   };
 
   // Round-trip through @secure-test/schema as a final correctness check.

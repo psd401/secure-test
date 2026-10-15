@@ -386,6 +386,16 @@ describe("DeliveryBundleSchema layout (client paging)", () => {
   });
 });
 
+// Passage highlighting: optional boolean, emitted only when true.
+describe("DeliveryBundleSchema allow_highlighting", () => {
+  test("accepts true, accepts absence, rejects a non-boolean", () => {
+    const base = { test_id: "t", title: "t", items: [] };
+    expect(DeliveryBundleSchema.parse({ ...base, allow_highlighting: true }).allow_highlighting).toBe(true);
+    expect(DeliveryBundleSchema.parse(base).allow_highlighting).toBeUndefined();
+    expect(DeliveryBundleSchema.safeParse({ ...base, allow_highlighting: "yes" }).success).toBe(false);
+  });
+});
+
 // Client paging follow-up: the answered ids, optional, never a key.
 describe("DeliveryBundleSchema answered_item_ids", () => {
   test("accepts a list of ids, accepts absence, rejects an empty id", () => {

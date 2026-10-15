@@ -8,6 +8,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { assertNever } from "@/lib/assertNever";
+import { clientSupportsHighlighting } from "@/lib/items/clientSupport";
 import { collectBundleAssets } from "@/lib/api/bundleAssets";
 import { exportItemSets } from "@/lib/api/itemSetsBundle";
 import { applySourcesToSets } from "@/lib/api/setSources";
@@ -216,6 +217,11 @@ export async function buildDeliveryBundle(
    * still accepted and the two must not be able to disagree.
    */
   deadline: Date | null = null,
+  /**
+   * The client's `X-SecureTest-Version` header, null when absent. Gates
+   * `allow_highlighting` (lib/items/clientSupport.ts, H-1).
+   */
+  clientVersion: string | null = null,
 ): Promise<{ bundle: DeliveryBundle; bundledCount: number }> {
   const itemRows = await db
     .select()
@@ -297,6 +303,12 @@ export async function buildDeliveryBundle(
     // Slice 69: emitted only when true. Absence means locked, so a client that
     // has not heard of this flag stays closed rather than open.
     ...(assessment.allow_clipboard ? { allow_clipboard: true } : {}),
+    // Passage highlighting (docs/passage-highlighting-design.md): only when
+    // on AND the client reports 2.0+. An older client gets no field and is
+    // not refused (H-1) — it renders the test exactly as before.
+    ...(assessment.allow_highlighting && clientSupportsHighlighting(clientVersion)
+      ? { allow_highlighting: true }
+      : {}),
     // Client paging: emitted only as "paged"; absence means one scrolling
     // page, which is what every client before the field did anyway.
     ...(assessment.student_layout === "paged" ? { layout: "paged" as const } : {}),

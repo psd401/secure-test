@@ -1650,3 +1650,16 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 578 | Publish, then try to change the box | Locked like the other essay settings (the API answers 409) | NOT RUN |
 | 579 | Duplicate, and Export → Import | The copy keeps the setting | NOT RUN |
 | 580 | `/help.html#build` and the quick start | The essay line names the word count and the client version it needs | NOT RUN |
+
+## Passage highlighting — slice 1: the setting and the 2.0 gate (U-21, 2026-10-14)
+
+`docs/passage-highlighting-design.md` is the record (H-1: an older client is never refused, it just gets no field). Local dev, Claude in Chrome as a teacher; the delivery rows with a minted student token (`scripts/mint-student.ts`) against `GET /api/assessments/<id>/delivery`. The student half (the tool itself) is slice 2.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 581 | Settings tab: **Let students highlight passages** | Unticked by default, hint under it names "SecureTest 2.0 or later"; ticking it saves at once ("Saved"), and it stays ticked after a reload | NOT RUN |
+| 582 | Publish, then tick / untick it | Not greyed while Published; each change saves and survives a reload; the rest of the tab stays locked | NOT RUN |
+| 583 | With it ticked: **Duplicate**, and Export → Import (backup file) | Both copies show it ticked; the exported `.json` carries `"allow_highlighting": true` (absent when off) | NOT RUN |
+| 584 | Delivery with it ticked, header `X-SecureTest-Version: 2.0.0` | 200; the bundle carries `"allow_highlighting": true` | NOT RUN |
+| 585 | Delivery with it ticked, header `X-SecureTest-Version: 1.6.3`, and again with no header | 200 both times (not refused); no `allow_highlighting` key | NOT RUN |
+| 586 | Delivery with it unticked, header `2.0.0` | 200; no `allow_highlighting` key | NOT RUN |

@@ -482,6 +482,9 @@ export const ItemBundleSchema = z.object({
   // bundles byte-stable.
   student_feedback: StudentFeedbackSchema.optional(),
   answers_release: AnswersReleaseSchema.optional(),
+  // Passage highlighting (docs/passage-highlighting-design.md): emitted only
+  // when true, keeping older bundles byte-stable; absent reads as false.
+  allow_highlighting: z.boolean().optional(),
   // E5 slice 1: optional so every bundle written before it parses unchanged.
   item_sets: z.array(TeacherItemSetSchema).optional(),
   // Map<uuid, asset>. Optional — bundles without image refs omit this.

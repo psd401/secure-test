@@ -140,7 +140,8 @@ export function isUnlockOnlyPatch(
 
 /**
  * Instant feedback (docs/instant-feedback-design.md, D-1): does this PATCH on
- * a PUBLISHED assessment change nothing but the two feedback settings?
+ * a PUBLISHED assessment change nothing but the two feedback settings (and
+ * `allow_highlighting`, which shares the door — see below)?
  *
  * A teacher may turn answers on after the last period, so `student_feedback`
  * and `answers_release` pass the publish lock — neither reaches the delivery
@@ -155,7 +156,11 @@ export function isFeedbackSettingsOnlyPatch(
   body: Record<string, unknown>,
   current: AssessmentRow,
 ): boolean {
-  const FEEDBACK_KEYS = new Set(["student_feedback", "answers_release"]);
+  // Passage highlighting (docs/passage-highlighting-design.md) shares this
+  // door: unlike the feedback pair it DOES ride the delivery bundle, but it
+  // is an aid, not part of answering — a student mid-test simply gets (or
+  // loses) the tool on their next bundle fetch.
+  const FEEDBACK_KEYS = new Set(["student_feedback", "answers_release", "allow_highlighting"]);
   const currentRecord = current as unknown as Record<string, unknown>;
   let changesFeedback = false;
   for (const [key, value] of Object.entries(body)) {

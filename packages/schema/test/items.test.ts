@@ -385,6 +385,15 @@ describe("ItemSchema rejects malformed input", () => {
   });
 });
 
+describe("ItemBundleSchema — allow_highlighting", () => {
+  test("optional boolean: true survives, absence stays absent, a string is refused", () => {
+    const base = { test_id: "t", title: "t", items: [] };
+    expect(ItemBundleSchema.parse({ ...base, allow_highlighting: true }).allow_highlighting).toBe(true);
+    expect(ItemBundleSchema.parse(base).allow_highlighting).toBeUndefined();
+    expect(ItemBundleSchema.safeParse({ ...base, allow_highlighting: "on" }).success).toBe(false);
+  });
+});
+
 describe("ItemBundleSchema — accommodations (slice 21)", () => {
   test("bundle without accommodations fields parses", () => {
     const parsed = ItemBundleSchema.parse({

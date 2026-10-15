@@ -145,7 +145,8 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   //
   // Instant feedback (docs/instant-feedback-design.md, D-1): the second door
   // through the lock is a PATCH whose only changes are the two feedback
-  // settings — neither rides the delivery bundle.
+  // settings — neither rides the delivery bundle. Passage highlighting's
+  // `allow_highlighting` shares that door (an aid, not part of answering).
   if (access.assessment.status === "published") {
     if (
       !isUnlockOnlyPatch(body, access.assessment) &&

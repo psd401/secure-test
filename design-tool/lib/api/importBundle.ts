@@ -287,6 +287,8 @@ export async function importBundleForOwner(
         // not in the bundle, so the copy starts unreleased.
         student_feedback: bundle.student_feedback ?? "off",
         answers_release: bundle.answers_release ?? "on_release",
+        // Passage highlighting: absent reads as off.
+        allow_highlighting: bundle.allow_highlighting ?? false,
       })
       .returning();
     // E5 slice 1: the new item ids come back by position (position = index

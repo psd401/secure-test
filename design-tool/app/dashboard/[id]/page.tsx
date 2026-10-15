@@ -95,6 +95,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
           answers_released_at: assessment.answers_released_at
             ? assessment.answers_released_at.toISOString()
             : null,
+          allow_highlighting: assessment.allow_highlighting,
           allowed_accommodations: (assessment.allowed_accommodations ??
             []) as string[],
           construct_altering: (assessment.construct_altering ?? []) as string[],

@@ -31,6 +31,7 @@ import { PreviewFrame } from "@/components/app/PreviewFrame";
 import { PublishDialog } from "@/components/app/PublishDialog";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { questionGaps, readinessChecks } from "./readiness";
 import { ShareDialog } from "@/components/app/ShareDialog";
 import type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
@@ -195,6 +196,8 @@ interface AssessmentView {
   answers_release: AnswersReleaseSetting;
   /** ISO instant the teacher released the key, or null. */
   answers_released_at: string | null;
+  /** Passage highlighting (docs/passage-highlighting-design.md). */
+  allow_highlighting: boolean;
   allowed_accommodations: string[];
   construct_altering: string[];
   /** U-18: per class period (lib/accommodations/sections.ts). */
@@ -781,6 +784,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   const [allowLlm, setAllowLlm] = useState(assessment.allow_llm_authoring);
   const [studentLayout, setStudentLayout] = useState<"scroll" | "paged">(assessment.student_layout);
   const [settingsSave, setSettingsSave] = useState<SaveState>({ kind: "idle" });
+  const [allowHighlighting, setAllowHighlighting] = useState(assessment.allow_highlighting);
+  const [highlightSave, setHighlightSave] = useState<SaveState>({ kind: "idle" });
   const [accomSave, setAccomSave] = useState<SaveState>({ kind: "idle" });
   const [publishOpen, setPublishOpen] = useState<null | "publish" | "unpublish">(null);
   // E12 slice 4: which set's source picker is open.
@@ -1040,6 +1045,27 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       refresh();
     } catch (e) {
       setSettingsSave({ kind: "failed", message: describe(e) });
+    }
+  }
+
+  // Passage highlighting (docs/passage-highlighting-design.md): saves itself
+  // at once with a PATCH carrying only this field, so it works while
+  // Published (the server's isFeedbackSettingsOnlyPatch door).
+  async function saveHighlighting(next: boolean) {
+    const prev = allowHighlighting;
+    setAllowHighlighting(next);
+    setHighlightSave({ kind: "saving" });
+    try {
+      await call(apiBase, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ allow_highlighting: next }),
+      });
+      setHighlightSave({ kind: "saved", at: new Date() });
+      refresh();
+    } catch (e) {
+      setAllowHighlighting(prev);
+      setHighlightSave({ kind: "failed", message: describe(e) });
     }
   }
 
@@ -1885,6 +1911,31 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             Save settings
           </Button>
           <StatusLine state={settingsSave} />
+        </div>
+
+        {/* Passage highlighting (docs/passage-highlighting-design.md): NOT
+            gated by isLocked — it saves itself, and the server lets it
+            through the publish lock alongside the feedback settings. */}
+        <div className="border-t border-border pt-4">
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={allowHighlighting}
+              onChange={(e) => void saveHighlighting(e.target.checked)}
+              disabled={highlightSave.kind === "saving"}
+              className="mt-1"
+            />
+            <span className="text-sm">
+              Let students highlight passages
+              <span className="block text-xs text-muted-foreground">
+                Students can mark text in passages and sources. Highlights are not saved and are
+                not shown to you. Needs {PRODUCT_NAME} 2.0 or later.
+              </span>
+            </span>
+          </label>
+          <div className="mt-2 flex items-center gap-3">
+            <StatusLine state={highlightSave} />
+          </div>
         </div>
 
         {/* Instant feedback (docs/instant-feedback-design.md): NOT gated by

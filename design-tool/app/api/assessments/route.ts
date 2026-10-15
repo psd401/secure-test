@@ -60,6 +60,7 @@ export async function POST(req: Request) {
       student_layout: body.student_layout ?? "scroll",
       student_feedback: body.student_feedback,
       answers_release: body.answers_release,
+      allow_highlighting: body.allow_highlighting,
       allowed_accommodations: body.allowed_accommodations,
       construct_altering: body.construct_altering,
     })

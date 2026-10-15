@@ -126,6 +126,8 @@ export async function GET(req: Request, ctx: RouteContext) {
       // a relaunch or a resume in a later sitting counts down to the same
       // instant. Null — and no new bundle keys — when there is no limit.
       deadlineFor(attempt, assessment),
+      // Passage highlighting rides only to a 2.0+ client (H-1: never refused).
+      req.headers.get(CLIENT_VERSION_HEADER),
     );
     // FB slice 6 (docs/fill-in-blank-design.md, D-4): a bundle carrying an
     // item type this client cannot render would fail its whole decode, so
