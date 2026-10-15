@@ -1,29 +1,29 @@
 ---
 type: Reference
 title: Signed renderer delivery
-description: Signed renderer manifest, verification, signing CLI and delivery through the design tool, which names the renderer in delivery bundles behind RENDERER_DELIVERY=on and serves its files.
+description: Signed renderer manifest, verification, signing CLI and delivery through the design tool (which names the renderer in delivery bundles behind RENDERER_DELIVERY=on and serves its files), and the macOS client's fetch, verify-before-use and cache of that renderer before a test starts.
 tags: [renderer, signing, delivery]
 openwiki:
   roles: [architecture, delivery, integration]
   change_kinds: [renderer-delivery, signing, public-api]
-  source_paths: [packages/renderer/src/manifest.ts, packages/renderer/src/verify.ts, packages/renderer/src/requires.ts, packages/renderer/scripts/build.ts, packages/renderer/scripts/extract-swift.ts, design-tool/lib/renderer/current.ts, design-tool/lib/renderer/expiryWatch.ts, "design-tool/app/api/renderer/[sha256]/[file]/route.ts", packages/schema/src/delivery.ts, tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift]
-  symbols: [buildManifest, canonicalManifestBytes, parseManifest, verifyManifestSignature, checkManifestUse, REQUIREMENTS, createRendererResolver, currentRenderer, RENDERER_FILE_TYPES, rendererObjectKey, RendererRefSchema, extractRenderer, CLIENT_SOURCES]
-  test_paths: [packages/renderer/test/manifest.test.ts, packages/renderer/test/verify.test.ts, packages/renderer/test/extract.test.ts, design-tool/test/renderer-current.test.ts, design-tool/test/renderer-route.test.ts, design-tool/test/delivery-api.test.ts]
-  invariants: ["The server names a renderer only when RENDERER_DELIVERY is exactly on and every stored file re-verifies.", "A manifest signature covers the exact canonical bytes; parseManifest rejects non-canonical bytes.", "Only renderer.js and renderer.css are published as signed files."]
-  validation_commands: ["cd packages/renderer && bun test", "cd design-tool && bun test test/renderer-current.test.ts test/renderer-route.test.ts"]
+  source_paths: [packages/renderer/src/manifest.ts, packages/renderer/src/verify.ts, packages/renderer/src/requires.ts, packages/renderer/scripts/build.ts, packages/renderer/scripts/extract-swift.ts, design-tool/lib/renderer/current.ts, design-tool/lib/renderer/expiryWatch.ts, "design-tool/app/api/renderer/[sha256]/[file]/route.ts", packages/schema/src/delivery.ts, tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift, client/SecureTestCore/Sources/SecureTestCore/RendererStart.swift, client/SecureTestCore/Sources/SecureTestCore/RendererLoader.swift, client/SecureTestCore/Sources/SecureTestCore/RendererVerifier.swift, client/SecureTestCore/Sources/SecureTestCore/RendererCache.swift, client/SecureTestCore/Sources/SecureTestCore/RendererKeys.swift, client/SecureTest/AssessmentViewController.swift]
+  symbols: [buildManifest, canonicalManifestBytes, parseManifest, verifyManifestSignature, checkManifestUse, REQUIREMENTS, createRendererResolver, currentRenderer, RENDERER_FILE_TYPES, rendererObjectKey, RendererRefSchema, extractRenderer, CLIENT_SOURCES, RendererStart, RendererLoader, RendererVerifier, RendererCache, RendererKeys, RendererPolicy, RendererCapabilities]
+  test_paths: [packages/renderer/test/manifest.test.ts, packages/renderer/test/verify.test.ts, packages/renderer/test/extract.test.ts, design-tool/test/renderer-current.test.ts, design-tool/test/renderer-route.test.ts, design-tool/test/delivery-api.test.ts, client/SecureTestCore/Tests/SecureTestCoreTests/RendererVerifierTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/RendererLoaderTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/RendererStartTests.swift]
+  invariants: ["The server names a renderer only when RENDERER_DELIVERY is exactly on and every stored file re-verifies.", "A manifest signature covers the exact canonical bytes; parseManifest rejects non-canonical bytes.", "Only renderer.js and renderer.css are published as signed files.", "The client verifies the signature, version floor, validity window and requires before fetching code, and re-verifies every cached byte on every use.", "A verified served renderer replaces only the page script and the item and rich-text styles; a Release build refuses a bundle that names no renderer."]
+  validation_commands: ["cd packages/renderer && bun test", "cd design-tool && bun test test/renderer-current.test.ts test/renderer-route.test.ts", "cd client/SecureTestCore && swift test --filter RendererLoaderTests"]
 ---
 
 # Signed renderer delivery
 
-This page covers the server-delivered renderer: the signed manifest, how the design tool stores and serves it, and what the macOS client does not yet do with it.
+This page covers the server-delivered renderer: the signed manifest, how the design tool stores and serves it, and how the macOS client fetches, verifies and uses it.
 
 ## Status
 
 - **Server side (implemented).** The design tool resolves a current signed renderer from storage and names it in the delivery bundle only when `RENDERER_DELIVERY=on`. The flag is set for both the staging and production stacks (`design-tool/infra/lib/app-service.ts`), because a v2.0 client refuses a bundle without the field (D-11). The file route `GET /api/renderer/[sha256]/[file]` is not behind that flag: it serves any stored signed file to a signed-in student or staff session, and returns 404 for anything else.
-- **Client side (not implemented).** The macOS shell still bundles its own renderer script. It does not read the bundle's `renderer` field, fetch `/api/renderer/...`, or verify a manifest signature. The client's `SecureTestCore` sources contain no manifest code; only the separate `tools/renderer-sign` package does.
+- **Client side (implemented, verify-before-use).** Before lockdown begins, the macOS shell reads the bundle's `renderer` ref, fetches the four files by hash, verifies the manifest, and inlines the verified `renderer.js` and `renderer.css` into the test page. Details are in [client verification path](#client-verification-path). The shell refuses a served renderer it cannot verify; it falls back to its bundled page only in a Debug build when the bundle names no renderer.
 - **Bridge mode (implemented).** The published `renderer.js` and `renderer.css` are not authored in `packages/renderer`. `scripts/build.ts` extracts them from the client's Swift string literals (`rendererScript`, `itemStyles`, `richTextStyles` in `AssessmentPage.swift` and `AssessmentPageRichText.swift`) through `scripts/extract-swift.ts`, so the served file is byte-identical to the page a v1.x client builds at run time. Moving the page code into this package is a later slice (D-9 in `docs/server-delivered-renderer-design.md`).
 
-The design rationale is `docs/server-delivered-renderer-design.md`. ADR 0018 (`docs/adr/0018-server-delivered-renderer.md`) is still Proposed; see [lockdown and security](lockdown-and-security.md#sealed-page).
+The design rationale is `docs/server-delivered-renderer-design.md`. ADR 0018 (`docs/adr/0018-server-delivered-renderer.md`) is still marked Proposed in the repository, even though the client load path now exists; see [lockdown and security](lockdown-and-security.md#sealed-page).
 
 ## Components and where they run
 
@@ -35,7 +35,7 @@ The design rationale is `docs/server-delivered-renderer-design.md`. ADR 0018 (`d
 | Trusted public keys | `packages/renderer/src/keys.ts` (`RENDERER_PUBLIC_KEYS`), generated from `keys/*.pub.pem` | Keys the server and tests verify against. Generated: regenerate with `bun run keys` instead of editing. |
 | Build | `packages/renderer/scripts/build.ts` | Writes `dist/renderer.js`, `dist/renderer.css` and `dist/manifest.json`, with `version` from HEAD's committer time and `commit` from HEAD. Refuses any output containing `</`. |
 | Swift extraction | `packages/renderer/scripts/extract-swift.ts` (`CLIENT_SOURCES`, `extractRenderer`) | Reads the `static let` multi-line string literals of the client page and resolves them as Swift would (indentation stripping, raw literals, `\#(name)` splices). Anything it does not understand fails the build instead of shipping a different renderer. The proof against Swift itself is `scripts/check-extraction.sh`, which runs on macOS and is run by `deploy.sh` before signing. |
-| Signing and verifying CLI | `tools/renderer-sign/Sources/renderer-sign/main.swift`; pure core in `tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift` | Signs `manifest.json` with a Secure Enclave key, or a dev PEM key for local use. Verifies a signature with a public PEM. The Swift core is the same check the client shell is planned to make. |
+| Signing and verifying CLI | `tools/renderer-sign/Sources/renderer-sign/main.swift`; pure core in `tools/renderer-sign/Sources/RendererSignCore/RendererSignCore.swift` | Signs `manifest.json` with a Secure Enclave key, or a dev PEM key for local use. Verifies a signature with a public PEM. The Swift core mirrors the check the client shell makes in `RendererVerifier`. |
 | Storage resolver | `design-tool/lib/renderer/current.ts` (`createRendererResolver`, `currentRenderer`, `rendererObjectKey`) | Reads the stored pointer and renderer objects, re-verifies them, and returns the renderer to name. |
 | File route | `design-tool/app/api/renderer/[sha256]/[file]/route.ts` (`GET`) | Serves the four stored files by manifest hash. |
 | Delivery bundle | `design-tool/app/api/assessments/[id]/delivery/route.ts` | Adds `renderer` to the bundle only when the flag is on and a renderer verifies. |
@@ -67,6 +67,21 @@ Invariants that the tests and code enforce:
 
 Every consumer follows the same order: verify the bytes, parse them, then check use. `verifyManifestSignature` returns `false` for a malformed signature and throws for a key that is not P-256. `checkManifestUse` refuses `below_min_version`, `not_yet_valid` and `expired`, with both window ends inclusive.
 
+## Client verification path
+
+The macOS shell applies the same order, in Swift. `AssessmentViewController` runs it after the bundle arrives and its deadline check passes, and before the speech pre-flight and `onBundleLoaded`, which is what begins lockdown. A refusal therefore never starts a secure session.
+
+1. **Start decision.** `RendererStart.plan(for:allowsBundledFallback:)` loads when the bundle carries a `renderer` ref. Without one, a Debug build uses the bundled page and a Release build refuses (`refuseMissing`, D-11).
+2. **Cache first, never trusted.** `RendererLoader.load` reads `RendererCache`, one owner-only directory per manifest hash. A cached copy goes through the same `validate` as a fresh one. A failure that a fresh download could fix (a bad signature, a changed script or style) removes the entry and falls through to a fetch. A failure the signed manifest decides (policy, shape, missing capability) is returned without a refetch.
+3. **Fresh fetch, verify before code.** The loader fetches `manifest.json` through `APIClient.fetchRendererFile`, which calls `GET /api/renderer/<sha256>/<file>`. The manifest's SHA-256 must equal the bundle's `sha256`. The loader then fetches `manifest.sig` and runs `RendererVerifier.verify`, so a refused manifest costs two small requests and never the code. Only then does it fetch `renderer.js` and `renderer.css`.
+4. **Verifier order.** `RendererVerifier.verify` checks the signature against the trusted keys, then the manifest shape, then `version >= RendererPolicy.minimumVersion`, then `issued_at <= now <= not_after` (both inclusive), then that every `requires` term is in `RendererCapabilities.supported`. A refusal caused only by a missing capability sets `isUpdateNeeded`, so the student sees "update SecureTest" rather than "try again".
+5. **Code checks.** `validate` requires the manifest `version` to equal the bundle's `version`, each file's size and SHA-256 to match the manifest, both files to decode as UTF-8, and the script to contain no `</`. A verified copy is written to the cache.
+6. **Trusted keys.** `RendererStart.trustedKeys(includeDevKey:)` always returns `RendererKeys.working` and `RendererKeys.backup`. It adds the dev key only in a Debug build.
+
+When the outcome is `.served`, `AssessmentPage.html(... renderer:)` replaces the bundled `rendererScript` and the adjacent item and rich-text styles with the verified copies. KaTeX, the page globals, `PageShell`'s styles and the CSP are unchanged, so the page still follows the [client overview](overview.md). A refusal logs one `renderer: REFUSED` line, calls `onRendererRefused`, and returns without asking for the microphone.
+
+Tests: `RendererLoaderTests` covers fresh fetch and cache reuse, tampered cache entries, manifest hash and version mismatches, a bad signature refused before the code is fetched, integrity failures, a missing capability, a version below the floor, eviction, and the cache's file modes. `RendererVerifierTests` covers the cross-language fixture, timestamp shapes, the window edges, and the key and policy pins (`testWorkingKeyMatchesRepoPEM`, `testPolicyMinimumVersionIsTheFirstProductionRenderer`). `RendererStartTests` covers the plan, the Debug fallback, and the served-page splice. Run `cd client/SecureTestCore && swift test --filter RendererLoaderTests` (macOS).
+
 ## Storage layout and the pointer
 
 Files live in the asset storage provider under a hash prefix (`lib/renderer/current.ts`):
@@ -96,13 +111,18 @@ sequenceDiagram
     participant Bundle as Delivery route
     participant Resolver as currentRenderer
     participant Route as GET api renderer sha256 file
+    participant Shell as Client RendererLoader
     Signer->>Store: write manifest, signature, files, then current.json
     Bundle->>Resolver: read when RENDERER_DELIVERY is on
     Resolver->>Store: read pointer, manifest, signature and files
     Resolver-->>Bundle: sha256 and version, or null with a WARN log
     Bundle-->>Bundle: add renderer to the bundle only when non-null
-    Note over Route,Store: The shell fetches these files by hash. Not yet implemented in the client.
+    Bundle-->>Shell: delivery bundle with the renderer ref
+    Shell->>Route: GET manifest.json, check its hash, then GET manifest.sig
     Route->>Store: read one of the four stored files
+    Shell->>Shell: verify signature, version floor, window and requires
+    Shell->>Route: GET renderer.js and renderer.css
+    Shell->>Shell: check size, hash and UTF-8, then cache and inline
 ```
 
 The bundle's `renderer` field is optional, and `RendererRefSchema` is strict. The schema comment says a client that predates the field ignores it. The `RENDERER_DELIVERY` flag is read in the delivery route itself, and only the exact value `on` enables it. The delivery route tests cover `true` as not enabled.
@@ -132,7 +152,8 @@ The bundle's `renderer` field is optional, and `RendererRefSchema` is strict. Th
 - **Adding a `requires` term.** Edit `REQUIREMENTS` in `requires.ts` only together with a shell that can answer the term, since the shell refuses a renderer that names what it lacks. Keep `PLACEHOLDER_REQUIRES` unchanged until then.
 - **Rotating a trusted key.** Add or replace a PEM under `packages/renderer/keys/`, run `bun run keys`, and never edit `src/keys.ts` by hand. `keys.test.ts` fails while the two drift.
 - **Serving behaviour in the delivery bundle.** Changes to when the bundle names a renderer belong in `delivery-api.test.ts` (describe "GET /api/assessments/:id/delivery — renderer"). That suite needs the test database (see [testing](../testing/testing-and-validation.md)).
-- **Client adoption.** Starting the shell side (reading `renderer`, fetching by hash, verifying in Swift) is a new seam, not a bug fix. It depends on the ADR 0018 decision and needs its own tests in `client/SecureTestCore`.
+- **Changing the client load path.** Start decisions belong in `RendererStart.swift`, fetch and cache in `RendererLoader.swift` and `RendererCache.swift`, and checks in `RendererVerifier.swift`. A change to the verify order or the floor needs the matching cases in `RendererVerifierTests` and `RendererLoaderTests`. Keep `RendererKeys` byte-for-byte with `packages/renderer/keys/` (the tests fail if they drift). Validate with `cd client/SecureTestCore && swift test --filter RendererVerifierTests` (macOS).
+- **Raising the client floor.** `RendererPolicy.minimumVersion` is the lowest renderer version the shell runs. Raising it retires older renderers on every shell (the exposure runbook), so change it only in a release, and test with `RendererVerifierTests` (`testPolicyMinimumVersionIsTheFirstProductionRenderer` pins the current value).
 - **Conditional checks.** `swift test` in `tools/renderer-sign` runs on macOS only. Run it only when `RendererSignCore` or its fixtures change.
 
 Scope boundaries: the signing and deployment scripts are not documented here. The deploy orchestration is in `design-tool/infra`, which this wiki does not cover in detail; see [deployment and observability](../operations/deployment-and-observability.md) for the stacks.

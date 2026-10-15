@@ -68,6 +68,18 @@ The page reads the box as a tree (`richTreeFromDom`) rather than re-parsing mark
 - **Caret moves (RT-2).** A caret move without an edit is recorded on the current state (`history.moved`), so an undo lands the caret where the change was made. `testUndoPutsTheCaretWhereTheUndoneChangeWasMade` pins this.
 - **Saving.** Typing autosaves the html and derived text, five seconds after the last keystroke or every 30 seconds during continuous typing (the essay timing in `RendererTextAutosaveTests`). Leaving the box posts at once (`testLeavingTheBoxPostsAtOnce`). A bold-only change is still saved (`testABoldOnlyChangeIsSaved`).
 
+## Word count
+
+<!-- openwiki: broken internal link [../design-tool/authoring.md#item] heading anchor "item" does not exist in "../design-tool/authoring.md". Fix the href or restore the target, then delete this comment. -->
+The count is a page-side display of the item's `max_word_count` and `show_word_count` keys from the delivery bundle (both are set by the teacher; see [authoring](../design-tool/authoring.md#item)). Both essay boxes, formatted and plain, use the same rules in `AssessmentPage.swift`:
+
+- A maximum always shows its count as "n / max words" and gets the `word-count over` class when the count passes it.
+- Without a maximum, `show_word_count` shows a plain running "n words" count that is never marked over.
+- Without either key, no count is drawn.
+- The box is named "Your answer". The count is spoken on request, when focus leaves the box, in a hidden phrase such as "12 of 50 words, over the limit", so red alone does not carry the state. Crossing the maximum is announced once in each direction, never word by word.
+
+The server derives the stored word count from the sanitised text, so the number the student sees matches the stored one ([rich-text rules](#rules-that-must-stay-in-step-with-the-server)). Focused checks: `cd client/SecureTestCore && swift test --filter RendererRichTextTests` (formatted boxes, including the WC-2 spoken-count and U-22 `show_word_count` cases) and `swift test --filter RendererBehaviourTests` (plain essays, the over-limit and spoken-count cases); server side: `cd design-tool && bun test test/delivery-api.test.ts` (the U-22 test).
+
 ## Resume and read-back
 
 - A saved formatted answer is rebuilt from its html without posting (`testASavedFormattedAnswerIsRestoredWithoutPosting`). A plain saved answer fills one paragraph per line. This is the P-1 path described in [resume prefill](../design-tool/sittings-and-attempts.md#resume-prefill).

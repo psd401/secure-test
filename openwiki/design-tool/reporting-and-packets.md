@@ -63,7 +63,7 @@ URL contract (`parsePacketQuery`, `PacketQuery`):
 
 - `section` is required for a class packet (one PDF per section). Without it the page shows a screen-only list of sections with handed-in work and prints nothing.
 - `attempt=<uuid>` prints one student's work with no section. Unlike the section packet, it may name an in-progress attempt.
-- `items` is a comma list or repeated values from the toolbar checklist; `questions=0` prints answers only; `scores` is `none | teacher | ai | both`; `anon` switches to labels with a teacher key page last; `spacing=double` double-spaces essay answers.
+- `items` is a comma list or repeated values from the toolbar checklist; `questions=0` prints answers only; `answers=0` leaves out what the student wrote or chose and keeps the question and the score and feedback blocks, a feedback sheet to hand back (ignored when `scores=none`, so the answers still print: `packetHidesAnswers` in `lib/reporting/workPacket.ts`); `scores` is `none | teacher | ai | both`; `anon` switches to labels with a teacher key page last; `spacing=double` double-spaces essay answers.
 - The last repeated value wins, and every malformed value falls back to a default. The parser never returns a 400.
 
 Behaviour that matters for changes:
