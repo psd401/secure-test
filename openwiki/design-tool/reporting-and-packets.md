@@ -57,7 +57,7 @@ Essay answers are rendered by `renderEssayAnswerHtml` in `lib/richText/`, not by
 
 ## The class work packet
 
-The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and scores from the teacher, the AI, both or neither. Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on the teacher's explicit action for their own assessment. Failures are `notFound()` so the URL cannot probe for other assessments.
+The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and scores from the teacher, the AI, both or neither. Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on an explicit teacher action. The page checks `view` access on the assessment (`pageAssessment` in `lib/api/access.ts`), so the owner, a grant holder or an admin can print it. Failures are `notFound()` so the URL cannot probe for other assessments. The page comment and FERPA note still say owner-only; the mismatch is listed in [auth and access](auth-and-access.md#open-co-teacher-gaps).
 
 URL contract (`parsePacketQuery`, `PacketQuery`):
 

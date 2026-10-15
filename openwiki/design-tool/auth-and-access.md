@@ -82,6 +82,16 @@ Other sharing models: `assessment_shares` (`lib/api/shares.ts`) is **copy semant
 
 **Admin** is a config list, not a role: `ADMIN_EMAILS` (comma list, `lib/auth/admin.ts`). It widens only the *ownership* check (admin → `own` everywhere), never the role check. **Impersonation** (`POST /api/admin/impersonate[/stop]`, `lib/api/impersonation.ts`, `impersonation_sessions` audit table): mints a session whose `sub/email/role` are the target teacher's with `actor_sub` set; `isAdmin()` is false while `actor_sub` is set, so act-as cannot reach admin pages or chain. A target can only be a staff address that owns an `assessments`/`test_sessions` row.
 
+## Open co-teacher gaps
+
+A design note written on 2026-10-15 (`docs/coteacher-gaps-2026-10-design.md`) records what remains open after the co-teacher follow-ups of 2026-09-22. These items were inferred from code and were not reproduced with a second staff account, so treat them as open findings to verify, not as settled behaviour.
+
+- **Owner images are not visible to co-teachers (G-1).** `GET /api/assets/[id]` requires `own` on the asset ([storage and assets](storage-and-assets.md#assets)). Staff pages that emit `<img src="/api/assets/<id>">` therefore break for grant holders and for admins acting outside act-as. The student bundle and the preview resolve assets under the assessment owner, so students still see the images. The note proposes an assessment-scoped asset URL authorised at `view`.
+- **Work packet admits any `view` principal (G-3).** `/dashboard/[id]/results/work` calls `pageAssessment(…, "view")`, so a co-teacher or admin can print student work. The access model allows this. The page comment and the FERPA note still describe the packet as owner-only ([reporting and packets](reporting-and-packets.md)).
+- **Co-teacher sittings with no section lose their section label (G-2).** `resolveSection` in `lib/scoring/results.ts` falls back to the assessment owner's sections, so a co-teacher's students can read "No section" and drop out of work packets. The proposed fix tries the sitting owner's sections first.
+- **Practice sittings have no duplicate guard (G-4).** `POST /api/test-sessions` skips the open-sitting duplicate check for `kind = practice`, so only the UI prevents a second practice sitting ([sittings and attempts](sittings-and-attempts.md#vocabulary)).
+- **Teacher email matching is case-sensitive in section lookups (G-5).** `sectionsCurrentlyTaughtBy` and `studentsInTeachersSections` in `lib/roster/queries.ts` compare `teacher_email` exactly. `coTeachersOf` and `teachersCurrentlyTeaching` lower-case both sides.
+
 ## Change recipes
 
 - **New teacher route**: call `requireStaff()`, then `authorizeAssessment(db, session, id, level)` with the *lowest* level that fits the table above; return its `response` unchanged. Never compare `owner_sub` inline.
