@@ -34,13 +34,12 @@ The server side is small: the `student_layout` column (migration `0027_client_pa
 
 The page script in `AssessmentPage.swift` reads `BUNDLE.layout` once when it loads: `var PAGED = !!(BUNDLE && BUNDLE.layout === 'paged')`. Anything else, including a value this build does not know, takes the scroll path, which builds the same tree as before the field existed.
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
-    B["Delivery bundle: layout, item_sets, answered_item_ids"] --> P{"layout == paged?"}
-    P -- no --> S["Scroll: stimulus before each set's first member, items in order, hand-in block at the end"]
+    B["Delivery bundle: layout, item_sets, answered_item_ids"] --> P{"layout is paged?"}
+    P -- no --> S["Scroll: stimulus before each set first member, items in order, hand-in block at the end"]
     P -- yes --> Q["buildPaged: one page per question, one page per inline set, a passage page per own_page set, a review page"]
-    Q --> W{"side_by_side and viewport >= 1100 px at build time?"}
+    Q --> W{"side_by_side and viewport at least 1100 px at build time?"}
     W -- yes --> SBS["Passage in the left column, question in the right, Sources: Beside or Above"]
     W -- no --> OP["Narrow: own_page behaviour, passage on its own page"]
     Q --> BAR["Pager bar: Previous, current page label, Next, and a strip with one button per page"]
