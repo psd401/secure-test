@@ -1657,9 +1657,9 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 581 | Settings tab: **Let students highlight passages** | Unticked by default, hint under it names "SecureTest 2.0 or later"; ticking it saves at once ("Saved"), and it stays ticked after a reload | NOT RUN |
-| 582 | Publish, then tick / untick it | Not greyed while Published; each change saves and survives a reload; the rest of the tab stays locked | NOT RUN |
-| 583 | With it ticked: **Duplicate**, and Export → Import (backup file) | Both copies show it ticked; the exported `.json` carries `"allow_highlighting": true` (absent when off) | NOT RUN |
-| 584 | Delivery with it ticked, header `X-SecureTest-Version: 2.0.0` | 200; the bundle carries `"allow_highlighting": true` | NOT RUN |
-| 585 | Delivery with it ticked, header `X-SecureTest-Version: 1.6.3`, and again with no header | 200 both times (not refused); no `allow_highlighting` key | NOT RUN |
-| 586 | Delivery with it unticked, header `2.0.0` | 200; no `allow_highlighting` key | NOT RUN |
+| 581 | Settings tab: **Let students highlight passages** | Unticked by default, hint under it names "SecureTest 2.0 or later"; ticking it saves at once ("Saved"), and it stays ticked after a reload | ✅ 2026-10-15, local dev on the `_demo` DB, fixture `Highlighting rows 581-586 2026-10-15` (a duplicate of Photosynthesis Quiz), Claude in the browser pane — unticked by default, hint ends "Needs SecureTest 2.0 or later.", ticking showed "Saved" and the DB row read true, still ticked after a reload |
+| 582 | Publish, then tick / untick it | Not greyed while Published; each change saves and survives a reload; the rest of the tab stays locked | ✅ 2026-10-15, same fixture — after Publish the checkbox stayed enabled while Name and Save settings were locked; untick → DB false, unticked after a reload; tick → DB true |
+| 583 | With it ticked: **Duplicate**, and Export → Import (backup file) | Both copies show it ticked; the exported `.json` carries `"allow_highlighting": true` (absent when off) | ✅ 2026-10-15 — the Duplicate button's copy and an Export → `POST /api/assessments/import` of the backup both came out ticked; the export carried `"allow_highlighting": true`, and an export of a copy set to off carried no key |
+| 584 | Delivery with it ticked, header `X-SecureTest-Version: 2.0.0` | 200; the bundle carries `"allow_highlighting": true` | ✅ 2026-10-15 — a demo student joined the sitting (minted token, redeem, start attempt); `GET …/delivery` with `X-SecureTest-Version: 2.0.0` → 200, `allow_highlighting: true` |
+| 585 | Delivery with it ticked, header `X-SecureTest-Version: 1.6.3`, and again with no header | 200 both times (not refused); no `allow_highlighting` key | ✅ 2026-10-15 — `1.6.3` → 200, no key; no header → 200, no key |
+| 586 | Delivery with it unticked, header `2.0.0` | 200; no `allow_highlighting` key | ✅ 2026-10-15 — unticked through the PATCH route; `2.0.0` → 200, no key. Fixtures, the sitting and the attempt were deleted afterwards |
