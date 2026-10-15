@@ -47,6 +47,11 @@ time) and its rubric is attached.
    question at a time**, and it shows two columns only on a wide screen (a
    MacBook in full screen qualifies). Students get a *Sources: Beside |
    Above* switch.
+   **Settings → Let students highlight passages** (off by default, editable
+   after publishing) lets students mark text in passages and sources — mouse,
+   or *Highlight mode* with the arrow keys. Highlights are not saved and you
+   don't see them in results; it needs SecureTest 2.0 or later (older Macs
+   test normally, without it).
 3. **Publish.** A Published assessment is locked (a running test can't
    change). To edit, *Unpublish*, edit, *Publish* again — anyone already in
    a session keeps going on what they had.

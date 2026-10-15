@@ -2513,3 +2513,40 @@ maximum, neither.
 | Count with no maximum: arrive, then VO-Right | "Your answer" on arrival; "3 words" after; nothing announced while typing | NOT RUN |
 | No count | "Your answer"; VO-Right reaches the next question | NOT RUN |
 | Sighted: a contrast set + 3X zoom | The visible counter unchanged ("12 / 50 words", red past the maximum); no stray text shows | NOT RUN |
+
+## Passage highlighting (U-21, slices 2–3, ships with v2.0, 2026-10-14)
+
+`docs/passage-highlighting-design.md` is the record. With the assessment's
+"Let students highlight passages" on, stimulus and source bodies are
+selectable; a Highlight button marks a selection; the "Highlight mode"
+button gives the keyboard sentence cursor. Nothing is saved or posted.
+Already checked headlessly: `swift test` (RendererHighlightTests, 35).
+
+**How to run:** rows 1–17 on a Debug build of `main` with the offline
+bundle `highlight-spike.json` plus `"allow_highlighting": true` (the
+server's 2.0 gate does not apply to a local bundle), windowed; rows 18–19
+on the v2.0 RC and a v1.6.3 client against production after the deploy
+that signs the renderer. **VoiceOver rows: quit or hide the Claude app first, VoiceOver
+on before joining (VO-1); report afterwards.**
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 1 | Bundle without the flag | No Highlight button on selection, no "Highlight mode" button, passages not selectable | NOT RUN |
+| 2 | Drag across part of a sentence; press Highlight | The button appears just under the selection; exactly the selected words are marked, underlined | NOT RUN |
+| 3 | Drag across two paragraphs | Two marks, none across the blank line | NOT RUN |
+| 4 | Drag across inline math | The whole formula is marked as one piece; no gap | NOT RUN |
+| 5 | Select in a question stem or across two passages | No Highlight button | NOT RUN |
+| 6 | Click a mark | That mark only is removed; "Clear highlights" disappears with the last mark | NOT RUN |
+| 7 | "Clear highlights" | Every mark in that passage removed, other passages untouched | NOT RUN |
+| 8 | Cmd-C on a selected passage word (clipboard locked) | Clipboard unchanged | NOT RUN |
+| 9 | Scroll a source panel with the button showing | The button hides | NOT RUN |
+| 10 | Tab to "Highlight mode" (macOS Keyboard navigation OFF), Space | Mode on, button pressed, first sentence outlined | NOT RUN |
+| 11 | Down / Up / Home / End | The outline moves by sentence and stops at the ends | NOT RUN |
+| 12 | Space on a sentence, again on the same sentence | Marked, then the mark removed; a mouse mark reaching into the next sentence keeps its outside part | NOT RUN |
+| 13 | Escape; then Tab away while in the mode | Focus returns to "Highlight mode", unpressed; Tab also leaves the mode | NOT RUN |
+| 14 | Contrast sets (Yellow on Black, Black on White, Medium Gray on Light Gray) + 3X zoom | Marks readable and underlined in each; the outline visible | NOT RUN |
+| 15 | VoiceOver: arrive on a highlighted word, a highlighted phrase | Announced as highlighted, once | ✅ 2026-10-14 (spike build, James) |
+| 16 | VoiceOver: enter Highlight mode, VO hears the instruction; arrows move (not VoiceOver's own cursor); Space | "Highlight mode. Arrow keys move by sentence…", each sentence read with ", highlighted" when marked, "Highlighted" / "Highlight removed" | NOT RUN |
+| 17 | Read aloud a passage with marks (an accommodation fixture) | Reads the whole passage in order | NOT RUN |
+| 18 | v2.0 RC, real AAC session, production with the setting on | Rows 2, 6, 8, 10 hold inside the lock | NOT RUN |
+| 19 | v1.6.3 client on the same assessment | Test works as before; no highlighting, no refusal | NOT RUN |
