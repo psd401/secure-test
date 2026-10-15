@@ -178,18 +178,25 @@ final class RendererBehaviourTests: XCTestCase {
     private static let liveJS = "__all('.sr-only', __item(0)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0].textContent"
 
     /// The textarea was named only by its placeholder and linked to its count
-    /// by nothing. Now its name is "Your answer" + the count worded for
-    /// listening, and the visible counter is hidden from VoiceOver.
-    func testAPlainEssayIsNamedWithItsSpokenCount() throws {
+    /// by nothing (WC-2). WC-3: its name is just "Your answer"; the count,
+    /// worded for listening, is the hidden node right after the visible
+    /// counter (which VoiceOver skips), so moving on from the box reaches it.
+    func testAPlainEssayIsNamedAndItsSpokenCountFollowsTheCounter() throws {
         let h = try RendererHarness(bundleJSON: """
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":50}]}
         """)
         let area = "__first('textarea', __item(0))"
-        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 0 of 50 words")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(\(area))"), "0 of 50 words")
         XCTAssertEqual(try h.string("__first('.word-count', __item(0)).getAttribute('aria-hidden')"), "true")
         XCTAssertNil(try h.string("\(area).getAttribute('aria-describedby')"))
+        // The label is read only as the name, never on its own.
+        XCTAssertEqual(try h.string("__all('.sr-only', __item(0)).filter(function (n) { return n.id.indexOf('essay-label-') === 0; })[0].getAttribute('aria-hidden')"), "true")
+        // The spoken count is the node right after the visible counter.
+        XCTAssertEqual(try h.string("(function () { var c = __first('.word-count', __item(0)); var k = c.parentNode.children; return k[k.indexOf(c) + 1].id; })()"), "essay-count-spoken-i")
         try h.eval("var a = \(area); a.value = 'one two three'; a.oninput();")
-        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 3 of 50 words")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(\(area))"), "3 of 50 words")
         XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "3 / 50 words")
     }
 
@@ -202,13 +209,15 @@ final class RendererBehaviourTests: XCTestCase {
         let area = "__first('textarea', __item(0))"
         XCTAssertEqual(try h.string(Self.liveJS), "")
         try h.eval("var a = \(area); a.value = 'one two three four'; a.oninput();")
-        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 4 of 3 words, over the limit")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(\(area))"), "4 of 3 words, over the limit")
         XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
         // Still over: the live text is unchanged, so nothing is re-announced.
         try h.eval("var a = \(area); a.value = 'one two three four five'; a.oninput();")
         XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
         try h.eval("var a = \(area); a.value = 'one two'; a.oninput();")
-        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 2 of 3 words")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(\(area))"), "2 of 3 words")
         XCTAssertEqual(try h.string(Self.liveJS), "Back within the limit")
     }
 
@@ -220,7 +229,8 @@ final class RendererBehaviourTests: XCTestCase {
         """)
         let area = "__first('textarea', __item(0))"
         try h.eval("var a = \(area); a.value = 'one'; a.oninput();")
-        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer 1 word")
+        XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(\(area))"), "1 word")
         XCTAssertEqual(try h.string(Self.liveJS), "")
     }
 

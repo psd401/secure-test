@@ -2577,14 +2577,17 @@ public enum AssessmentPage {
           ? 'word-count over' : 'word-count';
       }
 
-      // WC-2 (2026-10-14): VoiceOver reads a field's NAME every time the
-      // student arrives in it; the count as a description (aria-describedby)
-      // was never heard in a real session, and the plain essay's textarea had
-      // no name at all. So both essay boxes are named "Your answer" plus the
-      // count worded for listening — "12 of 50 words, over the limit", since
-      // red alone is no cue (WCAG 1.4.1). The visible counter is hidden from
-      // VoiceOver so the page reads the count once, and crossing the maximum
-      // is announced once each way, never word by word.
+      // WC-2 (2026-10-14): the count as a description (aria-describedby) was
+      // never heard in a real session, and the plain essay's textarea had no
+      // name at all. WC-3 (James, 2026-10-14, option b): the count in the
+      // box's NAME was heard, but read in the intro every time the student
+      // arrived. So both essay boxes are named just "Your answer", and the
+      // count is heard on request — moving on from the box reaches it, worded
+      // for listening ("12 of 50 words, over the limit", since red alone is
+      // no cue, WCAG 1.4.1) in a hidden span after the visible
+      // "12 / 50 words", which VoiceOver skips (no "slash").
+      // Crossing the maximum is still announced once each way, never word by
+      // word, so going over is never silent.
       function wordCountSpoken(n, item) {
         if (typeof item.max_word_count === 'number') {
           var s = n + ' of ' + item.max_word_count + ' words';
@@ -2605,6 +2608,9 @@ public enum AssessmentPage {
       function essayFieldA11y(field, counter, item) {
         var label = hiddenText('essay-label-' + item.id);
         label.textContent = 'Your answer';
+        // Read only as the box's name, never on its own when VoiceOver moves
+        // past it (the same pattern as the dropdown blanks' label).
+        label.setAttribute('aria-hidden', 'true');
         var nodes = [label];
         field.removeAttribute('aria-label');
         field.removeAttribute('aria-describedby');
@@ -2612,22 +2618,28 @@ public enum AssessmentPage {
           field.setAttribute('aria-labelledby', label.id);
           return { nodes: nodes, update: function () {} };
         }
+        field.setAttribute('aria-labelledby', label.id);
+        // The visible counter is hidden from VoiceOver; the spoken count is
+        // the next node after it (callers append `nodes` right after the
+        // counter), so VO-moving on from the box reaches it.
         counter.setAttribute('aria-hidden', 'true');
         var spoken = hiddenText('essay-count-spoken-' + item.id);
         var live = hiddenText('essay-count-live-' + item.id);
         live.setAttribute('aria-live', 'polite');
-        nodes.push(spoken, live);
-        field.setAttribute('aria-labelledby', label.id + ' ' + spoken.id);
+        nodes.unshift(spoken, live);
         var max = item.max_word_count;
         var wasOver = null;
         return {
           nodes: nodes,
+          // Sets the visible count, its spoken twin and the over class.
           update: function (n) {
+            counter.textContent = wordCountText(n, item);
             spoken.textContent = wordCountSpoken(n, item);
+            counter.className = wordCountClass(n, item);
             if (typeof max !== 'number') return;
             var over = n > max;
             // The first call (building, or a restored answer) sets the state
-            // without announcing it: the name already says it on arrival.
+            // without announcing it: only a crossing while typing is news.
             if (wasOver !== null && over !== wasOver) {
               live.textContent = over ? 'Over the ' + max + '-word limit' : 'Back within the limit';
             }
@@ -2796,17 +2808,14 @@ public enum AssessmentPage {
           counter.className = 'word-count';
           counter.id = 'essay-count-' + item.id;
         }
-        // WC-2: the count is heard in the box's name, not as a description.
+        // WC-2 / WC-3: the box is named "Your answer"; the counter speaks the count.
         var a11y = essayFieldA11y(box, counter, item);
         function refresh() {
           var b = blocks();
           var empty = richText(b) === '';
           box.setAttribute('data-empty', empty ? 'true' : 'false');
           if (!counter) return;
-          var n = countWords(richText(b, true));
-          counter.textContent = wordCountText(n, item);
-          counter.className = wordCountClass(n, item);
-          a11y.update(n);
+          a11y.update(countWords(richText(b, true)));
         }
 
         function sendEssay() {
@@ -3217,14 +3226,11 @@ public enum AssessmentPage {
 
         function refresh() {
           if (!counter) return;
-          var n = countWords(area.value);
-          counter.textContent = wordCountText(n, item);
           // Over-limit is SHOWN, never truncated. Silently deleting a student's
           // words is a worse failure than an over-length response, and the
           // submit-time gate belongs with submission (slice 64) where there is
           // something to gate.
-          counter.className = wordCountClass(n, item);
-          a11y.update(n);
+          a11y.update(countWords(area.value));
         }
 
         area.oninput = refresh;

@@ -535,6 +535,17 @@ final class RendererHarness {
       }).join(' ');
     }
 
+    /// WC-3: the count VoiceOver reaches after an essay box — the hidden
+    /// span paired with the box's "Your answer" label by item id, plus
+    /// whether it is the node right after the visible counter.
+    function __spokenCount(field) {
+      var label = (field.getAttribute('aria-labelledby') || '').split(' ')[0];
+      var id = label.replace('essay-label-', 'essay-count-spoken-');
+      var nodes = __all('.sr-only');
+      for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) return nodes[i].textContent;
+      return '<missing ' + id + '>';
+    }
+
     function __count(sel, node) { return __all(sel, node).length; }
 
     /// The nth rendered item wrapper, so tests can scope to one item.

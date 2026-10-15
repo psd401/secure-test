@@ -336,7 +336,8 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(try h.string("__box().getAttribute('aria-multiline')"), "true")
         // WC-2: named by labelledby — "Your answer" + the spoken count.
         XCTAssertNil(try h.string("__box().getAttribute('aria-label')"))
-        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 0 of 400 words")
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(__box())"), "0 of 400 words")
         XCTAssertEqual(try h.string("__box().getAttribute('data-placeholder')"), "Write your response here…")
         XCTAssertEqual(try h.string("__first('.essay-toolbar', \(item)).getAttribute('role')"), "toolbar")
         XCTAssertEqual(
@@ -422,7 +423,8 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "0 words")
         try h.eval("__typeBox(['One two', 'three']);")
         XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "3 words")
-        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 3 words")
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(__box())"), "3 words")
     }
 
     /// WC-2: over the maximum is said in words (red alone is no cue), and
@@ -432,7 +434,8 @@ final class RendererRichTextTests: XCTestCase {
         let live = "__all('.sr-only', __item(3)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0].textContent"
         XCTAssertEqual(try h.string(live), "")
         try h.eval("__typeBox(['one two three four']);")
-        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 4 of 3 words, over the limit")
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(__box())"), "4 of 3 words, over the limit")
         XCTAssertEqual(try h.string(live), "Over the 3-word limit")
     }
 
@@ -1012,7 +1015,8 @@ final class RendererRichTextTests: XCTestCase {
         // not a description (a delayed hint VoiceOver did not speak), and the
         // visible counter is hidden from VoiceOver so it is heard once.
         XCTAssertNil(try h.string("__box().getAttribute('aria-describedby')"))
-        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer 0 of 400 words")
+        XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
+        XCTAssertEqual(try h.string("__spokenCount(__box())"), "0 of 400 words")
         XCTAssertEqual(try h.string("__first('.word-count', \(item)).getAttribute('aria-hidden')"), "true")
         // No count at all: still named.
         let none = try harness(extra: "delete BUNDLE.items[3].max_word_count;")

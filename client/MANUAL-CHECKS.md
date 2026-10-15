@@ -2483,3 +2483,33 @@ formatted with a maximum, a count with no maximum, neither.
 | VoiceOver cursor (VO-arrows) across the page | The count is read once, in its spoken form; the visible "12 / 50 words" is not read separately | NOT RUN |
 | Sighted check: contrast set + 3X zoom | The visible counter looks as in v1.6.3 (red past the maximum); no stray hidden text shows | NOT RUN |
 | Real AAC session on the signed v1.6.4 build | The first five rows hold inside the lock | NOT RUN |
+
+## Word count heard on request (WC-3, ships with v2.0, 2026-10-14)
+
+`docs/roadmap-2026-09.md` WC-3 is the record (James, option b). WC-2 put
+the count in the essay box's name; James did not want it in the intro read
+on every arrival. Now both essay boxes are named just "Your answer"; the
+count, worded for listening ("12 of 50 words, over the limit"), is a hidden
+node right after the visible counter (which VoiceOver skips, so no
+"slash"); the "Your answer" label is hidden too, so it is heard only as
+the name. The once-per-crossing announcements are unchanged. No key speaks
+the count (James: none for now). Already checked headlessly: `swift test`
+999 (the WC-2 tests now assert the name "Your answer", the spoken count
+through `__spokenCount`, the hidden label, and that the spoken count is the
+node right after the counter). A served renderer carries it only after a
+production deploy re-signs one — run these on a v2.0 client after that.
+
+**Turn VoiceOver on BEFORE joining (VO-1).** Fixture: four essays — plain
+with a maximum of 50, formatted with a maximum of 50, a count with no
+maximum, neither.
+
+| Check | Expected | Result |
+|---|---|---|
+| Arrive in the plain essay with a maximum | "Your answer, edit text" (VoiceOver's wording) — no count | NOT RUN |
+| Arrive in the formatted essay with a maximum | "Your answer" and its text-entry role — no count | NOT RUN |
+| From either box, VO-Right (Control-Option-Right) | "0 of 50 words" — not "0 slash 50 words"; "Your answer" is not read again | NOT RUN |
+| Type past 50, then VO-Right from the box | "Over the 50-word limit" once while typing; the counter then reads "52 of 50 words, over the limit" | NOT RUN |
+| Delete back under 50 | "Back within the limit" once | NOT RUN |
+| Count with no maximum: arrive, then VO-Right | "Your answer" on arrival; "3 words" after; nothing announced while typing | NOT RUN |
+| No count | "Your answer"; VO-Right reaches the next question | NOT RUN |
+| Sighted: a contrast set + 3X zoom | The visible counter unchanged ("12 / 50 words", red past the maximum); no stray text shows | NOT RUN |

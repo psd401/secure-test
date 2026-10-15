@@ -1137,7 +1137,10 @@ never renamed (convention in `CLAUDE.md` "Naming").
   because production's renderer then predated WC-2 — on v2.0 a page fix
   reaches students only through a deploy that re-signs.
 - **WC-3 — the count is read as part of the essay box's name. DECIDED
-  2026-10-14 (James: option b), nothing built.** Side: renderer (v2.0 —
+  2026-10-14 (James: option b; no key for now), BUILT the same evening on
+  `main` (renderer page in `AssessmentPage.swift`, `essayFieldA11y`; swift
+  test 999); ships with the v2.0 merge (James); rows in
+  `client/MANUAL-CHECKS.md` "Word count heard on request" NOT RUN.** Side: renderer (v2.0 —
   ships with a production deploy, no client release).
   - *Found:* WC-2 passes, but James does not like the count in the intro
     VoiceOver reads on arriving in the box ("Your answer, 12 of 50 words").
