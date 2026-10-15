@@ -166,12 +166,13 @@ describe("cross-language fixture (signed by tools/renderer-sign)", () => {
 });
 
 // Backup-key rehearsal (slice 3b): a manifest no shell will ever run —
-// version 1 (below RendererPolicy.minimumVersion), a one-day window that has
-// passed, placeholder files, an all-zero commit. IT signs these exact bytes
+// version 1 (below RendererPolicy.minimumVersion), a one-day window that
+// ended before the manifest was ever sent for signing, placeholder files, an all-zero commit. IT signs these exact bytes
 // on the YubiKey (tools/renderer-sign/backup/sign_backup.py) and the
 // signature comes back as manifest.sig beside it; until then only the
-// manifest is committed. Standard 11 rule 5: a rehearsal is a recorded test,
-// not a backup use, so it starts no rotation.
+// manifest is committed. Standard 11 rule 5 (psd-dev-standards#96): a
+// rehearsal is a recorded test, not a backup use, only when clients reject
+// the manifest by construction — its window has already ended when signed.
 describe("backup-key rehearsal manifest", () => {
   const dir = join(import.meta.dir, "fixtures", "backup-rehearsal");
   const bytes = new Uint8Array(readFileSync(join(dir, "manifest.json")));
@@ -184,7 +185,7 @@ describe("backup-key rehearsal manifest", () => {
     version: 1,
     commit: "0000000000000000000000000000000000000000",
     requires: ["home"],
-    issuedAt: new Date("2026-10-15T00:00:00.000Z"),
+    issuedAt: new Date("2026-10-01T00:00:00.000Z"),
     validityDays: 1,
   };
 
@@ -195,7 +196,13 @@ describe("backup-key rehearsal manifest", () => {
   test("no shell could run it: version 1 and an expired window", () => {
     const m = parseManifest(bytes);
     expect(m.version).toBe(1);
-    expect(checkManifestUse(m, { now: new Date("2026-10-16T00:00:01.000Z"), minVersion: 0 })).toEqual({ ok: false, reason: "expired" });
+    expect(checkManifestUse(m, { now: new Date("2026-10-02T00:00:01.000Z"), minVersion: 0 })).toEqual({ ok: false, reason: "expired" });
+  });
+
+  test("the window ended before the manifest went out for signing (2026-10-15)", () => {
+    const m = parseManifest(bytes);
+    expect(new Date(m.not_after).getTime()).toBeLessThan(new Date("2026-10-15T00:00:00.000Z").getTime());
+    expect(checkManifestUse(m, { now: new Date("2026-10-15T00:00:00.000Z"), minVersion: 0 })).toEqual({ ok: false, reason: "expired" });
   });
 });
 

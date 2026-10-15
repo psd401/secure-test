@@ -623,3 +623,13 @@ rollback past the first production renderer reaches no v2.0 Mac.
   (psd-dev-standards#96): a rehearsal is a recorded test under standard 11
   rule 5, not a backup use, so it starts no rotation. Waiting on the
   custodians' signature.
+- 2026-10-15 — **rehearsal manifest re-cut with a past window.** The
+  merged rule 5 (psd-dev-standards#96, `e1de561`) counts a rehearsal as a
+  test only when the manifest's window has already ended when it is
+  signed; the first cut's window ran to 2026-10-16 00:00 UTC, still live
+  on the signing day. The fixture now carries issued 2026-10-01, not_after
+  2026-10-02 (SHA-256 `34ea9a76…63af7`, 391 bytes), and
+  `verify.test.ts` asserts it is expired before 2026-10-15. No released
+  client verifies renderers yet (the fleet is v1.6.x); the v2.0 verifier's
+  expiry tests are on `v2-renderer` (`RendererVerifierTests`,
+  `RendererLoaderTests`).
