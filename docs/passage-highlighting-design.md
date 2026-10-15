@@ -151,4 +151,24 @@ interaction, and whether the build fits before v2.0 or follows it.
   - **5 / 6 not run** — VoiceOver and the real AAC session need James at
     the keyboard.
   - Read-aloud with marks present not yet tried (marks split text nodes).
+- 2026-10-14 night — **spike, hands-on half** (James, same spike build,
+  offline, windowed):
+  - **3 ✅ Copy stays refused** with the clipboard locked: Cmd-C on a
+    selected passage word left the clipboard unchanged (fingerprint
+    checked before and after); Cmd-V into the short answer also did
+    nothing (paste is refused too, so that alone proves nothing).
+  - **5a ✅ VoiceOver hears a mark:** a highlighted word and a highlighted
+    phrase are each announced as highlighted, the phrase once — WebKit
+    exposes `<mark>` with no extra labelling.
+  - **5b ❌ VoiceOver's own text selection does not reach the page:**
+    VO-Return … VO-Return made no DOM selection, so the Highlight button
+    never appeared. Keyboard option (a) is out; the choice is (b) a
+    sentence cursor or (c) mouse-only first (open, James).
+  - **Testing method (James):** twice during VoiceOver the Claude desktop
+    app went to 100 % CPU and stopped responding (first time it crashed).
+    VoiceOver checks run with the Claude app quit or hidden, with the
+    steps written down beforehand and results reported after.
+  - Still open: 4 (paging — becomes a JSC-harness test in the build), 6
+    (a real AAC session — joins the build's hand-run rows), read-aloud
+    with marks present.
 
