@@ -50,10 +50,11 @@ final class RendererHighlightTests: XCTestCase {
         toString: function () { return __sel ? __sel.text : ''; }
       };
     };
-    function __select(sn, so, en, eo, text) {
+    function __select(sn, so, en, eo, text, rect) {
+      var box = rect || { left: 40, top: 100, bottom: 120, right: 90 };
       __sel = {
         startContainer: sn, startOffset: so, endContainer: en, endOffset: eo, text: text,
-        getBoundingClientRect: function () { return { left: 40, top: 100, bottom: 120, right: 90 }; }
+        getBoundingClientRect: function () { return box; }
       };
       __fire('mouseup');
       __fireTimers();
@@ -79,6 +80,10 @@ final class RendererHighlightTests: XCTestCase {
       if (extra) for (var k in extra) ev[k] = extra[k];
       if (typeof el.onkeydown === 'function') el.onkeydown(ev);
       return ev;
+    }
+    // H-3: the Clear buttons a student can see and press.
+    function __clears() {
+      return __all('.st-mark-clear').filter(function (c) { return !c.disabled; });
     }
     function __live() {
       var live = __first('.st-hl-live', document.body);
@@ -231,8 +236,8 @@ final class RendererHighlightTests: XCTestCase {
         XCTAssertEqual(try h.string("\(passage).textContent"), "The cell membrane controls entry.")
         XCTAssertEqual(try h.int("\(passage).childNodes.length"), 1)
         XCTAssertEqual(try h.int("\(passage).childNodes[0].nodeType"), 3)
-        // The last mark gone, so is "Clear highlights".
-        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 0)
+        // The last mark gone, "Clear highlights" is disabled and hidden again.
+        XCTAssertEqual(try h.int("__clears().length"), 0)
     }
 
     func testAClickThatEndsASelectionRemovesNothing() throws {
@@ -252,19 +257,20 @@ final class RendererHighlightTests: XCTestCase {
             src.__hlMark(st, 0, st, 5);
             """)
         XCTAssertEqual(try h.int("__marks().length"), 3)
-        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 2)
+        XCTAssertEqual(try h.int("__clears().length"), 2)
         let clear = "\(passage).__hlClear"
         XCTAssertEqual(try h.string("\(clear).textContent"), "Clear highlights")
         XCTAssertEqual(try h.string("\(clear).type"), "button")
-        // Just above the passage it clears.
-        XCTAssertTrue(try h.bool("\(clear).nextSibling === \(passage)"))
+        // H-3: in the row above the passage, beside its Highlight mode toggle.
+        XCTAssertTrue(try h.bool("\(clear).parentNode === \(passage).__hlRow && \(passage).__hlRow.nextSibling === \(passage)"))
         try h.eval("\(clear).onclick()")
         XCTAssertEqual(try h.int("__marks(\(passage)).length"), 0)
         XCTAssertEqual(try h.string("\(passage).textContent"), "One two.\n\nThree four.")
         XCTAssertEqual(try h.int("\(passage).childNodes.length"), 1)
         // The source keeps its own mark and its own Clear.
         XCTAssertEqual(try h.int("__marks(src).length"), 1)
-        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 1)
+        XCTAssertEqual(try h.int("__clears().length"), 1)
+        XCTAssertTrue(try h.bool("__clears()[0] === src.__hlClear"))
     }
 
     // MARK: - The Highlight button
@@ -277,9 +283,9 @@ final class RendererHighlightTests: XCTestCase {
         XCTAssertEqual(try h.string("\(button).type"), "button")
         XCTAssertEqual(try h.string("\(button).textContent"), "Highlight")
         XCTAssertNil(try h.string("\(button).getAttribute('hidden')"))
-        // Under the selection.
+        // H-5: above the selection — 100 (its top) - 6 - 30 (the height).
         XCTAssertEqual(try h.string("\(button).style.left"), "40px")
-        XCTAssertEqual(try h.string("\(button).style.top"), "126px")
+        XCTAssertEqual(try h.string("\(button).style.top"), "64px")
         try h.eval("\(button).onclick()")
         XCTAssertEqual(try h.string("__markTexts()"), "the")
         XCTAssertEqual(try h.string("\(button).getAttribute('hidden')"), "")
@@ -326,7 +332,8 @@ final class RendererHighlightTests: XCTestCase {
             try h.eval("__first('.pager-next').onclick()")
             XCTAssertTrue(try h.bool("__first('.stimulus-body') === body"))
             XCTAssertEqual(try h.string("__markTexts(body)"), "the")
-            XCTAssertTrue(try h.bool("body.__hlClear && body.__hlClear.nextSibling === body"))
+            XCTAssertTrue(try h.bool("body.__hlClear && body.__hlClear.parentNode === body.__hlRow && body.__hlRow.nextSibling === body"))
+            XCTAssertFalse(try h.bool("body.__hlClear.disabled"))
         }
         try h.eval("__first('.pager-prev').onclick(); __first('.pager-prev').onclick();")
         XCTAssertEqual(try h.string("__markTexts(body)"), "the")
@@ -435,7 +442,9 @@ final class RendererHighlightTests: XCTestCase {
               var t = body.__hlToggle;
               return t && t.tagName === 'button' && t.type === 'button' &&
                 t.textContent === 'Highlight mode' && t.getAttribute('tabindex') === '0' &&
-                t.getAttribute('aria-pressed') === 'false' && t.nextSibling === body;
+                t.getAttribute('aria-pressed') === 'false' &&
+                t.parentNode === body.__hlRow && t.parentNode.className === 'st-hl-row' &&
+                t.parentNode.nextSibling === body;
             })
             """))
         // Not in the mode: the passage itself is not a Tab stop.
@@ -533,7 +542,7 @@ final class RendererHighlightTests: XCTestCase {
         XCTAssertEqual(try h.string("__live()"), "Highlight removed")
         XCTAssertEqual(try h.string("\(passage).textContent"), "First one here. Second one!\n\nThird one?")
         XCTAssertEqual(try h.int("\(passage).childNodes.length"), 1)
-        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 0)
+        XCTAssertEqual(try h.int("__clears().length"), 0)
     }
 
     func testSpaceOnAPartlyMarkedSentenceMarksTheRestAndUnmarkingKeepsTheNeighbour() throws {
@@ -652,9 +661,144 @@ final class RendererHighlightTests: XCTestCase {
         XCTAssertTrue(css.contains(".st-hl-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }"))
     }
 
-    /// James, 2026-10-14: a mark shows without relying on colour.
-    func testMarksAreUnderlined() {
-        XCTAssertTrue(AssessmentPage.itemStyles.contains("mark.st-mark { background: var(--mark-paper); color: var(--mark-ink); cursor: pointer; border-radius: 2px; text-decoration: underline;"))
+    /// James, 2026-10-14: a mark shows without relying on colour. H-4: the
+    /// underline is an inset shadow, so it runs under an inline-block formula
+    /// too, and every line fragment of a mark gets its own.
+    func testMarksAreUnderlined() throws {
+        let css = AssessmentPage.itemStyles
+        let rule = try XCTUnwrap(css.components(separatedBy: "\n").first { $0.contains("mark.st-mark {") })
+        XCTAssertEqual(rule.trimmingCharacters(in: .whitespaces),
+                       "mark.st-mark { background: var(--mark-paper); color: var(--mark-ink); cursor: pointer; border-radius: 2px; box-shadow: inset 0 -2px 0 var(--mark-ink); -webkit-box-decoration-break: clone; box-decoration-break: clone; }")
+        XCTAssertFalse(rule.contains("text-decoration"))
+    }
+
+    // MARK: - Hand-run readings H-2, H-3, H-5
+
+    /// H-3: the control row exists before any mark, with Clear in it but
+    /// disabled and hidden from AT; the first mark enables it in place and the
+    /// last removal disables it again — the row is never added or removed, so
+    /// the passage text does not move.
+    func testClearLivesInTheToggleRowBeforeAnyMark() throws {
+        let h = try harness()
+        XCTAssertEqual(try h.int("__count('.st-hl-row')"), 3)
+        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 3)
+        try h.eval("var row = \(passage).__hlRow; var clear = \(passage).__hlClear; var block = \(passage).parentNode;")
+        XCTAssertTrue(try h.bool("""
+            row.childNodes.length === 2 && row.childNodes[0] === \(passage).__hlToggle &&
+            row.childNodes[1] === clear && row.nextSibling === \(passage)
+            """))
+        XCTAssertTrue(try h.bool("clear.disabled === true"))
+        XCTAssertEqual(try h.string("clear.getAttribute('aria-hidden')"), "true")
+        XCTAssertEqual(try h.string("clear.getAttribute('disabled')"), "")
+        try h.eval("var kidsBefore = block.childNodes.length; var t = \(passage).childNodes[0]; \(passage).__hlMark(t, 5, t, 8);")
+        XCTAssertTrue(try h.bool("clear.disabled === false && \(passage).__hlClear === clear && \(passage).__hlRow === row"))
+        XCTAssertNil(try h.string("clear.getAttribute('aria-hidden')"))
+        XCTAssertNil(try h.string("clear.getAttribute('disabled')"))
+        XCTAssertTrue(try h.bool("block.childNodes.length === kidsBefore && row.nextSibling === \(passage)"))
+        try h.eval("clear.focus(); clear.onclick();")
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+        XCTAssertTrue(try h.bool("clear.disabled === true && block.childNodes.length === kidsBefore"))
+        XCTAssertEqual(try h.string("clear.getAttribute('aria-hidden')"), "true")
+        // Focus does not fall to nowhere when the pressed Clear disables.
+        XCTAssertTrue(try h.bool("document.activeElement === \(passage).__hlToggle"))
+    }
+
+    func testClearStylesKeepTheRowsHeight() {
+        let css = AssessmentPage.itemStyles
+        XCTAssertTrue(css.contains(".st-hl-row { display: flex;"))
+        XCTAssertTrue(css.contains(".st-mark-clear:disabled { visibility: hidden; }"))
+        XCTAssertFalse(css.contains("display: block; margin: 0 0 0.5rem; font: inherit;"))
+    }
+
+    /// H-2: a formula's taller rect joins the line it sits on, and each line
+    /// is one box spanning every rect on it.
+    func testLineBoxesGroupByOverlapAndSpanTheUnion() throws {
+        let h = try harness()
+        let boxes = "JSON.stringify(\(passage).__hlLineBoxes(rects))"
+        // Line 1: text, a taller formula (top 95, bottom 125), text; line 2
+        // below; an empty rect is ignored.
+        try h.eval("""
+            var rects = [
+              { left: 10, right: 80, top: 100, bottom: 120 },
+              { left: 80, right: 130, top: 95, bottom: 125 },
+              { left: 130, right: 200, top: 100, bottom: 120 },
+              { left: 50, right: 50, top: 100, bottom: 120 },
+              { left: 10, right: 90, top: 130, bottom: 150 }
+            ];
+            """)
+        XCTAssertEqual(try h.string(boxes),
+            #"[{"left":10,"right":200,"top":95,"bottom":125},{"left":10,"right":90,"top":130,"bottom":150}]"#)
+        // The formula first, and a formula that starts lower than the text.
+        try h.eval("""
+            rects = [
+              { left: 80, right: 130, top: 104, bottom: 140 },
+              { left: 10, right: 80, top: 100, bottom: 120 }
+            ];
+            """)
+        XCTAssertEqual(try h.string(boxes), #"[{"left":10,"right":130,"top":100,"bottom":140}]"#)
+        // Two lines that merely touch stay two lines.
+        try h.eval("""
+            rects = [
+              { left: 10, right: 80, top: 100, bottom: 120 },
+              { left: 10, right: 80, top: 119, bottom: 139 }
+            ];
+            """)
+        XCTAssertEqual(try h.int("\(passage).__hlLineBoxes(rects).length"), 2)
+        XCTAssertEqual(try h.string("JSON.stringify(\(passage).__hlLineBoxes([]))"), "[]")
+    }
+
+    /// H-2 through the real path: the sentence ring draws one box per line
+    /// from a Range's client rects.
+    func testSentenceRingDrawsOneBoxPerLine() throws {
+        let h = try harness()
+        try h.eval("""
+            document.createRange = function () {
+              return {
+                setStart: function () {}, setEnd: function () {},
+                setStartBefore: function () {}, setEndAfter: function () {},
+                getClientRects: function () {
+                  return [
+                    { left: 10, right: 80, top: 100, bottom: 120 },
+                    { left: 80, right: 130, top: 95, bottom: 125 },
+                    { left: 10, right: 60, top: 130, bottom: 150 }
+                  ];
+                }
+              };
+            };
+            \(passage).getBoundingClientRect = function () { return { left: 10, top: 90 }; };
+            __setBody(\(passage), [__text('One sentence here.')]); \(toggle).onclick();
+            """)
+        let ring = "\(passage).__hlRing"
+        XCTAssertEqual(try h.int("\(ring).childNodes.length"), 2)
+        let first = "\(ring).childNodes[0].style"
+        XCTAssertEqual(try h.string("[\(first).left, \(first).top, \(first).width, \(first).height].join(',')"),
+                       "0px,5px,120px,30px")
+    }
+
+    /// H-5: above the selection when it fits, else under it; inside the
+    /// viewport horizontally.
+    func testHighlightButtonSpot() throws {
+        let h = try harness()
+        let spot = "JSON.stringify(\(passage).__hlButtonSpot"
+        let size = "{ width: 100, height: 30 }"
+        XCTAssertEqual(try h.string("\(spot)({ left: 40, top: 100, bottom: 160 }, { width: 1000 }, \(size)))"),
+                       #"{"left":40,"top":64,"above":true}"#)
+        // Too near the viewport's top: under the selection's last line.
+        XCTAssertEqual(try h.string("\(spot)({ left: 40, top: 20, bottom: 80 }, { width: 1000 }, \(size)))"),
+                       #"{"left":40,"top":86,"above":false}"#)
+        // Exactly fitting stays above.
+        XCTAssertEqual(try h.string("\(spot)({ left: 40, top: 36, bottom: 50 }, { width: 1000 }, \(size)))"),
+                       #"{"left":40,"top":0,"above":true}"#)
+        // Near the right edge: pulled in; never off the left.
+        XCTAssertEqual(try h.string("\(spot)({ left: 950, top: 100, bottom: 120 }, { width: 1000 }, \(size)))"),
+                       #"{"left":896,"top":64,"above":true}"#)
+        XCTAssertEqual(try h.string("\(spot)({ left: 40, top: 100, bottom: 120 }, { width: 80 }, \(size)))"),
+                       #"{"left":0,"top":64,"above":true}"#)
+        // Through a real selection near the top of the viewport.
+        try h.eval("var t = \(passage).childNodes[0]; __select(t, 5, t, 8, 'the', { left: 40, top: 10, bottom: 30, right: 90 });")
+        let button = "__first('.st-highlight-button', document.body)"
+        XCTAssertEqual(try h.string("\(button).style.top"), "36px")
+        XCTAssertEqual(try h.string("\(button).style.left"), "40px")
     }
 
 }

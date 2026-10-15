@@ -221,4 +221,12 @@ interaction, and whether the build fits before v2.0 or follows it.
   shows. Left for James: 8 (Cmd-C), 9 (scroll a source panel), 16
   (VoiceOver in Highlight mode — Claude app quit or hidden), 17 (read
   aloud with marks); 18–19 at the v2.0 RC.
+- 2026-10-14 night — **H-2…H-5 FIXED** (James: fix the cosmetics first) and
+  re-checked on a fresh Debug build: one outline box per line wrapping a
+  formula (H-2); "Clear highlights" sits beside "Highlight mode" and is
+  hidden, not removed, while empty, so the passage never moves (H-3); the
+  underline is an inset bottom shadow that reaches formulas (H-4); the
+  Highlight button sits above the selection, below only near the window
+  top (H-5). swift 1039. Rows left for James: 8, 9, 16, 17; 18–19 at the
+  v2.0 RC.
 

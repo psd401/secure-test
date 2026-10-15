@@ -363,7 +363,10 @@ public enum AssessmentPage {
     html[data-contrast="Yellow on Black"] { --mark-paper: #ffff00; --mark-ink: #000000; }
     html[data-contrast="Yellow on Blue"] { --mark-paper: #ffff00; --mark-ink: #000000; }
     .st-highlightable { -webkit-user-select: text; user-select: text; }
-    mark.st-mark { background: var(--mark-paper); color: var(--mark-ink); cursor: pointer; border-radius: 2px; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    /* H-4: the underline is an inset shadow, not text-decoration, so it also
+       runs under a formula (KaTeX is inline-block, which text-decoration does
+       not reach); clone gives every line fragment its own. */
+    mark.st-mark { background: var(--mark-paper); color: var(--mark-ink); cursor: pointer; border-radius: 2px; box-shadow: inset 0 -2px 0 var(--mark-ink); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
     .st-highlight-button {
       position: absolute; z-index: 30; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
       border: 1px solid var(--accent); border-radius: 6px;
@@ -372,18 +375,25 @@ public enum AssessmentPage {
     }
     .st-highlight-button[hidden] { display: none; }
     .st-highlight-button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    /* H-3: one row above the passage holds "Highlight mode" and "Clear
+       highlights". Clear is always there; with no marks it is disabled and
+       invisible (so neither focusable nor announced), and the row keeps its
+       height, so the passage never moves when the first mark comes or the
+       last one goes. */
+    .st-hl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.5rem; }
     .st-mark-clear {
-      display: block; margin: 0 0 0.5rem; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      display: inline-block; margin: 0; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
       border: 1px solid var(--line-strong); border-radius: 6px;
       background: var(--paper); color: var(--ink); cursor: pointer;
     }
+    .st-mark-clear:disabled { visibility: hidden; }
     .st-mark-clear:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* Passage highlighting slice 3: the sentence cursor. The toggle sits above
        the passage beside "Clear highlights"; in Highlight mode the passage is
        focused (a dashed edge says which one) and the current sentence carries
        the page's focus ring, drawn as boxes over its line rects. */
     .st-hl-toggle {
-      display: inline-block; margin: 0 0.5rem 0.5rem 0; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      display: inline-block; margin: 0; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
       border: 1px solid var(--line-strong); border-radius: 6px;
       background: var(--paper); color: var(--ink); cursor: pointer;
     }
@@ -5586,22 +5596,28 @@ public enum AssessmentPage {
         return out;
       }
 
-      // "Clear highlights" sits just above the passage while it has a mark,
-      // and goes when the last one does.
+      // H-3: "Clear highlights" lives in the passage's control row beside
+      // "Highlight mode" (hlPlaceToggle) and is always there. With no marks it
+      // is disabled — so neither focusable nor pressable — aria-hidden, and
+      // invisible by CSS; the row keeps its height, so the passage text never
+      // moves when the first mark comes or the last one goes. Only that
+      // passage's marks are cleared.
       function hlRefreshClear(body) {
+        if (!body.__hlClear) hlPlaceToggle(body);
+        var clear = body.__hlClear;
+        if (!clear) return;
         var any = hlMarksIn(body).length > 0;
-        var clear = body.__hlClear || null;
-        if (any && !clear && body.parentNode) {
-          clear = document.createElement('button');
-          clear.type = 'button';
-          clear.className = 'st-mark-clear';
-          clear.textContent = 'Clear highlights';
-          clear.onclick = function () { hlClearAll(body); };
-          body.parentNode.insertBefore(clear, body);
-          body.__hlClear = clear;
-        } else if (!any && clear) {
-          if (clear.parentNode) clear.parentNode.removeChild(clear);
-          body.__hlClear = null;
+        clear.disabled = !any;
+        if (any) {
+          clear.removeAttribute('disabled');
+          clear.removeAttribute('aria-hidden');
+        } else {
+          // A Clear that just emptied the passage hands focus to its
+          // neighbour rather than to nowhere.
+          if (document.activeElement === clear && body.__hlToggle &&
+              typeof body.__hlToggle.focus === 'function') body.__hlToggle.focus();
+          clear.setAttribute('disabled', '');
+          clear.setAttribute('aria-hidden', 'true');
         }
       }
 
@@ -5675,16 +5691,33 @@ public enum AssessmentPage {
           en: range.endContainer, eo: range.endOffset
         };
         var button = hlButtonEl();
+        // Shown first, so it has a size to place by.
+        button.removeAttribute('hidden');
         if (typeof range.getBoundingClientRect === 'function') {
           var rect = range.getBoundingClientRect();
           var sx = typeof window.scrollX === 'number' ? window.scrollX : 0;
           var sy = typeof window.scrollY === 'number' ? window.scrollY : 0;
-          var left = rect.left;
-          if (typeof window.innerWidth === 'number') left = Math.min(left, window.innerWidth - 140);
-          button.style.left = (Math.max(0, left) + sx) + 'px';
-          button.style.top = (rect.bottom + sy + 6) + 'px';
+          var spot = hlButtonSpot(rect,
+            { width: typeof window.innerWidth === 'number' ? window.innerWidth : 0 },
+            { width: button.offsetWidth > 0 ? button.offsetWidth : 120,
+              height: button.offsetHeight > 0 ? button.offsetHeight : 30 });
+          button.style.left = (spot.left + sx) + 'px';
+          button.style.top = (spot.top + sy) + 'px';
         }
-        button.removeAttribute('hidden');
+      }
+
+      // H-5: where the Highlight button goes, in viewport coordinates. Above
+      // the selection's first line, its bottom edge 6px over the selection's
+      // top, so it never covers the next line (at 3X zoom it did); when that
+      // would leave the top of the viewport, under the last line instead.
+      // Horizontally at the selection's left, kept inside the viewport.
+      function hlButtonSpot(rect, viewport, size) {
+        var top = rect.top - 6 - size.height;
+        var above = top >= 0;
+        if (!above) top = rect.bottom + 6;
+        var left = rect.left;
+        if (viewport.width > 0) left = Math.min(left, viewport.width - size.width - 4);
+        return { left: Math.max(0, left), top: top, above: above };
       }
 
       function hlWire() {
@@ -5711,6 +5744,9 @@ public enum AssessmentPage {
             return hlRangeText(units, s[0], s[1], false);
           });
         };
+        // The two pure layout rules (H-2, H-5), reachable by the JSC harness.
+        body.__hlLineBoxes = hlLineBoxes;
+        body.__hlButtonSpot = hlButtonSpot;
         body.__hlCurrent = function () {
           if (!body.__hlMode) return null;
           var units = hlLocate(body, []);
@@ -5941,6 +5977,35 @@ public enum AssessmentPage {
         body.__hlRing = null;
       }
 
+      // H-2: a sentence's client rects as one box per line. Rects join a line
+      // by vertical OVERLAP (at least half the shorter one's height), not by
+      // equal tops: a formula's inline-block rect is taller than the text
+      // beside it and used to make a box of its own that cut through the
+      // glyphs. Each line's box is the union of every rect on it.
+      function hlLineBoxes(list) {
+        var lines = [];
+        for (var i = 0; list && i < list.length; i++) {
+          var r = list[i];
+          if (!r || !(r.right - r.left > 0) || !(r.bottom - r.top > 0)) continue;
+          var line = null;
+          for (var k = 0; k < lines.length && !line; k++) {
+            var l = lines[k];
+            var overlap = Math.min(l.bottom, r.bottom) - Math.max(l.top, r.top);
+            var least = Math.min(l.bottom - l.top, r.bottom - r.top) / 2;
+            if (overlap > 0 && overlap >= least) line = l;
+          }
+          if (line) {
+            line.left = Math.min(line.left, r.left);
+            line.right = Math.max(line.right, r.right);
+            line.top = Math.min(line.top, r.top);
+            line.bottom = Math.max(line.bottom, r.bottom);
+          } else {
+            lines.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+          }
+        }
+        return lines;
+      }
+
       function hlDrawRing(body) {
         hlRemoveRing(body);
         if (!body.__hlMode || typeof document.createRange !== 'function' ||
@@ -5955,23 +6020,7 @@ public enum AssessmentPage {
           var range = document.createRange();
           if (hlIsMath(a.node)) range.setStartBefore(a.node); else range.setStart(a.node, a.offset);
           if (hlIsMath(b.node)) range.setEndAfter(b.node); else range.setEnd(b.node, b.offset);
-          var list = range.getClientRects();
-          for (var i = 0; i < list.length; i++) {
-            var r = list[i];
-            if (r.width <= 0 || r.height <= 0) continue;
-            var line = null;
-            for (var k = 0; k < rects.length; k++) {
-              if (Math.abs(rects[k].top - r.top) < 4 && Math.abs(rects[k].bottom - r.bottom) < 4) line = rects[k];
-            }
-            if (line) {
-              line.left = Math.min(line.left, r.left);
-              line.right = Math.max(line.right, r.right);
-              line.top = Math.min(line.top, r.top);
-              line.bottom = Math.max(line.bottom, r.bottom);
-            } else {
-              rects.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
-            }
-          }
+          rects = hlLineBoxes(range.getClientRects());
         } catch (error) {
           return;
         }
@@ -6069,9 +6118,10 @@ public enum AssessmentPage {
       }
 
       // Called once the passage is in its block with its text: a passage with
-      // no text gets no toggle.
+      // no text gets no control row. H-3: the row holds the toggle and "Clear
+      // highlights" (hlRefreshClear), so it exists before any mark.
       function hlPlaceToggle(body) {
-        if (!body.parentNode || body.__hlToggle) return;
+        if (!body.parentNode || body.__hlRow) return;
         if (!hlSplitSentences(hlLinearText(hlLocate(body, []))).length) return;
         var toggle = document.createElement('button');
         toggle.type = 'button';
@@ -6088,8 +6138,20 @@ public enum AssessmentPage {
           if (body.__hlMode) hlLeaveMode(body, true);
           else hlEnterMode(body);
         };
-        body.parentNode.insertBefore(toggle, body);
+        var clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'st-mark-clear';
+        clear.textContent = 'Clear highlights';
+        clear.onclick = function () { hlClearAll(body); };
+        var row = document.createElement('div');
+        row.className = 'st-hl-row';
+        row.appendChild(toggle);
+        row.appendChild(clear);
+        body.parentNode.insertBefore(row, body);
+        body.__hlRow = row;
         body.__hlToggle = toggle;
+        body.__hlClear = clear;
+        hlRefreshClear(body);
       }
 
       // Multi-source stimulus slice 4: which source a set has open, kept in
