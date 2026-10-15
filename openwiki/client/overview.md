@@ -121,6 +121,7 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 | New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
 | Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
 | Offline/durability behaviour | `ResponseSpool.swift`, `UploadGate.swift` | `ResponseSpoolTests`, `UploadGateTests` |
+| One question at a time: pages, pager bar, answered marks | `AssessmentPage.swift` (`buildPaged`, `show`, `refreshMarks`), `DeliveryBundle.swift` (`Layout`) | `RendererPagingTests`, `DeliveryBundleTests` ([paged delivery](paged-delivery.md)) |
 | Time limit or closed-sitting UX | `TimeLimitCountdown.swift`, `AttemptEventReporter.swift` | `TimeLimitCountdownTests`, `RendererTimeLimitTests`, `AttemptEventReporterTests` |
 | Student's list of sittings (home screen, `/api/me/sittings`) | `MySittings.swift`, `APIClient.swift` | `MySittingsTests` |
 | Teacher peek (screenshot request, notice, poll) | `PeekResponder.swift`, `PeekNotice.swift` (see [lockdown and security](lockdown-and-security.md#telemetry-and-diagnostics)) | `PeekResponderTests`, `PeekNoticeTests` |
@@ -135,3 +136,4 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
 
 Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
+d: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).

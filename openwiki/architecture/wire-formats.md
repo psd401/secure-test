@@ -45,7 +45,7 @@ Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on ei
 - **`DeliveryBundleSchema` (student)** — a *separate* discriminated union, not a filtered view. Differences that matter:
   - match → independent `lefts` / `rights`; order → `entries`; ids are per-attempt HMACs from `lib/api/opaqueIds.ts` (`opaqueId(attempt, item, realId, scope)`; scope `"L"`/`"R"` for match, `""` for order). The server un-seals them on write (`unsealResponseIds` in `lib/api/studentAttempt.ts`) so `responses.response` holds authoring ids.
   - `accommodations` is the **effective per-student map** (tool id → setting value), plus `construct_altering`; never the authoring allow-list.
-  - `allow_clipboard` is emitted only when true (absence = locked). `layout` only when `paged`.
+  - `allow_clipboard` is emitted only when true (absence = locked). `layout` only when `paged` (what the client does with it is in [paged delivery](../client/paged-delivery.md)).
   - Per-attempt state: `answered_item_ids`, `saved_responses` (typed as `ItemResponseSchema`, so it cannot become a key channel), `saved_uploads` (drawing bytes ≤ 2 MB), `time_limit_ends_at` + `server_now` (emitted together, only for timed attempts).
   - `essay.rubric` appears only when `student_visibility.during_test`.
   - `DeliveryItemSetSchema` adds `source_missing`, `inline_item_id`, `inline_text` for per-student stimuli.

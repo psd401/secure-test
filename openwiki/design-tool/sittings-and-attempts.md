@@ -174,7 +174,7 @@ Invariants:
 - **Read-only**: a still-pending upload slot is not settled from the GET; settling belongs to the write path that accepts the response.
 - **Additive keys**: `answered_item_ids`, `saved_responses` and `saved_uploads` are emitted by `buildDeliveryBundle` only when non-empty, so a fresh attempt's bundle is unchanged.
 
-The wire fields are defined in `DeliveryBundleSchema` (`packages/schema/src/delivery.ts`, see [wire formats](../architecture/wire-formats.md)). The macOS client reads `saved_responses` through its `DeliveryBundle` decoding, and the page script in `AssessmentPage.swift` uses it to fill fields under the answered marks ([client overview](../client/overview.md#the-page)).
+The wire fields are defined in `DeliveryBundleSchema` (`packages/schema/src/delivery.ts`, see [wire formats](../architecture/wire-formats.md)). The macOS client reads `saved_responses` through its `DeliveryBundle` decoding, and the page script in `AssessmentPage.swift` uses it to fill fields under the answered marks ([client overview](../client/overview.md#the-page)). On a paged test, the same `answered_item_ids` seed the page strip and review list ([paged delivery](../client/paged-delivery.md#navigation-and-answered-marks)).
 
 Focused tests: `delivery-api.test.ts`, describe "GET /api/assessments/:id/delivery — saved_responses / saved_uploads (P-1)" (includes "a drawing answer carries its stored bytes"); `packages/schema/test/delivery.test.ts`, describe "DeliveryBundleSchema answered_item_ids"; the Swift `RendererPrefillTests` injects `saved_responses` and `saved_uploads` into the fixture to exercise the page's restore path.
 
