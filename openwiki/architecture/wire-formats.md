@@ -41,7 +41,7 @@ Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on ei
 
 ## Two bundles (ADR 0016)
 
-- **`ItemBundleSchema` (teacher)** — export, teacher-to-teacher share, backup, duplicate. Carries every key (`correct_choice_id(s)`, `correct_answer`, `correct_region_ids`, `pairs`, `sequence`, `cell_keys`, fill-blank `keys`), rubrics, `scoring_method`, `item_sets` with optional E12 `source` link (dropped on import unless the same owner owns the source), base64 `assets`, `allowed_accommodations` / `construct_altering`, `student_layout`, `student_feedback`, `answers_release`. Optional fields are emitted only when non-default so older bundles stay byte-stable.
+- **`ItemBundleSchema` (teacher)** — export, teacher-to-teacher share, backup, duplicate. Carries every key (`correct_choice_id(s)`, `correct_answer`, `correct_region_ids`, `pairs`, `sequence`, `cell_keys`, fill-blank `keys`), rubrics, `scoring_method`, `item_sets` with optional E12 `source` link (dropped on import unless the same owner owns the source), base64 `assets`, `allowed_accommodations` / `construct_altering`, `student_layout`, `student_feedback`, `answers_release`, `allow_highlighting`. Optional fields are emitted only when non-default so older bundles stay byte-stable.
 - **`DeliveryBundleSchema` (student)** — a *separate* discriminated union, not a filtered view. Differences that matter:
   - match → independent `lefts` / `rights`; order → `entries`; ids are per-attempt HMACs from `lib/api/opaqueIds.ts` (`opaqueId(attempt, item, realId, scope)`; scope `"L"`/`"R"` for match, `""` for order). The server un-seals them on write (`unsealResponseIds` in `lib/api/studentAttempt.ts`) so `responses.response` holds authoring ids.
   - `accommodations` is the **effective per-student map** (tool id → setting value), plus `construct_altering`; never the authoring allow-list.
@@ -73,3 +73,4 @@ Edit `K12_MACROS` only; then `client/scripts/vendor-katex.mjs` regenerates `Gene
 - `dist/` is a build product; do not hand-edit it.
 
 Related: [sittings and attempts](../design-tool/sittings-and-attempts.md) (who builds/serves the delivery bundle), [authoring](../design-tool/authoring.md) (export/import), [client overview](../client/overview.md) (Swift mirror).
+-and-attempts.md) (who builds/serves the delivery bundle), [authoring](../design-tool/authoring.md) (export/import), [client overview](../client/overview.md) (Swift mirror).
