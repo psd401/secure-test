@@ -34,8 +34,7 @@ openwiki:
 
 # Math keypad and formula preview for short-text answers
 
-<!-- openwiki: broken internal link [../design-tool/scoring-and-results.md#scoring-rules] heading anchor "scoring-rules" does not exist in "../design-tool/scoring-and-results.md". Fix the href or restore the target, then delete this comment. -->
-A `short_text` item is a single line of text, but many questions are math. The student client therefore gives every short-text field a **math keypad** and a **live preview** of the typed answer rendered as KaTeX. The keypad is a student aid. It does not change what is stored or how the answer is scored. The stored response is the raw text, and the design tool reads that text with the rules in [scoring and results](../design-tool/scoring-and-results.md#scoring-rules).
+A `short_text` item is a single line of text, but many questions are math. The student client therefore gives every short-text field a **math keypad** and a **live preview** of the typed answer rendered as KaTeX. The keypad is a student aid. It does not change what is stored or how the answer is scored. The stored response is the raw text, and the design tool reads that text with the rules in [scoring and results](../design-tool/scoring-and-results.md#auto-scoring-rules-libscoringautots).
 
 The design rationale is in `docs/math-entry-design.md`. Its header predates the build, so trust its Progress section and the source for what shipped. The handwriting idea in that note remains a spike and is not built.
 

@@ -70,8 +70,7 @@ The page reads the box as a tree (`richTreeFromDom`) rather than re-parsing mark
 
 ## Word count
 
-<!-- openwiki: broken internal link [../design-tool/authoring.md#item] heading anchor "item" does not exist in "../design-tool/authoring.md". Fix the href or restore the target, then delete this comment. -->
-The count is a page-side display of the item's `max_word_count` and `show_word_count` keys from the delivery bundle (both are set by the teacher; see [authoring](../design-tool/authoring.md#item)). Both essay boxes, formatted and plain, use the same rules in `AssessmentPage.swift`:
+The count is a page-side display of the item's `max_word_count` and `show_word_count` keys from the delivery bundle (both are set by the teacher; see [authoring](../design-tool/authoring.md#concepts)). Both essay boxes, formatted and plain, use the same rules in `AssessmentPage.swift`:
 
 - A maximum always shows its count as "n / max words" and gets the `word-count over` class when the count passes it.
 - Without a maximum, `show_word_count` shows a plain running "n words" count that is never marked over.

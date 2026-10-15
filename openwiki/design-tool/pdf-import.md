@@ -37,8 +37,7 @@ PDF import is the teacher's way to turn an existing printed test into draft item
 
 ## Pipeline
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: a semicolon inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart TD
     A["Upload multipart file to import-pdf"] --> B["requireStaff, edit access, requireDraft"]
     B --> C["extractPdfText via unpdf"]
@@ -51,7 +50,7 @@ flowchart TD
     H --> I
     I --> J["validatePdfCandidates through CreateItemBody"]
     J --> K["Numbering, source numbers, changes, sets, forms reports"]
-    K --> L["JSON proposal to PdfImportPanel; teacher saves"]
+    K --> L["JSON proposal to PdfImportPanel, teacher saves"]
 ```
 
 The import route is a read-only analysis. Writes happen only when the panel posts accepted items and sets back to the item and item-set routes.
