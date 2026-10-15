@@ -593,3 +593,19 @@ rollback past the first production renderer reaches no v2.0 Mac.
   Tests: design-tool 3225, schema 142, renderer 60, swift 1080. Left
   before release: the 3b rehearsal, a staging deploy, the "No field,
   Release refuses" row, the RC run on the staging Mac, rebase + merge.
+- 2026-10-14 evening — **v2.0.0 RC run on production (option A, James at
+  the client, real AAC sessions).** The RC (`4fe3d7b`, Release, archived,
+  notarized + stapled, run from `~/Desktop/st-rc-2.0.0/`; AirDrop to the
+  student tester was blocked for the student account, so B was dropped)
+  loaded production's served renderer before `begin()` and cached it; 10 of
+  10 answers saved and handed in, both drawings readable on the teacher
+  side, no `client_error` on any timeline; Cmd-Q confirm ✅; resume after a
+  pass back ✅. WC-2's VoiceOver rows failed first — production's renderer
+  (`fa425afe…`, v1791933698, signed at `93006f4` by a deploy the ledger
+  does not record) predated WC-2 — and passed after the production deploy
+  at `3e1ecc58` signed v1792017314 (`7ae2429a…`). **Rule learned: an RC
+  sitting tests the renderer production serves at that moment, not the
+  branch's page, so it follows a production deploy at the release
+  commit.** Finding WC-3 (the count in the box's name) DECIDED b, roadmap.
+  Staging also deployed (renderer v1792017314, `8eca0741…`). Production
+  fixtures + attempts deleted after the run.

@@ -1130,6 +1130,32 @@ never renamed (convention in `CLAUDE.md` "Naming").
     (VO-1), arrive in each box, cross the limit both ways, a contrast set
     and zoom, one real AAC session on the signed build. Then v1.6.4 via
     psd-sign (`MARKETING_VERSION` 1.6.4).
+- **WC-2 status 2026-10-14:** built on `main` (`89efeef`), rides v2.0 (no
+  v1.6.4, James). Heard by ear 2026-10-14 on the v2.0.0 RC in a real AAC
+  session against production, AFTER the production deploy at `3e1ecc58`
+  signed a renderer carrying it (v1792017314): passes. The first try failed
+  because production's renderer then predated WC-2 — on v2.0 a page fix
+  reaches students only through a deploy that re-signs.
+- **WC-3 — the count is read as part of the essay box's name. DECIDED
+  2026-10-14 (James: option b), nothing built.** Side: renderer (v2.0 —
+  ships with a production deploy, no client release).
+  - *Found:* WC-2 passes, but James does not like the count in the intro
+    VoiceOver reads on arriving in the box ("Your answer, 12 of 50 words").
+  - *Options weighed:* (a) the count after the name as a description —
+    exactly what VoiceOver skipped in v1.6.3 (WC-2's cause); (b) the name
+    stays "Your answer" and the count is heard only on request — the
+    student moves to the counter or presses a key; (c) leave it.
+  - *Decision (b):* name = "Your answer"; the visible counter becomes
+    reachable by VoiceOver again (no `aria-hidden`), read in its spoken
+    form; WC-2's one-per-crossing "Over the 50-word limit" / "Back within
+    the limit" announcements stay, so going over is never silent. Open for
+    the design pass: whether a key (and which, inside a locked session)
+    speaks the count, and whether the counter sits before or after the box
+    in reading order.
+  - *Rows:* the WC-2 VoiceOver rows re-worded (arrival speaks "Your
+    answer" only; the count is found by VO-arrows or the key; crossing
+    still announced once each way), run on a v2.0 client after the deploy
+    that signs the renderer.
 - **VO-1 — Cmd-F5 during a real secure session restarted the Mac.** v1.6.3
   smoke, 16:03 → 16:05 PT: the attempt logged `lockdown_begin` with no
   end; the Mac booted at 16:05:28. No SecureTest crash report; the panic
