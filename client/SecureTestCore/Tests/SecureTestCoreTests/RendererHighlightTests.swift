@@ -535,7 +535,7 @@ final class RendererHighlightTests: XCTestCase {
         XCTAssertEqual(try h.string("\(passage).textContent"), "First one here. Second one!\n\nThird one?")
         // Moving away and back: the state is heard.
         try h.eval("__key(\(passage), 'ArrowDown'); __key(\(passage), 'ArrowUp');")
-        XCTAssertEqual(try h.string("__live()"), "Second one!, highlighted")
+        XCTAssertEqual(try h.string("__live()"), "Highlighted: Second one!")
         // Enter does what Space does.
         try h.eval("__key(\(passage), 'Enter')")
         XCTAssertEqual(try h.int("__marks().length"), 0)
@@ -553,7 +553,7 @@ final class RendererHighlightTests: XCTestCase {
             \(toggle).onclick(); __key(\(passage), 'ArrowDown');
             """)
         XCTAssertEqual(try h.string("__markTexts()"), "two. Three")
-        XCTAssertEqual(try h.string("__live()"), "Three four., partly highlighted")
+        XCTAssertEqual(try h.string("__live()"), "Partly highlighted: Three four.")
         try h.eval("__key(\(passage), ' ')")
         XCTAssertEqual(try h.string("__markTexts()"), "two. Three|four.")
         XCTAssertEqual(try h.string("__live()"), "Highlighted")

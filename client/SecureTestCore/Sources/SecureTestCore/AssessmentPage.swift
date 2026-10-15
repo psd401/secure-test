@@ -5785,8 +5785,8 @@ public enum AssessmentPage {
       // whole. Nothing is posted or stored (5.2).
       //
       // VoiceOver hears the mode through one polite live region: the
-      // instruction and the first sentence on entering, each sentence (with
-      // ", highlighted" / ", partly highlighted") on every move, and
+      // instruction and the first sentence on entering, each sentence (led by
+      // "Highlighted: " / "Partly highlighted: ") on every move, and
       // "Highlighted" / "Highlight removed" on Space. The current sentence is
       // drawn as focus-ring boxes over its line rectangles (a Range's client
       // rects), inside the passage so they scroll with it.
@@ -5967,8 +5967,9 @@ public enum AssessmentPage {
 
       function hlAnnounce(text) { hlLiveEl().textContent = text; }
 
-      // "<sentence>" or "<sentence>, highlighted" — the sentence cut to
-      // about 300 characters in the announcement only.
+      // "<sentence>" or "Highlighted: <sentence>" — the state first, so a
+      // student who arrows on after a few words still hears it; the sentence
+      // cut to about 300 characters in the announcement only.
       function hlSentenceAnnouncement(body) {
         var units = hlLocate(body, []);
         var s = hlSplitSentences(hlLinearText(units))[body.__hlIndex];
@@ -5976,8 +5977,8 @@ public enum AssessmentPage {
         var text = hlRangeText(units, s[0], s[1], true);
         if (text.length > 300) text = text.slice(0, 299).trim() + '…';
         var state = hlMarkState(units, s[0], s[1]);
-        if (state === 'all') return text + ', highlighted';
-        if (state === 'some') return text + ', partly highlighted';
+        if (state === 'all') return 'Highlighted: ' + text;
+        if (state === 'some') return 'Partly highlighted: ' + text;
         return text;
       }
 

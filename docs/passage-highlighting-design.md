@@ -199,7 +199,8 @@ interaction, and whether the build fits before v2.0 or follows it.
   reaching past the sentence is split so only that sentence loses it),
   Escape returns to the toggle, blur leaves; outline in the focus-ring
   token; a polite live region announces the instruction, each sentence
-  (", highlighted" / ", partly highlighted") and "Highlighted" /
+  (led by "Highlighted: " / "Partly highlighted: " — first, not last, since
+  2026-10-15, James) and "Highlighted" /
   "Highlight removed". Splitter: `. ! ?` before whitespace or end, blank
   lines; decimals and a short abbreviation list stay whole; limits =
   initials, "... " ellipses, other abbreviations, single line breaks.
