@@ -164,3 +164,38 @@ describe("cross-language fixture (signed by tools/renderer-sign)", () => {
     expect(verifyManifestSignature(bytes, sig, [p256().pem])).toBe(false);
   });
 });
+
+// Backup-key rehearsal (slice 3b): a manifest no shell will ever run —
+// version 1 (below RendererPolicy.minimumVersion), a one-day window that has
+// passed, placeholder files, an all-zero commit. IT signs these exact bytes
+// on the YubiKey (tools/renderer-sign/backup/sign_backup.py) and the
+// signature comes back as manifest.sig beside it; until then only the
+// manifest is committed. Standard 11 rule 5: a rehearsal is a recorded test,
+// not a backup use, so it starts no rotation.
+describe("backup-key rehearsal manifest", () => {
+  const dir = join(import.meta.dir, "fixtures", "backup-rehearsal");
+  const bytes = new Uint8Array(readFileSync(join(dir, "manifest.json")));
+
+  const REHEARSAL_INPUT = {
+    files: {
+      "renderer.js": enc.encode("// SecureTest backup-key rehearsal - not a renderer\n"),
+      "renderer.css": enc.encode("/* rehearsal */\n"),
+    },
+    version: 1,
+    commit: "0000000000000000000000000000000000000000",
+    requires: ["home"],
+    issuedAt: new Date("2026-10-15T00:00:00.000Z"),
+    validityDays: 1,
+  };
+
+  test("the fixture is this package's canonical form of the inputs", () => {
+    expect(Buffer.from(bytes).equals(Buffer.from(canonicalManifestBytes(buildManifest(REHEARSAL_INPUT))))).toBe(true);
+  });
+
+  test("no shell could run it: version 1 and an expired window", () => {
+    const m = parseManifest(bytes);
+    expect(m.version).toBe(1);
+    expect(checkManifestUse(m, { now: new Date("2026-10-16T00:00:01.000Z"), minVersion: 0 })).toEqual({ ok: false, reason: "expired" });
+  });
+});
+

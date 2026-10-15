@@ -358,9 +358,14 @@ Custody and the token's details are in the ops repository.
    the ci gate and the extraction check, writes `manifest.json` +
    `renderer.{js,css}` to DIR, and stops — nothing uploaded or deployed.
 2. The two custodians sign `DIR/manifest.json` byte for byte on the YubiKey
-   (PIV slot 9c, PIN and touch) and save the DER ECDSA P-256 / SHA-256
-   signature as `DIR/manifest.sig`. TODO: the exact command — asked of IT
-   2026-10-14 (the one that signed the 210-byte test vector).
+   (PIV slot 9c; the token holder brings the token, the second custodian
+   enters the PIN and touches the key, the PIN sheet is resealed) with
+   `ykman script tools/renderer-sign/backup/sign_backup.py DIR/manifest.json
+   DIR/manifest.sig <serial>` (IT's script on Yubico's library; needs only
+   ykman; the serial is in the ops repository). It writes the raw DER
+   ECDSA P-256 / SHA-256 signature. Check it before step 3:
+   `openssl dgst -sha256 -verify packages/renderer/keys/backup.pub.pem
+   -signature DIR/manifest.sig DIR/manifest.json`.
 3. `design-tool/infra/scripts/deploy.sh --backup-signed DIR` (same
    `--staging` choice). It rebuilds and refuses unless DIR's manifest names
    HEAD, matches this build's files and `requires`, and has not expired; it
@@ -609,3 +614,12 @@ rollback past the first production renderer reaches no v2.0 Mac.
   commit.** Finding WC-3 (the count in the box's name) DECIDED b, roadmap.
   Staging also deployed (renderer v1792017314, `8eca0741…`). Production
   fixtures + attempts deleted after the run.
+- 2026-10-15 — **3b rehearsal prepared.** IT's signing script is in the
+  repo (`tools/renderer-sign/backup/sign_backup.py`, run via `ykman
+  script`) and the runbook names it. The rehearsal manifest is
+  `packages/renderer/test/fixtures/backup-rehearsal/manifest.json`
+  (version 1, a one-day window on 2026-10-15, placeholder files, an
+  all-zero commit — no shell can run it). IT leadership, 2026-10-15
+  (psd-dev-standards#96): a rehearsal is a recorded test under standard 11
+  rule 5, not a backup use, so it starts no rotation. Waiting on the
+  custodians' signature.
