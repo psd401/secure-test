@@ -72,7 +72,7 @@ Row actions (`DuplicateAssessmentButton`, `ArchiveAssessmentButton`, `DeleteDraf
 | Tab (`?tab=`) | Teacher label | Owns |
 |---|---|---|
 | `questions` | Questions | Items, item sets, imports, AI generation, and standards tags. See [authoring](authoring.md) and [batch item generation](batch-item-generation.md). |
-| `settings` | Settings | Name, time limit, layout, feedback and answer-release settings, archive and delete. |
+| `settings` | Settings | Name, time limit, layout, feedback and answer-release settings, the passage-highlighting checkbox ([passage highlighting](passage-highlighting.md)), archive and delete. |
 | `accommodations` | Allowed on this test | Assessment-wide allowed list, construct-altering flags, and class-period grants. See [accommodations and roster](accommodations-and-roster.md). |
 | `students` | Exceptions for this test | Per-student overrides on this assessment. See [accommodations and roster](accommodations-and-roster.md). |
 | `sessions` | Test sessions | `SittingsPanel`: create sittings, show codes, close early, and see who has joined or submitted. Extend and hand-in controls are on the monitor. See [sittings and attempts](sittings-and-attempts.md). |

@@ -52,9 +52,9 @@ Archiving is orthogonal to this diagram. `PATCH {archived: true}` sets `archived
 
 ## The publish lock
 
-`PATCH /api/assessments/[id]` (`app/api/assessments/[id]/route.ts`) is the single chokepoint for assessment metadata. When the row is `published`, the route accepts a body only if `isUnlockOnlyPatch` (`lib/api/requireDraft.ts`) says the PATCH flips status to `draft` and changes nothing else, or if `isFeedbackSettingsOnlyPatch` says the only changes are the two instant-feedback settings. Anything else returns 409 `assessment_published_editing_locked` with a hint to unlock first. Item routes apply the same lock through `requireDraft`; the answer-key-only and standards-only exceptions are described in [authoring](authoring.md#draftpublished-lock).
+`PATCH /api/assessments/[id]` (`app/api/assessments/[id]/route.ts`) is the single chokepoint for assessment metadata. When the row is `published`, the route accepts a body only if `isUnlockOnlyPatch` (`lib/api/requireDraft.ts`) says the PATCH flips status to `draft` and changes nothing else, or if `isFeedbackSettingsOnlyPatch` says the only changes are the feedback settings: the two instant-feedback settings and `allow_highlighting`. Anything else returns 409 `assessment_published_editing_locked` with a hint to unlock first. Item routes apply the same lock through `requireDraft`; the answer-key-only and standards-only exceptions are described in [authoring](authoring.md#draftpublished-lock).
 
-The lock exists so a delivered bundle cannot change under a student. Archiving and feedback settings are the two deliberate exceptions because neither reaches the delivery bundle.
+The lock exists so a delivered bundle cannot change under a student. Archiving and the two instant-feedback settings are exceptions because neither reaches the delivery bundle. `allow_highlighting` is a third exception that does reach the bundle, but only as an aid that a student picks up on the next fetch; its gate and client-version rule are in [passage highlighting](passage-highlighting.md#delivery-gate).
 
 ## Archive
 
