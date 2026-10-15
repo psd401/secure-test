@@ -343,6 +343,41 @@ public enum AssessmentPage {
        pressed fill (the accent pair every contrast set defines) and the field
        carries an accent outline; the volatile "Hearing: …" line is soft ink. */
     .stt-bar { margin: 0 0 0.5rem; }
+    /* Passage highlighting slice 2 (docs/passage-highlighting-design.md). With
+       the assessment's allow_highlighting on, a stimulus or source body opts
+       back in to selection (PageShell turns it off page-wide); nothing else
+       does. A mark is one colour per contrast set: --mark-paper behind
+       --mark-ink, each pair at 4.5:1 or better (asserted in
+       RendererHighlightTests). The tokens live here rather than in
+       PageAccommodations so the served renderer carries them; the selectors
+       are the contrast sets' own (html[data-contrast]). On the light sets the
+       yellow differs from the page mostly by hue, so every mark is also
+       underlined: it shows without relying on colour (James, 2026-10-14). */
+    :root { --mark-paper: #ffe680; --mark-ink: #25424c; }
+    html[data-contrast="Black on Rose"] { --mark-paper: #fff176; --mark-ink: #000000; }
+    html[data-contrast="Black on White"] { --mark-paper: #ffff00; --mark-ink: #000000; }
+    html[data-contrast="Medium Gray on Light Gray"] { --mark-paper: #fff59d; --mark-ink: #595959; }
+    html[data-contrast="Red on White"] { --mark-paper: #ffff80; --mark-ink: #d40000; }
+    html[data-contrast="Reverse Contrast"] { --mark-paper: #ffff00; --mark-ink: #000000; }
+    html[data-contrast="White on Red"] { --mark-paper: #ffff00; --mark-ink: #000000; }
+    html[data-contrast="Yellow on Black"] { --mark-paper: #ffff00; --mark-ink: #000000; }
+    html[data-contrast="Yellow on Blue"] { --mark-paper: #ffff00; --mark-ink: #000000; }
+    .st-highlightable { -webkit-user-select: text; user-select: text; }
+    mark.st-mark { background: var(--mark-paper); color: var(--mark-ink); cursor: pointer; border-radius: 2px; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+    .st-highlight-button {
+      position: absolute; z-index: 30; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--accent); border-radius: 6px;
+      background: var(--accent); color: var(--accent-ink); cursor: pointer;
+      -webkit-user-select: none; user-select: none;
+    }
+    .st-highlight-button[hidden] { display: none; }
+    .st-highlight-button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    .st-mark-clear {
+      display: block; margin: 0 0 0.5rem; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .st-mark-clear:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     .stt-toggle {
       font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
       border: 1px solid var(--line-strong); border-radius: 6px;
@@ -737,6 +772,10 @@ public enum AssessmentPage {
       // Slice 69: absent means locked. A client that has not heard of this flag
       // stays closed rather than open.
       var ALLOW_CLIPBOARD = !!(BUNDLE && BUNDLE.allow_clipboard);
+      // Passage highlighting slice 2 (docs/passage-highlighting-design.md):
+      // only an explicit true opens it. Absent or false is the page exactly
+      // as before — no class, no listener, no button.
+      var ALLOW_HIGHLIGHTING = !!(BUNDLE && BUNDLE.allow_highlighting === true);
       // Finding 8.5: on the offline path the host ignores uploads and
       // hand-ins by design, so the "in flight" labels would never resolve.
       // Anything short of an explicit true is the server path.
@@ -5291,6 +5330,367 @@ public enum AssessmentPage {
         members.forEach(function (id) { setOfItem[id] = set; });
       });
 
+      // Passage highlighting slice 2 (docs/passage-highlighting-design.md,
+      // decisions 5.2–5.6; mouse only — the sentence cursor is slice 3).
+      //
+      // With ALLOW_HIGHLIGHTING, every stimulus body and source body opts in
+      // to text selection (`.st-highlightable`) and nothing else does. A
+      // non-empty selection that starts and ends inside ONE such passage
+      // shows one floating "Highlight" button under it; pressing it wraps the
+      // selected text in `mark.st-mark` elements. Clicking a mark removes that
+      // mark; "Clear highlights" on the passage removes them all. Page memory
+      // only (5.2): nothing is posted, stored or sent to the host. Copy stays
+      // governed by ALLOW_CLIPBOARD's handlers above.
+      //
+      // The spike's three build details (2026-10-14):
+      // - boundary POINTS decide what is marked, not their containers — a
+      //   selection may start or end on an element (offset = a child index),
+      //   and only the text between the two points is wrapped (hlLocate);
+      // - a passage is `white-space: pre-line`, so one text node can hold
+      //   several paragraphs: a mark never crosses a blank line (hlWrapText);
+      // - rendered math is one unit, wrapped whole when any of it is
+      //   selected, never split inside KaTeX (hlIsMath).
+      //
+      // The wrapping functions take explicit (node, offset) points rather
+      // than a live Selection, so the JSC harness can drive them; each
+      // passage body carries `__hlMark(startNode, startOffset, endNode,
+      // endOffset)` for that.
+      var hlButton = null;    // the one floating "Highlight" button
+      var hlPending = null;   // { body, sn, so, en, eo } — what it would mark
+      var hlWired = false;
+      var HL_SKIP_TAGS = {
+        textarea: true, input: true, select: true, script: true, style: true,
+        canvas: true, button: true
+      };
+
+      function hlHasClass(node, cls) {
+        return !!node && node.nodeType === 1 &&
+          (' ' + (node.className || '') + ' ').indexOf(' ' + cls + ' ') !== -1;
+      }
+
+      function hlTag(node) { return String((node && node.nodeName) || '').toLowerCase(); }
+
+      // Rendered math: the math pass's wrapper (it carries `__tex`) or any
+      // KaTeX element.
+      function hlIsMath(node) {
+        return !!node && node.nodeType === 1 &&
+          (typeof node.__tex === 'string' || hlHasClass(node, 'katex') || hlHasClass(node, 'katex-display'));
+      }
+
+      function hlIsMark(node) {
+        return !!node && node.nodeType === 1 && hlTag(node) === 'mark' && hlHasClass(node, 'st-mark');
+      }
+
+      // The opted-in passage body a node sits in (itself included), or null.
+      function hlPassageOf(node) {
+        for (var at = node; at; at = at.parentNode) {
+          if (at.__hlPassage === true) return at;
+        }
+        return null;
+      }
+
+      // The nearest ancestor (itself included) below `body` that passes
+      // `test`, or the OUTERMOST one when `outermost` is set.
+      function hlAncestor(node, body, test, outermost) {
+        var found = null;
+        for (var at = node; at && at !== body; at = at.parentNode) {
+          if (test(at)) {
+            found = at;
+            if (!outermost) return found;
+          }
+        }
+        return found;
+      }
+
+      // The passage as units in document order — each text node, and each
+      // rendered formula as ONE unit of length 1 — with the two boundary
+      // points placed on that order as { u: unit index, k: offset in it }.
+      // An element point (node, n) sits before its n-th child, i.e. before
+      // every unit inside or after that child; a point inside a formula
+      // covers the formula (its start before it, its end after it). A point
+      // the walk never meets keeps u undefined and marks nothing.
+      function hlLocate(body, points) {
+        var units = [];
+        function placeAt(node, index) {
+          points.forEach(function (p) {
+            if (p.u === undefined && p.node === node && p.offset === index) {
+              p.u = units.length;
+              p.k = 0;
+            }
+          });
+        }
+        (function walk(node) {
+          var kids = node.childNodes || [];
+          for (var i = 0; i < kids.length; i++) {
+            placeAt(node, i);
+            var n = kids[i];
+            if (n.nodeType === 3) {
+              points.forEach(function (p) {
+                if (p.u === undefined && p.node === n) { p.u = units.length; p.k = p.offset; }
+              });
+              units.push({ node: n, math: false, length: String(n.textContent || '').length });
+            } else if (n.nodeType === 1) {
+              if (hlIsMath(n)) {
+                points.forEach(function (p) {
+                  if (p.u === undefined && typeof n.contains === 'function' && n.contains(p.node)) {
+                    p.u = units.length;
+                    p.k = p.end ? 1 : 0;
+                  }
+                });
+                units.push({ node: n, math: true, length: 1 });
+                continue;
+              }
+              if (HL_SKIP_TAGS[hlTag(n)] === true) continue;
+              walk(n);
+            }
+          }
+          placeAt(node, kids.length);
+        })(body);
+        units.forEach(function (unit) {
+          unit.inMark = !!hlAncestor(unit.node, body, hlIsMark, false);
+        });
+        return units;
+      }
+
+      function hlNewMark() {
+        var mark = document.createElement('mark');
+        mark.className = 'st-mark';
+        return mark;
+      }
+
+      // Wraps [a, b) of one text node: one mark per paragraph — a blank line
+      // (two line breaks, spaces between allowed) is left unmarked between
+      // them, and whitespace at either end of a piece stays outside its mark.
+      // Returns how many marks were made.
+      function hlWrapText(textNode, a, b) {
+        var text = String(textNode.textContent || '');
+        a = Math.max(0, Math.min(a, text.length));
+        b = Math.max(a, Math.min(b, text.length));
+        var pieces = [];
+        var push = function (from, to) {
+          while (from < to && /\s/.test(text.charAt(from))) from += 1;
+          while (to > from && /\s/.test(text.charAt(to - 1))) to -= 1;
+          if (to > from) pieces.push([from, to]);
+        };
+        var breakRe = /\n[ \t]*\n/g;
+        var slice = text.slice(a, b);
+        var at = 0, m;
+        while ((m = breakRe.exec(slice)) !== null) {
+          push(a + at, a + m.index);
+          at = m.index + m[0].length;
+        }
+        push(a + at, b);
+        if (!pieces.length || !textNode.parentNode) return 0;
+        var frag = document.createDocumentFragment();
+        var cursor = 0;
+        pieces.forEach(function (piece) {
+          if (piece[0] > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, piece[0])));
+          var mark = hlNewMark();
+          mark.appendChild(document.createTextNode(text.slice(piece[0], piece[1])));
+          frag.appendChild(mark);
+          cursor = piece[1];
+        });
+        if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+        textNode.parentNode.replaceChild(frag, textNode);
+        return pieces.length;
+      }
+
+      // A formula is marked whole: one mark around the math pass's wrapper.
+      function hlWrapWhole(el) {
+        var parent = el.parentNode;
+        if (!parent) return 0;
+        var mark = hlNewMark();
+        parent.insertBefore(mark, el);
+        mark.appendChild(el);
+        return 1;
+      }
+
+      // Marks the text between two boundary points of one passage. Text that
+      // is already marked is left as it is (no mark inside a mark).
+      function hlWrap(body, sn, so, en, eo) {
+        if (!body || !sn || !en) return 0;
+        var s = { node: sn, offset: so, end: false };
+        var e = { node: en, offset: eo, end: true };
+        var units = hlLocate(body, [s, e]);
+        if (s.u === undefined || e.u === undefined) return 0;
+        var made = 0;
+        for (var i = s.u; i <= e.u && i < units.length; i++) {
+          var unit = units[i];
+          if (unit.inMark) continue;
+          var a = i === s.u ? s.k : 0;
+          var b = i === e.u ? e.k : unit.length;
+          if (a >= b) continue;
+          made += unit.math ? hlWrapWhole(unit.node) : hlWrapText(unit.node, a, b);
+        }
+        hlRefreshClear(body);
+        return made;
+      }
+
+      // Adjacent text nodes among `parent`'s children become one, and empty
+      // ones go — Node.normalize() on the one level an unwrap touched, done
+      // by hand so the harness's DOM and WebKit's behave alike.
+      function hlNormalize(parent) {
+        var kids = parent.childNodes || [];
+        var i = 0;
+        while (i < kids.length) {
+          var n = kids[i];
+          if (n.nodeType === 3) {
+            var next = n.nextSibling;
+            if (next && next.nodeType === 3) {
+              n.textContent = String(n.textContent || '') + String(next.textContent || '');
+              parent.removeChild(next);
+              continue;
+            }
+            if (String(n.textContent || '') === '') {
+              parent.removeChild(n);
+              continue;
+            }
+          }
+          i += 1;
+        }
+      }
+
+      function hlUnwrap(mark) {
+        var parent = mark && mark.parentNode;
+        if (!parent) return;
+        while ((mark.childNodes || []).length) parent.insertBefore(mark.childNodes[0], mark);
+        parent.removeChild(mark);
+        hlNormalize(parent);
+      }
+
+      function hlMarksIn(body) {
+        var out = [];
+        (function walk(node) {
+          var kids = node.childNodes || [];
+          for (var i = 0; i < kids.length; i++) {
+            if (kids[i].nodeType !== 1) continue;
+            if (hlIsMark(kids[i])) out.push(kids[i]);
+            else walk(kids[i]);
+          }
+        })(body);
+        return out;
+      }
+
+      // "Clear highlights" sits just above the passage while it has a mark,
+      // and goes when the last one does.
+      function hlRefreshClear(body) {
+        var any = hlMarksIn(body).length > 0;
+        var clear = body.__hlClear || null;
+        if (any && !clear && body.parentNode) {
+          clear = document.createElement('button');
+          clear.type = 'button';
+          clear.className = 'st-mark-clear';
+          clear.textContent = 'Clear highlights';
+          clear.onclick = function () { hlClearAll(body); };
+          body.parentNode.insertBefore(clear, body);
+          body.__hlClear = clear;
+        } else if (!any && clear) {
+          if (clear.parentNode) clear.parentNode.removeChild(clear);
+          body.__hlClear = null;
+        }
+      }
+
+      function hlClearAll(body) {
+        hlMarksIn(body).forEach(hlUnwrap);
+        hlRefreshClear(body);
+      }
+
+      function hlSelection() {
+        if (typeof window.getSelection !== 'function') return null;
+        var sel = window.getSelection();
+        if (!sel || !sel.rangeCount || sel.isCollapsed) return null;
+        return sel;
+      }
+
+      // A click on a mark removes that mark — unless the click ended a drag
+      // that made a selection, which is the student selecting, not removing.
+      function hlMarkClicked(body, event) {
+        if (hlSelection()) return;
+        var mark = hlAncestor(event && event.target, body, hlIsMark, false);
+        if (!mark) return;
+        hlUnwrap(mark);
+        hlRefreshClear(body);
+      }
+
+      function hlHide() {
+        hlPending = null;
+        if (hlButton) hlButton.setAttribute('hidden', '');
+      }
+
+      function hlApply() {
+        var p = hlPending;
+        hlHide();
+        if (!p || typeof p.body.contains !== 'function' ||
+            !p.body.contains(p.sn) || !p.body.contains(p.en)) return;
+        hlWrap(p.body, p.sn, p.so, p.en, p.eo);
+        if (typeof window.getSelection === 'function') {
+          var sel = window.getSelection();
+          if (sel && typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
+        }
+      }
+
+      function hlButtonEl() {
+        if (hlButton) return hlButton;
+        hlButton = document.createElement('button');
+        hlButton.type = 'button';
+        hlButton.className = 'st-highlight-button';
+        hlButton.textContent = 'Highlight';
+        hlButton.setAttribute('hidden', '');
+        // Pressing the button must not collapse the selection it acts on.
+        hlButton.onmousedown = function (event) {
+          if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        };
+        hlButton.onclick = hlApply;
+        if (document.body) document.body.appendChild(hlButton);
+        return hlButton;
+      }
+
+      // After a mouse-up: the selection, if it lies inside one passage, gets
+      // the button under it; anything else hides it.
+      function hlFromSelection() {
+        var sel = hlSelection();
+        if (!sel) { hlHide(); return; }
+        var range = sel.getRangeAt(0);
+        var body = range ? hlPassageOf(range.startContainer) : null;
+        if (!body || hlPassageOf(range.endContainer) !== body) { hlHide(); return; }
+        if (typeof sel.toString === 'function' && !String(sel.toString()).trim()) { hlHide(); return; }
+        hlPending = {
+          body: body,
+          sn: range.startContainer, so: range.startOffset,
+          en: range.endContainer, eo: range.endOffset
+        };
+        var button = hlButtonEl();
+        if (typeof range.getBoundingClientRect === 'function') {
+          var rect = range.getBoundingClientRect();
+          var sx = typeof window.scrollX === 'number' ? window.scrollX : 0;
+          var sy = typeof window.scrollY === 'number' ? window.scrollY : 0;
+          var left = rect.left;
+          if (typeof window.innerWidth === 'number') left = Math.min(left, window.innerWidth - 140);
+          button.style.left = (Math.max(0, left) + sx) + 'px';
+          button.style.top = (rect.bottom + sy + 6) + 'px';
+        }
+        button.removeAttribute('hidden');
+      }
+
+      function hlWire() {
+        if (hlWired) return;
+        hlWired = true;
+        if (typeof document.addEventListener !== 'function') return;
+        document.addEventListener('mouseup', function () { setTimeout(hlFromSelection, 0); });
+        document.addEventListener('selectionchange', function () { if (!hlSelection()) hlHide(); });
+        // The button is placed in page coordinates; a scrolled panel or
+        // column would leave it beside the wrong words.
+        document.addEventListener('scroll', function () { hlHide(); }, true);
+      }
+
+      function hlOptIn(body) {
+        body.className += ' st-highlightable';
+        body.__hlPassage = true;
+        body.__hlMark = function (sn, so, en, eo) { return hlWrap(body, sn, so, en, eo); };
+        body.onclick = function (event) { hlMarkClicked(body, event); };
+        hlWire();
+      }
+
       // Multi-source stimulus slice 4: which source a set has open, kept in
       // memory only (nothing posts) so a page turn inside the set comes back
       // to the source the student was reading.
@@ -5329,6 +5729,7 @@ public enum AssessmentPage {
           }
           var body = document.createElement('div');
           body.className = 'source-body';
+          if (ALLOW_HIGHLIGHTING) hlOptIn(body);
           // C-4: a picture inside a source carries its source's label into the
           // enlarged view — "Source B — <alt>" — because that is what tells the
           // student which document the chart came out of.
@@ -5409,6 +5810,7 @@ public enum AssessmentPage {
         block.appendChild(label);
         var body = document.createElement('div');
         body.className = 'stimulus-body';
+        if (ALLOW_HIGHLIGHTING) hlOptIn(body);
         // C-4: content, so it enlarges. No caption of its own — the alt text
         // the teacher wrote is all there is to say about it.
         body.appendChild(textWithAssets(set.stimulus, { caption: '' }));

@@ -141,7 +141,19 @@ final class PageShellTests: XCTestCase {
             return XCTFail("expected the :root block to close")
         }
         XCTAssertEqual(hexes(in: String(PageShell.baseStyles[close.upperBound...])), [])
-        XCTAssertEqual(hexes(in: AssessmentPage.itemStyles), [])
+        // Passage highlighting slice 2: the item sheet carries ONE token pair
+        // of its own — the mark colour, `--mark-paper` / `--mark-ink`, on
+        // `:root` and per contrast set — so the served renderer owns it
+        // (RendererHighlightTests checks every pair at 4.5:1). Those
+        // declarations are tokens too; every other rule stays hex-free.
+        let markToken = try! NSRegularExpression(pattern: "--mark-(?:paper|ink): #[0-9a-fA-F]{6};")
+        let items = AssessmentPage.itemStyles
+        let itemRange = NSRange(items.startIndex..., in: items)
+        XCTAssertEqual(markToken.numberOfMatches(in: items, range: itemRange),
+                       2 * (1 + PageAccommodations.contrastSets.count))
+        let itemsWithoutMarkTokens = markToken.stringByReplacingMatches(
+            in: items, range: itemRange, withTemplate: "")
+        XCTAssertEqual(hexes(in: itemsWithoutMarkTokens), [])
         // And the token block itself does carry them — otherwise the two
         // assertions above would pass on an empty stylesheet.
         // Twelve slice-B tokens plus `--canvas-paper`, the drawing canvas's

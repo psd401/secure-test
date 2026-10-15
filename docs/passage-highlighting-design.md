@@ -178,4 +178,19 @@ interaction, and whether the build fits before v2.0 or follows it.
   state. Mouse selection stays alongside. The spike worktree and branch
   are deleted. Next: the build, slices 1–4 above (server setting gated to
   2.0+ → page marking → sentence cursor → rows).
+- 2026-10-14 night — **slice 1 BUILT + PUSHED (`d230906`), deploy HELD until
+  v2.0 (James).** **Slice 2 BUILT** (page, mouse only, on `main` — the
+  served renderer is extracted from it): passages opt in to selection, a
+  Highlight button under a one-passage selection, marks split at blank
+  lines, formulas wrapped whole, boundary points placed by an ordered walk
+  (testable without a live Range), click a mark to remove it, "Clear
+  highlights" per passage, nothing posted or stored; mark colours per
+  contrast set 5.23:1–19.56:1 plus an underline so marks show without
+  colour (James); read-aloud reads a marked passage whole. Decision 31.1
+  (James): the teacher's View screen showing the student's marks is
+  accepted — a glimpse, not a record. Readings: a word cut by a mark edge
+  gets a partial word highlight; adding a mark mid-reading drops the word
+  highlight for the rest of that reading. Not verified in WebKit yet:
+  button position, the press keeping the selection, scroll hiding it —
+  slice 4 rows. Tests: swift 1017, renderer 62, extraction byte-identical.
 
