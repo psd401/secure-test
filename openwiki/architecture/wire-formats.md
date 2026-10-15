@@ -58,6 +58,7 @@ Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on ei
 2. Populate it in `design-tool/lib/api/buildDeliveryBundle.ts` (the final `DeliveryBundleSchema.parse` is the leak backstop) and, if needed, the route `app/api/assessments/[id]/delivery/route.ts`.
 3. Mirror it in `client/SecureTestCore/Sources/SecureTestCore/DeliveryBundle.swift` / `DeliveryItem.swift`; the page receives the **original JSON bytes** (`AssessmentPage.html`), so the renderer script must also learn it.
 4. Tests: `packages/schema/test/delivery.test.ts` (negative key assertions), `design-tool/test/delivery-api.test.ts`, `client/.../DeliveryBundleTests.swift`, relevant `Renderer*Tests.swift`.
+5. If the bundle shape changed, regenerate the Swift test fixture from the real route with `design-tool/scripts/generate-delivery-fixture.ts`. The Swift decoder and renderer suites read that fixture, so a stale one can pass against an old shape. The regeneration steps are in [testing](../testing/testing-and-validation.md#shared-delivery-bundle-fixture).
 
 ### Add an item type (cross-system, expensive)
 `ITEM_TYPES` in `db/schema.ts` → `items.ts` schema + `ItemSchema` union → `delivery.ts` schema + union → `responses.ts` response + union → `lib/api/items.ts` (`CreateItemBody`, config validation, `effectiveScoringMethod`) → `buildDeliveryBundle.ts` (`mapItemForDelivery` ends in `assertNever`, so a missing branch fails typecheck) → `exportBundle.ts` / `importBundle.ts` → `lib/scoring/auto.ts` (`scoreResponse`) and `results.ts` max-points → `lib/items/clientSupport.ts` (`MIN_CLIENT_VERSION_FOR_TYPE`: the delivery route refuses a bundle containing a type an old client cannot decode, because one unknown type fails the whole decode) → Swift `DeliveryItem` enum (exhaustive switch) and renderer → editor UI/preview (`lib/preview/renderHtml.ts`).
@@ -69,8 +70,7 @@ Edit `K12_MACROS` only; then `client/scripts/vendor-katex.mjs` regenerates `Gene
 
 - Narrow: `cd packages/schema && bun run build && bun test` (a leak regression shows up in `delivery.test.ts`).
 - Consumer-surface check: `cd design-tool && bun run typecheck` (resolves `@secure-test/schema` through `dist/`) and `bun test test/delivery-api.test.ts` (needs the test DB, see [testing](../testing/testing-and-validation.md)).
-- Conditional: `cd client/SecureTestCore && swift test` only when the bundle shape the client decodes changed.
+- Conditional: `cd client/SecureTestCore && swift test` only when the bundle shape the client decodes changed, and only after regenerating the shared delivery fixture (`design-tool/scripts/generate-delivery-fixture.ts`, see [testing](../testing/testing-and-validation.md#shared-delivery-bundle-fixture)).
 - `dist/` is a build product; do not hand-edit it.
 
 Related: [sittings and attempts](../design-tool/sittings-and-attempts.md) (who builds/serves the delivery bundle), [authoring](../design-tool/authoring.md) (export/import), [client overview](../client/overview.md) (Swift mirror).
--and-attempts.md) (who builds/serves the delivery bundle), [authoring](../design-tool/authoring.md) (export/import), [client overview](../client/overview.md) (Swift mirror).
