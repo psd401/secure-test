@@ -2538,8 +2538,8 @@ on before joining (VO-1); report afterwards.**
 | 5 | Select in a question stem or across two passages | No Highlight button | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (stem; nothing selects) |
 | 6 | Click a mark | That mark only is removed; "Clear highlights" disappears with the last mark | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
 | 7 | "Clear highlights" | Every mark in that passage removed, other passages untouched | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
-| 8 | Cmd-C on a selected passage word (clipboard locked) | Clipboard unchanged | NOT RUN |
-| 9 | Scroll a source panel with the button showing | The button hides | NOT RUN |
+| 8 | Cmd-C on a selected passage word (clipboard locked) | Clipboard unchanged | ✅ 2026-10-15, Debug `d524610af89d` (rebased `v2-renderer`), offline bundle, computer use — a sentinel set with `pbcopy` read back unchanged; stderr `clipboard disabled for this assessment` |
+| 9 | Scroll a source panel with the button showing | The button hides | ✅ 2026-10-15, Debug `d524610af89d` (rebased `v2-renderer`), offline bundle, computer use — `highlight-longsource.json` (Source A at 20 paragraphs, window zoomed to full width): scrolling Source A's own panel hid the button, the selection stayed; a page scroll hides it too |
 | 10 | Tab to "Highlight mode" (macOS Keyboard navigation OFF), Space | Mode on, button pressed, first sentence outlined | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (two Tabs from the page) |
 | 11 | Down / Up / Home / End | The outline moves by sentence and stops at the ends | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
 | 12 | Space on a sentence, again on the same sentence | Marked, then the mark removed; a mouse mark reaching into the next sentence keeps its outside part | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (the formula sentence, formula marked whole) — reading H-2 (outline crossed the formula) FIXED + re-checked 2026-10-14 |
@@ -2547,7 +2547,7 @@ on before joining (VO-1); report afterwards.**
 | 14 | Contrast sets (Yellow on Black, Black on White, Medium Gray on Light Gray) + 3X zoom | Marks readable and underlined in each; the outline visible | ◐ 2026-10-14 — marks readable and underlined in all three at 3X; the outline not looked at under these sets. Readings H-3 (first mark shifted the passage) and H-5 (button covered the next line) FIXED + re-checked 2026-10-14 at 1X |
 | 15 | VoiceOver: arrive on a highlighted word, a highlighted phrase | Announced as highlighted, once | ✅ 2026-10-14 (spike build, James) |
 | 16 | VoiceOver: enter Highlight mode, VO hears the instruction; arrows move (not VoiceOver's own cursor); Space | "Highlight mode. Arrow keys move by sentence…", each sentence read with ", highlighted" when marked, "Highlighted" / "Highlight removed" | NOT RUN |
-| 17 | Read aloud a passage with marks (an accommodation fixture) | Reads the whole passage in order | NOT RUN |
+| 17 | Read aloud a passage with marks (an accommodation fixture) | Reads the whole passage in order | ✅ 2026-10-15, Debug `d524610af89d` (rebased `v2-renderer`), offline bundle, computer use — `highlight-tts.json` (`tts_test_content` Stimuli+Items), two marks: the word cursor ran through both marks in order to the last word; stderr `tts: speak normal, 512 chars` with the marks and again after Clear highlights (marks do not change the script) |
 | 18 | v2.0 RC, real AAC session, production with the setting on | Rows 2, 6, 8, 10 hold inside the lock | NOT RUN |
 | 19 | v1.6.3 client on the same assessment | Test works as before; no highlighting, no refusal | NOT RUN |
 
