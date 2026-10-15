@@ -34,6 +34,10 @@ function renderMath(tex: string, displayMode: boolean): string {
     macros: { ...K12_MACROS },
     output: "html",
     strict: "ignore",
+    // Explicit, not the default: KaTeX < 0.18.2 reads an inherited `trust`
+    // from a polluted Object.prototype (GHSA-238p-pmpm-9mq7). An own
+    // property closes that until the 0.18 upgrade rides v2.0.
+    trust: false,
   });
 }
 

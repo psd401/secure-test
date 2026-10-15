@@ -68,6 +68,8 @@ export function MathTranslator({ onInsert }: Props) {
         errorColor: "#cc0000",
         output: "html",
         strict: "ignore",
+        // Explicit (GHSA-238p-pmpm-9mq7) — see lib/math/renderLatex.ts.
+        trust: false,
       });
     } catch {
       previewHtml = "";
