@@ -20,7 +20,7 @@ openwiki:
     - design-tool/app/dashboard/[id]/readiness.ts
     - design-tool/app/dashboard/[id]/FillBlankEditor.tsx
     - client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift
-  symbols: [FillBlankItemSchema, FillBlankResponseSchema, isKeyedBlank, FILL_BLANK_MARKER_RE, fillBlankMarkerIds, validateFillBlank, effectiveScoringMethod, fillBlankAnswer, fillBlankEditor, fillBlankMaxPoints, fillBlankHandScored, fillBlankTextMatches, scoreResponse, requiredClientUpgrade, MIN_CLIENT_VERSION_FOR_TYPE, fillBlankGaps, fillBlankField]
+  symbols: [FillBlankItemSchema, FillBlankResponseSchema, isKeyedBlank, FILL_BLANK_MARKER_RE, fillBlankMarkerIds, validateFillBlank, effectiveScoringMethod, fillBlankAnswer, fillBlankEditor, fillBlankMaxPoints, fillBlankHandScored, fillBlankTextMatches, scoreResponse, requiredClientUpgrade, MIN_CLIENT_VERSION_FOR_TYPE, fillBlankGaps, fillBlankField, renderAroundBlanks]
   test_paths:
     - design-tool/test/items-api.test.ts
     - design-tool/test/scoring-auto.test.ts
@@ -84,6 +84,7 @@ flowchart LR
 - **Scoring.** `scoreResponse` in `design-tool/lib/scoring/auto.ts` awards one point per keyed blank. A dropdown matches by option-id equality. A typed blank matches when any key passes `fillBlankTextMatches`, which uses the short-text rule with the blank's `exact_form` opt-out. Unkeyed blanks are never counted, and an item with no keyed blank returns `null`, so it is skipped rather than scored zero.
 - **Max points.** `fillBlankMaxPoints` is the keyed count, or all blanks when the item is hand-scored. `results.ts` and `reviewActions.ts` use it, so every student's totals stay comparable.
 - **One reading for every surface.** `fillBlankAnswer` in `design-tool/lib/items/fillBlankAnswer.ts` turns a stem and an answer record into segments and per-blank verdicts. The review queue, per-student page, work packet, instant feedback and insights evidence pack all read through it. Its output is raw text with a `format` hint: a dropdown's option text is `content` (it may contain math or emphasis), and a typed answer is `plain` (escape it). HTML is produced by `design-tool/lib/reporting/fillBlankView.ts`, which applies that rule.
+- **Stem HTML keeps emphasis whole.** `renderAroundBlanks` in `design-tool/lib/items/renderAroundBlanks.ts` renders a stem around its blanks. It joins the text between blanks with a private-use sentinel, renders the whole stem once through `renderItemContent`, then substitutes each blank's markup at its sentinel. A blank therefore sits inside a `**…**` or `_…_` span instead of cutting it. If a sentinel does not survive as plain text (a marker inside a formula or an image alt text), or lands inside an HTML tag, the function falls back to rendering each segment separately, which is always well-formed. `fillBlankView.ts` (reporting) and `lib/preview/renderHtml.ts` (teacher preview) both call it. The student page applies the same rule in `fillBlankField`. Focused test: the "bold around a blank" case in `design-tool/test/fill-blank-read-side.test.ts`, with the preview's blank markup checked in `design-tool/test/preview-render.test.ts`.
 
 ## Client compatibility
 
@@ -97,5 +98,5 @@ Related pages: [scoring and results](scoring-and-results.md) owns the general au
 - Changing scoring: edit `scoreResponse` and the max-points helpers in `auto.ts`, then run `design-tool/test/scoring-auto.test.ts` and `design-tool/test/fill-blank-read-side.test.ts`.
 - Changing a shape that a client decodes (blank or response fields): this crosses TypeScript and Swift. Follow [wire formats](../architecture/wire-formats.md) and run `client/SecureTestCore` with `swift test --filter FillBlank`, plus `design-tool/test/delivery-api.test.ts`.
 - Changing the version floor: edit `MIN_CLIENT_VERSION_FOR_TYPE` only when a client release actually renders the new shape. Check `design-tool/test/client-support.test.ts`.
+- Changing stem rendering: edit `renderAroundBlanks` and keep the segmented fallback. Run `cd design-tool && bun test test/fill-blank-read-side.test.ts`, and check `test/preview-render.test.ts` if the preview markup changes.
 - Non-goals: the client does not judge answers, and no key ever belongs in the bundle. Do not hand-edit generated Swift or schema `dist` output.
-st` output.
