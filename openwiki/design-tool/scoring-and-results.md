@@ -44,7 +44,7 @@ Scores live in the append-only `scores` table (see [data model](data-model.md#ta
 | `hybrid` item setting | AI, then confidence gate | `final` when confidence is at least `HYBRID_AUTO_FINALIZE_CONFIDENCE`, else `proposed` | `aiScoreResponse.ts` |
 | `human` | Teacher | `final` | `app/api/responses/[responseId]/score`, `app/api/scores/[scoreId]/approve` |
 
-`effectiveScoringMethod(type, config)` in `lib/api/items.ts` resolves the item's method: an explicit `items.config.scoring_method` wins, otherwise MC and short text are `auto` and essays are `human`. The schema's `ScoringMethodSchema` is `auto | ai | human | hybrid`.
+`effectiveScoringMethod(type, config)` in `lib/api/items.ts` resolves the item's method: an explicit `items.config.scoring_method` wins. Otherwise the per-type default `DEFAULT_SCORING_METHOD` applies (MC, short text, match, order, hotspot, table and fill-in-the-blank are `auto`; essay and drawing upload are `human`), with one override: a table or fill-in-the-blank item with no key (`cell_keys` or a keyed blank) defaults to `human` and flips to `auto` when the first key is saved (the E3-F1 rule; `items-api.test.ts`, "E3-F1: effective scoring method follows cell_keys"). The schema's `ScoringMethodSchema` is `auto | ai | human | hybrid`.
 
 ### Auto-scoring rules (`lib/scoring/auto.ts`)
 
