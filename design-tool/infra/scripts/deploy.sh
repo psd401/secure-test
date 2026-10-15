@@ -186,23 +186,24 @@ ci_state() {
 # Renderer signing gate (2.a): only a commit with a green `ci` run on main is
 # signed. The OpenWiki fast-forward above can leave HEAD on a bot commit whose
 # own `ci` run may never exist (a push by the bot does not necessarily trigger
-# workflows). Rule: when HEAD has NO run at all and HEAD is a bot-only
-# openwiki/ commit, walk back over such commits to the newest commit that is
+# workflows), or may still be running minutes after the person's push it
+# follows. Rule: when HEAD is a bot-only openwiki/ commit whose run is absent
+# OR still pending, walk back over such commits to the newest commit that is
 # not, and require THAT commit's run to be green. Sound because the bot's
 # commits change only openwiki/, which neither the renderer build nor any test
 # reads — the signed files are the ones ci tested; only the manifest's
-# `commit` / `version` name the bot commit. A pending or failed run on HEAD
-# itself is never stepped over.
+# `commit` / `version` name the bot commit. A failed run is never stepped
+# over, and neither is a pending run on a person's commit.
 ci_gate() {
   local sha="$HEAD_SHA" state
   command -v gh >/dev/null 2>&1 || fail "gh (GitHub CLI) is required for the ci gate — install it and run: gh auth login"
   state="$(ci_state "$sha")" || fail "could not read ci runs from GitHub (gh auth status?)"
-  if [ "$state" = "none" ]; then
+  if [ "$state" = "none" ] || [ "$state" = "pending" ]; then
     while is_bot_openwiki_commit "$sha"; do
       sha="$(git rev-parse "$sha^")"
     done
     if [ "$sha" != "$HEAD_SHA" ]; then
-      echo "ci: HEAD is OpenWiki bot commit(s) with no ci run; using $sha (the newest non-bot ancestor)"
+      echo "ci: HEAD is OpenWiki bot commit(s) with ci $state; using $sha (the newest non-bot ancestor)"
       state="$(ci_state "$sha")" || fail "could not read ci runs from GitHub (gh auth status?)"
     fi
   fi
