@@ -119,6 +119,10 @@ Focused tests: `test/admin.test.ts` (the admin and impersonation predicate) and 
 
 `components/app/` holds the dialogs and controls used across these pages, for example `PublishDialog`, `ShareDialog`, `GenerateQuestionsDialog`, `SuggestStandardsDialog`, `SafeguardingPanel`, and `SendToGoogleDocsControl`. `components/ui/` holds the shared UI primitives. `AppChrome` resolves the header from the session and is shared with `/admin`; it shows the act-as banner when the session is an impersonation.
 
+### Teacher-facing error copy
+
+Routes answer with machine codes (for example `already_granted`, `ends_at_past`). `lib/ui/errorCopy.ts` turns a code into one sentence a teacher can act on, and each panel calls the helper for its own surface: `itemErrorCopy` in the assessment editor, `sessionErrorCopy` and `attemptDeleteErrorCopy` on sittings and the monitor, `attemptHandInErrorCopy`, `extendErrorCopy` and `passBackErrorCopy` on attempt controls, `accommodationErrorCopy` and `tideImportErrorCopy` on accommodations, `coTeachErrorCopy` in the share dialog, `importErrorCopy` and `uploadErrorCopy` on import and uploads, and `authErrorCopy` on the login page. Each helper returns `{ message, showCode }`. `showCode` is true when the fix belongs to IT rather than the teacher, so the raw code stays visible for search. An unknown code falls back to a generic message that still shows the code. A new route code therefore needs a case in the matching helper, or the teacher sees the fallback. Tests `co-teach-ui.test.tsx` and `pass-back-control.test.tsx` pin the exact wording for their helpers. Copy rules are not enforced by the routes, so a wording change is a UI-only change.
+
 ## Change navigation
 
 - **Where to start.** Find the route in the route map, then read its page source. Rules usually live behind `lib/api/*`, not in the page.
