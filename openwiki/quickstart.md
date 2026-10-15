@@ -80,4 +80,3 @@ Cross-boundary rule: a change to a wire format, event kind or payload limit touc
 ## Backlog
 
 - Help-capture screenshot tooling (`docs/help-capture.md`, `design-tool/scripts/help-capture/`): documentation-build tooling, not product runtime. Deferred because most of its inputs are excluded from this wiki's scope by `.openwikiignore`. The teacher UI is covered in [teacher dashboard](design-tool/teacher-dashboard.md).
-s inputs are excluded from this wiki's scope by `.openwikiignore`. The teacher UI is covered in [teacher dashboard](design-tool/teacher-dashboard.md).
