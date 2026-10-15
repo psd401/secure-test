@@ -47,7 +47,7 @@ The student plane is the set of routes a signed-in student (or a staff member pr
 
 - **Sitting** (`test_sessions`): one teacher-started run of one assessment. It owns a 6-character join code, a scope (all the owner's current sections, one `section_ps_id`, or an explicit `student_ps_ids` list) and an `expires_at`. Status is `open` or `closed`. `kind` is `class` or `practice`.
 - **Attempt** (`attempts`): one student's work on one assessment. There is a unique constraint on `(assessment_id, student_id)`, so joining a second sitting of the same assessment resumes the same attempt and rebinds `test_session_id` to the new sitting.
-- **Practice sitting**: a staff member sitting their own test on their own Mac. The attempt has `practice = true`, the student row is a `practice_for_sub` overlay, and every class reader (results, CSV, print, review queue, analytics, hand-in-all, corpus) filters practice attempts out. The design note is `docs/practice-sitting-design.md`.
+- **Practice sitting**: a staff member sitting their own test on their own Mac. The attempt has `practice = true`, the student row is a `practice_for_sub` overlay, and every class reader (results, CSV, print, review queue, analytics, hand-in-all, corpus) filters practice attempts out. The design note is `docs/practice-sitting-design.md`. The route does not enforce one open practice sitting per teacher: `POST /api/test-sessions` skips the duplicate check for practice, so only the UI prevents a double start ([open co-teacher gaps](auth-and-access.md#open-co-teacher-gaps)).
 
 ## Starting a sitting: scope and roster pickers
 
