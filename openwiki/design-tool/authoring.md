@@ -69,7 +69,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 
 | Path | Entry points | Notes |
 | --- | --- | --- |
-| Export bundle | `GET /api/assessments/[id]/export` → `buildExportBundle` | `ItemBundleSchema` JSON with answer keys; bundles referenced asset bytes inline (`x-bundled-asset-count`); hidden rubrics omitted unless asked |
+| Export bundle | `GET /api/assessments/[id]/export` → `buildExportBundle` | `ItemBundleSchema` JSON with answer keys; bundles referenced asset bytes inline through `collectBundleAssets` (`lib/api/bundleAssets.ts`, which the student delivery bundle also uses so both resolve `asset:<uuid>` refs the same way) (`x-bundled-asset-count`); hidden rubrics omitted unless asked |
 | Import bundle | `POST /api/assessments/import` (JSON or multipart, 50 MB cap) → `importBundleForOwner`, also the `/dashboard/import` page | validates `ItemBundleSchema`, re-uploads bundled assets (sha256 dedup) and rewrites `asset:` ids, validates accommodation ids leniently and reports dropped counters; E12 set sources kept only when the same owner owns the source assessment |
 | Duplicate | `POST /api/assessments/[id]/duplicate` → `duplicateAssessment.ts` | copies section accommodations whole; answers-release stamp never copied |
 | Share | `lib/api/shares.ts`, `/api/assessments/[id]/shares`, `/api/shares/[shareId]/accept` | **copy semantics**: the recipient accepts and gets an independent assessment built from the lossless export; share notification email via `lib/email/shareNotifications.ts`; a Co-teach grant (an `access_grants` row, not a share) shows "New" on the grantee's home list until they open it ([auth and access](auth-and-access.md)) |

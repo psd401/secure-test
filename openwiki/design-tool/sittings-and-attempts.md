@@ -122,7 +122,7 @@ stateDiagram-v2
 
 Attempt status. Extending, removing the limit and rebinding to a new sitting change deadline columns, not status. Pass back supersedes final scores in the same transaction ([scoring](scoring-and-results.md#score-status-lifecycle)).
 
-Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/*` (`close`, `extend`, `attendance`, `hand-in-all`) and `app/api/attempts/[attemptId]/*` (`extend`, `hand-in`, `pass-back`). Each authorizes through `authorizeSitting` or `authorizeAttempt` at `run` level; deleting an attempt requires `own` and leaves an `attempt_deletions` audit row (`lib/api/deleteAttempt.ts`). Both extend routes call `extendAttempt` in `lib/api/extendAttempt.ts`, which takes exactly one target (a new end instant or "no limit"; `toExtendTarget` builds it from the request body).
+Teacher actions on a live sitting live under `app/api/test-sessions/[sessionId]/*` (`close`, `extend`, `attendance`, `hand-in-all`) and `app/api/attempts/[attemptId]/*` (`extend`, `hand-in`, `pass-back`). Each authorizes through `authorizeSitting` or `authorizeAttempt` at `run` level; deleting an attempt requires `own` and leaves an `attempt_deletions` audit row (`lib/api/deleteAttempt.ts`). Delete, hand-in and answer restore share one guard, `sittingIsOpen` in `lib/api/staffAttempt.ts`, which asks whether the student may be mid-answer in an open sitting and answers `session_open` (409) when so. Hand-in is exempt once the time limit has passed, and a practice attempt can always be deleted. Both extend routes call `extendAttempt` in `lib/api/extendAttempt.ts`, which takes exactly one target (a new end instant or "no limit"; `toExtendTarget` builds it from the request body).
 
 ## Events and the monitor
 
