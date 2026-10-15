@@ -22,7 +22,12 @@ openwiki:
     - design-tool/lib/accommodations/sharedRecords.ts
     - design-tool/lib/accommodations/pendingDiffs.ts
     - design-tool/lib/accommodations/preview.ts
-  symbols: [explainAccommodations, resolveEffectiveAccommodations, isEnabledValue, resolveStudentForOwner, importSnapshot, validateExtract, handleS3Event, MockSnapshotSource, S3SnapshotSource, coTeacherEmailsFor, relatedTeacherEmails, pendingTideDiffs, buildAccommodationsPreview]
+    - design-tool/lib/api/students.ts
+    - design-tool/app/api/students/route.ts
+    - design-tool/app/api/students/[id]/route.ts
+    - design-tool/app/api/students/[id]/accommodations/route.ts
+    - design-tool/app/api/students/[id]/accommodations/[accId]/route.ts
+  symbols: [explainAccommodations, resolveEffectiveAccommodations, isEnabledValue, resolveStudentForOwner, importSnapshot, validateExtract, handleS3Event, MockSnapshotSource, S3SnapshotSource, coTeacherEmailsFor, relatedTeacherEmails, pendingTideDiffs, buildAccommodationsPreview, CreateStudentBody, UpsertManualAccommodationBody, EditAccommodationValueBody]
   test_paths:
     - design-tool/test/effective-accommodations.test.ts
     - design-tool/test/section-accommodations.test.ts
@@ -32,6 +37,8 @@ openwiki:
     - design-tool/test/roster-extract.test.ts
     - design-tool/test/roster-import.test.ts
     - design-tool/test/roster-sync-handler.test.ts
+    - design-tool/test/students-api.test.ts
+    - design-tool/test/student-accommodations-api.test.ts
   invariants:
     - Roster sync never hard-deletes; absence from a complete, checksum-verified snapshot flips is_active.
     - A refused snapshot leaves every roster table at last-known-good.
@@ -68,6 +75,19 @@ The **By class period** panel has an "Apply to all my periods" action (`applyToA
 `POST /api/accommodations/import` (`lib/api/importTide.ts`, `exceljs`) applies fixed merge semantics: values from a TIDE import overwrite `tide_import` rows, a teacher-edited row (`tide_then_edited`) is preserved and surfaced as a diff to accept or keep (`accept-tide`, `keep-mine` routes, review page `app/dashboard/accommodations/import/review`), `manual` rows are never touched, rows absent from the new import are soft-removed, and unknown tool ids are dropped. Deleting a TIDE-origin row returns 409. Soft-deleted ledger rows do not block re-insertion (partial unique index).
 
 The vocabulary bridge is `lib/accommodations/tideCatalog.ts`. It loads the generated `tide-catalog.json` rows and maps a TIDE `(subject, tool, value)` triple to a design-tool catalog id and TDS code through `mapTideToCatalogId` and `tideToolNameToCatalogId`. The tool-name map `TIDE_TOOL_TO_ID` is hand-curated. Non-embedded tools (Non-Embedded Accommodations and Designated Supports) are intentionally absent because they need out-of-band handling, so they map to `null` and the import counts them as dropped. The reverse direction (`mapCatalogIdToTide`, used by the `accept-tide` route) and `tideValueForCode` (used by `pendingDiffs.ts` to state what TIDE now asserts) go through the same module. When a TIDE tool is new, add it to `TIDE_TOOL_TO_ID` rather than editing the generated JSON. Tests: `tide-catalog.test.ts` (mapping and parity) and `tide-import.test.ts`. The column-level correspondence between TIDE's export and upload files and the browser's session schema is recorded in `docs/accommodations-data-dictionary.md`.
+
+## Teacher student records and manual accommodations
+
+The teacher's Students pages edit the same per-teacher overlay through a small CRUD API. Every route calls `requireStaff`, and record-level routes call `authorizeStudent(db, session, id, "own")` from `lib/api/access.ts` ([auth and access](auth-and-access.md)), so a row the caller does not own answers 404 rather than revealing that it exists.
+
+- `GET /api/students` (`app/api/students/route.ts`) lists the caller's overlay rows ordered by SSID, each with a live `accommodation_count`. Practice-overlay rows (`practice_for_sub` set) are excluded, because a staff member's practice child is not a student ([sittings and attempts](sittings-and-attempts.md)).
+- `POST /api/students` validates `CreateStudentBody` (`lib/api/students.ts`: SSID required and at most 64 characters, name, grade and school optional). A duplicate SSID answers 409 `ssid_already_exists` with the existing id, so the client can tell a duplicate from a server failure. The unique index on `(owner_sub, ssid)` is the backstop.
+- `GET`, `PATCH` and `DELETE /api/students/[id]` (`app/api/students/[id]/route.ts`) read one record (`?include_removed=1` includes soft-removed accommodations), patch only name, grade and school (`UpdateStudentBody`), and delete the record. The database cascade removes its `student_accommodations` rows.
+- `POST /api/students/[id]/accommodations` (`.../accommodations/route.ts`) creates a manual row. The server forces `source: "manual"`, so a client cannot write a TIDE origin. A live row for the same subject and tool answers 409 `already_exists`; a soft-removed row does not block re-insertion.
+- `PATCH /api/students/[id]/accommodations/[accId]` (`.../[accId]/route.ts`) edits a value. An unchanged value is a no-op that keeps `edited_at` stable, so the next TIDE import sees no phantom edit. A changed value turns a `tide_import` row into `tide_then_edited`, stamps `edited_at` and clears `kept_against_tide_code`, because a new edit supersedes an earlier Keep-mine decision. Manual and already-edited rows keep their source.
+- `DELETE` on the same route hard-deletes only `manual` rows. A TIDE-origin row returns 409 `tide_row_not_deletable`, and it leaves the ledger only through a re-import's soft-remove.
+
+Invariant: the server decides a row's origin, and a re-import rather than a client delete is the only way a TIDE-origin row leaves. Tests: `test/students-api.test.ts` (record CRUD and the duplicate-SSID 409) and `test/student-accommodations-api.test.ts` (manual create, the value-edit source transition and no-op, and the delete rules). Narrow check: `cd design-tool && $TESTDB bun test test/student-accommodations-api.test.ts`.
 
 ## Student identity binding
 
