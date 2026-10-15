@@ -2531,20 +2531,20 @@ on before joining (VO-1); report afterwards.**
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 1 | Bundle without the flag | No Highlight button on selection, no "Highlight mode" button, passages not selectable | NOT RUN |
-| 2 | Drag across part of a sentence; press Highlight | The button appears just under the selection; exactly the selected words are marked, underlined | NOT RUN |
-| 3 | Drag across two paragraphs | Two marks, none across the blank line | NOT RUN |
-| 4 | Drag across inline math | The whole formula is marked as one piece; no gap | NOT RUN |
-| 5 | Select in a question stem or across two passages | No Highlight button | NOT RUN |
-| 6 | Click a mark | That mark only is removed; "Clear highlights" disappears with the last mark | NOT RUN |
-| 7 | "Clear highlights" | Every mark in that passage removed, other passages untouched | NOT RUN |
+| 1 | Bundle without the flag | No Highlight button on selection, no "Highlight mode" button, passages not selectable | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
+| 2 | Drag across part of a sentence; press Highlight | The button appears just under the selection; exactly the selected words are marked, underlined | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use — the mark began mid-word where the drag began |
+| 3 | Drag across two paragraphs | Two marks, none across the blank line | ◐ 2026-10-14 — the drag ended at the start of paragraph 2, so only paragraph 1 was marked; no mark crossed the blank line and an existing mark was not doubled; the two-mark split is covered by RendererHighlightTests |
+| 4 | Drag across inline math | The whole formula is marked as one piece; no gap | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use — reading H-4: the underline does not run under the formula (KaTeX is inline-block) |
+| 5 | Select in a question stem or across two passages | No Highlight button | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (stem; nothing selects) |
+| 6 | Click a mark | That mark only is removed; "Clear highlights" disappears with the last mark | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
+| 7 | "Clear highlights" | Every mark in that passage removed, other passages untouched | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
 | 8 | Cmd-C on a selected passage word (clipboard locked) | Clipboard unchanged | NOT RUN |
 | 9 | Scroll a source panel with the button showing | The button hides | NOT RUN |
-| 10 | Tab to "Highlight mode" (macOS Keyboard navigation OFF), Space | Mode on, button pressed, first sentence outlined | NOT RUN |
-| 11 | Down / Up / Home / End | The outline moves by sentence and stops at the ends | NOT RUN |
-| 12 | Space on a sentence, again on the same sentence | Marked, then the mark removed; a mouse mark reaching into the next sentence keeps its outside part | NOT RUN |
-| 13 | Escape; then Tab away while in the mode | Focus returns to "Highlight mode", unpressed; Tab also leaves the mode | NOT RUN |
-| 14 | Contrast sets (Yellow on Black, Black on White, Medium Gray on Light Gray) + 3X zoom | Marks readable and underlined in each; the outline visible | NOT RUN |
+| 10 | Tab to "Highlight mode" (macOS Keyboard navigation OFF), Space | Mode on, button pressed, first sentence outlined | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (two Tabs from the page) |
+| 11 | Down / Up / Home / End | The outline moves by sentence and stops at the ends | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
+| 12 | Space on a sentence, again on the same sentence | Marked, then the mark removed; a mouse mark reaching into the next sentence keeps its outside part | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use (the formula sentence, formula marked whole) — reading H-2: on that sentence the outline box crosses through the formula |
+| 13 | Escape; then Tab away while in the mode | Focus returns to "Highlight mode", unpressed; Tab also leaves the mode | ✅ 2026-10-14, Debug `05776a722b36`, offline bundle, computer use |
+| 14 | Contrast sets (Yellow on Black, Black on White, Medium Gray on Light Gray) + 3X zoom | Marks readable and underlined in each; the outline visible | ◐ 2026-10-14 — marks readable and underlined in all three at 3X; the outline not looked at under these sets. Readings H-3: the first mark inserts "Clear highlights" above the passage and pushes the text down a line; H-5: at 3X the Highlight button covers the line below the selection while it shows |
 | 15 | VoiceOver: arrive on a highlighted word, a highlighted phrase | Announced as highlighted, once | ✅ 2026-10-14 (spike build, James) |
 | 16 | VoiceOver: enter Highlight mode, VO hears the instruction; arrows move (not VoiceOver's own cursor); Space | "Highlight mode. Arrow keys move by sentence…", each sentence read with ", highlighted" when marked, "Highlighted" / "Highlight removed" | NOT RUN |
 | 17 | Read aloud a passage with marks (an accommodation fixture) | Reads the whole passage in order | NOT RUN |

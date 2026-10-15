@@ -210,4 +210,15 @@ interaction, and whether the build fits before v2.0 or follows it.
   byte-identical. Next: slice 4 — rows, help page, quick start; rows run in
   one sitting on a Debug build against local dev, VoiceOver with the Claude
   app quit or hidden.
+- 2026-10-14 night — **slice 4 docs pushed (`05776a7`); hand-run, first
+  pass** (Debug of `05776a7`, offline bundle with the flag, computer use;
+  `client/MANUAL-CHECKS.md` "Passage highlighting"): rows 1, 2, 4–7, 10–13
+  ✅, 3 and 14 ◐. Readings, all cosmetic, proposals only: **H-2** the
+  sentence outline crosses through an inline formula; **H-3** the first
+  mark inserts "Clear highlights" above the passage and shifts the text a
+  line; **H-4** the mark's underline does not run under a formula; **H-5**
+  at 3X zoom the floating Highlight button covers the next line while it
+  shows. Left for James: 8 (Cmd-C), 9 (scroll a source panel), 16
+  (VoiceOver in Highlight mode — Claude app quit or hidden), 17 (read
+  aloud with marks); 18–19 at the v2.0 RC.
 
