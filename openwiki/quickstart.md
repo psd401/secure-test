@@ -19,7 +19,7 @@ secure-test is one school district's in-house secure assessment stack: teachers 
 |---|---|
 | System | [Architecture overview](architecture/overview.md), [Wire formats (`packages/schema`)](architecture/wire-formats.md) |
 | Design tool | [Auth and access](design-tool/auth-and-access.md), [Data model](design-tool/data-model.md), [Authoring](design-tool/authoring.md), [Fill-in-the-blank items](design-tool/fill-in-the-blank.md), [Sittings and attempts](design-tool/sittings-and-attempts.md), [Scoring and results](design-tool/scoring-and-results.md), [Reporting and work packets](design-tool/reporting-and-packets.md), [Integrations](design-tool/integrations.md), [Accommodations and roster](design-tool/accommodations-and-roster.md), [AI and safeguarding](design-tool/ai-and-safeguarding.md), [Standards alignment](design-tool/standards-alignment.md), [Storage and assets](design-tool/storage-and-assets.md), [Teacher dashboard](design-tool/teacher-dashboard.md) |
-| Client | [macOS client overview](client/overview.md), [Lockdown and security](client/lockdown-and-security.md), [Speech accommodations](client/speech-accommodations.md), [Instant feedback](client/instant-feedback.md), [Drawing canvas](client/drawing-canvas.md), [Formatted essay editor](client/rich-text-essay.md), [Signed renderer delivery](client/signed-renderer.md) |
+| Client | [macOS client overview](client/overview.md), [Lockdown and security](client/lockdown-and-security.md), [Speech accommodations](client/speech-accommodations.md), [Instant feedback](client/instant-feedback.md), [Drawing canvas](client/drawing-canvas.md), [Formatted essay editor](client/rich-text-essay.md), [Math keypad](client/math-keypad.md), [Signed renderer delivery](client/signed-renderer.md) |
 | Operations | [Deployment and observability](operations/deployment-and-observability.md) |
 | Testing | [Testing and validation](testing/testing-and-validation.md) |
 
@@ -80,3 +80,4 @@ Cross-boundary rule: a change to a wire format, event kind or payload limit touc
 ## Backlog
 
 - Help-capture screenshot tooling (`docs/help-capture.md`, `design-tool/scripts/help-capture/`): documentation-build tooling, not product runtime. Deferred because most of its inputs are excluded from this wiki's scope by `.openwikiignore`. The teacher UI is covered in [teacher dashboard](design-tool/teacher-dashboard.md).
+s inputs are excluded from this wiki's scope by `.openwikiignore`. The teacher UI is covered in [teacher dashboard](design-tool/teacher-dashboard.md).
