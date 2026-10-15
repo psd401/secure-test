@@ -135,4 +135,3 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
 
 Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
-lidation.md).
