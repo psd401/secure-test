@@ -69,7 +69,7 @@ Sittings have their own archive flag, set by `PATCH /api/test-sessions/[sessionI
 
 ## Delete
 
-`DELETE /api/assessments/[id]` is owner-only (`own`) and hard-deletes the row. The route checks in this order:
+`DELETE /api/assessments/[id]` is owner-only (`own`) and hard-deletes the row. The design note `docs/archive-and-delete-design.md` explains why: unpublishing a row with attempts used to be allowed, so "unpublish, then delete" silently destroyed student work, and the attempt-count guard closes that gap (decision D-1). The route checks in this order:
 
 1. `requireDraft`: a published row returns 409 `assessment_published_editing_locked`, so the only path is unpublish first.
 2. Attempt count: if any `attempts` row references the assessment, the route returns 409 `has_attempts` with the count and deletes nothing. The comment in the route explains why: deleting student work silently would bypass the per-attempt delete route and its audit row.
