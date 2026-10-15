@@ -14,8 +14,9 @@ openwiki:
     - client/SecureTest/SpeechListener.swift
     - client/SecureTest/AssessmentViewController.swift
     - client/SecureTestCore/Sources/SecureTestCore/AttemptEventReporter.swift
+    - client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift
     - design-tool/app/api/attempts/[attemptId]/events/route.ts
-  symbols: [TextToSpeechScope, SpeechCommand, SpeechScript, SpeechCallback, MathSpeech, SpeechToText, SpeechToTextAvailability, SpeechToTextPreflight, DictationCommand, SpeechReader, SpeechListener, AssessmentViewController]
+  symbols: [TextToSpeechScope, SpeechCommand, SpeechScript, SpeechCallback, MathSpeech, SpeechToText, SpeechToTextAvailability, SpeechToTextPreflight, DictationCommand, SpeechReader, SpeechListener, AssessmentViewController, ttsMirrorFor, ttsTypedSegments]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/TextToSpeechTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/SpeechToTextTests.swift
@@ -25,6 +26,7 @@ openwiki:
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererResponseSpeechTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/BridgeChecksTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/AttemptEventReporterTests.swift
+    - client/SecureTestCore/Tests/SecureTestCoreTests/RendererAnswerHighlightTests.swift
   invariants:
     - A speech grant is read only from the bundle's effective accommodations; an off-ish value never switches a tool on, on either side of the wire.
     - Dictation never starts unless the pre-flight returned ready before lockdown; no permission prompt is ever shown inside the secure session.
@@ -78,6 +80,10 @@ Caption: read-aloud messages are refused without a grant, and each speak replace
 - `SpeechScript` turns the segments into the utterance text. `MathSpeech.words` reads each `math` segment. It is all-or-nothing: an expression outside its subset becomes the phrase "math expression" instead of a half-read formula.
 - `SpeechReader` (app target) owns one `AVSpeechSynthesizer` and maps each delegate callback to a `SpeechCallback` script for the page. It does not persist anything.
 
+### Highlighting the word in an answer field
+
+A CSS Custom Highlight cannot reach inside an `<input>` or `<textarea>`, so "Read my answer" cannot mark the word being spoken in the field itself. Instead `ttsMirrorFor` (in `AssessmentPage.swift`) lays one `.tts-mirror` `div` over the field, with the field's box, font and wrapping (`TTS_MIRROR_STYLE`) and the value as a single text node. Only that node's highlighted word paints, over the field's own copy. The mirror is `aria-hidden`, has `pointer-events: none`, is never focusable, and is never posted or written back, so the field's value is untouched. `ttsMirrorPlace` re-places it and copies the field's scroll on every word. A table moves one mirror from cell to cell. Typed segments carry their offsets in the field (`ttsTypedSegments`), so a word maps into the mirror. Typing in the field removes the mirror. The behaviour is pinned by `RendererAnswerHighlightTests`, which asserts on mirror count, placement and the stale-paint toggle. The formatted essay box is excluded: `RendererRichTextTests` checks that no mirror appears over it.
+
 ## Dictation flow and pre-flight
 
 The microphone and recognition permissions are settled before lockdown begins, not during the test. PoC-A finding #16 showed that a first permission prompt inside an `AEAssessmentSession` is hidden behind the lockout and hangs, so the rule is structural:
@@ -95,7 +101,7 @@ Invariant: every `stop` path is also a teardown path. `AssessmentViewController.
 - Adding a speech-related accommodation id: add it to the catalog and the server visibility rules first ([accommodations and roster](../design-tool/accommodations-and-roster.md)), then read it in `TextToSpeechScope` or `SpeechToText.isGranted`. Remember the page constants (`TTS_SCOPE`, `STT_STATE`) are what the renderer sees.
 - Changing what is spoken: `MathSpeech` (subset and fallback) and `SpeechScript` (segment join). Keep the all-or-nothing rule, because a partial formula reading is worse than the fallback phrase.
 - Changing the pre-flight outcome vocabulary: update the Swift `EventOutcome` and `Step` enums together with the server's `SPEECH_PREFLIGHT_OUTCOMES` and `SPEECH_PREFLIGHT_STEPS` in the attempt events route. Mismatched values are rejected by the server.
-- Focused tests (run under `swift test`, no Xcode window): `SpeechToTextTests` (grant, availability, outcome mapping, `DictationCommand` decoding), `TextToSpeechTests` (scope resolution, `SpeechCommand` decoding and bounds), `MathSpeechTests`, `RendererTextToSpeechTests`, `RendererSpeechToTextTests`, `RendererResponseSpeechTests` (the page's controls), `BridgeChecksTests` (message size limits), and `AttemptEventReporterTests` (`speech_preflight` wire value).
+- Focused tests (run under `swift test`, no Xcode window): `SpeechToTextTests` (grant, availability, outcome mapping, `DictationCommand` decoding), `TextToSpeechTests` (scope resolution, `SpeechCommand` decoding and bounds), `MathSpeechTests`, `RendererTextToSpeechTests`, `RendererSpeechToTextTests`, `RendererResponseSpeechTests` (the page's controls), `RendererAnswerHighlightTests` (the answer-field mirror), `BridgeChecksTests` (message size limits), and `AttemptEventReporterTests` (`speech_preflight` wire value).
 - `SpeechListener.swift`, `SpeechReader.swift` and the handlers in `AssessmentViewController.swift` are in the app target and are not covered by `swift test`. Verify them with an Xcode build and a manual run on a Mac that has the assets installed.
 - Scope boundary: the speech grants are data the server already emits in the bundle's accommodation map. Changing which keys or values that map carries is a wire change; see [wire formats](../architecture/wire-formats.md). Pure rule changes inside `SecureTestCore` do not need a server change.
 
