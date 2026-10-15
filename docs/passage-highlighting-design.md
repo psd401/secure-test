@@ -193,4 +193,21 @@ interaction, and whether the build fits before v2.0 or follows it.
   highlight for the rest of that reading. Not verified in WebKit yet:
   button position, the press keeping the selection, scroll hiding it —
   slice 4 rows. Tests: swift 1017, renderer 62, extraction byte-identical.
+- 2026-10-14 night — **slice 3 BUILT** (sentence cursor, on `main`): a
+  "Highlight mode" toggle per passage (tabindex, aria-pressed); in the mode
+  arrows move by sentence, Home / End, Space / Enter mark or unmark (a mark
+  reaching past the sentence is split so only that sentence loses it),
+  Escape returns to the toggle, blur leaves; outline in the focus-ring
+  token; a polite live region announces the instruction, each sentence
+  (", highlighted" / ", partly highlighted") and "Highlighted" /
+  "Highlight removed". Splitter: `. ! ?` before whitespace or end, blank
+  lines; decimals and a short abbreviation list stay whole; limits =
+  initials, "... " ellipses, other abbreviations, single line breaks.
+  Agent choices accepted (James): "partly highlighted"; `role="application"`
+  on the passage in the mode so VoiceOver passes arrows through (hand-run
+  must confirm); no redraw on resize until the next key; re-entry starts at
+  the first sentence. Tests: swift 1034 (16 new), renderer 62, extraction
+  byte-identical. Next: slice 4 — rows, help page, quick start; rows run in
+  one sitting on a Debug build against local dev, VoiceOver with the Claude
+  app quit or hidden.
 

@@ -68,6 +68,22 @@ final class RendererHighlightTests: XCTestCase {
     function __markTexts(node) {
       return __marks(node).map(function (m) { return m.textContent; }).join('|');
     }
+    // Slice 3: a keydown on `el` as WebKit would deliver it; the event comes
+    // back so a test can see whether the page claimed it.
+    function __key(el, key, extra) {
+      var ev = {
+        key: key, prevented: false, stopped: false,
+        preventDefault: function () { this.prevented = true; },
+        stopPropagation: function () { this.stopped = true; }
+      };
+      if (extra) for (var k in extra) ev[k] = extra[k];
+      if (typeof el.onkeydown === 'function') el.onkeydown(ev);
+      return ev;
+    }
+    function __live() {
+      var live = __first('.st-hl-live', document.body);
+      return live ? live.textContent : null;
+    }
     """#
 
     private func harness(
@@ -394,6 +410,246 @@ final class RendererHighlightTests: XCTestCase {
     private static func ratio(_ a: String, _ b: String) -> Double {
         let x = luminance(a), y = luminance(b)
         return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    // MARK: - Slice 3: the sentence cursor
+
+    private let toggle = "__first('.stimulus-body').__hlToggle"
+
+    func testFlagOffHasNoHighlightModeToggle() throws {
+        for flag in [nil, "false"] {
+            let h = try harness(flag: flag)
+            XCTAssertEqual(try h.int("__count('.st-hl-toggle')"), 0)
+            XCTAssertEqual(try h.string("typeof \(passage).onkeydown"), "undefined")
+            XCTAssertEqual(try h.string("typeof \(passage).onblur"), "undefined")
+            XCTAssertNil(try h.string("\(passage).getAttribute('tabindex')"))
+            XCTAssertNil(try h.string("__live()"))
+        }
+    }
+
+    func testEachPassageHasAHighlightModeToggleAbove() throws {
+        let h = try harness()
+        XCTAssertEqual(try h.int("__count('.st-hl-toggle')"), 3)
+        XCTAssertTrue(try h.bool("""
+            __all('.st-highlightable').every(function (body) {
+              var t = body.__hlToggle;
+              return t && t.tagName === 'button' && t.type === 'button' &&
+                t.textContent === 'Highlight mode' && t.getAttribute('tabindex') === '0' &&
+                t.getAttribute('aria-pressed') === 'false' && t.nextSibling === body;
+            })
+            """))
+        // Not in the mode: the passage itself is not a Tab stop.
+        XCTAssertNil(try h.string("\(passage).getAttribute('tabindex')"))
+    }
+
+    func testAPassageWithNoTextGetsNoToggle() throws {
+        let json = Self.bundle
+            .replacingOccurrences(of: #""stimulus": "Read the passage.""#, with: #""stimulus": """#)
+            .replacingOccurrences(of: #""test_id": "hl","#, with: #""allow_highlighting": true, "test_id": "hl","#)
+        let h = try RendererHarness(bundleJSON: json, prelude: Self.selectionPrelude)
+        XCTAssertEqual(try h.int("__count('.st-hl-toggle')"), 2)
+    }
+
+    private func sentences(_ h: RendererHarness, _ setup: String) throws -> String? {
+        try h.eval(setup)
+        return try h.string("\(passage).__hlSentences().join('|')")
+    }
+
+    func testSentenceSplitting() throws {
+        let h = try harness()
+        XCTAssertEqual(try sentences(h, "__setBody(\(passage), [__text('One. Two! Three? Four')])"),
+                       "One.|Two!|Three?|Four")
+        // A decimal is not an end; nor is a short abbreviation.
+        XCTAssertEqual(try sentences(h, "__setBody(\(passage), [__text('It costs 3.5 dollars. Mr. Lee paid. Done.')])"),
+                       "It costs 3.5 dollars.|Mr. Lee paid.|Done.")
+        // A blank line ends a sentence, with or without punctuation; a single
+        // line break does not.
+        XCTAssertEqual(try sentences(h, "__setBody(\(passage), [__text('A heading\\n\\nFirst line\\nsame sentence. Last')])"),
+                       "A heading|First line\nsame sentence.|Last")
+        // Closing quotes and repeated marks stay with their sentence.
+        XCTAssertEqual(try sentences(h, "__setBody(\(passage), [__text('He said \"Stop.\" Then?! he left.')])"),
+                       "He said \"Stop.\"|Then?!|he left.")
+        // Across several text nodes.
+        XCTAssertEqual(try sentences(h, "__setBody(\(passage), [__text('Alpha be'), __text('ta. Gamma.')])"),
+                       "Alpha beta.|Gamma.")
+    }
+
+    func testAFormulaStaysInsideItsSentence() throws {
+        let h = try harness()
+        XCTAssertEqual(try sentences(h, """
+            var k = document.createElement('span'); k.className = 'katex';
+            var kt = __text('3.5 + x. y'); k.appendChild(kt);
+            __setBody(\(passage), [__text('Area is '), k, __text('. Next one.')]);
+            """), "Area is 3.5 + x. y.|Next one.")
+    }
+
+    private func modeHarness(_ text: String = "First one here. Second one!\\n\\nThird one?") throws -> RendererHarness {
+        let h = try harness()
+        try h.eval("var s = '\(text)'; __setBody(\(passage), [__text(s)]); \(toggle).onclick();")
+        return h
+    }
+
+    func testEnteringTheModeFocusesTheFirstSentence() throws {
+        let h = try modeHarness()
+        XCTAssertTrue(try h.bool("document.activeElement === \(passage)"))
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "true")
+        XCTAssertEqual(try h.string("\(passage).getAttribute('tabindex')"), "-1")
+        XCTAssertEqual(try h.string("\(passage).getAttribute('role')"), "application")
+        XCTAssertTrue(try h.bool("/ st-hl-mode/.test(\(passage).className)"))
+        XCTAssertEqual(try h.string("\(passage).__hlCurrent()"), "First one here.")
+        XCTAssertEqual(try h.string("__live()"),
+                       "Highlight mode. Arrow keys move by sentence, Space highlights, Escape leaves. First one here.")
+    }
+
+    func testArrowsHomeAndEndMoveBySentence() throws {
+        let h = try modeHarness()
+        let current = "\(passage).__hlCurrent()"
+        for (key, expected) in [("ArrowDown", "Second one!"), ("ArrowRight", "Third one?"),
+                                ("ArrowDown", "Third one?"), ("ArrowUp", "Second one!"),
+                                ("ArrowLeft", "First one here."), ("ArrowUp", "First one here."),
+                                ("End", "Third one?"), ("Home", "First one here.")] {
+            let ev = "__key(\(passage), '\(key)')"
+            XCTAssertTrue(try h.bool("var e = \(ev); e.prevented && e.stopped"), key)
+            XCTAssertEqual(try h.string(current), expected, key)
+            XCTAssertEqual(try h.string("__live()"), expected, key)
+        }
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+    }
+
+    func testSpaceMarksExactlyTheSentenceAndSpaceAgainRemovesIt() throws {
+        let h = try modeHarness()
+        try h.eval("__key(\(passage), 'ArrowDown')")
+        XCTAssertTrue(try h.bool("var e = __key(\(passage), ' '); e.prevented && e.stopped"))
+        XCTAssertEqual(try h.string("__markTexts()"), "Second one!")
+        XCTAssertEqual(try h.string("__marks()[0].className"), "st-mark")
+        XCTAssertEqual(try h.string("__live()"), "Highlighted")
+        XCTAssertEqual(try h.string("\(passage).textContent"), "First one here. Second one!\n\nThird one?")
+        // Moving away and back: the state is heard.
+        try h.eval("__key(\(passage), 'ArrowDown'); __key(\(passage), 'ArrowUp');")
+        XCTAssertEqual(try h.string("__live()"), "Second one!, highlighted")
+        // Enter does what Space does.
+        try h.eval("__key(\(passage), 'Enter')")
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+        XCTAssertEqual(try h.string("__live()"), "Highlight removed")
+        XCTAssertEqual(try h.string("\(passage).textContent"), "First one here. Second one!\n\nThird one?")
+        XCTAssertEqual(try h.int("\(passage).childNodes.length"), 1)
+        XCTAssertEqual(try h.int("__count('.st-mark-clear')"), 0)
+    }
+
+    func testSpaceOnAPartlyMarkedSentenceMarksTheRestAndUnmarkingKeepsTheNeighbour() throws {
+        let h = try harness()
+        try h.eval("""
+            var s = 'One two. Three four.'; var t = __text(s); __setBody(\(passage), [t]);
+            \(passage).__hlMark(t, s.indexOf('two'), t, s.indexOf(' four'));
+            \(toggle).onclick(); __key(\(passage), 'ArrowDown');
+            """)
+        XCTAssertEqual(try h.string("__markTexts()"), "two. Three")
+        XCTAssertEqual(try h.string("__live()"), "Three four., partly highlighted")
+        try h.eval("__key(\(passage), ' ')")
+        XCTAssertEqual(try h.string("__markTexts()"), "two. Three|four.")
+        XCTAssertEqual(try h.string("__live()"), "Highlighted")
+        try h.eval("__key(\(passage), ' ')")
+        // Only the first sentence's part of the mouse mark is left.
+        XCTAssertEqual(try h.string("__markTexts()"), "two.")
+        XCTAssertEqual(try h.string("__live()"), "Highlight removed")
+        XCTAssertEqual(try h.string("\(passage).textContent"), "One two. Three four.")
+    }
+
+    func testSpaceMarksAFormulaWholeInsideItsSentence() throws {
+        let h = try harness()
+        try h.eval("""
+            var k = document.createElement('span'); k.className = 'katex';
+            var kt = __text('πr2'); k.appendChild(kt);
+            __setBody(\(passage), [__text('Area is '), k, __text(' units. Next.')]);
+            \(toggle).onclick(); __key(\(passage), ' ');
+            """)
+        XCTAssertEqual(try h.string("__markTexts()"), "Area is|πr2|units.")
+        XCTAssertTrue(try h.bool("k.parentNode.className === 'st-mark' && kt.parentNode === k"))
+        XCTAssertEqual(try h.string("__live()"), "Highlighted")
+        try h.eval("__key(\(passage), ' ')")
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+        XCTAssertEqual(try h.string("\(passage).textContent"), "Area is πr2 units. Next.")
+    }
+
+    func testEscapeLeavesTheModeAndReturnsToTheToggle() throws {
+        let h = try modeHarness()
+        XCTAssertTrue(try h.bool("var e = __key(\(passage), 'Escape'); e.prevented && e.stopped"))
+        XCTAssertTrue(try h.bool("document.activeElement === \(toggle)"))
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "false")
+        XCTAssertNil(try h.string("\(passage).getAttribute('tabindex')"))
+        XCTAssertNil(try h.string("\(passage).getAttribute('role')"))
+        XCTAssertFalse(try h.bool("/st-hl-mode/.test(\(passage).className)"))
+        XCTAssertNil(try h.string("\(passage).__hlCurrent()"))
+        XCTAssertEqual(try h.string("__live()"), "")
+        // Out of the mode the keys are the page's again.
+        XCTAssertFalse(try h.bool("var e = __key(\(passage), ' '); e.prevented || e.stopped"))
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+    }
+
+    func testLosingFocusOrPressingTheToggleAgainLeavesTheMode() throws {
+        let h = try modeHarness()
+        try h.eval("\(passage).onblur()")
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "false")
+        XCTAssertNil(try h.string("\(passage).getAttribute('tabindex')"))
+        try h.eval("\(toggle).onclick()")
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "true")
+        try h.eval("\(toggle).onclick()")
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "false")
+    }
+
+    /// One passage in the mode at a time.
+    func testEnteringAnotherPassageLeavesTheFirst() throws {
+        let h = try modeHarness()
+        try h.eval("var src = __first('.source-body'); src.__hlToggle.onclick();")
+        XCTAssertEqual(try h.string("\(toggle).getAttribute('aria-pressed')"), "false")
+        XCTAssertEqual(try h.string("src.__hlToggle.getAttribute('aria-pressed')"), "true")
+        XCTAssertEqual(try h.string("src.__hlCurrent()"), "Alpha text.")
+    }
+
+    func testKeysTheModeDoesNotUsePassThrough() throws {
+        let h = try harness()
+        // Outside the mode, nothing is claimed.
+        for key in ["ArrowDown", "ArrowUp", "Home", "End", " ", "Enter", "Escape"] {
+            XCTAssertFalse(try h.bool("var e = __key(\(passage), '\(key)'); e.prevented || e.stopped"), key)
+        }
+        try h.eval("\(toggle).onclick()")
+        // In the mode: other keys, and chords, are left alone.
+        for key in ["a", "Tab", "PageDown"] {
+            XCTAssertFalse(try h.bool("var e = __key(\(passage), '\(key)'); e.prevented || e.stopped"), key)
+        }
+        XCTAssertFalse(try h.bool("var e = __key(\(passage), 'ArrowDown', { metaKey: true }); e.prevented || e.stopped"))
+        XCTAssertEqual(try h.int("__marks().length"), 0)
+    }
+
+    func testALongSentenceIsCutInTheAnnouncementOnly() throws {
+        let h = try harness()
+        try h.eval("""
+            var long = ''; for (var i = 0; i < 80; i++) long += 'word ';
+            __setBody(\(passage), [__text(long + 'end.')]); \(toggle).onclick();
+            __key(\(passage), 'Home');
+            """)
+        XCTAssertLessThanOrEqual(try h.int("__live().length"), 300)
+        XCTAssertTrue(try h.bool("/\\u2026$/.test(__live())"))
+        XCTAssertEqual(try h.int("\(passage).__hlCurrent().length"), 404)
+    }
+
+    func testKeyboardMarkingPostsNothing() throws {
+        let h = try modeHarness()
+        try h.eval("""
+            __key(\(passage), ' '); __key(\(passage), 'ArrowDown'); __key(\(passage), 'Enter');
+            __key(\(passage), ' '); __key(\(passage), 'Escape');
+            """)
+        XCTAssertTrue(try h.postedMessages().isEmpty)
+        XCTAssertTrue(try h.postedUploads().isEmpty)
+        XCTAssertTrue(try h.postedSubmits().isEmpty)
+        XCTAssertTrue(try h.postedWithdrawals().isEmpty)
+        XCTAssertTrue(try h.postedSpeech().isEmpty)
+    }
+
+    func testHighlightModeStylesUseThePageTokens() {
+        let css = AssessmentPage.itemStyles
+        XCTAssertTrue(css.contains(".st-sentence-box { position: absolute; outline: 3px solid var(--accent);"))
+        XCTAssertTrue(css.contains(".st-hl-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }"))
     }
 
     /// James, 2026-10-14: a mark shows without relying on colour.

@@ -378,6 +378,21 @@ public enum AssessmentPage {
       background: var(--paper); color: var(--ink); cursor: pointer;
     }
     .st-mark-clear:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    /* Passage highlighting slice 3: the sentence cursor. The toggle sits above
+       the passage beside "Clear highlights"; in Highlight mode the passage is
+       focused (a dashed edge says which one) and the current sentence carries
+       the page's focus ring, drawn as boxes over its line rects. */
+    .st-hl-toggle {
+      display: inline-block; margin: 0 0.5rem 0.5rem 0; font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
+      border: 1px solid var(--line-strong); border-radius: 6px;
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .st-hl-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .st-hl-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .st-hl-mode { position: relative; }
+    .st-hl-mode:focus, .st-hl-mode:focus-visible { outline: 1px dashed var(--line-strong); outline-offset: 6px; }
+    .st-sentence-ring { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+    .st-sentence-box { position: absolute; outline: 3px solid var(--accent); outline-offset: 1px; border-radius: 3px; pointer-events: none; }
     .stt-toggle {
       font: inherit; font-size: 0.8125rem; padding: 0.3rem 0.6rem;
       border: 1px solid var(--line-strong); border-radius: 6px;
@@ -5688,7 +5703,393 @@ public enum AssessmentPage {
         body.__hlPassage = true;
         body.__hlMark = function (sn, so, en, eo) { return hlWrap(body, sn, so, en, eo); };
         body.onclick = function (event) { hlMarkClicked(body, event); };
+        body.onkeydown = function (event) { return hlModeKey(body, event); };
+        body.onblur = function () { hlLeaveMode(body, false); };
+        body.__hlSentences = function () {
+          var units = hlLocate(body, []);
+          return hlSplitSentences(hlLinearText(units)).map(function (s) {
+            return hlRangeText(units, s[0], s[1], false);
+          });
+        };
+        body.__hlCurrent = function () {
+          if (!body.__hlMode) return null;
+          var units = hlLocate(body, []);
+          var s = hlSplitSentences(hlLinearText(units))[body.__hlIndex];
+          return s ? hlRangeText(units, s[0], s[1], false) : null;
+        };
         hlWire();
+      }
+
+      // Passage highlighting slice 3 (docs/passage-highlighting-design.md,
+      // keyboard model (b), James 2026-10-14): the sentence cursor.
+      //
+      // Each highlightable passage with text gets a "Highlight mode" toggle
+      // just above it (aria-pressed). Pressing it focuses the passage itself
+      // (tabindex -1 while the mode lasts) on its FIRST sentence: Down / Right
+      // and Up / Left move by sentence, Home / End go to the ends, Space or
+      // Enter marks the current sentence — or, when every letter of it is
+      // already marked, removes the marks over it — and Escape leaves the
+      // mode with focus back on the toggle. Tab, a click elsewhere or a page
+      // turn moves focus out of the passage, and the blur leaves the mode.
+      // The keys the mode uses stop at the passage (preventDefault +
+      // stopPropagation); every other key, and every key outside the mode,
+      // passes untouched. The marks are slice 2's: hlWrap with explicit
+      // boundary points, so they split at blank lines and take a formula
+      // whole. Nothing is posted or stored (5.2).
+      //
+      // VoiceOver hears the mode through one polite live region: the
+      // instruction and the first sentence on entering, each sentence (with
+      // ", highlighted" / ", partly highlighted") on every move, and
+      // "Highlighted" / "Highlight removed" on Space. The current sentence is
+      // drawn as focus-ring boxes over its line rectangles (a Range's client
+      // rects), inside the passage so they scroll with it.
+      //
+      // Sentences (hlSplitSentences) are found in the passage's linear text —
+      // its text nodes in order, each formula one placeholder character, so a
+      // formula always sits inside a sentence. A sentence ends after . ! or ?
+      // (with any further . ! ? and closing quotes / brackets) when whitespace
+      // or the end of the text follows, and at a blank line. Limits, kept on
+      // purpose: a decimal (3.5) never splits, nor do a few abbreviations
+      // (Mr. Mrs. Ms. Dr. Prof. St. Jr. Sr. vs. e.g. i.e.); an initial
+      // ("J. K."), an ellipsis followed by a space or any other abbreviation
+      // DOES split, and a single line break (a heading line, a poem's lines)
+      // does not.
+      var hlActive = null;   // the passage in Highlight mode, or null
+      var hlLive = null;     // the one polite live region
+      var HL_PLACEHOLDER = '￼';
+      var HL_ABBREVIATIONS = {
+        mr: true, mrs: true, ms: true, dr: true, prof: true, st: true,
+        jr: true, sr: true, vs: true, 'e.g': true, 'i.e': true
+      };
+      var HL_INSTRUCTION = 'Highlight mode. Arrow keys move by sentence, Space highlights, Escape leaves.';
+
+      // [start, end) pairs over `text`, each trimmed of edge whitespace.
+      function hlSplitSentences(text) {
+        var out = [];
+        var n = text.length;
+        var start = 0;
+        var push = function (a, b) {
+          while (a < b && /\s/.test(text.charAt(a))) a += 1;
+          while (b > a && /\s/.test(text.charAt(b - 1))) b -= 1;
+          if (b > a) out.push([a, b]);
+        };
+        var i = 0;
+        while (i < n) {
+          var c = text.charAt(i);
+          if (c === '\n') {
+            var blank = /^\n[ \t]*\n/.exec(text.slice(i, i + 64));
+            if (blank) {
+              push(start, i);
+              i += blank[0].length;
+              start = i;
+              continue;
+            }
+          }
+          if (c === '.' || c === '!' || c === '?') {
+            var j = i + 1;
+            while (j < n && /[.!?]/.test(text.charAt(j))) j += 1;
+            var single = j === i + 1;
+            while (j < n && /["'”’)\]]/.test(text.charAt(j))) j += 1;
+            if (j >= n || /\s/.test(text.charAt(j))) {
+              var word = /([A-Za-z.]+)$/.exec(text.slice(start, i));
+              var abbreviation = c === '.' && single && word &&
+                HL_ABBREVIATIONS[word[1].toLowerCase()] === true;
+              if (!abbreviation) {
+                push(start, j);
+                start = j;
+              }
+            }
+            i = j;
+            continue;
+          }
+          i += 1;
+        }
+        push(start, n);
+        return out;
+      }
+
+      // The passage's units as one string, a formula as one placeholder.
+      function hlLinearText(units) {
+        return units.map(function (unit) {
+          return unit.math ? HL_PLACEHOLDER : String(unit.node.textContent || '');
+        }).join('');
+      }
+
+      // What a formula reads as: KaTeX's MathML half (the HTML half repeats
+      // it), else its whole text.
+      function hlMathText(node) {
+        var found = null;
+        (function walk(n) {
+          var kids = n.childNodes || [];
+          for (var i = 0; i < kids.length && !found; i++) {
+            if (hlHasClass(kids[i], 'katex-mathml')) found = kids[i];
+            else if (kids[i].nodeType === 1) walk(kids[i]);
+          }
+        })(node);
+        return String((found || node).textContent || '');
+      }
+
+      // The text of [s, e) of the linear text; `spoken` collapses whitespace.
+      function hlRangeText(units, s, e, spoken) {
+        var out = '';
+        var at = 0;
+        units.forEach(function (unit) {
+          var from = at, to = at + unit.length;
+          at = to;
+          if (to <= s || from >= e) return;
+          if (unit.math) { out += hlMathText(unit.node); return; }
+          out += String(unit.node.textContent || '').slice(Math.max(s, from) - from, Math.min(e, to) - from);
+        });
+        return spoken ? out.replace(/\s+/g, ' ').trim() : out;
+      }
+
+      // The (node, offset) a linear offset falls on, as hlWrap takes it — a
+      // formula is passed as itself (hlLocate covers it whole).
+      function hlPointAt(units, offset, isEnd) {
+        var at = 0;
+        for (var i = 0; i < units.length; i++) {
+          var unit = units[i];
+          var from = at, to = at + unit.length;
+          at = to;
+          if (unit.length === 0) continue;
+          var inside = isEnd ? (offset > from && offset <= to) : (offset >= from && offset < to);
+          if (!inside) continue;
+          return unit.math ? { node: unit.node, offset: 0 } : { node: unit.node, offset: offset - from };
+        }
+        return null;
+      }
+
+      function hlWrapLinear(body, s, e) {
+        if (e <= s) return 0;
+        var units = hlLocate(body, []);
+        var a = hlPointAt(units, s, false), b = hlPointAt(units, e, true);
+        if (!a || !b) return 0;
+        return hlWrap(body, a.node, a.offset, b.node, b.offset);
+      }
+
+      // 'all' when every non-space character of [s, e) is marked, 'some',
+      // or 'none'.
+      function hlMarkState(units, s, e) {
+        var marked = 0, plain = 0, at = 0;
+        units.forEach(function (unit) {
+          var from = at, to = at + unit.length;
+          at = to;
+          if (to <= s || from >= e) return;
+          var text = unit.math ? HL_PLACEHOLDER
+            : String(unit.node.textContent || '').slice(Math.max(s, from) - from, Math.min(e, to) - from);
+          if (!/\S/.test(text)) return;
+          if (unit.inMark) marked += 1; else plain += 1;
+        });
+        if (marked && !plain) return 'all';
+        return marked ? 'some' : 'none';
+      }
+
+      // Removes the marks over [s, e). A mark that reaches past the sentence
+      // is unwrapped and its outside part marked again, so only this
+      // sentence loses its highlight.
+      function hlUnmarkLinear(body, s, e) {
+        var units = hlLocate(body, []);
+        var spans = [];
+        var at = 0;
+        units.forEach(function (unit) {
+          var from = at, to = at + unit.length;
+          at = to;
+          if (!unit.inMark) return;
+          var mark = hlAncestor(unit.node, body, hlIsMark, false);
+          var last = spans.length ? spans[spans.length - 1] : null;
+          if (last && last.mark === mark) last.to = to;
+          else spans.push({ mark: mark, from: from, to: to });
+        });
+        var hit = spans.filter(function (span) { return span.to > s && span.from < e; });
+        hit.forEach(function (span) { hlUnwrap(span.mark); });
+        hit.forEach(function (span) {
+          if (span.from < s) hlWrapLinear(body, span.from, s);
+          if (span.to > e) hlWrapLinear(body, e, span.to);
+        });
+        hlRefreshClear(body);
+      }
+
+      function hlLiveEl() {
+        if (hlLive) return hlLive;
+        hlLive = document.createElement('div');
+        hlLive.className = 'sr-only st-hl-live';
+        hlLive.setAttribute('aria-live', 'polite');
+        if (document.body) document.body.appendChild(hlLive);
+        return hlLive;
+      }
+
+      function hlAnnounce(text) { hlLiveEl().textContent = text; }
+
+      // "<sentence>" or "<sentence>, highlighted" — the sentence cut to
+      // about 300 characters in the announcement only.
+      function hlSentenceAnnouncement(body) {
+        var units = hlLocate(body, []);
+        var s = hlSplitSentences(hlLinearText(units))[body.__hlIndex];
+        if (!s) return '';
+        var text = hlRangeText(units, s[0], s[1], true);
+        if (text.length > 300) text = text.slice(0, 299).trim() + '…';
+        var state = hlMarkState(units, s[0], s[1]);
+        if (state === 'all') return text + ', highlighted';
+        if (state === 'some') return text + ', partly highlighted';
+        return text;
+      }
+
+      // The focus-ring boxes over the current sentence, one per line. Needs a
+      // real Range (WebKit); without one nothing is drawn.
+      function hlRemoveRing(body) {
+        if (body.__hlRing && body.__hlRing.parentNode) body.__hlRing.parentNode.removeChild(body.__hlRing);
+        body.__hlRing = null;
+      }
+
+      function hlDrawRing(body) {
+        hlRemoveRing(body);
+        if (!body.__hlMode || typeof document.createRange !== 'function' ||
+            typeof body.getBoundingClientRect !== 'function') return;
+        var units = hlLocate(body, []);
+        var s = hlSplitSentences(hlLinearText(units))[body.__hlIndex];
+        if (!s) return;
+        var a = hlPointAt(units, s[0], false), b = hlPointAt(units, s[1], true);
+        if (!a || !b) return;
+        var rects = [];
+        try {
+          var range = document.createRange();
+          if (hlIsMath(a.node)) range.setStartBefore(a.node); else range.setStart(a.node, a.offset);
+          if (hlIsMath(b.node)) range.setEndAfter(b.node); else range.setEnd(b.node, b.offset);
+          var list = range.getClientRects();
+          for (var i = 0; i < list.length; i++) {
+            var r = list[i];
+            if (r.width <= 0 || r.height <= 0) continue;
+            var line = null;
+            for (var k = 0; k < rects.length; k++) {
+              if (Math.abs(rects[k].top - r.top) < 4 && Math.abs(rects[k].bottom - r.bottom) < 4) line = rects[k];
+            }
+            if (line) {
+              line.left = Math.min(line.left, r.left);
+              line.right = Math.max(line.right, r.right);
+              line.top = Math.min(line.top, r.top);
+              line.bottom = Math.max(line.bottom, r.bottom);
+            } else {
+              rects.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+            }
+          }
+        } catch (error) {
+          return;
+        }
+        if (!rects.length) return;
+        var origin = body.getBoundingClientRect();
+        var ring = document.createElement('span');
+        ring.className = 'st-sentence-ring';
+        ring.setAttribute('aria-hidden', 'true');
+        rects.forEach(function (r) {
+          var box = document.createElement('span');
+          box.className = 'st-sentence-box';
+          box.style.left = (r.left - origin.left) + 'px';
+          box.style.top = (r.top - origin.top) + 'px';
+          box.style.width = (r.right - r.left) + 'px';
+          box.style.height = (r.bottom - r.top) + 'px';
+          ring.appendChild(box);
+        });
+        body.appendChild(ring);
+        body.__hlRing = ring;
+        var first = ring.childNodes[0];
+        if (first && typeof first.scrollIntoView === 'function') first.scrollIntoView({ block: 'nearest' });
+      }
+
+      function hlEnterMode(body) {
+        var units = hlLocate(body, []);
+        if (!hlSplitSentences(hlLinearText(units)).length) return;
+        if (hlActive && hlActive !== body) hlLeaveMode(hlActive, false);
+        hlActive = body;
+        body.__hlMode = true;
+        body.__hlIndex = 0;
+        body.className += ' st-hl-mode';
+        body.setAttribute('tabindex', '-1');
+        // The page answers the arrow keys here, so VoiceOver passes them on
+        // and does not read the whole passage out when it takes focus.
+        body.setAttribute('role', 'application');
+        body.setAttribute('aria-label', 'Passage, highlight mode');
+        if (body.__hlToggle) body.__hlToggle.setAttribute('aria-pressed', 'true');
+        if (typeof body.focus === 'function') body.focus();
+        hlDrawRing(body);
+        hlAnnounce(HL_INSTRUCTION + ' ' + hlSentenceAnnouncement(body));
+      }
+
+      function hlLeaveMode(body, refocus) {
+        if (!body.__hlMode) return;
+        body.__hlMode = false;
+        if (hlActive === body) hlActive = null;
+        body.className = String(body.className || '').replace(/ st-hl-mode/g, '');
+        body.removeAttribute('tabindex');
+        body.removeAttribute('role');
+        body.removeAttribute('aria-label');
+        hlRemoveRing(body);
+        if (hlLive) hlLive.textContent = '';
+        var toggle = body.__hlToggle;
+        if (toggle) {
+          toggle.setAttribute('aria-pressed', 'false');
+          if (refocus && typeof toggle.focus === 'function') toggle.focus();
+        }
+      }
+
+      function hlModeKey(body, event) {
+        if (!body.__hlMode || !event || event.metaKey || event.ctrlKey || event.altKey) return;
+        var key = event.key;
+        var count = hlSplitSentences(hlLinearText(hlLocate(body, []))).length;
+        var index = body.__hlIndex;
+        var action = null;
+        if (key === 'ArrowDown' || key === 'ArrowRight') action = 'move', index = Math.min(index + 1, count - 1);
+        else if (key === 'ArrowUp' || key === 'ArrowLeft') action = 'move', index = Math.max(index - 1, 0);
+        else if (key === 'Home') action = 'move', index = 0;
+        else if (key === 'End') action = 'move', index = count - 1;
+        else if (key === ' ' || key === 'Spacebar' || key === 'Enter') action = 'toggle';
+        else if (key === 'Escape') action = 'leave';
+        if (!action) return;
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        if (action === 'leave') { hlLeaveMode(body, true); return false; }
+        if (count === 0) return false;
+        if (action === 'move') {
+          body.__hlIndex = Math.max(0, index);
+          hlDrawRing(body);
+          hlAnnounce(hlSentenceAnnouncement(body));
+          return false;
+        }
+        var units = hlLocate(body, []);
+        var s = hlSplitSentences(hlLinearText(units))[body.__hlIndex];
+        if (!s) return false;
+        if (hlMarkState(units, s[0], s[1]) === 'all') {
+          hlUnmarkLinear(body, s[0], s[1]);
+          hlAnnounce('Highlight removed');
+        } else {
+          hlWrapLinear(body, s[0], s[1]);
+          hlAnnounce('Highlighted');
+        }
+        hlDrawRing(body);
+        return false;
+      }
+
+      // Called once the passage is in its block with its text: a passage with
+      // no text gets no toggle.
+      function hlPlaceToggle(body) {
+        if (!body.parentNode || body.__hlToggle) return;
+        if (!hlSplitSentences(hlLinearText(hlLocate(body, []))).length) return;
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'st-hl-toggle';
+        toggle.textContent = 'Highlight mode';
+        toggle.setAttribute('tabindex', '0');
+        toggle.setAttribute('aria-pressed', 'false');
+        // A mouse press must not blur the passage first (which would leave
+        // the mode and let this click enter it again).
+        toggle.onmousedown = function (event) {
+          if (body.__hlMode && event && typeof event.preventDefault === 'function') event.preventDefault();
+        };
+        toggle.onclick = function () {
+          if (body.__hlMode) hlLeaveMode(body, true);
+          else hlEnterMode(body);
+        };
+        body.parentNode.insertBefore(toggle, body);
+        body.__hlToggle = toggle;
       }
 
       // Multi-source stimulus slice 4: which source a set has open, kept in
@@ -5738,6 +6139,7 @@ public enum AssessmentPage {
           // panel so it hides with it.
           if (TTS.stimuli === true) panel.appendChild(ttsBar(body, 'source ' + source.label));
           panel.appendChild(body);
+          if (ALLOW_HIGHLIGHTING) hlPlaceToggle(body);
           panels.push(panel);
         });
         if (single) {
@@ -5820,6 +6222,7 @@ public enum AssessmentPage {
           block.appendChild(ttsBar(body, 'the passage'));
         }
         block.appendChild(body);
+        if (ALLOW_HIGHLIGHTING) hlPlaceToggle(body);
         // Slice 4: the introduction on top, the sources beneath it — under
         // every layout, since side_by_side only changes where the block goes.
         var pane = sourcePane(set);
