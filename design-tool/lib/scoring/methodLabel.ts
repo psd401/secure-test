@@ -35,3 +35,32 @@ export function finalMethodWord(score: MethodLabelScore, viewerSub: string): str
       return score.method;
   }
 }
+
+/** The results page's line above the matrix (slice 2, D-3); null at 0. */
+export function unreviewedCountLine(n: number): string | null {
+  if (n <= 0) return null;
+  return n === 1
+    ? "1 AI score was finalized without review"
+    : `${n} AI scores were finalized without review`;
+}
+
+/**
+ * The scoring queue's "Finalized by AI — not reviewed" list, filtered to the
+ * results page's section (decision 5.4). `section` is the results page's own
+ * `?section=` value, the "no section" sentinel included.
+ */
+export function unreviewedQueueHref(assessmentId: string, section: string): string {
+  const q = section ? `?section=${encodeURIComponent(section)}` : "";
+  return `/dashboard/${assessmentId}/scoring${q}#unreviewed`;
+}
+
+/** The review-queue API URL, with the section filter when one is chosen. */
+export function reviewQueueUrl(assessmentId: string, section: string): string {
+  const q = section ? `?section=${encodeURIComponent(section)}` : "";
+  return `/api/assessments/${assessmentId}/review-queue${q}`;
+}
+
+/** The queue card's line for a final AI score no teacher reviewed (D-3, D-5: no confidence). */
+export function unreviewedCardLine(final: { points: number; max_points: number }): string {
+  return `AI scored ${final.points} / ${final.max_points} · counted, not reviewed`;
+}

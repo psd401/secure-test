@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { unreviewedCountLine, unreviewedQueueHref } from "@/lib/scoring/methodLabel";
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import {
   buildResults,
+  matchesSectionFilter,
+  NO_SECTION,
   sectionFilterOptions,
   type ResultsCell,
 } from "@/lib/scoring/results";
@@ -33,13 +36,13 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-/** The `?section=` value that means "the rows with no section resolved". */
-const NO_SECTION = "__none__";
 
 function cellText(cell: ResultsCell): string {
   switch (cell.status) {
     case "final":
-      return `${cell.points}/${cell.max_points}`;
+      // Hybrid transparency slice 2 (D-3, 5.1): a dot marks a final AI score
+      // no teacher reviewed; the cell's title says what it means.
+      return `${cell.points}/${cell.max_points}${cell.ai_unreviewed ? " •" : ""}`;
     case "proposed_pending":
       return "AI ⏳";
     case "unscored":
@@ -125,12 +128,9 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // Co-teacher follow-ups, 2026-09-22: the options also carry every section a
   // class sitting named (a co-teacher's included), not only labels on rows.
   const { labels, hasBlank } = sectionFilterOptions(results);
-  const filtered =
-    selectedSection === ""
-      ? results.rows
-      : selectedSection === NO_SECTION
-        ? results.rows.filter((r) => !r.student.section)
-        : results.rows.filter((r) => r.student.section === selectedSection);
+  const filtered = results.rows.filter((r) =>
+    matchesSectionFilter(r.student.section, selectedSection),
+  );
   // Roadmap U-14 (2026-10-05): hand in every unfinished row the page shows,
   // whichever session each last joined. Same enable rule as the row's Hand in.
   const inProgressRows = filtered.filter((r) => r.status === "in_progress");
@@ -159,6 +159,11 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     results.rows.some((r) => r.status === "submitted");
   const showHandInInProgress =
     inProgressRows.length > 0 && levelSatisfies(access.level, "run");
+  // Hybrid transparency slice 2 (D-3): final AI scores Hybrid settled on its
+  // own, over the rows shown (the section filter applies, 5.4).
+  const unreviewedLine = unreviewedCountLine(
+    filtered.reduce((sum, r) => sum + r.ai_unreviewed_count, 0),
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -230,9 +235,26 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
         <Link href={`/dashboard/${assessment.id}/scoring`} className="underline">
           scoring queue
         </Link>
-        ; they are not counted in totals. Open a student&rsquo;s name for their
-        answers and their test-session history.
+        ; they are not counted in totals. A &ldquo;•&rdquo; after a score marks
+        an AI score that counted without review. Open a student&rsquo;s name
+        for their answers and their test-session history.
       </p>
+      {unreviewedLine ? (
+        <p className="mt-2 text-sm">
+          {unreviewedLine}
+          {levelSatisfies(access.level, "edit") ? (
+            <>
+              {" — "}
+              <Link
+                href={unreviewedQueueHref(assessment.id, selectedSection)}
+                className="underline"
+              >
+                Review them
+              </Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
 
       {labels.length > 0 || hasBlank ? (
         <form method="get" className="mt-6 flex flex-wrap items-center gap-2">
@@ -353,7 +375,11 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                     <td
                       key={i}
                       className="px-2 py-2 text-center"
-                      title={CELL_TITLE[cell.status]}
+                      title={
+                        cell.ai_unreviewed
+                          ? "AI score, not reviewed (counted)"
+                          : CELL_TITLE[cell.status]
+                      }
                     >
                       {cellText(cell)}
                     </td>

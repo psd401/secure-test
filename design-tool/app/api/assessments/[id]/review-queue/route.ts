@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isAiUnreviewed } from "@/lib/scoring/methodLabel";
+import { buildResults, matchesSectionFilter, sectionFilterOptions } from "@/lib/scoring/results";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
@@ -33,8 +35,10 @@ interface RouteContext {
 // auto and that have no final score yet. Two client-side groups fall out
 // of `proposed`: null = needs a manual score; non-null = an AI proposal
 // awaiting approve/override. Auto items never appear (slice 37 finalizes
-// them without review); neither do responses with a final.
-export async function GET(_req: Request, ctx: RouteContext) {
+// them without review); neither do responses with a final — except, since
+// Hybrid transparency slice 2, a final AI score no teacher reviewed, which is
+// returned apart as `unreviewed`. `?section=` filters both lists.
+export async function GET(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
@@ -55,8 +59,23 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .orderBy(asc(attempts.started_at));
   const submitted = attemptRows.filter((a) => a.status === "submitted");
   if (submitted.length === 0) {
-    return NextResponse.json({ entries: [] });
+    return NextResponse.json({
+      entries: [],
+      unreviewed: [],
+      sections: { labels: [], hasBlank: false },
+    });
   }
+
+  // Hybrid transparency slice 2, decision 5.4: the queue filters by section
+  // the way the results matrix does, so "Review them" under one section lands
+  // on that section's cards. The labels come from buildResults itself — the
+  // matrix's own resolution — so the two pages can never disagree on who is
+  // in which section.
+  const sectionFilter = new URL(req.url).searchParams.get("section") ?? "";
+  const results = await buildResults(id);
+  const sectionByAttempt = new Map(
+    results.rows.map((r) => [r.attempt_id, r.student.section]),
+  );
 
   const itemRows = await db
     .select()
@@ -71,8 +90,6 @@ export async function GET(_req: Request, ctx: RouteContext) {
   // sees the owner's pictures; refs to anyone else's assets render as the
   // inline-red placeholder.
   const stemRefs = extractAssetRefsFromMany(itemRows.map((i) => i.stem));
-  // G-1: under the assessment's owner, with the assessment-scoped URL, so
-  // a co-teacher sees the owner's pictures.
   const resolvedAssets = await resolveAssessmentAssets(db, access.assessment, stemRefs);
   const stemHtmlByItem = new Map(
     itemRows.map((i) => [i.id, renderItemContent(i.stem, resolvedAssets)]),
@@ -127,8 +144,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
             ),
           )
       : [];
-  const finals = new Set(
-    scoreRows.filter((s) => s.status === "final").map((s) => s.response_id),
+  const finalByResponse = new Map(
+    scoreRows.filter((s) => s.status === "final").map((s) => [s.response_id, s]),
   );
   // Latest proposed per response (created_at, then insertion order).
   const proposedByResponse = new Map<string, ScoreRow>();
@@ -158,14 +175,21 @@ export async function GET(_req: Request, ctx: RouteContext) {
   );
   const outlineCache = new Map<string, { origin: "source" | "inline" | "missing"; words: number }>();
   const entries = [];
+  // Hybrid transparency slice 2 (D-3): the third list — responses whose FINAL
+  // is an AI score no teacher reviewed (Hybrid settled it on its own). Listed
+  // whatever the item's method is now; Approve marks it reviewed, Change
+  // replaces it, and either takes it off the list.
+  const unreviewed = [];
   for (const response of responseRows) {
     const item = itemsById.get(response.item_id);
     if (!item) continue;
     const method = effectiveScoringMethod(item.type as ItemType, item.config);
-    if (method === "auto") continue;
-    if (finals.has(response.id)) continue;
+    const final = finalByResponse.get(response.id) ?? null;
+    if (final ? !isAiUnreviewed(final) : method === "auto") continue;
     const attempt = attemptsById.get(response.attempt_id);
     if (!attempt) continue;
+    const section = sectionByAttempt.get(attempt.id) ?? null;
+    if (!matchesSectionFilter(section, sectionFilter)) continue;
     const student = studentsById.get(attempt.student_id);
     const proposed = proposedByResponse.get(response.id) ?? null;
     const sourceItemId = item.item_set_id ? (sourceOfSet.get(item.item_set_id) ?? null) : null;
@@ -190,7 +214,8 @@ export async function GET(_req: Request, ctx: RouteContext) {
       ? null
       : (responseAlerts.find((a) => a.kind === "prompt_injection" && a.ai_forced_at !== null) ??
         null);
-    entries.push({
+    const card = {
+      section,
       outline,
       safeguarding: {
         injection: injection
@@ -297,7 +322,22 @@ export async function GET(_req: Request, ctx: RouteContext) {
             created_at: proposed.created_at,
           }
         : null,
-    });
+    };
+    if (final) {
+      unreviewed.push({
+        ...card,
+        final: {
+          score_id: final.id,
+          points: final.points,
+          max_points: final.max_points,
+          rationale: final.rationale,
+          scorer: final.scorer,
+          created_at: final.created_at,
+        },
+      });
+    } else {
+      entries.push(card);
+    }
   }
   // Stable order: item position, then attempt start (review fix 2026-08-14:
   // this previously tiebroke on attempt UUID despite the comment), then
@@ -305,12 +345,19 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const attemptStart = new Map(
     submitted.map((a) => [a.id, a.started_at?.getTime() ?? 0]),
   );
-  entries.sort(
-    (a, b) =>
-      a.item.position - b.item.position ||
-      (attemptStart.get(a.attempt_id) ?? 0) - (attemptStart.get(b.attempt_id) ?? 0) ||
-      a.attempt_id.localeCompare(b.attempt_id),
-  );
+  const byQuestionThenStart = (
+    a: { item: { position: number }; attempt_id: string },
+    b: { item: { position: number }; attempt_id: string },
+  ) =>
+    a.item.position - b.item.position ||
+    (attemptStart.get(a.attempt_id) ?? 0) - (attemptStart.get(b.attempt_id) ?? 0) ||
+    a.attempt_id.localeCompare(b.attempt_id);
+  entries.sort(byQuestionThenStart);
+  unreviewed.sort(byQuestionThenStart);
 
-  return NextResponse.json({ entries });
+  return NextResponse.json({
+    entries,
+    unreviewed,
+    sections: sectionFilterOptions(results),
+  });
 }

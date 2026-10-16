@@ -3,7 +3,15 @@
 // pinned by a test before this slice.
 import { describe, expect, test } from "bun:test";
 import { HYBRID_HINT, SCORING_LABEL } from "../app/dashboard/[id]/AssessmentEditor";
-import { finalMethodWord, isAiUnreviewed } from "../lib/scoring/methodLabel";
+import {
+  finalMethodWord,
+  isAiUnreviewed,
+  reviewQueueUrl,
+  unreviewedCardLine,
+  unreviewedCountLine,
+  unreviewedQueueHref,
+} from "../lib/scoring/methodLabel";
+import { matchesSectionFilter, NO_SECTION } from "../lib/scoring/sectionFilter";
 
 describe("finalMethodWord", () => {
   test("auto and human keep their words", () => {
@@ -46,5 +54,38 @@ describe("the editor's scoring select (HC-1, decision 4.2)", () => {
     expect(HYBRID_HINT).toBe(
       "AI scores it is confident about count at once. You can still change any score.",
     );
+  });
+});
+
+describe("slice 2: the count line, the links and the card line", () => {
+  test("count line is null at 0 and agrees in number", () => {
+    expect(unreviewedCountLine(0)).toBeNull();
+    expect(unreviewedCountLine(1)).toBe("1 AI score was finalized without review");
+    expect(unreviewedCountLine(3)).toBe("3 AI scores were finalized without review");
+  });
+
+  test("Review them carries the section and lands on the list", () => {
+    expect(unreviewedQueueHref("a1", "")).toBe("/dashboard/a1/scoring#unreviewed");
+    expect(unreviewedQueueHref("a1", "Period 2")).toBe(
+      "/dashboard/a1/scoring?section=Period%202#unreviewed",
+    );
+    expect(reviewQueueUrl("a1", "")).toBe("/api/assessments/a1/review-queue");
+    expect(reviewQueueUrl("a1", NO_SECTION)).toBe(
+      "/api/assessments/a1/review-queue?section=__none__",
+    );
+  });
+
+  test("the card line shows no confidence (D-5)", () => {
+    expect(unreviewedCardLine({ points: 4, max_points: 5 })).toBe(
+      "AI scored 4 / 5 · counted, not reviewed",
+    );
+  });
+
+  test("section filter: all, none, one", () => {
+    expect(matchesSectionFilter("P2", "")).toBe(true);
+    expect(matchesSectionFilter(null, NO_SECTION)).toBe(true);
+    expect(matchesSectionFilter("P2", NO_SECTION)).toBe(false);
+    expect(matchesSectionFilter("P2", "P2")).toBe(true);
+    expect(matchesSectionFilter("P3", "P2")).toBe(false);
   });
 });

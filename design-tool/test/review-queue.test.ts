@@ -1050,3 +1050,105 @@ describe("review queue: fill-in-the-blank items (FB slice 3)", () => {
     expect(body.entries.every((e) => e.fill_blank_html === null)).toBe(true);
   });
 });
+
+// Hybrid transparency slice 2 (docs/hybrid-scoring-transparency-design.md,
+// D-3, 5.3, 5.4): a final AI score no teacher reviewed is listed apart as
+// `unreviewed`, Approve marks it reviewed in place, and `?section=` filters
+// both lists the way the results matrix does.
+describe("unreviewed AI finals (Hybrid transparency slice 2)", () => {
+  async function seedHybridFinal() {
+    const scenario = await seedQueueScenario();
+    const [final] = await scenario.db
+      .insert(scores)
+      .values({
+        response_id: scenario.responseRows[2]!.id,
+        method: "ai",
+        points: 4,
+        max_points: 5,
+        scorer: "mock",
+        status: "final",
+        rationale: { overall_rationale: "Clear thesis.", confidence: 0.9 },
+      })
+      .returning();
+    return { ...scenario, final: final! };
+  }
+
+  async function getQueueWith(assessmentId: string, query: string) {
+    const { GET } = await import("../app/api/assessments/[id]/review-queue/route");
+    return GET(
+      new Request(`http://localhost/api/assessments/${assessmentId}/review-queue${query}`),
+      { params: Promise.resolve({ id: assessmentId }) },
+    );
+  }
+
+  type Body = {
+    entries: Array<{ response_id: string }>;
+    unreviewed: Array<{ response_id: string; final: { score_id: string; points: number } }>;
+    sections: { labels: string[]; hasBlank: boolean };
+  };
+
+  test("listed apart from entries, with its final", async () => {
+    const { assessment, responseRows, final } = await seedHybridFinal();
+    const body = (await (await getQueue(assessment.id)).json()) as Body;
+    expect(body.entries.map((e) => e.response_id)).not.toContain(responseRows[2]!.id);
+    expect(body.unreviewed).toHaveLength(1);
+    expect(body.unreviewed[0]!.response_id).toBe(responseRows[2]!.id);
+    expect(body.unreviewed[0]!.final.score_id).toBe(final.id);
+    expect(body.unreviewed[0]!.final.points).toBe(4);
+  });
+
+  test("Approve marks it reviewed in place, no new row; a second press is harmless", async () => {
+    const { db, assessment, responseRows, final } = await seedHybridFinal();
+    const res = await postApprove(final.id);
+    expect(res.status).toBe(200);
+
+    const rows = await db.select().from(scores).where(eq(scores.response_id, responseRows[2]!.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.reviewed_by_sub).toBe(OWNER);
+    expect(rows[0]!.points).toBe(4);
+
+    const body = (await (await getQueue(assessment.id)).json()) as Body;
+    expect(body.unreviewed).toHaveLength(0);
+    expect(body.entries.map((e) => e.response_id)).not.toContain(responseRows[2]!.id);
+
+    expect((await postApprove(final.id)).status).toBe(200);
+  });
+
+  test("a human final is not approvable", async () => {
+    const { db, responseRows } = await seedQueueScenario();
+    const [human] = await db
+      .insert(scores)
+      .values({
+        response_id: responseRows[1]!.id,
+        method: "human",
+        points: 3,
+        max_points: 5,
+        scorer: OWNER,
+        status: "final",
+        reviewed_by_sub: OWNER,
+      })
+      .returning();
+    expect((await postApprove(human!.id)).status).toBe(400);
+  });
+
+  test("another teacher cannot approve it", async () => {
+    const { final } = await seedHybridFinal();
+    mockSub = "someone-else";
+    expect((await postApprove(final.id)).status).toBe(404);
+  });
+
+  test("?section= filters both lists; the payload names the sections", async () => {
+    // The seed's student has no roster binding, so its section is none.
+    const { assessment } = await seedHybridFinal();
+    const all = (await (await getQueue(assessment.id)).json()) as Body;
+    expect(all.sections.hasBlank).toBe(true);
+
+    const none = (await (await getQueueWith(assessment.id, "?section=__none__")).json()) as Body;
+    expect(none.unreviewed).toHaveLength(1);
+    expect(none.entries.length).toBe(all.entries.length);
+
+    const other = (await (await getQueueWith(assessment.id, "?section=Period%202")).json()) as Body;
+    expect(other.unreviewed).toHaveLength(0);
+    expect(other.entries).toHaveLength(0);
+  });
+});

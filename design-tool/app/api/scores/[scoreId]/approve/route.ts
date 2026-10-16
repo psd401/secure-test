@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { scores } from "@/db/schema";
 import { loadResponseChain } from "@/lib/api/reviewActions";
@@ -39,7 +39,14 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (proposal.status === "research") {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  if (proposal.status !== "proposed") {
+  // Hybrid transparency slice 2 (docs/hybrid-scoring-transparency-design.md,
+  // D-3): a FINAL AI score no teacher reviewed (Hybrid finalized it on its
+  // own) can be approved too. That marks the existing row reviewed in place —
+  // no new row, the score and its numbers are unchanged. An already-reviewed
+  // one answers with the row as it stands, so a second press is harmless.
+  const aiFinal =
+    proposal.status === "final" && proposal.method === "ai";
+  if (proposal.status !== "proposed" && !aiFinal) {
     return NextResponse.json(
       { ok: false, error: "not_a_proposal" },
       { status: 400 },
@@ -52,6 +59,25 @@ export async function POST(_req: Request, ctx: RouteContext) {
       { ok: false, error: chain.error },
       { status: chain.status },
     );
+  }
+  if (aiFinal) {
+    const [marked] = await db
+      .update(scores)
+      .set({ reviewed_by_sub: auth.session.sub })
+      .where(
+        and(
+          eq(scores.id, proposal.id),
+          eq(scores.status, "final"),
+          isNull(scores.reviewed_by_sub),
+        ),
+      )
+      .returning();
+    if (marked) return NextResponse.json({ ok: true, score: marked }, { status: 200 });
+    const [current] = await db.select().from(scores).where(eq(scores.id, proposal.id)).limit(1);
+    if (!current || current.status !== "final") {
+      return NextResponse.json({ ok: false, error: "not_a_proposal" }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, score: current }, { status: 200 });
   }
   if (chain.hasFinal) {
     return NextResponse.json(

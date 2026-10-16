@@ -9,11 +9,12 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ section?: string | string[] }>;
 }
 
 // Slice 39: the human review queue for one assessment — manual scoring of
 // human-method items and approve/override/re-run of AI proposals.
-export default async function ScoringPage({ params }: PageProps) {
+export default async function ScoringPage({ params, searchParams }: PageProps) {
   const session = await readStaffSessionFromCookies();
   if (!session) {
     redirect("/login?next=/dashboard");
@@ -32,9 +33,18 @@ export default async function ScoringPage({ params }: PageProps) {
     notFound();
   }
 
+  // Hybrid transparency slice 2 (5.4): the results page's "Review them"
+  // carries its section filter here.
+  const raw = (await searchParams).section;
+  const initialSection = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <ScoringQueue assessmentId={assessment.id} assessmentName={assessment.name} />
+      <ScoringQueue
+        assessmentId={assessment.id}
+        assessmentName={assessment.name}
+        initialSection={initialSection}
+      />
     </main>
   );
 }

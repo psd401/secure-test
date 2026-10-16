@@ -47,6 +47,11 @@ export interface ResultsCell {
   status: CellStatus;
   points: number | null;
   max_points: number | null;
+  /**
+   * Hybrid transparency slice 2 (D-3): present, and true, only on a final AI
+   * score no teacher reviewed. Left off every other cell.
+   */
+  ai_unreviewed?: true;
 }
 
 export interface ResultsRow {
@@ -135,6 +140,8 @@ export interface AssessmentResults {
   // (n)" count; 0 disables the button. Practice attempts never count.
   rescore_students: number;
 }
+
+export { matchesSectionFilter, NO_SECTION } from "@/lib/scoring/sectionFilter";
 
 /** The section filter's options (the results matrix; the print report reads
  * the same `?section=` labels): every label on a row plus every section a
@@ -490,11 +497,13 @@ export async function buildResults(
       if (final) {
         total += final.points;
         scoredMax += final.max_points;
-        if (isAiUnreviewed(final)) aiUnreviewed++;
+        const unreviewed = isAiUnreviewed(final);
+        if (unreviewed) aiUnreviewed++;
         return {
           status: "final",
           points: final.points,
           max_points: final.max_points,
+          ...(unreviewed ? { ai_unreviewed: true as const } : {}),
         };
       }
       unscored++;

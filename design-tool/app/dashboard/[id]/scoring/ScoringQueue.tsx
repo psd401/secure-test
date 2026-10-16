@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/schema";
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
@@ -8,6 +8,9 @@ import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 import { tableCellMatches } from "@/lib/scoring/auto";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
+import { ChangeScoreControl } from "@/components/app/ChangeScoreControl";
+import { NO_SECTION } from "@/lib/scoring/sectionFilter";
+import { reviewQueueUrl, unreviewedCardLine } from "@/lib/scoring/methodLabel";
 
 // Slice 39: client panel for the review queue. Two groups fall out of the
 // API's `proposed` field: AI proposals awaiting approve/override, and
@@ -30,6 +33,19 @@ import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
 interface QueueEntry {
   response_id: string;
   attempt_id: string;
+  /** Slice 2 (5.4): the section the results matrix resolves for this attempt. */
+  section?: string | null;
+  /**
+   * Hybrid transparency slice 2 (D-3): present only on the "Finalized by AI —
+   * not reviewed" list — the final AI score no teacher has reviewed yet.
+   */
+  final?: {
+    score_id: string;
+    points: number;
+    max_points: number;
+    rationale: QueueRationale | null;
+    scorer: string;
+  };
   /** E12 slice 4: what this student saw as the stimulus, when it was their own earlier answer. */
   outline?: { origin: "source" | "inline" | "missing"; words: number } | null;
   student: { name: string; ssid: string };
@@ -105,18 +121,25 @@ interface QueueEntry {
     score_id: string;
     points: number;
     max_points: number;
-    rationale: {
-      overall_rationale?: string;
-      confidence?: number;
-      criterion_scores?: Array<{
-        criterion_id: string;
-        level_id: string;
-        points: number;
-        rationale: string;
-      }>;
-    } | null;
+    rationale: QueueRationale | null;
     scorer: string;
   } | null;
+}
+
+interface QueueRationale {
+  overall_rationale?: string;
+  confidence?: number;
+  criterion_scores?: Array<{
+    criterion_id: string;
+    level_id: string;
+    points: number;
+    rationale: string;
+  }>;
+}
+
+interface QueueSections {
+  labels: string[];
+  hasBlank: boolean;
 }
 
 /**
@@ -270,6 +293,8 @@ export function ScoreWithAiRow({
 interface Props {
   assessmentId: string;
   assessmentName: string;
+  /** Slice 2 (5.4): the `?section=` the page was opened with ("" = all). */
+  initialSection?: string;
 }
 
 function rubricMax(rubric: Rubric): number {
@@ -393,8 +418,14 @@ function tableGrid(entry: QueueEntry) {
   );
 }
 
-export function ScoringQueue({ assessmentId, assessmentName }: Props) {
+export function ScoringQueue({ assessmentId, assessmentName, initialSection = "" }: Props) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
+  const [unreviewed, setUnreviewed] = useState<QueueEntry[]>([]);
+  const [sections, setSections] = useState<QueueSections>({ labels: [], hasBlank: false });
+  const [section, setSection] = useState(initialSection);
+  // The results page's "Review them" link lands on #unreviewed; the list
+  // only exists once the fetch is back, so scroll there once, after it.
+  const scrolledToHash = useRef(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -407,10 +438,16 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/assessments/${assessmentId}/review-queue`);
+      const res = await fetch(reviewQueueUrl(assessmentId, section));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { entries: QueueEntry[] };
+      const body = (await res.json()) as {
+        entries: QueueEntry[];
+        unreviewed?: QueueEntry[];
+        sections?: QueueSections;
+      };
       setEntries(body.entries);
+      setUnreviewed(body.unreviewed ?? []);
+      setSections(body.sections ?? { labels: [], hasBlank: false });
       // D-6: an override starts from what the AI proposed, so a teacher who
       // disagrees with one criterion changes that one instead of re-picking
       // the whole rubric. Anything the teacher has already touched wins.
@@ -426,11 +463,29 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [assessmentId]);
+  }, [assessmentId, section]);
 
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  useEffect(() => {
+    if (loading || scrolledToHash.current) return;
+    scrolledToHash.current = true;
+    if (window.location.hash === "#unreviewed") {
+      document.getElementById("unreviewed")?.scrollIntoView();
+    }
+  }, [loading]);
+
+  // Keeps the section in the address bar, so a reload or a shared link
+  // opens the same filtered queue.
+  function chooseSection(next: string) {
+    setSection(next);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("section", next);
+    else url.searchParams.delete("section");
+    window.history.replaceState(null, "", url);
+  }
 
   async function act(run: () => Promise<Response>) {
     setBusy(true);
@@ -597,7 +652,11 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
   // family will read. Same rows the results page (and slice 5's print page)
   // render, from lib/reporting/rubricScoreView.
   function proposalDetail(entry: QueueEntry) {
-    const rows = rubricScoreRows(entry.item.rubric, entry.proposed?.rationale);
+    return rationaleDetail(entry, entry.proposed?.rationale);
+  }
+
+  function rationaleDetail(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
+    const rows = rubricScoreRows(entry.item.rubric, rationale);
     if (rows.length === 0) return null;
     const cell = "border border-border px-2 py-1 align-top text-xs";
     return (
@@ -622,6 +681,50 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  // Hybrid transparency slice 2 (D-3): a final AI score no teacher reviewed.
+  // It already counts (D-2); Approve marks it reviewed (same route as a
+  // proposal), Change replaces it. No confidence here (D-5).
+  function finalBlock(entry: QueueEntry, final: NonNullable<QueueEntry["final"]>) {
+    return (
+      <div className="mt-3 rounded border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm">{unreviewedCardLine(final)}</span>
+          <div className="flex gap-2">
+            <button
+              disabled={busy}
+              onClick={() => approve(final.score_id)}
+              className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
+            >
+              Approve
+            </button>
+            <ChangeScoreControl
+              responseId={entry.response_id}
+              questionLabel={`Q${entry.item.position + 1}`}
+              score={{
+                points: final.points,
+                max_points: final.max_points,
+                method: "ai",
+                reviewed_by_sub: null,
+              }}
+              maxPoints={entry.item.max_points}
+              rubric={entry.item.rubric ? scoringView(entry.item.rubric) : null}
+              initialPicks={Object.fromEntries(
+                (final.rationale?.criterion_scores ?? []).map((c) => [c.criterion_id, c.level_id]),
+              )}
+              onChanged={() => void refetch()}
+            />
+          </div>
+        </div>
+        {rationaleDetail(entry, final.rationale)}
+        {final.rationale?.overall_rationale ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {final.rationale.overall_rationale}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -704,7 +807,9 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
           </blockquote>
         )}
 
-        {entry.proposed ? (
+        {entry.final ? (
+          finalBlock(entry, entry.final)
+        ) : entry.proposed ? (
           <div className="mt-3 rounded border border-border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm">
@@ -834,9 +939,28 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
         </p>
       ) : null}
 
+      {sections.labels.length > 0 || sections.hasBlank ? (
+        <label className="flex items-center gap-2 text-sm">
+          Section
+          <select
+            value={section}
+            onChange={(e) => chooseSection(e.target.value)}
+            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+          >
+            <option value="">All sections</option>
+            {sections.labels.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+            {sections.hasBlank ? <option value={NO_SECTION}>No section</option> : null}
+          </select>
+        </label>
+      ) : null}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : entries.length === 0 ? (
+      ) : entries.length === 0 && unreviewed.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nothing to review — every response is scored or auto-scorable.
         </p>
@@ -856,6 +980,18 @@ export function ScoringQueue({ assessmentId, assessmentName }: Props) {
                 Needs manual scoring ({needsManual.length})
               </h2>
               <ul className="mt-3 space-y-3">{needsManual.map(entryCard)}</ul>
+            </section>
+          ) : null}
+          {unreviewed.length > 0 ? (
+            <section id="unreviewed">
+              <h2 className="text-lg font-semibold">
+                Finalized by AI — not reviewed ({unreviewed.length})
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Hybrid scored these on its own, and they already count. Approve
+                keeps the score; Change replaces it.
+              </p>
+              <ul className="mt-3 space-y-3">{unreviewed.map(entryCard)}</ul>
             </section>
           ) : null}
         </>

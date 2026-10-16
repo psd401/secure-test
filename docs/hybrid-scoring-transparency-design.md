@@ -24,6 +24,12 @@ Option **C** (B plus the injection rule), every recommendation accepted:
 - **D-7** (4.2) Select label "Hybrid (AI finalizes confident scores)"; the
   hint under it carries the rest.
 - **D-8** (4.3) The results CSV gains an `ai_not_reviewed` column.
+- **D-9** (5.1, 2026-10-16) The matrix marks an unreviewed AI cell with
+  `•` and a title.
+- **D-10** (5.2) The queue's third list sits last, after Needs manual scoring.
+- **D-11** (5.3) The existing approve route also marks a final AI score
+  reviewed, in place.
+- **D-12** (5.4) The scoring queue takes `?section=` like the results page.
 
 ## What the code does today
 
@@ -135,6 +141,24 @@ Design tool only; no client release; no migration.
   `nowLine`, `packetScoreHeading`, the golden CSV + a count case in
   `test/results.test.ts`. "scored by you" on a co-teacher's human score is
   unchanged (out of scope). Not hand-run.
+
+- **Slice 2 BUILT 2026-10-16, not committed, not deployed.**
+  `ResultsCell.ai_unreviewed` (only when true); the matrix cell reads
+  `3/4 •` with "AI score, not reviewed (counted)"; a line above the matrix
+  ("N AI scores were finalized without review — Review them", the link at
+  edit level only) over the rows the section filter shows.
+  `POST /api/scores/[scoreId]/approve` on a final `ai` row sets
+  `reviewed_by_sub` in place (200, no new row; a second press returns the
+  row). The review-queue route returns `unreviewed` (each card + `final`),
+  takes `?section=` (labels from `buildResults`, so the queue and the matrix
+  agree) and returns `sections`; `lib/scoring/sectionFilter.ts` holds the
+  rule both pages use. The queue page: a Section select kept in the address
+  bar, the "Finalized by AI — not reviewed (n)" list last with Approve and
+  Change (`ChangeScoreControl`), no confidence on those cards. Tests:
+  `test/review-queue.test.ts` (5 cases), `test/results.test.ts`,
+  `test/hybrid-labels.test.ts`. Readings: the queue now reads results once
+  more per load (the price of one section rule); approving a final writes
+  no timeline event, like approving a proposal. Not hand-run.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 

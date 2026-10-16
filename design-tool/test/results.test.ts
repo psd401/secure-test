@@ -569,6 +569,7 @@ describe("resultsToCsv", () => {
     const unreviewed = await buildResults(assessmentId);
     const alice = unreviewed.rows.find((r) => r.student.name.startsWith("Alice"))!;
     expect(alice.ai_unreviewed_count).toBe(1);
+    expect(alice.cells.filter((c) => c.ai_unreviewed === true)).toHaveLength(1);
     expect(alice.total_points).toBe(4);
     expect(resultsToCsv(unreviewed).split("\r\n")[1]!.endsWith(",1")).toBe(true);
 
@@ -580,6 +581,9 @@ describe("resultsToCsv", () => {
     expect(
       approved.rows.find((r) => r.student.name.startsWith("Alice"))!.ai_unreviewed_count,
     ).toBe(0);
+    expect(
+      approved.rows.flatMap((r) => r.cells).some((c) => "ai_unreviewed" in c),
+    ).toBe(false);
   });
 });
 
