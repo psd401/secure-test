@@ -160,6 +160,7 @@ describe("selectPacketScores", () => {
   const row = (over: Partial<PacketScoreRow>): PacketScoreRow => ({
     method: "human",
     status: "final",
+    reviewed_by_sub: null,
     points: 3,
     max_points: 4,
     rationale: null,
@@ -222,10 +223,14 @@ describe("selectPacketScores", () => {
     expect(packetScoreHeading("ai", null)).toBe("No AI score");
   });
 
-  test("an accepted ai row is headed as a score, a pending one as a proposal", () => {
+  test("a final ai row says whether it was reviewed, a pending one is a proposal", () => {
     expect(packetScoreHeading("ai", aiNew)).toBe("AI proposal");
+    expect(
+      packetScoreHeading("ai", row({ method: "ai", status: "final", reviewed_by_sub: "t1" })),
+    ).toBe("AI score (approved)");
+    // Hybrid transparency D-1: finalized by the scorer, no teacher reviewed it.
     expect(packetScoreHeading("ai", row({ method: "ai", status: "final" }))).toBe(
-      "AI score (accepted)",
+      "AI score (not reviewed)",
     );
     expect(packetScoreHeading("teacher", human)).toBe("Teacher score");
   });

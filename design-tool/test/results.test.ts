@@ -537,11 +537,49 @@ describe("resultsToCsv", () => {
     // (4/6 rounded, unscored 0).
     const expected =
       [
-        "student_number,name,email,section,submitted_at,Q1,Q2,Q3,total,max,percent,unscored",
-        ',"Alice ""A"", comma",,,2026-07-09T17:00:00.000Z,1,,,1,6,,2',
-        ",Bob,,,2026-07-09T17:00:00.000Z,0,4,,4,6,67,0",
+        "student_number,name,email,section,submitted_at,Q1,Q2,Q3,total,max,percent,unscored,ai_not_reviewed",
+        ',"Alice ""A"", comma",,,2026-07-09T17:00:00.000Z,1,,,1,6,,2,0',
+        ",Bob,,,2026-07-09T17:00:00.000Z,0,4,,4,6,67,0,0",
       ].join("\r\n") + "\r\n";
     expect(csv).toBe(expected);
+  });
+
+  // Hybrid transparency (docs/hybrid-scoring-transparency-design.md, D-1,
+  // decision 4.3): a final AI score no teacher reviewed counts like any final
+  // (D-2) and is counted in `ai_not_reviewed`; once approved it is not.
+  test("ai_not_reviewed counts final AI scores with no reviewer", async () => {
+    const { db } = await seedResultsScenario();
+    const [proposal] = await db
+      .select()
+      .from(scores)
+      .where(eq(scores.status, "proposed"));
+    const [hybridFinal] = await db
+      .insert(scores)
+      .values({
+        response_id: proposal!.response_id,
+        method: "ai",
+        points: 3,
+        max_points: 4,
+        scorer: "mock",
+        status: "final",
+      })
+      .returning();
+    const assessmentId = (await db.select().from(assessments))[0]!.id;
+
+    const unreviewed = await buildResults(assessmentId);
+    const alice = unreviewed.rows.find((r) => r.student.name.startsWith("Alice"))!;
+    expect(alice.ai_unreviewed_count).toBe(1);
+    expect(alice.total_points).toBe(4);
+    expect(resultsToCsv(unreviewed).split("\r\n")[1]!.endsWith(",1")).toBe(true);
+
+    await db
+      .update(scores)
+      .set({ reviewed_by_sub: OWNER })
+      .where(eq(scores.id, hybridFinal!.id));
+    const approved = await buildResults(assessmentId);
+    expect(
+      approved.rows.find((r) => r.student.name.startsWith("Alice"))!.ai_unreviewed_count,
+    ).toBe(0);
   });
 });
 

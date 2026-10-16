@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { isAiUnreviewed } from "@/lib/scoring/methodLabel";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -106,6 +107,11 @@ export interface ResultsRow {
   total_points: number | null;
   scored_max_points: number | null;
   unscored_count: number;
+  // Hybrid transparency (docs/hybrid-scoring-transparency-design.md, D-1,
+  // decision 4.3): final AI scores on this row no teacher reviewed — Hybrid
+  // finalized them on its own. They count like any final (D-2); the CSV's
+  // `ai_not_reviewed` column says how many there are.
+  ai_unreviewed_count: number;
   // D-R1: the assessment-level constant denominator (same value on every
   // row — carried per row so the CSV and JSON need no second lookup).
   max_points: number;
@@ -466,6 +472,7 @@ export async function buildResults(
     let scoredMax = 0;
     let unscored = 0;
     let answered = 0;
+    let aiUnreviewed = 0;
     const cells: ResultsCell[] = itemRows.map((item) => {
       const response = responseByCell.get(`${attempt.id}:${item.id}`);
       if (!response) {
@@ -483,6 +490,7 @@ export async function buildResults(
       if (final) {
         total += final.points;
         scoredMax += final.max_points;
+        if (isAiUnreviewed(final)) aiUnreviewed++;
         return {
           status: "final",
           points: final.points,
@@ -538,6 +546,7 @@ export async function buildResults(
       total_points: inProgress ? null : total,
       scored_max_points: inProgress ? null : scoredMax,
       unscored_count: unscored,
+      ai_unreviewed_count: aiUnreviewed,
       max_points: assessmentMaxPoints,
       percent,
     };
@@ -583,6 +592,7 @@ export function resultsToCsv(results: AssessmentResults): string {
     "max",
     "percent",
     "unscored",
+    "ai_not_reviewed",
   ];
   const lines = [header.map(csvField).join(",")];
   for (const row of results.rows) {
@@ -600,6 +610,7 @@ export function resultsToCsv(results: AssessmentResults): string {
         String(row.max_points),
         row.percent === null ? "" : String(row.percent),
         String(row.unscored_count),
+        String(row.ai_unreviewed_count),
       ].join(","),
     );
   }

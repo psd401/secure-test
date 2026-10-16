@@ -18,6 +18,12 @@ Option **C** (B plus the injection rule), every recommendation accepted:
 - **D-4** (1.4) "Score with AI anyway" on a flagged answer always writes a
   proposed score, whatever the method.
 - **D-5** (1.5) Confidence stays on queue proposal cards only.
+- **D-6** (4.1, 2026-10-16) An AI score approved by someone other than the
+  viewer reads "AI, approved" (no name); "approved by you" only to the
+  approver.
+- **D-7** (4.2) Select label "Hybrid (AI finalizes confident scores)"; the
+  hint under it carries the rest.
+- **D-8** (4.3) The results CSV gains an `ai_not_reviewed` column.
 
 ## What the code does today
 
@@ -114,6 +120,21 @@ false sense of precision. Revisit after a corpus run.
    roadmap page, help page. XS.
 
 Design tool only; no client release; no migration.
+
+## Progress
+
+- **Slice 1 BUILT 2026-10-16, not committed, not deployed.**
+  `lib/scoring/methodLabel.ts` (`isAiUnreviewed`, `finalMethodWord`) on the
+  per-student page's final line and "Earlier scores" (`supersededScores`
+  now carries `reviewed_by_sub`); the Change dialog's `nowLine` reads
+  "· AI, not reviewed" / "· AI, approved"; the work packet heads a final AI
+  row "AI score (not reviewed)" / "AI score (approved)"; the editor's Hybrid
+  label + `HYBRID_HINT` when Hybrid is chosen; `ResultsRow.ai_unreviewed_count`
+  and the CSV's last column `ai_not_reviewed` (appended after `unscored` so
+  earlier columns keep their positions). Tests: `test/hybrid-labels.test.ts`,
+  `nowLine`, `packetScoreHeading`, the golden CSV + a count case in
+  `test/results.test.ts`. "scored by you" on a co-teacher's human score is
+  unchanged (out of scope). Not hand-run.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 

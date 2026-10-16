@@ -44,6 +44,7 @@ import { PassBackAndReload } from "../PassBackAndReload";
 import { ChangeScoreAndReload } from "../ChangeScoreAndReload";
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
 import { canChange, causeLine } from "@/lib/scoring/changeScoreDialog";
+import { finalMethodWord } from "@/lib/scoring/methodLabel";
 import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
 import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
 import { CopyTextButton } from "@/components/app/CopyTextButton";
@@ -60,12 +61,6 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ id: string; attemptId: string }>;
 }
-
-const METHOD_WORD: Record<string, string> = {
-  auto: "auto-scored",
-  ai: "AI, approved by you",
-  human: "scored by you",
-};
 
 /**
  * The one final score per response, and the newest proposal, split out.
@@ -829,7 +824,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                           {final.points} / {final.max_points}
                         </strong>{" "}
                         <span className="text-muted-foreground">
-                          ({METHOD_WORD[final.method] ?? final.method})
+                          ({finalMethodWord(final, session.sub)})
                         </span>
                       </span>
                       {/* Change a final score (docs/change-score-design.md,
@@ -842,6 +837,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                             points: final.points,
                             max_points: final.max_points,
                             method: final.method,
+                            reviewed_by_sub: final.reviewed_by_sub,
                           }}
                           maxPoints={itemMaxPoints(item)}
                           rubric={rubric ? scoringView(rubric) : null}
@@ -907,7 +903,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 <span className="text-foreground">
                   {s.points} / {s.max}
                 </span>{" "}
-                ({METHOD_WORD[s.method] ?? s.method}) ·{" "}
+                ({finalMethodWord(s, session.sub)}) ·{" "}
                 {formatWhen(s.created_at)} · {causeLine(s)}
               </li>
             ))}

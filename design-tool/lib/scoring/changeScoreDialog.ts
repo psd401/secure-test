@@ -4,6 +4,8 @@
  * component so the repo's static-markup tests (no DOM harness) can pin it.
  */
 
+import { isAiUnreviewed } from "@/lib/scoring/methodLabel";
+
 /** The three ways a final score comes to exist, in the words the page uses. */
 const METHOD_LABEL: Record<string, string> = {
   auto: "auto",
@@ -22,13 +24,23 @@ export function methodLabel(method: string): string {
   return METHOD_LABEL[method] ?? method;
 }
 
-/** "Now 2 of 4 · auto" — the dialog's line naming what is being replaced. */
+/**
+ * "Now 2 of 4 · auto" — the dialog's line naming what is being replaced.
+ * Hybrid transparency (D-1): an AI score says whether a teacher reviewed it.
+ */
 export function nowLine(score: {
   points: number;
   max_points: number;
   method: string;
+  reviewed_by_sub: string | null;
 }): string {
-  return `Now ${score.points} of ${score.max_points} · ${methodLabel(score.method)}`;
+  const word =
+    score.method === "ai"
+      ? isAiUnreviewed(score)
+        ? "AI, not reviewed"
+        : "AI, approved"
+      : methodLabel(score.method);
+  return `Now ${score.points} of ${score.max_points} · ${word}`;
 }
 
 /** The queue's step rule: whole points once an item is worth more than one. */

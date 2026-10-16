@@ -392,12 +392,18 @@ const AI_GENERABLE_TYPES: readonly ItemType[] = [
 
 // Slice 36: scoring-method picker. Mirrors ALLOWED_SCORING_METHODS /
 // DEFAULT_SCORING_METHOD in lib/api/items.ts (the server-side authority).
-const SCORING_LABEL: Record<ScoringMethod, string> = {
+export const SCORING_LABEL: Record<ScoringMethod, string> = {
   auto: "Auto (machine-scored)",
   ai: "AI (proposes a score, teacher approves)",
   human: "Human (teacher scores)",
-  hybrid: "Hybrid (AI + human review)",
+  // Hybrid transparency (docs/hybrid-scoring-transparency-design.md, HC-1,
+  // decision 4.2): the old "AI + human review" promised a review that a
+  // confident score skips. The hint below the select says the rest.
+  hybrid: "Hybrid (AI finalizes confident scores)",
 };
+
+export const HYBRID_HINT =
+  "AI scores it is confident about count at once. You can still change any score.";
 
 const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   multiple_choice_single: ["auto", "human"],
@@ -3365,6 +3371,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     <p className="mt-1 text-xs text-muted-foreground">
                       AI and Hybrid need a scoring rubric — add one above to
                       enable them.
+                    </p>
+                  ) : null}
+                  {item.scoring_method === "hybrid" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {HYBRID_HINT}
                     </p>
                   ) : null}
                 </label>

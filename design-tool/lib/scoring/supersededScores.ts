@@ -37,6 +37,8 @@ export interface SupersededScore {
   points: number;
   max: number;
   method: string;
+  /** Hybrid transparency (D-1): null on an AI row no teacher reviewed. */
+  reviewed_by_sub: string | null;
   scorer: string;
   /** When the score was given (see the note above — NOT when it was superseded). */
   created_at: Date;
@@ -89,6 +91,7 @@ export async function listSupersededScores(
       points: scores.points,
       max: scores.max_points,
       method: scores.method,
+      reviewed_by_sub: scores.reviewed_by_sub,
       scorer: scores.scorer,
       status: scores.status,
       rationale: scores.rationale,
@@ -148,6 +151,7 @@ export async function listSupersededScores(
         points: row.points,
         max: row.max,
         method: row.method,
+        reviewed_by_sub: row.reviewed_by_sub,
         scorer: row.scorer,
         created_at: row.created_at,
         // E11 (docs/rescore-after-key-change-design.md): a successor written

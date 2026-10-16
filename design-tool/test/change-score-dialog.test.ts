@@ -26,9 +26,21 @@ describe("canChange", () => {
 
 describe("nowLine", () => {
   test("names the method in the page's words", () => {
-    expect(nowLine({ points: 2, max_points: 4, method: "auto" })).toBe("Now 2 of 4 · auto");
-    expect(nowLine({ points: 3, max_points: 4, method: "ai" })).toBe("Now 3 of 4 · AI");
-    expect(nowLine({ points: 1, max_points: 1, method: "human" })).toBe("Now 1 of 1 · you");
+    expect(nowLine({ points: 2, max_points: 4, method: "auto", reviewed_by_sub: null })).toBe(
+      "Now 2 of 4 · auto",
+    );
+    expect(nowLine({ points: 1, max_points: 1, method: "human", reviewed_by_sub: "t" })).toBe(
+      "Now 1 of 1 · you",
+    );
+  });
+
+  test("an AI score says whether a teacher reviewed it (Hybrid transparency D-1)", () => {
+    expect(nowLine({ points: 3, max_points: 4, method: "ai", reviewed_by_sub: null })).toBe(
+      "Now 3 of 4 · AI, not reviewed",
+    );
+    expect(nowLine({ points: 3, max_points: 4, method: "ai", reviewed_by_sub: "t" })).toBe(
+      "Now 3 of 4 · AI, approved",
+    );
     expect(methodLabel("odd")).toBe("odd");
   });
 });
@@ -77,7 +89,7 @@ describe("ChangeScoreControl markup", () => {
       createElement(ChangeScoreControl, {
         responseId: "r1",
         questionLabel: "Q1",
-        score: { points: 1, max_points: 1, method: "auto" },
+        score: { points: 1, max_points: 1, method: "auto", reviewed_by_sub: null },
         maxPoints: 1,
         rubric: null,
         onChanged: () => {},

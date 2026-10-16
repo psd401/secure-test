@@ -196,6 +196,8 @@ export function anonymousLabels(attemptIds: string[]): Map<string, string> {
 export interface PacketScoreRow {
   method: string;
   status: string;
+  /** Hybrid transparency (D-1): null on an AI row no teacher reviewed. */
+  reviewed_by_sub: string | null;
   points: number;
   max_points: number;
   rationale: unknown;
@@ -262,7 +264,10 @@ export function packetScoreHeading(
     return row.method === "auto" ? "Auto score (your answer key)" : "Teacher score";
   }
   if (!row) return "No AI score";
-  return row.status === "final" ? "AI score (accepted)" : "AI proposal";
+  if (row.status !== "final") return "AI proposal";
+  // Hybrid transparency (D-1): a final AI score Hybrid settled on its own is
+  // not one the teacher accepted.
+  return row.reviewed_by_sub === null ? "AI score (not reviewed)" : "AI score (approved)";
 }
 
 export interface ChoiceCheckboxLine {

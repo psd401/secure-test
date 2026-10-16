@@ -168,6 +168,7 @@ function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "c
     total_points: 0,
     scored_max_points: 0,
     unscored_count: 0,
+    ai_unreviewed_count: 0,
     max_points: 6,
     percent: null,
     ...overrides,

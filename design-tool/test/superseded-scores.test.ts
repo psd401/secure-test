@@ -249,6 +249,7 @@ describe("the work packet never prints a superseded row", () => {
     points: 3,
     max_points: 4,
     rationale: null,
+    reviewed_by_sub: null,
   };
 
   test("neither as the teacher score nor as the latest AI row", () => {

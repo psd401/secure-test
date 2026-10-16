@@ -50,7 +50,7 @@ export function ChangeScoreControl({
 }: {
   responseId: string;
   questionLabel: string;
-  score: { points: number; max_points: number; method: string };
+  score: { points: number; max_points: number; method: string; reviewed_by_sub: string | null };
   maxPoints: number;
   rubric: ChangeScoreRubric | null;
   initialPicks?: Record<string, string>;
