@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assets,
   attempt_events,
   attempts,
   google_doc_releases,
@@ -16,10 +15,8 @@ import {
 } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
-import {
-  renderItemContent,
-  type ResolvedAsset,
-} from "@/lib/items/renderItemContent";
+import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
+import { renderItemContent } from "@/lib/items/renderItemContent";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
 import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
@@ -415,21 +412,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
   // the same resolution the review queue does, for the same reason: a teacher
   // reading a student's answer should see the question as the student saw it.
   const stemRefs = extractAssetRefsFromMany(itemRows.map((i) => i.stem));
-  const resolvedAssets = new Map<string, ResolvedAsset>();
-  if (stemRefs.length > 0) {
-    const assetRows = await db
-      .select({ id: assets.id, content_type: assets.content_type })
-      .from(assets)
-      .where(
-        and(eq(assets.owner_sub, session.sub), inArray(assets.id, stemRefs)),
-      );
-    for (const a of assetRows) {
-      resolvedAssets.set(a.id.toLowerCase(), {
-        id: a.id,
-        content_type: a.content_type,
-      });
-    }
-  }
+  // G-1: under the assessment's owner, with the assessment-scoped URL, so
+  // a co-teacher sees the owner's pictures.
+  const resolvedAssets = await resolveAssessmentAssets(db, access.assessment, stemRefs);
 
   const responseRows = await db
     .select()

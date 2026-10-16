@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import type { HotspotRegion } from "@secure-test/schema";
 import { ImagePicker } from "./ImagePicker";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
+import { assessmentAssetUrl } from "@/lib/assets/assessmentAssetUrl";
+import { useAssessmentId } from "@/components/app/AssessmentIdContext";
 
 // Slice 49: hotspot authoring. The teacher picks an image (reusing the
 // asset-library ImagePicker — its markdown insert is parsed for the asset
@@ -43,6 +45,9 @@ export function HotspotEditor({
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   // Drag-in-progress rectangle, normalized. null when not dragging.
+  // G-1: inside an assessment the picture loads through the assessment, so
+  // a co-teacher sees the owner's image.
+  const assessmentId = useAssessmentId();
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
     null,
   );
@@ -130,7 +135,11 @@ export function HotspotEditor({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/assets/${imageAssetId}`}
+            src={
+              assessmentId
+                ? assessmentAssetUrl(assessmentId, imageAssetId)
+                : `/api/assets/${imageAssetId}`
+            }
             alt="Hotspot base"
             className="block h-auto max-w-full rounded border border-border"
             draggable={false}

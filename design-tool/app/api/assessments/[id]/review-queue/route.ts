@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assets,
   attempts,
   items,
   responses,
@@ -12,10 +11,8 @@ import {
   type ScoreRow, item_sets } from "@/db/schema";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
-import {
-  renderItemContent,
-  type ResolvedAsset,
-} from "@/lib/items/renderItemContent";
+import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
+import { renderItemContent } from "@/lib/items/renderItemContent";
 import { requireStaff } from "@/lib/api/requireSession";
 import { resolveSourceText } from "@/lib/api/setSources";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
@@ -69,25 +66,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
   const itemsById = new Map(itemRows.map((i) => [i.id, i]));
 
   // Stems reach the queue rendered (math + image refs) so hand-scoring
-  // reads a fraction, not KaTeX source. Same owner-scoped asset resolution
-  // as the editor's renderContent action: refs to other users' assets fall
-  // out of the lookup and render as the inline-red placeholder.
+  // reads a fraction, not KaTeX source. G-1: refs resolve under the
+  // assessment's owner with the assessment-scoped URL, so a co-teacher scoring
+  // sees the owner's pictures; refs to anyone else's assets render as the
+  // inline-red placeholder.
   const stemRefs = extractAssetRefsFromMany(itemRows.map((i) => i.stem));
-  const resolvedAssets = new Map<string, ResolvedAsset>();
-  if (stemRefs.length > 0) {
-    const assetRows = await db
-      .select({ id: assets.id, content_type: assets.content_type })
-      .from(assets)
-      .where(
-        and(eq(assets.owner_sub, auth.session.sub), inArray(assets.id, stemRefs)),
-      );
-    for (const r of assetRows) {
-      resolvedAssets.set(r.id.toLowerCase(), {
-        id: r.id,
-        content_type: r.content_type,
-      });
-    }
-  }
+  // G-1: under the assessment's owner, with the assessment-scoped URL, so
+  // a co-teacher sees the owner's pictures.
+  const resolvedAssets = await resolveAssessmentAssets(db, access.assessment, stemRefs);
   const stemHtmlByItem = new Map(
     itemRows.map((i) => [i.id, renderItemContent(i.stem, resolvedAssets)]),
   );

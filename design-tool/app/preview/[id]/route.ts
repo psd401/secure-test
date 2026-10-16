@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assets, items, type ItemType } from "@/db/schema";
+import { items, type ItemType } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAssessment } from "@/lib/api/access";
 import {
   assetIdsFromItemConfig,
   extractAssetRefsFromMany,
 } from "@/lib/items/extractAssetRefs";
-import type { ResolvedAsset } from "@/lib/items/renderItemContent";
+import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
 import { previewBlanks, renderAssessmentHtml } from "@/lib/preview/renderHtml";
 import { exportItemSets } from "@/lib/api/itemSetsBundle";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
@@ -86,28 +86,9 @@ export async function GET(req: Request, ctx: RouteContext) {
       ...itemRows.flatMap((r) => assetIdsFromItemConfig(r.config)),
     ]),
   ];
-  const resolved = new Map<string, ResolvedAsset>();
-  if (refIds.length > 0) {
-    const ownedAssets = await db
-      .select({ id: assets.id, content_type: assets.content_type })
-      .from(assets)
-      .where(
-        and(
-          // Scoped to the assessment's OWNER, not the caller: a co-teacher
-          // previewing through an `edit` grant (access slice 2) must see the
-          // lead teacher's images, and every other bundle path already reads
-          // them under `assessment.owner_sub` for the same reason.
-          eq(assets.owner_sub, assessmentRow.owner_sub),
-          inArray(assets.id, refIds),
-        ),
-      );
-    for (const a of ownedAssets) {
-      resolved.set(a.id.toLowerCase(), {
-        id: a.id,
-        content_type: a.content_type,
-      });
-    }
-  }
+  // G-1: under the assessment's OWNER, with the assessment-scoped image URL
+  // a co-teacher previewing through a grant can load.
+  const resolved = await resolveAssessmentAssets(db, assessmentRow, refIds);
 
   const html = renderAssessmentHtml(
     {

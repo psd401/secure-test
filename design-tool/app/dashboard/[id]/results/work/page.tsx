@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
-  assets,
   item_sets,
   items,
   responses,
@@ -14,6 +13,7 @@ import {
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
 import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
+import { assessmentAssetUrl, resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
 import { describeAnswer, type AnswerLine } from "@/lib/reporting/answerView";
 import { renderFillBlankAnswerHtml, renderFillBlankGapsHtml } from "@/lib/reporting/fillBlankView";
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
@@ -531,16 +531,9 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     for (const src of set.sources) refTexts.push(src.text);
   }
   const refs = extractAssetRefsFromMany(refTexts);
-  const resolvedAssets = new Map<string, ResolvedAsset>();
-  if (refs.length > 0) {
-    const assetRows = await db
-      .select({ id: assets.id, content_type: assets.content_type })
-      .from(assets)
-      .where(and(eq(assets.owner_sub, session.sub), inArray(assets.id, refs)));
-    for (const a of assetRows) {
-      resolvedAssets.set(a.id.toLowerCase(), { id: a.id, content_type: a.content_type });
-    }
-  }
+  // G-1: under the assessment's owner, with the assessment-scoped URL, so a
+  // co-teacher's packet carries the owner's pictures.
+  const resolvedAssets = await resolveAssessmentAssets(db, assessment, refs);
 
   // ── Responses and scores for this section's attempts only.
   const attemptIds = ordered.map((r) => r.attempt_id);
@@ -838,7 +831,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                     item.type === "hotspot" &&
                     item.config.image_asset_id ? (
                       <img
-                        src={`/api/assets/${encodeURIComponent(item.config.image_asset_id)}`}
+                        src={assessmentAssetUrl(assessment.id, item.config.image_asset_id)}
                         alt={`Picture for question ${item.position + 1}`}
                       />
                     ) : null}

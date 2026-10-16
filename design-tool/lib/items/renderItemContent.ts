@@ -18,6 +18,17 @@ const IMG_RE =
 export interface ResolvedAsset {
   id: string;
   content_type: string;
+  /**
+   * G-1: where the `<img>` points. Staff readers set the assessment-scoped
+   * URL (`lib/assets/assessmentAssets.ts`) so a co-teacher can load the
+   * owner's image; absent means the owner's own `/api/assets/<id>`.
+   */
+  url?: string;
+}
+
+/** The `src` for a resolved asset (G-1). */
+export function assetSrc(asset: ResolvedAsset): string {
+  return asset.url ?? `/api/assets/${encodeURIComponent(asset.id.toLowerCase())}`;
 }
 
 function renderMath(tex: string, displayMode: boolean): string {
@@ -50,7 +61,7 @@ function renderImageRef(
     return `<span class="image-missing">[image not found: ${escapeHtml(alt || lowerId)}]</span>`;
   }
   return (
-    `<img class="item-image" src="/api/assets/${encodeURIComponent(lowerId)}" ` +
+    `<img class="item-image" src="${escapeHtml(assetSrc(asset))}" ` +
     `alt="${escapeHtml(alt)}" loading="lazy">`
   );
 }

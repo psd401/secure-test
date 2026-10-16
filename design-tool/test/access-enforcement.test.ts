@@ -228,14 +228,7 @@ const OWNER_SUB_ALLOWED = new Map<string, string>([
   [join("uploads", "image"), "sha256 dedup WHERE + insert value"],
   [
     join("assessments", "[id]", "review-queue"),
-    "asset and overlay-student lookups scoped to the caller (not the queue's own gate)",
-  ],
-  // Access slice 2: the preview's asset lookup is scoped to the ASSESSMENT's
-  // owner, not the caller, so a co-teacher's preview shows the lead teacher's
-  // images. A read scope, not a refusal.
-  [
-    join("preview", "[id]"),
-    "asset lookup scoped to the assessment's owner so a grantee sees its images",
+    "overlay-student lookup scoped to the assessment's owner (not the queue's own gate); G-1 moved the asset lookup to lib/assets",
   ],
   // Class insights slice 4 (D-5): the chat thread's own column — the teacher
   // whose thread it is — read and written under the caller's sub after

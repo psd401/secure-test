@@ -20,6 +20,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import type { SessionPayload } from "@/lib/auth/session";
 import { UUID_RE } from "@/lib/uuid";
 import { effectiveLevel } from "@/lib/api/grants";
+import { referencedAssetIds } from "@/lib/assets/assessmentAssets";
 import {
   levelSatisfies,
   type AccessLevel,
@@ -290,6 +291,41 @@ export async function authorizeAsset(
   if (!asset) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, asset.owner_sub);
   if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  return { ok: true, asset, ...resolved };
+}
+
+/**
+ * G-1 (docs/coteacher-gaps-2026-10-design.md, D-1): one image as staff see it
+ * inside one assessment. `view` on the assessment admits an asset that belongs
+ * to the assessment's owner AND that the assessment references, so a
+ * co-teacher sees the owner's pictures in that assessment and nothing else on
+ * the owner's shelf. A caller who owns the asset (or an admin) is admitted
+ * whether or not it is referenced yet (decision 2.2, 2026-10-16): the editor's
+ * live preview renders an image the owner has inserted but not saved.
+ */
+export async function authorizeAssessmentAsset(
+  db: Db,
+  session: SessionPayload,
+  assessmentId: string,
+  assetId: string,
+): Promise<AssetAccess> {
+  if (!UUID_RE.test(assessmentId) || !UUID_RE.test(assetId)) return denyInvalidId();
+  const access = await authorizeAssessment(db, session, assessmentId, "view");
+  if (!access.ok) return access;
+  const [asset] = await db
+    .select()
+    .from(assets)
+    .where(eq(assets.id, assetId))
+    .limit(1);
+  if (!asset) return denyNotFound();
+  if (asset.owner_sub === access.assessment.owner_sub) {
+    const referenced = await referencedAssetIds(db, assessmentId);
+    if (referenced.has(asset.id.toLowerCase())) {
+      return { ok: true, asset, level: access.level, via: access.via, scope: access.scope };
+    }
+  }
+  const resolved = resolveOwnerSubLevel(session, asset.owner_sub);
+  if (!resolved) return denyNotFound();
   return { ok: true, asset, ...resolved };
 }
 

@@ -6,6 +6,7 @@ import { attempts, items, type ItemType } from "@/db/schema";
 import { loadItemSetsInOrder } from "@/lib/api/itemSets";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { AssessmentEditor } from "./AssessmentEditor";
+import { AssessmentIdProvider } from "@/components/app/AssessmentIdContext";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
 import { markAssessmentGrantSeen } from "@/lib/api/grants";
@@ -73,75 +74,77 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <AssessmentEditor
-        initialItemSets={itemSetRows.map((s) => ({
-          id: s.id,
-          stimulus_text: s.stimulus_text,
-          // Multi-source stimulus slice 2: the set's labelled sources.
-          sources: s.sources ?? [],
-          layout: s.layout as "inline" | "own_page" | "side_by_side",
-          source: s.source,
-        }))}
-        assessment={{
-          id: assessment.id,
-          name: assessment.name,
-          description: assessment.description,
-          status: assessment.status,
-          allow_llm_authoring: assessment.allow_llm_authoring,
-          time_limit_seconds: assessment.time_limit_seconds,
-          student_layout: assessment.student_layout as "scroll" | "paged",
-          student_feedback: assessment.student_feedback as FeedbackLevelSetting,
-          answers_release: assessment.answers_release as AnswersReleaseSetting,
-          answers_released_at: assessment.answers_released_at
-            ? assessment.answers_released_at.toISOString()
-            : null,
-          allow_highlighting: assessment.allow_highlighting,
-          allowed_accommodations: (assessment.allowed_accommodations ??
-            []) as string[],
-          construct_altering: (assessment.construct_altering ?? []) as string[],
-          section_accommodations: assessment.section_accommodations ?? {},
-          assigned_scope: assessment.assigned_scope,
-          attempt_count: attemptCountRow?.n ?? 0,
-          archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
-        }}
-        access={{
-          level: access.level,
-          via: access.via,
-          owner_email: assessment.owner_email,
-        }}
-        initialItems={itemRows.map((r) => ({
-          id: r.id,
-          position: r.position,
-          item_set_id: r.item_set_id,
-          type: r.type as ItemType,
-          stem: r.stem,
-          choices: (r.choices ?? []) as { id: string; text: string }[],
-          correct_choice_ids: (r.correct_choice_ids ?? []) as string[],
-          correct_answer: r.correct_answer,
-          max_word_count: r.config?.max_word_count ?? null,
-          placeholder: r.config?.placeholder ?? null,
-          rich_text: r.config?.rich_text ? true : null,
-          show_word_count: r.config?.show_word_count ? true : null,
-          rubric: r.config?.rubric ?? null,
-          rubric_id: r.config?.rubric_id ?? null,
-          pairs: r.config?.pairs ?? null,
-          sequence: r.config?.sequence ?? null,
-          image_asset_id: r.config?.image_asset_id ?? null,
-          regions: r.config?.regions ?? null,
-          correct_region_ids: r.config?.correct_region_ids ?? null,
-          prompt_asset_id: r.config?.prompt_asset_id ?? null,
-          canvas: r.config?.canvas ?? null,
-          columns: r.config?.columns ?? null,
-          rows: r.config?.rows ?? null,
-          corner: r.config?.corner ?? null,
-          cell_keys: r.config?.cell_keys ?? null,
-          // FB slice 2: stem order, as the editor keeps it (lib/items/fillBlankEditor.ts).
-          blanks: r.config?.blanks ? orderBlanksByStem(r.stem, r.config.blanks) : null,
-          exact_form: r.config?.exact_form ?? null,
-          scoring_method: r.config?.scoring_method ?? null,
-          standards: Array.isArray(r.standards) ? r.standards : [],
-        }))}
-      />
+      <AssessmentIdProvider id={assessment.id}>
+        <AssessmentEditor
+          initialItemSets={itemSetRows.map((s) => ({
+            id: s.id,
+            stimulus_text: s.stimulus_text,
+            // Multi-source stimulus slice 2: the set's labelled sources.
+            sources: s.sources ?? [],
+            layout: s.layout as "inline" | "own_page" | "side_by_side",
+            source: s.source,
+          }))}
+          assessment={{
+            id: assessment.id,
+            name: assessment.name,
+            description: assessment.description,
+            status: assessment.status,
+            allow_llm_authoring: assessment.allow_llm_authoring,
+            time_limit_seconds: assessment.time_limit_seconds,
+            student_layout: assessment.student_layout as "scroll" | "paged",
+            student_feedback: assessment.student_feedback as FeedbackLevelSetting,
+            answers_release: assessment.answers_release as AnswersReleaseSetting,
+            answers_released_at: assessment.answers_released_at
+              ? assessment.answers_released_at.toISOString()
+              : null,
+            allow_highlighting: assessment.allow_highlighting,
+            allowed_accommodations: (assessment.allowed_accommodations ??
+              []) as string[],
+            construct_altering: (assessment.construct_altering ?? []) as string[],
+            section_accommodations: assessment.section_accommodations ?? {},
+            assigned_scope: assessment.assigned_scope,
+            attempt_count: attemptCountRow?.n ?? 0,
+            archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
+          }}
+          access={{
+            level: access.level,
+            via: access.via,
+            owner_email: assessment.owner_email,
+          }}
+          initialItems={itemRows.map((r) => ({
+            id: r.id,
+            position: r.position,
+            item_set_id: r.item_set_id,
+            type: r.type as ItemType,
+            stem: r.stem,
+            choices: (r.choices ?? []) as { id: string; text: string }[],
+            correct_choice_ids: (r.correct_choice_ids ?? []) as string[],
+            correct_answer: r.correct_answer,
+            max_word_count: r.config?.max_word_count ?? null,
+            placeholder: r.config?.placeholder ?? null,
+            rich_text: r.config?.rich_text ? true : null,
+            show_word_count: r.config?.show_word_count ? true : null,
+            rubric: r.config?.rubric ?? null,
+            rubric_id: r.config?.rubric_id ?? null,
+            pairs: r.config?.pairs ?? null,
+            sequence: r.config?.sequence ?? null,
+            image_asset_id: r.config?.image_asset_id ?? null,
+            regions: r.config?.regions ?? null,
+            correct_region_ids: r.config?.correct_region_ids ?? null,
+            prompt_asset_id: r.config?.prompt_asset_id ?? null,
+            canvas: r.config?.canvas ?? null,
+            columns: r.config?.columns ?? null,
+            rows: r.config?.rows ?? null,
+            corner: r.config?.corner ?? null,
+            cell_keys: r.config?.cell_keys ?? null,
+            // FB slice 2: stem order, as the editor keeps it (lib/items/fillBlankEditor.ts).
+            blanks: r.config?.blanks ? orderBlanksByStem(r.stem, r.config.blanks) : null,
+            exact_form: r.config?.exact_form ?? null,
+            scoring_method: r.config?.scoring_method ?? null,
+            standards: Array.isArray(r.standards) ? r.standards : [],
+          }))}
+        />
+      </AssessmentIdProvider>
     </main>
   );
 }

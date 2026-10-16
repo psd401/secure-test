@@ -22,6 +22,15 @@ Nothing is built.
 - **D-4** (3.4) G-4 and G-5 are built now, with the others.
 - **D-5** (3.5) Hand-run: the one-day teacher-row script plus a colleague
   James names later, holding a co-teach grant.
+- **D-6** (2.1, 2026-10-16) G-1 keeps the assessment-scoped URL (D-1), not a
+  widened `/api/assets/[id]`: the check stays one assessment wide.
+- **D-7** (2.2) The owner exception lives in the route: a caller who owns the
+  asset (or an admin) loads it through the scoped URL even before the
+  assessment references it (the editor's live preview of an unsaved insert).
+- **D-8** (2.3) "Referenced" is the preview's set: stems, choices, set
+  introductions and sources, item-config images. Rubric text and keys are
+  not scanned.
+- **D-9** (2.4) G-6 is recorded only.
 
 ## Confirmed fixed (for the record)
 
@@ -118,12 +127,42 @@ extract would miss. **Fix:** `lower()` on both sides, or normalize at
 import (`lib/roster/extract.ts`). Worth one read-only Aurora count first
 (`teacher_email <> lower(teacher_email)`).
 
+### G-6 — a co-teacher's inserted image belongs to the co-teacher
+
+Found 2026-10-16 while building G-1; recorded only (D-9). The editor's Image
+picker lists the CALLER's own images, so an edit-level co-teacher who inserts
+a picture references an asset owned by the co-teacher. Every reader resolves
+under the assessment's owner, so students, the owner and the preview see
+"[image not found]"; only the co-teacher's own editor preview shows it (the
+D-7 exception). A fix means the picker lists the owner's images for a
+grantee, or uploads made inside an assessment land under its owner — an
+access decision of its own.
+
 ## Recommendation
 
 One slice each, in order G-1 (the only one a co-teacher would hit on every
 assessment with a picture), G-2, then G-3 + G-4 + G-5 together. Design tool
 only; G-4 is the only migration. Rows need a second staff account with a
 co-teach grant (the same blocker as rows 223–228 / 252).
+
+## Progress
+
+- **G-1 BUILT 2026-10-16, not committed, not deployed.**
+  `GET /api/assessments/[id]/assets/[assetId]` → `authorizeAssessmentAsset`
+  (`lib/api/access.ts`: `view` on the assessment + owner's asset + referenced,
+  else the asset's owner or an admin). `lib/assets/assessmentAssets.ts`
+  (`referencedAssetIds`, `resolveAssessmentAssets` under `owner_sub`),
+  `lib/assets/assessmentAssetUrl.ts` (pure, for client components),
+  `lib/assets/assetResponse.ts` (shared with `/api/assets/[id]`).
+  `ResolvedAsset.url` + `assetSrc` carry the URL through `renderItemContent`
+  and `renderHtml` without new parameters. Switched: preview, work packet
+  (incl. its hotspot `<img>`), per-student page, review queue,
+  `renderContent(text, assessmentId?)` via `AssessmentIdProvider` around the
+  editor (MathPreview, RenderedText), the editor's drawing-reference and
+  hotspot `<img>`s. The Images page and Image picker keep `/api/assets/[id]`.
+  Tests: `test/assessment-assets.test.ts`; the access-enforcement allowlist
+  lost the preview entry. Hand-run rows not written yet (need the co-teach
+  grant, D-5).
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 

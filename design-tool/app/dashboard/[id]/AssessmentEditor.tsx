@@ -1,5 +1,6 @@
 "use client";
 
+import { assessmentAssetUrl } from "@/lib/assets/assessmentAssetUrl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -2855,7 +2856,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         <div className="mt-2 space-y-1">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={`/api/assets/${item.prompt_asset_id}`}
+                            src={assessmentAssetUrl(assessment.id, item.prompt_asset_id)}
                             alt="Reference"
                             className="max-h-48 rounded border border-border"
                           />

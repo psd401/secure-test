@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { renderContent } from "@/app/actions/renderContent";
+import { useAssessmentId } from "@/components/app/AssessmentIdContext";
 
 // S-f-1 (docs/multi-source-stimulus-design.md, Row S-f sitting 2026-09-09):
 // the importer writes money as `\$57,600` so the renderers never open math
@@ -23,19 +24,20 @@ export function needsRendering(text: string): boolean {
 // HTML arrives, or if the action returns nothing, the raw text shows.
 export function RenderedText({ text, className }: { text: string; className?: string }) {
   const interesting = needsRendering(text);
+  const assessmentId = useAssessmentId();
   const [html, setHtml] = useState<string>("");
   useEffect(() => {
     if (!interesting) return;
     let cancelled = false;
-    void renderContent(text).then((out) => {
+    void renderContent(text, assessmentId ?? undefined).then((out) => {
       if (!cancelled) setHtml(out);
     });
     return () => {
       cancelled = true;
     };
-  }, [text, interesting]);
+  }, [text, interesting, assessmentId]);
   // renderContent output is server-rendered: text HTML-escaped, math is
-  // KaTeX, images point at session-scoped /api/assets — the same trust as
+  // KaTeX, images point at the assessment-scoped image URL (G-1) — the same trust as
   // MathPreview.
   if (interesting && html) {
     return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;

@@ -30,7 +30,7 @@ import {
 import type { ItemType } from "@/db/schema";
 import { assertNever } from "@/lib/assertNever";
 import { escapeHtml } from "@/lib/escapeHtml";
-import { renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
+import { assetSrc, renderItemContent, type ResolvedAsset } from "@/lib/items/renderItemContent";
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
@@ -464,7 +464,7 @@ function renderItem(
         .join("");
       body =
         `<div class="hotspot-wrap">` +
-        `<img class="hotspot-image" src="/api/assets/${escapeHtml(image.id)}" alt="">` +
+        `<img class="hotspot-image" src="${escapeHtml(assetSrc(image))}" alt="">` +
         overlays +
         `</div>` +
         `<p class="match-hint">Mark the correct region(s) by number.</p>`;
@@ -476,7 +476,7 @@ function renderItem(
     const promptId = item.prompt_asset_id?.toLowerCase() ?? null;
     const ref = promptId ? resolved.get(promptId) : null;
     const refHtml = ref
-      ? `<img class="item-image" src="/api/assets/${escapeHtml(ref.id)}" alt="">`
+      ? `<img class="item-image" src="${escapeHtml(assetSrc(ref))}" alt="">`
       : item.prompt_asset_id
         ? `<span class="image-missing">[reference image not found]</span>`
         : "";

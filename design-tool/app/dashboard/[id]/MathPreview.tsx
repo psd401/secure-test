@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { renderContent } from "@/app/actions/renderContent";
+import { useAssessmentId } from "@/components/app/AssessmentIdContext";
 
 interface Props {
   text: string;
@@ -17,6 +18,7 @@ interface Props {
 export function MathPreview({ text, debounceMs = 300 }: Props) {
   const [html, setHtml] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const assessmentId = useAssessmentId();
   // E6 (2026-09-02, row 39): emphasis markers count as "interesting" too,
   // so a stem like "Which factor is **ABIOTIC**?" previews in its card and
   // the teacher sees the bold rather than the asterisks.
@@ -32,7 +34,7 @@ export function MathPreview({ text, debounceMs = 300 }: Props) {
     const timer = setTimeout(async () => {
       setBusy(true);
       try {
-        const out = await renderContent(text);
+        const out = await renderContent(text, assessmentId ?? undefined);
         if (!cancelled) setHtml(out);
       } finally {
         if (!cancelled) setBusy(false);
@@ -42,7 +44,7 @@ export function MathPreview({ text, debounceMs = 300 }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [text, debounceMs, interesting]);
+  }, [text, debounceMs, interesting, assessmentId]);
 
   if (!interesting) return null;
 
@@ -53,7 +55,7 @@ export function MathPreview({ text, debounceMs = 300 }: Props) {
       </span>
       {/* renderContent output is server-side rendered: text is
           HTML-escaped, math is KaTeX, images are <img> tags pointing
-          at session-scoped /api/assets/<uuid>. Unresolved refs come
+          at the assessment-scoped image URL (G-1). Unresolved refs come
           back as inline red placeholders — no injection vector. */}
       <span className="whitespace-pre-line" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
