@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
@@ -128,22 +129,24 @@ export function PassBackControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size={size}
-        disabled={disabledReason !== undefined}
-        title={disabledReason}
-        onClick={openDialog}
-      >
-        Pass back
-      </Button>
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) openDialog();
+          else if (!busy) setOpen(false);
         }}
       >
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size={size}
+            disabled={disabledReason !== undefined}
+            title={disabledReason}
+          >
+            Pass back
+          </Button>
+        </DialogTrigger>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Pass back to {studentName}?</DialogTitle>

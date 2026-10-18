@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -134,27 +135,29 @@ export function RescoreControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={studentsChanged === 0}
-        title={studentsChanged === 0 ? RESCORE_NOTHING_TITLE : undefined}
-        onClick={() => void preview()}
-      >
-        {rescoreButtonLabel(studentsChanged)}
-      </Button>
-      {done ? (
-        <p role="status" className="order-last basis-full text-sm text-muted-foreground">
-          {doneLine(done)}
-          {sentLine ? <span className="ml-1 text-foreground">{sentLine}</span> : null}
-        </p>
-      ) : null}
       <AlertDialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) void preview();
+          else if (!busy) setOpen(false);
         }}
       >
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={studentsChanged === 0}
+            title={studentsChanged === 0 ? RESCORE_NOTHING_TITLE : undefined}
+          >
+            {rescoreButtonLabel(studentsChanged)}
+          </Button>
+        </AlertDialogTrigger>
+        {done ? (
+          <p role="status" className="order-last basis-full text-sm text-muted-foreground">
+            {doneLine(done)}
+            {sentLine ? <span className="ml-1 text-foreground">{sentLine}</span> : null}
+          </p>
+        ) : null}
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Rescore with the current answer keys?</AlertDialogTitle>

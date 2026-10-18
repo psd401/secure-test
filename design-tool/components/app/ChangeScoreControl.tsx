@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -142,15 +143,18 @@ export function ChangeScoreControl({
 
   return (
     <>
-      <Button type="button" variant="outline" size="xs" onClick={openDialog}>
-        Change
-      </Button>
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) openDialog();
+          else if (!busy) setOpen(false);
         }}
       >
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline" size="xs">
+            Change
+          </Button>
+        </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Change {questionLabel} score</DialogTitle>

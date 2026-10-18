@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,15 +83,20 @@ export function ReleaseAnswersControl({
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => { setError(null); setOpen(true); }}>
-        Release answers
-      </Button>
       <AlertDialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) {
+            setError(null);
+            setOpen(true);
+          } else if (!busy) setOpen(false);
         }}
       >
+        <AlertDialogTrigger asChild>
+          <Button type="button" variant="outline">
+            Release answers
+          </Button>
+        </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{RELEASE_CONFIRM_TITLE}</AlertDialogTitle>

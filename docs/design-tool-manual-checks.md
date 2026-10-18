@@ -1756,3 +1756,37 @@ Findings and readings, 2026-10-18 (local dev, `_demo`):
 - **U24-F1 — FIXED in this slice.** Escape or Cancel left focus on the page body, not the button: the button opened the dialog from its own `onClick`, so Radix had no trigger to return focus to (as "Hand in all in progress" still does; the G-3 pattern in `docs/batch-item-generation-design.md`). The button is now an `AlertDialogTrigger`; row 635 re-run ✅. "Hand in all in progress" had the same gap and got the same fix the same day: Enter opens with focus on Cancel, and Escape or Cancel returns focus to the button (checked on the fixture with the English 10 session closed; nothing handed in). Eleven more controls open their dialog the same way and still lose focus on close — Pass back, Hand in (one attempt), Change score, Rescore with current key, Restore this version, Delete attempt, Adjust time, Send to Google Docs, Send to gradebook, Release answers, Hand in everyone — not fixed here.
 - **U24-R1 — reading, no change proposed.** The summary's "held back" counts every flagged answer the route passed over, including one flagged before the press (Rowan), so it said "2 held back" after a dialog that promised 7 essays (6 scored + 1 newly flagged). Each held-back answer does wait in the queue, so the line is true; `n` stays the essays a press can score.
 - Fixture `U-24 batch AI hand-run 2026-10-18` stays on `_demo` (two class sittings open, one attempt in progress, the co-teacher's edit grant). An empty duplicate of the same name (`81657606…`, left by a first fixture run that failed on two student emails) has no attempts and two open sittings — delete both when done.
+
+## Focus returns to the button after a dialog (U24-F1 across the app, slice 1: student-row actions, 2026-10-18)
+
+The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows up to 638 are taken (main's G-2 / G-4 and batch print rows reach 626; U-24, #54, uses 627–638), so this section starts at 639. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
+
+Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8ZQP`, closed: one in-progress and one handed-in attempt). Nothing was confirmed; both attempts read unchanged afterwards (status, pass-back count, deadline override). Each check pressed real Enter / Escape keys; Cancel was focused and pressed with Enter.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 639 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
+| 640 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
+| 641 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
+| 642 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
+| 643 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
+
+## Focus returns to the button after a dialog (slice 2: scores, 2026-10-18)
+
+Same change and method as slice 1 for Change, Rescore with current key, Restore this version and Release answers. Rescore's open now runs the dry-run preview from `onOpenChange`. Run 2026-10-18 on local `_demo` in Chrome. Nothing was confirmed: no `answer_restored` / `score_changed` events and no `answers_released_at` afterwards.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 644 | **Change** beside a final score on a per-student results page | Enter opens "Change Qn score"; Escape and Cancel each return focus to that Change | ✅ 2026-10-18 — fixture "Rescore hand-run 2026-10-08"; focus opens in the points field |
+| 645 | **Rescore with current key (n)** on the results page, n > 0 | Enter opens the dialog and its dry run fills the summary; Escape and Cancel each return focus to the Rescore button | ✅ 2026-10-18 — same fixture, its MC key switched c1 → c2 in the DB for the check (count read 3) and switched back after. Reading: while the dry run is in flight both footer buttons are disabled, so focus stays on the Rescore button behind the open dialog instead of moving into it; it was the same before this change |
+| 646 | **Restore this version** under "Earlier versions" on a per-student results page | Enter opens "Restore the version saved …?"; Escape and Cancel each return focus to that Restore this version | ✅ 2026-10-18 — fixture "v1.6.3 word count hand-run 2026-10-13", "Earlier versions" opened first (a button inside a closed `<details>` cannot take focus) |
+| 647 | **Release answers** on the results page (answers released on request, not yet released) | Enter opens "Release answers?"; Escape and Cancel each return focus to Release answers | ✅ 2026-10-18 — fixture "IF feedback page answers on_release" |
+
+## Focus returns to the button after a dialog (slice 3: sends, 2026-10-18)
+
+Same change and method for Send to Google Docs and Send to gradebook. Both open handlers still run their reset (`openDialog`); both close paths still go through `close()` (busy guard; Google Docs reloads after a send, the gradebook calls `onDone`). Google Docs' return-from-Google reopen still sets `open` directly, so its saved choices and notice are kept. Run 2026-10-18 on local `_demo` in Chrome, fixture "v1.6.3 word count hand-run 2026-10-13", dev server started with `GRADEBOOK_PROVIDER=mock` (the gradebook button is hidden without a provider). Nothing was sent.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 648 | **Send to Google Docs** on a per-student results page; then the return from Google (saved choices in `sessionStorage` + `?gdrive=ok`) | Enter opens the dialog; Escape and Cancel each return focus to the button. After the return: the dialog opens by itself with the saved choices and "Google Drive is connected…", `?gdrive=` is dropped, and Escape returns focus to the button | ✅ 2026-10-18 — the return was simulated by writing the saved state and loading `?gdrive=ok`; reopening from the button after that clears the notice and keeps the choices, as before |
+| 649 | **Send to gradebook** on the results page | Enter opens the dialog and the categories load; Escape and Cancel each return focus to the button | ✅ 2026-10-18 — mock gradebook categories listed; focus opens on the Section select |

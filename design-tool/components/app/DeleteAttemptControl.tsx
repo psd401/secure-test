@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, attemptDeleteErrorCopy } from "@/lib/ui/errorCopy";
@@ -73,25 +74,26 @@ export function DeleteAttemptControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size={size}
-        disabled={disabledReason !== undefined}
-        title={disabledReason}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        Delete attempt
-      </Button>
       <AlertDialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) {
+            setError(null);
+            setOpen(true);
+          } else if (!busy) setOpen(false);
         }}
       >
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size={size}
+            disabled={disabledReason !== undefined}
+            title={disabledReason}
+          >
+            Delete attempt
+          </Button>
+        </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {studentName}&apos;s attempt?</AlertDialogTitle>
