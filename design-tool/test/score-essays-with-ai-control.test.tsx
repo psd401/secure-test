@@ -7,6 +7,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   addToTally,
   EMPTY_TALLY,
+  outcomeForStatus,
+  REFUSED,
   runPool,
   ScoreEssaysWithAiControl,
   scoreEssaysDialogCopy,
@@ -82,6 +84,7 @@ describe("tally and summary", () => {
       provider_errors: 1,
       skipped_unscorable: 0,
       failed_students: 1,
+      refused_students: 0,
     });
   });
 
@@ -95,6 +98,7 @@ describe("tally and summary", () => {
         provider_errors: 1,
         skipped_unscorable: 3,
         failed_students: 1,
+        refused_students: 0,
       }),
     ).toEqual([
       "24 essays scored — 18 waiting for your review in the scoring queue, 6 finalized by AI (Hybrid).",
@@ -113,6 +117,27 @@ describe("tally and summary", () => {
       "1 essay scored — 1 waiting for your review in the scoring queue.",
       "1 held back: it looks like it tries to instruct the AI. Read it in the scoring queue.",
     ]);
+  });
+
+  test("a refused request is not told to retry", () => {
+    const t = addToTally(addToTally(EMPTY_TALLY, REFUSED), null);
+    expect(t.refused_students).toBe(1);
+    expect(t.failed_students).toBe(1);
+    expect(scoreEssaysSummary({ ...EMPTY_TALLY, refused_students: 2 })).toEqual(
+      [
+        "2 students' essays couldn't be scored from this page. Reload it and check you can still edit this test.",
+      ],
+    );
+  });
+
+  test("which statuses are worth a retry", () => {
+    expect(outcomeForStatus(201)).toBe("ok");
+    expect(outcomeForStatus(200)).toBe("ok");
+    expect(outcomeForStatus(429)).toBe("retry");
+    expect(outcomeForStatus(502)).toBe("retry");
+    expect(outcomeForStatus(403)).toBe(REFUSED);
+    expect(outcomeForStatus(404)).toBe(REFUSED);
+    expect(outcomeForStatus(400)).toBe(REFUSED);
   });
 
   test("nothing to report", () => {

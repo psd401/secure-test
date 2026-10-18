@@ -1,5 +1,4 @@
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { ItemResponseSchema } from "@secure-test/schema";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import {
   items,
@@ -57,27 +56,20 @@ export async function aiBatchCounts(
   if (itemIds.length === 0) return { has_ai_items: false, counts };
   if (attemptIds.length === 0) return { has_ai_items: true, counts };
 
-  const responseRows = await db
-    .select({
-      id: responses.id,
-      attempt_id: responses.attempt_id,
-      response: responses.response,
-    })
+  // Only ids leave the database: an essay counts when its text has a
+  // non-space character (the scorer's own `text.trim()` empty check), so the
+  // full answers are never loaded to render a count.
+  const written = await db
+    .select({ id: responses.id, attempt_id: responses.attempt_id })
     .from(responses)
     .where(
       and(
         inArray(responses.attempt_id, attemptIds),
         inArray(responses.item_id, itemIds),
+        sql`${responses.response}->>'type' = 'essay'`,
+        sql`${responses.response}->>'text' ~ '[^[:space:]]'`,
       ),
     );
-  const written = responseRows.filter((r) => {
-    const parsed = ItemResponseSchema.safeParse(r.response);
-    return (
-      parsed.success &&
-      parsed.data.type === "essay" &&
-      parsed.data.text.trim() !== ""
-    );
-  });
   if (written.length === 0) return { has_ai_items: true, counts };
   const ids = written.map((r) => r.id);
 
