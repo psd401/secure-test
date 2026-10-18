@@ -37,6 +37,11 @@ interface RouteContext {
 // Safeguarding alerts (D-4): a response with an unforced prompt-injection
 // alert is withheld from this run (counted in `withheld`); only the
 // per-response route's explicit force releases it.
+//
+// Concurrency (docs/ai-score-concurrency-design.md): each essay is scored
+// under a short-lived claim. An essay another request is scoring right now
+// is counted in `in_progress`; one that gained a score row after this run's
+// snapshot is counted in `already_scored`.
 export async function POST(_req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
@@ -96,6 +101,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   let blocked = 0;
   let providerErrors = 0;
   let withheld = 0;
+  let inProgress = 0;
 
   for (const response of responseRows) {
     const item = itemsById.get(response.item_id);
@@ -121,6 +127,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
       item,
       response,
       ownerSub: auth.session.sub,
+      skipIfScored: true,
     });
     switch (outcome.kind) {
       case "scored":
@@ -140,8 +147,12 @@ export async function POST(_req: Request, ctx: RouteContext) {
         providerErrors++;
         break;
       case "already_final":
-        // Lost a race to a concurrent final — the response IS scored.
+      case "already_scored":
+        // Lost a race to a concurrent request — the response IS scored.
         alreadyScored++;
+        break;
+      case "in_progress":
+        inProgress++;
         break;
     }
   }
@@ -155,6 +166,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     skipped_unscorable: skippedUnscorable,
     blocked,
     withheld,
+    in_progress: inProgress,
     provider_errors: providerErrors,
     total_responses: responseRows.length,
   });

@@ -22,6 +22,9 @@ interface RouteContext {
 // says `{ "force": true }` — the queue's Score with AI anyway — which is
 // recorded on the alert. The body is optional (the queue's plain Score with
 // AI / Re-run AI posts none).
+//
+// Concurrency (docs/ai-score-concurrency-design.md): an answer another
+// request is scoring right now answers 409 `scoring_in_progress`.
 export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
@@ -101,6 +104,18 @@ export async function POST(req: Request, ctx: RouteContext) {
       return NextResponse.json(
         { ok: false, error: "provider_error" },
         { status: 502 },
+      );
+    case "in_progress":
+    case "already_scored":
+      // `already_scored` needs skipIfScored, which this route never sets.
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "scoring_in_progress",
+          detail:
+            "This essay is already being scored. Refresh in a moment to see the proposal.",
+        },
+        { status: 409 },
       );
     case "already_final":
       // Lost a race to a concurrent final (the route's own 409 pre-check

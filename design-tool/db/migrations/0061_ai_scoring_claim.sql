@@ -1,0 +1,1 @@
+ALTER TABLE "responses" ADD COLUMN "ai_scoring_claimed_at" timestamp with time zone;
