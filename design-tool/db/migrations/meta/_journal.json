@@ -428,6 +428,13 @@
       "when": 1792029775138,
       "tag": "0060_allow_highlighting",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792345097534,
+      "tag": "0061_ai_scoring_claim",
+      "breakpoints": true
     }
   ]
 }

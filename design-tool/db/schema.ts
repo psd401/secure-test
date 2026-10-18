@@ -1085,6 +1085,14 @@ export const responses = pgTable(
     safeguarding_screened_at: timestamp("safeguarding_screened_at", {
       withTimezone: true,
     }),
+    // docs/ai-score-concurrency-design.md: a short-lived claim taken before
+    // the essay scorer runs, so two concurrent requests never both call
+    // Bedrock and leave two proposals. Null = nobody is scoring it; a claim
+    // older than 5 minutes is abandoned (a task died mid-call) and can be
+    // taken over. Cleared when the scorer finishes or fails.
+    ai_scoring_claimed_at: timestamp("ai_scoring_claimed_at", {
+      withTimezone: true,
+    }),
   },
   (t) => ({
     attemptIdIdx: index("responses_attempt_id_idx").on(t.attempt_id),
