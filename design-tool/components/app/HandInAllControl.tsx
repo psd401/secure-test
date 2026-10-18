@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, attemptHandInErrorCopy } from "@/lib/ui/errorCopy";
@@ -103,33 +104,34 @@ export function HandInAllControl({
 
   return (
     <>
-      <span className="inline-flex flex-col items-end gap-1">
-        <Button
-          type="button"
-          variant={variant}
-          size={size}
-          disabled={disabledReason !== undefined}
-          title={disabledReason}
-          onClick={() => {
-            setError(null);
-            setStatus(null);
-            setOpen(true);
-          }}
-        >
-          Hand in everyone
-        </Button>
-        {status ? (
-          <span role="status" className="text-xs text-muted-foreground">
-            {status}
-          </span>
-        ) : null}
-      </span>
       <AlertDialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) {
+            setError(null);
+            setStatus(null);
+            setOpen(true);
+          } else if (!busy) setOpen(false);
         }}
       >
+        <span className="inline-flex flex-col items-end gap-1">
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant={variant}
+              size={size}
+              disabled={disabledReason !== undefined}
+              title={disabledReason}
+            >
+              Hand in everyone
+            </Button>
+          </AlertDialogTrigger>
+          {status ? (
+            <span role="status" className="text-xs text-muted-foreground">
+              {status}
+            </span>
+          ) : null}
+        </span>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hand in everyone?</AlertDialogTitle>

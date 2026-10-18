@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, extendErrorCopy } from "@/lib/ui/errorCopy";
@@ -279,29 +280,31 @@ export function ExtendTimeControl({
 
   return (
     <>
-      <span className="inline-flex flex-col items-end gap-1">
-        <Button
-          type="button"
-          variant={variant}
-          size={size}
-          disabled={disabledReason !== undefined}
-          title={disabledReason}
-          onClick={openDialog}
-        >
-          {label}
-        </Button>
-        {status ? (
-          <span role="status" className="text-xs text-muted-foreground">
-            {status}
-          </span>
-        ) : null}
-      </span>
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) openDialog();
+          else if (!busy) setOpen(false);
         }}
       >
+        <span className="inline-flex flex-col items-end gap-1">
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              variant={variant}
+              size={size}
+              disabled={disabledReason !== undefined}
+              title={disabledReason}
+            >
+              {label}
+            </Button>
+          </DialogTrigger>
+          {status ? (
+            <span role="status" className="text-xs text-muted-foreground">
+              {status}
+            </span>
+          ) : null}
+        </span>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Adjust time</DialogTitle>

@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, attemptHandInErrorCopy } from "@/lib/ui/errorCopy";
@@ -92,25 +93,26 @@ export function HandInAttemptControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size={size}
-        disabled={disabledReason !== undefined}
-        title={disabledReason}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        Hand in
-      </Button>
       <AlertDialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) {
+            setError(null);
+            setOpen(true);
+          } else if (!busy) setOpen(false);
         }}
       >
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size={size}
+            disabled={disabledReason !== undefined}
+            title={disabledReason}
+          >
+            Hand in
+          </Button>
+        </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hand in for {studentName}?</AlertDialogTitle>

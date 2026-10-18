@@ -1700,3 +1700,17 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 607 | Then **Re-run AI** on that answer | Another proposal, never a final (the attempt-wide route has no button; its case is in `test/safeguarding-screening.test.ts`) | NOT RUN |
 | 608 | `/help.html#score` and the quick start | Topic 8's last step names the •, the "Finalized by AI — not reviewed" list and that a flagged answer always waits; the quick start no longer says nothing counts until approved | NOT RUN |
 | 609 | After the deploy: `/roadmap.html` | A milestone "AI scores say whether a teacher reviewed them" (D-14, added at deploy) | NOT RUN |
+
+## Focus returns to the button after a dialog (U24-F1 across the app, slice 1: student-row actions, 2026-10-18)
+
+The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows 610–621 belong to the unmerged U-24 branch, so this section starts at 622. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
+
+Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8ZQP`, closed: one in-progress and one handed-in attempt). Nothing was confirmed; both attempts read unchanged afterwards (status, pass-back count, deadline override). Each check pressed real Enter / Escape keys; Cancel was focused and pressed with Enter.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 622 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
+| 623 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
+| 624 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
+| 625 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
+| 626 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
