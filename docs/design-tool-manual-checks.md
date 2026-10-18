@@ -1714,3 +1714,14 @@ Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8Z
 | 624 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
 | 625 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
 | 626 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
+
+## Focus returns to the button after a dialog (slice 2: scores, 2026-10-18)
+
+Same change and method as slice 1 for Change, Rescore with current key, Restore this version and Release answers. Rescore's open now runs the dry-run preview from `onOpenChange`. Run 2026-10-18 on local `_demo` in Chrome. Nothing was confirmed: no `answer_restored` / `score_changed` events and no `answers_released_at` afterwards.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 627 | **Change** beside a final score on a per-student results page | Enter opens "Change Qn score"; Escape and Cancel each return focus to that Change | ✅ 2026-10-18 — fixture "Rescore hand-run 2026-10-08"; focus opens in the points field |
+| 628 | **Rescore with current key (n)** on the results page, n > 0 | Enter opens the dialog and its dry run fills the summary; Escape and Cancel each return focus to the Rescore button | ✅ 2026-10-18 — same fixture, its MC key switched c1 → c2 in the DB for the check (count read 3) and switched back after. Reading: while the dry run is in flight both footer buttons are disabled, so focus stays on the Rescore button behind the open dialog instead of moving into it; it was the same before this change |
+| 629 | **Restore this version** under "Earlier versions" on a per-student results page | Enter opens "Restore the version saved …?"; Escape and Cancel each return focus to that Restore this version | ✅ 2026-10-18 — fixture "v1.6.3 word count hand-run 2026-10-13", "Earlier versions" opened first (a button inside a closed `<details>` cannot take focus) |
+| 630 | **Release answers** on the results page (answers released on request, not yet released) | Enter opens "Release answers?"; Escape and Cancel each return focus to Release answers | ✅ 2026-10-18 — fixture "IF feedback page answers on_release" |

@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -87,25 +88,26 @@ export function RestoreVersionControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="xs"
-        disabled={disabledReason !== undefined}
-        title={disabledReason}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        Restore this version
-      </Button>
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
+          if (o) {
+            setError(null);
+            setOpen(true);
+          } else if (!busy) setOpen(false);
         }}
       >
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={disabledReason !== undefined}
+            title={disabledReason}
+          >
+            Restore this version
+          </Button>
+        </DialogTrigger>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Restore the version saved {savedLabel}?</DialogTitle>
