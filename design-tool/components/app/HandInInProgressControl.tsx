@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, attemptHandInErrorCopy } from "@/lib/ui/errorCopy";
@@ -113,56 +114,58 @@ export function HandInInProgressControl({
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={ready === 0}
-        title={
-          ready === 0
-            ? "Everyone still working is in an open test session. Close it first, then hand in."
-            : undefined
-        }
-        onClick={() => {
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) {
           setError(null);
           setOpen(true);
-        }}
-      >
-        {handInInProgressLabel(ready)}
-      </Button>
-      <AlertDialog
-        open={open}
-        onOpenChange={(o) => {
-          if (!o && !busy) setOpen(false);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Hand in all in progress?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {handInInProgressDialogCopy(ready, heldCount, sectionLabel)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {error ? (
-            <p role="alert" className="text-sm text-danger-foreground">
-              {error}
-            </p>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy}
-              onClick={(e) => {
-                e.preventDefault();
-                void confirm();
-              }}
-            >
-              {busy ? "Handing in…" : `Hand in ${students(ready)}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        } else if (!busy) {
+          setOpen(false);
+        }
+      }}
+    >
+      {/* U24-F1: the trigger, so Radix returns focus to it on close (G-3). */}
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={ready === 0}
+          title={
+            ready === 0
+              ? "Everyone still working is in an open test session. Close it first, then hand in."
+              : undefined
+          }
+        >
+          {handInInProgressLabel(ready)}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Hand in all in progress?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {handInInProgressDialogCopy(ready, heldCount, sectionLabel)}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? (
+          <p role="alert" className="text-sm text-danger-foreground">
+            {error}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={busy}
+            onClick={(e) => {
+              e.preventDefault();
+              void confirm();
+            }}
+          >
+            {busy ? "Handing in…" : `Hand in ${students(ready)}`}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
