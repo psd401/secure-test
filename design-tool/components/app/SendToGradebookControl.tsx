@@ -8,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -175,15 +176,16 @@ export function SendToGradebookControl({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openDialog}
-        className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
-      >
-        {sendButtonLabel(lastSent)}
-        {lastSent ? <span className="ml-2 text-xs text-muted-foreground">Send again</span> : null}
-      </button>
-      <Dialog open={open} onOpenChange={(o) => (!o ? close() : undefined)}>
+      <Dialog open={open} onOpenChange={(o) => (o ? openDialog() : close())}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+          >
+            {sendButtonLabel(lastSent)}
+            {lastSent ? <span className="ml-2 text-xs text-muted-foreground">Send again</span> : null}
+          </button>
+        </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send to gradebook</DialogTitle>
