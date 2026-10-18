@@ -1701,19 +1701,64 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 608 | `/help.html#score` and the quick start | Topic 8's last step names the •, the "Finalized by AI — not reviewed" list and that a flagged answer always waits; the quick start no longer says nothing counts until approved | NOT RUN |
 | 609 | After the deploy: `/roadmap.html` | A milestone "AI scores say whether a teacher reviewed them" (D-14, added at deploy) | NOT RUN |
 
+## Co-teacher sections and one practice sitting (G-2, G-4, 2026-10-18)
+
+`docs/coteacher-gaps-2026-10-design.md` is the record (D-2, D-4, D-10, D-11). Local dev on `_demo`, Claude in Chrome; the co-teacher is a second staff session holding an edit-level co-teach grant on the fixture, and teaches a section the owner does not. G-3 (wording) and G-5 (no change) have no rows.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 610 | The co-teacher starts a test session with **All my sections**; a student of the co-teacher's section joins and hands in | The owner's Results shows that student under the co-teacher's section, not "No section"; the section filter offers it | NOT RUN |
+| 611 | **Print student work** for that section | The student prints; the strip reads "1 of N students in <section> handed in", N the section's enrolment, not 0 | NOT RUN |
+| 612 | The owner's own **All my sections** session, a student of the owner's section | Labelled by the owner's section, as before | NOT RUN |
+| 613 | **Practice on my Mac** pressed twice quickly, or once in each of two tabs | One practice row on the Test sessions tab; no error shown | NOT RUN |
+| 614 | Close that practice session, then **Practice on my Mac** | A new practice session opens | NOT RUN |
+
+## Batch print — several sections and chosen students (U-9, 2026-10-18)
+
+`docs/batch-print-design.md` is the record (D-1…D-11). Local dev on `_demo`, Claude in Chrome as the demo teacher, on an assessment with handed-in work in two sections and one student still working in one of them.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 615 | Results → **Print student work** (All sections) → tick both sections → **Print selected** | One packet; the sections in alphabetical order; a divider naming the section on the first page of each section's run; every page footer names the section; one strip line per section | NOT RUN |
+| 616 | The same with **Anonymous** ticked → Update | "Student 01" in each section's run; a key page closing each run, listing that section only; no name above either key page | NOT RUN |
+| 617 | **Print / Save as PDF** of 616 | Every student starts a new sheet, each section's run ends with its key page, an inch of margin | NOT RUN |
+| 618 | The toolbar's **Sections**: untick one → Update | That section's run is gone; its students leave the student list | NOT RUN |
+| 619 | The toolbar's **Students**: grouped by section; tick two → Update; untick both → Update | Only those two print; with none ticked, everyone in the ticked sections | NOT RUN |
+| 620 | Tick one student → Update; then tick a second section as well → Update | One student's work ("One student's work — handed in"); still that one student after the second Update, the box still ticked (slice 1's rule, recorded) | NOT RUN |
+| 621 | **Include work not yet handed in** → Update | The working student prints with "In progress — not handed in"; off by default (unticked, they do not print) | NOT RUN |
+| 622 | Tick the working student alone, the box unticked | They print as one student's work, marked in progress (D-6) | NOT RUN |
+| 623 | Sections with more than 200 students ticked | "Too many students to choose one by one — choose sections instead" in place of the student list (likely not exercisable on `_demo`; the case is in `test/work-packet.test.ts`) | NOT RUN |
+| 624 | Results filtered to one section → **Print student work**; then with **All sections** | That section's packet; the chooser | NOT RUN |
+| 625 | A student's page → **Print student work**, and an old bookmarked one-section link | Both print exactly as before | NOT RUN |
+| 626 | `/help.html#results` and the quick start | The packet line names several sections, chosen students and work not yet handed in | NOT RUN |
+
 ## Focus returns to the button after a dialog (U24-F1 across the app, slice 1: student-row actions, 2026-10-18)
 
-The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows 610–621 belong to the unmerged U-24 branch, so this section starts at 622. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
+The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows up to 626 are taken (main's G-2 / G-4 and batch print rows; the unmerged U-24 branch also uses 610–621), so this section starts at 627. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
 
 Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8ZQP`, closed: one in-progress and one handed-in attempt). Nothing was confirmed; both attempts read unchanged afterwards (status, pass-back count, deadline override). Each check pressed real Enter / Escape keys; Cancel was focused and pressed with Enter.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 622 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
-| 623 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
-| 624 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
-| 625 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
-| 626 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
+| 627 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
+| 628 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
+| 629 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
+| 630 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
+| 631 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
+
+## Focus returns to the button after a dialog (U24-F1 across the app, slice 1: student-row actions, 2026-10-18)
+
+The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows up to 626 are taken (main's G-2 / G-4 and batch print rows; the unmerged U-24 branch also uses 610–621), so this section starts at 627. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
+
+Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8ZQP`, closed: one in-progress and one handed-in attempt). Nothing was confirmed; both attempts read unchanged afterwards (status, pass-back count, deadline override). Each check pressed real Enter / Escape keys; Cancel was focused and pressed with Enter.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 627 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
+| 628 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
+| 629 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
+| 630 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
+| 631 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
 
 ## Focus returns to the button after a dialog (slice 2: scores, 2026-10-18)
 
@@ -1721,10 +1766,35 @@ Same change and method as slice 1 for Change, Rescore with current key, Restore 
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 627 | **Change** beside a final score on a per-student results page | Enter opens "Change Qn score"; Escape and Cancel each return focus to that Change | ✅ 2026-10-18 — fixture "Rescore hand-run 2026-10-08"; focus opens in the points field |
-| 628 | **Rescore with current key (n)** on the results page, n > 0 | Enter opens the dialog and its dry run fills the summary; Escape and Cancel each return focus to the Rescore button | ✅ 2026-10-18 — same fixture, its MC key switched c1 → c2 in the DB for the check (count read 3) and switched back after. Reading: while the dry run is in flight both footer buttons are disabled, so focus stays on the Rescore button behind the open dialog instead of moving into it; it was the same before this change |
-| 629 | **Restore this version** under "Earlier versions" on a per-student results page | Enter opens "Restore the version saved …?"; Escape and Cancel each return focus to that Restore this version | ✅ 2026-10-18 — fixture "v1.6.3 word count hand-run 2026-10-13", "Earlier versions" opened first (a button inside a closed `<details>` cannot take focus) |
-| 630 | **Release answers** on the results page (answers released on request, not yet released) | Enter opens "Release answers?"; Escape and Cancel each return focus to Release answers | ✅ 2026-10-18 — fixture "IF feedback page answers on_release" |
+| 632 | **Change** beside a final score on a per-student results page | Enter opens "Change Qn score"; Escape and Cancel each return focus to that Change | ✅ 2026-10-18 — fixture "Rescore hand-run 2026-10-08"; focus opens in the points field |
+| 633 | **Rescore with current key (n)** on the results page, n > 0 | Enter opens the dialog and its dry run fills the summary; Escape and Cancel each return focus to the Rescore button | ✅ 2026-10-18 — same fixture, its MC key switched c1 → c2 in the DB for the check (count read 3) and switched back after. Reading: while the dry run is in flight both footer buttons are disabled, so focus stays on the Rescore button behind the open dialog instead of moving into it; it was the same before this change |
+| 634 | **Restore this version** under "Earlier versions" on a per-student results page | Enter opens "Restore the version saved …?"; Escape and Cancel each return focus to that Restore this version | ✅ 2026-10-18 — fixture "v1.6.3 word count hand-run 2026-10-13", "Earlier versions" opened first (a button inside a closed `<details>` cannot take focus) |
+| 635 | **Release answers** on the results page (answers released on request, not yet released) | Enter opens "Release answers?"; Escape and Cancel each return focus to Release answers | ✅ 2026-10-18 — fixture "IF feedback page answers on_release" |
+
+## Focus returns to the button after a dialog (U24-F1 across the app, slice 1: student-row actions, 2026-10-18)
+
+The five controls below opened their dialog from the button's own `onClick`, so Escape or Cancel left keyboard focus on the page body. Each button is now the dialog's trigger (the G-3 / U24-F1 pattern); the reset on open moved into `onOpenChange`, and the "not while busy" guard stays. Rows up to 626 are taken (main's G-2 / G-4 and batch print rows; the unmerged U-24 branch also uses 610–621), so this section starts at 627. Local dev on `_demo`, Chrome, minted demo-teacher cookie on a `*.localhost` host. Each check: Tab to the button, Enter opens the dialog; Escape closes it and focus is on the button (`document.activeElement`); Enter again, then Cancel, and focus is on the button again.
+
+Run 2026-10-18 on fixture "v1.6.3 word count hand-run 2026-10-13" (sitting `BM8ZQP`, closed: one in-progress and one handed-in attempt). Nothing was confirmed; both attempts read unchanged afterwards (status, pass-back count, deadline override). Each check pressed real Enter / Escape keys; Cancel was focused and pressed with Enter.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 627 | **Hand in** on a per-student results page (in-progress attempt, sitting closed) | Enter opens "Hand in for …?"; Escape and Cancel each return focus to Hand in | ✅ 2026-10-18 — focus opens on Cancel; after Escape and after Cancel `document.activeElement` is Hand in |
+| 628 | **Pass back** on a per-student results page (handed-in attempt) | Enter opens "Pass back to …?"; Escape and Cancel each return focus to Pass back | ✅ 2026-10-18 |
+| 629 | **Delete attempt** on a per-student results page (sitting closed) | Enter opens "Delete …'s attempt?"; Escape and Cancel each return focus to Delete attempt | ✅ 2026-10-18 |
+| 630 | **Adjust time** on a Monitor row and on a per-student results page | Enter opens "Adjust time"; Escape and Cancel each return focus to that Adjust time | ✅ 2026-10-18 — both places; the Monitor row was on a closed sitting with an in-progress student (the button is enabled there), focus still on the row's button after a 6 s wait across a Monitor poll |
+| 631 | **Hand in everyone** on the Monitor header (closed sitting with an in-progress attempt) | Enter opens "Hand in everyone?"; Escape and Cancel each return focus to Hand in everyone | ✅ 2026-10-18 |
+
+## Focus returns to the button after a dialog (slice 2: scores, 2026-10-18)
+
+Same change and method as slice 1 for Change, Rescore with current key, Restore this version and Release answers. Rescore's open now runs the dry-run preview from `onOpenChange`. Run 2026-10-18 on local `_demo` in Chrome. Nothing was confirmed: no `answer_restored` / `score_changed` events and no `answers_released_at` afterwards.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 632 | **Change** beside a final score on a per-student results page | Enter opens "Change Qn score"; Escape and Cancel each return focus to that Change | ✅ 2026-10-18 — fixture "Rescore hand-run 2026-10-08"; focus opens in the points field |
+| 633 | **Rescore with current key (n)** on the results page, n > 0 | Enter opens the dialog and its dry run fills the summary; Escape and Cancel each return focus to the Rescore button | ✅ 2026-10-18 — same fixture, its MC key switched c1 → c2 in the DB for the check (count read 3) and switched back after. Reading: while the dry run is in flight both footer buttons are disabled, so focus stays on the Rescore button behind the open dialog instead of moving into it; it was the same before this change |
+| 634 | **Restore this version** under "Earlier versions" on a per-student results page | Enter opens "Restore the version saved …?"; Escape and Cancel each return focus to that Restore this version | ✅ 2026-10-18 — fixture "v1.6.3 word count hand-run 2026-10-13", "Earlier versions" opened first (a button inside a closed `<details>` cannot take focus) |
+| 635 | **Release answers** on the results page (answers released on request, not yet released) | Enter opens "Release answers?"; Escape and Cancel each return focus to Release answers | ✅ 2026-10-18 — fixture "IF feedback page answers on_release" |
 
 ## Focus returns to the button after a dialog (slice 3: sends, 2026-10-18)
 
@@ -1732,5 +1802,5 @@ Same change and method for Send to Google Docs and Send to gradebook. Both open 
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 631 | **Send to Google Docs** on a per-student results page; then the return from Google (saved choices in `sessionStorage` + `?gdrive=ok`) | Enter opens the dialog; Escape and Cancel each return focus to the button. After the return: the dialog opens by itself with the saved choices and "Google Drive is connected…", `?gdrive=` is dropped, and Escape returns focus to the button | ✅ 2026-10-18 — the return was simulated by writing the saved state and loading `?gdrive=ok`; reopening from the button after that clears the notice and keeps the choices, as before |
-| 632 | **Send to gradebook** on the results page | Enter opens the dialog and the categories load; Escape and Cancel each return focus to the button | ✅ 2026-10-18 — mock gradebook categories listed; focus opens on the Section select |
+| 636 | **Send to Google Docs** on a per-student results page; then the return from Google (saved choices in `sessionStorage` + `?gdrive=ok`) | Enter opens the dialog; Escape and Cancel each return focus to the button. After the return: the dialog opens by itself with the saved choices and "Google Drive is connected…", `?gdrive=` is dropped, and Escape returns focus to the button | ✅ 2026-10-18 — the return was simulated by writing the saved state and loading `?gdrive=ok`; reopening from the button after that clears the notice and keeps the choices, as before |
+| 637 | **Send to gradebook** on the results page | Enter opens the dialog and the categories load; Escape and Cancel each return focus to the button | ✅ 2026-10-18 — mock gradebook categories listed; focus opens on the Section select |

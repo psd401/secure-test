@@ -137,6 +137,12 @@ Design tool only; no migration; no client release.
   Tests: the select / picker tests rewritten for checkboxes, two new page
   cases, `studentChoices` + `workPacketHref` cases.
 
+- **Slice 3 DONE 2026-10-18 (text only), not committed.** Rows 615–626 in
+  `docs/design-tool-manual-checks.md` (all NOT RUN; 623 likely needs more
+  students than `_demo` has); help topic 9's packet step and the quick
+  start name several sections, chosen students and work not yet handed in.
+  Open: re-capture the topic's picture (later, per James).
+
 ## Open questions — answered 2026-10-15 (see Decisions)
 
 - 2.1 One packet for several sections (recommended), or one packet per
