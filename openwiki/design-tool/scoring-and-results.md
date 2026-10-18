@@ -18,9 +18,14 @@ openwiki:
     - design-tool/lib/scoring/methodLabel.ts
     - design-tool/lib/safeguarding/alerts.ts
     - design-tool/app/api/scores/[scoreId]/approve/route.ts
-  symbols: [scoreResponse, runAutoScoringPass, buildResults, planRescore, applyRescore, effectiveScoringMethod, shortTextMatches, aiScoreResponse, HYBRID_AUTO_FINALIZE_CONFIDENCE, hasInjectionAlert, isAiUnreviewed, finalMethodWord]
+    - design-tool/lib/scoring/aiBatch.ts
+    - design-tool/app/api/attempts/[attemptId]/score-ai/route.ts
+    - design-tool/components/app/ScoreEssaysWithAiControl.tsx
+  symbols: [scoreResponse, runAutoScoringPass, buildResults, planRescore, applyRescore, effectiveScoringMethod, shortTextMatches, aiScoreResponse, AI_SCORING_CLAIM_TTL_MINUTES, aiBatchCounts, HYBRID_AUTO_FINALIZE_CONFIDENCE, hasInjectionAlert, isAiUnreviewed, finalMethodWord]
   test_paths:
     - design-tool/test/scoring-auto.test.ts
+    - design-tool/test/ai-batch-counts.test.ts
+    - design-tool/test/score-essays-with-ai-control.test.tsx
     - design-tool/test/results.test.ts
     - design-tool/test/rescore.test.ts
     - design-tool/test/change-score.test.ts
@@ -96,6 +101,49 @@ Human scoring is driven from a per-assessment queue rather than from each attemp
 - Every action in this chain loads the response through `loadResponseChain`, which uses `authorizeAttempt(..., "edit")` and returns `404` for other teachers' rows, and `400 attempt_not_submitted` for unsubmitted attempts.
 
 Invariant: approval and manual scoring never edit a score's points or status. They only append a `final`, and let the partial unique index arbitrate races. The one in-place write is approving an unreviewed final AI score, which sets `reviewed_by_sub` only. An attempt enters the queue only once it is submitted, by student hand-in or teacher hand-in ([sittings and attempts](sittings-and-attempts.md)); `loadResponseChain` ignores `research` rows when it checks for an existing final, and approval never edits the proposal, so an override goes through the manual score or change score path instead. Test focus: `review-queue.test.ts` and `change-score.test.ts`.
+
+## Batch and per-essay AI scoring
+
+The results matrix ([reporting and packets](reporting-and-packets.md)) shows **Score essays with AI (n)** to users with edit access once a section is chosen. The button scores that section's handed-in essays. The browser does the batch: it posts once per student to `POST /api/attempts/[attemptId]/score-ai` and keeps three students in flight (`CONCURRENCY` in `components/app/ScoreEssaysWithAiControl.tsx`), so each request stays well under the load balancer's idle timeout and one failed student does not stop the rest. Pressing again after a closed tab or a failure sends only what is still unscored.
+
+`aiBatchCounts` in `lib/scoring/aiBatch.ts` produces the (n). It counts essays that `isAiBatchItem` accepts (essay, effective method `ai` or `hybrid`, rubric present), whose text has a non-space character, that have no non-research score row, and that have no unforced prompt-injection alert. The route stays the authority: it runs the same skip rules, screens lazily, and withholds flagged answers at press time. The provider and guardrail behind each model call are described in [AI and safeguarding](ai-and-safeguarding.md).
+
+```mermaid
+sequenceDiagram
+    participant B as Results page browser
+    participant R as score-ai route
+    participant A as aiScoreResponse
+    participant P as Essay scorer provider
+    participant DB as responses and scores
+    B->>R: POST score-ai for one attempt
+    R->>DB: read responses and non-research score rows once
+    loop each essay still unscored
+        R->>A: aiScoreResponse with skipIfScored
+        A->>DB: UPDATE responses claim column if unclaimed or claim older than 5 minutes
+        alt claim not granted
+            A-->>R: in_progress
+        else claim granted
+            A->>DB: re-check for a non-research score row
+            alt a score appeared meanwhile
+                A-->>R: already_scored
+            else still unscored
+                A->>P: scoreEssay through the guardrail
+                A->>DB: insert proposed or final row
+                A->>DB: release claim
+            end
+        end
+    end
+    R-->>B: counts scored_proposed, scored_final, already_scored, withheld, in_progress
+```
+
+Caption: one batch request per student; each essay is claimed before the model call, so two overlapping batches score it once.
+
+- **The claim.** `aiScoreResponse` (`lib/scoring/aiScoreResponse.ts`) takes a claim with one atomic `UPDATE` of `responses.ai_scoring_claimed_at` (migration `0061_ai_scoring_claim.sql`; see [data model](data-model.md)). A claim is only taken when the column is null or older than `AI_SCORING_CLAIM_TTL_MINUTES` (5). The claim is not held in a transaction, because a pool connection must not wait through a 5 to 30 second model call (the pool allows 5 connections). The release in `finally` matches the exact claim value, so it never clears a takeover's claim. A claim left by a task that died expires on its own.
+- **Outcomes.** A lost claim returns `in_progress`. With `skipIfScored` (the batch only), a non-research score row that appears after the request's snapshot returns `already_scored`. The batch JSON reports `scored_proposed`, `scored_final`, `already_scored`, `skipped_not_ai`, `skipped_unscorable`, `blocked`, `withheld`, `in_progress`, `provider_errors` and `total_responses`.
+- **Per-essay re-run.** `POST /api/responses/[responseId]/rescore-ai` (the queue's Score with AI and Re-run AI) does not pass `skipIfScored`, so it deliberately adds another proposal. It refuses with `final_exists` (409) once a final exists, `injection_flagged` (409) unless `force` is sent, and `scoring_in_progress` (409) when it loses the claim.
+- **Known gap.** Lazy safeguarding screening runs before the claim in both routes, so two overlapping requests can both screen the same unscreened answer. The design note (`docs/ai-score-concurrency-design.md`) records this as unchanged.
+- **Invariants.** The (n) and the route must agree: keep `isAiBatchItem` and the route's `isAiEligible` in step when either changes. A rubric-less essay is counted by the route as `skipped_unscorable`, but `aiBatchCounts` excludes it. Batch scoring writes only proposals and Hybrid finals, through the same `aiScoreResponse` path as the per-essay button, so the rules in [Hybrid and unreviewed AI scores](#hybrid-and-unreviewed-ai-scores) apply.
+- **Tests.** `essay-scorer.test.ts`, describe `score-ai concurrency (claim)` (two concurrent batch runs score each essay once; a per-essay press during a batch answers 409 `scoring_in_progress`, and a later deliberate re-run still adds a proposal; a claim older than 5 minutes is taken over and a fresh one is honoured). `ai-batch-counts.test.ts` (`aiBatchCounts`, `isAiBatchItem`; needs the test database). `score-essays-with-ai-control.test.tsx` (tally, summary and the bounded `runPool`).
 
 ## Hybrid and unreviewed AI scores
 
