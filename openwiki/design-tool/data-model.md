@@ -82,7 +82,7 @@ Diagram: core relationships only. `students.roster_ps_id` is a plain text bridge
 
 ## Migrations
 
-- Edit `db/schema.ts`, then `cd design-tool && bun run db:generate` (drizzle-kit) to emit `db/migrations/00NN_*.sql` plus `db/migrations/meta/*` (generated; do not hand-edit). At this revision the newest migration is `0060_allow_highlighting.sql`; check `db/migrations/` for the current highest number before adding one.
+- Edit `db/schema.ts`, then `cd design-tool && bun run db:generate` (drizzle-kit) to emit `db/migrations/00NN_*.sql` plus `db/migrations/meta/*` (generated; do not hand-edit). At this revision the newest migration is `0061_ai_scoring_claim.sql`; check `db/migrations/` for the current highest number before adding one.
 - Apply with `bun run db:migrate` (`db/migrate.ts`) against `DATABASE_URL`. It takes a Postgres advisory lock (`secure-test:migrate`) so two ECS tasks booting together serialise. In Fargate the same file is bundled to `db/migrate.mjs` and run by `scripts/docker-entrypoint.mjs migrate` (container also migrates at boot) — see [operations](../operations/deployment-and-observability.md).
 - Tests run against a database whose URL contains `secure_test_design_tool_test`; many suites throw if it does not and `truncate … cascade` tables in `afterEach`. Create and migrate both dev and test databases (see [testing](../testing/testing-and-validation.md)).
 
@@ -91,5 +91,8 @@ Diagram: core relationships only. `students.roster_ps_id` is a plain text bridge
 1. Edit `db/schema.ts` (types, CHECKs, indexes) and any exported vocabulary array.
 2. `bun run db:generate`; review the SQL for backfills/defaults (existing rows!).
 3. Update the owning `lib/api/*` module and route Zod schema; if it crosses to students or teachers' bundles, update [wire formats](../architecture/wire-formats.md).
+4. Add retention handling if it holds personal data (`lib/retention/sweep.ts`, `lib/api/deleteAttempt.ts`).
+5. Validate: `bun run typecheck` and the one API test file for the owning route.
+undles, update [wire formats](../architecture/wire-formats.md).
 4. Add retention handling if it holds personal data (`lib/retention/sweep.ts`, `lib/api/deleteAttempt.ts`).
 5. Validate: `bun run typecheck` and the one API test file for the owning route.
