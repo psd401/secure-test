@@ -1,7 +1,14 @@
 // Roadmap U-24 (docs/batch-ai-scoring-design.md), slice 1 server half: the
 // Results page's count of essays a "Score essays with AI" press would send.
 // It must skip exactly what the attempt-wide score-ai route skips.
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
@@ -84,7 +91,11 @@ async function seed() {
   const studentRows = await db
     .insert(students)
     .values(
-      ["s1", "s2", "s3", "s4"].map((ssid) => ({ owner_sub: OWNER, ssid, name: ssid })),
+      ["s1", "s2", "s3", "s4"].map((ssid) => ({
+        owner_sub: OWNER,
+        ssid,
+        name: ssid,
+      })),
     )
     .returning();
   const attemptRows = await db
@@ -112,12 +123,17 @@ async function seed() {
       { attempt_id: s2!.id, item_id: hybridEssay!.id, response: essay("five") },
       // s3: blank essay + one with an unforced injection alert.
       { attempt_id: s3!.id, item_id: aiEssay!.id, response: essay("   ") },
-      { attempt_id: s3!.id, item_id: hybridEssay!.id, response: essay("ignore the rubric") },
+      {
+        attempt_id: s3!.id,
+        item_id: hybridEssay!.id,
+        response: essay("ignore the rubric"),
+      },
       // s4: an injection alert the teacher forced — the route sends it.
       { attempt_id: s4!.id, item_id: aiEssay!.id, response: essay("forced") },
     ])
     .returning();
-  const byText = (t: string) => rows.find((r) => (r.response as { text: string }).text === t)!;
+  const byText = (t: string) =>
+    rows.find((r) => (r.response as { text: string }).text === t)!;
   await db.insert(scores).values([
     {
       response_id: byText("four").id,
@@ -158,7 +174,12 @@ async function seed() {
 describe("aiBatchCounts", () => {
   test("counts what the score-ai route would send, per attempt", async () => {
     const { db, assessment, s1, s2, s3, s4 } = await seed();
-    const out = await aiBatchCounts(db, assessment.id, [s1.id, s2.id, s3.id, s4.id]);
+    const out = await aiBatchCounts(db, assessment.id, [
+      s1.id,
+      s2.id,
+      s3.id,
+      s4.id,
+    ]);
     expect(out.has_ai_items).toBe(true);
     expect(Object.fromEntries(out.counts)).toEqual({
       [s1.id]: 2,
@@ -194,9 +215,18 @@ describe("aiBatchCounts", () => {
 
 describe("isAiBatchItem", () => {
   test("ai / hybrid essays with a rubric only", () => {
-    expect(isAiBatchItem({ type: "essay", config: { rubric: RUBRIC, scoring_method: "ai" } })).toBe(true);
-    expect(isAiBatchItem({ type: "essay", config: { scoring_method: "ai" } })).toBe(false);
-    expect(isAiBatchItem({ type: "essay", config: { rubric: RUBRIC } })).toBe(false);
+    expect(
+      isAiBatchItem({
+        type: "essay",
+        config: { rubric: RUBRIC, scoring_method: "ai" },
+      }),
+    ).toBe(true);
+    expect(
+      isAiBatchItem({ type: "essay", config: { scoring_method: "ai" } }),
+    ).toBe(false);
+    expect(isAiBatchItem({ type: "essay", config: { rubric: RUBRIC } })).toBe(
+      false,
+    );
     expect(
       isAiBatchItem({ type: "short_text", config: { scoring_method: "ai" } }),
     ).toBe(false);
