@@ -57,7 +57,7 @@ Essay answers are rendered by `renderEssayAnswerHtml` in `lib/richText/`, not by
 
 ## The class work packet
 
-The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and scores from the teacher, the AI, both or neither. Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on an explicit teacher action. The page checks `view` access on the assessment (`pageAssessment` in `lib/api/access.ts`), so the owner, a grant holder or an admin can print it. Failures are `notFound()` so the URL cannot probe for other assessments. The page comment and FERPA note still say owner-only; the mismatch is listed in [auth and access](auth-and-access.md#open-co-teacher-gaps).
+The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and scores from the teacher, the AI, both or neither. Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on an explicit teacher action. The page checks `view` access on the assessment (`pageAssessment` in `lib/api/access.ts`), so the owner, a grant holder or an admin can print it. Failures are `notFound()` so the URL cannot probe for other assessments. The page comments and this FERPA note now say `view`, not owner-only (G-3 in [co-teacher gaps](auth-and-access.md#co-teacher-gaps)).
 
 URL contract (`parsePacketQuery`, `PacketQuery`):
 
@@ -99,7 +99,7 @@ The module is deliberately identifier-free: a pair carries response and item ids
 ## Change navigation
 
 - **Changing the packet URL or flags**: edit `parsePacketQuery` and `PacketQuery` first, then `work/page.tsx`. Keep the never-throw rule; the test file `work-packet.test.ts` has a `parsePacketQuery` suite.
-- **Changing what prints for a score**: `selectPacketScores` and `packetScoreHeading`. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)).
+- **Changing what prints for a score**: `selectPacketScores` and `packetScoreHeading`. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)). A final AI score heads the row "AI score (not reviewed)" or "AI score (approved)" (the `reviewed_by_sub` rule in `packetScoreHeading`, which is separate from the per-student wording in `lib/scoring/methodLabel.ts`; see [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores)).
 - **Changing an answer's printed form**: the `*View.ts` renderer for that type, plus `renderEssayAnswerHtml` for essays. Escape all text; the renderers feed HTML.
 - **Changing run statistics**: `runComparison.ts`, with `run-comparison.test.ts` (`compareRun`, `comparisonToCsv`). It needs no database.
 - **Focused checks**: `cd design-tool && bun test test/work-packet.test.ts test/run-comparison.test.ts`. For print helpers and timeline, add `test/reporting-print-helpers.test.ts` and `test/reporting-timeline.test.ts`. The packet page's markup is in `test/work-packet-page.test.tsx`.

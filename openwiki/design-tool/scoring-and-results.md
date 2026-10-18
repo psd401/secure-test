@@ -15,7 +15,10 @@ openwiki:
     - design-tool/lib/api/changeScore.ts
     - design-tool/lib/api/passBackAttempt.ts
     - design-tool/lib/feedback/attemptFeedback.ts
-  symbols: [scoreResponse, runAutoScoringPass, buildResults, planRescore, applyRescore, effectiveScoringMethod, shortTextMatches]
+    - design-tool/lib/scoring/methodLabel.ts
+    - design-tool/lib/safeguarding/alerts.ts
+    - design-tool/app/api/scores/[scoreId]/approve/route.ts
+  symbols: [scoreResponse, runAutoScoringPass, buildResults, planRescore, applyRescore, effectiveScoringMethod, shortTextMatches, aiScoreResponse, HYBRID_AUTO_FINALIZE_CONFIDENCE, hasInjectionAlert, isAiUnreviewed, finalMethodWord]
   test_paths:
     - design-tool/test/scoring-auto.test.ts
     - design-tool/test/results.test.ts
@@ -23,10 +26,15 @@ openwiki:
     - design-tool/test/change-score.test.ts
     - design-tool/test/superseded-scores.test.ts
     - design-tool/test/essay-scorer.test.ts
+    - design-tool/test/hybrid-labels.test.ts
+    - design-tool/test/review-queue.test.ts
+    - design-tool/test/safeguarding-screening.test.ts
   invariants:
     - At most one score per response has status final (partial unique index).
     - Proposed AI scores never count toward totals until a human or the hybrid confidence gate finalises them.
     - Pass back and rescore supersede finals rather than deleting them.
+    - A final AI score with null reviewed_by_sub is labelled "AI, not reviewed"; approving it sets reviewed_by_sub in place and writes no new row.
+    - Under Hybrid, an answer with any prompt-injection alert always gets a proposal, never a final.
   validation_commands:
     - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/scoring-auto.test.ts
 ---
@@ -41,7 +49,7 @@ Scores live in the append-only `scores` table (see [data model](data-model.md#ta
 |---|---|---|---|
 | `auto` | Deterministic key comparison | `final` directly | `scoreResponse` in `lib/scoring/auto.ts`, driven by `runAutoScoringPass` in `lib/scoring/runAutoScoring.ts` |
 | `ai` | Essay scorer provider | always `proposed` (a human finalises) | `lib/scoring/aiScoreResponse.ts`, routes `score-ai` (per attempt) and `rescore-ai` (per response) |
-| `hybrid` item setting | AI, then confidence gate | `final` when confidence is at least `HYBRID_AUTO_FINALIZE_CONFIDENCE`, else `proposed` | `aiScoreResponse.ts` |
+| `hybrid` item setting | AI, then confidence gate | `final` when confidence is at least `HYBRID_AUTO_FINALIZE_CONFIDENCE` and no prompt-injection alert exists on the answer, else `proposed` | `aiScoreResponse.ts`; see [Hybrid and unreviewed AI scores](#hybrid-and-unreviewed-ai-scores) |
 | `human` | Teacher | `final` | `app/api/responses/[responseId]/score`, `app/api/scores/[scoreId]/approve` |
 
 `effectiveScoringMethod(type, config)` in `lib/api/items.ts` resolves the item's method: an explicit `items.config.scoring_method` wins. Otherwise the per-type default `DEFAULT_SCORING_METHOD` applies (MC, short text, match, order, hotspot, table and fill-in-the-blank are `auto`; essay and drawing upload are `human`), with one override: a table or fill-in-the-blank item with no key (`cell_keys` or a keyed blank) defaults to `human` and flips to `auto` when the first key is saved (the E3-F1 rule; `items-api.test.ts`, "E3-F1: effective scoring method follows cell_keys"). The schema's `ScoringMethodSchema` is `auto | ai | human | hybrid`.
@@ -82,12 +90,40 @@ Staff-only event kinds (`STAFF_ONLY_ATTEMPT_EVENT_KINDS`) are written by these r
 
 Human scoring is driven from a per-assessment queue rather than from each attempt.
 
-- `GET /api/assessments/[id]/review-queue` (`view` access) lists responses on the assessment's **submitted, non-practice** attempts whose item's effective method is not `auto` and that have no `final` row. Auto items never appear (they were finalised at hand-in), and neither do practice hand-ins. Each entry is grouped by `proposed`: `null` means "needs a manual score", a non-null proposal means "AI suggestion awaiting approve or override". Stems reach the queue rendered, so teachers score a fraction, not KaTeX source.
+- `GET /api/assessments/[id]/review-queue` (`view` access) lists responses on the assessment's **submitted, non-practice** attempts whose item's effective method is not `auto` and that have no `final` row. Auto items never appear (they were finalised at hand-in), and neither do practice hand-ins. Each entry is grouped by `proposed`: `null` means "needs a manual score", a non-null proposal means "AI suggestion awaiting approve or override". Stems reach the queue rendered, so teachers score a fraction, not KaTeX source. The response also returns `unreviewed` (the "Finalized by AI — not reviewed" list, see below) and `sections`; `?section=` filters both lists using `lib/scoring/sectionFilter.ts`.
 - **Manual score** (`app/api/responses/[responseId]/score`) and **change score** share `checkManualScore` in `lib/api/reviewActions.ts`. `max_points` must equal the item's own maximum (rubric max, table cells, fill-blank count, otherwise 1), so every student's totals stay comparable. When `criterion_scores` are sent they are validated against the scoring view, which expands single-point rubrics into the derived `.below/.meets/.exceeds` levels the queue offers.
-- **Approve** (`app/api/scores/[scoreId]/approve`) inserts a new `final` row copying the AI proposal's numbers and rationale. The method stays `ai` and the scorer stays the model id, while `reviewed_by_sub` records the approving teacher. The proposal row stays as audit trail. Approve refuses a `research` row as `not_found`, a non-proposal as `not_a_proposal`, and a response that already has a final as `409 final_exists`; the insert uses `onConflictDoNothing` to close the race with a concurrent score.
+- **Approve** (`app/api/scores/[scoreId]/approve`) on a `proposed` AI row inserts a new `final` row copying the proposal's numbers and rationale. The method stays `ai` and the scorer stays the model id, while `reviewed_by_sub` records the approving teacher. The proposal row stays as audit trail. Approve on a `final` AI row with no reviewer marks that row reviewed in place (no new row, and a repeat press returns the row as it stands). Approve refuses a `research` row as `not_found`, any other non-proposal as `not_a_proposal`, and a response that already has a final as `409 final_exists`; the insert uses `onConflictDoNothing` to close the race with a concurrent score.
 - Every action in this chain loads the response through `loadResponseChain`, which uses `authorizeAttempt(..., "edit")` and returns `404` for other teachers' rows, and `400 attempt_not_submitted` for unsubmitted attempts.
 
-Invariant: approval and manual scoring never edit a row. They only append a `final` and let the partial unique index arbitrate races. An attempt enters the queue only once it is submitted, by student hand-in or teacher hand-in ([sittings and attempts](sittings-and-attempts.md)); `loadResponseChain` ignores `research` rows when it checks for an existing final, and approval never edits the proposal, so an override goes through the manual score or change score path instead. Test focus: `review-queue.test.ts` and `change-score.test.ts`.
+Invariant: approval and manual scoring never edit a score's points or status. They only append a `final`, and let the partial unique index arbitrate races. The one in-place write is approving an unreviewed final AI score, which sets `reviewed_by_sub` only. An attempt enters the queue only once it is submitted, by student hand-in or teacher hand-in ([sittings and attempts](sittings-and-attempts.md)); `loadResponseChain` ignores `research` rows when it checks for an existing final, and approval never edits the proposal, so an override goes through the manual score or change score path instead. Test focus: `review-queue.test.ts` and `change-score.test.ts`.
+
+## Hybrid and unreviewed AI scores
+
+The `hybrid` method lets a confident AI score become `final` without a teacher. `aiScoreResponse` in `lib/scoring/aiScoreResponse.ts` makes that decision against `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85, one global value in `lib/ai/essayScorer/scoreCore.ts`) and the injection check.
+
+```mermaid
+flowchart TD
+    A["AI scorer returns points and confidence"] --> B{"Item scoring method"}
+    B -->|"ai"| P["proposed row"]
+    B -->|"hybrid"| C{"confidence at least HYBRID_AUTO_FINALIZE_CONFIDENCE?"}
+    C -->|"no"| P
+    C -->|"yes"| D{"hasInjectionAlert on the answer?"}
+    D -->|"yes"| P
+    D -->|"no"| F["final row, reviewed_by_sub null"]
+    P --> I["teacher approves: new final row with reviewer"]
+    F --> J["teacher approves: reviewed_by_sub set in place"]
+```
+
+Caption: an AI score is final on its own only under Hybrid, and only when the answer carries no prompt-injection alert.
+
+- **The signal is `reviewed_by_sub`.** An `ai` final with a null reviewer was finalized by the scorer. Every teacher approval, manual score and change score sets the reviewer, so the null value cannot be a teacher's decision.
+- **Wording.** `isAiUnreviewed` and `finalMethodWord` in `lib/scoring/methodLabel.ts` give the per-student page "AI, not reviewed", "AI, approved by you" (only for the viewer who approved) or "AI, approved". The Change dialog (`lib/scoring/changeScoreDialog.ts`) and the work packet's `packetScoreHeading` (`lib/reporting/workPacket.ts`) have their own strings with the same rule.
+- **Results.** A final AI cell with no reviewer shows `•` with the title "AI score, not reviewed (counted)". `unreviewedCountLine` (`methodLabel.ts`) gives the line above the matrix, which links to the queue at edit level. The results CSV's last column is `ai_not_reviewed`, appended after `unscored` so earlier columns keep their positions (`lib/scoring/results.ts`).
+- **Queue.** The "Finalized by AI — not reviewed" list (`unreviewed` in the review-queue response, rendered in `app/dashboard/[id]/scoring/ScoringQueue.tsx`) shows read-only cards with Approve, which marks the score reviewed in place, and Change. Those cards show no confidence.
+- **Students and gradebook are unchanged.** An auto-finalized score is final for instant feedback, Google Docs and the gradebook send, as before. The labels only tell teachers who reviewed it.
+- **Editor copy.** Choosing Hybrid shows `HYBRID_HINT` in `app/dashboard/[id]/AssessmentEditor.tsx`. It says confident scores count at once and the teacher can still change any score. The copy is the only part of the choice that teachers read.
+
+Tests: `test/hybrid-labels.test.ts` (each label string), `test/results.test.ts` (the `ai_not_reviewed` count and CSV column), `test/review-queue.test.ts` (the unreviewed list and approval in place), `test/safeguarding-screening.test.ts` (the injection rule). Narrow check: `cd design-tool && bun test test/hybrid-labels.test.ts`.
 
 ## Results and reporting
 
@@ -105,5 +141,5 @@ Downstream consumers of finals are the gradebook push and Google Docs release in
 - Start with `lib/scoring/auto.ts` for scoring rules, `lib/scoring/results.ts` for totals, and the specific `lib/api/*` module for a correction flow.
 - Anything that reads scores must filter on `status = 'final'`; a reader that does not will double count or show superseded or research rows.
 - A new scored item type needs a branch in `scoreResponse`, an `itemMax` entry in `results.ts`, and the type-exhaustive switches described in [wire formats](../architecture/wire-formats.md#add-an-item-type-cross-system-expensive).
-- Focused tests: `scoring-auto.test.ts`, `scoring-numeric-equivalence.test.ts`, `scoring-math-fold.test.ts`, `scoring-method.test.ts`, `results.test.ts`, `rescore.test.ts`, `change-score.test.ts`, `superseded-scores.test.ts`, `essay-scorer.test.ts`, `essay-prompt-version.test.ts` (prompt drift check; a prompt edit needs a version bump in `lib/ai/essayScorer/scoreCore.ts` and a new recorded hash in the same change), `review-queue.test.ts`, `instant-feedback-*.test.ts`, and for the scoring corpus `scoring-corpus-runner.test.ts` (candidate selection, `createRun`, the rule that corpus rows stay `research`) and `scoring-corpus-schema.test.ts` (migration 0035 and the `research` status) with `corpus-args.test.ts` for its CLI argument parsing.
+- Focused tests: `scoring-auto.test.ts`, `scoring-numeric-equivalence.test.ts`, `scoring-math-fold.test.ts`, `scoring-method.test.ts`, `results.test.ts`, `rescore.test.ts`, `change-score.test.ts`, `superseded-scores.test.ts`, `essay-scorer.test.ts`, `hybrid-labels.test.ts` and `safeguarding-screening.test.ts` (the Hybrid rules above), `essay-prompt-version.test.ts` (prompt drift check; a prompt edit needs a version bump in `lib/ai/essayScorer/scoreCore.ts` and a new recorded hash in the same change), `review-queue.test.ts`, `instant-feedback-*.test.ts`, and for the scoring corpus `scoring-corpus-runner.test.ts` (candidate selection, `createRun`, the rule that corpus rows stay `research`) and `scoring-corpus-schema.test.ts` (migration 0035 and the `research` status) with `corpus-args.test.ts` for its CLI argument parsing.
 - Do not run the whole suite for a pure scoring-rule change; the DB-backed files above are enough. All of them need the test database ([testing](../testing/testing-and-validation.md)).

@@ -16,8 +16,11 @@ openwiki:
     - design-tool/lib/api/deleteAttempt.ts
     - design-tool/app/api/assets/[id]/route.ts
     - design-tool/app/api/uploads/image/route.ts
+    - design-tool/app/api/assessments/[id]/assets/[assetId]/route.ts
+    - design-tool/lib/api/access.ts
+    - design-tool/lib/assets/assessmentAssets.ts
     - design-tool/db/schema.ts
-  symbols: [StorageProvider, PresignedUpload, getStorageProvider, getStorageProviderById, localFsProvider, s3Provider, registerUpload, settlePendingUpload, pruneSupersededUploads, ALLOWED_IMAGE_MIME_TYPES, sha256Hex]
+  symbols: [StorageProvider, PresignedUpload, getStorageProvider, getStorageProviderById, localFsProvider, s3Provider, registerUpload, settlePendingUpload, pruneSupersededUploads, ALLOWED_IMAGE_MIME_TYPES, sha256Hex, authorizeAssessmentAsset]
   test_paths:
     - design-tool/test/storage-provider.test.ts
     - design-tool/test/s3-provider.test.ts
@@ -79,7 +82,9 @@ The production choice (`STORAGE_PROVIDER=s3`) is pinned in the ECS service defin
 
 - **Upload**: `POST /api/uploads/image` accepts only `ALLOWED_IMAGE_MIME_TYPES` (png, jpeg, gif, webp). The server re-checks the type because the browser `accept` attribute can be bypassed. The route accepts at most `MAX_UPLOAD_BYTES` (5 MB) and hashes the bytes with `sha256Hex` (`lib/api/uploads.ts`); if the owner already has the same hash, it returns the existing row with `deduped: true`, and the `(owner_sub, sha256)` uniqueness is enforced by the database.
 - **Excluded on purpose**: SVG. The asset route serves stored bytes inline on the app origin, so an SVG upload would be a stored-XSS vector. The phase-1-2 review finding that set this rule is cited in the code comment.
-- **Serving**: `GET /api/assets/[id]` requires `requireStaff()` and `authorizeAsset(..., "own")`, then streams the bytes with `cache-control: private`, `x-content-type-options: nosniff` and `referrer-policy: no-referrer`. A non-owner gets the same 404 as a missing row. Because grant holders are refused here, co-teachers see broken images for the owner's pictures on staff pages; the open issue is listed in [auth and access](auth-and-access.md#open-co-teacher-gaps).
+- **Serving**: two staff routes stream the same bytes through `assetResponse` (`lib/assets/assetResponse.ts`) with `cache-control: private`, `x-content-type-options: nosniff` and `referrer-policy: no-referrer`:
+  - `GET /api/assets/[id]` (the Images page and the Image picker) requires `requireStaff()` and `authorizeAsset(..., "own")`. A non-owner gets the same 404 as a missing row.
+  - `GET /api/assessments/[id]/assets/[assetId]` (every staff surface that renders assessment content, such as the preview, work packet, per-student page, review queue and editor previews) uses `authorizeAssessmentAsset` in `lib/api/access.ts`. A grant holder with `view` on the assessment sees the owner's asset only when that assessment references it. This is what lets co-teachers see the owner's pictures in a shared assessment ([auth and access](auth-and-access.md#co-teacher-gaps), G-1; test `assessment-assets.test.ts`).
 - **Listing**: `GET /api/assets` returns only the caller's rows.
 - **Deleting**: `DELETE /api/assets/[id]` removes the row first, then deletes the bytes best-effort. An orphaned object is tolerated; the row is the source of truth.
 
