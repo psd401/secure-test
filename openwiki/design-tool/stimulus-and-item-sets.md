@@ -47,8 +47,7 @@ openwiki:
 
 # Stimulus, item sets and multi-source readings
 
-<!-- openwiki: broken internal link [../architecture/wire-formats.md#item-sets] heading anchor "item-sets" does not exist in "../architecture/wire-formats.md". Fix the href or restore the target, then delete this comment. -->
-An **item set** is one stimulus (a passage, figure caption, data table, or several labelled sources) shared by consecutive questions. Consult this page when changing how a set is created or edited, how sources are written or rendered, how an E12 source-backed set is resolved for a student, or the publish checks on stimuli. The shared table and the `items.item_set_id` foreign key are described in [data model](data-model.md); the wire shape both bundles carry is in [wire formats](../architecture/wire-formats.md#item-sets).
+An **item set** is one stimulus (a passage, figure caption, data table, or several labelled sources) shared by consecutive questions. Consult this page when changing how a set is created or edited, how sources are written or rendered, how an E12 source-backed set is resolved for a student, or the publish checks on stimuli. The shared table and the `items.item_set_id` foreign key are described in [data model](data-model.md); the wire shape both bundles carry is in [wire formats](../architecture/wire-formats.md#two-bundles-adr-0016).
 
 ## Data and invariants
 
