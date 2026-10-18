@@ -74,6 +74,7 @@ describe("tally and summary", () => {
       scored_proposed: 2,
       blocked: 1,
       provider_errors: 1,
+      in_progress: 1,
     });
     t = addToTally(t, null);
     expect(t).toEqual({
@@ -83,6 +84,7 @@ describe("tally and summary", () => {
       blocked: 1,
       provider_errors: 1,
       skipped_unscorable: 0,
+      in_progress: 1,
       failed_students: 1,
       refused_students: 0,
     });
@@ -97,12 +99,14 @@ describe("tally and summary", () => {
         blocked: 1,
         provider_errors: 1,
         skipped_unscorable: 3,
+        in_progress: 2,
         failed_students: 1,
         refused_students: 0,
       }),
     ).toEqual([
       "24 essays scored — 18 waiting for your review in the scoring queue, 6 finalized by AI (Hybrid).",
       "2 held back: they look like they try to instruct the AI. Read them in the scoring queue.",
+      "2 were already being scored from another press — check the scoring queue in a minute.",
       "1 stopped by the AI safety filter — score it by hand.",
       "1 couldn't be scored (the AI service didn't answer). Press the button again to retry.",
       "1 student's essays couldn't be sent. Press the button again to retry.",
@@ -117,6 +121,14 @@ describe("tally and summary", () => {
       "1 essay scored — 1 waiting for your review in the scoring queue.",
       "1 held back: it looks like it tries to instruct the AI. Read it in the scoring queue.",
     ]);
+  });
+
+  test("an essay already being scored elsewhere; a route without the field", () => {
+    expect(scoreEssaysSummary({ ...EMPTY_TALLY, in_progress: 1 })).toEqual([
+      "1 was already being scored from another press — check the scoring queue in a minute.",
+    ]);
+    // Before the claim (#55) the route sends no in_progress: it reads as 0.
+    expect(addToTally(EMPTY_TALLY, { ok: true, scored_proposed: 1 }).in_progress).toBe(0);
   });
 
   test("a refused request is not told to retry", () => {
