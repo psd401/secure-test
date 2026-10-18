@@ -101,7 +101,7 @@ The monitor polls only while there is something left to watch, and each control 
 
 `results/page.tsx` renders `buildResults` with a `sectionFilterOptions` filter; a `NO_SECTION` value covers rows that resolve to no section. Per-attempt actions are small client components that call a route and reload: `ChangeScoreAndReload`, `RescoreAndReload`, `PassBackAndReload`, `ReleaseAnswersAndReload`, `SendToGradebookAndReload`, `HandInAttemptAndReload`, `HandInInProgressAndReload`, `ExtendTimeAndReload`, and `DeleteAttemptAndReload`. Item analytics come from `results/analyticsQuery.ts`, and the class-insights panel is `components/app/ClassInsightsPanel.tsx`.
 
-`scoring/ScoringQueue.tsx` is the review queue for human-method items and AI proposals; its rules are in [scoring and results](scoring-and-results.md#teacher-review-queue-and-approval). The printable pages are described in [reporting and work packets](reporting-and-packets.md).
+`scoring/ScoringQueue.tsx` is the review queue for human-method items and AI proposals, with a Section select kept in the address bar and a last list, "Finalized by AI — not reviewed", for Hybrid scores no teacher has reviewed. Its rules are in [scoring and results](scoring-and-results.md#teacher-review-queue-and-approval) and [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores). The printable pages are described in [reporting and work packets](reporting-and-packets.md).
 
 ## Accommodations pages
 
