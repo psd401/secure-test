@@ -27,6 +27,7 @@ openwiki:
     - design-tool/test/auth-bearer.test.ts
     - design-tool/test/auth-exchange-route.test.ts
     - design-tool/test/oauth-flow.test.ts
+    - design-tool/test/safe-next.test.ts
     - design-tool/test/access-enforcement.test.ts
     - design-tool/test/access-grants.test.ts
     - design-tool/test/grants-api.test.ts
@@ -108,3 +109,4 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
 
 Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
+ent](../operations/deployment-and-observability.md) for secrets in ECS.
