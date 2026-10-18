@@ -61,8 +61,9 @@ The packet is a printable PDF-ready page: one sheet per student, an inch of marg
 
 URL contract (`parsePacketQuery`, `PacketQuery`):
 
-- `section` is required for a class packet (one PDF per section). Without it the page shows a screen-only list of sections with handed-in work and prints nothing.
-- `attempt=<uuid>` prints one student's work with no section. Unlike the section packet, it may name an in-progress attempt.
+- `section` is repeatable and names the sections to print. With no section and no student, the page shows a screen-only chooser of sections with handed-in work and prints nothing. Several sections make a batch: one run per section, in alphabetical order, each with its own divider, labels and key page.
+- `attempt=<uuid>` is repeatable and names chosen students. One chosen student with no section is "one student's work" and may be in progress. Several print grouped by their own sections. With a `section`, chosen students outside those sections are ignored, and with none left the sections print in full. A chosen student prints whatever their status.
+- `in_progress=1` adds work not yet handed in to section runs, with the in-progress mark. It is off by default and chosen students ignore it.
 - `items` is a comma list or repeated values from the toolbar checklist; `questions=0` prints answers only; `answers=0` leaves out what the student wrote or chose and keeps the question and the score and feedback blocks, a feedback sheet to hand back (ignored when `scores=none`, so the answers still print: `packetHidesAnswers` in `lib/reporting/workPacket.ts`); `scores` is `none | teacher | ai | both`; `anon` switches to labels with a teacher key page last; `spacing=double` double-spaces essay answers.
 - The last repeated value wins, and every malformed value falls back to a default. The parser never returns a 400.
 
@@ -70,16 +71,19 @@ Behaviour that matters for changes:
 
 - **Score selection** (`selectPacketScores`): the packet reads finals only. Superseded rows, `research` rows and unfinished proposals never print. The test `superseded-scores.test.ts` ("the work packet never prints a superseded row") pins this.
 - **Anonymity** (`anonymousLabels`, D-1): labels are stable per attempt id; the name-to-label mapping appears only on the teacher key page, so a packet can leave the teacher's hands.
+- **Selection** (`selectPacket`, batch print D-1 to D-4, 8.1, 8.2): returns `chooser`, `not_found`, `single` or `batch`. A chosen attempt that does not belong to this assessment is `not_found`, the same answer as a missing assessment. Each batch run holds one section's rows; a section's run is its handed-in work, plus in-progress work when `in_progress=1`.
+- **Anonymity across a batch** (`sectionAnonymousLabels`, D-2): labels are numbered per section, so each section's stack can be torn off with its own key page. A section run's handed-in labels are `Student NN`, and in-progress work is `In progress n`.
 - **Ordering** (`packetOrdering`) and item selection are pure; `stemExcerpt` makes the toolbar's item labels short.
+- **Toolbar limit**: the toolbar still offers one section, and no "Print selected" control exists yet. Multi-section and multi-student packets are reached through bookmarked or hand-edited URLs until the toolbar checkboxes ship (the remaining batch-print slices are in the [quickstart backlog](../quickstart.md#backlog)).
 
 ```mermaid
 flowchart LR
   URL["work page URL"] --> PQ["parsePacketQuery"]
-  PQ --> SEL["section or attempt rows"]
+  PQ --> SEL["selectPacket: chooser, not found, single or batch runs"]
   SEL --> SC["selectPacketScores: finals only"]
-  SC --> ANON["anonymousLabels if anon"]
+  SC --> ANON["sectionAnonymousLabels if anon"]
   ANON --> RENDER["answer and score rendering"]
-  RENDER --> PRINT["print sheet per student"]
+  RENDER --> PRINT["print run per section or student"]
 ```
 
 Caption: the packet is a pure pipeline after the page loads its rows; the only database reads happen in the page.
@@ -98,7 +102,7 @@ The module is deliberately identifier-free: a pair carries response and item ids
 
 ## Change navigation
 
-- **Changing the packet URL or flags**: edit `parsePacketQuery` and `PacketQuery` first, then `work/page.tsx`. Keep the never-throw rule; the test file `work-packet.test.ts` has a `parsePacketQuery` suite.
+- **Changing the packet URL or flags**: edit `parsePacketQuery` and `PacketQuery` first, then `selectPacket` if the selection rules change, then `work/page.tsx`. Keep the never-throw rule; the test file `work-packet.test.ts` has `parsePacketQuery` and `selectPacket` suites (the batch cases sit in the `selectPacket` describe block).
 - **Changing what prints for a score**: `selectPacketScores` and `packetScoreHeading`. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)). A final AI score heads the row "AI score (not reviewed)" or "AI score (approved)" (the `reviewed_by_sub` rule in `packetScoreHeading`, which is separate from the per-student wording in `lib/scoring/methodLabel.ts`; see [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores)).
 - **Changing an answer's printed form**: the `*View.ts` renderer for that type, plus `renderEssayAnswerHtml` for essays. Escape all text; the renderers feed HTML.
 - **Changing run statistics**: `runComparison.ts`, with `run-comparison.test.ts` (`compareRun`, `comparisonToCsv`). It needs no database.
@@ -106,3 +110,4 @@ The module is deliberately identifier-free: a pair carries response and item ids
 - **Scope boundary**: this is a read-only area. A change here should not need a migration or a route change unless the URL contract changes. Checks against the test database are needed only for DB-backed suites such as `superseded-scores.test.ts`, which can be run per [testing](../testing/testing-and-validation.md).
 
 Related: [scoring and results](scoring-and-results.md) (which finals exist), [integrations](integrations.md) (Google Docs and gradebook consume the same finals), [sittings and attempts](sittings-and-attempts.md) (the events the timeline reads).
+he timeline reads).
