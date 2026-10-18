@@ -70,6 +70,12 @@ export type ScoreAiTally = {
   blocked: number;
   provider_errors: number;
   skipped_unscorable: number;
+  /**
+   * Essays another request was already scoring (the claim in
+   * docs/ai-score-concurrency-design.md, #55). Absent from routes before
+   * that change, so it reads as 0.
+   */
+  in_progress: number;
   /** Students whose request failed outright (HTTP error or network). */
   failed_students: number;
   /**
@@ -86,6 +92,7 @@ export const EMPTY_TALLY: ScoreAiTally = {
   blocked: 0,
   provider_errors: 0,
   skipped_unscorable: 0,
+  in_progress: 0,
   failed_students: 0,
   refused_students: 0,
 };
@@ -109,6 +116,7 @@ export function addToTally(
     blocked: tally.blocked + n("blocked"),
     provider_errors: tally.provider_errors + n("provider_errors"),
     skipped_unscorable: tally.skipped_unscorable + n("skipped_unscorable"),
+    in_progress: tally.in_progress + n("in_progress"),
     failed_students: tally.failed_students,
     refused_students: tally.refused_students,
   };
@@ -134,6 +142,12 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
       `${t.withheld} held back: ${t.withheld === 1 ? "it looks" : "they look"} like ` +
         `${t.withheld === 1 ? "it tries" : "they try"} to instruct the AI. Read ` +
         `${t.withheld === 1 ? "it" : "them"} in the scoring queue.`,
+    );
+  }
+  if (t.in_progress > 0) {
+    lines.push(
+      `${t.in_progress} ${t.in_progress === 1 ? "was" : "were"} already being scored ` +
+        "from another press — check the scoring queue in a minute.",
     );
   }
   if (t.blocked > 0) {
