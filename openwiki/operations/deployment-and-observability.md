@@ -55,7 +55,7 @@ At boot it assembles `DATABASE_URL` from `DB_*` variables that ECS injects from 
 | `lambda/deleteStoredUpload.ts` | Deletes stored drawing/upload bytes for swept practice attempts (grant scoped to `responses/*`). |
 | `scripts/*.sh` | `deploy.sh`, `migrate-aurora.sh`, `oneoff-aurora.sh`, `query-aurora.sh`, `ai-usage.sh`. |
 
-Why Fargate and not Amplify: ADR 0014 (Amplify supports Next 12-15 only, has a 30 s response timeout and cannot join the VPC). The first-deploy walk-through lives in `design-tool/infra/README.md` and `docs/ecs-deploy-plan.md`, which are not part of this wiki's evidence set.
+Why Fargate and not Amplify: ADR 0014 (Amplify supports Next 12-15 only, has a 30 s response timeout and cannot join the VPC). The first-deploy walk-through is an operator runbook outside this wiki's evidence set (excluded by `.openwikiignore`), so this page describes the code and not that procedure.
 
 ```mermaid
 flowchart LR
