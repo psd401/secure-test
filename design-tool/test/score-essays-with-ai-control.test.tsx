@@ -61,8 +61,18 @@ describe("ScoreEssaysWithAiControl", () => {
 describe("tally and summary", () => {
   test("adds route counts and failed requests", () => {
     let t = EMPTY_TALLY;
-    t = addToTally(t, { ok: true, scored_proposed: 1, scored_final: 1, withheld: 0 });
-    t = addToTally(t, { ok: true, scored_proposed: 2, blocked: 1, provider_errors: 1 });
+    t = addToTally(t, {
+      ok: true,
+      scored_proposed: 1,
+      scored_final: 1,
+      withheld: 0,
+    });
+    t = addToTally(t, {
+      ok: true,
+      scored_proposed: 2,
+      blocked: 1,
+      provider_errors: 1,
+    });
     t = addToTally(t, null);
     expect(t).toEqual({
       scored_proposed: 3,
@@ -106,7 +116,9 @@ describe("tally and summary", () => {
   });
 
   test("nothing to report", () => {
-    expect(scoreEssaysSummary(EMPTY_TALLY)).toEqual(["Nothing was left to score."]);
+    expect(scoreEssaysSummary(EMPTY_TALLY)).toEqual([
+      "Nothing was left to score.",
+    ]);
   });
 });
 
@@ -134,7 +146,12 @@ describe("runPool", () => {
 
   test("an empty list resolves at once", async () => {
     const seen: string[] = [];
-    await runPool([], 3, async (id) => id, (id) => seen.push(id));
+    await runPool(
+      [],
+      3,
+      async (id) => id,
+      (id) => seen.push(id),
+    );
     expect(seen).toEqual([]);
   });
 });

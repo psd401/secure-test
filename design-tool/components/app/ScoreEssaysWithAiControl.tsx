@@ -10,6 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -84,10 +85,15 @@ export const EMPTY_TALLY: ScoreAiTally = {
 };
 
 /** Adds one route response (or a failed request, `null`) to the tally. */
-export function addToTally(tally: ScoreAiTally, body: unknown | null): ScoreAiTally {
-  if (body === null) return { ...tally, failed_students: tally.failed_students + 1 };
+export function addToTally(
+  tally: ScoreAiTally,
+  body: unknown | null,
+): ScoreAiTally {
+  if (body === null)
+    return { ...tally, failed_students: tally.failed_students + 1 };
   const b = body as Partial<Record<keyof ScoreAiTally, unknown>>;
-  const n = (k: keyof ScoreAiTally) => (typeof b[k] === "number" ? (b[k] as number) : 0);
+  const n = (k: keyof ScoreAiTally) =>
+    typeof b[k] === "number" ? (b[k] as number) : 0;
   return {
     scored_proposed: tally.scored_proposed + n("scored_proposed"),
     scored_final: tally.scored_final + n("scored_final"),
@@ -106,9 +112,12 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
   if (scored > 0) {
     const parts: string[] = [];
     if (t.scored_proposed > 0) {
-      parts.push(`${t.scored_proposed} waiting for your review in the scoring queue`);
+      parts.push(
+        `${t.scored_proposed} waiting for your review in the scoring queue`,
+      );
     }
-    if (t.scored_final > 0) parts.push(`${t.scored_final} finalized by AI (Hybrid)`);
+    if (t.scored_final > 0)
+      parts.push(`${t.scored_final} finalized by AI (Hybrid)`);
     lines.push(`${essays(scored)} scored — ${parts.join(", ")}.`);
   }
   if (t.withheld > 0) {
@@ -136,7 +145,9 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
     );
   }
   if (t.skipped_unscorable > 0) {
-    lines.push(`${t.skipped_unscorable} ${t.skipped_unscorable === 1 ? "has" : "have"} no rubric or ${t.skipped_unscorable === 1 ? "is" : "are"} empty.`);
+    lines.push(
+      `${t.skipped_unscorable} ${t.skipped_unscorable === 1 ? "has" : "have"} no rubric or ${t.skipped_unscorable === 1 ? "is" : "are"} empty.`,
+    );
   }
   if (lines.length === 0) lines.push("Nothing was left to score.");
   return lines;
@@ -164,7 +175,9 @@ export async function runPool<T>(
 
 async function scoreOne(attemptId: string): Promise<unknown | null> {
   try {
-    const res = await fetch(`/api/attempts/${attemptId}/score-ai`, { method: "POST" });
+    const res = await fetch(`/api/attempts/${attemptId}/score-ai`, {
+      method: "POST",
+    });
     if (!res.ok) return null;
     return (await res.json()) as unknown;
   } catch {
@@ -193,7 +206,10 @@ export function ScoreEssaysWithAiControl({
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
   const [summary, setSummary] = useState<string[] | null>(null);
-  const disabledReason = scoreEssaysDisabledReason(essayCount, sectionLabel !== null);
+  const disabledReason = scoreEssaysDisabledReason(
+    essayCount,
+    sectionLabel !== null,
+  );
 
   async function start() {
     setRunning(true);
@@ -208,81 +224,87 @@ export function ScoreEssaysWithAiControl({
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabledReason !== undefined}
-        title={disabledReason}
-        onClick={() => {
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (o) {
           setSummary(null);
           setOpen(true);
-        }}
-      >
-        {scoreEssaysLabel(essayCount)}
-      </Button>
-      <AlertDialog
-        open={open}
-        onOpenChange={(o) => {
-          if (o || running) return;
-          setOpen(false);
-          if (summary) onFinished();
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {summary ? "AI scoring finished" : "Score essays with AI?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div>
-                {summary ? (
-                  <ul className="space-y-1">
-                    {summary.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                ) : running ? (
-                  <p role="status">
-                    Scoring… {done} of {students(attemptIds.length)} done.
-                  </p>
-                ) : (
-                  <p>
-                    {scoreEssaysDialogCopy(essayCount, attemptIds.length, sectionLabel ?? "")}
-                  </p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            {summary ? (
+          return;
+        }
+        if (running) return;
+        setOpen(false);
+        if (summary) onFinished();
+      }}
+    >
+      {/* G-3 pattern: the trigger, so Radix returns focus to it on close. */}
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabledReason !== undefined}
+          title={disabledReason}
+        >
+          {scoreEssaysLabel(essayCount)}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {summary ? "AI scoring finished" : "Score essays with AI?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div>
+              {summary ? (
+                <ul className="space-y-1">
+                  {summary.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : running ? (
+                <p role="status">
+                  Scoring… {done} of {students(attemptIds.length)} done.
+                </p>
+              ) : (
+                <p>
+                  {scoreEssaysDialogCopy(
+                    essayCount,
+                    attemptIds.length,
+                    sectionLabel ?? "",
+                  )}
+                </p>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          {summary ? (
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                onFinished();
+              }}
+            >
+              Done
+            </AlertDialogAction>
+          ) : (
+            <>
+              <AlertDialogCancel disabled={running}>Cancel</AlertDialogCancel>
               <AlertDialogAction
+                disabled={running}
                 onClick={(e) => {
                   e.preventDefault();
-                  setOpen(false);
-                  onFinished();
+                  void start();
                 }}
               >
-                Done
+                {running ? "Scoring…" : `Score ${essays(essayCount)}`}
               </AlertDialogAction>
-            ) : (
-              <>
-                <AlertDialogCancel disabled={running}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={running}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void start();
-                  }}
-                >
-                  {running ? "Scoring…" : `Score ${essays(essayCount)}`}
-                </AlertDialogAction>
-              </>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+            </>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

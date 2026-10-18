@@ -24,7 +24,9 @@ type Db = ReturnType<typeof getDb>;
 export function isAiBatchItem(item: Pick<ItemRow, "type" | "config">): boolean {
   if (item.type !== "essay") return false;
   const method = effectiveScoringMethod(item.type as ItemType, item.config);
-  return (method === "ai" || method === "hybrid") && Boolean(item.config?.rubric);
+  return (
+    (method === "ai" || method === "hybrid") && Boolean(item.config?.rubric)
+  );
 }
 
 export type AiBatchCounts = {
@@ -70,7 +72,11 @@ export async function aiBatchCounts(
     );
   const written = responseRows.filter((r) => {
     const parsed = ItemResponseSchema.safeParse(r.response);
-    return parsed.success && parsed.data.type === "essay" && parsed.data.text.trim() !== "";
+    return (
+      parsed.success &&
+      parsed.data.type === "essay" &&
+      parsed.data.text.trim() !== ""
+    );
   });
   if (written.length === 0) return { has_ai_items: true, counts };
   const ids = written.map((r) => r.id);
@@ -79,7 +85,9 @@ export async function aiBatchCounts(
   const scored = await db
     .select({ response_id: scores.response_id })
     .from(scores)
-    .where(and(inArray(scores.response_id, ids), ne(scores.status, "research")));
+    .where(
+      and(inArray(scores.response_id, ids), ne(scores.status, "research")),
+    );
   for (const row of scored) skip.add(row.response_id);
   const flagged = await db
     .select({ response_id: safeguarding_alerts.response_id })

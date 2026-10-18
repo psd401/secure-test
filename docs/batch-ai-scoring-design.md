@@ -105,3 +105,16 @@ No migration, no client release.
 - **D-5** (1.5) **3 students at a time.** Before the first full-class run on
   the origin, check the account's Bedrock request quota for the essay
   scorer's model (slice 2's timing row records it).
+
+## Progress
+
+- **Slice 1 BUILT 2026-10-18** (`18fcfec`): `lib/scoring/aiBatch.ts`
+  (`aiBatchCounts`), `components/app/ScoreEssaysWithAiControl.tsx`, the
+  Results page wiring. Not merged, not deployed.
+- **Slice 2 RUN 2026-10-18 on local dev (`_demo`, mock scorer, mock
+  screener):** rows 610–620 ✅ in `docs/design-tool-manual-checks.md`
+  (620 with the demo co-teacher, not a second real account); row 621 (the
+  origin with Bedrock, a full class, the quota check) NOT RUN. Fix U24-F1
+  (the button is now the dialog's trigger, so focus returns to it) went in
+  with the rows; reading U24-R1 ("held back" counts answers flagged before
+  the press) needs no change.
