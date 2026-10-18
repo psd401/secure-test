@@ -226,8 +226,10 @@ its own.
   Drive.
 - **Scoring queue**: essays and hand-scored items wait here. A rubric can
   be uploaded on the question (PDF, Word, Markdown or plain text); with a rubric, *Score
-  with AI* proposes a score and feedback you approve or change. Nothing
-  reaches the student until you approve it.
+  with AI* proposes a score and feedback you approve or change. With
+  *AI*, nothing counts until you approve it; with *Hybrid*, confident AI
+  scores count at once (a • on Results) and wait under *Finalized by AI —
+  not reviewed* for you to approve or change.
 - **Fixed an answer key after students handed in?** Save the question,
   then press **Rescore with current key** on Results. Scores you set by
   hand stay; the old scores stay on each student's page. If the class was

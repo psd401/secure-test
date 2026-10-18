@@ -24,6 +24,7 @@ import type {
 } from "@/lib/ai/essayScorer/types";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
+import { hasInjectionAlert } from "@/lib/safeguarding/alerts";
 
 // Slice 39 refactor: the score-one-response core shared by the attempt-wide
 // score-ai route (slice 38) and the per-response re-run action (slice 39).
@@ -33,7 +34,9 @@ import { runGuarded } from "@/lib/safeguarding/guard";
 // its route 409s first).
 //
 // Semantics (confirmed 2026-07-09): ai → status=proposed always; hybrid →
-// final at confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE, else proposed.
+// final at confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE, else proposed —
+// and, since Hybrid transparency slice 3, proposed whenever the answer
+// carries a prompt-injection alert.
 
 export type AiScoreOutcome =
   | { kind: "scored"; status: "proposed" | "final" }
@@ -169,10 +172,16 @@ export async function aiScoreResponse(opts: {
     return attempt.kind === "bounds" ? { kind: "provider_error" } : attempt;
   }
   const { result, provider, method } = attempt;
-  const finalize =
-    method === "hybrid" && result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE;
-  const status = finalize ? ("final" as const) : ("proposed" as const);
   const db = getDb();
+  // Hybrid transparency slice 3 (D-4, 6.1): an answer with a prompt-injection
+  // alert — forced or not — always gets a proposal, never a final: the
+  // answer most likely to have inflated its own confidence is the one a
+  // teacher must review. Asked only when Hybrid would otherwise finalize.
+  const finalize =
+    method === "hybrid" &&
+    result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE &&
+    !(await hasInjectionAlert(db, response.id));
+  const status = finalize ? ("final" as const) : ("proposed" as const);
   // The insert stays inside a catch, as it was before the slice-2 extraction:
   // a failed write is this caller's provider_error, not a thrown route 500.
   try {

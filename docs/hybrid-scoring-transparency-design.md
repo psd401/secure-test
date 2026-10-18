@@ -30,6 +30,13 @@ Option **C** (B plus the injection rule), every recommendation accepted:
 - **D-11** (5.3) The existing approve route also marks a final AI score
   reviewed, in place.
 - **D-12** (5.4) The scoring queue takes `?section=` like the results page.
+- **D-13** (6.1, 2026-10-16) ANY prompt-injection alert on the answer,
+  forced or not, keeps Hybrid from finalizing it — D-4 as written covered
+  only the forced press, but a later Re-run AI or attempt-wide run on a
+  forced answer would have finalized.
+- **D-14** (6.2) The roadmap page gets a new milestone at deploy; the
+  2026-09-11 milestone stays as written.
+- **D-15** (6.3) The help picture `scoring-queue.png` is re-captured later.
 
 ## What the code does today
 
@@ -159,6 +166,18 @@ Design tool only; no client release; no migration.
   `test/hybrid-labels.test.ts`. Readings: the queue now reads results once
   more per load (the price of one section rule); approving a final writes
   no timeline event, like approving a proposal. Not hand-run.
+
+- **Slice 3 BUILT 2026-10-16, not committed, not deployed.**
+  `hasInjectionAlert` (`lib/safeguarding/alerts.ts`, any prompt-injection
+  alert); `aiScoreResponse` asks it only when Hybrid would finalize and
+  writes a proposal instead — covers rescore-ai (forced and later re-runs)
+  and the attempt-wide score-ai. Tests: three cases in
+  `test/safeguarding-screening.test.ts`. Copy: help topic 8 gains a step
+  (the •, the queue list, flagged answers always wait); the quick start's
+  scoring-queue bullet no longer says nothing counts until approved. **At
+  deploy:** add the `/roadmap.html` JOURNEY milestone ("AI scores say
+  whether a teacher reviewed them"). Open: `scoring-queue.png` (D-15). Not
+  hand-run.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 

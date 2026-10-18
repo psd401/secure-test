@@ -33,6 +33,27 @@ export async function injectionAlertFor(
 }
 
 /**
+ * Whether this answer carries ANY prompt-injection alert, forced or not.
+ * Hybrid transparency slice 3 (docs/hybrid-scoring-transparency-design.md,
+ * D-4, decision 6.1): an answer flagged as trying to manipulate the scorer
+ * never has its AI score finalized without review — not on the forced press,
+ * and not on a later Re-run AI or attempt-wide run once the alert is forced.
+ */
+export async function hasInjectionAlert(db: Db, responseId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: safeguarding_alerts.id })
+    .from(safeguarding_alerts)
+    .where(
+      and(
+        eq(safeguarding_alerts.response_id, responseId),
+        eq(safeguarding_alerts.kind, "prompt_injection"),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
  * Records the teacher's Score with AI anyway — who and when (D-4). Marks
  * EVERY unforced injection alert on the answer, not only the newest: an
  * acknowledged older alert and a rescreen's newer one are the same concern,
