@@ -411,6 +411,7 @@
             <li>On an essay question, <b class="ui">Upload rubric</b> (PDF, Word, Markdown or pasted text) or reuse one from your library.</li>
             <li>Open the <b class="ui">Scoring queue</b>. Each answer waits there with its rubric.</li>
             <li>Press <b class="ui">Score with AI</b> for a proposed score and feedback per criterion. Approve it, change it, or score it yourself.</li>
+            <li>To score a whole class at once, open <b class="ui">Results</b>, choose the <b class="ui">Section</b>, and press <b class="ui">Score essays with AI</b>. The number on the button is the class's handed-in essays with no score yet. Keep the page open until the summary shows; essays already scored are skipped, and pressing it again picks up anything left.</li>
             <li>The question's scoring method decides what happens next: with <b class="ui">AI</b>, every AI score waits for your approval; with <b class="ui">Hybrid</b>, a confident AI score becomes final on its own and the rest wait for you.</li>
             <li>On <b class="ui">Results</b>, a • after a score marks an AI score that counted without review. <b class="ui">Finalized by AI — not reviewed</b> at the bottom of the scoring queue lists them: <b class="ui">Approve</b> keeps the score, <b class="ui">Change</b> replaces it. An answer flagged for trying to trick the AI scorer always waits for you, even with Hybrid.</li>
           </ol>
@@ -513,6 +514,8 @@
         <dd>Closing returns students to Your tests with answers saved, but does not hand in. Press <b class="ui">Hand in</b> on the row, or open another session and they resume.</dd>
         <dt>A student has saved work, but isn't in the scoring queue.</dt>
         <dd>The queue shows handed-in work only. Press <b class="ui">Hand in</b> on their row (Monitor or Results), <b class="ui">Hand in all in progress</b> on Results for the whole class, or have them press <b class="ui">Finish and hand in</b>.</dd>
+        <dt>Do I have to press Score with AI on every essay?</dt>
+        <dd>No. On <b class="ui">Results</b>, choose the section and press <b class="ui">Score essays with AI</b> to score the whole class. It is greyed out until you choose a section, and once every handed-in essay there has a score. Essays flagged for trying to trick the AI scorer are held back for you to read. See <a href="#score">Score and give feedback</a>.</dd>
         <dt>Start session says a session for this class is already open.</dt>
         <dd>One with the same students is still open, and its code is shown. Use that one, or close it on the <b class="ui">Test sessions</b> tab and start again.</dd>
         <dt>A student deleted their essay by accident.</dt>
@@ -583,7 +586,7 @@
 </dialog>
 
 <script>
-const UPDATED = "2026-10-01";
+const UPDATED = "2026-10-18";
 document.getElementById("updated").textContent =
   new Date(UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 

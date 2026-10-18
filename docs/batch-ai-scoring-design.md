@@ -118,3 +118,10 @@ No migration, no client release.
   (the button is now the dialog's trigger, so focus returns to it) went in
   with the rows; reading U24-R1 ("held back" counts answers flagged before
   the press) needs no change.
+- **Slice 3 WRITTEN 2026-10-18:** help topic 8 gains a step (Results →
+  Section → Score essays with AI), "Looks wrong but isn't" gains "Do I have
+  to press Score with AI on every essay?", the quick start's Scoring queue
+  bullet gains one sentence, `/roadmap.html` gains a 2026-10-18 milestone
+  (re-date it if the deploy lands later). Both pages' "Last updated" read
+  2026-10-18. No picture re-captured: `results.png` predates the button
+  (topic 9's picture, still accurate for what it shows).
