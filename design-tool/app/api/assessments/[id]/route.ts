@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, eq, gt, notInArray } from "drizzle-orm";
+import { and, asc, count, eq, gt, isNull, notInArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  access_grants,
   assessments,
   assessment_student_overrides,
   attempts,
@@ -306,6 +307,22 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
     );
   }
 
-  await db.delete(assessments).where(eq(assessments.id, id));
+  // 2026-10-18: access_grants holds the assessment id as text (scope_id), so
+  // no foreign key removes its grants and they outlived the assessment. They
+  // are revoked rather than deleted — a revoked grant stays as the record,
+  // the same as the revoke route.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(access_grants)
+      .set({ revoked_at: sql`now()` })
+      .where(
+        and(
+          eq(access_grants.scope_kind, "assessment"),
+          eq(access_grants.scope_id, id),
+          isNull(access_grants.revoked_at),
+        ),
+      );
+    await tx.delete(assessments).where(eq(assessments.id, id));
+  });
   return new NextResponse(null, { status: 204 });
 }

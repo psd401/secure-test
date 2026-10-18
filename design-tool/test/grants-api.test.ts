@@ -253,6 +253,33 @@ describe("GET + DELETE /api/assessments/[id]/grants", () => {
     expect(twice.status).toBe(404);
   });
 
+  test("deleting the assessment revokes its live grants and keeps the rows (2026-10-18)", async () => {
+    const a = await makeAssessment();
+    const keep = await makeAssessment();
+    asUser(OWNER);
+    const { POST } = await assessmentGrantsRoute();
+    for (const target of [a, keep]) {
+      const res = await POST(
+        post("http://localhost/x", { grantee_email: CO_EMAIL, level: "edit" }),
+        ctx({ id: target.id }),
+      );
+      expect(res.status).toBe(201);
+    }
+    const { DELETE } = await import("../app/api/assessments/[id]/route");
+    const res = await DELETE(
+      new Request("http://localhost/x", { method: "DELETE" }),
+      ctx({ id: a.id }),
+    );
+    expect(res.status).toBe(204);
+    const rows = await getDb().select().from(access_grants);
+    expect(rows).toHaveLength(2);
+    const deleted = rows.find((r) => r.scope_id === a.id)!;
+    const other = rows.find((r) => r.scope_id === keep.id)!;
+    expect(deleted.revoked_at).not.toBeNull();
+    // Another assessment's grant is untouched.
+    expect(other.revoked_at).toBeNull();
+  });
+
   test("a grant on ANOTHER assessment cannot be revoked through this one's id", async () => {
     const mine = await makeAssessment();
     const theirs = await makeAssessment(OTHER);
