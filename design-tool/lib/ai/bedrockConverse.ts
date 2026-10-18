@@ -160,6 +160,13 @@ export async function converseTextWithMeta(opts: {
   errPrefix: string;
   surface: ConverseSurface;
   ownerSub?: string;
+  /**
+   * Gives up on the call (SDK retries included) after this long and throws
+   * `<errPrefix>_timeout`. Unset = no limit, as before: PDF import and
+   * question generation can legitimately run long, so the shared client
+   * carries none.
+   */
+  timeoutMs?: number;
 }): Promise<{ text: string; stopReason: string | undefined }> {
   const content: ContentBlock[] = [];
   if (opts.document) {
@@ -182,8 +189,13 @@ export async function converseTextWithMeta(opts: {
         messages: [{ role: "user", content }],
         inferenceConfig: inferenceConfig(opts.maxTokens, opts.temperature),
       }),
+      opts.timeoutMs ? { abortSignal: AbortSignal.timeout(opts.timeoutMs) } : undefined,
     );
   } catch (err) {
+    const name = (err as { name?: unknown })?.name;
+    if (opts.timeoutMs && (name === "TimeoutError" || name === "AbortError")) {
+      throw new Error(`${opts.errPrefix}_timeout: no reply within ${opts.timeoutMs} ms`);
+    }
     wrapBedrockError(err, opts.errPrefix);
   }
   logAiUsage({

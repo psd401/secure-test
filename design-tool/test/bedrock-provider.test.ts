@@ -40,7 +40,9 @@ interface ConverseResponse {
 }
 type Resolver =
   | { kind: "ok"; response: ConverseResponse }
-  | { kind: "throw"; error: Error };
+  | { kind: "throw"; error: Error }
+  // Never answers; rejects the way the SDK does when the abort signal fires.
+  | { kind: "hang" };
 
 let nextResolver: Resolver | null = null;
 // Responses staged after the next one, for calls that send more than once
@@ -53,6 +55,8 @@ const callLog: {
   toolConfig: unknown;
   // Raw command input — guardrail tests read guardrailIdentifier/source/etc.
   input: Record<string, unknown>;
+  // Whether send() got an abortSignal (the per-call timeout, 2026-10-18).
+  hasAbortSignal: boolean;
 }[] = [];
 
 function setNextResponse(response: ConverseResponse) {
@@ -85,8 +89,9 @@ class FakeApplyGuardrailCommand {
 
 class FakeBedrockRuntimeClient {
   constructor(_config?: unknown) {}
-  async send(command: { input: Record<string, unknown> }) {
+  async send(command: { input: Record<string, unknown> }, options?: { abortSignal?: AbortSignal }) {
     callLog.push({
+      hasAbortSignal: Boolean(options?.abortSignal),
       modelId: command.input.modelId as string,
       system: command.input.system,
       messages: command.input.messages,
@@ -97,6 +102,15 @@ class FakeBedrockRuntimeClient {
     const r = nextResolver;
     nextResolver = queuedResolvers.shift() ?? null;
     if (r.kind === "throw") throw r.error;
+    if (r.kind === "hang") {
+      return new Promise<never>((_, reject) => {
+        options?.abortSignal?.addEventListener("abort", () => {
+          const e = new Error("The operation was aborted due to timeout");
+          e.name = "TimeoutError";
+          reject(e);
+        });
+      });
+    }
     return r.response;
   }
 }
@@ -721,6 +735,30 @@ describe("ai_usage log line (docs/rubric-upload-design.md D-7)", () => {
     expect(Object.prototype.hasOwnProperty.call(line!, "owner_sub")).toBe(false);
   });
 
+  test("per-call timeout (2026-10-18): only the essay scorer sets one; a hung call throws <prefix>_timeout", async () => {
+    const { converseTextWithMeta } = await import("../lib/ai/bedrockConverse");
+    const { ESSAY_SCORE_CALL_TIMEOUT_MS } = await import("../lib/ai/essayScorer/bedrockProvider");
+    expect(ESSAY_SCORE_CALL_TIMEOUT_MS).toBe(60_000);
+    // No timeoutMs → no signal, as before (PDF import, question generation).
+    setNextResponse(textResponse("ok"));
+    await converseTextWithMeta({
+      modelId: "m", systemText: "s", userText: "u", maxTokens: 10,
+      errPrefix: "bedrock", surface: "pdf-import",
+    });
+    expect(callLog.at(-1)!.hasAbortSignal).toBe(false);
+    // A call that never answers is given up on after timeoutMs.
+    nextResolver = { kind: "hang" };
+    const started = performance.now();
+    await expect(
+      converseTextWithMeta({
+        modelId: "m", systemText: "s", userText: "u", maxTokens: 10,
+        errPrefix: "bedrock", surface: "essay-score", timeoutMs: 50,
+      }),
+    ).rejects.toThrow("bedrock_timeout: no reply within 50 ms");
+    expect(callLog.at(-1)!.hasAbortSignal).toBe(true);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
   test("essay-score surface via bedrockEssayScorer, with owner_sub", async () => {
     setNextResponse({
       ...textResponse(
@@ -758,6 +796,7 @@ describe("ai_usage log line (docs/rubric-upload-design.md D-7)", () => {
       },
       "teacher-sub-2",
     );
+    expect(callLog.at(-1)!.hasAbortSignal).toBe(true);
     const line = lastAiUsageLine();
     expect(line).toMatchObject({
       surface: "essay-score",

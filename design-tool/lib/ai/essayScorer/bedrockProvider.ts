@@ -43,6 +43,15 @@ const DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6";
 // calls per essay, whatever went wrong.
 const MAX_ATTEMPTS = 2;
 
+// 2026-10-18: the scoring claim (docs/ai-score-concurrency-design.md)
+// expires after AI_SCORING_CLAIM_TTL_MINUTES = 5, and the shared Bedrock
+// client has no request timeout, so a hung call could outlive the claim and
+// let a second request call Bedrock for the same essay. Production, 30 days
+// to 2026-10-18 (594 essay scores): median 5.8 s, p99 10.7 s, max 12.7 s,
+// longest reply 910 tokens. 60 s per call is ~5x the slowest seen; with
+// MAX_ATTEMPTS calls the worst case is ~2 min, inside the claim.
+export const ESSAY_SCORE_CALL_TIMEOUT_MS = 60_000;
+
 export const bedrockEssayScorer: EssayScorerProvider = {
   // Lazy so tests can configure BEDROCK_ESSAY_SCORE_MODEL after import.
   get id() {
@@ -69,6 +78,7 @@ export const bedrockEssayScorer: EssayScorerProvider = {
         errPrefix: "bedrock",
         surface: "essay-score",
         ownerSub,
+        timeoutMs: ESSAY_SCORE_CALL_TIMEOUT_MS,
       });
       let parsed;
       try {
