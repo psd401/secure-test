@@ -8,6 +8,7 @@ openwiki:
   change_kinds: [reporting, public-api, extension-seam]
   source_paths:
     - design-tool/lib/reporting/workPacket.ts
+    - design-tool/lib/reporting/workPacketLinks.ts
     - design-tool/lib/reporting/runComparison.ts
     - design-tool/lib/reporting/answerView.ts
     - design-tool/lib/reporting/answerHistoryView.ts
@@ -18,7 +19,7 @@ openwiki:
     - design-tool/lib/reporting/analytics.ts
     - design-tool/app/dashboard/[id]/results/work/page.tsx
     - design-tool/scripts/compare-runs.ts
-  symbols: [parsePacketQuery, PacketQuery, PACKET_SCORE_MODES, anonymousLabels, selectPacketScores, packetOrdering, choiceCheckboxLines, stemExcerpt, compareRun, comparisonToCsv, RunComparisonInput, summarizeCohort, buildTimeline, buildItemAnalytics]
+  symbols: [parsePacketQuery, PacketQuery, PACKET_SCORE_MODES, selectPacket, sectionAnonymousLabels, studentChoices, PACKET_STUDENT_CHOICE_CAP, workPacketHref, anonymousLabels, selectPacketScores, packetOrdering, choiceCheckboxLines, stemExcerpt, compareRun, comparisonToCsv, RunComparisonInput, summarizeCohort, buildTimeline, buildItemAnalytics]
   test_paths:
     - design-tool/test/work-packet.test.ts
     - design-tool/test/work-packet-page.test.tsx
@@ -45,7 +46,8 @@ The `lib/reporting/` directory holds the pure logic behind the teacher's results
 
 | Module | Owns | Consumed by |
 |---|---|---|
-| `workPacket.ts` | URL contract of the class packet, anonymous labels, which score row prints, item selection and ordering, checkbox lines | `app/dashboard/[id]/results/work/page.tsx` |
+| `workPacket.ts` | URL contract of the class packet, batch selection (`selectPacket`), anonymous labels, the toolbar's student list and cap (`studentChoices`), which score row prints, item selection and ordering, checkbox lines | `app/dashboard/[id]/results/work/page.tsx` |
+| `workPacketLinks.ts` | The results page's link into the packet, carrying its section filter (`workPacketHref`) | `app/dashboard/[id]/results/page.tsx` |
 | `runComparison.ts` | Agreement statistics between an AI run and teacher finals | `scripts/compare-runs.ts` |
 | `answerView.ts`, `shortTextView.ts`, `fillBlankView.ts`, `rubricScoreView.ts` | Plain, printable rendering of each answer type and rubric | results pages, work packet |
 | `answerHistoryView.ts` | Labels for an earlier saved answer version and why it was captured | per-student page history list; restore flow in [scoring](scoring-and-results.md) |
@@ -74,7 +76,8 @@ Behaviour that matters for changes:
 - **Selection** (`selectPacket`, batch print D-1 to D-4, 8.1, 8.2): returns `chooser`, `not_found`, `single` or `batch`. A chosen attempt that does not belong to this assessment is `not_found`, the same answer as a missing assessment. Each batch run holds one section's rows; a section's run is its handed-in work, plus in-progress work when `in_progress=1`.
 - **Anonymity across a batch** (`sectionAnonymousLabels`, D-2): labels are numbered per section, so each section's stack can be torn off with its own key page. A section run's handed-in labels are `Student NN`, and in-progress work is `In progress n`.
 - **Ordering** (`packetOrdering`) and item selection are pure; `stemExcerpt` makes the toolbar's item labels short.
-- **Toolbar limit**: the toolbar still offers one section, and no "Print selected" control exists yet. Multi-section and multi-student packets are reached through bookmarked or hand-edited URLs until the toolbar checkboxes ship (the remaining batch-print slices are in the [quickstart backlog](../quickstart.md#backlog)).
+- **Toolbar** (batch print slice 2): the Section and Student menus are checkboxes that write `section` and `attempt`, and "Include work not yet handed in" writes `in_progress`. The student list is built by `studentChoices` for the ticked sections; above `PACKET_STUDENT_CHOICE_CAP` (200 students) it returns `tooMany` and the toolbar asks for sections instead, because the form is a plain GET with no client JavaScript. The chooser's **Print selected** submits the ticks. A ticked student still prints when another section is ticked too, and the ticked box shows why (slice 1's rule).
+- **Entry from results**: the results page's "Print student work" button is built by `workPacketHref` (`lib/reporting/workPacketLinks.ts`). It keeps the results section filter; "All sections" and "No section" go to the chooser.
 
 ```mermaid
 flowchart LR
@@ -103,6 +106,7 @@ The module is deliberately identifier-free: a pair carries response and item ids
 ## Change navigation
 
 - **Changing the packet URL or flags**: edit `parsePacketQuery` and `PacketQuery` first, then `selectPacket` if the selection rules change, then `work/page.tsx`. Keep the never-throw rule; the test file `work-packet.test.ts` has `parsePacketQuery` and `selectPacket` suites (the batch cases sit in the `selectPacket` describe block).
+- **Changing batch selection or the toolbar**: `selectPacket` decides the runs, `studentChoices` builds the student checkboxes and enforces the cap, and `workPacketHref` builds the results-page link. Tests: `work-packet.test.ts` (`selectPacket`, `studentChoices`, `workPacketHref` describes) and `work-packet-page.test.tsx` (`work packet — slice 2's toolbar` and `work packet — batch print (several sections, chosen students)`). A new section or cap value must change `PACKET_STUDENT_CHOICE_CAP` and its test together.
 - **Changing what prints for a score**: `selectPacketScores` and `packetScoreHeading`. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)). A final AI score heads the row "AI score (not reviewed)" or "AI score (approved)" (the `reviewed_by_sub` rule in `packetScoreHeading`, which is separate from the per-student wording in `lib/scoring/methodLabel.ts`; see [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores)).
 - **Changing an answer's printed form**: the `*View.ts` renderer for that type, plus `renderEssayAnswerHtml` for essays. Escape all text; the renderers feed HTML.
 - **Changing run statistics**: `runComparison.ts`, with `run-comparison.test.ts` (`compareRun`, `comparisonToCsv`). It needs no database.
@@ -110,4 +114,3 @@ The module is deliberately identifier-free: a pair carries response and item ids
 - **Scope boundary**: this is a read-only area. A change here should not need a migration or a route change unless the URL contract changes. Checks against the test database are needed only for DB-backed suites such as `superseded-scores.test.ts`, which can be run per [testing](../testing/testing-and-validation.md).
 
 Related: [scoring and results](scoring-and-results.md) (which finals exist), [integrations](integrations.md) (Google Docs and gradebook consume the same finals), [sittings and attempts](sittings-and-attempts.md) (the events the timeline reads).
-he timeline reads).
