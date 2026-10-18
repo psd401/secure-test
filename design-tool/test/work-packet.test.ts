@@ -16,8 +16,11 @@ import {
   selectPacketScores,
   stemExcerpt,
   stripLine,
+  studentChoices,
+  PACKET_STUDENT_CHOICE_CAP,
   type PacketScoreRow,
 } from "../lib/reporting/workPacket";
+import { workPacketHref } from "../lib/reporting/workPacketLinks";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -443,5 +446,42 @@ describe("selectPacket", () => {
     expect(keyCountLine({ ...run, rows: rows.slice(0, 2) })).toBe("2 handed-in attempts");
     expect(keyCountLine(run)).toBe("3 attempts, 1 not handed in");
     expect(keyCountLine({ ...run, chosen: true })).toBe("3 chosen attempts");
+  });
+});
+
+// Batch print slice 2: the toolbar's student boxes and the cap (9.1).
+describe("studentChoices", () => {
+  type Row = {
+    attempt_id: string;
+    status: "submitted" | "in_progress";
+    student: { name: string; section: string | null };
+  };
+  const C = "33333333-3333-4333-8333-333333333333";
+  const rows: Row[] = [
+    { attempt_id: A, status: "submitted", student: { name: "Zed Young", section: "P3" } },
+    { attempt_id: B, status: "in_progress", student: { name: "Amy Able", section: "P3" } },
+    { attempt_id: C, status: "submitted", student: { name: "Cy Cole", section: "P1" } },
+  ];
+
+  test("one group per ticked section, alphabetical, handed in or not, by name", () => {
+    const choices = studentChoices(rows, ["P3", "P1"], false);
+    if (choices.tooMany) throw new Error("tooMany");
+    expect(choices.groups.map((g) => g.section)).toEqual(["P1", "P3"]);
+    expect(choices.groups[1]!.rows.map((r) => r.attempt_id)).toEqual([B, A]);
+  });
+
+  test("above the cap: no list, the count instead", () => {
+    expect(studentChoices(rows, ["P3", "P1"], false, 2)).toEqual({ tooMany: true, count: 3 });
+    expect(studentChoices(rows, ["P3"], false, 2).tooMany).toBe(false);
+    expect(PACKET_STUDENT_CHOICE_CAP).toBe(200);
+  });
+});
+
+// Batch print 9.3: the results page's button carries its section filter.
+describe("workPacketHref", () => {
+  test("a section filter lands on that section's packet; all or none lands on the chooser", () => {
+    expect(workPacketHref("a1", "")).toBe("/dashboard/a1/results/work");
+    expect(workPacketHref("a1", "__none__")).toBe("/dashboard/a1/results/work");
+    expect(workPacketHref("a1", "Period 2")).toBe("/dashboard/a1/results/work?section=Period%202");
   });
 });

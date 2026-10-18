@@ -105,6 +105,22 @@ async function render(
 // regardless of `?items=` / `?questions=`, so a stem string can legitimately
 // appear there even when the printed packet itself excludes that question.
 // Assertions about what actually PRINTS are scoped to this slice of the html.
+/**
+ * Batch print slice 2: a toolbar checkbox by its name and value — whether it
+ * is ticked and the label text beside it — or null when there is none.
+ */
+function box(
+  html: string,
+  name: string,
+  value: string,
+): { checked: boolean; text: string } | null {
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(
+    `<input type="checkbox" name="${name}"( checked="")? value="${escaped}"/> ([^<]*)</label>`,
+  ).exec(html);
+  return m ? { checked: m[1] !== undefined, text: m[2]! } : null;
+}
+
 function packetBody(html: string): string {
   const at = html.indexOf('<main class="packet"');
   return at === -1 ? html : html.slice(at);
@@ -801,11 +817,13 @@ describe("work packet — anonymous mode (D-1)", () => {
 });
 
 describe("work packet — slice 2's toolbar", () => {
-  test("the section select carries every handed-in section, the current one selected", async () => {
+  // Batch print slice 2: sections are checkboxes now, one per section with
+  // handed-in work, the URL's ticked.
+  test("the section checkboxes carry every handed-in section, the current one ticked", async () => {
     const { assessment } = await seedPacketScene();
     const html = await render(assessment.id, { section: SECTION });
-    expect(html).toContain('<select id="packet-section" name="section">');
-    expect(html).toContain(`<option value="${SECTION}" selected="">`);
+    expect(html).not.toContain('id="packet-section"');
+    expect(box(html, "section", SECTION)).toEqual({ checked: true, text: `${SECTION} (2 handed in)` });
   });
 
   test("every item shows as a checked checkbox by default, labelled Qn + a stem excerpt", async () => {
@@ -1187,37 +1205,43 @@ describe("work packet — one student's work (?attempt=)", () => {
     expect(html).toContain("has handed this in yet");
   });
 
-  test("the toolbar's student picker lists the section's students, in progress marked, Everyone by default", async () => {
+  test("the toolbar's student boxes list the section's students, in progress marked, none ticked by default", async () => {
     const { assessment, adaAttempt, benAttempt, calAttempt } = await seedWithInProgress();
     const html = await render(assessment.id, { section: SECTION });
-    expect(html).toContain('<select id="packet-attempt" name="attempt">');
-    expect(html).toContain('<option value="" selected="">Everyone in this section</option>');
-    expect(html).toContain(`<option value="${adaAttempt.id}">Fixture, Ada</option>`);
-    expect(html).toContain(`<option value="${benAttempt.id}">Sample, Ben</option>`);
-    expect(html).toContain(`<option value="${calAttempt.id}">Draft, Cal (in progress)</option>`);
+    expect(html).not.toContain('id="packet-attempt"');
+    expect(html).toContain("none ticked = everyone in the sections above");
+    expect(box(html, "attempt", adaAttempt.id)).toEqual({ checked: false, text: "Fixture, Ada" });
+    expect(box(html, "attempt", benAttempt.id)).toEqual({ checked: false, text: "Sample, Ben" });
+    expect(box(html, "attempt", calAttempt.id)).toEqual({
+      checked: false,
+      text: "Draft, Cal (in progress)",
+    });
   });
 
-  test("anonymous mode's picker carries labels, never a name (D-1)", async () => {
-    const { assessment, calAttempt } = await seedWithInProgress();
+  test("anonymous mode's student boxes carry labels, never a name (D-1)", async () => {
+    const { assessment, adaAttempt, benAttempt, calAttempt } = await seedWithInProgress();
     const html = await render(assessment.id, { section: SECTION, anon: "1" });
     const picker = html.slice(
-      html.indexOf('<select id="packet-attempt"'),
-      html.indexOf("</select>", html.indexOf('<select id="packet-attempt"')),
+      html.indexOf('class="toolbar-students"'),
+      html.indexOf("</fieldset>", html.indexOf('class="toolbar-students"')),
     );
-    expect(picker).toContain(">Student 01</option>");
-    expect(picker).toContain(">Student 02</option>");
-    expect(picker).toContain(`<option value="${calAttempt.id}">In progress 1</option>`);
+    expect([box(picker, "attempt", adaAttempt.id)!.text, box(picker, "attempt", benAttempt.id)!.text].sort()).toEqual([
+      "Student 01",
+      "Student 02",
+    ]);
+    expect(box(picker, "attempt", calAttempt.id)!.text).toBe("In progress 1");
     expect(picker).not.toContain("Fixture, Ada");
     expect(picker).not.toContain("Draft, Cal");
   });
 
-  test("in single mode the picker selects the student and the section select their section", async () => {
+  test("in single mode the student's box and their section's box are ticked", async () => {
     const { assessment, calAttempt } = await seedWithInProgress();
     const html = await render(assessment.id, { attempt: calAttempt.id });
-    expect(html).toContain(
-      `<option value="${calAttempt.id}" selected="">Draft, Cal (in progress)</option>`,
-    );
-    expect(html).toContain(`<option value="${SECTION}" selected="">`);
+    expect(box(html, "attempt", calAttempt.id)).toEqual({
+      checked: true,
+      text: "Draft, Cal (in progress)",
+    });
+    expect(box(html, "section", SECTION)!.checked).toBe(true);
     // "Select all" keeps the one student.
     expect(html).toContain(`attempt=${calAttempt.id}`);
   });
@@ -1414,6 +1438,39 @@ describe("work packet — batch print (several sections, chosen students)", () =
     expect(body).toContain("Fixture, Ada");
     expect(body).not.toContain("Example, Cy");
     expect(body).not.toContain(BIO);
+  });
+
+  test("slice 2 toolbar: both sections ticked, students grouped by section, the in-progress box follows the URL", async () => {
+    const { assessment, BIO, adaAttempt, cyAttempt } = await seedBatchScene();
+    const html = await render(assessment.id, {
+      section: [SECTION, BIO],
+      attempt: [adaAttempt.id, cyAttempt.id],
+      in_progress: "1",
+    });
+    expect(box(html, "section", SECTION)!.checked).toBe(true);
+    expect(box(html, "section", BIO)!.checked).toBe(true);
+    expect(box(html, "attempt", adaAttempt.id)!.checked).toBe(true);
+    expect(box(html, "attempt", cyAttempt.id)!.checked).toBe(true);
+    const students = html.slice(html.indexOf('class="toolbar-students"'));
+    const algebraAt = students.indexOf(`<p class="meta">${SECTION}</p>`);
+    const bioAt = students.indexOf(`<p class="meta">${BIO}</p>`);
+    expect(algebraAt).toBeGreaterThan(-1);
+    expect(bioAt).toBeGreaterThan(-1);
+    expect(html).toContain('<input type="checkbox" name="in_progress" checked="" value="1"/>');
+    const off = await render(assessment.id, { section: SECTION });
+    expect(off).toContain('<input type="checkbox" name="in_progress" value="1"/>');
+  });
+
+  test("the chooser lists sections as boxes and links, with Print selected", async () => {
+    const { assessment, BIO } = await seedBatchScene();
+    const html = await render(assessment.id);
+    expect(html).toContain("Print selected");
+    expect(html).toContain(`name="section" value="${SECTION}"/>`);
+    expect(html).toContain(`name="section" value="${BIO}"/>`);
+    expect(html).toContain(
+      `/dashboard/${assessment.id}/results/work?section=${encodeURIComponent(BIO)}`,
+    );
+    expect(html).not.toContain('class="student-page"');
   });
 
   test("one section still prints as before: no divider, no section in the footer", async () => {
