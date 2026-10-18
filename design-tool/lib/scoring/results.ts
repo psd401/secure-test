@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { isAiUnreviewed } from "@/lib/scoring/methodLabel";
 import { getDb } from "@/db/client";
 import {
@@ -17,6 +17,7 @@ import {
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import {
+  normalizeEmail,
   sectionsCurrentlyTaughtBy,
   studentsEnrolledInSection,
   studentsInTeachersSections,
@@ -216,6 +217,34 @@ async function sectionsNamedBySittings(
   return rows.map((r) => r.section);
 }
 
+/** G-2: the (normalized) emails of everyone other than the owner who ran a
+ * CLASS sitting on this assessment naming no section. */
+async function coTeacherSittingOwners(
+  db: ReturnType<typeof getDb>,
+  assessmentId: string,
+  ownerEmail: string | null,
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ owner_email: test_sessions.owner_email })
+    .from(test_sessions)
+    .where(
+      and(
+        eq(test_sessions.assessment_id, assessmentId),
+        eq(test_sessions.kind, "class"),
+        isNull(test_sessions.section_ps_id),
+        isNotNull(test_sessions.owner_email),
+      ),
+    );
+  const ownerKey = normalizeEmail(ownerEmail);
+  return [
+    ...new Set(
+      rows
+        .map((r) => normalizeEmail(r.owner_email))
+        .filter((e): e is string => e !== null && e !== ownerKey),
+    ),
+  ];
+}
+
 /**
  * The work packet's "M" in "N of M students in <section> handed in": the
  * current enrollment of the section with this label, looked up in the union
@@ -240,6 +269,13 @@ export async function sectionEnrolment(
   }
   for (const s of await sectionsNamedBySittings(db, assessmentId)) {
     if (sectionLabel(s) === label) psIds.add(s.ps_id);
+  }
+  // G-2: a co-teacher's unscoped sitting labels its students by the
+  // co-teacher's own sections, so those sections count here too.
+  for (const email of await coTeacherSittingOwners(db, assessmentId, ownerEmail)) {
+    for (const s of await sectionsCurrentlyTaughtBy(db, email)) {
+      if (sectionLabel(s) === label) psIds.add(s.ps_id);
+    }
   }
   if (psIds.size === 0) return ownerEmail ? 0 : null;
   const students = new Set<string>();
@@ -407,6 +443,27 @@ export async function buildResults(
     }
   }
 
+  // G-2 (docs/coteacher-gaps-2026-10-design.md, D-2): a sitting a CO-TEACHER
+  // ran that names no section ("all my sections", or a student list) labels
+  // its students by the co-teacher's own current sections first — the owner
+  // may not teach them at all. Looked up once per such sitting owner.
+  const ownerKey = normalizeEmail(ownerEmail);
+  const sittingOwnerEmailBySessionId = new Map<string, string>();
+  for (const t of testSessionRows) {
+    const email = normalizeEmail(t.owner_email);
+    if (!t.section_ps_id && email && email !== ownerKey) {
+      sittingOwnerEmailBySessionId.set(t.id, email);
+    }
+  }
+  const sectionsBySittingOwner = new Map<string, Map<string, string>>();
+  for (const email of new Set(sittingOwnerEmailBySessionId.values())) {
+    const byStudent = new Map<string, string>();
+    for (const { student, section } of await studentsInTeachersSections(db, email)) {
+      if (!byStudent.has(student.ps_id)) byStudent.set(student.ps_id, sectionLabel(section));
+    }
+    sectionsBySittingOwner.set(email, byStudent);
+  }
+
   function resolveSection(attempt: (typeof submitted)[number], rosterPsId: string | null): string | null {
     const sittingSectionPsId = attempt.test_session_id
       ? sectionPsIdBySessionId.get(attempt.test_session_id)
@@ -416,6 +473,11 @@ export async function buildResults(
       if (section) return sectionLabel(section);
     }
     if (rosterPsId) {
+      const coTeacher = attempt.test_session_id
+        ? sittingOwnerEmailBySessionId.get(attempt.test_session_id)
+        : undefined;
+      const coLabel = coTeacher ? sectionsBySittingOwner.get(coTeacher)?.get(rosterPsId) : undefined;
+      if (coLabel) return coLabel;
       const label = sectionsByStudentPsId.get(rosterPsId);
       if (label) return label;
     }

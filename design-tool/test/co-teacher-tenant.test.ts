@@ -413,4 +413,72 @@ describe("a student in a co-teacher's class sitting (co-teacher tenant fix)", ()
     expect(roster.coTaught[0]!.coTeacherEmail).toBe(OTHER_TEACHER_EMAIL);
     expect(roster.coTaught[0]!.students.map((o) => o.id)).toEqual([attempt.student_id]);
   });
+
+  // G-2 (docs/coteacher-gaps-2026-10-design.md, D-2): a co-teacher's sitting
+  // that names NO section ("all my sections") — before the fix the student was
+  // looked up only in the owner's sections and read "No section", fell out of
+  // every work packet and the filter, and the packet's count read 0.
+  test("a co-teacher's sitting with no section labels the student by the co-teacher's section", async () => {
+    const db = getDb();
+    const [assessment] = await db
+      .insert(assessments)
+      .values({ owner_sub: OWNER, owner_email: TEACHER_EMAIL, name: "Co-taught, unscoped", status: "published" })
+      .returning();
+    await db.insert(items).values({
+      assessment_id: assessment!.id,
+      position: 0,
+      type: "multiple_choice_single",
+      stem: "Pick",
+      choices: [
+        { id: "a", text: "A" },
+        { id: "b", text: "B" },
+      ],
+      correct_choice_ids: ["a"],
+    });
+    await db.insert(access_grants).values({
+      grantee_email: OTHER_TEACHER_EMAIL,
+      scope_kind: "assessment",
+      scope_id: assessment!.id,
+      level: "edit",
+      note: "co-teacher",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+    });
+
+    principal = staffPrincipal(CO_TEACHER, OTHER_TEACHER_EMAIL);
+    const created = await call("../app/api/test-sessions/route", "POST", "/api/test-sessions", {}, {
+      assessment_id: assessment!.id,
+    });
+    expect(created.status).toBe(201);
+    const sitting = ((await created.json()) as { test_session: TestSessionRow }).test_session;
+    expect(sitting.section_ps_id).toBeNull();
+
+    principal = studentPrincipal(BIOLOGY_STUDENT.email);
+    await call("../app/api/test-sessions/redeem/route", "POST", "/api/test-sessions/redeem", {}, {
+      code: sitting.code,
+    });
+    const joined = await call("../app/api/attempts/route", "POST", "/api/attempts", {}, {
+      test_session_id: sitting.id,
+    });
+    const { attempt } = (await joined.json()) as { attempt: AttemptRow };
+    expect(
+      (
+        await call(
+          "../app/api/attempts/[attemptId]/submit/route",
+          "POST",
+          `/api/attempts/${attempt.id}/submit`,
+          { attemptId: attempt.id },
+        )
+      ).status,
+    ).toBe(200);
+
+    const [biology] = await db.select().from(roster_sections).where(eq(roster_sections.ps_id, "5002"));
+    const biologyLabel = sectionLabel(biology!);
+
+    const results = await buildResults(assessment!.id);
+    expect(results.rows).toHaveLength(1);
+    expect(results.rows[0]!.student.section).toBe(biologyLabel);
+    expect(sectionFilterOptions(results).labels).toContain(biologyLabel);
+    expect(await sectionEnrolment(db, assessment!.id, biologyLabel)).toBe(1);
+  });
 });
