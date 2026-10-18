@@ -72,6 +72,11 @@ export type ScoreAiTally = {
   skipped_unscorable: number;
   /** Students whose request failed outright (HTTP error or network). */
   failed_students: number;
+  /**
+   * Students the route refused for a reason a retry cannot fix (a 4xx other
+   * than 429: access removed mid-batch, an attempt no longer handed in).
+   */
+  refused_students: number;
 };
 
 export const EMPTY_TALLY: ScoreAiTally = {
@@ -82,15 +87,18 @@ export const EMPTY_TALLY: ScoreAiTally = {
   provider_errors: 0,
   skipped_unscorable: 0,
   failed_students: 0,
+  refused_students: 0,
 };
 
 /** Adds one route response (or a failed request, `null`) to the tally. */
 export function addToTally(
   tally: ScoreAiTally,
-  body: unknown | null,
+  body: unknown | null | typeof REFUSED,
 ): ScoreAiTally {
   if (body === null)
     return { ...tally, failed_students: tally.failed_students + 1 };
+  if (body === REFUSED)
+    return { ...tally, refused_students: tally.refused_students + 1 };
   const b = body as Partial<Record<keyof ScoreAiTally, unknown>>;
   const n = (k: keyof ScoreAiTally) =>
     typeof b[k] === "number" ? (b[k] as number) : 0;
@@ -102,6 +110,7 @@ export function addToTally(
     provider_errors: tally.provider_errors + n("provider_errors"),
     skipped_unscorable: tally.skipped_unscorable + n("skipped_unscorable"),
     failed_students: tally.failed_students,
+    refused_students: tally.refused_students,
   };
 }
 
@@ -144,6 +153,12 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
         "couldn't be sent. Press the button again to retry.",
     );
   }
+  if (t.refused_students > 0) {
+    lines.push(
+      `${t.refused_students} ${t.refused_students === 1 ? "student's" : "students'"} essays ` +
+        "couldn't be scored from this page. Reload it and check you can still edit this test.",
+    );
+  }
   if (t.skipped_unscorable > 0) {
     lines.push(
       `${t.skipped_unscorable} ${t.skipped_unscorable === 1 ? "has" : "have"} no rubric or ${t.skipped_unscorable === 1 ? "is" : "are"} empty.`,
@@ -173,12 +188,32 @@ export async function runPool<T>(
   await Promise.all(Array.from({ length: Math.min(limit, ids.length) }, lane));
 }
 
-async function scoreOne(attemptId: string): Promise<unknown | null> {
+/** A request the route refused for good; pressing again would not help. */
+export const REFUSED = "refused" as const;
+
+/**
+ * How one student's request ended, from its HTTP status: the route's body on
+ * success, `null` when a retry may succeed (network, 429, 5xx), REFUSED for
+ * any other status (403 / 404 access, 400 `attempt_not_submitted`).
+ */
+export function outcomeForStatus(
+  status: number,
+): "ok" | "retry" | typeof REFUSED {
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 429 || status >= 500) return "retry";
+  return REFUSED;
+}
+
+async function scoreOne(
+  attemptId: string,
+): Promise<unknown | null | typeof REFUSED> {
   try {
     const res = await fetch(`/api/attempts/${attemptId}/score-ai`, {
       method: "POST",
     });
-    if (!res.ok) return null;
+    const outcome = outcomeForStatus(res.status);
+    if (outcome === REFUSED) return REFUSED;
+    if (outcome === "retry") return null;
     return (await res.json()) as unknown;
   } catch {
     return null;

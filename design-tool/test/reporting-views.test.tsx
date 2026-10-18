@@ -490,6 +490,39 @@ describe("the results matrix", () => {
     expect(html).toContain(">Print student work</a>");
   });
 
+  // U-24 (docs/batch-ai-scoring-design.md): the button shows only on a test
+  // with an AI / Hybrid essay, and is disabled until a section is chosen.
+  test("Score essays with AI shows only for an AI essay, disabled without a section", async () => {
+    const scene = await seedScene();
+    const human = await renderResults(scene.assessment.id);
+    expect(human).not.toContain("Score essays with AI");
+
+    const db = getDb();
+    const [essay] = await db
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, scene.assessment.id))
+      .then((rows) => rows.filter((i) => i.type === "essay"));
+    await db
+      .update(items)
+      .set({ config: { ...essay!.config, scoring_method: "ai" } })
+      .where(eq(items.id, essay!.id));
+
+    const all = await renderResults(scene.assessment.id);
+    expect(all).toContain("Score essays with AI (");
+    expect(all).toContain('title="Choose a section first."');
+    expect(all).toContain("Choose a section to score its handed-in essays with AI.");
+
+    const results = await buildResults(scene.assessment.id);
+    const section = results.rows.find(
+      (r) => r.attempt_id === scene.aliceAttempt.id,
+    )!.student.section!;
+    const one = await renderResults(scene.assessment.id, section);
+    expect(one).toContain("Score essays with AI (");
+    expect(one).not.toContain('title="Choose a section first."');
+    expect(one).toContain("Handed-in essays in this section that have no score yet.");
+  });
+
   test("the section filter narrows the rows and offers every section present", async () => {
     const scene = await seedScene();
     const results = await buildResults(scene.assessment.id);
