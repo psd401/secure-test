@@ -206,7 +206,9 @@ its own.
   percent. *Download CSV*, *Print report* (a printable summary; add
   `?attempt=…` from a student's row for a family-facing single page),
   *Print student work* (each student's answers with the key on a last
-  page, for scoring by hand or evidence; with a score choice and *Leave out
+  page, for scoring by hand or evidence; tick several sections for one
+  packet, or just the students you want, and *Include work not yet handed
+  in* for students still working; with a score choice and *Leave out
   answers* it prints the scores and feedback without the student's writing,
   to hand back).
 - **Send to gradebook** (Results page, since 2026-09-29): each student's

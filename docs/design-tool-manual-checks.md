@@ -1700,3 +1700,34 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 607 | Then **Re-run AI** on that answer | Another proposal, never a final (the attempt-wide route has no button; its case is in `test/safeguarding-screening.test.ts`) | NOT RUN |
 | 608 | `/help.html#score` and the quick start | Topic 8's last step names the •, the "Finalized by AI — not reviewed" list and that a flagged answer always waits; the quick start no longer says nothing counts until approved | NOT RUN |
 | 609 | After the deploy: `/roadmap.html` | A milestone "AI scores say whether a teacher reviewed them" (D-14, added at deploy) | NOT RUN |
+
+## Co-teacher sections and one practice sitting (G-2, G-4, 2026-10-18)
+
+`docs/coteacher-gaps-2026-10-design.md` is the record (D-2, D-4, D-10, D-11). Local dev on `_demo`, Claude in Chrome; the co-teacher is a second staff session holding an edit-level co-teach grant on the fixture, and teaches a section the owner does not. G-3 (wording) and G-5 (no change) have no rows.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 610 | The co-teacher starts a test session with **All my sections**; a student of the co-teacher's section joins and hands in | The owner's Results shows that student under the co-teacher's section, not "No section"; the section filter offers it | NOT RUN |
+| 611 | **Print student work** for that section | The student prints; the strip reads "1 of N students in <section> handed in", N the section's enrolment, not 0 | NOT RUN |
+| 612 | The owner's own **All my sections** session, a student of the owner's section | Labelled by the owner's section, as before | NOT RUN |
+| 613 | **Practice on my Mac** pressed twice quickly, or once in each of two tabs | One practice row on the Test sessions tab; no error shown | NOT RUN |
+| 614 | Close that practice session, then **Practice on my Mac** | A new practice session opens | NOT RUN |
+
+## Batch print — several sections and chosen students (U-9, 2026-10-18)
+
+`docs/batch-print-design.md` is the record (D-1…D-11). Local dev on `_demo`, Claude in Chrome as the demo teacher, on an assessment with handed-in work in two sections and one student still working in one of them.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 615 | Results → **Print student work** (All sections) → tick both sections → **Print selected** | One packet; the sections in alphabetical order; a divider naming the section on the first page of each section's run; every page footer names the section; one strip line per section | NOT RUN |
+| 616 | The same with **Anonymous** ticked → Update | "Student 01" in each section's run; a key page closing each run, listing that section only; no name above either key page | NOT RUN |
+| 617 | **Print / Save as PDF** of 616 | Every student starts a new sheet, each section's run ends with its key page, an inch of margin | NOT RUN |
+| 618 | The toolbar's **Sections**: untick one → Update | That section's run is gone; its students leave the student list | NOT RUN |
+| 619 | The toolbar's **Students**: grouped by section; tick two → Update; untick both → Update | Only those two print; with none ticked, everyone in the ticked sections | NOT RUN |
+| 620 | Tick one student → Update; then tick a second section as well → Update | One student's work ("One student's work — handed in"); still that one student after the second Update, the box still ticked (slice 1's rule, recorded) | NOT RUN |
+| 621 | **Include work not yet handed in** → Update | The working student prints with "In progress — not handed in"; off by default (unticked, they do not print) | NOT RUN |
+| 622 | Tick the working student alone, the box unticked | They print as one student's work, marked in progress (D-6) | NOT RUN |
+| 623 | Sections with more than 200 students ticked | "Too many students to choose one by one — choose sections instead" in place of the student list (likely not exercisable on `_demo`; the case is in `test/work-packet.test.ts`) | NOT RUN |
+| 624 | Results filtered to one section → **Print student work**; then with **All sections** | That section's packet; the chooser | NOT RUN |
+| 625 | A student's page → **Print student work**, and an old bookmarked one-section link | Both print exactly as before | NOT RUN |
+| 626 | `/help.html#results` and the quick start | The packet line names several sections, chosen students and work not yet handed in | NOT RUN |
