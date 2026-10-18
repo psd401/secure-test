@@ -83,7 +83,7 @@ stateDiagram-v2
 Score statuses on a response row. `research` rows are written only by the scoring-corpus runner and are invisible to teacher surfaces.
 
 - The partial unique index `scores_one_final_per_response_unq` allows one `final` per response. Superseding frees the slot so the next hand-in (or the correction itself) can write a new final.
-- **Pass back** (`lib/api/passBackAttempt.ts`): one transaction flips a submitted attempt to `in_progress`, supersedes every `final`, and records a `passed_back` event. `proposed` rows are left alone. A timed assessment requires a new deadline, written to `deadline_override_at`.
+- **Pass back** (`lib/api/passBackAttempt.ts`, design note `docs/pass-back-design.md`): one transaction flips a submitted attempt to `in_progress`, supersedes every `final`, and records a `passed_back` event. `proposed` rows are left alone. A timed assessment requires a new deadline, written to `deadline_override_at`.
 - **Rescore with current key** (`lib/scoring/rescore.ts`): `planRescore` is pure; `applyRescore` supersedes only `auto` finals whose answer now scores differently and inserts a new `auto` final with `rationale.changed_from`. Teacher-set scores are counted but never overwritten.
 - **Change score** (`lib/api/changeScore.ts`): supersedes a `final` with a new human final and writes a `score_changed` event.
 - **Earlier scores** (`lib/scoring/supersededScores.ts`, `listSupersededScores`): the only reader of `superseded` rows. It feeds the per-student "Earlier scores (before pass back)" section. Every row is labelled with a `cause`: `changed` when a later score on the same response names it in `rationale.changed_from.score_id`, otherwise `pass_back`. Every other surface (results, CSV, print, work packet, review queue, auto-scoring pass) reads only `final`, so superseded rows stay out of totals. Tests: `superseded-scores.test.ts`.
@@ -147,7 +147,7 @@ Caption: one batch request per student; each essay is claimed before the model c
 
 ## Hybrid and unreviewed AI scores
 
-The `hybrid` method lets a confident AI score become `final` without a teacher. `aiScoreResponse` in `lib/scoring/aiScoreResponse.ts` makes that decision against `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85, one global value in `lib/ai/essayScorer/scoreCore.ts`) and the injection check.
+The `hybrid` method lets a confident AI score become `final` without a teacher. The reasoning behind these rules is in `docs/hybrid-scoring-transparency-design.md`. `aiScoreResponse` in `lib/scoring/aiScoreResponse.ts` makes that decision against `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85, one global value in `lib/ai/essayScorer/scoreCore.ts`) and the injection check.
 
 ```mermaid
 flowchart TD
