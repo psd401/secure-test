@@ -112,8 +112,8 @@ No migration, no client release.
   (`aiBatchCounts`), `components/app/ScoreEssaysWithAiControl.tsx`, the
   Results page wiring. Not merged, not deployed.
 - **Slice 2 RUN 2026-10-18 on local dev (`_demo`, mock scorer, mock
-  screener):** rows 610–620 ✅ in `docs/design-tool-manual-checks.md`
-  (620 with the demo co-teacher, not a second real account); row 621 (the
+  screener):** rows 627–637 ✅ in `docs/design-tool-manual-checks.md`
+  (637 with the demo co-teacher, not a second real account); row 638 (the
   origin with Bedrock, a full class, the quota check) NOT RUN. Fix U24-F1
   (the button is now the dialog's trigger, so focus returns to it) went in
   with the rows; reading U24-R1 ("held back" counts answers flagged before
