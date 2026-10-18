@@ -25,16 +25,15 @@ import {
   type RubricScoreRow,
 } from "@/lib/reporting/rubricScoreView";
 import {
-  anonymousLabels,
   choiceCheckboxLines,
   packetHidesAnswers,
-  packetOrdering,
   packetScoreHeading,
   parsePacketQuery,
   keyCountLine,
   PACKET_SCORE_MODES,
   sectionAnonymousLabels,
   selectPacket,
+  studentChoices,
   selectPacketScores,
   stemExcerpt,
   stripLine,
@@ -169,6 +168,9 @@ const PRINT_CSS = `
 .toolbar-scores { display: flex; flex-wrap: wrap; gap: .25rem 1rem;
   align-items: center; border: none; padding: 0; }
 .toolbar-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.toolbar-students { border: 1px solid #ccc; border-radius: .375rem; padding: .5rem .75rem;
+  display: flex; flex-wrap: wrap; gap: .5rem 2rem; }
+.toolbar-student-group { display: flex; flex-direction: column; gap: .1rem; }
 @media print {
   header, nav, .strip, .screen-only { display: none !important; }
   .packet { max-width: none; padding: 0; font-size: 11pt; }
@@ -398,7 +400,8 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
       <main className="mx-auto max-w-2xl space-y-4 px-6 py-10">
         <h1 className="text-2xl font-semibold">Print student work</h1>
         <p className="text-sm text-muted-foreground">
-          One packet per class: pick a section. {assessment.name}
+          Pick one or more sections — they print as one packet, a section at a
+          time. {assessment.name}
         </p>
         {sections.length === 0 ? (
           <p className="text-sm">
@@ -407,21 +410,38 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
             from the student&apos;s enrollment in a section you teach.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {sections.map(([label, count]) => (
-              <li key={label}>
-                <a
-                  className="underline"
-                  href={`/dashboard/${assessment.id}/results/work?section=${encodeURIComponent(label)}`}
-                >
-                  {label}
-                </a>{" "}
-                <span className="text-sm text-muted-foreground">
-                  — {count} handed in
-                </span>
-              </li>
-            ))}
-          </ul>
+          // Batch print slice 2: a plain GET form, like the toolbar. Each name
+          // stays a link to that section's packet alone (9.2).
+          <form
+            method="GET"
+            action={`/dashboard/${assessment.id}/results/work`}
+            className="space-y-3"
+          >
+            <ul className="space-y-2">
+              {sections.map(([label, count]) => (
+                <li key={label} className="flex items-baseline gap-2">
+                  <input
+                    type="checkbox"
+                    name="section"
+                    value={label}
+                    aria-label={`Include ${label}`}
+                  />
+                  <a
+                    className="underline"
+                    href={`/dashboard/${assessment.id}/results/work?section=${encodeURIComponent(label)}`}
+                  >
+                    {label}
+                  </a>{" "}
+                  <span className="text-sm text-muted-foreground">
+                    — {count} handed in
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button type="submit" className="rounded-md border px-3 py-1.5 text-sm">
+              Print selected
+            </button>
+          </form>
         )}
         {unsectioned > 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -439,10 +459,6 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     );
   }
 
-  // The toolbar's section and student selects still name ONE section (batch
-  // print slice 2 replaces them with checkboxes): the single student's own,
-  // else the first run's.
-  const section = runs[0]?.section ?? null;
   const ordered = runs.flatMap((r) => r.rows);
   // D-2: anonymous labels numbered per section, over each section's
   // handed-in work, so a narrowed or single print keeps the number the full
@@ -476,27 +492,38 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     }
   }
 
-  // The toolbar's student picker: everyone in the chosen section who has an
-  // attempt, handed in or not. Named, alphabetical — except in anonymous
-  // mode, where no name appears anywhere above the key page (D-1), so each
-  // option carries the section packet's label instead (handed in) or an
-  // "In progress n" of its own (in progress; no label exists for one).
-  const pickable = packetOrdering(
-    results.rows.filter((r) => r.student.section === section),
-    query.anon,
-  );
-  const sectionLabels = query.anon ? sectionAnonymousLabels(results.rows, section) : null;
+  // Batch print slice 2: the toolbar's section and student checkboxes. The
+  // ticked sections are the URL's, else the sections the packet's runs are in
+  // (a single student's own section, or chosen students' sections).
+  const tickedSections: (string | null)[] =
+    query.sections.length > 0 ? query.sections : runs.map((r) => r.section);
+  const tickedSectionSet = new Set(tickedSections);
+  // Every section with handed-in work, plus any ticked one that has none yet
+  // (a single in-progress student's, or a hand-edited URL's).
+  const sectionOptions: [string, number][] = [
+    ...sections,
+    ...tickedSections
+      .filter((s): s is string => s !== null && !sectionCounts.has(s))
+      .map((s) => [s, 0] as [string, number]),
+  ].sort((a, b) => a[0].localeCompare(b[0]));
+  // Named, alphabetical — except in anonymous mode, where no name appears
+  // anywhere above the key page (D-1), so each box carries the section
+  // packet's label instead (handed in) or "In progress n".
+  const choices = studentChoices(results.rows, tickedSections, query.anon);
+  const chosenIds = new Set(query.attempts);
+  const labelsBySection = new Map<string | null, Map<string, string>>();
   function pickerLabel(r: ResultsRow): string {
-    if (sectionLabels) return sectionLabels.get(r.attempt_id) ?? "Student";
+    if (query.anon) {
+      let forSection = labelsBySection.get(r.student.section);
+      if (!forSection) {
+        forSection = sectionAnonymousLabels(results.rows, r.student.section);
+        labelsBySection.set(r.student.section, forSection);
+      }
+      return forSection.get(r.attempt_id) ?? "Student";
+    }
     const name = r.student.name || r.student.ssid || "(unknown)";
     return r.status === "in_progress" ? `${name} (in progress)` : name;
   }
-  // The section select lists sections with handed-in work; a single
-  // in-progress student's section may have none yet, so it is added.
-  const sectionOptions =
-    section !== null && !sectionCounts.has(section)
-      ? [...sections, [section, 0] as [string, number]].sort((a, b) => a[0].localeCompare(b[0]))
-      : sections;
 
   // ── Items, in delivery order, narrowed by ?items=.
   const allItems = await db
@@ -627,32 +654,59 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
         action={`/dashboard/${assessment.id}/results/work`}
         className="toolbar screen-only"
       >
-        <div className="toolbar-row">
-          <label htmlFor="packet-section">Section</label>
-          <select id="packet-section" name="section" defaultValue={section ?? ""}>
-            {/* Only a single student no section resolves for gets here with
-                none; "" parses as no section, so the attempt still prints. */}
-            {section === null ? <option value="">No section</option> : null}
-            {sectionOptions.map(([label, count]) => (
-              <option key={label} value={label}>
-                {label} ({count} handed in)
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="toolbar-row">
-          {/* One student's work: "Everyone" submits `attempt=` blank, which
-              parses as none — the section packet. */}
-          <label htmlFor="packet-attempt">Student</label>
-          <select id="packet-attempt" name="attempt" defaultValue={single?.attempt_id ?? ""}>
-            <option value="">Everyone in this section</option>
-            {pickable.map((r) => (
-              <option key={r.attempt_id} value={r.attempt_id}>
-                {pickerLabel(r)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <fieldset className="toolbar-items">
+          <legend>Sections</legend>
+          {sectionOptions.map(([label, count]) => (
+            <label key={label} className="toolbar-item">
+              <input
+                type="checkbox"
+                name="section"
+                value={label}
+                defaultChecked={tickedSectionSet.has(label)}
+              />{" "}
+              {label} ({count} handed in)
+            </label>
+          ))}
+        </fieldset>
+        <fieldset className="toolbar-students">
+          {/* None ticked = everyone in the ticked sections. The list follows
+              the ticked sections after Update — a GET round trip, no JS. */}
+          <legend>Students (none ticked = everyone in the sections above)</legend>
+          {choices.tooMany ? (
+            <p className="meta" role="status">
+              Too many students to choose one by one ({choices.count}) — choose
+              sections instead.
+            </p>
+          ) : (
+            choices.groups.map((group) => (
+              <div key={group.section ?? "__none__"} className="toolbar-student-group">
+                <p className="meta">{group.section ?? "No section"}</p>
+                {group.rows.map((r) => (
+                  <label key={r.attempt_id} className="toolbar-item">
+                    <input
+                      type="checkbox"
+                      name="attempt"
+                      value={r.attempt_id}
+                      defaultChecked={chosenIds.has(r.attempt_id)}
+                    />{" "}
+                    {pickerLabel(r)}
+                  </label>
+                ))}
+              </div>
+            ))
+          )}
+        </fieldset>
+        <label className="toolbar-flag">
+          {/* D-3: off by default, so an unchecked box (which submits nothing)
+              is the default — no hidden field needed. */}
+          <input
+            type="checkbox"
+            name="in_progress"
+            value="1"
+            defaultChecked={query.inProgress}
+          />
+          Include work not yet handed in
+        </label>
         <fieldset className="toolbar-items">
           <legend>
             Questions to include{" "}

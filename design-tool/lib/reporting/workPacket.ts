@@ -520,3 +520,39 @@ export function keyCountLine<T extends PacketRowLike>(run: PacketRun<T>): string
     ? `${plural(run.rows.length, "attempt")}, ${notYet} not handed in`
     : plural(handed, "handed-in attempt");
 }
+
+/**
+ * Batch print slice 2 (docs/batch-print-design.md, 9.1): above this many
+ * students in the ticked sections the toolbar offers no student checkboxes.
+ * The form is a plain GET with no client JS, so the browser puts every ticked
+ * id in the URL; 200 ids (~45 bytes each) stays well under the 16 KB the ALB
+ * and Node accept.
+ */
+export const PACKET_STUDENT_CHOICE_CAP = 200;
+
+export type StudentChoices<T> =
+  | { tooMany: true; count: number }
+  | { tooMany: false; groups: Array<{ section: string | null; rows: T[] }> };
+
+/**
+ * The toolbar's student checkboxes: everyone with an attempt (handed in or
+ * not) in each ticked section, one group per section in the packet's order,
+ * or `tooMany` above the cap.
+ */
+export function studentChoices<T extends PacketRowLike>(
+  rows: readonly T[],
+  sections: readonly (string | null)[],
+  anon: boolean,
+  cap: number = PACKET_STUDENT_CHOICE_CAP,
+): StudentChoices<T> {
+  const ordered = [...new Set(sections)].sort(compareSections);
+  const groups = ordered.map((section) => ({
+    section,
+    rows: packetOrdering(
+      rows.filter((r) => r.student.section === section),
+      anon,
+    ),
+  }));
+  const count = groups.reduce((n, g) => n + g.rows.length, 0);
+  return count > cap ? { tooMany: true, count } : { tooMany: false, groups };
+}

@@ -23,6 +23,12 @@ D-2 every item type). Nothing is built.
 - **D-7** (8.2) "As listed" means alphabetical, the toolbar's order, not URL
   order; chosen students with no section print last.
 - **D-8** (8.3) The flag is `in_progress=1`.
+- **D-9** (9.1, 2026-10-18) The student checkboxes stop at 200 students in
+  the ticked sections; above that the toolbar says to choose sections.
+- **D-10** (9.2) The chooser keeps each section name as its own link beside
+  its checkbox.
+- **D-11** (9.3) The results page's **Print student work** carries its
+  section filter (not "All sections" or "No section").
 
 ## What exists
 
@@ -116,6 +122,20 @@ Design tool only; no migration; no client release.
   pass unchanged). Tests: `test/work-packet.test.ts` (the last-wins
   `section` test replaced; `selectPacket`, labels, lines) and six batch
   cases in `test/work-packet-page.test.tsx`.
+
+- **Slice 2 BUILT 2026-10-18, not committed, not deployed.** The toolbar's
+  Section and Student menus are checkboxes (`section`, `attempt`): the
+  sections with handed-in work plus any ticked one with none, the URL's
+  (or the runs') sections ticked; students of the ticked sections grouped
+  by section, handed in or not, ticked from the URL, labels under
+  Anonymous (`studentChoices`, `PACKET_STUDENT_CHOICE_CAP` = 200, D-9); an
+  "Include work not yet handed in" box. The chooser is a GET form — a box
+  and a link per section, **Print selected** (D-10). `workPacketHref`
+  (`lib/reporting/workPacketLinks.ts`) gives the results page's button its
+  section (D-11). Reading: with one student ticked, ticking another section
+  still prints that student (slice 1's rule); the ticked box shows why.
+  Tests: the select / picker tests rewritten for checkboxes, two new page
+  cases, `studentChoices` + `workPacketHref` cases.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 
