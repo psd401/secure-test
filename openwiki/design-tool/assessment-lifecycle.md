@@ -74,7 +74,7 @@ Sittings have their own archive flag, set by `PATCH /api/test-sessions/[sessionI
 1. `requireDraft`: a published row returns 409 `assessment_published_editing_locked`, so the only path is unpublish first.
 2. Attempt count: if any `attempts` row references the assessment, the route returns 409 `has_attempts` with the count and deletes nothing. The comment in the route explains why: deleting student work silently would bypass the per-attempt delete route and its audit row.
 
-When the draft has no attempts, the cascade removes items, item sets, overrides, shares, sittings and any stored upload rows. The editor's Settings tab and the Assessments list both offer delete, and the list disables it with a note when the row is published or has attempts (`DeleteDraftButton.tsx`, `AssessmentEditor.tsx`). Deleting an attempt is covered in [sittings and attempts](sittings-and-attempts.md#attempt-lifecycle).
+When the draft has no attempts, the cascade removes items, item sets, overrides, shares, sittings and any stored upload rows. Access grants are not part of that cascade: `access_grants.scope_id` holds the assessment id as text, so no foreign key reaches it. The route therefore sets `revoked_at` on every live assessment-scope grant for the id, in the same transaction as the row delete. The grant rows stay as the record, as with the revoke route (see [auth and access](auth-and-access.md)). The editor's Settings tab and the Assessments list both offer delete, and the list disables it with a note when the row is published or has attempts (`DeleteDraftButton.tsx`, `AssessmentEditor.tsx`). Deleting an attempt is covered in [sittings and attempts](sittings-and-attempts.md#attempt-lifecycle).
 
 ## Duplicate
 
@@ -89,6 +89,7 @@ Bundle structure and the import rules are in [wire formats](../architecture/wire
 - To add a new status-only PATCH, decide its level first: archive is `own`, edits are `edit`. Add it beside the existing archive branch in `app/api/assessments/[id]/route.ts`, and keep it status-only so the lock is not bypassed.
 - Any new route that writes an assessment's content must call `requireDraft` (or `isAnswerKeyOnlyPatch` for the answer-key exception).
 - `visibleAssessments` decides what the list shows for owners and grantees. Change archived semantics there, not in the page.
+- Any new cascade or delete path for an assessment must also revoke its assessment-scope grants, because the grant table has no foreign key to `assessments`. Keep it in the same transaction as the row delete.
 
 Focused checks:
 
@@ -96,4 +97,4 @@ Focused checks:
 cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/assessments-api.test.ts test/duplicate-assessment.test.ts
 ```
 
-Use `assessments-api.test.ts` for the lock, archive and delete sections (`describe("DELETE /api/assessments/[id] — D-1 has_attempts guard")`, `describe("PATCH /api/assessments/[id] — archive")`, `describe("slice 19 — publish lock")`). The component tests `archive-assessment-button.test.tsx` and `delete-draft-button.test.tsx` cover button wording only. Broader suites such as the full design-tool test run are not needed for a lifecycle change.
+Use `assessments-api.test.ts` for the lock, archive and delete sections (`describe("DELETE /api/assessments/[id] — D-1 has_attempts guard")`, `describe("PATCH /api/assessments/[id] — archive")`, `describe("slice 19 — publish lock")`). The grant revocation on delete is covered by the test "deleting the assessment revokes its live grants and keeps the rows" in `test/grants-api.test.ts`, which also needs the test database. The component tests `archive-assessment-button.test.tsx` and `delete-draft-button.test.tsx` cover button wording only. Broader suites such as the full design-tool test run are not needed for a lifecycle change.

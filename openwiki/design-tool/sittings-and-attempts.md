@@ -105,7 +105,7 @@ Two independent clocks refuse student writes, and each has a grace period for th
 | Clock | Decider | Grace | Meaning |
 |---|---|---|---|
 | Time limit | `deadlineFor(attempt, assessment)` in `lib/api/attemptDeadline.ts` | `DEADLINE_GRACE_SECONDS` = 30 | Per attempt. Order of precedence: `time_limit_removed` (null), then `deadline_override_at`, then `started_at + time_limit_seconds`. A non-positive limit means no limit. |
-| Sitting over | `sittingIsOver` in `lib/api/sittingOver.ts` | `SITTING_CLOSE_GRACE_SECONDS` = 10 for writes, none for the peek poll and submit | The teacher pressed Close, or `expires_at` passed. Expiry is read lazily, with no timer. |
+| Sitting over | `sittingIsOver` in `lib/api/sittingOver.ts` | `SITTING_CLOSE_GRACE_SECONDS` = 10 for writes, none for the peek poll and submit | The teacher pressed Close, or `expires_at` passed. Expiry is read lazily, with no timer. The design note is `docs/close-session-ends-attempts-design.md`. |
 
 The design note for this behaviour is `docs/time-limit-and-unfinished-attempts-design.md`. Neither clock hands the attempt in. The client ends the secure session, the attempt stays `in_progress` and resumable through a later sitting, and finalising is the teacher's hand-in (`app/api/attempts/[attemptId]/hand-in`, `app/api/test-sessions/[sessionId]/hand-in-all`) or the student's Finish later. A student's own submit after the deadline is refused (409), so only the teacher's route stays open.
 
