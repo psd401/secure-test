@@ -100,11 +100,3 @@ One Swift fixture is not hand-written. `Fixtures/delivery-bundle.json` under `cl
 | `next build`, CDK synth | see [deployment and observability](../operations/deployment-and-observability.md) | conditional: only for build, Dockerfile or infra edits |
 
 CI in `.github/workflows/ci.yml` runs on every push to `main` and on every pull request. It builds and tests `packages/schema` and `packages/renderer`, typechecks and tests the design tool against a Postgres service, and runs `bun db/migrate.ts` first. It does not run the Swift packages (the workflow header says `swift test` needs a macOS runner). A green `ci` run on `main` is also the signing gate for renderer manifests ([signed renderer delivery](../client/signed-renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
-tool && bun run typecheck` | resolves `@secure-test/schema` through `dist/` |
-| Schema | `cd packages/schema && bun run build && bun test` | rebuild before consumer checks |
-| Swift class | `cd client/SecureTestCore && swift test --filter <TestClass>` | |
-| App target compile | `cd client && xcodebuild -project SecureTest.xcodeproj -scheme SecureTest -destination 'platform=macOS' build` | conditional: only for edits under `client/SecureTest/` or the project file |
-| Full design-tool suite | `cd design-tool && DATABASE_URL=... bun test` | conditional: shared helpers, auth, schema or migration changes |
-| `next build`, CDK synth | see [deployment and observability](../operations/deployment-and-observability.md) | conditional: only for build, Dockerfile or infra edits |
-
-CI in `.github/workflows/ci.yml` runs on every push to `main` and on every pull request. It builds and tests `packages/schema` and `packages/renderer`, typechecks and tests the design tool against a Postgres service, and runs `bun db/migrate.ts` first. It does not run the Swift packages (the workflow header says `swift test` needs a macOS runner). A green `ci` run on `main` is also the signing gate for renderer manifests ([signed renderer delivery](../client/signed-renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
