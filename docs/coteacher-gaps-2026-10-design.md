@@ -31,6 +31,13 @@ Nothing is built.
   introductions and sources, item-config images. Rubric text and keys are
   not scanned.
 - **D-9** (2.4) G-6 is recorded only.
+- **D-10** (7.1, 2026-10-16) G-2 also fixes the work packet's "N of M":
+  `sectionEnrolment` counts the sections a co-teacher who ran an unscoped
+  sitting currently teaches.
+- **D-11** (7.2) G-4 is check-only, no migration — the U-13 posture.
+- **D-12** (7.3, 7.4) G-5 would normalize student and teacher emails at
+  import and be built regardless of the Aurora count. The read found it is
+  already done (see Progress): no change.
 
 ## Confirmed fixed (for the record)
 
@@ -163,6 +170,35 @@ co-teach grant (the same blocker as rows 223–228 / 252).
   Tests: `test/assessment-assets.test.ts`; the access-enforcement allowlist
   lost the preview entry. Hand-run rows not written yet (need the co-teach
   grant, D-5).
+
+- **G-2 BUILT 2026-10-18, not committed, not deployed.** `buildResults`:
+  for a class sitting that names no section and whose owner is not the
+  assessment's owner, the student is looked up in that sitting owner's
+  current sections first (`studentsInTeachersSections`, once per such
+  owner), then the owner's. `sectionEnrolment` adds the sections those
+  sitting owners teach (`coTeacherSittingOwners`). Emails compared through
+  `normalizeEmail`. Regression case in `test/co-teacher-tenant.test.ts` —
+  fails on the old code (`null` for the section). The section label then
+  reaches the matrix, the filter, the work packet and the queue's section
+  filter, which all read `buildResults`.
+- **G-3 BUILT 2026-10-18 (wording only).** The work packet's header and
+  access comments and `docs/student-work-export-design.md` (the four spec
+  mentions; its dated Progress entries kept) say `view` on the assessment,
+  not "owner-only". The drawing route behind it is `view` too.
+- **G-4 BUILT 2026-10-18.** `findOpenPracticeSitting`
+  (`lib/api/testSessions.ts`) after `sweepExpired`; `POST /api/test-sessions`
+  with `kind: practice` answers 409 `sitting_already_open` (code + id) when
+  the caller already has one open on the assessment; "Practice on my Mac"
+  treats that answer as success and reloads. No migration (D-11). Test in
+  `test/practice-sitting.test.ts`.
+- **G-5 CLOSED 2026-10-18, no change.** The note's premise was wrong: the
+  importer is the only writer of `roster_students.email` and
+  `roster_section_teachers.teacher_email`, and `optionalEmail`
+  (`lib/roster/extract.ts`) has lower-cased and trimmed both since the first
+  public commit, pinned by `test/roster-extract.test.ts` ("lowercases
+  emails"). The stored values are lower case, so the exact comparisons are
+  safe as long as callers pass a normalized address — they do. No Aurora
+  count needed.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 

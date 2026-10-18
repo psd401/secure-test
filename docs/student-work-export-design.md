@@ -14,8 +14,8 @@ is built** (nothing yet).
 
 - **The results print report** (`app/dashboard/[id]/results/print/page.tsx`,
   R2 of `docs/reporting-design.md`) is the only print surface: a server
-  component with no client JS beyond the `window.print()` button, owner-only
-  (every failure is `notFound()`), `force-dynamic` + `no-store`, `?section=`
+  component with no client JS beyond the `window.print()` button, opened at
+  `view` on the assessment (every failure is `notFound()`), `force-dynamic` + `no-store`, `?section=`
   and `?attempt=` query contract, `.student-page` blocks, `break-inside:
   avoid` feedback blocks. It carries a deliberate rule in its header: **never
   a free-text response**. This request inverts that rule on purpose, so the
@@ -26,8 +26,8 @@ is built** (nothing yet).
   `@page { margin: 1in }` rule; nothing server-side renders PDF.
 - **`lib/reporting/answerView.ts`** (R1) already resolves every response
   kind against its item: `text` (essay / short text, newlines kept), `lines`
-  (choice text, pairs, order, regions), `drawing` (bytes behind the owner-only
-  `GET /api/responses/[responseId]/upload`, rendered as `<img>` in the queue
+  (choice text, pairs, order, regions), `drawing` (bytes behind
+  `GET /api/responses/[responseId]/upload`, opened at `view` on the attempt, rendered as `<img>` in the queue
   since F-1), `table`. The per-student page draws all of them.
 - **Scores** live in `scores`: `method IN ('auto','ai','human')`, `status IN
   ('proposed','final')`, one final per response. A teacher's score is the
@@ -49,7 +49,7 @@ is built** (nothing yet).
 ### The page
 
 `/dashboard/<assessmentId>/results/work` — a server component in the same
-shape and posture as the report: owner-only, `notFound()` on every failure,
+shape and posture as the report: `view` on the assessment, `notFound()` on every failure,
 `force-dynamic`, `no-store`, no client JS but the print button. It renders
 **one page per handed-in attempt** in the section, ordered by student last
 name (or by label when anonymous), each `break-before: page`, with the
@@ -133,7 +133,12 @@ number, so a hand-run row measures them in the saved PDF.
 
 ### FERPA posture
 
-- Owner-only, same helper chain as the report; `no-store`.
+- Opened at `view` on the assessment — the owner, an admin, or anyone the
+  owner granted access (the access model's levels; `view` is the lowest) —
+  through the same helper chain as the report; `no-store`. (Written as
+  "owner-only" until 2026-10-16: the access model widened every reader to
+  `view` and this page with it; G-3 / D-3 in
+  `docs/coteacher-gaps-2026-10-design.md` kept that and fixed the wording.)
 - The page prints student names, numbers and free-text responses by the
   teacher's explicit action; the header comment says so and points here.
   Nothing about students who are not the teacher's.

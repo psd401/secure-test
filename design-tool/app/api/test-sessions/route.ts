@@ -10,6 +10,7 @@ import {
   MAX_DURATION_MINUTES,
   createSessionWithCode,
   findIdenticalOpenSitting,
+  findOpenPracticeSitting,
   sittingVisibleToCaller,
   sweepExpired,
 } from "@/lib/api/testSessions";
@@ -179,6 +180,21 @@ export async function POST(req: Request) {
   // Swept for the sitting's OWNER, which is whose code-holding rows could
   // block the new one.
   await sweepExpired(db, sittingOwnerSub);
+
+  // G-4: the same for "Practice on my Mac" — one open practice sitting per
+  // teacher per assessment. The panel reloads on this answer.
+  if (practice) {
+    const existing = await findOpenPracticeSitting(db, {
+      assessmentId: assessment.id,
+      practiceForSub: auth.session.sub,
+    });
+    if (existing) {
+      return NextResponse.json(
+        { ok: false, error: "sitting_already_open", code: existing.code, test_session_id: existing.id },
+        { status: 409 },
+      );
+    }
+  }
 
   // U-13: a second press of Start session must not open the same sitting
   // twice. Refused with the existing code so the teacher reads that one out.

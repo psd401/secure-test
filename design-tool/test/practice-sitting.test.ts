@@ -179,6 +179,26 @@ describe("creating a practice sitting (D-1, D-2)", () => {
     expect(row.practice_for_sub).toBeNull();
   });
 
+  // G-4 (docs/coteacher-gaps-2026-10-design.md, D-4, 7.2): one open practice
+  // sitting per teacher per assessment; a second press answers with it.
+  test("a second practice press answers 409 with the open one; after Close a new one opens", async () => {
+    await seedAssessment();
+    const first = await practiceSitting();
+    const again = await createSitting({ kind: "practice" });
+    expect(again.status).toBe(409);
+    const body = (await again.json()) as { error: string; test_session_id: string; code: string };
+    expect(body.error).toBe("sitting_already_open");
+    expect(body.test_session_id).toBe(first.id);
+    expect(body.code).toBe(first.code);
+
+    await getDb()
+      .update(test_sessions)
+      .set({ status: "closed" })
+      .where(eq(test_sessions.id, first.id));
+    const next = await practiceSitting();
+    expect(next.id).not.toBe(first.id);
+  });
+
   test("a colleague with no access to the assessment cannot start one (404)", async () => {
     await seedAssessment();
     asColleague();

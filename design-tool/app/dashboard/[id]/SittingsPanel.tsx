@@ -175,6 +175,16 @@ function describe(e: unknown): string {
   return copy.showCode ? `${copy.message} ${code}` : copy.message;
 }
 
+// G-4 (docs/coteacher-gaps-2026-10-design.md): the route answers 409
+// `sitting_already_open` when this teacher already has an open practice
+// sitting here; the panel treats that as success and reloads. Reads a clone,
+// so the caller can still read the body for any other error.
+async function isAlreadyOpenPractice(res: Response): Promise<boolean> {
+  if (res.status !== 409) return false;
+  const body = (await res.clone().json().catch(() => null)) as { error?: string } | null;
+  return body?.error === "sitting_already_open";
+}
+
 // D-6 (docs/practice-sitting-design.md): "Practice again" deletes the
 // teacher's own attempt through the same route DeleteAttemptControl uses.
 function describeDelete(e: unknown): string {
@@ -445,7 +455,8 @@ export function SittingsPanel({
           duration_minutes: restOfDayMinutes(new Date(Date.now())),
         }),
       });
-      if (!res.ok) throw await readError(res);
+      // G-4: another tab or a double press already opened one — show it.
+      if (!res.ok && !(await isAlreadyOpenPractice(res))) throw await readError(res);
       setNow(Date.now());
       await loadSittings();
     } catch (err) {

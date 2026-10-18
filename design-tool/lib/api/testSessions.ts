@@ -111,6 +111,34 @@ export async function findIdenticalOpenSitting(
   );
 }
 
+/**
+ * G-4 (docs/coteacher-gaps-2026-10-design.md, D-4): the caller's open
+ * practice sitting on this assessment, if any — so a double press or a second
+ * tab of "Practice on my Mac" answers with it instead of opening another. The
+ * same check-only posture as findIdenticalOpenSitting (decision 7.2, no
+ * index): two requests in the same instant can still both create, which is
+ * harmless ("Your tests" collapses them). Call after `sweepExpired`, so an
+ * expired practice sitting is already closed and does not block a new one.
+ */
+export async function findOpenPracticeSitting(
+  db: Db,
+  args: { assessmentId: string; practiceForSub: string },
+): Promise<typeof test_sessions.$inferSelect | null> {
+  const [row] = await db
+    .select()
+    .from(test_sessions)
+    .where(
+      and(
+        eq(test_sessions.assessment_id, args.assessmentId),
+        eq(test_sessions.kind, "practice"),
+        eq(test_sessions.practice_for_sub, args.practiceForSub),
+        eq(test_sessions.status, "open"),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export class CodeExhaustionError extends Error {
   constructor() {
     super("could not allocate an unused session code");

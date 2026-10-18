@@ -53,13 +53,15 @@ import { pageAssessment } from "@/lib/api/access";
  * "NEVER a free-text response", and that rule stays true of the report. This
  * page **prints student names, student numbers and what students wrote**,
  * because that is the thing a teacher asked for and it happens only by their
- * explicit action on their own assessment. Everything else about the posture
- * is the report's: owner-only through the same helper chain, every failure is
- * `notFound()` so the URL cannot probe for an assessment, `no-store`, no
- * client JS beyond the print button, and no student identifier in the URL
- * beyond the section label. Anonymous mode (D-1) exists so a packet can leave
- * the teacher's hands — labels everywhere, and the name ↔ label mapping only
- * on a tear-off key page at the very end.
+ * explicit action on an assessment they can open. Everything else about the
+ * posture is the report's: `view` on the assessment through the same helper
+ * chain (G-3, docs/coteacher-gaps-2026-10-design.md D-3: a co-teacher prints
+ * too), every failure is `notFound()` so the URL cannot probe for an
+ * assessment, `no-store`, no client JS beyond the print button, and no
+ * student identifier in the URL beyond the section label. Anonymous mode
+ * (D-1) exists so a packet can leave the teacher's hands — labels
+ * everywhere, and the name ↔ label mapping only on a tear-off key page at
+ * the very end.
  *
  * URL contract (docs/student-work-export-design.md §The page):
  *   /dashboard/<assessmentId>/results/work
@@ -335,7 +337,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   const query = parsePacketQuery(await searchParams);
 
   const db = getDb();
-  // Owner-only, and a non-owner gets the SAME answer as a missing row.
+  // `view` and up (G-3); a caller without it gets the SAME answer as a missing row.
   const assessment = await pageAssessment(db, session, id, "view");
   if (!assessment) {
     notFound();
