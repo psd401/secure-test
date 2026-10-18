@@ -11,7 +11,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, isNotNull, sql } from "drizzle-orm";
 import { RubricSchema, type Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -592,14 +592,20 @@ describe("score-ai concurrency (claim)", () => {
     process.env.MOCK_ESSAY_SCORER_CONFIDENCE = "0.5";
     const spy = slowScorer();
     try {
-      const { db, attempt, itemRows } = await seedAiScenario();
-      const [aiResponse] = await db
-        .select()
-        .from(responses)
-        .where(eq(responses.item_id, itemRows[0]!.id));
+      const { db, attempt } = await seedAiScenario();
       const batch = postScoreAi(attempt.id);
-      // Let the batch take the first essay's claim.
-      await new Promise((r) => setTimeout(r, 50));
+      // Wait for the batch to claim an essay, and target THAT one: the
+      // route reads responses in no particular order, so which essay it
+      // reaches first is not fixed.
+      let aiResponse: typeof responses.$inferSelect | undefined;
+      for (let i = 0; i < 100 && !aiResponse; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+        [aiResponse] = await db
+          .select()
+          .from(responses)
+          .where(isNotNull(responses.ai_scoring_claimed_at));
+      }
+      expect(aiResponse).toBeDefined();
       const single = await postRescoreAi(aiResponse!.id);
       expect(single.status).toBe(409);
       expect(((await single.json()) as { error: string }).error).toBe(
