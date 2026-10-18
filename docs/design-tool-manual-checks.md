@@ -1663,3 +1663,40 @@ Fixture: any test with two or more of your periods on the roster. Rows 486–489
 | 584 | Delivery with it ticked, header `X-SecureTest-Version: 2.0.0` | 200; the bundle carries `"allow_highlighting": true` | ✅ 2026-10-15 — a demo student joined the sitting (minted token, redeem, start attempt); `GET …/delivery` with `X-SecureTest-Version: 2.0.0` → 200, `allow_highlighting: true` |
 | 585 | Delivery with it ticked, header `X-SecureTest-Version: 1.6.3`, and again with no header | 200 both times (not refused); no `allow_highlighting` key | ✅ 2026-10-15 — `1.6.3` → 200, no key; no header → 200, no key |
 | 586 | Delivery with it unticked, header `2.0.0` | 200; no `allow_highlighting` key | ✅ 2026-10-15 — unticked through the PATCH route; `2.0.0` → 200, no key. Fixtures, the sitting and the attempt were deleted afterwards |
+
+## Co-teachers see the owner's images (G-1, 2026-10-16)
+
+`docs/coteacher-gaps-2026-10-design.md` is the record (D-1, D-6…D-9). Local dev on `_demo` with the mock providers, Claude in Chrome. The owner is the demo teacher; the co-teacher is a second staff session (a locally minted staff cookie, or the colleague D-5 names on the origin) holding a co-teach grant on the fixture. Fixture: an assessment whose items use the owner's images in a stem, a choice, a set introduction, a source, a hotspot picture and a drawing reference, with one handed-in attempt. Every image is checked by its address too: it should be `/api/assessments/<id>/assets/<assetId>`.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 587 | Owner: the editor's live previews, the hotspot editor, the drawing reference, Preview, the per-student page, the scoring queue, the work packet | Every picture loads, from the assessment-scoped address | NOT RUN |
+| 588 | Owner: insert an image from the Image picker and do not save | The live preview shows it (the owner's own image loads before the assessment references it, D-7) | NOT RUN |
+| 589 | Co-teacher with **view**: Preview, the per-student page, the work packet (hotspot picture included) | Every picture loads | NOT RUN |
+| 590 | Co-teacher with **edit**: the editor's live previews (stem, choices, set introduction, sources), the hotspot editor, the drawing reference, the scoring queue | Every picture loads | NOT RUN |
+| 591 | Co-teacher: an owner's image the fixture does not use, through `/api/assessments/<id>/assets/<thatId>`; and any owner image through `/api/assets/<id>` | 404 both times | NOT RUN |
+| 592 | A staff session with no grant: the scoped address of a picture the fixture uses | 404 | NOT RUN |
+| 593 | A student sitting on the fixture (the client) | Pictures show as before — the bundle carries them, untouched by G-1 | NOT RUN |
+| 594 | G-6, recorded only: the edit-level co-teacher inserts one of their own images and saves | The co-teacher's preview shows it; the owner's preview and the student see "[image not found]" (the known gap, not a regression) | NOT RUN |
+
+## Hybrid scoring says what it does (HC-1, slices 1–3, 2026-10-16)
+
+`docs/hybrid-scoring-transparency-design.md` is the record (D-1…D-15). Local dev on `_demo`: the mock essay scorer answers confidence 0.9 (above the 0.85 gate), so a Hybrid essay finalizes on **Score with AI**; `MOCK_ESSAY_SCORER_CONFIDENCE=0.5` makes a proposal instead; `SAFEGUARDING_SCREENER_PROVIDER=mock` flags an essay containing `SG_INJECT`. Fixture: one Hybrid essay with a rubric and one AI essay, a few handed-in attempts across two sections.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 595 | Editor, an essay's scoring select | Hybrid reads "Hybrid (AI finalizes confident scores)"; choosing it shows "AI scores it is confident about count at once. You can still change any score."; other methods show no such hint | NOT RUN |
+| 596 | A Hybrid essay scored by **Score with AI** (confidence 0.9) → the per-student page | The score reads "(AI, not reviewed)"; the Change dialog says "Now n of m · AI, not reviewed" | NOT RUN |
+| 597 | The same score after Approve in the queue (row 602), as the approver and as a co-teacher | "(AI, approved by you)" to the approver, "(AI, approved)" to the co-teacher; the dialog says "· AI, approved" | NOT RUN |
+| 598 | Work packet with Scores **ai** before and after the approval | "AI score (not reviewed)", then "AI score (approved)"; a proposal still reads "AI proposal" | NOT RUN |
+| 599 | **Download CSV** | The last column is `ai_not_reviewed`, after `unscored`; it counts each student's unreviewed AI finals; every earlier column is where it was | NOT RUN |
+| 600 | Results matrix | An unreviewed AI cell reads "n/m •", titled "AI score, not reviewed (counted)"; a line above the matrix reads "N AI scores were finalized without review — Review them"; the paragraph names the dot; a view-level co-teacher sees the line without the link | NOT RUN |
+| 601 | Pick a section on Results, then **Review them** | The count follows the section; the queue opens on that section, scrolled to "Finalized by AI — not reviewed (n)", listed last, each card "AI scored n / m · counted, not reviewed" with no confidence, the criterion table and the rationale | NOT RUN |
+| 602 | **Approve** on one card | The card leaves the list; the matrix dot and the count drop by one; the student's total is unchanged; the per-student page reads "AI, approved by you" | NOT RUN |
+| 603 | **Change** on one card | The dialog opens on the AI's levels; Save takes the card off the list; the per-student page shows the new score and "Earlier scores" lists the old one as "AI, not reviewed" | NOT RUN |
+| 604 | The queue's **Section** select | Filters all three lists; the address keeps `?section=`; a reload opens the same section; "No section" appears when a student has none | NOT RUN |
+| 605 | Approve or change every card | The list disappears; with nothing else waiting, the page reads "Nothing to review" | NOT RUN |
+| 606 | A Hybrid essay containing `SG_INJECT` → **Score with AI anyway** | A proposal ("AI proposes …"), not a final, even at confidence 0.9 | NOT RUN |
+| 607 | Then **Re-run AI** on that answer | Another proposal, never a final (the attempt-wide route has no button; its case is in `test/safeguarding-screening.test.ts`) | NOT RUN |
+| 608 | `/help.html#score` and the quick start | Topic 8's last step names the •, the "Finalized by AI — not reviewed" list and that a flagged answer always waits; the quick start no longer says nothing counts until approved | NOT RUN |
+| 609 | After the deploy: `/roadmap.html` | A milestone "AI scores say whether a teacher reviewed them" (D-14, added at deploy) | NOT RUN |
