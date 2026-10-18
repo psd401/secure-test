@@ -231,7 +231,9 @@ its own.
   with AI* proposes a score and feedback you approve or change. With
   *AI*, nothing counts until you approve it; with *Hybrid*, confident AI
   scores count at once (a • on Results) and wait under *Finalized by AI —
-  not reviewed* for you to approve or change.
+  not reviewed* for you to approve or change. To score a whole class at
+  once, choose the section on Results and press **Score essays with AI**;
+  keep the page open until the summary shows.
 - **Fixed an answer key after students handed in?** Save the question,
   then press **Rescore with current key** on Results. Scores you set by
   hand stay; the old scores stay on each student's page. If the class was

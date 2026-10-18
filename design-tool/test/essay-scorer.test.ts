@@ -1,8 +1,17 @@
 // Slice 38: AI essay scoring — core validators, mock provider contract,
 // and the score-ai route (proposed/final split, hybrid confidence gate,
 // idempotency, guardrail wiring). DB parts use the items-api harness.
-import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+import { eq, isNotNull, sql } from "drizzle-orm";
 import { RubricSchema, type Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -519,5 +528,127 @@ describe("POST /api/attempts/:id/score-ai", () => {
     // Access slice 1 (D-3): the refusal is 404 — not-yours is indistinguishable
     // from not-there.
     expect(res.status).toBe(404);
+  });
+});
+
+async function postRescoreAi(responseId: string) {
+  const { POST } = await import("../app/api/responses/[responseId]/rescore-ai/route");
+  return POST(
+    new Request(`http://localhost/api/responses/${responseId}/rescore-ai`, {
+      method: "POST",
+    }),
+    { params: Promise.resolve({ responseId }) },
+  );
+}
+
+// docs/ai-score-concurrency-design.md: a short-lived claim per response so
+// concurrent requests never both call the scorer.
+describe("score-ai concurrency (claim)", () => {
+  // Slow the mock so two requests overlap inside the scorer call, and count
+  // the calls — a duplicate proposal costs a second Bedrock call.
+  function slowScorer() {
+    const original = mockEssayScorer.scoreEssay.bind(mockEssayScorer);
+    return spyOn(mockEssayScorer, "scoreEssay").mockImplementation(
+      async (...args: Parameters<typeof original>) => {
+        await new Promise((r) => setTimeout(r, 150));
+        return original(...args);
+      },
+    );
+  }
+
+  test("two concurrent batch runs score each essay once", async () => {
+    process.env.MOCK_ESSAY_SCORER_CONFIDENCE = "0.5"; // both land proposed
+    const spy = slowScorer();
+    try {
+      const { db, attempt } = await seedAiScenario();
+      const [a, b] = await Promise.all([
+        postScoreAi(attempt.id),
+        postScoreAi(attempt.id),
+      ]);
+      const bodies = (await Promise.all([a.json(), b.json()])) as Record<
+        string,
+        number
+      >[];
+      expect(spy).toHaveBeenCalledTimes(2); // two AI essays, once each
+      const rows = await db.select().from(scores);
+      expect(rows).toHaveLength(2);
+      expect(new Set(rows.map((r) => r.response_id)).size).toBe(2);
+      const total = (k: string) => bodies[0]![k]! + bodies[1]![k]!;
+      expect(total("scored_proposed")).toBe(2);
+      // Each essay the losing request did not score was either still being
+      // scored (in_progress) or already scored by the time it looked.
+      expect(total("in_progress") + total("already_scored")).toBe(2);
+      // Claims are released.
+      const claims = await db
+        .select({ c: responses.ai_scoring_claimed_at })
+        .from(responses);
+      expect(claims.every((r) => r.c === null)).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("per-essay Score with AI during a batch answers 409 scoring_in_progress", async () => {
+    process.env.MOCK_ESSAY_SCORER_CONFIDENCE = "0.5";
+    const spy = slowScorer();
+    try {
+      const { db, attempt } = await seedAiScenario();
+      const batch = postScoreAi(attempt.id);
+      // Wait for the batch to claim an essay, and target THAT one: the
+      // route reads responses in no particular order, so which essay it
+      // reaches first is not fixed.
+      let aiResponse: typeof responses.$inferSelect | undefined;
+      for (let i = 0; i < 100 && !aiResponse; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+        [aiResponse] = await db
+          .select()
+          .from(responses)
+          .where(isNotNull(responses.ai_scoring_claimed_at));
+      }
+      expect(aiResponse).toBeDefined();
+      const single = await postRescoreAi(aiResponse!.id);
+      expect(single.status).toBe(409);
+      expect(((await single.json()) as { error: string }).error).toBe(
+        "scoring_in_progress",
+      );
+      expect((await batch).status).toBe(200);
+      const rows = await db
+        .select()
+        .from(scores)
+        .where(eq(scores.response_id, aiResponse!.id));
+      expect(rows).toHaveLength(1);
+      // Once the batch is done, a deliberate re-run still adds a proposal.
+      const rerun = await postRescoreAi(aiResponse!.id);
+      expect(rerun.status).toBe(201);
+      expect(
+        await db.select().from(scores).where(eq(scores.response_id, aiResponse!.id)),
+      ).toHaveLength(2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("a claim older than 5 minutes is taken over; a fresh one is honoured", async () => {
+    process.env.MOCK_ESSAY_SCORER_CONFIDENCE = "0.5";
+    const { db, attempt, itemRows } = await seedAiScenario();
+    await db
+      .update(responses)
+      .set({ ai_scoring_claimed_at: sql`now() - interval '6 minutes'` })
+      .where(eq(responses.item_id, itemRows[0]!.id));
+    await db
+      .update(responses)
+      .set({ ai_scoring_claimed_at: sql`now()` })
+      .where(eq(responses.item_id, itemRows[1]!.id));
+    const body = (await (await postScoreAi(attempt.id)).json()) as Record<
+      string,
+      number
+    >;
+    expect(body.scored_proposed).toBe(1);
+    expect(body.in_progress).toBe(1);
+    const [stale] = await db
+      .select({ c: responses.ai_scoring_claimed_at })
+      .from(responses)
+      .where(eq(responses.item_id, itemRows[0]!.id));
+    expect(stale!.c).toBeNull();
   });
 });

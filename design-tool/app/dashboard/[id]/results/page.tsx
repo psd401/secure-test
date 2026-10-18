@@ -19,6 +19,8 @@ import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
+import { ScoreEssaysWithAiAndReload } from "./ScoreEssaysWithAiAndReload";
+import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
@@ -160,6 +162,29 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     results.rows.some((r) => r.status === "submitted");
   const showHandInInProgress =
     inProgressRows.length > 0 && levelSatisfies(access.level, "run");
+  const sectionLabel =
+    selectedSection === ""
+      ? null
+      : selectedSection === NO_SECTION
+        ? "No section"
+        : selectedSection;
+  // Roadmap U-24 (docs/batch-ai-scoring-design.md): edit level, handed-in
+  // rows the page shows, only when the test has an essay the AI scorer takes.
+  // The count is the essays a press would send; with no section chosen the
+  // button shows it but stays disabled (D-2).
+  const submittedShown = filtered.filter((r) => r.status === "submitted");
+  const aiBatch = levelSatisfies(access.level, "edit") && submittedShown.length > 0
+    ? await aiBatchCounts(
+        db,
+        assessment.id,
+        submittedShown.map((r) => r.attempt_id),
+      )
+    : null;
+  const aiBatchAttemptIds = aiBatch ? [...aiBatch.counts.keys()] : [];
+  const aiBatchEssays = aiBatch
+    ? [...aiBatch.counts.values()].reduce((sum, n) => sum + n, 0)
+    : 0;
+  const showScoreEssays = aiBatch?.has_ai_items ?? false;
   // Hybrid transparency slice 2 (D-3): final AI scores Hybrid settled on its
   // own, over the rows shown (the section filter applies, 5.4).
   const unreviewedLine = unreviewedCountLine(
@@ -299,16 +324,25 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
             assessmentId={assessment.id}
             readyAttemptIds={readyAttemptIds}
             heldCount={inProgressRows.length - readyAttemptIds.length}
-            sectionLabel={
-              selectedSection === ""
-                ? null
-                : selectedSection === NO_SECTION
-                  ? "No section"
-                  : selectedSection
-            }
+            sectionLabel={sectionLabel}
           />
           <span className="text-xs text-muted-foreground">
             Unfinished work from every session{selectedSection === "" ? "" : " in this section"} — only handed-in work reaches the scoring queue.
+          </span>
+        </div>
+      ) : null}
+
+      {showScoreEssays ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <ScoreEssaysWithAiAndReload
+            attemptIds={aiBatchAttemptIds}
+            essayCount={aiBatchEssays}
+            sectionLabel={sectionLabel}
+          />
+          <span className="text-xs text-muted-foreground">
+            {sectionLabel === null
+              ? "Choose a section to score its handed-in essays with AI."
+              : "Handed-in essays in this section that have no score yet."}
           </span>
         </div>
       ) : null}

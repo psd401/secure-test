@@ -3,9 +3,11 @@ import {
   type Rubric,
   type ScoringMethod,
 } from "@secure-test/schema";
+import { and, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { log, truncate } from "@/lib/log";
 import {
+  responses,
   scores,
   type ItemRow,
   type ItemType,
@@ -47,7 +49,13 @@ export type AiScoreOutcome =
   // Review fix (2026-08-14): a hybrid auto-finalize that loses the race to
   // a concurrent final is its own outcome — previously the unique-index
   // violation landed in the catch and was miscounted as provider_error.
-  | { kind: "already_final" };
+  | { kind: "already_final" }
+  // docs/ai-score-concurrency-design.md: another request holds this
+  // response's scoring claim — it is being scored right now.
+  | { kind: "in_progress" }
+  // `skipIfScored` only: a non-research score row appeared after the
+  // caller's own snapshot (a concurrent request finished first).
+  | { kind: "already_scored" };
 
 // Slice 2 of docs/scoring-corpus-design.md: the "run the provider and
 // validate its output" half, extracted so the corpus runner uses the SAME
@@ -160,7 +168,80 @@ export async function runEssayScorer(opts: {
   }
 }
 
+// docs/ai-score-concurrency-design.md: a claim older than this is treated
+// as abandoned (the task holding it died mid-call) and can be taken over.
+export const AI_SCORING_CLAIM_TTL_MINUTES = 5;
+
 export async function aiScoreResponse(opts: {
+  item: ItemRow;
+  response: ResponseRow;
+  ownerSub: string;
+  /**
+   * The attempt-wide run's policy: after taking the claim, re-check for a
+   * non-research score row and skip the essay if one exists. Its own
+   * start-of-request snapshot cannot see a row a concurrent request wrote
+   * since. The explicit re-run leaves this off — it adds a proposal on purpose.
+   */
+  skipIfScored?: boolean;
+}): Promise<AiScoreOutcome> {
+  const db = getDb();
+  // One atomic statement takes the claim, so two concurrent requests never
+  // both call the scorer. The claim is not held in a transaction: a pool
+  // connection must not wait on a 5–30 s Bedrock call (pool max is 5).
+  const claimed = await db
+    .update(responses)
+    .set({ ai_scoring_claimed_at: sql`now()` })
+    .where(
+      and(
+        eq(responses.id, opts.response.id),
+        or(
+          isNull(responses.ai_scoring_claimed_at),
+          lt(
+            responses.ai_scoring_claimed_at,
+            sql`now() - make_interval(mins => ${AI_SCORING_CLAIM_TTL_MINUTES})`,
+          ),
+        ),
+      ),
+    )
+    // Text, not a Date: a JS Date drops the microseconds, and the release
+    // must match this exact claim to leave a takeover's claim alone.
+    .returning({ token: sql<string>`${responses.ai_scoring_claimed_at}::text` });
+  const token = claimed[0]?.token;
+  if (token === undefined) return { kind: "in_progress" };
+  try {
+    if (opts.skipIfScored) {
+      const existing = await db
+        .select({ id: scores.id })
+        .from(scores)
+        .where(
+          and(eq(scores.response_id, opts.response.id), ne(scores.status, "research")),
+        )
+        .limit(1);
+      if (existing.length > 0) return { kind: "already_scored" };
+    }
+    return await scoreClaimed(opts);
+  } finally {
+    try {
+      await db
+        .update(responses)
+        .set({ ai_scoring_claimed_at: null })
+        .where(
+          and(
+            eq(responses.id, opts.response.id),
+            sql`${responses.ai_scoring_claimed_at}::text = ${token}`,
+          ),
+        );
+    } catch (err) {
+      // A claim left behind expires on its own after the TTL.
+      log.warn("essay_score_claim_release_failed", {
+        response_id: opts.response.id,
+        message: truncate(err instanceof Error ? err.message : String(err)),
+      });
+    }
+  }
+}
+
+async function scoreClaimed(opts: {
   item: ItemRow;
   response: ResponseRow;
   ownerSub: string;
