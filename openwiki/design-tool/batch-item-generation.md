@@ -11,6 +11,7 @@ openwiki:
     - design-tool/lib/ai/itemBatchCore.ts
     - design-tool/lib/ai/types.ts
     - design-tool/lib/ai/batchForm.ts
+    - design-tool/lib/ai/documentUpload.ts
   symbols: [GenerateItemsRequest, BatchTypeCounts, resolveTargetStandards, buildBatchUserText, parseBatchArray, validateBatchProposals, normalizeMatchElement, planTypes, runGuarded]
   test_paths:
     - design-tool/test/item-batch-core.test.ts
@@ -44,7 +45,7 @@ Consult this page when changing the batch request shape, the item types a batch 
 
 1. `requireStaff()` gates the caller.
 2. The body is read as JSON, or as multipart with a file. Zod validates it through `GenerateItemsRequest`.
-3. A file is checked against the upload types and the size cap before any database work (415 for an unsupported type, 413 for an oversize file). PDF and DOCX stay as document blocks for the model; Markdown and plain text are decoded and sent as text, so the guardrail can screen them.
+3. A file is checked against the upload types and the size cap before any database work (415 for an unsupported type, 413 for an oversize file). Both checks come from `lib/ai/documentUpload.ts` (`allowedUploadFor`, `ALLOWED_UPLOADS`, `MAX_UPLOAD_BYTES`), which the rubric extractor shares. PDF and DOCX stay as document blocks for the model; Markdown and plain text are decoded and sent as text, so the guardrail can screen them.
 4. `authorizeAssessment(..., "edit")` checks access, and the assessment must have `allow_llm_authoring` (otherwise 403 `llm_authoring_disabled`).
 5. The assessment's existing stems are loaded in position order, capped by `EXISTING_STEMS_MAX` (40) and `EXISTING_STEM_CHARS` (200), so the model can avoid duplicates.
 6. `resolveTargetStandards` turns each requested tag into the code, framework and text the prompt needs.

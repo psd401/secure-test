@@ -102,6 +102,6 @@ Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_tru
 - Keep extraction write-free. Any change that saves from this route breaks the lock and the teacher's review step.
 - Do not treat `docs/pdf-import-enhancements.md` as current on shapes. Use `PDF_EXTRACT_SYSTEM_PROMPT`.
 
-Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms and the mock). Add `test/pdf-import-route.test.ts` for the route's status codes and response shape. Those files do not need the test database. The figure extractor is covered by `test/pdf-figures.test.ts`.
+Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms and the mock). Add `test/pdf-import-route.test.ts` for the route's status codes and response shape. Those files do not need the test database. The figure extractor is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
 DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
 ute.test.ts`.
