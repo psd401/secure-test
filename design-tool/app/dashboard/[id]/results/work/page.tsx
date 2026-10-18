@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -30,10 +31,15 @@ import {
   packetOrdering,
   packetScoreHeading,
   parsePacketQuery,
+  keyCountLine,
   PACKET_SCORE_MODES,
+  sectionAnonymousLabels,
+  selectPacket,
   selectPacketScores,
   stemExcerpt,
+  stripLine,
   type PacketQuery,
+  type PacketRun,
 } from "@/lib/reporting/workPacket";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { buildResults, sectionEnrolment, type ResultsRow } from "@/lib/scoring/results";
@@ -148,6 +154,8 @@ const PRINT_CSS = `
 .packet .page-footer { margin-top: 1.5rem; padding-top: .35rem;
   border-top: 1px solid #000; font-size: 9pt; color: #333; }
 .packet .key-page table { width: auto; }
+.packet .section-divider { margin: 0 0 .75rem; padding-bottom: .25rem; border-bottom: 2px solid #000;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .strip { margin: 0 auto 1rem; max-width: 52rem; padding: 1rem 1.5rem 0;
   display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 /* Slice 2's toolbar: a plain GET form, screen only. */
@@ -190,8 +198,9 @@ function packetHref(
   omit: ReadonlySet<"items"> = new Set(),
 ): string {
   const params = new URLSearchParams();
-  if (query.section) params.set("section", query.section);
-  if (query.attempt) params.set("attempt", query.attempt);
+  for (const section of query.sections) params.append("section", section);
+  for (const attempt of query.attempts) params.append("attempt", attempt);
+  if (query.inProgress) params.set("in_progress", "1");
   if (!omit.has("items") && query.items) params.set("items", query.items.join(","));
   params.set("questions", query.questions ? "1" : "0");
   params.set("scores", query.scores);
@@ -351,22 +360,21 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   const results = await buildResults(id, { include_in_progress: true });
   const handedIn = results.rows.filter((r) => r.status === "submitted");
 
-  // ── One student's work. buildResults only returns this assessment's
-  // attempts, so a foreign or mistyped id finds nothing: the same notFound()
-  // as a missing assessment.
-  let single: ResultsRow | null = null;
-  if (query.attempt !== null) {
-    single = results.rows.find((r) => r.attempt_id === query.attempt) ?? null;
-    if (!single) {
-      notFound();
-    }
-    // The toolbar submits the section select AND the picker. A section the
-    // student is not in means the teacher switched sections without resetting
-    // the picker: print the section they switched to.
-    if (query.section !== null && single.student.section !== query.section) {
-      single = null;
-    }
+  // ── Who prints (docs/batch-print-design.md): one student, a batch of
+  // section runs, or the chooser. A chosen attempt that is not this
+  // assessment's finds nothing: the same notFound() as a missing assessment.
+  const selection = selectPacket(results.rows, query);
+  if (selection.kind === "not_found") {
+    notFound();
   }
+  const single = selection.kind === "single" ? selection.row : null;
+  const runs: PacketRun<ResultsRow>[] =
+    selection.kind === "single"
+      ? [{ section: selection.row.student.section, rows: [selection.row], chosen: true }]
+      : selection.kind === "batch"
+        ? selection.runs
+        : [];
+  const multiRun = runs.length > 1;
 
   // Every section with at least one handed-in attempt, plus a count of
   // attempts that resolve to no section at all. Shared by the chooser below
@@ -385,7 +393,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   // ── No section: the chooser. One URL per section is the contract, so rather
   // than printing "all sections" this lists what there is to print. Screen
   // only; there is nothing printable on this branch.
-  if (query.section === null && single === null) {
+  if (selection.kind === "chooser") {
     return (
       <main className="mx-auto max-w-2xl space-y-4 px-6 py-10">
         <h1 className="text-2xl font-semibold">Print student work</h1>
@@ -431,19 +439,27 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     );
   }
 
-  // Single mode takes the student's own section (null when none resolves),
-  // so the toolbar and the page header name the right class.
-  const section = single ? single.student.section : query.section;
-  const inSection = handedIn.filter((r) => r.student.section === section);
-  const ordered = single ? [single] : packetOrdering(inSection, query.anon);
-  // Anonymous labels. A single student printed alone keeps the number the
-  // section packet (and the toolbar's picker) gives them — James, 2026-09-23 —
-  // so a teacher matching a reprint to the class set finds the same label;
-  // an in-progress student, who has no packet number, reads "In progress n",
-  // as in the picker. Both are set below, once the picker's labels exist.
-  let labels = query.anon && !single
-    ? anonymousLabels(ordered.map((r) => r.attempt_id))
+  // The toolbar's section and student selects still name ONE section (batch
+  // print slice 2 replaces them with checkboxes): the single student's own,
+  // else the first run's.
+  const section = runs[0]?.section ?? null;
+  const ordered = runs.flatMap((r) => r.rows);
+  // D-2: anonymous labels numbered per section, over each section's
+  // handed-in work, so a narrowed or single print keeps the number the full
+  // section packet gives (James, 2026-09-23); work not handed in reads
+  // "In progress n", as in the picker.
+  const labels: Map<string, string> | null = query.anon
+    ? new Map(
+        runs.flatMap((run) => {
+          const forSection = sectionAnonymousLabels(results.rows, run.section);
+          return run.rows.map((r) => [r.attempt_id, forSection.get(r.attempt_id) ?? "Student"] as const);
+        }),
+      )
     : null;
+  const handedInBySection = new Map<string | null, number>();
+  for (const row of handedIn) {
+    handedInBySection.set(row.student.section, (handedInBySection.get(row.student.section) ?? 0) + 1);
+  }
 
   // "N of M students in <section> handed in": M is the section's current
   // enrollment, looked up in the sections the assessment's OWNER teaches
@@ -451,9 +467,14 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
   // 2026-09-21) plus the sections its class sittings named — a co-teacher's
   // section counted 0 before (co-teacher follow-ups, 2026-09-22,
   // docs/access-model-design.md). Null when no owner email is known and no
-  // sitting named the section, and the strip then says N alone.
-  const enrolled =
-    single === null && section !== null ? await sectionEnrolment(db, id, section) : null;
+  // sitting named the section, and the strip then says N alone. One per
+  // whole-section run; a chosen-students run says how many were chosen.
+  const enrolledBySection = new Map<string, number | null>();
+  for (const run of runs) {
+    if (single === null && !run.chosen && run.section !== null) {
+      enrolledBySection.set(run.section, await sectionEnrolment(db, id, run.section));
+    }
+  }
 
   // The toolbar's student picker: everyone in the chosen section who has an
   // attempt, handed in or not. Named, alphabetical — except in anonymous
@@ -464,24 +485,11 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     results.rows.filter((r) => r.student.section === section),
     query.anon,
   );
-  const sectionLabels = query.anon
-    ? anonymousLabels(inSection.map((r) => r.attempt_id))
-    : null;
-  const inProgressIds = pickable
-    .filter((r) => r.status === "in_progress")
-    .map((r) => r.attempt_id);
+  const sectionLabels = query.anon ? sectionAnonymousLabels(results.rows, section) : null;
   function pickerLabel(r: ResultsRow): string {
-    if (sectionLabels) {
-      return (
-        sectionLabels.get(r.attempt_id) ??
-        `In progress ${inProgressIds.indexOf(r.attempt_id) + 1}`
-      );
-    }
+    if (sectionLabels) return sectionLabels.get(r.attempt_id) ?? "Student";
     const name = r.student.name || r.student.ssid || "(unknown)";
     return r.status === "in_progress" ? `${name} (in progress)` : name;
-  }
-  if (query.anon && single) {
-    labels = new Map([[single.attempt_id, pickerLabel(single)]]);
   }
   // The section select lists sections with handed-in work; a single
   // in-progress student's section may have none yet, so it is added.
@@ -595,9 +603,11 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
             ? single.status === "in_progress"
               ? "One student's work — in progress, not handed in"
               : "One student's work — handed in"
-            : enrolled === null
-              ? `${ordered.length} handed in`
-              : `${ordered.length} of ${enrolled} students in ${section} handed in`}
+            : runs.map((run) => (
+                <span key={run.section ?? "__none__"} className="block">
+                  {stripLine(run, run.section === null ? null : (enrolledBySection.get(run.section) ?? null), multiRun)}
+                </span>
+              ))}
         </span>
         <a
           href={`/dashboard/${assessment.id}/results`}
@@ -717,301 +727,313 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
         </button>
       </form>
       <main className="packet">
-        {ordered.length === 0 && section !== null ? (
-          <p className="meta">
-            Nobody in {section} has handed this in yet, so there is nothing to
-            print.
-          </p>
-        ) : null}
-
-        {ordered.map((row) => (
-          <section
-            key={row.attempt_id}
-            className="student-page"
-            aria-label={
-              labels
-                ? `Work for ${labels.get(row.attempt_id)}`
-                : `Work for ${row.student.name}`
-            }
-          >
-            <h2>{identityLine(row)}</h2>
-            <p className="meta">
-              {[section, assessment.name].filter(Boolean).join(" · ")}
-            </p>
-            {/* Printed, not screen-only: the paper itself has to say these
-                answers were not handed in (only `?attempt=` reaches here). */}
-            {row.status === "in_progress" ? (
+        {runs.map((run) => (
+          <Fragment key={run.section ?? "__none__"}>
+            {run.rows.length === 0 ? (
               <p className="meta">
-                <strong>In progress — not handed in</strong> · answers saved so far
+                Nobody in {run.section} has handed this in yet, so there is nothing to
+                print.
               </p>
-            ) : (
-              <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
-            )}
+            ) : null}
 
-            {includedItems.map((item) => {
-              const setId = setOpensAtItem.get(item.id);
-              const set = setId ? setsById.get(setId)! : null;
-              const response = responseByCell.get(`${row.attempt_id}:${item.id}`);
-              const responseJson = response
-                ? (response.response as unknown as Record<string, unknown>)
-                : null;
-              const view = describeAnswer(
-                {
-                  type: item.type,
-                  stem: item.stem,
-                  choices: item.choices as Array<{ id: string; text: string }>,
-                  correct_choice_ids: item.correct_choice_ids as string[],
-                  correct_answer: item.correct_answer,
-                  config: item.config,
-                },
-                responseJson,
-              );
-              const boxes = query.questions
-                ? choiceCheckboxLines(
+            {run.rows.map((row, i) => (
+              <section
+                key={row.attempt_id}
+                className="student-page"
+                aria-label={
+                  labels
+                    ? `Work for ${labels.get(row.attempt_id)}`
+                    : `Work for ${row.student.name}`
+                }
+              >
+                {/* Batch print: a divider on the first page of each section's
+                    run, so a stack can be split by hand. A one-section packet
+                    prints as before. */}
+                {multiRun && i === 0 ? (
+                  <p className="section-divider">{run.section ?? "No section"}</p>
+                ) : null}
+                <h2>{identityLine(row)}</h2>
+                <p className="meta">
+                  {[run.section, assessment.name].filter(Boolean).join(" · ")}
+                </p>
+                {/* Printed, not screen-only: the paper itself has to say these
+                    answers were not handed in (only `?attempt=` reaches here). */}
+                {row.status === "in_progress" ? (
+                  <p className="meta">
+                    <strong>In progress — not handed in</strong> · answers saved so far
+                  </p>
+                ) : (
+                  <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
+                )}
+
+                {includedItems.map((item) => {
+                  const setId = setOpensAtItem.get(item.id);
+                  const set = setId ? setsById.get(setId)! : null;
+                  const response = responseByCell.get(`${row.attempt_id}:${item.id}`);
+                  const responseJson = response
+                    ? (response.response as unknown as Record<string, unknown>)
+                    : null;
+                  const view = describeAnswer(
                     {
                       type: item.type,
+                      stem: item.stem,
                       choices: item.choices as Array<{ id: string; text: string }>,
+                      correct_choice_ids: item.correct_choice_ids as string[],
+                      correct_answer: item.correct_answer,
+                      config: item.config,
                     },
                     responseJson,
-                  )
-                : [];
-              const picked = selectPacketScores(query.scores, [
-                ...(response ? (scoresByResponse.get(response.id) ?? []) : []),
-              ]);
-              const rubric = item.config.rubric ?? null;
-              // U-23: a hidden answer has nothing to paginate.
-              const isText = view.kind === "text" && !hideAnswers;
-              return (
-                <div key={item.id}>
-                  {/* A set's stimulus and sources print once, above the first
-                      of its questions in this packet. Suppressed with
-                      ?questions=0, which is an answers-only packet. */}
-                  {set && query.questions ? (
-                    <StimulusBlock set={set} resolved={resolvedAssets} />
-                  ) : null}
-                  <div className={`item${isText ? " item-flow" : ""}`}>
-                    <p className="qnum">Q{item.position + 1}</p>
-                    {/* FB slice 3: with the questions printed, a
-                        fill-in-the-blank stem is printed ONCE, as the sentence
-                        with the student's answers in place
-                        (renderFillBlankAnswerHtml: stem through
-                        renderItemContent, answers escaped). Marks and
-                        "expected" only with the teacher's side (W-1). An
-                        answers-only packet prints the "Blank n: …" lines
-                        below instead. */}
-                    {query.questions && item.type === "fill_blank" && hideAnswers ? (
-                      <div
-                        className="stem"
-                        dangerouslySetInnerHTML={{
-                          __html: renderFillBlankGapsHtml(item.stem, resolvedAssets),
-                        }}
-                      />
-                    ) : query.questions && item.type === "fill_blank" ? (
-                      <div
-                        className="stem"
-                        dangerouslySetInnerHTML={{
-                          __html: renderFillBlankAnswerHtml(
-                            item.stem,
-                            item.config.blanks,
-                            responseJson,
-                            resolvedAssets,
-                            { showKey, summary: showKey && responseJson != null, handScored: fillBlankHandScored(item.config) },
-                          ),
-                        }}
-                      />
-                    ) : query.questions ? (
-                      <div
-                        className="stem"
-                        dangerouslySetInnerHTML={{
-                          __html: renderItemContent(item.stem, resolvedAssets),
-                        }}
-                      />
-                    ) : null}
-                    {/* Hotspot: the picture, then the regions the student
-                        picked beneath it (no overlay drawing in v1). */}
-                    {query.questions &&
-                    item.type === "hotspot" &&
-                    item.config.image_asset_id ? (
-                      <img
-                        src={assessmentAssetUrl(assessment.id, item.config.image_asset_id)}
-                        alt={`Picture for question ${item.position + 1}`}
-                      />
-                    ) : null}
-
-                    {/* U-23: answers=0 — the choices still print for
-                        context (no ticks), nothing the student wrote does. */}
-                    {hideAnswers ? (
-                      boxes.length > 0 ? (
-                        <ul className="choices">
-                          {boxes.map((b) => (
-                            <li key={b.id}>{b.text}</li>
-                          ))}
-                        </ul>
-                      ) : null
-                    ) : (
-                    <div className="answer">
-                      {view.kind === "none" ? (
-                        <p className="meta muted">No answer.</p>
-                      ) : isText && view.kind === "text" ? (
-                        // Roadmap 4b-f (2026-09-14): a short-text answer
-                        // prints as the math the student saw (the client's
-                        // formulaTex preview), essays as prose.
-                        item.type === "short_text" && view.text !== "" ? (
-                          <p
-                            className="answer-text"
+                  );
+                  const boxes = query.questions
+                    ? choiceCheckboxLines(
+                        {
+                          type: item.type,
+                          choices: item.choices as Array<{ id: string; text: string }>,
+                        },
+                        responseJson,
+                      )
+                    : [];
+                  const picked = selectPacketScores(query.scores, [
+                    ...(response ? (scoresByResponse.get(response.id) ?? []) : []),
+                  ]);
+                  const rubric = item.config.rubric ?? null;
+                  // U-23: a hidden answer has nothing to paginate.
+                  const isText = view.kind === "text" && !hideAnswers;
+                  return (
+                    <div key={item.id}>
+                      {/* A set's stimulus and sources print once, above the first
+                          of its questions in this packet. Suppressed with
+                          ?questions=0, which is an answers-only packet. */}
+                      {set && query.questions ? (
+                        <StimulusBlock set={set} resolved={resolvedAssets} />
+                      ) : null}
+                      <div className={`item${isText ? " item-flow" : ""}`}>
+                        <p className="qnum">Q{item.position + 1}</p>
+                        {/* FB slice 3: with the questions printed, a
+                            fill-in-the-blank stem is printed ONCE, as the sentence
+                            with the student's answers in place
+                            (renderFillBlankAnswerHtml: stem through
+                            renderItemContent, answers escaped). Marks and
+                            "expected" only with the teacher's side (W-1). An
+                            answers-only packet prints the "Blank n: …" lines
+                            below instead. */}
+                        {query.questions && item.type === "fill_blank" && hideAnswers ? (
+                          <div
+                            className="stem"
                             dangerouslySetInnerHTML={{
-                              __html: renderShortTextAnswer(view.text),
+                              __html: renderFillBlankGapsHtml(item.stem, resolvedAssets),
                             }}
                           />
-                        ) : item.type === "essay" ? (
-                          // RT slice 2 (docs/rich-text-essay-design.md): the
-                          // one sanitising renderer — a formatted essay keeps
-                          // its formatting, a plain one is its escaped text
-                          // (pre-line keeps the line breaks). A div, since the
-                          // formatted form holds paragraphs and lists. D-10:
-                          // ?spacing=double double-spaces it.
-                          view.text === "" ? (
-                            <div
-                              className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
-                            >
-                              (blank)
-                            </div>
-                          ) : (
-                            <div
-                              className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
-                              dangerouslySetInnerHTML={{
-                                __html: renderEssayAnswerHtml(responseJson),
-                              }}
-                            />
-                          )
-                        ) : (
-                          <p className="answer-text">
-                            {view.text === "" ? "(blank)" : view.text}
-                          </p>
-                        )
-                      ) : boxes.length > 0 ? (
-                        <ul className="choices">
-                          {boxes.map((b) => (
-                            <li key={b.id}>
-                              <span className="box">{b.selected ? "☑" : "☐"}</span>
-                              {b.text}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : view.kind === "drawing" && response ? (
-                        <img
-                          src={`/api/responses/${response.id}/upload`}
-                          alt={`Drawing for question ${item.position + 1}`}
-                        />
-                      ) : view.kind === "table" && response ? (
-                        <TableGrid
-                          item={item}
-                          cells={
-                            (
-                              response.response as unknown as {
-                                cells?: Record<string, Record<string, string>>;
-                              }
-                            ).cells ?? {}
-                          }
-                          showKey={showKey}
-                        />
-                      ) : view.kind === "lines" ? (
-                        <AnswerLines lines={view.lines} showKey={showKey} />
-                      ) : view.kind === "fill_blank" && !query.questions ? (
-                        <AnswerLines lines={view.lines} showKey={showKey} />
-                      ) : null}
-                    </div>
-                    )}
+                        ) : query.questions && item.type === "fill_blank" ? (
+                          <div
+                            className="stem"
+                            dangerouslySetInnerHTML={{
+                              __html: renderFillBlankAnswerHtml(
+                                item.stem,
+                                item.config.blanks,
+                                responseJson,
+                                resolvedAssets,
+                                { showKey, summary: showKey && responseJson != null, handScored: fillBlankHandScored(item.config) },
+                              ),
+                            }}
+                          />
+                        ) : query.questions ? (
+                          <div
+                            className="stem"
+                            dangerouslySetInnerHTML={{
+                              __html: renderItemContent(item.stem, resolvedAssets),
+                            }}
+                          />
+                        ) : null}
+                        {/* Hotspot: the picture, then the regions the student
+                            picked beneath it (no overlay drawing in v1). */}
+                        {query.questions &&
+                        item.type === "hotspot" &&
+                        item.config.image_asset_id ? (
+                          <img
+                            src={assessmentAssetUrl(assessment.id, item.config.image_asset_id)}
+                            alt={`Picture for question ${item.position + 1}`}
+                          />
+                        ) : null}
 
-                    {query.scores === "none" ? null : (
-                      // Two columns only for `both`, and only while both sides
-                      // have something to show: one lonely block in a
-                      // half-width column reads as a rendering bug.
-                      <div
-                        className={
-                          query.scores === "both" && picked.teacher && picked.ai
-                            ? "scores"
-                            : "scores scores-one"
-                        }
-                      >
-                        {query.scores === "ai" ? null : (
-                          <ScoreBlock
-                            heading={packetScoreHeading("teacher", picked.teacher)}
-                            row={picked.teacher}
-                            rubricRows={rubricScoreRows(rubric, picked.teacher?.rationale)}
-                            overall={overallRationale(picked.teacher?.rationale)}
-                          />
+                        {/* U-23: answers=0 — the choices still print for
+                            context (no ticks), nothing the student wrote does. */}
+                        {hideAnswers ? (
+                          boxes.length > 0 ? (
+                            <ul className="choices">
+                              {boxes.map((b) => (
+                                <li key={b.id}>{b.text}</li>
+                              ))}
+                            </ul>
+                          ) : null
+                        ) : (
+                        <div className="answer">
+                          {view.kind === "none" ? (
+                            <p className="meta muted">No answer.</p>
+                          ) : isText && view.kind === "text" ? (
+                            // Roadmap 4b-f (2026-09-14): a short-text answer
+                            // prints as the math the student saw (the client's
+                            // formulaTex preview), essays as prose.
+                            item.type === "short_text" && view.text !== "" ? (
+                              <p
+                                className="answer-text"
+                                dangerouslySetInnerHTML={{
+                                  __html: renderShortTextAnswer(view.text),
+                                }}
+                              />
+                            ) : item.type === "essay" ? (
+                              // RT slice 2 (docs/rich-text-essay-design.md): the
+                              // one sanitising renderer — a formatted essay keeps
+                              // its formatting, a plain one is its escaped text
+                              // (pre-line keeps the line breaks). A div, since the
+                              // formatted form holds paragraphs and lists. D-10:
+                              // ?spacing=double double-spaces it.
+                              view.text === "" ? (
+                                <div
+                                  className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                                >
+                                  (blank)
+                                </div>
+                              ) : (
+                                <div
+                                  className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                                  dangerouslySetInnerHTML={{
+                                    __html: renderEssayAnswerHtml(responseJson),
+                                  }}
+                                />
+                              )
+                            ) : (
+                              <p className="answer-text">
+                                {view.text === "" ? "(blank)" : view.text}
+                              </p>
+                            )
+                          ) : boxes.length > 0 ? (
+                            <ul className="choices">
+                              {boxes.map((b) => (
+                                <li key={b.id}>
+                                  <span className="box">{b.selected ? "☑" : "☐"}</span>
+                                  {b.text}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : view.kind === "drawing" && response ? (
+                            <img
+                              src={`/api/responses/${response.id}/upload`}
+                              alt={`Drawing for question ${item.position + 1}`}
+                            />
+                          ) : view.kind === "table" && response ? (
+                            <TableGrid
+                              item={item}
+                              cells={
+                                (
+                                  response.response as unknown as {
+                                    cells?: Record<string, Record<string, string>>;
+                                  }
+                                ).cells ?? {}
+                              }
+                              showKey={showKey}
+                            />
+                          ) : view.kind === "lines" ? (
+                            <AnswerLines lines={view.lines} showKey={showKey} />
+                          ) : view.kind === "fill_blank" && !query.questions ? (
+                            <AnswerLines lines={view.lines} showKey={showKey} />
+                          ) : null}
+                        </div>
                         )}
-                        {query.scores === "teacher" ? null : (
-                          <ScoreBlock
-                            heading={packetScoreHeading("ai", picked.ai)}
-                            row={picked.ai}
-                            rubricRows={rubricScoreRows(rubric, picked.ai?.rationale)}
-                            overall={overallRationale(picked.ai?.rationale)}
-                          />
+
+                        {query.scores === "none" ? null : (
+                          // Two columns only for `both`, and only while both sides
+                          // have something to show: one lonely block in a
+                          // half-width column reads as a rendering bug.
+                          <div
+                            className={
+                              query.scores === "both" && picked.teacher && picked.ai
+                                ? "scores"
+                                : "scores scores-one"
+                            }
+                          >
+                            {query.scores === "ai" ? null : (
+                              <ScoreBlock
+                                heading={packetScoreHeading("teacher", picked.teacher)}
+                                row={picked.teacher}
+                                rubricRows={rubricScoreRows(rubric, picked.teacher?.rationale)}
+                                overall={overallRationale(picked.teacher?.rationale)}
+                              />
+                            )}
+                            {query.scores === "teacher" ? null : (
+                              <ScoreBlock
+                                heading={packetScoreHeading("ai", picked.ai)}
+                                row={picked.ai}
+                                rubricRows={rubricScoreRows(rubric, picked.ai?.rationale)}
+                                overall={overallRationale(picked.ai?.rationale)}
+                              />
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    </div>
+                  );
+                })}
 
-            {/* Page numbers are the browser's; this is the identity line that
-                gets a loose annotated sheet back to the right student. */}
-            <p className="page-footer">
-              {assessment.name} · {identityLine(row)}
-            </p>
-          </section>
-        ))}
+                {/* Page numbers are the browser's; this is the identity line that
+                    gets a loose annotated sheet back to the right student. */}
+                <p className="page-footer">
+                  {/* D-2: "Student 01" repeats once per section in a batch, so
+                      the footer names the section beside it. */}
+                  {[assessment.name, multiRun ? run.section : null, identityLine(row)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </section>
+            ))}
 
-        {/* D-1: the key page, last, so it tears off. */}
-        {labels && ordered.length > 0 ? (
-          <section className="student-page key-page" aria-label="Teacher key">
-            <h2>Teacher key — do not distribute</h2>
-            <p className="meta">
-              {[assessment.name, section].filter(Boolean).join(" · ")}
-            </p>
-            {single ? (
-              // One student printed alone: the label is the section packet's
-              // (or "In progress n"), as of this print.
-              <p className="meta">Printed {printedOn} · one student&apos;s work</p>
-            ) : (
-              <>
+            {/* D-1 / D-2: a key page closes each section's run, so each
+                section's stack tears off on its own. */}
+            {labels && run.rows.length > 0 ? (
+              <section className="student-page key-page" aria-label="Teacher key">
+                <h2>Teacher key — do not distribute</h2>
                 <p className="meta">
-                  Printed {printedOn} · {ordered.length} handed-in attempt
-                  {ordered.length === 1 ? "" : "s"}
+                  {[assessment.name, run.section].filter(Boolean).join(" · ")}
                 </p>
-                <p className="meta muted">
-                  Labels are assigned over the {ordered.length} attempt
-                  {ordered.length === 1 ? "" : "s"} handed in as of this print. If
-                  another student hands in and you print again, the labels can
-                  shift — keep this page with its packet.
-                </p>
-              </>
-            )}
-            <table>
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Student</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordered.map((row) => (
-                  <tr key={row.attempt_id}>
-                    <td>{labels.get(row.attempt_id)}</td>
-                    <td>
-                      {[row.student.name, row.student.student_number]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ) : null}
+                {single ? (
+                  // One student printed alone: the label is the section packet's
+                  // (or "In progress n"), as of this print.
+                  <p className="meta">Printed {printedOn} · one student&apos;s work</p>
+                ) : (
+                  <>
+                    <p className="meta">Printed {printedOn} · {keyCountLine(run)}</p>
+                    <p className="meta muted">
+                      Labels are assigned over the {handedInBySection.get(run.section) ?? 0} attempt
+                      {(handedInBySection.get(run.section) ?? 0) === 1 ? "" : "s"} handed in as of this
+                      print. If another student hands in and you print again, the labels can shift —
+                      keep this page with its packet.
+                    </p>
+                  </>
+                )}
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Label</th>
+                      <th>Student</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {run.rows.map((row) => (
+                      <tr key={row.attempt_id}>
+                        <td>{labels.get(row.attempt_id)}</td>
+                        <td>
+                          {[row.student.name, row.student.student_number]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            ) : null}
+          </Fragment>
+        ))}
       </main>
       {/* The one script on the page, same as the report's. */}
       <script dangerouslySetInnerHTML={{ __html: PRINT_SCRIPT }} />

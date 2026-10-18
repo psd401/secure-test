@@ -23,7 +23,7 @@ import {
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { sectionLabel } from "../lib/roster/teacherRoster";
-import { OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
+import { BIOLOGY_STUDENT, OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
 import { anonymousLabels } from "../lib/reporting/workPacket";
 
 /** The label the section packet gives `id` among the section's handed-in attempts. */
@@ -92,7 +92,7 @@ afterAll(async () => {
 
 async function render(
   id: string,
-  search: Record<string, string> = {},
+  search: Record<string, string | string[]> = {},
 ): Promise<string> {
   const element = await StudentWorkPacketPage({
     params: Promise.resolve({ id }),
@@ -1286,5 +1286,141 @@ describe("work packet — fill in the blank", () => {
     expect(body).not.toContain("STEM-FB");
     expect(body).toContain("Blank 1: OPT-LEEWARD");
     expect(body).toContain("Blank 2: ADA-TYPED");
+  });
+});
+
+// Batch print slice 1 (docs/batch-print-design.md, D-1..D-4, 8.1, 8.2): the
+// packet scene's two Algebra students, plus Cy in a Biology sitting and Eve
+// (no roster binding) still working in the Algebra sitting.
+describe("work packet — batch print (several sections, chosen students)", () => {
+  async function seedBatchScene() {
+    const scene = await seedPacketScene();
+    const db = getDb();
+    const [bio] = await db
+      .select()
+      .from(roster_sections)
+      .where(eq(roster_sections.ps_id, "5002"))
+      .limit(1);
+    const BIO = sectionLabel(bio!);
+    const [cy, eve] = await db
+      .insert(students)
+      .values([
+        { owner_sub: OWNER, roster_ps_id: BIOLOGY_STUDENT.ps_id, name: "Example, Cy" },
+        { owner_sub: OWNER, name: "Working, Eve" },
+      ])
+      .returning();
+    const [bioSitting] = await db
+      .insert(test_sessions)
+      .values({
+        assessment_id: scene.assessment.id,
+        owner_sub: OWNER,
+        owner_email: TEACHER_EMAIL,
+        section_ps_id: "5002",
+        code: "WP02TST",
+        status: "closed",
+        expires_at: new Date("2026-09-14T23:00:00Z"),
+      })
+      .returning();
+    const [algebraSitting] = await db
+      .select()
+      .from(test_sessions)
+      .where(eq(test_sessions.code, "WP01TST"))
+      .limit(1);
+    const [cyAttempt, eveAttempt] = await db
+      .insert(attempts)
+      .values([
+        {
+          assessment_id: scene.assessment.id,
+          student_id: cy!.id,
+          test_session_id: bioSitting!.id,
+          status: "submitted" as const,
+          started_at: new Date("2026-09-14T16:00:00Z"),
+          submitted_at: new Date("2026-09-14T17:10:00Z"),
+        },
+        {
+          assessment_id: scene.assessment.id,
+          student_id: eve!.id,
+          test_session_id: algebraSitting!.id,
+          status: "in_progress" as const,
+          started_at: new Date("2026-09-14T16:00:00Z"),
+        },
+      ])
+      .returning();
+    return { ...scene, BIO, cyAttempt: cyAttempt!, eveAttempt: eveAttempt! };
+  }
+
+  test("two sections: one packet, sections alphabetical, a divider and the section in every footer", async () => {
+    const { assessment, BIO } = await seedBatchScene();
+    const html = await render(assessment.id, { section: [BIO, SECTION] });
+    const body = packetBody(html);
+    expect(body.split('class="student-page').length - 1).toBe(3);
+    const [first, second] = [SECTION, BIO].sort((a, b) => a.localeCompare(b));
+    const dividers = [...body.matchAll(/class="section-divider">([^<]*)</g)].map((m) => m[1]);
+    expect(dividers).toEqual([first, second]);
+    expect(body.indexOf("Example, Cy") > body.indexOf("Fixture, Ada")).toBe(first === SECTION);
+    const footers = [...body.matchAll(/class="page-footer">([\s\S]*?)<\/p>/g)].map((m) => m[1]!);
+    expect(footers).toHaveLength(3);
+    expect(footers.every((f) => f.includes(SECTION) || f.includes(BIO))).toBe(true);
+    // The strip has one line per section; Eve (in progress) is not printed.
+    expect(html).toContain(`students in ${SECTION} handed in`);
+    expect(html).toContain(`students in ${BIO} handed in`);
+    expect(body).not.toContain("Working, Eve");
+  });
+
+  test("anonymous: labels numbered per section and a key page closing each section's run (D-2)", async () => {
+    const { assessment, BIO } = await seedBatchScene();
+    const html = await render(assessment.id, { section: [SECTION, BIO], anon: "1" });
+    const body = packetBody(html);
+    const keys = body.split("Teacher key — do not distribute").length - 1;
+    expect(keys).toBe(2);
+    // "Student 01" appears in both sections' runs.
+    const pages = body.split('class="student-page"').slice(1);
+    const labelled = pages.filter((p) => p.includes("Student 01"));
+    expect(labelled.length).toBeGreaterThanOrEqual(2);
+    // No name above the first key page.
+    const firstKey = body.indexOf("Teacher key — do not distribute");
+    expect(body.slice(0, firstKey)).not.toContain("Fixture, Ada");
+    expect(body.slice(0, firstKey)).not.toContain("Example, Cy");
+  });
+
+  test("in_progress=1 adds work not handed in, with the in-progress mark (D-3)", async () => {
+    const { assessment } = await seedBatchScene();
+    const off = packetBody(await render(assessment.id, { section: SECTION }));
+    expect(off).not.toContain("Working, Eve");
+    const on = packetBody(await render(assessment.id, { section: SECTION, in_progress: "1" }));
+    expect(on).toContain("Working, Eve");
+    expect(on).toContain("In progress — not handed in");
+    expect(on.split('class="student-page').length - 1).toBe(3);
+  });
+
+  test("chosen students with no section print under their own sections; a chosen in-progress student prints (8.1)", async () => {
+    const { assessment, adaAttempt, cyAttempt, eveAttempt } = await seedBatchScene();
+    const html = await render(assessment.id, {
+      attempt: [adaAttempt.id, cyAttempt.id, eveAttempt.id],
+    });
+    const body = packetBody(html);
+    expect(body.split('class="student-page').length - 1).toBe(3);
+    expect(body).toContain("Working, Eve");
+    expect(html).toContain("chosen in");
+  });
+
+  test("a chosen student outside the ticked sections is left out", async () => {
+    const { assessment, BIO, adaAttempt, cyAttempt } = await seedBatchScene();
+    const body = packetBody(
+      await render(assessment.id, { section: SECTION, attempt: [adaAttempt.id, cyAttempt.id] }),
+    );
+    // Only Ada is left, so this is one student's work.
+    expect(body.split('class="student-page').length - 1).toBe(1);
+    expect(body).toContain("Fixture, Ada");
+    expect(body).not.toContain("Example, Cy");
+    expect(body).not.toContain(BIO);
+  });
+
+  test("one section still prints as before: no divider, no section in the footer", async () => {
+    const { assessment } = await seedBatchScene();
+    const body = packetBody(await render(assessment.id, { section: SECTION }));
+    expect(body).not.toContain("section-divider");
+    const footers = [...body.matchAll(/class="page-footer">([\s\S]*?)<\/p>/g)].map((m) => m[1]!);
+    expect(footers.some((f) => f.includes(SECTION))).toBe(false);
   });
 });

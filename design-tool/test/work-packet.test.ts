@@ -8,10 +8,14 @@ import {
   choiceCheckboxLines,
   packetOrdering,
   packetHidesAnswers,
+  keyCountLine,
   packetScoreHeading,
   parsePacketQuery,
+  sectionAnonymousLabels,
+  selectPacket,
   selectPacketScores,
   stemExcerpt,
+  stripLine,
   type PacketScoreRow,
 } from "../lib/reporting/workPacket";
 
@@ -21,8 +25,9 @@ const B = "22222222-2222-4222-8222-222222222222";
 describe("parsePacketQuery", () => {
   test("an empty query is the documented default: all items, questions on, no scores, named", () => {
     expect(parsePacketQuery({})).toEqual({
-      section: null,
-      attempt: null,
+      sections: [],
+      attempts: [],
+      inProgress: false,
       items: null,
       questions: true,
       scores: "none",
@@ -43,23 +48,33 @@ describe("parsePacketQuery", () => {
     expect(parsePacketQuery({ spacing: ["double", "single"] }).doubleSpace).toBe(false);
   });
 
-  test("section is trimmed, and blank is the same as absent", () => {
-    expect(parsePacketQuery({ section: "  English 9 · 3  " }).section).toBe("English 9 · 3");
-    expect(parsePacketQuery({ section: "   " }).section).toBeNull();
-    // Next hands a repeated parameter as an array; the LAST one wins (slice
-    // 2: the questions checkbox relies on this — see the lastParam test).
-    expect(parsePacketQuery({ section: ["Biology", "Algebra"] }).section).toBe("Algebra");
+  // Batch print (docs/batch-print-design.md, D-1): `section` is multi-value
+  // now — it replaces the old last-value-wins rule for this parameter.
+  test("section is trimmed, blank is absent, and several are all kept in URL order", () => {
+    expect(parsePacketQuery({ section: "  English 9 · 3  " }).sections).toEqual(["English 9 · 3"]);
+    expect(parsePacketQuery({ section: "   " }).sections).toEqual([]);
+    expect(parsePacketQuery({ section: ["Biology", "Algebra"] }).sections).toEqual([
+      "Biology",
+      "Algebra",
+    ]);
+    expect(parsePacketQuery({ section: ["Biology", " ", "Biology"] }).sections).toEqual(["Biology"]);
+  });
+
+  test("in_progress=1 adds work not handed in; off by default (D-3)", () => {
+    expect(parsePacketQuery({}).inProgress).toBe(false);
+    expect(parsePacketQuery({ in_progress: "1" }).inProgress).toBe(true);
+    expect(parsePacketQuery({ in_progress: "0" }).inProgress).toBe(false);
   });
 
   // One student's work (2026-09-23): the per-student page's button and the
   // toolbar's picker, whose "Everyone in this section" option submits blank.
-  test("attempt is a uuid, case-folded; blank or junk is none; the LAST value wins", () => {
-    expect(parsePacketQuery({ attempt: A }).attempt).toBe(A);
-    expect(parsePacketQuery({ attempt: `  ${A.toUpperCase()} ` }).attempt).toBe(A);
-    expect(parsePacketQuery({ attempt: "" }).attempt).toBeNull();
-    expect(parsePacketQuery({ attempt: "not-a-uuid" }).attempt).toBeNull();
-    expect(parsePacketQuery({ attempt: [A, B] }).attempt).toBe(B);
-    expect(parsePacketQuery({ attempt: [A, ""] }).attempt).toBeNull();
+  test("attempt is a uuid, case-folded; blank or junk is dropped; several are all kept", () => {
+    expect(parsePacketQuery({ attempt: A }).attempts).toEqual([A]);
+    expect(parsePacketQuery({ attempt: `  ${A.toUpperCase()} ` }).attempts).toEqual([A]);
+    expect(parsePacketQuery({ attempt: "" }).attempts).toEqual([]);
+    expect(parsePacketQuery({ attempt: "not-a-uuid" }).attempts).toEqual([]);
+    expect(parsePacketQuery({ attempt: [A, B] }).attempts).toEqual([A, B]);
+    expect(parsePacketQuery({ attempt: [A, "", A] }).attempts).toEqual([A]);
   });
 
   test("items is a comma list of uuids; junk is dropped, duplicates collapse, empty = all", () => {
@@ -338,5 +353,95 @@ describe("stemExcerpt — the toolbar's item-checklist label", () => {
   test("blank or whitespace-only stems give an empty string", () => {
     expect(stemExcerpt("")).toBe("");
     expect(stemExcerpt("   ")).toBe("");
+  });
+});
+
+// Batch print slice 1 (docs/batch-print-design.md, D-1..D-4, 8.1, 8.2).
+describe("selectPacket", () => {
+  const C = "33333333-3333-4333-8333-333333333333";
+  const D = "44444444-4444-4444-8444-444444444444";
+  const E = "55555555-5555-4555-8555-555555555555";
+  type Row = {
+    attempt_id: string;
+    status: "submitted" | "in_progress";
+    student: { name: string; section: string | null };
+  };
+  const rows: Row[] = [
+    { attempt_id: A, status: "submitted", student: { name: "Zed Young", section: "P3" } },
+    { attempt_id: B, status: "submitted", student: { name: "Amy Able", section: "P3" } },
+    { attempt_id: C, status: "in_progress", student: { name: "Bo Bell", section: "P3" } },
+    { attempt_id: D, status: "submitted", student: { name: "Cy Cole", section: "P1" } },
+    { attempt_id: E, status: "submitted", student: { name: "Di Dunn", section: null } },
+  ];
+  const q = (over: Partial<{ sections: string[]; attempts: string[]; inProgress: boolean; anon: boolean }>) => ({
+    sections: [],
+    attempts: [],
+    inProgress: false,
+    anon: false,
+    ...over,
+  });
+
+  test("nothing chosen is the chooser; a foreign attempt is not found", () => {
+    expect(selectPacket(rows, q({})).kind).toBe("chooser");
+    expect(selectPacket(rows, q({ attempts: ["66666666-6666-4666-8666-666666666666"] })).kind).toBe(
+      "not_found",
+    );
+  });
+
+  test("sections print alphabetically, each by name, handed-in only by default", () => {
+    const sel = selectPacket(rows, q({ sections: ["P3", "P1"] }));
+    if (sel.kind !== "batch") throw new Error(sel.kind);
+    expect(sel.runs.map((r) => r.section)).toEqual(["P1", "P3"]);
+    expect(sel.runs[1]!.rows.map((r) => r.attempt_id)).toEqual([B, A]);
+    expect(sel.runs.every((r) => !r.chosen)).toBe(true);
+  });
+
+  test("in_progress adds the work not handed in to a section run (D-3)", () => {
+    const sel = selectPacket(rows, q({ sections: ["P3"], inProgress: true }));
+    if (sel.kind !== "batch") throw new Error(sel.kind);
+    expect(sel.runs[0]!.rows.map((r) => r.attempt_id)).toEqual([B, C, A]);
+  });
+
+  test("one chosen student is single mode, in progress or not (8.1)", () => {
+    const sel = selectPacket(rows, q({ attempts: [C] }));
+    expect(sel.kind).toBe("single");
+  });
+
+  test("chosen students outside the sections are ignored; none left = the sections in full", () => {
+    const narrowed = selectPacket(rows, q({ sections: ["P3"], attempts: [A, C, D] }));
+    if (narrowed.kind !== "batch") throw new Error(narrowed.kind);
+    expect(narrowed.runs).toHaveLength(1);
+    expect(narrowed.runs[0]!.chosen).toBe(true);
+    expect(narrowed.runs[0]!.rows.map((r) => r.attempt_id)).toEqual([C, A]);
+
+    const switched = selectPacket(rows, q({ sections: ["P1"], attempts: [A] }));
+    if (switched.kind !== "batch") throw new Error(switched.kind);
+    expect(switched.runs[0]!.section).toBe("P1");
+    expect(switched.runs[0]!.chosen).toBe(false);
+  });
+
+  test("several chosen students with no section group by their own sections, none last", () => {
+    const sel = selectPacket(rows, q({ attempts: [E, A, D] }));
+    if (sel.kind !== "batch") throw new Error(sel.kind);
+    expect(sel.runs.map((r) => r.section)).toEqual(["P1", "P3", null]);
+  });
+
+  test("labels are numbered per section over its handed-in work; in progress reads In progress n (D-2)", () => {
+    const p3 = sectionAnonymousLabels(rows, "P3");
+    expect([...new Set([p3.get(A), p3.get(B)])].sort()).toEqual(["Student 01", "Student 02"]);
+    expect(p3.get(C)).toBe("In progress 1");
+    expect(sectionAnonymousLabels(rows, "P1").get(D)).toBe("Student 01");
+  });
+
+  test("strip and key-page lines", () => {
+    const run = { section: "P3", rows: rows.slice(0, 3), chosen: false };
+    expect(stripLine({ ...run, rows: rows.slice(0, 2) }, 30, false)).toBe("2 of 30 students in P3 handed in");
+    expect(stripLine(run, 30, true)).toBe("2 of 30 students in P3 handed in · 1 not handed in");
+    expect(stripLine({ ...run, rows: rows.slice(0, 2) }, null, false)).toBe("2 handed in");
+    expect(stripLine({ ...run, rows: rows.slice(0, 2) }, null, true)).toBe("P3: 2 handed in");
+    expect(stripLine({ ...run, chosen: true }, null, true)).toBe("3 students chosen in P3");
+    expect(keyCountLine({ ...run, rows: rows.slice(0, 2) })).toBe("2 handed-in attempts");
+    expect(keyCountLine(run)).toBe("3 attempts, 1 not handed in");
+    expect(keyCountLine({ ...run, chosen: true })).toBe("3 chosen attempts");
   });
 });

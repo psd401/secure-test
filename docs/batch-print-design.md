@@ -17,6 +17,12 @@ D-2 every item type). Nothing is built.
   with today's in-progress mark.
 - **D-4** (2.4) Order: section as listed, then last / first name.
 - **D-5** (2.5) Student checkboxes in the first version.
+- **D-6** (8.1, 2026-10-18) A chosen student prints whatever their status —
+  `in_progress` governs only a section's run, as the single-student print
+  always did.
+- **D-7** (8.2) "As listed" means alphabetical, the toolbar's order, not URL
+  order; chosen students with no section print last.
+- **D-8** (8.3) The flag is `in_progress=1`.
 
 ## What exists
 
@@ -90,6 +96,26 @@ today, including its "In progress n" label.
    help topic "Print student work" and its picture. XS.
 
 Design tool only; no migration; no client release.
+
+## Progress
+
+- **Slice 1 BUILT 2026-10-18, not committed, not deployed.**
+  `PacketQuery.sections` / `attempts` (multi-value, trimmed / uuid-checked,
+  repeats dropped) and `inProgress`; `selectPacket` (`lib/reporting/
+  workPacket.ts`) decides chooser / not found / one student / a batch of
+  section runs by the rules above (a foreign attempt id is not found;
+  chosen students outside the ticked sections are ignored, and with none
+  left the sections print in full); `sectionAnonymousLabels` numbers per
+  section over its handed-in work, "In progress n" otherwise;
+  `stripLine` / `keyCountLine`. The page renders one run per section —
+  divider on its first page and the section in every footer only when
+  there is more than one run, a key page closing each run, one strip line
+  per run. The toolbar and chooser are unchanged (slice 2): the section
+  select shows the first run's section. A one-section URL, a one-attempt
+  URL and every bookmarked link print as before (the 48 existing page tests
+  pass unchanged). Tests: `test/work-packet.test.ts` (the last-wins
+  `section` test replaced; `selectPacket`, labels, lines) and six batch
+  cases in `test/work-packet-page.test.tsx`.
 
 ## Open questions — answered 2026-10-15 (see Decisions)
 
