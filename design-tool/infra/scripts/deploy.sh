@@ -38,6 +38,7 @@
 #   design-tool/infra/scripts/deploy.sh --during-school  # override DS-2
 #   design-tool/infra/scripts/deploy.sh --staging        # the STAGING stack
 #   design-tool/infra/scripts/deploy.sh --no-renderer    # either stack, no signing
+#   design-tool/infra/scripts/deploy.sh --hotfix         # production, from a hotfix/* branch
 #   design-tool/infra/scripts/deploy.sh --backup-prepare DIR  # backup key, step 1
 #   design-tool/infra/scripts/deploy.sh --backup-signed DIR   # backup key, step 2
 # --staging (renderer slice 2, D-7) deploys SecureTestDesignToolStaging with
@@ -88,6 +89,16 @@
 # --no-renderer skips a-f on either stack: an infra-only deploy, no Touch ID;
 # the pointer keeps naming the last signed renderer. --diff never signs.
 # Production's school-hours rule (DS-2) is unchanged by any of this.
+# --hotfix (2026-10-19, row ES — docs/ended-session-rejoin-design.md "Shipping
+# before v2.0"): deploy PRODUCTION from a pushed `hotfix/*` branch instead of
+# origin/main, while main is held for a bigger release. The branch must be
+# built on what is live (the live commit is an ancestor of HEAD — a hotfix
+# never rolls back live work), carry NO new migration (refused, not merely
+# school-hours-gated), and have a green `ci` run on HEAD (ci runs on the
+# branch's pull request). The renderer is never touched (implies
+# --no-renderer): the pointer keeps naming the renderer production serves.
+# The health stamp then reads the hotfix commit; cherry-pick it onto main
+# afterwards so the next main deploy carries it.
 # Env: AWS_REGION (default us-west-2), STACK (default SecureTestDesignTool,
 #      or SecureTestDesignToolStaging with --staging),
 #      DEPLOY_HEALTH_WAIT (seconds, default 600),
@@ -109,6 +120,7 @@ DIFF_ONLY=0
 DURING_SCHOOL=0
 STAGING=0
 NO_RENDERER=0
+HOTFIX=0
 BACKUP_PREPARE=""
 BACKUP_SIGNED=""
 while [ "$#" -gt 0 ]; do
@@ -117,6 +129,7 @@ while [ "$#" -gt 0 ]; do
     --during-school) DURING_SCHOOL=1 ;;
     --staging) STAGING=1 ;;
     --no-renderer) NO_RENDERER=1 ;;
+    --hotfix) HOTFIX=1 ;;
     --backup-prepare|--backup-signed)
       [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "deploy: $1 needs a directory" >&2; exit 2; }
       if [ "$1" = "--backup-prepare" ]; then BACKUP_PREPARE="$2"; else BACKUP_SIGNED="$2"; fi
@@ -125,6 +138,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+if [ "$HOTFIX" -eq 1 ]; then
+  [ "$STAGING" -eq 0 ] || { echo "deploy: --hotfix is for production; staging deploys from any pushed main" >&2; exit 2; }
+  [ -z "$BACKUP_PREPARE$BACKUP_SIGNED" ] || { echo "deploy: --hotfix never signs a renderer - not with the backup-key flags" >&2; exit 2; }
+  NO_RENDERER=1
+fi
 if [ -n "$BACKUP_PREPARE" ] && [ -n "$BACKUP_SIGNED" ]; then
   echo "deploy: pass --backup-prepare or --backup-signed, not both" >&2; exit 2
 fi
@@ -221,6 +239,16 @@ cd "$REPO"
 [ -z "$(git status --porcelain)" ] || fail "working tree is not clean — commit or stash first"
 HEAD_SHA="$(git rev-parse HEAD)"
 git fetch -q origin
+if [ "$HOTFIX" -eq 1 ]; then
+  BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
+  case "$BRANCH" in
+    hotfix/*) ;;
+    *) fail "--hotfix deploys a hotfix/* branch; HEAD is on '${BRANCH:-a detached HEAD}'" ;;
+  esac
+  git rev-parse -q --verify "origin/$BRANCH" >/dev/null || fail "$BRANCH is not pushed — push it first (the image stamps APP_COMMIT from HEAD)"
+  [ "$(git rev-parse "origin/$BRANCH")" = "$HEAD_SHA" ] || fail "HEAD ($HEAD_SHA) is not origin/$BRANCH — push first"
+  echo "HEAD = origin/$BRANCH = $HEAD_SHA (hotfix)"
+else
 # The OpenWiki bot pushes a docs commit after every push to main, which left
 # HEAD one behind origin/main before nearly every deploy (2026-10-13).
 # Fast-forward ONLY when HEAD is an ancestor of origin/main and every commit
@@ -240,6 +268,7 @@ if [ "$(git rev-parse origin/main)" != "$HEAD_SHA" ] \
 fi
 [ "$(git rev-parse origin/main)" = "$HEAD_SHA" ] || fail "HEAD ($HEAD_SHA) is not origin/main — push first (the image stamps APP_COMMIT from HEAD)"
 echo "HEAD = origin/main = $HEAD_SHA"
+fi
 
 if [ "$RENDERER" -eq 1 ]; then
   # Signing needs this Mac (Touch ID, the Secure Enclave key, Swift for the
@@ -280,6 +309,20 @@ if [ -n "$LIVE_SHA" ] && git -C "$REPO" cat-file -e "$LIVE_SHA^{commit}" 2>/dev/
   NEW_MIGRATIONS="$(git -C "$REPO" diff --name-only "$LIVE_SHA" "$HEAD_SHA" -- design-tool/db/migrations/ | grep -v '/meta/' || true)"
 else
   NEW_MIGRATIONS="(unknown live commit — assuming new migrations)"
+fi
+if [ "$HOTFIX" -eq 1 ]; then
+  [ -n "$LIVE_SHA" ] || fail "--hotfix needs the live commit (health did not answer) to prove the branch is built on it"
+  git -C "$REPO" merge-base --is-ancestor "$LIVE_SHA" "$HEAD_SHA" 2>/dev/null \
+    || fail "--hotfix: the live commit $LIVE_SHA is not an ancestor of HEAD — branch from what is live"
+  [ -z "$NEW_MIGRATIONS" ] || fail "--hotfix carries no migrations; this branch adds: $NEW_MIGRATIONS"
+  command -v gh >/dev/null 2>&1 || fail "gh (GitHub CLI) is required for the --hotfix ci gate — install it and run: gh auth login"
+  case "$(ci_state "$HEAD_SHA" || echo unreadable)" in
+    success) echo "ci: green on $HEAD_SHA (hotfix)" ;;
+    pending) fail "ci is still running on $HEAD_SHA — wait for ci, then re-run" ;;
+    failed) fail "ci failed on $HEAD_SHA — fix it on the branch first" ;;
+    unreadable) fail "could not read ci runs from GitHub (gh auth status?)" ;;
+    *) fail "no ci run found for $HEAD_SHA — open a pull request from the branch so ci runs" ;;
+  esac
 fi
 if [ -n "$NEW_MIGRATIONS" ]; then
   echo "new migrations (the new task applies them at boot):"
