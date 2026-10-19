@@ -5,7 +5,7 @@
 // page is awaited and its element tree rendered, the same way
 // reporting-print.test.tsx does it.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { renderToStaticMarkup } from "react-dom/server";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -576,9 +576,41 @@ describe("work packet — one page per student, every item type", () => {
     // Scoped to the packet: the toolbar's student picker names them first.
     const body = packetBody(html);
     const adaPage = body.slice(body.indexOf("Fixture, Ada"), body.indexOf("Sample, Ben"));
-    expect(adaPage).toContain("☑</span>CHOICE-COPPER");
-    expect(adaPage).toContain("☐</span>CHOICE-NEON");
-    expect(adaPage).toContain("☐</span>CHOICE-IRON");
+    expect(adaPage).toContain('☑</span><span class="choice-text">CHOICE-COPPER</span>');
+    expect(adaPage).toContain('☐</span><span class="choice-text">CHOICE-NEON</span>');
+    expect(adaPage).toContain('☐</span><span class="choice-text">CHOICE-IRON</span>');
+  });
+
+  test("WP-2: a choice prints through the stem renderer — KaTeX and the owner's picture, never raw", async () => {
+    const { assessment } = await seedPacketScene();
+    const db = getDb();
+    const [asset] = await db
+      .insert(assets)
+      .values({
+        owner_sub: OWNER,
+        content_type: "image/png",
+        size_bytes: 4,
+        sha256: "wp2-fixture",
+        storage_provider: "local-fs",
+        storage_key: "wp2/fixture.png",
+        original_filename: "fixture.png",
+      })
+      .returning();
+    await db
+      .update(items)
+      .set({
+        choices: [
+          { id: "s1", text: "CHOICE-YES $x^2$" },
+          { id: "s2", text: `![CHOICE-PIC](asset:${asset!.id})` },
+        ],
+      })
+      .where(and(eq(items.assessment_id, assessment.id), eq(items.position, 3)));
+    const body = packetBody(await render(assessment.id, { section: SECTION }));
+    expect(body).not.toContain("$x^2$");
+    expect(body).toContain('class="katex"');
+    expect(body).not.toContain("](asset:");
+    expect(body).toContain(`/api/assessments/${assessment.id}/assets/${asset!.id}`);
+    expect(body).toContain('alt="CHOICE-PIC"');
   });
 
   test("?items= narrows the packet to the chosen questions", async () => {

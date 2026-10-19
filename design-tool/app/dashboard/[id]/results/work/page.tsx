@@ -966,7 +966,15 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                               {boxes.map((b) => (
                                 <li key={b.id}>
                                   <span className="box">{b.selected ? "☑" : "☐"}</span>
-                                  {b.text}
+                                  {/* WP-2: choice text follows the stem's content
+                                      rules (KaTeX, emphasis, `![alt](asset:…)`);
+                                      it printed raw until 2026-10-18. */}
+                                  <span
+                                    className="choice-text"
+                                    dangerouslySetInnerHTML={{
+                                      __html: renderItemContent(b.text, resolvedAssets),
+                                    }}
+                                  />
                                 </li>
                               ))}
                             </ul>
