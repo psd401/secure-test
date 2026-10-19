@@ -779,3 +779,55 @@ describe("POST /api/test-sessions — scope (slice 79)", () => {
     expect((await redeem(test_session.code)).status).toBe(200);
   });
 });
+
+// Row ES (docs/ended-session-rejoin-design.md): "Continue in a new session"
+// posts the ended sitting's scope back to the create route. The old code stays
+// dead; the new one admits the same students.
+describe("POST /api/test-sessions — continue an ended sitting (row ES)", () => {
+  test("an ended section sitting continues with the same scope and a working code", async () => {
+    const { continueSessionBody } = await import("../app/dashboard/[id]/attendanceView");
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const a = await seedAssessment();
+    const first = await post({ assessment_id: a.id, section_ps_id: "5001" });
+    expect(first.status).toBe(201);
+    const { test_session: ended } = (await first.json()) as {
+      test_session: { id: string; code: string; section_ps_id: string | null; student_ps_ids: string[] | null };
+    };
+    await getDb()
+      .update(test_sessions)
+      .set({ expires_at: new Date(Date.now() - 60_000) })
+      .where(eq(test_sessions.id, ended.id));
+
+    const res = await post(continueSessionBody(a.id, ended, 55));
+    expect(res.status).toBe(201);
+    const { test_session: next } = (await res.json()) as {
+      test_session: { id: string; code: string; section_ps_id: string | null };
+    };
+    expect(next.id).not.toBe(ended.id);
+    expect(next.section_ps_id).toBe("5001");
+    // The create path's sweep closed the ended sitting.
+    const [old] = await getDb().select().from(test_sessions).where(eq(test_sessions.id, ended.id));
+    expect(old?.status).toBe("closed");
+
+    principal = studentPrincipal();
+    expect((await redeem(ended.code)).status).toBe(404);
+    const joined = await redeem(next.code);
+    expect(joined.status).toBe(200);
+    expect((await joined.json()).test_session_id).toBe(next.id);
+  });
+
+  test("a student-list sitting continues with the same list", async () => {
+    const { continueSessionBody } = await import("../app/dashboard/[id]/attendanceView");
+    principal = { sub: TEACHER, role: "staff", email: TEACHER_EMAIL };
+    const a = await seedAssessment();
+    const first = await post({ assessment_id: a.id, student_ps_ids: [STUDENT.ps_id] });
+    const { test_session: ended } = (await first.json()) as {
+      test_session: { id: string; section_ps_id: string | null; student_ps_ids: string[] | null };
+    };
+    await getDb().update(test_sessions).set({ status: "closed" }).where(eq(test_sessions.id, ended.id));
+    const res = await post(continueSessionBody(a.id, ended, 30));
+    expect(res.status).toBe(201);
+    const { test_session: next } = (await res.json()) as { test_session: { student_ps_ids: string[] | null } };
+    expect(next.student_ps_ids).toEqual([STUDENT.ps_id]);
+  });
+});

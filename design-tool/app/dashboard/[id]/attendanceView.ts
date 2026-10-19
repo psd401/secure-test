@@ -431,3 +431,41 @@ export function practiceHasAttempt(
 ): boolean {
   return !!row && row.status !== "not_joined" && row.attempt_id !== null;
 }
+
+/**
+ * Row ES (docs/ended-session-rejoin-design.md, D-2): "Continue in a new
+ * session" is offered on every class sitting that is no longer joinable —
+ * closed, or open past its `expires_at` (nothing flips the status at expiry;
+ * redemption checks the clock, and so does this). Never on a practice
+ * sitting: "Practice again" is its own way back.
+ */
+export function canContinueInNewSession(
+  sitting: { status: string; expires_at: string; kind?: "class" | "practice" },
+  now: number,
+): boolean {
+  if (sitting.kind === "practice") return false;
+  return sitting.status === "closed" || Date.parse(sitting.expires_at) <= now;
+}
+
+/**
+ * Row ES (D-1 (a), D-5): the POST /api/test-sessions body for a new sitting
+ * with the ended one's scope — one section, the same student list, or (both
+ * null) all the teacher's sections. The route re-checks the scope against
+ * today's roster, and sweeps the teacher's expired sittings before it
+ * allocates a code.
+ */
+export function continueSessionBody(
+  assessmentId: string,
+  sitting: { section_ps_id: string | null; student_ps_ids: string[] | null },
+  durationMinutes: number,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    assessment_id: assessmentId,
+    duration_minutes: durationMinutes,
+  };
+  if (sitting.section_ps_id !== null) body.section_ps_id = sitting.section_ps_id;
+  else if (sitting.student_ps_ids !== null && sitting.student_ps_ids.length > 0) {
+    body.student_ps_ids = sitting.student_ps_ids;
+  }
+  return body;
+}
