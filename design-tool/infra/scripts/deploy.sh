@@ -94,8 +94,9 @@
 # origin/main, while main is held for a bigger release. The branch must be
 # built on what is live (the live commit is an ancestor of HEAD — a hotfix
 # never rolls back live work), carry NO new migration (refused, not merely
-# school-hours-gated), and have a green `ci` run on HEAD (ci runs on the
-# branch's pull request). The renderer is never touched (implies
+# school-hours-gated), and have a green `ci` run on HEAD (ci runs on every
+# push to hotfix/** — a pull request from a branch that conflicts with main
+# never gets one). The renderer is never touched (implies
 # --no-renderer): the pointer keeps naming the renderer production serves.
 # The health stamp then reads the hotfix commit; cherry-pick it onto main
 # afterwards so the next main deploy carries it.
@@ -321,7 +322,7 @@ if [ "$HOTFIX" -eq 1 ]; then
     pending) fail "ci is still running on $HEAD_SHA — wait for ci, then re-run" ;;
     failed) fail "ci failed on $HEAD_SHA — fix it on the branch first" ;;
     unreadable) fail "could not read ci runs from GitHub (gh auth status?)" ;;
-    *) fail "no ci run found for $HEAD_SHA — open a pull request from the branch so ci runs" ;;
+    *) fail "no ci run found for $HEAD_SHA — push the branch (ci runs on pushes to hotfix/**) and wait" ;;
   esac
 fi
 if [ -n "$NEW_MIGRATIONS" ]; then
