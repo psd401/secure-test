@@ -192,6 +192,10 @@ its own.
   session** when it ends. Answers are saved; nothing is handed in.
 - **Next class, start a new session.** Students see the test under **Your
   tests** with **Resume** and continue where they stopped.
+- **Session already ended?** Press **Continue in a new session** on it (Test
+  sessions tab or its Monitor): same students, a new session. Students who
+  didn't finish resume, absent students start. **Adjust time** doesn't
+  reopen an ended session.
 - **Close the old session when the class ends.** Students see each test
   once under **Your tests** even with two sessions open, but an open session
   lets them keep working outside class time.

@@ -103,3 +103,17 @@ time dialog line on an ended sitting.
 
 - 2026-10-19: note written from the beta report (read-only Aurora query
   in the session scratchpad; no student identifiers recorded).
+- 2026-10-19: built on `hotfix/es-ended-session` from `3e1ecc58` —
+  slice 1 helpers + route proof (`canContinueInNewSession`,
+  `continueSessionBody`; no server change), slice 2 the control, Monitor
+  banner + header button, Test sessions row button, Adjust time line on
+  all four Adjust time buttons (`ENDED_SITTING_NOTE`), slice 3
+  `deploy.sh --hotfix`, slice 4 help topic 7 + FAQ + roadmap milestone
+  (branch) and quick start + rows 650–657 (main). Design-tool 3238 pass.
+  Rows 650–653 ✅ on local dev. Readings: a co-teacher continuing the lead
+  teacher's sitting for a period they don't teach gets "That section isn't
+  on your class list any more"; an ended sitting's Test sessions row still
+  has no Monitor link (unchanged); students whose own deadline already
+  passed are refused in the new session until the teacher sets No time
+  limit (the Monitor's existing "Time ran out" note says so).
+

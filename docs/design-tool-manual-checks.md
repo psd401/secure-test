@@ -1790,3 +1790,19 @@ Same change and method for Send to Google Docs and Send to gradebook. Both open 
 |---|---|---|---|
 | 648 | **Send to Google Docs** on a per-student results page; then the return from Google (saved choices in `sessionStorage` + `?gdrive=ok`) | Enter opens the dialog; Escape and Cancel each return focus to the button. After the return: the dialog opens by itself with the saved choices and "Google Drive is connected…", `?gdrive=` is dropped, and Escape returns focus to the button | ✅ 2026-10-18 — the return was simulated by writing the saved state and loading `?gdrive=ok`; reopening from the button after that clears the notice and keeps the choices, as before |
 | 649 | **Send to gradebook** on the results page | Enter opens the dialog and the categories load; Escape and Cancel each return focus to the button | ✅ 2026-10-18 — mock gradebook categories listed; focus opens on the Section select |
+
+## Continue in a new session (row ES, 2026-10-19)
+
+`docs/ended-session-rejoin-design.md` is the record. Built on `hotfix/es-ended-session` from the live commit; local dev on `_demo` (the worktree's dev server), Claude in Chrome as the demo teacher.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 650 | Monitor of a class sitting open past its end time, one student in progress | **Continue in a new session** in the header; banner "This session has ended. 1 student hasn't handed in — they can finish in a new session. Adjust time alone doesn't let anyone back in." | ✅ 2026-10-19 on local dev (`_demo`, sitting ARGGNX) |
+| 651 | **Adjust time** in that Monitor's header | The dialog shows "This session has ended — students need a new session to get back in. Use Continue in a new session." | ✅ 2026-10-19 on local dev |
+| 652 | **Continue in a new session** → 55 min → **Start session** | A new sitting with the same scope; lands on its Monitor with the code shown full-screen | ✅ 2026-10-19 on local dev (new code, "All my sections", closes in 55 min) |
+| 653 | Test sessions tab after 652 | The new sitting Open; ended class rows carry **Continue in a new session**; practice rows do not | ✅ 2026-10-19 on local dev |
+| 654 | A student mid-test on the ended sitting opens the client | The test is under **Your tests** with **Resume** and continues on the new sitting; an absent student starts it; a student who handed in sees "already handed in" | NOT RUN (route covered by `test/test-sessions-api.test.ts`) |
+| 655 | Press **Continue** twice on the same ended sitting | The second lands on the sitting the first started (409 `sitting_already_open`) | NOT RUN |
+| 656 | A one-section sitting, and a picked-students sitting | The new sitting keeps that section / that list | NOT RUN (route covered) |
+| 657 | `/help.html#run` ("A test that takes more than one class"), the FAQ entry, the quick start, `/roadmap.html` | The "Session already ended?" step, "I adjusted time, but students still can't get back in.", the 2026-10-19 milestone | NOT RUN |
+

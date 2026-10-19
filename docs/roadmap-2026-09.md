@@ -1184,3 +1184,16 @@ never renamed (convention in `CLAUDE.md` "Naming").
   has a reason, and the release notes say so. If it recurs on a student
   Mac: the panic report from IT, then Apple Feedback against Automatic
   Assessment Configuration.
+
+## Row ES — Continue an ended test session (beta report 2026-10-19) — `docs/ended-session-rejoin-design.md` is the record
+
+A teacher pressed Adjust time eleven times on a sitting that had ended the
+Friday before; no student could get back in. **DECIDED 2026-10-19 (James):**
+"Continue in a new session" on every ended class sitting (same scope, new
+code), a banner on an ended Monitor, one line in the Adjust time dialog, and
+a `deploy.sh --hotfix` mode so it ships from `hotfix/es-ended-session` (off
+the live commit) before the v2.0 deploy. Side: design tool. **BUILT
+2026-10-19 on the hotfix branch** (slices 1–3 + help / roadmap pages), rows
+650–657 in `docs/design-tool-manual-checks.md`; cherry-picked onto `main`
+after the hotfix deploy.
+
