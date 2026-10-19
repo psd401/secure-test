@@ -469,3 +469,36 @@ export function continueSessionBody(
   }
   return body;
 }
+
+/** The create route's range for `duration_minutes` (Start session's field). */
+export const MIN_SESSION_MINUTES = 1;
+export const MAX_SESSION_MINUTES = 720;
+
+/** Minutes from `now` until 4:00 PM Pacific today, clamped to the API's range.
+ * Start session's "Rest of day" preset; shared with Continue in a new session. */
+export function restOfDayMinutes(now: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  const left = 16 * 60 - (h * 60 + m);
+  return Math.max(MIN_SESSION_MINUTES, Math.min(MAX_SESSION_MINUTES, left > 0 ? left : 60));
+}
+
+/**
+ * Row ES (D-3): the banner on an ended Monitor while students are still mid-
+ * test; null when no one is. The 2026-10-19 report was a teacher pressing
+ * Adjust time eleven times on an ended sitting — this says why that can't work.
+ */
+export function endedSessionBanner(inProgress: number): string | null {
+  if (inProgress <= 0) return null;
+  const who = inProgress === 1 ? "1 student hasn't" : `${inProgress} students haven't`;
+  return (
+    `This session has ended. ${who} handed in — they can finish in a new ` +
+    "session. Adjust time alone doesn't let anyone back in."
+  );
+}

@@ -182,6 +182,16 @@ export function untimedDeadlineWarning(
 }
 
 /**
+ * Row ES (docs/ended-session-rejoin-design.md, D-4): the line the dialog shows
+ * when its sitting is no longer joinable. Adjust time still matters there — a
+ * deadline set now applies once the student joins a new session — but it
+ * cannot let anyone back in, which is what the 2026-10-19 report expected.
+ */
+export const ENDED_SITTING_NOTE =
+  "This session has ended — students need a new session to get back in. " +
+  "Use Continue in a new session.";
+
+/**
  * A `datetime-local` value ("YYYY-MM-DDTHH:mm", read as local time by the
  * browser) turned into an ISO instant. `null` when the value is empty or
  * unparseable, which the caller treats as "nothing to submit" rather than
@@ -223,6 +233,7 @@ export function ExtendTimeControl({
   currentDeadlines,
   label = "Adjust time",
   assessmentUntimed = false,
+  sittingEnded = false,
 }: {
   target: ExtendTarget;
   /** The button's text; the dialog's title stays "Adjust time". */
@@ -234,6 +245,8 @@ export function ExtendTimeControl({
   /** The assessment has no time limit of its own: open on "No time limit"
    * and warn on a deadline (`untimedDeadlineWarning`). */
   assessmentUntimed?: boolean;
+  /** Row ES (D-4): the sitting has ended or been closed — show ENDED_SITTING_NOTE. */
+  sittingEnded?: boolean;
   size?: "xs" | "sm" | "default";
   variant?: "outline" | "ghost";
 }) {
@@ -307,6 +320,9 @@ export function ExtendTimeControl({
             <DialogTitle>Adjust time</DialogTitle>
             <DialogDescription>{extendHint(target.kind, choice)}</DialogDescription>
           </DialogHeader>
+          {sittingEnded ? (
+            <p className="text-xs text-warning-foreground">{ENDED_SITTING_NOTE}</p>
+          ) : null}
           <fieldset className="space-y-2 text-sm" disabled={busy}>
             <legend className="sr-only">Time limit</legend>
             <label className="flex items-center gap-2">
