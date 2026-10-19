@@ -17,7 +17,10 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # hotfix/** (2026-10-19, row ES): `deploy.sh --hotfix` requires a green run
+    # on the branch head, and a hotfix branch off the live commit conflicts
+    # with main, so GitHub never runs its pull_request event.
+    branches: [main, "hotfix/**"]
   pull_request:
 
 permissions:
