@@ -1197,3 +1197,29 @@ the live commit) before the v2.0 deploy. Side: design tool. **BUILT
 650–657 in `docs/design-tool-manual-checks.md`; cherry-picked onto `main`
 after the hotfix deploy.
 
+
+## Row DC — a Desmos calculator inside SecureTest tests (teacher request, 2026-10-19) — INVESTIGATE, nothing built
+
+A high-school teacher using Amplify Desmos Math asked to use SecureTest
+with the curriculum. Of three readings (A: lock down Amplify's own online
+assessments — out of scope, the client is not a general kiosk browser;
+B: import Amplify's printed assessments — possible for the item types we
+have, licensing to confirm with the district; C: a Desmos calculator
+available inside SecureTest tests), James chose **C** as worth
+investigating. Side: both (a per-test / per-question tool setting in the
+design tool; the calculator panel in the client page, likely shippable
+through the v2.0 served renderer). Investigate before any design note:
+- Desmos API terms for an embedded calculator in a secure-test product,
+  a production API key, and whether the script may be self-hosted inside
+  the signed renderer (it normally loads from Desmos's CDN) —
+  `assessments@desmos.com`.
+- Whether a CDN load works inside a real AAC session (finding 10.7 broke
+  DNS for OTHER processes; the client's own traffic was unaffected).
+- Which calculators (scientific / graphing / four-function) and which
+  Desmos "test mode" restrictions teachers expect; per test or per
+  question; an accommodation or a test setting.
+- Not in scope for the row: graph-entry answers (students plotting as a
+  response) — a separate, larger item type if teachers ask.
+Open with the teacher: which courses (one Amplify page lists digital
+assessments through Algebra 1), and whether a calculator alone covers
+her need.

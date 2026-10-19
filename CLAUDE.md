@@ -31,10 +31,11 @@ PSD macOS secure-testing browser + teacher-facing assessment-authoring "design-t
 ## Current state and history
 - **History lives in `docs/ledger.md`** (the dated status entries that used to be here, moved 2026-10-19 because this file had grown past 200 KB). Read its newest "STATE AT CLOSE-OUT" / dated entries before starting work; add new entries THERE, not here.
 - Detailed records: `docs/roadmap-2026-09.md` (§Progress), the design notes in `docs/`, `docs/design-tool-manual-checks.md`, `client/MANUAL-CHECKS.md`, `client/RELEASING.md`.
-- As of 2026-10-18: production is HELD at `3e1ecc58` until v2.0 ships; `main` carries undeployed work incl. migrations 0060 + 0061 (deploy after 15:30 PT on a weekday or with `--during-school`); v2.0 waits on IT's signed rehearsal manifest. Check `docs/ledger.md` for anything newer.
+- As of 2026-10-19: production runs the hotfix `4a812ae` (`hotfix/es-ended-session` = live `3e1ecc58` + row ES); `main` is HELD for v2.0 and carries undeployed work incl. migrations 0060 + 0061 (deploy after 15:30 PT on a weekday or with `--during-school`) plus the row ES commits by cherry-pick; v2.0 waits on IT's signed rehearsal manifest. Check `docs/ledger.md` for anything newer.
 
 ## Key working rules
 - Deploy = `design-tool/infra/scripts/deploy.sh` (James runs it if the classifier denies it); the container migrates at boot; read the `health stamp` line, not the exit code. `colima start` first.
+- While `main` is held, ship an urgent fix as a hotfix: branch `hotfix/<name>` from the live commit (`/api/health`), push (ci runs on `hotfix/**` pushes), then `deploy.sh --hotfix` from that worktree; cherry-pick the commits onto `main` afterwards. No migrations, no renderer.
 - `packages/schema` is consumed through `dist` — `bun run build` there after editing `src`. `cd client && bun scripts/vendor-katex.mjs` after a katex bump or `macros.ts` edit.
 - If `bun run dev` shows more than a handful of `postcss.js` processes, stop and `bun run dev:clean`.
 - Never edit or stage in this checkout while another Claude terminal is active in it — use a worktree. The OpenWiki bot pushes after every push to `main` — rebase before pushing.
