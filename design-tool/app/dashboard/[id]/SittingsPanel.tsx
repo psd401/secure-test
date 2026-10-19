@@ -45,6 +45,7 @@ import { LiveIndicator } from "@/components/app/LiveIndicator";
 import { ProgressBar } from "@/components/app/ProgressBar";
 import { SessionCode } from "@/components/app/SessionCode";
 import { ShowCodeDialog } from "@/components/app/ShowCodeDialog";
+import { ContinueInNewSessionControl } from "@/components/app/ContinueInNewSessionControl";
 import {
   SessionStatusBadge,
   StudentStatusBadge,
@@ -57,6 +58,9 @@ import {
   LIVE_INTERVAL_MS,
   ago,
   alertIsCurrent,
+  MAX_SESSION_MINUTES,
+  MIN_SESSION_MINUTES,
+  canContinueInNewSession,
   canExtend,
   canHandInAll,
   closeDialogCopy,
@@ -66,6 +70,7 @@ import {
   idleFor,
   practiceHasAttempt,
   practiceStatusLine,
+  restOfDayMinutes,
   studentState,
   type AttendancePayload,
   type AttendanceRow,
@@ -141,22 +146,8 @@ function isOpen(s: Sitting): boolean {
   return s.status === "open" && new Date(s.expires_at).getTime() > Date.now();
 }
 
-const MIN_MINUTES = 1;
-const MAX_MINUTES = 720;
-
-/** Minutes from `now` until 4:00 PM Pacific today, clamped to the API's range. */
-function restOfDayMinutes(now: Date): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false,
-  }).formatToParts(now);
-  const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24;
-  const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-  const left = 16 * 60 - (h * 60 + m);
-  return Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, left > 0 ? left : 60));
-}
+const MIN_MINUTES = MIN_SESSION_MINUTES;
+const MAX_MINUTES = MAX_SESSION_MINUTES;
 
 async function readError(res: Response): Promise<ApiError> {
   let code = `http_${res.status}`;
@@ -862,6 +853,15 @@ export function SittingsPanel({
                               Show code
                             </Button>
                           ) : null}
+                          {/* Row ES (D-2): every ended or closed class
+                              sitting — the way back for students who didn't
+                              finish and students who were absent. */}
+                          {!archived && canContinueInNewSession(s, now) ? (
+                            <ContinueInNewSessionControl
+                              assessmentId={assessmentId}
+                              sitting={s}
+                            />
+                          ) : null}
                           {!archived && open ? (
                             <Button asChild size="sm">
                               <Link href={`/dashboard/${assessmentId}/monitor/${s.id}`}>
@@ -955,6 +955,7 @@ export function SittingsPanel({
                             <ExtendTimeControl
                               target={{ kind: "sitting", sessionId: s.id }}
                               assessmentUntimed={assessmentUntimed}
+                              sittingEnded={!open}
                               onExtended={() => {
                                 setNow(Date.now());
                                 void loadAttendance(s.id);

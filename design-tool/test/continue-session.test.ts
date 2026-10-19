@@ -4,7 +4,9 @@ import { describe, expect, test } from "bun:test";
 import {
   canContinueInNewSession,
   continueSessionBody,
+  endedSessionBanner,
 } from "../app/dashboard/[id]/attendanceView";
+import { continuedMonitorHref } from "../components/app/ContinueInNewSessionControl";
 
 const NOW = Date.parse("2026-10-19T16:00:00Z");
 const PAST = "2026-10-16T16:22:00Z";
@@ -48,5 +50,23 @@ describe("continueSessionBody", () => {
       assessment_id: "a1",
       duration_minutes: 55,
     });
+  });
+});
+
+describe("endedSessionBanner", () => {
+  test("nothing when no one is mid-test", () => {
+    expect(endedSessionBanner(0)).toBeNull();
+  });
+  test("names the count and says Adjust time alone won't do it", () => {
+    expect(endedSessionBanner(1)).toContain("1 student hasn't handed in");
+    const five = endedSessionBanner(5) ?? "";
+    expect(five).toContain("5 students haven't handed in");
+    expect(five).toContain("Adjust time alone doesn't let anyone back in");
+  });
+});
+
+describe("continuedMonitorHref", () => {
+  test("opens the new sitting's Monitor on its code", () => {
+    expect(continuedMonitorHref("a1", "s2")).toBe("/dashboard/a1/monitor/s2?code=1");
   });
 });

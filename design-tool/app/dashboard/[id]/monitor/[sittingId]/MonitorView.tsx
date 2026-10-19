@@ -20,7 +20,7 @@ import {
   Presentation,
   ScanEye,
 } from "lucide-react";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +56,7 @@ import {
   type StudentState,
 } from "@/components/app/StatusBadge";
 import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
+import { ContinueInNewSessionControl } from "@/components/app/ContinueInNewSessionControl";
 import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
@@ -77,6 +78,7 @@ import {
   deadlineNote,
   eventLabel,
   earlierSessionNote,
+  endedSessionBanner,
   speechToTextNote,
   idleFor,
   pruneSelection,
@@ -104,6 +106,11 @@ interface Props {
   /** The assessment has no time limit: Adjust time opens on "No time limit"
    * (2026-10-05, `untimedDeadlineWarning`). */
   assessmentUntimed?: boolean;
+  /** Row ES: the sitting's scope, copied by "Continue in a new session". */
+  sectionPsId?: string | null;
+  studentPsIds?: string[] | null;
+  /** Row ES: arrived from "Continue in a new session" — open on the code. */
+  openCodeOnLoad?: boolean;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -140,6 +147,9 @@ export function MonitorView({
   expiresAt,
   kind,
   assessmentUntimed = false,
+  sectionPsId = null,
+  studentPsIds = null,
+  openCodeOnLoad = false,
 }: Props) {
   // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
   // or "Extend time" at the header level, same exclusions the Test sessions
@@ -153,7 +163,7 @@ export function MonitorView({
   const [pollFailedAt, setPollFailedAt] = useState<Date | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showCode, setShowCode] = useState(false);
+  const [showCode, setShowCode] = useState(openCodeOnLoad);
   const [pendingClose, setPendingClose] = useState(false);
   const [filter, setFilter] = useState<StudentState | null>(null);
   const [sort, setSort] = useState<"triage" | "name">("triage");
@@ -321,6 +331,15 @@ export function MonitorView({
                 Show code
               </Button>
             ) : null}
+            {/* Row ES (D-2): every ended or closed class sitting. */}
+            {!open && !isPractice ? (
+              <ContinueInNewSessionControl
+                assessmentId={assessmentId}
+                sitting={{ section_ps_id: sectionPsId, student_ps_ids: studentPsIds }}
+                size="default"
+                variant="default"
+              />
+            ) : null}
             <Button type="button" variant="outline" onClick={() => load()}>
               Refresh
             </Button>
@@ -361,6 +380,7 @@ export function MonitorView({
             {!isPractice ? (
               <ExtendTimeControl
                 assessmentUntimed={assessmentUntimed}
+                sittingEnded={!open}
                 target={{ kind: "sitting", sessionId: sittingId }}
                 onExtended={() => void load()}
                 currentDeadlines={(data?.rows ?? [])
@@ -401,6 +421,15 @@ export function MonitorView({
           />
         </div>
       </div>
+
+      {/* Row ES (D-3): why Adjust time can't bring anyone back. */}
+      {!open && !isPractice && endedSessionBanner(countInProgress(data?.rows ?? [])) ? (
+        <Alert>
+          <AlertDescription>
+            {endedSessionBanner(countInProgress(data?.rows ?? []))}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {actionError ? (
         <Alert variant="destructive">
@@ -507,6 +536,7 @@ export function MonitorView({
                   attemptIds: [...selected],
                 }}
                 label={`Adjust time for selected (${selected.size})`}
+                sittingEnded={!open}
                 onExtended={() => {
                   setSelected(new Set());
                   void load();
@@ -567,6 +597,7 @@ export function MonitorView({
                     now={now}
                     assessmentId={assessmentId}
                     sessionClosed={session.status === "closed"}
+                    sittingEnded={!open}
                     onDeleted={() => void load()}
                     selectable={!isPractice}
                     selected={r.attempt_id !== null && selected.has(r.attempt_id)}
@@ -636,6 +667,7 @@ function StudentRow({
   now,
   assessmentId,
   sessionClosed,
+  sittingEnded,
   onDeleted,
   assessmentUntimed,
   selectable,
@@ -647,6 +679,8 @@ function StudentRow({
   now: number;
   assessmentId: string;
   sessionClosed: boolean;
+  /** Row ES (D-4): closed OR past its end time — the Adjust time dialog's note. */
+  sittingEnded: boolean;
   onDeleted: () => void;
   assessmentUntimed: boolean;
   /** Whether the checkbox COLUMN exists (not on a practice sitting). */
@@ -826,6 +860,7 @@ function StudentRow({
                   <ExtendTimeControl
                     assessmentUntimed={assessmentUntimed}
                     target={{ kind: "attempt", attemptId: r.attempt_id }}
+                    sittingEnded={sittingEnded}
                     onExtended={onDeleted}
                     currentDeadlines={[r.deadline_at]}
                   />
