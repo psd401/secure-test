@@ -17,6 +17,9 @@ import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { canSendToGradebook, gradebookSendConfigured } from "@/lib/gradebook/sendDialog";
 import { loadSendDialogSections } from "@/lib/gradebook/sendDialogData";
 import { loadItemAnalytics } from "./analyticsQuery";
+import { extractAssetRefsFromMany } from "@/lib/items/extractAssetRefs";
+import { renderItemContent } from "@/lib/items/renderItemContent";
+import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
 import { ScoreEssaysWithAiAndReload } from "./ScoreEssaysWithAiAndReload";
@@ -96,6 +99,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
     include_in_progress: true,
   });
   const { analytics, submitted_count } = await loadItemAnalytics(id);
+  // WP-2b: choice text in the footer follows the stem's content rules
+  // (KaTeX, emphasis, `![alt](asset:…)`), under the assessment's owner with
+  // the assessment-scoped address (G-1). It printed raw until 2026-10-18.
+  const choiceAssets = await resolveAssessmentAssets(
+    db,
+    assessment,
+    extractAssetRefsFromMany(analytics.flatMap((a) => (a.choices ?? []).map((c) => c.text))),
+  );
   // Safeguarding alerts slice 2: the "Needs attention" badge on each row
   // with an OPEN alert; the per-student page carries the detail.
   const openAlerts = await openAlertCountsByAttempt(
@@ -548,7 +559,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                             <li key={c.id} className="text-xs">
                               <span className="tabular-nums">{c.count}</span>
                               {" · "}
-                              {c.text}
+                              {/* WP-2b: pictures shrink to a thumbnail so the
+                                  row stays one line high. */}
+                              <span
+                                className="analytics-choice [&_img]:inline-block [&_img]:max-h-12 [&_img]:w-auto [&_img]:align-middle"
+                                dangerouslySetInnerHTML={{
+                                  __html: renderItemContent(c.text, choiceAssets),
+                                }}
+                              />
                               {c.is_key ? (
                                 <span className="ml-1 font-medium" title="The answer key">
                                   ✓

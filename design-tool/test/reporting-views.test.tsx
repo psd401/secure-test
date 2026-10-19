@@ -6,11 +6,12 @@
 // the page function gives an element tree renderToStaticMarkup can render —
 // the same shape the error-boundary tests use.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { renderToStaticMarkup } from "react-dom/server";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
+  assets,
   attempt_events,
   attempts,
   items,
@@ -69,6 +70,7 @@ afterEach(async () => {
   await db.execute(sql`truncate table assessments restart identity cascade`);
   await db.execute(sql`truncate table students restart identity cascade`);
   await db.execute(sql`truncate table scoring_runs restart identity cascade`);
+  await db.execute(sql`truncate table assets restart identity cascade`);
 });
 
 afterAll(async () => {
@@ -559,6 +561,40 @@ describe("the results matrix", () => {
     expect(html).toContain("Copper");
     expect(html).toContain("50%");
     expect(html).toContain("(2 of 2)");
+  });
+
+  test("WP-2b: footer choices render KaTeX and the owner's picture as a thumbnail, never raw", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const [asset] = await db
+      .insert(assets)
+      .values({
+        owner_sub: OWNER,
+        content_type: "image/png",
+        size_bytes: 4,
+        sha256: "wp2b-fixture",
+        storage_provider: "local-fs",
+        storage_key: "wp2b/fixture.png",
+        original_filename: "fixture.png",
+      })
+      .returning();
+    await db
+      .update(items)
+      .set({
+        choices: [
+          { id: "a", text: "Copper $x^2$" },
+          { id: "b", text: `![Neon tube](asset:${asset!.id})` },
+        ],
+      })
+      .where(and(eq(items.assessment_id, scene.assessment.id), eq(items.position, 0)));
+    const html = await renderResults(scene.assessment.id);
+    const footer = html.slice(html.indexOf("How the class did, question by question"));
+    expect(footer).not.toContain("$x^2$");
+    expect(footer).toContain('class="katex"');
+    expect(footer).not.toContain("](asset:");
+    expect(footer).toContain(`/api/assessments/${scene.assessment.id}/assets/${asset!.id}`);
+    expect(footer).toContain('alt="Neon tube"');
+    expect(footer).toContain("[&amp;_img]:max-h-12");
   });
 });
 
