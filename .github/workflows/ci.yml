@@ -71,6 +71,16 @@ jobs:
       - name: Design tool — typecheck
         working-directory: design-tool
         run: bun run typecheck
+      # `next build` compiles every route for the browser AND the server
+      # (client components too, under the "node" export condition), which
+      # neither tsc nor bun test does: a package export missing from a
+      # dependency's server build (MathLive, 2026-10-20) passed both and
+      # broke the editor page. Needs no env, like the image build.
+      - name: Design tool — next build
+        working-directory: design-tool
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: bun run build
       - name: Design tool — migrate the test database
         working-directory: design-tool
         run: bun db/migrate.ts
