@@ -19,6 +19,9 @@ COPY packages/schema/package.json packages/schema/package.json
 # verification, the compiled-in public keys), so the workspace link must
 # exist at install time or the frozen install refuses.
 COPY packages/renderer/package.json packages/renderer/package.json
+# Graphing calculator (row DC): a workspace member, so the frozen install
+# refuses without its manifest even before the design tool imports it.
+COPY packages/graphing/package.json packages/graphing/package.json
 COPY design-tool/package.json design-tool/package.json
 RUN bun install --frozen-lockfile
 

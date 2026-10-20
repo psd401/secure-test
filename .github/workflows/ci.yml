@@ -65,6 +65,9 @@ jobs:
       - name: Renderer — build + test
         working-directory: packages/renderer
         run: bun run build && bun test
+      - name: Graphing — typecheck + test
+        working-directory: packages/graphing
+        run: bun run typecheck && bun test
       - name: Design tool — typecheck
         working-directory: design-tool
         run: bun run typecheck
