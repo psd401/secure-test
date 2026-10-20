@@ -25,7 +25,11 @@ function formatParts(x: number): [string, string | null] | null {
   if (x === 0 || Object.is(x, -0)) return ["0", null];
   const abs = Math.abs(x);
   const sign = x < 0 ? "-" : "";
-  if (abs >= 1e-6 && abs < 1e12) {
+  // Whole numbers below 10¹² print in full: 2³⁵ is 34359738368.
+  if (Number.isInteger(abs) && abs < 1e12) return [sign + String(abs), null];
+  // Range by the value as it will print: 999999999999.9 rounds up to 10¹².
+  const shown = Number(abs.toPrecision(SIG));
+  if (shown >= 1e-6 && shown < 1e12) {
     // toPrecision then trim: 0.1+0.2 → 0.3, 2/3 → 0.6666666667.
     let s = abs.toPrecision(SIG);
     if (s.includes("e")) s = Number(s).toString();

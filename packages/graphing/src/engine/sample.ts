@@ -11,8 +11,14 @@ export interface SampleOptions {
   pixels: number;
   /** Pixels per unit of f's output, for the flatness and jump tests. */
   valueScale: number;
-  /** Output range in pixels; a step longer than this is a discontinuity. */
+  /** Output range in pixels. */
   valueSpanPx: number;
+  /**
+   * The visible output range. Stretches entirely beyond one edge are not
+   * refined — x¹⁰ or sec²x far off screen would otherwise spend the whole
+   * budget where nothing is drawn.
+   */
+  visible?: [number, number];
   /** Maximum function evaluations (default 40 000). */
   budget?: number;
 }
@@ -36,11 +42,19 @@ export function sampleCurve(
   let budget = opts.budget ?? 40_000;
   const scale = opts.valueScale;
   const jumpPx = Math.max(opts.valueSpanPx, 1);
-  const evalf = (t: number): number => {
-    budget--;
+  const raw = (t: number): number => {
     const v = f(t);
     return typeof v === "number" ? v : NaN;
   };
+  const evalf = (t: number): number => {
+    budget--;
+    return raw(t);
+  };
+  const [lo, hi] = opts.visible ?? [-Infinity, Infinity];
+  // A margin keeps lines that leave the view drawn to its edge at full slope.
+  const margin = opts.visible ? (hi - lo) * 0.5 : 0;
+  const offscreen = (p: number, q: number, r: number) =>
+    (p > hi + margin && q > hi + margin && r > hi + margin) || (p < lo - margin && q < lo - margin && r < lo - margin);
   const finite = Number.isFinite;
 
   const flush = () => {
@@ -53,23 +67,25 @@ export function sampleCurve(
   // steep stretch (tan just short of π/2) shrinks to nothing; a jump or a
   // pole inside [a, b] keeps it however small the interval gets.
   const isJump = (a: number, fa: number, b: number, fb: number): boolean => {
-    let lo = a;
-    let hi = b;
-    let flo = fa;
-    let fhi = fb;
+    // Out of budget: only a sign flip between large values reads as a pole.
+    if (budget <= 0) return Math.sign(fa) !== Math.sign(fb) && Math.abs(fb - fa) * scale > jumpPx;
+    let l = a;
+    let h = b;
+    let fl = fa;
+    let fh = fb;
     for (let k = 0; k < 40 && budget > 0; k++) {
-      const m = (lo + hi) / 2;
-      if (m === lo || m === hi) break;
+      const m = (l + h) / 2;
+      if (m === l || m === h) break;
       const fm = evalf(m);
       if (!finite(fm)) return true;
-      if (Math.abs(fm - flo) >= Math.abs(fhi - fm)) {
-        hi = m;
-        fhi = fm;
+      if (Math.abs(fm - fl) >= Math.abs(fh - fm)) {
+        h = m;
+        fh = fm;
       } else {
-        lo = m;
-        flo = fm;
+        l = m;
+        fl = fm;
       }
-      if (Math.abs(fhi - flo) * scale < GAP_PX) return false;
+      if (Math.abs(fh - fl) * scale < GAP_PX) return false;
     }
     return true;
   };
@@ -118,11 +134,13 @@ export function sampleCurve(
     // the domain rather than spending the budget on it.
     if (!fina && !finb && !finite(fm) && depth >= 1) return;
     if (fina && finb && finite(fm)) {
-      const bend = Math.abs(fm - (fa + fb) / 2) * scale;
-      const step = Math.abs(fb - fa) * scale;
-      // Flat and short: done. A long step on a straight line is fine too,
-      // unless the midpoint is off the chord (a hidden jump or spike).
-      if (bend <= FLAT_PX && (step <= jumpPx || depth >= 4)) {
+      // Entirely past one edge of the view: nothing to see, nothing to refine.
+      if (offscreen(fa, fm, fb)) {
+        emit(b, fb);
+        return;
+      }
+      // The midpoint is on the chord: straight enough, however steep.
+      if (Math.abs(fm - (fa + fb) / 2) * scale <= FLAT_PX) {
         emit(b, fb);
         return;
       }
@@ -134,11 +152,12 @@ export function sampleCurve(
   const n = Math.max(2, Math.ceil(opts.pixels));
   const dt = (t1 - t0) / n;
   let a = t0;
-  let fa = evalf(a);
+  // The base samples don't count against the refinement budget.
+  let fa = raw(a);
   if (finite(fa)) emit(a, fa);
   for (let k = 1; k <= n; k++) {
     const b = k === n ? t1 : t0 + k * dt;
-    const fb = evalf(b);
+    const fb = raw(b);
     refine(a, fa, b, fb, 0);
     a = b;
     fa = fb;

@@ -5,7 +5,7 @@
 // loop; the other shapes serve points, lists and aggregate functions.
 
 import type { Node } from "./ast";
-import { BUILTINS, CONSTANTS, factorial, type FunctionGroup } from "./builtins";
+import { BUILTINS, CONSTANTS, DEGREE_TRIG, factorial, type FunctionGroup } from "./builtins";
 
 export type Env = Record<string, number>;
 export type NumFn = (env: Env) => number;
@@ -95,6 +95,9 @@ export function compileNumber(node: Node, scope: Scope): NumFn {
       return (e) => a(e) / b(e);
     }
     case "pow": {
+      // `a(x-1)^2` with no function a is a·(x−1)², not (a·(x−1))².
+      const split = splitProduct(node.left, scope);
+      if (split) return compileNumber({ kind: "mul", left: split[0], right: { ...node, left: split[1] } }, scope);
       const a = compileNumber(node.left, scope);
       // A constant rational exponent with an odd denominator keeps real
       // roots of negatives: x^(1/3) at x = -8 is -2, as students expect.
@@ -112,6 +115,8 @@ export function compileNumber(node: Node, scope: Scope): NumFn {
       return (e) => Math.pow(a(e), b(e));
     }
     case "factorial": {
+      const split = splitProduct(node.arg, scope);
+      if (split) return compileNumber({ kind: "mul", left: split[0], right: { ...node, arg: split[1] } }, scope);
       const a = compileNumber(node.arg, scope);
       return (e) => factorial(a(e));
     }
@@ -154,6 +159,13 @@ export function compileNumber(node: Node, scope: Scope): NumFn {
     case "list":
       throw new CompileError("A list can't be used as a number here");
   }
+}
+
+/** `name(arg)` that is really `name · (arg)`: [variable, parenthesis]. */
+function splitProduct(node: Node, scope: Scope): [Node, Node] | null {
+  if (node.kind !== "call" || !node.ambiguous || node.args.length !== 1) return null;
+  if (scope.userFunction(node.name)) return null;
+  return [{ kind: "var", name: node.name }, node.args[0]!];
 }
 
 /** p/q when `node` is a constant fraction with an odd q, else null. */
@@ -250,14 +262,20 @@ function call(node: Extract<Node, { kind: "call" }>, scope: Scope): NumFn {
   const fn = b.fn;
   if (b.angle === "forward" && scope.degrees) {
     const f0 = fs[0]!;
-    return (e) => fn(f0(e) * DEG);
+    const deg = DEGREE_TRIG[name] ?? ((x: number) => fn(x * DEG));
+    return (e) => deg(f0(e));
   }
   if (b.angle === "inverse" && scope.degrees) {
+    // arcsin(½) is 30, not 30.000000000000004.
+    const snap = (d: number) => {
+      const r = Math.round(d);
+      return Math.abs(d - r) < 1e-9 ? r : d;
+    };
     if (fs.length === 1) {
       const f0 = fs[0]!;
-      return (e) => fn(f0(e)) / DEG;
+      return (e) => snap(fn(f0(e)) / DEG);
     }
-    return (e) => fn(...fs.map((f) => f(e))) / DEG;
+    return (e) => snap(fn(...fs.map((f) => f(e))) / DEG);
   }
   if (fs.length === 1) {
     const f0 = fs[0]!;

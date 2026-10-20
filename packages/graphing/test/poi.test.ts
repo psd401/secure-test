@@ -57,8 +57,10 @@ describe("extrema", () => {
     expect(extrema(() => 3, -10, 10)).toEqual([]);
   });
 
-  test("|x| has a corner minimum", () => {
-    expect(extrema(Math.abs, -10, 10)).toEqual([{ t: 0, v: 0, max: false }]);
+  test("|x|+1 has a corner minimum; |x| touches zero instead", () => {
+    expect(extrema((x) => Math.abs(x) + 1, -10, 10)).toEqual([{ t: 0, v: 1, max: false }]);
+    expect(extrema(Math.abs, -10, 10)).toEqual([]);
+    expect(pointsOfInterest(Math.abs, -10, 10)).toEqual([{ kind: "zero", t: 0, v: 0 }]);
   });
 });
 

@@ -438,11 +438,35 @@ class Parser {
       case "abs":
         // Inside |…| a bar closes; outside it opens a new absolute value.
         return this.absDepth === 0;
+      case "setL":
+        // `2\{x<0:1,3\}` multiplies by a piecewise; braces that end the
+        // row with only conditions in them are its domain restriction.
+        return !this.trailingRestrictions();
       case "{":
         return true;
       default:
         return false;
     }
+  }
+
+  /** From here: only `\{conditions\}` groups, then the end of the row? */
+  private trailingRestrictions(): boolean {
+    let k = this.i;
+    while (this.toks[k]?.type === "setL") {
+      let depth = 0;
+      for (;;) {
+        const t = this.toks[k];
+        if (!t || t.type === "eof") return false;
+        if (t.type === "setL") depth++;
+        else if (t.type === "setR") {
+          depth--;
+          if (depth === 0) break;
+        } else if (depth === 1 && t.type === "op" && t.text === ":") return false;
+        k++;
+      }
+      k++;
+    }
+    return this.toks[k]?.type === "eof";
   }
 
   unary(): Node {

@@ -102,7 +102,11 @@ type Def = VarDef | FnDef;
 function definitionOf(st: Statement, row: number): Def | null {
   const b = st.body;
   if (b.kind !== "compare" || b.ops.length !== 1 || b.ops[0] !== "=") return null;
-  const [lhs, rhs] = b.operands as [Node, Node];
+  const lhs = b.operands[0]!;
+  // `f(x)=x^2\{x>0\}`: the restriction is part of what is defined —
+  // undefined where it fails.
+  let rhs = b.operands[1]!;
+  for (const r of st.restrictions) rhs = { kind: "piecewise", cases: [{ cond: r, value: rhs }], otherwise: null };
   if (lhs.kind === "var" && !COORDS.has(lhs.name)) {
     return { kind: "var", name: lhs.name, rhs, row };
   }
@@ -309,6 +313,7 @@ export function analyze(rows: readonly Row[], settings: Settings = DEFAULT_SETTI
 
   const scope = new ListScope(settings.degrees, settings.disabled, vars, fns);
   const xy = scope.with(COORDS);
+  const broken = brokenFunctions(fns, scope);
 
   return parsed.map((p, i): Analysis => {
     if (p === null) return { kind: "empty" };
@@ -324,9 +329,8 @@ export function analyze(rows: readonly Row[], settings: Settings = DEFAULT_SETTI
           if (recursive.has(def.name)) {
             return { kind: "error", message: `${def.name} is defined in terms of itself`, missing: [] };
           }
-          const missing = missingNames(def.body, scope, new Set(def.params));
-          if (missing.length) return undefinedError(missing);
-          scope.checkFunction(def.name);
+          const bad = broken.get(def.name);
+          if (bad) return bad.missing.length ? undefinedError(bad.missing) : { kind: "error", message: bad.message, missing: [] };
           let plot: Curve | null = null;
           if (def.params.length === 1 && def.params[0] === "x") {
             const uf = scope.userFunction(def.name)!;
@@ -334,13 +338,76 @@ export function analyze(rows: readonly Row[], settings: Settings = DEFAULT_SETTI
           }
           return { kind: "function", name: def.name, params: def.params, plot };
         }
+        const via = callsBroken(def.rhs, broken);
+        if (via) return via;
         return variableRow(def, scope);
+      }
+      for (const r of [p.body, ...p.restrictions]) {
+        const via = callsBroken(r, broken);
+        if (via) return via;
       }
       return plotRow(p, scope, xy);
     } catch (e) {
       return { kind: "error", message: errorOf(e), missing: [] };
     }
   });
+}
+
+interface Broken {
+  message: string;
+  missing: string[];
+}
+
+/**
+ * Functions whose bodies can't compile — directly (`f(x)=x+z` with no z)
+ * or through a function they call. Their callers report the same names,
+ * so a row using `f` offers the slider rather than failing while drawing.
+ */
+function brokenFunctions(fns: Map<string, FnDef>, scope: ListScope): Map<string, Broken> {
+  const out = new Map<string, Broken>();
+  for (const [name, def] of fns) {
+    const missing = missingNames(def.body, scope, new Set(def.params));
+    if (missing.length) {
+      out.set(name, { message: "", missing });
+      continue;
+    }
+    try {
+      scope.checkFunction(name);
+    } catch (e) {
+      out.set(name, { message: errorOf(e), missing: [] });
+    }
+  }
+  // Spread to callers until nothing changes.
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [name, def] of fns) {
+      if (out.has(name)) continue;
+      for (const called of calledFunctions(def.body)) {
+        const bad = out.get(called);
+        if (bad) {
+          out.set(name, { message: bad.message || `${called} has an error`, missing: bad.missing });
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** An error for a row that calls a broken function, or null. */
+function callsBroken(node: Node, broken: Map<string, Broken>): Analysis | null {
+  const missing: string[] = [];
+  let message = "";
+  for (const name of calledFunctions(node)) {
+    const bad = broken.get(name);
+    if (!bad) continue;
+    for (const m of bad.missing) if (!missing.includes(m)) missing.push(m);
+    message ||= bad.message ? `${name} has an error: ${bad.message}` : "";
+  }
+  if (missing.length) return undefinedError(missing);
+  if (message) return { kind: "error", message, missing: [] };
+  return null;
 }
 
 function undefinedError(missing: string[]): Analysis {
@@ -421,7 +488,10 @@ function plotRow(st: Statement, scope: ListScope, xy: ListScope): Analysis {
       return { kind: "error", message: "Add y= or x= to graph this, or define y in an equation", missing: [] };
     }
     if (fv.has("x")) return curve("y", b, "=", st, xy);
-    return { kind: "value", value: compileNumber(b, scope)({}) };
+    const value = compileNumber(b, scope)({});
+    // `2\{1<0\}` — a restriction that fails leaves the value undefined.
+    const holds = st.restrictions.every((r) => compileCondition(r, scope)({}));
+    return { kind: "value", value: holds ? value : NaN };
   }
 
   if (b.ops.length > 1) {
