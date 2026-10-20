@@ -2611,3 +2611,27 @@ student tester (staging profile) was refused for the student account.
 | A production deploy mid-evening re-signs the renderer | The next join fetches the NEW renderer; the old one stays cached beside it | ✅ 2026-10-14 — `7ae2429a…` (v1792017314) beside `fa425afe…` |
 | WC-2 VoiceOver rows | See "Word count VoiceOver hears" | ✅ after the re-sign (see that section) |
 
+
+## Graphing calculator in the test page (row DC slice 3, branch `graphing-calculator`, 2026-10-20)
+
+`docs/graphing-calculator-design.md` is the record. The page shows a
+Calculator button only when the bundle has a `calculator` field (nothing
+sends one yet — slice 5 adds the setting), so these rows run on the
+offline path with `packages/graphing/fixtures/calculator-bundle.json`
+(Debug, File → Open Test Bundle… or `--bundle`). Rows marked "probe" were
+checked on 2026-10-20 by an off-screen WKWebView loading the real page
+(`AssessmentPage.html`, real CSP, real KaTeX) — real WebKit, but not the
+app, not a real AAC session, and no human eyes on it.
+
+| Check | Expected | Result |
+|---|---|---|
+| **No field, no button.** Any bundle without `calculator` | The page exactly as before: no button, no extra style element | ✅ unit (`RendererCalculatorTests`) |
+| **Button and panel.** Open the fixture; press Calculator | A "Calculator" button top right; a movable panel opens with the expression list, graph and Degrees selected (state-test preset); × and Esc close it; the button returns to un-pressed | probe ✅ 2026-10-20 (panel, fields, canvas, Degrees on); NOT RUN in the app |
+| **Typing.** Type `y=x^2-4`, Enter, `y=2x+1` | Both graph; selecting a curve shows grey points of interest; pressing one labels it | probe ✅ 2026-10-20 (two rows drawn, zeros / vertex / intersections dotted); NOT RUN in the app |
+| **No network, no CSP report.** Watch stderr / Web Inspector console while opening | No CSP violation; MathLive logs one "Can't use relative paths…" console error at first open (its asset-path probe; fonts and sounds are switched off) and nothing else | probe ✅ 2026-10-20 (no `securitypolicyviolation`; the one console error as described) |
+| **Fonts.** Look at the math in the expression rows | KaTeX glyphs (italic x, proper fraction bars), not a fallback font | probe ✅ 2026-10-20 (`document.fonts.check('16px KaTeX_Main')` true; snapshot shows KaTeX) |
+| **Drag the panel** by its title bar | Moves; stays inside the window | NOT RUN |
+| **Inside a real AAC session** (James): open, type, pan with a trackpad, pinch | Keyboard, trackpad pan and pinch all work; nothing leaves the session | NOT RUN |
+| **Zoom 3X and each contrast set** (accommodations) | Panel and calculator follow the page's colours and size | NOT RUN (the panel maps `--gc-*` onto the page tokens; the canvas does not yet read them — slice 5) |
+| **Teacher peek** while the panel is open | The peek frame shows the panel; if the canvas is blank, note it (design note: "Not verified") | NOT RUN |
+| **VoiceOver** (James, Claude quit; VoiceOver method) | Button, panel, fields and keypad keys are named; the graph is announced as a graph | NOT RUN |

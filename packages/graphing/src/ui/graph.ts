@@ -148,7 +148,7 @@ export class GraphView {
 
   destroy(): void {
     this.resizeObserver?.disconnect();
-    cancelAnimationFrame(this.frame);
+    this.frame = 0;
     this.element.remove();
   }
 
@@ -204,11 +204,17 @@ export class GraphView {
 
   schedule(): void {
     if (this.frame) return;
-    const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb: FrameRequestCallback) => setTimeout(() => cb(0), 16) as unknown as number;
-    this.frame = raf(() => {
+    // A frame callback, with a timer behind it: WebKit pauses frames for a
+    // window that isn't on screen, and the graph must still be drawn.
+    const run = () => {
+      if (!this.frame) return;
       this.frame = 0;
+      clearTimeout(timer);
       this.render();
-    });
+    };
+    this.frame = 1;
+    const timer = setTimeout(run, 50);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
   }
 
   /** Reads a colour token from CSS, falling back to `dflt`. */
@@ -323,6 +329,9 @@ export class GraphView {
       if (Math.abs(x) < sx.major * 1e-9) continue;
       const [px] = toPx(v, x, 0);
       const text = tickLabel(x, sx.major);
+      // A label that would be cut by the edge is left out.
+      const half = ctx.measureText(text).width / 2;
+      if (px - half < 2 || px + half > v.width - 2) continue;
       this.haloText(text, px, labelY, paper);
     }
     ctx.textAlign = "right";
@@ -331,6 +340,7 @@ export class GraphView {
     for (const y of ticks(v.ymin, v.ymax, stepY.major)) {
       if (Math.abs(y) < stepY.major * 1e-9) continue;
       const [, py] = toPx(v, 0, y);
+      if (py < 8 || py > v.height - 8) continue;
       this.haloText(tickLabel(y, stepY.major), labelX, py, paper);
     }
     if (ox >= 0 && ox <= v.width && oy >= 0 && oy <= v.height) {

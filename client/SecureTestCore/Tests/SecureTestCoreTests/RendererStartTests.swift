@@ -74,7 +74,10 @@ final class RendererStartTests: XCTestCase {
         XCTAssertFalse(page.contains(AssessmentPage.itemStyles))
         XCTAssertFalse(page.contains(AssessmentPage.richTextStyles))
         // One style element fewer than the bundled page: two became one.
-        XCTAssertEqual(styleElementCount(page), styleElementCount(bundled) - 1)
+        // (Row DC: the vendored calculator's script mentions "<style" in
+        // strings; count elements, not the script's text.)
+        let bundledElements = bundled.replacingOccurrences(of: AssessmentPage.graphingScript, with: "")
+        XCTAssertEqual(styleElementCount(page), styleElementCount(bundledElements) - 1)
 
         // Everything the shell keeps is still there.
         for kept in [

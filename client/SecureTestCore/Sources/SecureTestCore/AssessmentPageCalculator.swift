@@ -1,0 +1,185 @@
+import Foundation
+
+// Graphing calculator, the page's half (roadmap row DC,
+// docs/graphing-calculator-design.md D-3 / D-6 / D-7).
+//
+// The calculator itself is `graphingScript` (GeneratedGraphing.swift, built
+// from packages/graphing): one function, `__secureTestGraphing()`, that
+// defines nothing until called. This file is the glue: when the bundle names
+// a calculator, a "Calculator" button opens a movable panel above the page,
+// and the first open calls `__secureTestGraphing()` and mounts it. A bundle
+// without `calculator` is the page exactly as before — no button, no style,
+// no call.
+//
+// Spliced into `AssessmentPage.rendererScript` the way `richTextFunctions`
+// is, so the served renderer (bridge mode) carries the same code.
+extension AssessmentPage {
+    /// The page script with the vendored calculator taken out: what the XSS /
+    /// drag guards inspect, since MathLive (which renders its own markup with
+    /// innerHTML) is pinned on its own in GraphingScriptTests.
+    static var rendererScriptWithoutVendored: String {
+        rendererScript.replacingOccurrences(of: graphingScript, with: "")
+    }
+
+    static let calculatorFunctions = #"""
+      // Row DC: `BUNDLE.calculator` = { mode, preset?, degrees? }. Anything
+      // else — absent, malformed, an unknown mode — is no calculator.
+      var CALCULATOR = (function () {
+        var c = BUNDLE && BUNDLE.calculator;
+        if (!c || typeof c !== 'object') return null;
+        if (c.mode !== 'graphing' && c.mode !== 'scientific' && c.mode !== 'four_function') return null;
+        return c;
+      })();
+      var calcButton = null;
+      var calcPanel = null;
+      var calcBody = null;
+      var calcHandle = null;
+      var calcStyled = false;
+      // Where the button and panel live: the body on the page, the item tree
+      // in the JSC harness (whose body is a separate node).
+      var calcHost = null;
+
+      // Tokens and rem only, so the eight contrast sets and the nine zoom
+      // levels reach the panel; the calculator's own `--gc-*` colours are
+      // mapped onto the page's tokens (D-5).
+      var CALC_STYLES =
+        '.calc-toggle { position: fixed; top: 0.75rem; right: 1rem; z-index: 3; font: inherit; font-size: 0.9375rem;' +
+        ' padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }' +
+        '.calc-toggle[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }' +
+        '.calc-panel { position: fixed; right: 1rem; top: 3.5rem; width: min(56rem, calc(100vw - 2rem));' +
+        ' height: min(36rem, calc(100vh - 9rem)); z-index: 3; display: flex; flex-direction: column;' +
+        ' background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px;' +
+        ' box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18); overflow: hidden; }' +
+        '.calc-panel[hidden] { display: none; }' +
+        '.calc-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem 0.25rem 0.75rem;' +
+        ' background: var(--panel); border-bottom: 1px solid var(--panel-line); cursor: move; -webkit-user-select: none; user-select: none; touch-action: none; }' +
+        '.calc-title { font-weight: 600; font-size: 0.9375rem; flex: 1; }' +
+        '.calc-close { font: inherit; font-size: 1.25rem; line-height: 1; width: 2rem; height: 2rem; border: 0;' +
+        ' background: transparent; color: var(--ink); border-radius: 6px; }' +
+        '.calc-body { flex: 1; min-height: 0; position: relative; }' +
+        '.calc-body, .calc-body * { -webkit-user-select: text; user-select: text; }' +
+        '.calc-body .gc-root { --gc-paper: var(--paper); --gc-ink: var(--ink); --gc-muted: var(--ink-soft);' +
+        ' --gc-line: var(--line); --gc-panel: var(--panel); --gc-accent: var(--accent); --gc-error: var(--danger);' +
+        ' --gc-label: var(--ink); --gc-axis: var(--ink); --gc-key: var(--paper); --gc-key-op: var(--panel);' +
+        ' --gc-keypad-bg: var(--panel-line); --gc-key-action: var(--ink); --gc-key-action-ink: var(--paper);' +
+        ' --gc-poi: var(--ink-soft); font-size: 0.9375rem; }' +
+        '.calc-failed { padding: 1rem; color: var(--danger); }';
+
+      function calculatorStyle() {
+        if (calcStyled) return;
+        calcStyled = true;
+        var style = document.createElement('style');
+        style.textContent = CALC_STYLES;
+        (document.head || document.body || root).appendChild(style);
+      }
+
+      function buildCalculatorButton(host) {
+        calcHost = host;
+        calculatorStyle();
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'calc-toggle';
+        b.textContent = 'Calculator';
+        b.setAttribute('aria-expanded', 'false');
+        b.setAttribute('aria-controls', 'calc-panel');
+        b.onclick = function () {
+          if (calcPanel && calcPanel.getAttribute('hidden') === null) closeCalculator();
+          else openCalculator();
+        };
+        calcButton = b;
+        return b;
+      }
+
+      function buildCalculatorPanel() {
+        var panel = document.createElement('div');
+        panel.className = 'calc-panel';
+        panel.id = 'calc-panel';
+        // Non-modal: the question stays usable beside it.
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', 'Calculator');
+        var head = document.createElement('div');
+        head.className = 'calc-head';
+        var title = document.createElement('span');
+        title.className = 'calc-title';
+        title.textContent = 'Calculator';
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'calc-close';
+        close.textContent = '×';
+        close.setAttribute('aria-label', 'Close the calculator');
+        close.onclick = closeCalculator;
+        head.appendChild(title);
+        head.appendChild(close);
+        var body = document.createElement('div');
+        body.className = 'calc-body';
+        panel.appendChild(head);
+        panel.appendChild(body);
+        panel.onkeydown = function (e) {
+          if (e.key === 'Escape' && !e.defaultPrevented) {
+            closeCalculator();
+            if (calcButton) calcButton.focus();
+          }
+        };
+        dragByHeader(panel, head);
+        calcBody = body;
+        return panel;
+      }
+
+      // Drag the panel by its title bar, kept inside the window. Handler
+      // properties, like the rest of the page (and the JSC shim).
+      function dragByHeader(panel, head) {
+        var start = null;
+        head.onpointerdown = function (e) {
+          if (e.target && e.target.closest && e.target.closest('button')) return;
+          var r = panel.getBoundingClientRect();
+          start = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+          if (head.setPointerCapture) head.setPointerCapture(e.pointerId);
+        };
+        head.onpointermove = function (e) {
+          if (!start) return;
+          var w = panel.offsetWidth, h = panel.offsetHeight;
+          var left = Math.max(0, Math.min(window.innerWidth - w, start.left + e.clientX - start.x));
+          var top = Math.max(0, Math.min(window.innerHeight - 40, start.top + e.clientY - start.y));
+          panel.style.left = left + 'px';
+          panel.style.top = top + 'px';
+          panel.style.right = 'auto';
+        };
+        head.onpointerup = function () { start = null; };
+        head.onpointercancel = head.onpointerup;
+      }
+
+      function openCalculator() {
+        if (!calcPanel) {
+          calcPanel = buildCalculatorPanel();
+          calcHost.appendChild(calcPanel);
+        }
+        calcPanel.removeAttribute('hidden');
+        if (calcButton) calcButton.setAttribute('aria-expanded', 'true');
+        if (!calcHandle) mountCalculator();
+      }
+
+      function closeCalculator() {
+        if (calcPanel) calcPanel.setAttribute('hidden', '');
+        if (calcButton) calcButton.setAttribute('aria-expanded', 'false');
+      }
+
+      function mountCalculator() {
+        try {
+          var lib = __secureTestGraphing();
+          var preset = lib.presetFor(CALCULATOR.preset);
+          calcHandle = lib.mountGraphing(calcBody, {
+            MathfieldElement: lib.MathfieldElement,
+            disabled: preset.disabled,
+            degrees: CALCULATOR.degrees === true || (CALCULATOR.degrees !== false && preset.degrees)
+          });
+        } catch (e) {
+          calcBody.textContent = '';
+          var failed = document.createElement('p');
+          failed.className = 'calc-failed';
+          failed.textContent = 'The calculator could not start. Ask your teacher.';
+          calcBody.appendChild(failed);
+          console.log('calculator failed: ' + (e && e.message));
+        }
+      }
+    """#
+}

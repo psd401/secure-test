@@ -13,11 +13,13 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json",
-    "playground": "bun scripts/playground.ts"
+    "playground": "bun scripts/playground.ts",
+    "build:page": "bun scripts/build-page.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",
     "@types/node": "^20.14.0",
+    "acorn": "8.15.0",
     "typescript": "^5.5.0"
   },
   "dependencies": {

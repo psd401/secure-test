@@ -36,11 +36,14 @@ final class AssessmentPageTests: XCTestCase {
 
     func testRendererNeverAssignsAuthoredContentToInnerHTML() {
         // The whole XSS posture rests on textContent / createTextNode. If a
-        // future edit reaches for innerHTML, that posture is gone.
-        XCTAssertFalse(AssessmentPage.rendererScript.contains("innerHTML"))
-        XCTAssertFalse(AssessmentPage.rendererScript.contains("outerHTML"))
-        XCTAssertFalse(AssessmentPage.rendererScript.contains("insertAdjacentHTML"))
-        XCTAssertFalse(AssessmentPage.rendererScript.contains("document.write"))
+        // future edit reaches for innerHTML, that posture is gone. Row DC:
+        // the vendored calculator (MathLive renders its own math markup) is
+        // pinned separately in GraphingScriptTests; this is OUR page code.
+        let ours = AssessmentPage.rendererScriptWithoutVendored
+        XCTAssertFalse(ours.contains("innerHTML"))
+        XCTAssertFalse(ours.contains("outerHTML"))
+        XCTAssertFalse(ours.contains("insertAdjacentHTML"))
+        XCTAssertFalse(ours.contains("document.write"))
     }
 
     func testRendererScriptCannotCloseItsOwnElement() {
@@ -124,7 +127,10 @@ final class AssessmentPageTests: XCTestCase {
 
     func testPageWithoutKatexStillRendersAndCarriesNoMathHooksButTheGuardedCall() {
         let bare = KatexBundle.Assets(css: "", js: "", autoRender: "", missing: ["katex.min.js"])
+        // Row DC: MathLive names the KaTeX families in its own CSS strings;
+        // the question is about inlined faces, so look past the vendored code.
         let html = AssessmentPage.html(title: "T", bundleJSON: "{}", katex: bare)
+            .replacingOccurrences(of: AssessmentPage.graphingScript, with: "")
         // No KaTeX face is inlined. The page's own two brand faces (client UI
         // pass slice A) are a separate stylesheet and still are, so this asks
         // about KaTeX's families rather than about data: fonts in general.

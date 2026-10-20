@@ -1,0 +1,9 @@
+{
+  "test_id": "graphing-calculator-hand-run",
+  "title": "Graphing calculator hand-run (row DC)",
+  "calculator": { "mode": "graphing", "preset": "state_wa" },
+  "items": [
+    { "type": "short_text", "id": "q1", "stem": "Graph $y=(x-2)^2+1$. What is its vertex?" },
+    { "type": "short_text", "id": "q2", "stem": "Where do $y=2x+1$ and $y=x^2-2$ meet? Give the x-coordinates." }
+  ]
+}

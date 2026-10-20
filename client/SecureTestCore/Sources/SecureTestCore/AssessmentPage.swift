@@ -1134,6 +1134,8 @@ public enum AssessmentPage {
       // `$…$` run by one rule. Spliced here unchanged.
     \#(mathPassFunctions)
     \#(richTextFunctions)
+    \#(calculatorFunctions)
+    \#(graphingScript)
 
       function italicNodes(text, into) {
         var last = 0, m;
@@ -6710,6 +6712,13 @@ public enum AssessmentPage {
           root.appendChild(itemBlock(item));
         });
         root.appendChild(buildFinish());
+      }
+
+      // Row DC: the calculator button, when the bundle names a calculator.
+      // The panel and the calculator itself are built on first open.
+      if (CALCULATOR) {
+        var calcAt = document.body && document.body.contains(root) ? document.body : root;
+        calcAt.appendChild(buildCalculatorButton(calcAt));
       }
 
       // HS-1 / ME-1: the whole built page once. The body when it holds the
