@@ -77,8 +77,19 @@ describe("categories (D-6)", () => {
       districtteachercategoryid: 2,
       isactive: true,
       defaultpublishoption: "OnSpecificDate",
+      isdefaultpublishscores: true,
     });
     expect(parseCategories({ not: "an array" })).toEqual([]);
+  });
+
+  test("isdefaultpublishscores: booleans and 0/1 read, absent is null", () => {
+    const parsed = parseCategories([
+      category({ teachercategoryid: 1, isdefaultpublishscores: false }),
+      category({ teachercategoryid: 2, isdefaultpublishscores: 1 }),
+      category({ teachercategoryid: 3, isdefaultpublishscores: undefined }),
+      category({ teachercategoryid: 4, isdefaultpublishscores: null }),
+    ]);
+    expect(parsed.map((c) => c.isdefaultpublishscores)).toEqual([false, true, null, null]);
   });
 
   test("default = the active district Test copy", () => {
@@ -102,6 +113,7 @@ describe("assignment create body", () => {
       maxPoints: 12,
       categoryId: "4302",
       publishOption: "Immediately",
+      publishScores: true,
     });
     expect(body).toEqual({
       _assignmentsections: [
@@ -116,6 +128,7 @@ describe("assignment create body", () => {
           iscountedinfinalgrade: true,
           isscoringneeded: true,
           publishoption: "Immediately",
+          isscorespublish: true,
           _assignmentcategoryassociations: [{ teachercategoryid: 4302, isprimary: true }],
         },
       ],
@@ -130,9 +143,25 @@ describe("assignment create body", () => {
       maxPoints: 1,
       categoryId: "4302",
       publishOption: null,
+      publishScores: null,
     });
     const section = (body._assignmentsections as Record<string, unknown>[])[0]!;
     expect("publishoption" in section).toBe(false);
+    expect("isscorespublish" in section).toBe(false);
+  });
+
+  test("a category that holds scores back sends isscorespublish false", () => {
+    const body = buildAssignmentCreateBody({
+      sectionDcid: "85001",
+      name: "x",
+      dueDate: "2026-09-28",
+      maxPoints: 1,
+      categoryId: "4302",
+      publishOption: "Immediately",
+      publishScores: false,
+    });
+    const section = (body._assignmentsections as Record<string, unknown>[])[0]!;
+    expect(section.isscorespublish).toBe(false);
   });
 
   test("the name is cut to 50 characters", () => {
@@ -500,6 +529,7 @@ describe("the mock gradebook", () => {
       maxPoints: 2,
       categoryId: "602",
       publishOption: null,
+      publishScores: null,
     }));
     const asid = created.assignmentSectionId!;
     expect(created.assignmentId).not.toBe(asid);

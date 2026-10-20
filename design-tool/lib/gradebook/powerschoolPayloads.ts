@@ -5,7 +5,7 @@
 //   - list responses are plain arrays, no wrapper;
 //   - a category is `_name: "teachercategory"` with id `teachercategoryid`,
 //     `isactive`, `districtteachercategoryid` on district copies and
-//     `defaultpublishoption`;
+//     `defaultpublishoption` and `isdefaultpublishscores`;
 //   - an assignment is `_name: "assignment"` with one `_assignmentsections[]`
 //     entry per section (ours always one — D-1), each carrying
 //     `_assignmentcategoryassociations[]`;
@@ -25,6 +25,8 @@ export interface PsCategory {
   districtteachercategoryid: number | null;
   isactive: boolean;
   defaultpublishoption: string | null;
+  /** Whether a new assignment in this category publishes its scores; null when the row has no value. */
+  isdefaultpublishscores: boolean | null;
 }
 
 /** District "Test" (D-6). */
@@ -77,6 +79,10 @@ export function parseCategories(body: unknown): PsCategory[] {
       isactive: asBool(row.isactive),
       defaultpublishoption:
         typeof row.defaultpublishoption === "string" ? row.defaultpublishoption : null,
+      isdefaultpublishscores:
+        row.isdefaultpublishscores === undefined || row.isdefaultpublishscores === null
+          ? null
+          : asBool(row.isdefaultpublishscores),
     });
   }
   return out;
@@ -118,6 +124,13 @@ export interface AssignmentCreateInput {
   categoryId: string;
   /** The category's `defaultpublishoption` (8.2); omitted when it has none. */
   publishOption: string | null;
+  /**
+   * The category's `isdefaultpublishscores`, sent as `isscorespublish`;
+   * omitted when it has none. PowerTeacher Pro's own create form copies it,
+   * but an API create without it leaves Publish Scores off (beta report
+   * 2026-10-20: students saw "not scored").
+   */
+  publishScores: boolean | null;
 }
 
 /**
@@ -141,6 +154,7 @@ export function buildAssignmentCreateBody(input: AssignmentCreateInput): Record<
     ],
   };
   if (input.publishOption) section.publishoption = input.publishOption;
+  if (input.publishScores !== null) section.isscorespublish = input.publishScores;
   return { _assignmentsections: [section] };
 }
 

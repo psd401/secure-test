@@ -399,6 +399,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
           iscountedinfinalgrade: true,
           isscoringneeded: true,
           publishoption: "Immediately",
+          isscorespublish: true,
           _assignmentcategoryassociations: [{ teachercategoryid: 602, isprimary: true }],
         },
       ],
@@ -657,7 +658,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect((await res.json()).error).toBe("unknown_category");
 
     mockPowerSchool.setCategories("8301", [
-      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null },
+      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null, isdefaultpublishscores: null },
     ]);
     res = await send(s.assessment.id, BASE_BODY);
     expect((await res.json()).error).toBe("unknown_category");
@@ -729,8 +730,8 @@ describe("GET /api/assessments/[id]/gradebook-categories", () => {
 
     // D-6: the Test copy inactive → no default.
     mockPowerSchool.setCategories("8301", [
-      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null },
-      { id: "650", name: "Summative", categorytype: "user", districtteachercategoryid: null, isactive: true, defaultpublishoption: null },
+      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null, isdefaultpublishscores: null },
+      { id: "650", name: "Summative", categorytype: "user", districtteachercategoryid: null, isactive: true, defaultpublishoption: null, isdefaultpublishscores: null },
     ]);
     body = await (await categories(s.assessment.id, "target=powerschool&section_ps_id=5001")).json();
     expect(body.default_category_id).toBeNull();

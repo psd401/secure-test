@@ -351,6 +351,7 @@ const createBody = payloads.buildAssignmentCreateBody({
   maxPoints: MAX,
   categoryId: category.id,
   publishOption: category.defaultpublishoption,
+  publishScores: category.isdefaultpublishscores,
 });
 console.log("── create body (ids masked)");
 console.log(JSON.stringify(shapeOf(createBody), null, 2));
