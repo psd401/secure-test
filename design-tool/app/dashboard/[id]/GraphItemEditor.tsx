@@ -40,6 +40,7 @@ export function GraphItemEditor({
   board: GraphBoard;
   graphKey: GraphKey | null;
   onChange: (patch: { board?: GraphBoard; graph_key?: GraphKey | null }) => void;
+  /** Published: the grid and tools lock; the key stays editable (the key door). */
   disabled: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -73,7 +74,6 @@ export function GraphItemEditor({
       handle.current?.destroy();
       handle.current = mountGraphAnswer(host.current, board, {
         initial: graphKey?.objects ?? [],
-        readOnly: disabled,
         label: "Answer key",
         onChange: (objects) =>
           latest.current.onChange({
@@ -88,7 +88,7 @@ export function GraphItemEditor({
     };
     // The key is read on (re)mount; later key edits come from the board itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardKey, disabled]);
+  }, [boardKey]);
 
   function applyFields(next: typeof fields) {
     setFields(next);
@@ -203,7 +203,6 @@ export function GraphItemEditor({
               <select
                 value={graphKey.scoring}
                 onChange={(e) => onChange({ graph_key: { ...graphKey, scoring: e.target.value as GraphKey["scoring"] } })}
-                disabled={disabled}
                 className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
               >
                 <option value="all">All or nothing (1 point)</option>

@@ -187,6 +187,9 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
       selected = id;
       render();
     },
+    // A saved view (the editor's, a resumed student's) is fitted before the
+    // panel has its final size; keep its bounds until the view is moved.
+    keepBounds: opts.initial?.view !== undefined,
     onHome: () => graph?.setViewport(homeViewport(), true),
     readOnly,
   });

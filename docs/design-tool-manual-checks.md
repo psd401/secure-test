@@ -1817,35 +1817,35 @@ calculator on the wire" block of `delivery-api.test.ts`).
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| 658 | Settings → Calculator → Graphing; Save settings; reload | Graphing still chosen; "Calculator setup" appears with "Everything on" | NOT RUN |
-| 659 | Calculator setup → Like the Washington state test; Save; reload | Kept | NOT RUN |
-| 660 | Publish, then try to change the calculator | Both selects disabled (locked like the layout) | NOT RUN |
-| 661 | With a calculator set, a question card shows "No calculator on this question"; tick it on one; save; reload | Ticked; with no calculator set the box isn't shown | NOT RUN |
-| 662 | Same, with "One scrolling page" | The box says it takes effect only one question at a time; Settings shows the amber note | NOT RUN |
-| 663 | Export the test, import the file | Calculator, setup and the ticked question all come back | NOT RUN |
-| 664 | Duplicate the test | Same as 663 | NOT RUN |
+| 658 | Settings → Calculator → Graphing; Save settings; reload | Graphing still chosen; "Calculator setup" appears with "Everything on" | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 659 | Calculator setup → Like the Washington state test; Save; reload | Kept | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 660 | Publish, then try to change the calculator | Both selects disabled (locked like the layout) | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — both selects and the per-question box disabled |
+| 661 | With a calculator set, a question card shows "No calculator on this question"; tick it on one; save; reload | Ticked; with no calculator set the box isn't shown | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 662 | Same, with "One scrolling page" | The box says it takes effect only one question at a time; Settings shows the amber note | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the card note and the amber Settings note |
+| 663 | Export the test, import the file | Calculator, setup and the ticked question all come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — export → import through the API (no file download); calculator, setup, ticked question, stimulus graph identical |
+| 664 | Duplicate the test | Same as 663 | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — Duplicate identical to the original |
 | 665 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | NOT RUN |
-| 666 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | NOT RUN |
+| 666 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
 
 ### Stimulus graphs (slice 6)
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| 667 | A question → Add a graph | The calculator loads in the card (MathLive, KaTeX fonts); typing graphs as in the student calculator | NOT RUN |
-| 668 | Draft a description; Use this graph; save the question; reload | The card shows the graph image and its description; Edit graph reopens with the same rows and view | NOT RUN |
-| 669 | Use this graph with an empty description | Refused with the "Describe the graph…" message | NOT RUN |
-| 670 | Preview / print | The graph as SVG under the stem, legend and description below | NOT RUN (unit: `preview-graph.test.ts`) |
+| 667 | A question → Add a graph | The calculator loads in the card (MathLive, KaTeX fonts); typing graphs as in the student calculator | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run found the page failing to build (MathLive SSR export, fixed in `1c6e1b4`); values set through the math-field API (Chrome automation's typing is not delivered to MathLive; real key presses are) |
+| 668 | Draft a description; Use this graph; save the question; reload | The card shows the graph image and its description; Edit graph reopens with the same rows and view | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 669 | Use this graph with an empty description | Refused with the "Describe the graph…" message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the error now clears when a draft fills the box |
+| 670 | Preview / print | The graph as SVG under the stem, legend and description below | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — numbered curve labels match the legend |
 | 671 | Remove graph; save; reload | Gone from editor, preview and the student page | NOT RUN |
-| 672 | Publish; Edit graph | Disabled (locked with the question) | NOT RUN |
+| 672 | Publish; Edit graph | Disabled (locked with the question) | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
 
 ### Graph it questions (slice 7)
 
 | # | Steps | Expected | Result |
 |---|---|---|---|
-| 673 | Add a question → Graph it | A grid (−10…10, lines every 1, snap 1), Point and Line ticked, at most 2; an empty key board | NOT RUN |
-| 674 | Draw a key line through (0,1) and (2,5); save; reload | The key reads "y = 2x + 1"; Scoring shows All or nothing | NOT RUN |
-| 675 | Change the grid to 0…20 with snap 1/2; tick Circle | The key board redraws; an off-grid key point is refused on save with a message | NOT RUN |
-| 676 | Publish; change only the key | Saves (the key door); changing the grid is refused | NOT RUN (unit: `graph-item.test.ts`) |
-| 677 | Preview and print | The empty grid as SVG, what students may place; print says to draw on the grid | NOT RUN |
+| 673 | Add a question → Graph it | A grid (−10…10, lines every 1, snap 1), Point and Line ticked, at most 2; an empty key board | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run: Add question refused ("isn't complete yet"; the default carried two empty choices), fixed in the following commit |
+| 674 | Draw a key line through (0,1) and (2,5); save; reload | The key reads "y = 2x + 1"; Scoring shows All or nothing | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — also: Scoring changed to per-object stayed per-object after adding a key object |
+| 675 | Change the grid to 0…20 with snap 1/2; tick Circle | The key board redraws; an off-grid key point is refused on save with a message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — alert "Key object 2 no longer fits…"; save refused; snap typed "1 / 2" saved as 1/2 |
+| 676 | Publish; change only the key | Saves (the key door); changing the grid is refused | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run: the key board was read-only after publish (no way through the key door), fixed in the following commit; then a key-only change saved (200), grid locked |
+| 677 | Preview and print | The empty grid as SVG, what students may place; print says to draw on the grid | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — print: "Draw your answer on the grid (up to 2)." |
 | 678 | A student answers (client row); Results → the student | Each object in words with ✓ / ✗; the score as the scorer gave it | NOT RUN |
-| 679 | Export, import | Grid, tools and key come back | NOT RUN (unit) |
+| 679 | Export, import | Grid, tools and key come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — same round trip as 663 |

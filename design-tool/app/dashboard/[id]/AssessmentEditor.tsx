@@ -713,6 +713,37 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       standards: [],
     };
   }
+  if (type === "graph") {
+    // Graphing calculator D-9: the default grid, no key yet; no choices.
+    return {
+      type,
+      stem: "",
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      max_word_count: null,
+      placeholder: null,
+      rubric: null,
+      rubric_id: null,
+      pairs: null,
+      sequence: null,
+      image_asset_id: null,
+      regions: null,
+      correct_region_ids: null,
+      prompt_asset_id: null,
+      canvas: null,
+      columns: null,
+      rows: null,
+      corner: null,
+      cell_keys: null,
+      blanks: null,
+      exact_form: null,
+      scoring_method: null,
+      standards: [],
+      board: DEFAULT_GRAPH_BOARD,
+      graph_key: null,
+    };
+  }
   if (type === "table") {
     // E3 slice 2: a 2 × 2 grid to start; the teacher renames and resizes it.
     return {
@@ -1277,7 +1308,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   : addType === "fill_blank"
                   ? { ...draft, stem: FILL_BLANK_SEED_STEM }
                   : addType === "graph"
-                  ? { ...draft, stem: "Graph your answer.", board: DEFAULT_GRAPH_BOARD, graph_key: null }
+                  ? { ...draft, stem: "Graph your answer.", board: DEFAULT_GRAPH_BOARD, key: null }
                   : addType === "table"
                     ? {
                         ...draft,
