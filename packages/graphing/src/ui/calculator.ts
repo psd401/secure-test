@@ -5,6 +5,7 @@
 import type { MathfieldElement } from "mathlive";
 import { analyze, type Analysis } from "../engine/analyze";
 import type { FunctionGroup } from "../engine/builtins";
+import { latexToText } from "../engine/describe";
 import { GraphView } from "./graph";
 import { Keypad } from "./keypad";
 import { ExpressionList } from "./list";
@@ -274,7 +275,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     state = { ...state, rows };
     list.update(state.rows, analyses);
     graph?.setItems(
-      state.rows.map((r, i) => ({ id: r.id, color: r.color, hidden: r.hidden, analysis: analyses[i]! })),
+      state.rows.map((r, i) => ({ id: r.id, color: r.color, hidden: r.hidden, analysis: analyses[i]!, label: latexToText(r.latex) })),
       selected,
     );
     radBtn.setAttribute("aria-checked", String(!state.degrees));

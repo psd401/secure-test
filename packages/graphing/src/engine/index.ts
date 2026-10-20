@@ -12,6 +12,7 @@ export { ParseError, parse } from "./parser";
 export { clean, extrema, intersections, pointsOfInterest, zeros, type Poi, type PoiKind } from "./poi";
 export { sampleCurve, type Polyline, type SampleOptions } from "./sample";
 export { describeGraph, latexToText, type GraphForWords } from "./describe";
+export { panFor, spokenNumber, summarizeCurve, summarizeGraph, sweep, toneFor, type Tone } from "./summary";
 
 import type { Curve } from "./analyze";
 

@@ -128,6 +128,17 @@ export const CALCULATOR_CSS = `
   width: 36px; height: 36px; border: 1px solid var(--gc-line); border-radius: 6px; background: var(--gc-paper);
   font-size: 1.3333em; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); padding: 0;
 }
+.gc-summary {
+  position: absolute; left: 10px; bottom: 10px; right: 56px; max-height: 45%; overflow: auto;
+  display: flex; gap: 6px; align-items: flex-start; background: var(--gc-paper); color: var(--gc-ink);
+  border: 1px solid var(--gc-line); border-radius: 6px; padding: 6px 4px 6px 10px; font-size: 0.9333em;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.gc-summary p { margin: 0; flex: 1; }
+.gc-summary-close {
+  min-width: 24px; min-height: 24px; border: 0; background: transparent; color: var(--gc-ink);
+  font-size: 1.2em; line-height: 1; cursor: pointer; padding: 0;
+}
 .gc-point-label {
   position: absolute; pointer-events: none; background: var(--gc-paper); color: var(--gc-ink);
   border: 1px solid var(--gc-line); border-radius: 4px; padding: 2px 6px; font-size: 0.9333em;

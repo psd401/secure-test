@@ -5,13 +5,17 @@
 // Interaction: drag the background to pan; wheel, pinch or the buttons to
 // zoom; press on a curve to select it and trace along it; a selected curve
 // shows its points of interest, and pressing one labels it. Keyboard: arrows
-// pan, + / − zoom, 0 resets.
+// pan, + / − zoom, 0 resets; S describes the graph in words, T traces a
+// curve note by note (left / right step, Shift jumps between points of
+// interest, up / down changes curve), H plays the curve as sound (slice 8).
 
 import type { Analysis, Curve } from "../engine/analyze";
 import { formatNumber } from "../engine/format";
 import { clean, intersections, pointsOfInterest, type Poi } from "../engine/poi";
 import { sampleCurve } from "../engine/sample";
 import { restricted } from "../engine/index";
+import { summarizeCurve, summarizeGraph, sweep, toneFor, panFor } from "../engine/summary";
+import { Tones } from "./audio";
 import { drawImplicit } from "./implicit";
 import { fromPx, gridStep, pan, scale, tickLabel, ticks, toPx, zoomAt, type Viewport } from "./viewport";
 
@@ -20,7 +24,13 @@ export interface PlotItem {
   color: string;
   hidden: boolean;
   analysis: Analysis;
+  /** The row in words ("y = x² − 4"), for the summary and the trace. */
+  label?: string;
 }
+
+/** What the graph's keys do, for its accessible name. */
+export const GRAPH_KEYS =
+  "Arrow keys move the view, plus and minus zoom, 0 resets. S describes the graph, T traces a curve, H plays it as sound.";
 
 interface Drawn {
   id: string;
@@ -36,6 +46,8 @@ interface Marker {
   kind: Poi["kind"] | "trace" | "point";
   /** The row the marker belongs to (for colour). */
   id: string;
+  /** Spoken before the coordinates (the keyboard trace names its curve). */
+  note?: string;
 }
 
 export interface GraphOptions {
@@ -158,6 +170,11 @@ export class GraphView {
   private mode: "none" | "pan" | "trace" = "none";
   private pinchDist = 0;
   private readonly resizeObserver: ResizeObserver | null = null;
+  private readonly summary: HTMLElement;
+  private readonly summaryText: HTMLElement;
+  private readonly tones = new Tones();
+  /** Keyboard trace mode: the arrows walk the selected curve. */
+  private keyTrace = false;
 
   constructor(
     host: HTMLElement,
@@ -172,7 +189,7 @@ export class GraphView {
     this.element.setAttribute("aria-roledescription", "graph");
     this.element.setAttribute(
       "aria-label",
-      "Graph. Arrow keys move the view, plus and minus zoom, 0 resets.",
+      `Graph. ${GRAPH_KEYS}`,
     );
     this.canvas = document.createElement("canvas");
     this.canvas.setAttribute("aria-hidden", "true");
@@ -185,6 +202,24 @@ export class GraphView {
     this.live.className = "gc-sr-only";
     this.live.setAttribute("aria-live", "polite");
     this.element.append(this.live);
+    this.summary = document.createElement("div");
+    this.summary.className = "gc-summary";
+    this.summary.hidden = true;
+    this.summaryText = document.createElement("p");
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "gc-summary-close";
+    close.setAttribute("aria-label", "Close the description");
+    close.textContent = "×";
+    close.addEventListener("pointerdown", (e) => e.stopPropagation());
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.summary.hidden = true;
+      this.element.focus({ preventScroll: true });
+    });
+    this.summary.append(this.summaryText, close);
+    this.summary.addEventListener("pointerdown", (e) => e.stopPropagation());
+    this.element.append(this.summary);
     this.element.append(this.zoomControls());
     host.append(this.element);
     this.ctx = this.canvas.getContext("2d")!;
@@ -214,6 +249,7 @@ export class GraphView {
   }
 
   destroy(): void {
+    this.tones.close();
     this.resizeObserver?.disconnect();
     this.frame = 0;
     this.element.remove();
@@ -240,7 +276,12 @@ export class GraphView {
       mk("Zoom in", "+", () => this.setViewport(zoomAt(this.v, 1.5, ...centre()), true)),
       mk("Zoom out", "−", () => this.setViewport(zoomAt(this.v, 1 / 1.5, ...centre()), true)),
       mk("Default view", "⌂", () => this.opts.onHome()),
+      mk("Describe the graph in words", "≡", () => this.describe()),
+      mk("Play the curve as sound", "♪", () => this.play()),
     );
+    const [, , , describeBtn, playBtn] = Array.from(box.children) as HTMLButtonElement[];
+    describeBtn!.title = "Describe the graph (S)";
+    playBtn!.title = "Play the curve as sound (H)";
     return box;
   }
 
@@ -593,7 +634,8 @@ export class GraphView {
     this.label.style.left = `${right ? px - 10 : px + 10}px`;
     this.label.style.top = `${top ? py + 10 : py - 10}px`;
     this.label.style.transform = `translate(${right ? "-100%" : "0"}, ${top ? "0" : "-100%"})`;
-    const spoken = kindText[m.kind] ? `${kindText[m.kind]} ${text}` : text;
+    const kind = kindText[m.kind] ? `${kindText[m.kind]} ${text}` : text;
+    const spoken = m.note ? `${m.note} ${kind}` : kind;
     if (this.live.textContent !== spoken) this.live.textContent = spoken;
   }
 
@@ -710,6 +752,25 @@ export class GraphView {
   }
 
   private key(e: KeyboardEvent): void {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (this.keyTrace && this.traceKey(e)) {
+      e.preventDefault();
+      return;
+    }
+    switch (e.key.toLowerCase()) {
+      case "s":
+        e.preventDefault();
+        this.describe();
+        return;
+      case "t":
+        e.preventDefault();
+        this.startTrace();
+        return;
+      case "h":
+        e.preventDefault();
+        this.play();
+        return;
+    }
     const step = 40;
     const c: [number, number] = [this.v.width / 2, this.v.height / 2];
     let next: Viewport | null = null;
@@ -739,6 +800,12 @@ export class GraphView {
         e.preventDefault();
         return;
       case "Escape":
+        if (!this.summary.hidden || this.tones.busy) {
+          this.summary.hidden = true;
+          this.tones.stop();
+          e.preventDefault();
+          return;
+        }
         this.element.blur();
         return;
       default:
@@ -746,5 +813,169 @@ export class GraphView {
     }
     e.preventDefault();
     this.setViewport(next, true);
+  }
+
+  // ---- Slice 8: the graph in words and in sound ----
+
+  private say(text: string): void {
+    // Re-set even when unchanged, so the same words are spoken again.
+    this.live.textContent = "";
+    this.live.textContent = text;
+  }
+
+  private labelOf(id: string): string {
+    return this.items.find((i) => i.id === id)?.label ?? "";
+  }
+
+  /** The curve the trace and the sound follow: the selected one, else the first drawn. */
+  private focusCurve(): Drawn | null {
+    return this.drawn.find((d) => d.id === this.selected) ?? this.drawn[0] ?? null;
+  }
+
+  private select(id: string): void {
+    if (this.selected === id) return;
+    // Set first, so the owner's setItems keeps the trace point.
+    this.selected = id;
+    this.poiKey = "";
+    this.opts.onSelect(id);
+  }
+
+  describe(): void {
+    const v = this.v;
+    const others = this.items.filter(
+      (i) => !i.hidden && (i.analysis.kind === "points" || i.analysis.kind === "implicit" || i.analysis.kind === "region"),
+    );
+    const sentences = this.drawn.map((d) => summarizeCurve(this.labelOf(d.id), d.f, d.curve.of, v));
+    for (const i of others) sentences.push(`${i.label?.trim() || "A relation"}: graphed.`);
+    const text = summarizeGraph(sentences, v);
+    this.summaryText.textContent = text;
+    this.summary.hidden = false;
+    this.say(text);
+  }
+
+  private startTrace(): void {
+    const d = this.focusCurve();
+    if (!d) {
+      this.say("There is no curve to trace.");
+      return;
+    }
+    this.keyTrace = true;
+    this.select(d.id);
+    const [a, b] = this.along(d);
+    this.traceAt(d, (a + b) / 2, "Tracing", true);
+  }
+
+  /** The curve's own-axis range in view. */
+  private along(d: Drawn): [number, number] {
+    return d.curve.of === "y" ? [this.v.xmin, this.v.xmax] : [this.v.ymin, this.v.ymax];
+  }
+
+  private step(d: Drawn): number {
+    const [a, b] = this.along(d);
+    const px = d.curve.of === "y" ? this.v.width : this.v.height;
+    return gridStep(b - a, px).minor;
+  }
+
+  /** Puts the trace point at t (snapped to the step), nearest defined point if t isn't. */
+  private traceAt(d: Drawn, t: number, note: string, snap: boolean): void {
+    const s = this.step(d);
+    const [a, b] = this.along(d);
+    let at = snap ? Math.round(t / s) * s : t;
+    at = Math.max(a, Math.min(b, at));
+    let val = d.f(at);
+    if (!Number.isFinite(val) && snap) {
+      for (let k = 1; k < 200 && !Number.isFinite(val); k++) {
+        for (const c of [at + k * s, at - k * s]) {
+          if (c < a || c > b) continue;
+          const w = d.f(c);
+          if (Number.isFinite(w)) {
+            at = c;
+            val = w;
+            break;
+          }
+        }
+      }
+    }
+    const label = this.labelOf(d.id);
+    if (!Number.isFinite(val)) {
+      this.say(`${note ? `${note} ${label}. ` : ""}Undefined at ${d.curve.of === "y" ? "x" : "y"} = ${formatNumber(clean(at, s))}.`);
+      return;
+    }
+    const [x, y] = d.curve.of === "y" ? [at, val] : [val, at];
+    const prefix = note === "Tracing" ? `Tracing ${label || "the curve"}.` : note;
+    this.trace = { x, y, kind: "trace", id: d.id, note: prefix || undefined };
+    this.pinned = null;
+    const [lo, hi] = d.curve.of === "y" ? [this.v.ymin, this.v.ymax] : [this.v.xmin, this.v.xmax];
+    this.tones.note({ freq: toneFor(val, lo, hi), pan: panFor(at, a, b) });
+    this.schedule();
+  }
+
+  /** Keys while tracing; false lets the key do what it does otherwise. */
+  private traceKey(e: KeyboardEvent): boolean {
+    const d = this.drawn.find((x) => x.id === this.selected) ?? null;
+    if (e.key === "Escape") {
+      this.keyTrace = false;
+      this.trace = null;
+      this.label.hidden = true;
+      this.tones.stop();
+      this.schedule();
+      this.say("Trace off. Arrow keys move the view.");
+      return true;
+    }
+    if (!d) return false;
+    const [a, b] = this.along(d);
+    const cur = this.trace ? (d.curve.of === "y" ? this.trace.x : this.trace.y) : (a + b) / 2;
+    const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (dir && e.shiftKey) {
+      this.computePois();
+      const s = this.step(d) * 1e-6;
+      const sorted = this.pois.filter((p) => p.id === d.id).map((p) => ({ p, t: d.curve.of === "y" ? p.x : p.y }));
+      const next = dir > 0 ? sorted.filter((q) => q.t > cur + s).sort((m, n) => m.t - n.t)[0] : sorted.filter((q) => q.t < cur - s).sort((m, n) => n.t - m.t)[0];
+      if (!next) {
+        this.say(dir > 0 ? "No more points of interest to the right." : "No more points of interest to the left.");
+        return true;
+      }
+      const [own, other] = d.curve.of === "y" ? ["x", "y"] : ["y", "x"];
+      const words: Record<string, string> = { zero: `${own}-intercept`, max: "Maximum", min: "Minimum", intercept: `${other}-intercept`, intersection: "Intersection" };
+      this.traceAt(d, next.t, words[next.p.kind] ?? "", false);
+      return true;
+    }
+    if (dir) {
+      const t = cur + dir * this.step(d);
+      if (t < a - 1e-9 * (b - a) || t > b + 1e-9 * (b - a)) {
+        this.say("Edge of the view.");
+        return true;
+      }
+      this.traceAt(d, t, "", true);
+      return true;
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const k = this.drawn.indexOf(d);
+      const n = this.drawn.length;
+      if (n < 2) {
+        this.say("This is the only curve.");
+        return true;
+      }
+      const other = this.drawn[(k + (e.key === "ArrowDown" ? 1 : n - 1)) % n]!;
+      this.select(other.id);
+      this.traceAt(other, cur, "Tracing", true);
+      return true;
+    }
+    return false;
+  }
+
+  play(): void {
+    if (this.tones.busy) {
+      this.tones.stop();
+      return;
+    }
+    const d = this.focusCurve();
+    if (!d) {
+      this.say("There is no curve to play.");
+      return;
+    }
+    const ok = this.tones.sweep(sweep(d.f, d.curve.of, this.v), 3);
+    const label = this.labelOf(d.id) || "the curve";
+    this.say(ok ? `Playing ${label}, left to right. Higher notes are higher on the graph.` : "Sound isn't available here.");
   }
 }

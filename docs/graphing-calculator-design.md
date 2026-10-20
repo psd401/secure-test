@@ -379,7 +379,8 @@ client is 3 (a Debug-only spike).
 
 - MathLive's constructable stylesheets under our CSP in WKWebView;
   MathLive + VoiceOver; MathLive after the `</` rewrite; Web Audio inside
-  an AAC session.
+  an AAC session (slice 8 constructs the context under the CSP; no sound
+  has been heard in the page yet).
 - Canvas performance at retina in WKWebView.
 - **The teacher's on-demand peek (`cacheDisplay`) shows the drawer and the
   graph canvas**, including inside a real AAC session — no hand row has
@@ -433,3 +434,34 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   accommodations, drawer placement, peek; WA preset corrected; WCAG
   2.5.7 / 2.5.1 controls; MathLive pin, sound stubs, parser corpus;
   package plumbing; slice-7 touch points.
+- 2026-10-19 — slice 1 (`e2bdf1a`, fixes `5bb6400`): `packages/graphing`
+  engine — parser, closure compiler, analysis, adaptive sampler, points of
+  interest; an adversarial sweep (three testers) found and fixed 28 bugs.
+- 2026-10-19 — slice 2 (`b41135f`): calculator UI and playground; the
+  MathLive output corpus pins the parser.
+- 2026-10-19 — slice 3 (`84c4930`): the calculator in the test page under
+  the real CSP, checked in real WebKit with a throwaway off-screen probe.
+- 2026-10-20 — slice 4 (`076e1a1`): implicit curves and inequality regions
+  on our own interval arithmetic (D-4).
+- 2026-10-20 — slice 5 (`30362ef`): the per-test setting, presets, the
+  paged per-item override, the 2.0.0 feature refusal. **Migration 0062 is on
+  this branch only — renumber it if `main` gains a migration first (D-12).**
+- 2026-10-20 — slice 6 (`441a63a`): graphs as question stimuli —
+  authoring, alt text, SVG preview / print, the student view.
+- 2026-10-20 — slice 7 (`d3f0de7`): the `graph` answer type — tools,
+  typed entry, exact-rational canonical scoring, readback in words, key
+  authoring, review; `response.generic` in `BRIDGE_REQUIRES`.
+- 2026-10-20 — slice 8: accessibility extras on every graph (calculator and
+  stimulus). S / ≡ describes the graph in words (each curve's axis
+  crossings and turning points in the current view, then the view); T
+  traces the selected curve with the arrow keys (Shift jumps between
+  points of interest, up / down change curve, Esc leaves); H / ♪ plays the
+  curve as a three-second sweep (pitch = height, 220–880 Hz; stereo pan =
+  position; silence where it is off screen or undefined). The
+  `AudioContext` is made on the first sound asked for, never at load, and
+  a missing or blocked Web Audio leaves the graph silent and says so. In
+  real WebKit (the probe): summary, trace, point-of-interest jumps, curve
+  switching and the announcements all work; the context is constructed
+  under the CSP (state `suspended` without a real key press). Not run:
+  hearing it, VoiceOver, a real AAC session. Still later: Nemeth, UEB,
+  embossing.

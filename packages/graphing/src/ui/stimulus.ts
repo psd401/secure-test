@@ -7,7 +7,7 @@
 
 import { analyze } from "../engine/analyze";
 import { latexToText } from "../engine/describe";
-import { GraphView } from "./graph";
+import { GRAPH_KEYS, GraphView } from "./graph";
 import { installStyles } from "./calculator";
 import { PALETTE } from "./state";
 import { fitBounds } from "./calculator";
@@ -56,10 +56,10 @@ export function mountStimulus(container: HTMLElement, g: StimulusGraph): Stimulu
     readOnly: true,
     keepBounds: true,
   });
-  view.element.setAttribute("aria-label", `${g.alt} Arrow keys move the view, plus and minus zoom, 0 resets.`);
+  view.element.setAttribute("aria-label", `${g.alt} ${GRAPH_KEYS}`);
   const draw = () =>
     view.setItems(
-      rows.map((r, i) => ({ id: r.id, color: r.color, hidden: r.hidden, analysis: analyses[i]! })),
+      rows.map((r, i) => ({ id: r.id, color: r.color, hidden: r.hidden, analysis: analyses[i]!, label: latexToText(r.latex) })),
       selected,
     );
   draw();
