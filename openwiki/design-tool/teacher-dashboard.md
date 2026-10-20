@@ -97,6 +97,8 @@ flowchart TD
 
 The monitor polls only while there is something left to watch, and each control calls an existing sitting route.
 
+Each student row also has a **View screen** control (`ViewScreenControl` in `MonitorView.tsx`), enabled only while that attempt is `in_progress`. Clicking it posts `POST /api/attempts/[attemptId]/peek`, then polls `GET /api/attempts/[attemptId]/peek/image` every 2.5 seconds for up to 40 seconds. The GET deletes the image as it returns it, so this row is the only reader and polls only while it waits. The frame opens in `ViewScreenDialog` (`components/app/ViewScreenDialog.tsx`), which holds it in component state only, so closing the dialog discards it. The student's side of the cycle and the server windows are in [events and the monitor](sittings-and-attempts.md#events-and-the-monitor).
+
 On an ended class sitting, the header offers **Continue in a new session**, and a banner appears while any student is still `in_progress` to explain that Adjust time alone does not let anyone back in. The rules are in [sittings and attempts](sittings-and-attempts.md#ending-a-sitting-and-continuing-it).
 
 ## Results, scoring, and reports
