@@ -5,7 +5,7 @@
 // One destination, one section (D-1). Only fully scored attempts (D-3),
 // points only against the assessment's max (D-4), a re-send reuses the stored
 // assignment and skips unchanged rows (D-7), the destination is remembered per
-// (teacher, section) (D-5), the publish option is the category's own (8.2),
+// (teacher, section) (D-5), the publish option and Publish Scores are the category's own (8.2),
 // and a passed-back attempt's earlier score stays until the next send
 // overwrites it — the summary says so (8.3).
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
@@ -319,6 +319,7 @@ export async function sendToPowerSchool(
           maxPoints: max_points,
           categoryId: category.id,
           publishOption: category.defaultpublishoption,
+          publishScores: category.isdefaultpublishscores,
         }),
       );
     } catch (err) {

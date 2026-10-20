@@ -400,6 +400,7 @@ export function defaultMockCategories(): PsCategory[] {
     districtteachercategoryid: n,
     isactive: true,
     defaultpublishoption: "Immediately",
+    isdefaultpublishscores: true,
   });
   return [
     district(1, "Classwork"),
@@ -413,6 +414,7 @@ export function defaultMockCategories(): PsCategory[] {
       districtteachercategoryid: null,
       isactive: true,
       defaultpublishoption: "Immediately",
+      isdefaultpublishscores: true,
     },
   ];
 }

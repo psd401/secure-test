@@ -643,3 +643,20 @@ the pilot teacher.
 teacher sent scores to PowerSchool production and verified them in
 PowerTeacher Pro. Confirmed with IT outside collab, so thread `54f59626…`
 (left archived) has no closing message. No new findings reported.
+
+**2026-10-20 — Publish Scores was never set (beta report); hotfix slice 1
+BUILT.** A beta teacher's sent scores showed in PowerTeacher Pro but
+students saw the assignment as "not scored". The teacher (with IT) found the
+assignment's Publish tab had **Publish Scores** off; turning it on fixed it.
+Cause: the create sent `publishoption` (8.2) but never `isscorespublish`,
+and an API create without it leaves Publish Scores off — PowerTeacher Pro's
+own form copies the category's `isdefaultpublishscores`, which we never
+read. Fix (branch `hotfix/publish-scores` from the live `4a812ae`): the
+category parse reads `isdefaultpublishscores` (null when absent) and the
+create sends it as `isscorespublish`, omitted when null — 8.2 applied to
+both halves. `ps-send-check.ts` sends the same body. Not yet confirmed
+against PowerSchool: the test-server check (`--write`) runs before the
+deploy. **Slice 2 (decided 2026-10-20, James):** a Send again turns
+Publish Scores ON for an existing assignment when its category default is
+on — never off; the assignment update call is unproven, so it is checked
+on the test server before it ships.
