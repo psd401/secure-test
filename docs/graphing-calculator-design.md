@@ -465,3 +465,8 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   under the CSP (state `suspended` without a real key press). Not run:
   hearing it, VoiceOver, a real AAC session. Still later: Nemeth, UEB,
   embossing.
+- 2026-10-20 — independent review of slices 5–8 (21 confirmed findings,
+  18 distinct) fixed in `1c6e1b4`; the design-tool hand rows (658–679) run
+  on local dev, finding and fixing the editor build break, three editor
+  defects (`b37ec83`) and raw JSON in the scoring queue (`835dc210`); CI
+  gains `next build` (`8181580a`). Client rows next.
