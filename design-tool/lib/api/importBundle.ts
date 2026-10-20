@@ -289,6 +289,9 @@ export async function importBundleForOwner(
         answers_release: bundle.answers_release ?? "on_release",
         // Passage highlighting: absent reads as off.
         allow_highlighting: bundle.allow_highlighting ?? false,
+        // Graphing calculator: absent reads as none.
+        calculator_mode: bundle.calculator?.mode ?? "none",
+        calculator_preset: bundle.calculator?.preset ?? "full",
       })
       .returning();
     // E5 slice 1: the new item ids come back by position (position = index
@@ -296,7 +299,7 @@ export async function importBundleForOwner(
     const insertedIds = new Map<number, string>();
     if (importable.length > 0) {
       const inserted = await tx.insert(items).values(
-        importable.map((it, idx) => {
+        withNoCalculator(importable, importable.map((it, idx) => {
           const stem = rewriteAssetRefs(it.stem, remap);
           const base = {
             assessment_id: row!.id,
@@ -481,7 +484,7 @@ export async function importBundleForOwner(
           // typecheck until an explicit branch above handles it — no more
           // silent import-as-short_text.
           return assertNever(it, "importBundle: unhandled item type");
-        }),
+        })),
       ).returning({ id: items.id, position: items.position });
       for (const r of inserted) insertedIds.set(r.position, r.id);
     }
@@ -558,4 +561,16 @@ export function isImportBundleError(
   r: ImportBundleResult | ImportBundleError,
 ): r is ImportBundleError {
   return "error" in r;
+}
+
+/**
+ * Graphing calculator (D-7): the per-question "no calculator" mark rides
+ * every item type, so it is added to each built row's config here rather
+ * than in every type's branch above.
+ */
+function withNoCalculator<R extends { config: ItemConfig }>(
+  src: readonly { no_calculator?: true }[],
+  rows: R[],
+): R[] {
+  return rows.map((r, i) => (src[i]?.no_calculator ? { ...r, config: { ...r.config, no_calculator: true } } : r));
 }

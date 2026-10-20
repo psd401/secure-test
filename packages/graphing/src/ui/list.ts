@@ -59,6 +59,8 @@ export class ExpressionList {
     private readonly makeField: MathfieldFactory,
     private readonly cb: ListCallbacks,
     private readonly readOnly = false,
+    /** False on the scientific and four-function calculators: no graph. */
+    private readonly graphing = true,
   ) {
     this.element = document.createElement("div");
     this.element.className = "gc-list";
@@ -191,7 +193,7 @@ export class ExpressionList {
     const drawable = a.kind === "curve" || a.kind === "points" || a.kind === "implicit" || a.kind === "region" || (a.kind === "function" && a.plot !== null);
     view.swatch.style.setProperty("--gc-row-color", row.color);
     view.swatch.classList.toggle("gc-swatch-off", row.hidden);
-    view.swatch.hidden = !drawable;
+    view.swatch.hidden = !drawable || !this.graphing;
     view.swatch.setAttribute("aria-pressed", String(!row.hidden));
     view.swatch.setAttribute("aria-label", `${row.hidden ? "Show" : "Hide"} expression ${n} on the graph`);
 
@@ -224,6 +226,12 @@ export class ExpressionList {
         view.info.append(val);
         break;
       }
+      case "curve":
+      case "implicit":
+      case "region":
+      case "points":
+        if (!this.graphing) view.info.append(note("Graphs need the graphing calculator."));
+        break;
       case "slider": {
         const s = this.slider(row, a.name, a.value);
         view.range = s.querySelector("input[type=range]");
@@ -301,6 +309,13 @@ export class ExpressionList {
     box.append(min, less, input, more, max);
     return box;
   }
+}
+
+function note(text: string): HTMLElement {
+  const d = document.createElement("div");
+  d.className = "gc-note";
+  d.textContent = text;
+  return d;
 }
 
 function numberInput(value: number, label: string): HTMLInputElement {

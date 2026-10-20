@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { ItemBundleSchema, type ItemBundle } from "@secure-test/schema";
+import { ItemBundleSchema, type CalculatorMode, type CalculatorPreset, type ItemBundle } from "@secure-test/schema";
 import type { getDb } from "@/db/client";
 import { items, ITEM_TYPES, type AssessmentRow, type ItemType } from "@/db/schema";
 import { exportItemSets } from "@/lib/api/itemSetsBundle";
@@ -91,6 +91,8 @@ export async function buildExportBundle(
     const scoring = {
       ...(row.config?.scoring_method ? { scoring_method: row.config.scoring_method } : {}),
       ...(tags.length > 0 ? { standards: tags } : {}),
+      // Graphing calculator (D-7): any type; only when set.
+      ...(row.config?.no_calculator ? { no_calculator: true as const } : {}),
     };
     const type = row.type as ItemType;
     switch (type) {
@@ -276,6 +278,15 @@ export async function buildExportBundle(
       : {}),
     // Passage highlighting: only when on, so older bundles stay byte-stable.
     ...(assessmentRow.allow_highlighting ? { allow_highlighting: true } : {}),
+    // Graphing calculator: only when the test has one.
+    ...(assessmentRow.calculator_mode !== "none"
+      ? {
+          calculator: {
+            mode: assessmentRow.calculator_mode as CalculatorMode,
+            preset: assessmentRow.calculator_preset as CalculatorPreset,
+          },
+        }
+      : {}),
   };
 
   // Round-trip through @secure-test/schema as a final correctness check.

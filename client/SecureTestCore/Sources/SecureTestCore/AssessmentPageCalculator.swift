@@ -38,6 +38,26 @@ extension AssessmentPage {
       // Where the button and panel live: the body on the page, the item tree
       // in the JSC harness (whose body is a separate node).
       var calcHost = null;
+      // D-7: true while the open page holds a question marked "no
+      // calculator" (paged layout only — one scrolling page shows every
+      // question at once, and the editor tells the teacher so).
+      var calcBlocked = false;
+
+      function calculatorForPage(itemIds) {
+        var marked = {};
+        (BUNDLE.items || []).forEach(function (item) {
+          if (item && item.no_calculator === true) marked[item.id] = true;
+        });
+        calcBlocked = (itemIds || []).some(function (id) { return marked[id] === true; });
+        if (calcBlocked) closeCalculator();
+        paintCalculatorButton();
+      }
+
+      function paintCalculatorButton() {
+        if (!calcButton) return;
+        calcButton.disabled = calcBlocked;
+        calcButton.textContent = calcBlocked ? 'No calculator on this question' : 'Calculator';
+      }
 
       // Tokens and rem only, so the eight contrast sets and the nine zoom
       // levels reach the panel; the calculator's own `--gc-*` colours are
@@ -46,6 +66,7 @@ extension AssessmentPage {
         '.calc-toggle { position: fixed; top: 0.75rem; right: 1rem; z-index: 3; font: inherit; font-size: 0.9375rem;' +
         ' padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }' +
         '.calc-toggle[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }' +
+        '.calc-toggle:disabled { color: var(--ink-soft); background: var(--panel); }' +
         '.calc-panel { position: fixed; right: 1rem; top: 3.5rem; width: min(56rem, calc(100vw - 2rem));' +
         ' height: min(36rem, calc(100vh - 9rem)); z-index: 3; display: flex; flex-direction: column;' +
         ' background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px;' +
@@ -83,10 +104,12 @@ extension AssessmentPage {
         b.setAttribute('aria-expanded', 'false');
         b.setAttribute('aria-controls', 'calc-panel');
         b.onclick = function () {
+          if (calcBlocked) return;
           if (calcPanel && calcPanel.getAttribute('hidden') === null) closeCalculator();
           else openCalculator();
         };
         calcButton = b;
+        paintCalculatorButton();
         return b;
       }
 
@@ -166,11 +189,12 @@ extension AssessmentPage {
       function mountCalculator() {
         try {
           var lib = __secureTestGraphing();
-          var preset = lib.presetFor(CALCULATOR.preset);
+          var mode = lib.isMode(CALCULATOR.mode) ? CALCULATOR.mode : 'graphing';
           calcHandle = lib.mountGraphing(calcBody, {
             MathfieldElement: lib.MathfieldElement,
-            disabled: preset.disabled,
-            degrees: CALCULATOR.degrees === true || (CALCULATOR.degrees !== false && preset.degrees)
+            mode: mode,
+            preset: CALCULATOR.preset,
+            degrees: CALCULATOR.degrees === true || (CALCULATOR.degrees !== false && lib.presetFor(CALCULATOR.preset, mode).degrees)
           });
         } catch (e) {
           calcBody.textContent = '';

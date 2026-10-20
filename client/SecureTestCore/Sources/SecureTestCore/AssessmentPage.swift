@@ -6667,6 +6667,9 @@ public enum AssessmentPage {
             }
           });
           var page = pages[n];
+          // Row DC (D-7): a page holding a "no calculator" question closes
+          // and disables the calculator; any other page offers it again.
+          if (CALCULATOR) calculatorForPage(page.items);
           // The passage travels to whichever page is open (one element).
           if (page.holder && page.set && page.set.__block) page.holder.appendChild(page.set.__block);
           current.textContent = page.label;

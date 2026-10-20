@@ -435,6 +435,13 @@
       "when": 1792345097534,
       "tag": "0061_ai_scoring_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792500361668,
+      "tag": "0062_calculator_setting",
+      "breakpoints": true
     }
   ]
 }

@@ -5,7 +5,7 @@
 // pay for until it is used. `scripts/build-page.ts` does the wrapping.
 import { MathfieldElement } from "mathlive";
 import { mountGraphing } from "./ui/calculator";
-import { presetFor } from "./ui/presets";
+import { isMode, presetFor } from "./ui/presets";
 
 declare var __gcOut: unknown;
-__gcOut = { mountGraphing, MathfieldElement, presetFor };
+__gcOut = { mountGraphing, MathfieldElement, presetFor, isMode };

@@ -70,4 +70,38 @@ final class RendererCalculatorTests: XCTestCase {
         // The question is still answerable.
         XCTAssertEqual(try h.int("__count('input')"), 1)
     }
+
+    // D-7: the per-question mark, honoured in paged layout only.
+    private func pagedWithMark(layout: String = "paged") throws -> RendererHarness {
+        try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","layout":"\(layout)","calculator":{"mode":"graphing","preset":"full"},
+         "items":[{"type":"short_text","id":"a","stem":"No calculator here","no_calculator":true},
+                  {"type":"short_text","id":"b","stem":"Calculator allowed"}]}
+        """)
+    }
+
+    func testAMarkedQuestionsPageDisablesTheCalculator() throws {
+        let h = try pagedWithMark()
+        XCTAssertTrue(try h.bool("__first('.calc-toggle').disabled"))
+        XCTAssertEqual(try h.string("__first('.calc-toggle').textContent"), "No calculator on this question")
+        try h.eval("__first('.calc-toggle').onclick()")
+        XCTAssertEqual(try h.int("__count('.calc-panel')"), 0, "a disabled button opens nothing")
+    }
+
+    func testTurningToAnUnmarkedPageOffersItAgainAndBackClosesIt() throws {
+        let h = try pagedWithMark()
+        try h.eval("__first('.pager-next').onclick()")
+        XCTAssertFalse(try h.bool("__first('.calc-toggle').disabled"))
+        XCTAssertEqual(try h.string("__first('.calc-toggle').textContent"), "Calculator")
+        try h.eval("__first('.calc-toggle').onclick()")
+        XCTAssertFalse(try h.bool("__first('.calc-panel').hidden"))
+        try h.eval("__first('.pager-prev').onclick()")
+        XCTAssertTrue(try h.bool("__first('.calc-panel').hidden"), "closed on the marked page")
+        XCTAssertTrue(try h.bool("__first('.calc-toggle').disabled"))
+    }
+
+    func testScrollLayoutIgnoresTheMark() throws {
+        let h = try pagedWithMark(layout: "scroll")
+        XCTAssertFalse(try h.bool("__first('.calc-toggle').disabled"))
+    }
 }

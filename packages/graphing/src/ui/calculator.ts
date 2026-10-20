@@ -8,6 +8,7 @@ import type { FunctionGroup } from "../engine/builtins";
 import { GraphView } from "./graph";
 import { Keypad } from "./keypad";
 import { ExpressionList } from "./list";
+import { presetFor, type Mode } from "./presets";
 import {
   addSliders,
   defaultRange,
@@ -40,6 +41,11 @@ export interface SavedGraph {
 export interface CalculatorOptions {
   MathfieldElement: typeof MathfieldElement;
   initial?: SavedGraph;
+  /** graphing (default), scientific (no graph) or four_function. */
+  mode?: Mode;
+  /** A configuration from presets.ts ("full", "state_wa"); default "full". */
+  preset?: string;
+  /** Overrides the preset's disabled function groups. */
   disabled?: Iterable<FunctionGroup>;
   /** Show the keypad toggle (default true). */
   keypad?: boolean;
@@ -81,11 +87,14 @@ export function configureMathLive(M: typeof MathfieldElement): void {
 export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): CalculatorHandle {
   installStyles(container.ownerDocument);
   configureMathLive(opts.MathfieldElement);
-  const disabled = new Set(opts.disabled ?? []);
+  const mode: Mode = opts.mode ?? "graphing";
+  const preset = presetFor(opts.preset, mode);
+  const disabled = new Set(opts.disabled ?? preset.disabled);
   const readOnly = opts.readOnly ?? false;
+  const graphing = mode === "graphing";
 
   const root = document.createElement("div");
-  root.className = "gc-root";
+  root.className = `gc-root gc-mode-${mode}`;
   if (readOnly) root.classList.add("gc-readonly");
   const left = document.createElement("div");
   left.className = "gc-left";
@@ -103,7 +112,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   const rect = right.getBoundingClientRect();
   let state: CalcState = {
     rows: [],
-    degrees: opts.degrees ?? false,
+    degrees: opts.degrees ?? preset.degrees,
     viewport: makeViewport(rect.width || 600, rect.height || 400),
   };
   let home: SavedGraph["view"] | undefined;
@@ -165,9 +174,10 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
       },
     },
     readOnly,
+    graphing,
   );
 
-  const graph = new GraphView(right, state.viewport, {
+  const graph: GraphView | null = !graphing ? null : new GraphView(right, state.viewport, {
     onViewport: (v: Viewport) => {
       state = { ...state, viewport: v };
       emit();
@@ -176,7 +186,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
       selected = id;
       render();
     },
-    onHome: () => graph.setViewport(homeViewport(), true),
+    onHome: () => graph?.setViewport(homeViewport(), true),
     readOnly,
   });
 
@@ -194,8 +204,11 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
         }
       },
       disabled,
+      preset.pages,
+      preset.sqrtKey,
     );
-    bottom.hidden = true;
+    // A scientific or four-function calculator is mostly its keypad.
+    bottom.hidden = graphing;
   }
 
   // Toolbar: angle mode and keypad.
@@ -221,18 +234,19 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     kb.type = "button";
     kb.className = "gc-keypad-toggle";
     kb.textContent = "Keypad";
-    kb.setAttribute("aria-expanded", "false");
+    kb.setAttribute("aria-expanded", String(!bottom.hidden));
     kb.addEventListener("click", () => {
       bottom.hidden = !bottom.hidden;
       kb.setAttribute("aria-expanded", String(!bottom.hidden));
-      graph.schedule();
+      graph?.schedule();
     });
     toolbar.append(kb);
   }
-  if (readOnly) angle.hidden = true;
+  // Angles mean nothing to a four-function calculator.
+  if (readOnly || mode === "four_function") angle.hidden = true;
 
   function homeViewport(): Viewport {
-    const v = graph.viewport;
+    const v = graph?.viewport ?? state.viewport;
     if (home) {
       // Fit the saved bounds to the current pixel size, keeping them in view.
       return { ...fitBounds(home, v.width, v.height) };
@@ -252,14 +266,14 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   }
 
   function render(): void {
-    analyses = analyze(state.rows, { degrees: state.degrees, disabled });
+    analyses = analyze(state.rows, { degrees: state.degrees, disabled, functions: preset.functions });
     let rows = state.rows;
     analyses.forEach((a, i) => {
       if (a.kind === "slider" && !rows[i]!.slider) rows = updateRow(rows, rows[i]!.id, { slider: defaultRange(a.value) });
     });
     state = { ...state, rows };
     list.update(state.rows, analyses);
-    graph.setItems(
+    graph?.setItems(
       state.rows.map((r, i) => ({ id: r.id, color: r.color, hidden: r.hidden, analysis: analyses[i]! })),
       selected,
     );
@@ -268,7 +282,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   }
 
   function save(): SavedGraph {
-    const v = graph.viewport;
+    const v = graph?.viewport ?? state.viewport;
     return {
       rows: state.rows.map((r) => ({
         latex: r.latex,
@@ -291,7 +305,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     home = saved.view;
     state = { ...state, rows, degrees: saved.degrees ?? state.degrees };
     render();
-    graph.setViewport(homeViewport(), false);
+    graph?.setViewport(homeViewport(), false);
   }
 
   load(opts.initial ?? { rows: [] });
@@ -301,7 +315,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     save,
     load,
     destroy() {
-      graph.destroy();
+      graph?.destroy();
       root.remove();
     },
   };

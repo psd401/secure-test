@@ -49,6 +49,66 @@ export interface GraphOptions {
 const HIT_PX = 10;
 const CLAMP_PX = 1e5;
 
+/** Relative luminance (WCAG) of a CSS colour in #rgb / #rrggbb / rgb() form. */
+export function luminance(color: string): number {
+  let r = 255;
+  let g = 255;
+  let b = 255;
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (m) {
+    const h = m[1]!.length === 3 ? m[1]!.replace(/(.)/g, "$1$1") : m[1]!;
+    const n = parseInt(h, 16);
+    [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  } else {
+    const c = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(color);
+    if (c) [r, g, b] = [Number(c[1]), Number(c[2]), Number(c[3])];
+  }
+  const lin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+/**
+ * A curve colour readable on the paper. The palette is chosen for white;
+ * on a dark contrast set each colour is mixed toward white until it stands
+ * out (3:1 or better, WCAG 1.4.11).
+ */
+export function curveColor(hex: string, paper: string): string {
+  const pl = luminance(paper);
+  if (pl > 0.4) return hex;
+  const n = parseInt(hex.replace("#", ""), 16);
+  let [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  for (let k = 0; k < 10; k++) {
+    const l = luminance(`rgb(${r}, ${g}, ${b})`);
+    if ((l + 0.05) / (pl + 0.05) >= 4.5) break;
+    r = Math.round(r + (255 - r) * 0.25);
+    g = Math.round(g + (255 - g) * 0.25);
+    b = Math.round(b + (255 - b) * 0.25);
+  }
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+function rgbOf(color: string): [number, number, number] {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (m) {
+    const h = m[1]!.length === 3 ? m[1]!.replace(/(.)/g, "$1$1") : m[1]!;
+    const n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const c = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(color);
+  return c ? [Number(c[1]), Number(c[2]), Number(c[3])] : [255, 255, 255];
+}
+
+/** `ink` laid over `paper` at `amount` — grid lines that suit any contrast set. */
+export function mix(paper: string, ink: string, amount: number): string {
+  const [pr, pg, pb] = rgbOf(paper);
+  const [ir, ig, ib] = rgbOf(ink);
+  const f = (p: number, i: number) => Math.round(p + (i - p) * amount);
+  return `rgb(${f(pr, ir)}, ${f(pg, ig)}, ${f(pb, ib)})`;
+}
+
 function rgba(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
   const n = parseInt(h.length === 3 ? h.replace(/(.)/g, "$1$1") : h, 16);
@@ -87,6 +147,7 @@ export class GraphView {
   private pinned: Marker | null = null;
   private trace: Marker | null = null;
   private frame = 0;
+  private textScale = 1;
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private mode: "none" | "pan" | "trace" = "none";
   private pinchDist = 0;
@@ -249,11 +310,15 @@ export class GraphView {
     ctx.fillRect(0, 0, w, h);
     this.drawGrid();
     this.drawn = [];
+    // Fonts follow the page's zoom: the root's font size against its 15 px default.
+    this.textScale = (parseFloat(getComputedStyle(this.element).fontSize) || 15) / 15;
+    const paper = this.token("--gc-paper", "#ffffff");
     for (const item of this.items) {
       if (item.hidden) continue;
+      const shown = { ...item, color: curveColor(item.color, paper) };
       // One row's failure must not blank the rest of the graph.
       try {
-        this.drawItem(item);
+        this.drawItem(shown);
       } catch {
         /* the row's own analysis carries its error */
       }
@@ -265,8 +330,12 @@ export class GraphView {
 
   private drawGrid(): void {
     const { ctx, v } = this;
-    const minorColor = this.token("--gc-grid-minor", "#eceff3");
-    const majorColor = this.token("--gc-grid-major", "#cfd5dd");
+    // Grid lines are the ink faded into the paper, so they stay quiet on
+    // every contrast set (a light grey grid glares on black).
+    const ink = this.token("--gc-ink", "#1d2433");
+    const paperColor = this.token("--gc-paper", "#ffffff");
+    const minorColor = this.token("--gc-grid-minor", "") || mix(paperColor, ink, 0.07);
+    const majorColor = this.token("--gc-grid-major", "") || mix(paperColor, ink, 0.18);
     const axisColor = this.token("--gc-axis", "#2b2b2b");
     const labelColor = this.token("--gc-label", "#333333");
     const paper = this.token("--gc-paper", "#ffffff");
@@ -320,9 +389,9 @@ export class GraphView {
     ctx.stroke();
 
     // Labels hug the axis, or the nearest edge when the axis is off screen.
-    ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
+    ctx.font = `${Math.round(12 * this.textScale)}px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif`;
     ctx.fillStyle = labelColor;
-    const labelY = Math.min(Math.max(oy + 4, 4), v.height - 16);
+    const labelY = Math.min(Math.max(oy + 4, 4), v.height - 16 * this.textScale);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     for (const x of ticks(v.xmin, v.xmax, sx.major)) {
@@ -482,7 +551,8 @@ export class GraphView {
     const item = this.items.find((i) => i.id === m.id);
     ctx.beginPath();
     ctx.arc(px, py, 6, 0, Math.PI * 2);
-    ctx.fillStyle = m.kind === "trace" ? item?.color ?? "#333" : this.token("--gc-poi", "#6b7280");
+    const paperTone = this.token("--gc-paper", "#ffffff");
+    ctx.fillStyle = m.kind === "trace" ? curveColor(item?.color ?? "#333333", paperTone) : this.token("--gc-poi", "#6b7280");
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = this.token("--gc-paper", "#ffffff");

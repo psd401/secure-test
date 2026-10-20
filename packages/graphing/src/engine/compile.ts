@@ -123,6 +123,7 @@ export function compileNumber(node: Node, scope: Scope): NumFn {
       return (e) => factorial(a(e));
     }
     case "abs": {
+      if (scope.disabled.has("misc")) throw new CompileError("|x| is not available on this calculator");
       if (shapeOf(node.arg, scope) === "point") {
         const p = compilePoint(node.arg, scope);
         return (e) => {
@@ -134,6 +135,7 @@ export function compileNumber(node: Node, scope: Scope): NumFn {
       return (e) => Math.abs(a(e));
     }
     case "root": {
+      if (scope.disabled.has("misc")) throw new CompileError("√ is not available on this calculator");
       const a = compileNumber(node.arg, scope);
       if (!node.index) return (e) => Math.sqrt(a(e));
       const n = compileNumber(node.index, scope);

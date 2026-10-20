@@ -124,6 +124,15 @@ export const assessments = pgTable(
     // bundle only for a client reporting 2.0+ (lib/items/clientSupport.ts).
     // Changeable while Published (requireDraft.ts, isFeedbackSettingsOnlyPatch).
     allow_highlighting: boolean("allow_highlighting").notNull().default(false),
+    // Graphing calculator (docs/graphing-calculator-design.md D-6 / D-7): the
+    // calculator every student gets on this test — "none" (the default and
+    // every test before the column), "four_function", "scientific" or
+    // "graphing" — and its configuration ("full" or the Washington
+    // state-test "state_wa"). Part of what the test measures, so locked once
+    // Published like the layout; reaches the delivery bundle only when not
+    // "none", and the delivery route refuses it to a client older than 2.0.
+    calculator_mode: text("calculator_mode").notNull().default("none"),
+    calculator_preset: text("calculator_preset").notNull().default("full"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -143,6 +152,14 @@ export const assessments = pgTable(
     studentLayoutCheck: check(
       "assessments_student_layout_check",
       sql`student_layout IN ('scroll', 'paged')`,
+    ),
+    calculatorModeCheck: check(
+      "assessments_calculator_mode_check",
+      sql`calculator_mode IN ('none', 'four_function', 'scientific', 'graphing')`,
+    ),
+    calculatorPresetCheck: check(
+      "assessments_calculator_preset_check",
+      sql`calculator_preset IN ('full', 'state_wa')`,
     ),
     studentFeedbackCheck: check(
       "assessments_student_feedback_check",
@@ -194,6 +211,9 @@ export type ItemConfig = {
   // U-22: essay only — show a running word count without a maximum. Stored
   // only when true.
   show_word_count?: boolean;
+  // Graphing calculator (D-7): any type — the test's calculator is hidden on
+  // this question's page (paged layout). Stored only when true.
+  no_calculator?: boolean;
   rubric?: Rubric;
   // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
   // COPIED from, if any. Editor metadata only — `rubric` above stays the

@@ -181,6 +181,9 @@ interface ItemView {
   // BG slice 2: standards tags (`scheme:code` or the teacher's own text);
   // every type, [] when none.
   standards: string[];
+  // Graphing calculator (D-7): hide the test's calculator on this question's
+  // page; null = off. Optional so the per-type draft factories need not name it.
+  no_calculator?: boolean | null;
 }
 
 interface AssessmentView {
@@ -199,6 +202,9 @@ interface AssessmentView {
   answers_released_at: string | null;
   /** Passage highlighting (docs/passage-highlighting-design.md). */
   allow_highlighting: boolean;
+  /** Graphing calculator (docs/graphing-calculator-design.md D-7). */
+  calculator_mode: "none" | "four_function" | "scientific" | "graphing";
+  calculator_preset: "full" | "state_wa";
   allowed_accommodations: string[];
   construct_altering: string[];
   /** U-18: per class period (lib/accommodations/sections.ts). */
@@ -300,6 +306,7 @@ interface ItemRow {
     placeholder?: string | null;
     rich_text?: boolean | null;
     show_word_count?: boolean | null;
+    no_calculator?: boolean | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -340,6 +347,7 @@ function rowToView(r: ItemRow): ItemView {
     placeholder: r.config?.placeholder ?? null,
     rich_text: r.config?.rich_text ? true : null,
     show_word_count: r.config?.show_word_count ? true : null,
+    no_calculator: r.config?.no_calculator ? true : null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -790,6 +798,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   }
   const [allowLlm, setAllowLlm] = useState(assessment.allow_llm_authoring);
   const [studentLayout, setStudentLayout] = useState<"scroll" | "paged">(assessment.student_layout);
+  const [calculatorMode, setCalculatorMode] = useState(assessment.calculator_mode);
+  const [calculatorPreset, setCalculatorPreset] = useState(assessment.calculator_preset);
   const [settingsSave, setSettingsSave] = useState<SaveState>({ kind: "idle" });
   const [allowHighlighting, setAllowHighlighting] = useState(assessment.allow_highlighting);
   const [highlightSave, setHighlightSave] = useState<SaveState>({ kind: "idle" });
@@ -1046,6 +1056,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           time_limit_seconds,
           allow_llm_authoring: allowLlm,
           student_layout: studentLayout,
+          calculator_mode: calculatorMode,
+          calculator_preset: calculatorPreset,
         }),
       });
       setSettingsSave({ kind: "saved", at: new Date() });
@@ -1310,6 +1322,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       choices: item.choices,
       correct_choice_ids: item.correct_choice_ids,
       correct_answer: item.correct_answer,
+      // Graphing calculator (D-7): sent both ways so unticking clears it.
+      no_calculator: item.no_calculator === true,
     };
     if (item.type === "essay") {
       // Omit when unset: the essay body schema treats these as optional
@@ -1893,6 +1907,55 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             unaffected.
           </span>
         </label>
+        {/* Graphing calculator (docs/graphing-calculator-design.md D-7):
+            every student gets it; part of what the test measures, so it is
+            saved with the settings above and locked once Published. */}
+        <label className="block">
+          <span className="block text-sm font-medium">Calculator</span>
+          <NativeSelect
+            size="sm"
+            value={calculatorMode}
+            onChange={(e) => setCalculatorMode(e.target.value as AssessmentView["calculator_mode"])}
+            disabled={isLocked}
+            className="mt-1"
+          >
+            <NativeSelectOption value="none">No calculator</NativeSelectOption>
+            <NativeSelectOption value="four_function">Four-function</NativeSelectOption>
+            <NativeSelectOption value="scientific">Scientific</NativeSelectOption>
+            <NativeSelectOption value="graphing">Graphing</NativeSelectOption>
+          </NativeSelect>
+          <span className="block text-xs text-muted-foreground">
+            Every student gets this calculator during the test. Needs {PRODUCT_NAME} 2.0 or later;
+            an older version is asked to update before the test opens.
+          </span>
+        </label>
+        {calculatorMode !== "none" ? (
+          <label className="block">
+            <span className="block text-sm font-medium">Calculator setup</span>
+            <NativeSelect
+              size="sm"
+              value={calculatorPreset}
+              onChange={(e) => setCalculatorPreset(e.target.value as AssessmentView["calculator_preset"])}
+              disabled={isLocked}
+              className="mt-1"
+            >
+              <NativeSelectOption value="full">Everything on</NativeSelectOption>
+              <NativeSelectOption value="state_wa">Like the Washington state test</NativeSelectOption>
+            </NativeSelect>
+            <span className="block text-xs text-muted-foreground">
+              &ldquo;Like the Washington state test&rdquo; starts in degrees and turns off what the
+              state test&rsquo;s calculator leaves out.
+            </span>
+          </label>
+        ) : null}
+        {calculatorMode !== "none" &&
+        studentLayout === "scroll" &&
+        items.some((i) => i.no_calculator === true) ? (
+          <p className="text-xs text-amber-800" role="note">
+            Some questions are marked &ldquo;No calculator on this question&rdquo;. That only takes effect
+            when students see one question at a time.
+          </p>
+        ) : null}
         <label className="flex items-start gap-2">
           <input
             type="checkbox"
@@ -2808,6 +2871,27 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   onChange={(standards) => updateItem(item.id, (i) => ({ ...i, standards }))}
                   suggestions={usedStandards}
                 />
+                {/* Graphing calculator (D-7): only when the test has one. */}
+                {calculatorMode !== "none" ? (
+                  <label className="mt-2 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={item.no_calculator === true}
+                      onChange={(e) =>
+                        updateItem(item.id, (i) => ({ ...i, no_calculator: e.target.checked ? true : null }))
+                      }
+                      disabled={isLocked}
+                    />
+                    <span>
+                      No calculator on this question
+                      {studentLayout === "scroll" ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Takes effect only when students see one question at a time.
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ) : null}
                 <StandardSuggestionChips
                   suggestions={suggestions[item.id] ?? []}
                   entries={suggestionEntries}

@@ -1806,3 +1806,23 @@ Same change and method for Send to Google Docs and Send to gradebook. Both open 
 | 656 | A one-section sitting, and a picked-students sitting | The new sitting keeps that section / that list | ACCEPTED 2026-10-19 (James) on the route tests (section + student-list copies) |
 | 657 | `/help.html#run` ("A test that takes more than one class"), the FAQ entry, the quick start, `/roadmap.html` | The "Session already ended?" step, "I adjusted time, but students still can't get back in.", the 2026-10-19 milestone | ✅ 2026-10-19 on the origin (rev 111): the step + FAQ on `/help.html#run`, the milestone on `/roadmap.html`; the quick start checked in the diff |
 
+
+## Calculator setting (row DC slice 5, branch `graphing-calculator`, 2026-10-20)
+
+`docs/graphing-calculator-design.md` D-7 is the record. Migration 0062
+(`calculator_mode`, `calculator_preset`) is on the branch only; renumber it
+if `main` gains a migration first. Rows 658–666 NOT RUN (the API half is
+covered by `design-tool/test/calculator-api.test.ts` and the "graphing
+calculator on the wire" block of `delivery-api.test.ts`).
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 658 | Settings → Calculator → Graphing; Save settings; reload | Graphing still chosen; "Calculator setup" appears with "Everything on" | NOT RUN |
+| 659 | Calculator setup → Like the Washington state test; Save; reload | Kept | NOT RUN |
+| 660 | Publish, then try to change the calculator | Both selects disabled (locked like the layout) | NOT RUN |
+| 661 | With a calculator set, a question card shows "No calculator on this question"; tick it on one; save; reload | Ticked; with no calculator set the box isn't shown | NOT RUN |
+| 662 | Same, with "One scrolling page" | The box says it takes effect only one question at a time; Settings shows the amber note | NOT RUN |
+| 663 | Export the test, import the file | Calculator, setup and the ticked question all come back | NOT RUN |
+| 664 | Duplicate the test | Same as 663 | NOT RUN |
+| 665 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | NOT RUN |
+| 666 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | NOT RUN |

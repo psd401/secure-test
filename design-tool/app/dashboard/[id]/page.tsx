@@ -98,6 +98,8 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
               ? assessment.answers_released_at.toISOString()
               : null,
             allow_highlighting: assessment.allow_highlighting,
+            calculator_mode: assessment.calculator_mode as "none" | "four_function" | "scientific" | "graphing",
+            calculator_preset: assessment.calculator_preset as "full" | "state_wa",
             allowed_accommodations: (assessment.allowed_accommodations ??
               []) as string[],
             construct_altering: (assessment.construct_altering ?? []) as string[],
@@ -124,6 +126,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
             placeholder: r.config?.placeholder ?? null,
             rich_text: r.config?.rich_text ? true : null,
             show_word_count: r.config?.show_word_count ? true : null,
+            no_calculator: r.config?.no_calculator ? true : null,
             rubric: r.config?.rubric ?? null,
             rubric_id: r.config?.rubric_id ?? null,
             pairs: r.config?.pairs ?? null,

@@ -9,6 +9,7 @@ import {
   RubricSchema,
   SequenceEntrySchema,
   StudentLayoutSchema,
+  CalculatorSettingSchema,
   TableColumnSchema,
   TableRowSchema,
   itemSetIssues,
@@ -58,6 +59,9 @@ import {
 const baseDeliveryItem = {
   id: z.string().min(1),
   stem: z.string(),
+  // Graphing calculator (D-7): the calculator is hidden on this question's
+  // page (paged layout only). Emitted only when true.
+  no_calculator: z.literal(true).optional(),
 };
 
 export const DeliverySingleSelectMCItemSchema = z.object({
@@ -247,6 +251,11 @@ export const DeliveryBundleSchema = z
     // is never refused, it simply gets no field and no tool). Highlights live
     // in page memory only — nothing is posted back.
     allow_highlighting: z.boolean().optional(),
+    // Graphing calculator (docs/graphing-calculator-design.md D-7): every
+    // student gets this calculator. Emitted only when the test has one, and
+    // the delivery route refuses a client older than 2.0.0 such a bundle
+    // (the calculator is part of what the test measures).
+    calculator: CalculatorSettingSchema.optional(),
     // Client paging (docs/client-paging-design.md): emitted only as "paged".
     // Absent means one scrolling page — a client that predates the field
     // renders as it always has.

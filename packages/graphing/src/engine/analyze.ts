@@ -34,6 +34,8 @@ export interface Row {
 export interface Settings {
   degrees: boolean;
   disabled: ReadonlySet<FunctionGroup>;
+  /** Function definitions allowed (the state-test scientific has none). */
+  functions?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { degrees: false, disabled: new Set() };
@@ -336,6 +338,9 @@ export function analyze(rows: readonly Row[], settings: Settings = DEFAULT_SETTI
           return { kind: "error", message: `${display(def.name)} is defined more than once`, missing: [] };
         }
         if (def.kind === "fn") {
+          if (settings.functions === false) {
+            return { kind: "error", message: "Functions can't be defined on this calculator", missing: [] };
+          }
           if (recursive.has(def.name)) {
             return { kind: "error", message: `${def.name} is defined in terms of itself`, missing: [] };
           }

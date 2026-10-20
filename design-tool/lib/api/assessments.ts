@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { StudentLayoutSchema } from "@secure-test/schema";
+import { CalculatorModeSchema, CalculatorPresetSchema, StudentLayoutSchema } from "@secure-test/schema";
 import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { SectionAccommodationsSchema } from "@/lib/accommodations/sections";
@@ -9,6 +9,8 @@ const AccommodationId = z
   .refine(isValidAccommodationId, { message: "unknown_accommodation_id" });
 const AllowedAccommodations = z.array(AccommodationId);
 const ConstructAltering = z.array(AccommodationId);
+// The column also holds "none"; the bundle schema leaves the field out instead.
+const CalculatorModeColumn = z.union([z.literal("none"), CalculatorModeSchema]);
 
 export const CreateAssessmentBody = z
   .object({
@@ -24,6 +26,9 @@ export const CreateAssessmentBody = z
     answers_release: z.enum(ANSWERS_RELEASE_MODES).optional().default("on_release"),
     // Passage highlighting (docs/passage-highlighting-design.md).
     allow_highlighting: z.boolean().optional().default(false),
+    // Graphing calculator (docs/graphing-calculator-design.md D-7).
+    calculator_mode: CalculatorModeColumn.optional().default("none"),
+    calculator_preset: CalculatorPresetSchema.optional().default("full"),
     allowed_accommodations: AllowedAccommodations.optional().default([]),
     construct_altering: ConstructAltering.optional().default([]),
   })
@@ -58,6 +63,10 @@ export const UpdateAssessmentBody = z
     // Passage highlighting (docs/passage-highlighting-design.md): also passes
     // the publish lock — see isFeedbackSettingsOnlyPatch.
     allow_highlighting: z.boolean().optional(),
+    // Graphing calculator: part of what the test measures, so NOT among the
+    // settings a Published assessment still accepts (unlike highlighting).
+    calculator_mode: CalculatorModeColumn.optional(),
+    calculator_preset: CalculatorPresetSchema.optional(),
     allowed_accommodations: AllowedAccommodations.optional(),
     construct_altering: ConstructAltering.optional(),
     // U-18: the whole per-period value, replaced on every PATCH (the Allowed

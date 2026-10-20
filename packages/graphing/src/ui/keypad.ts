@@ -13,7 +13,7 @@ export interface Key {
   insert?: string;
   /** Characters to type as if from the keyboard (honours smart fences). */
   type?: string;
-  command?: "left" | "right" | "backspace" | "enter";
+  command?: "left" | "right" | "backspace" | "enter" | "clear";
   group?: FunctionGroup;
   wide?: boolean;
   /** Visual role: digits look quieter than operators. */
@@ -144,10 +144,58 @@ export const FUNCTION_PAGE: Key[][] = [
   ],
 ];
 
+/** The four-function calculator: digits, the four operations, brackets, %. */
+export function fourPage(sqrtKey: boolean): Key[][] {
+  return [
+    [
+      k("(", "open parenthesis", { type: "(" }),
+      k(")", "close parenthesis", { type: ")" }),
+      k("%", "percent", { insert: "\\%" }),
+      k("7", "7", { type: "7", tone: "digit" }),
+      k("8", "8", { type: "8", tone: "digit" }),
+      k("9", "9", { type: "9", tone: "digit" }),
+      k("÷", "divide", { insert: "\\div", tone: "op" }),
+      NAV[0]!,
+    ],
+    [
+      sqrtKey ? k("√", "square root", { insert: "\\sqrt{#0}" }) : k("a/b", "fraction", { insert: "\\frac{#0}{#?}" }),
+      k("a²", "squared", { insert: "#@^{2}" }),
+      k("−", "negative", { type: "-" }),
+      k("4", "4", { type: "4", tone: "digit" }),
+      k("5", "5", { type: "5", tone: "digit" }),
+      k("6", "6", { type: "6", tone: "digit" }),
+      k("×", "times", { insert: "\\times", tone: "op" }),
+      NAV[1]!,
+    ],
+    [
+      sqrtKey ? k("a/b", "fraction", { insert: "\\frac{#0}{#?}" }) : k("", "", { type: "" }),
+      k("", "", { type: "" }),
+      k("", "", { type: "" }),
+      k("1", "1", { type: "1", tone: "digit" }),
+      k("2", "2", { type: "2", tone: "digit" }),
+      k("3", "3", { type: "3", tone: "digit" }),
+      k("−", "minus", { type: "-", tone: "op" }),
+      NAV[2]!,
+    ],
+    [
+      k("", "", { type: "" }),
+      k("", "", { type: "" }),
+      k("", "", { type: "" }),
+      k("0", "0", { type: "0", tone: "digit" }),
+      k(".", "decimal point", { type: ".", tone: "digit" }),
+      k("=", "equals", { command: "enter", tone: "op" }),
+      k("+", "plus", { type: "+", tone: "op" }),
+      k("C", "clear", { command: "clear", tone: "action" }),
+    ],
+  ];
+}
+
 /** Sends a key to a math field. */
 export function press(field: MathfieldElement, key: Key, onEnter: () => void): void {
   if (key.command === "enter") return onEnter();
-  if (key.command === "backspace") {
+  if (key.command === "clear") {
+    field.executeCommand("deleteAll");
+  } else if (key.command === "backspace") {
     field.executeCommand("deleteBackward");
   } else if (key.command === "left") {
     field.executeCommand("moveToPreviousChar");
@@ -161,7 +209,7 @@ export function press(field: MathfieldElement, key: Key, onEnter: () => void): v
   field.focus();
 }
 
-export type Page = "main" | "alpha" | "functions";
+export type Page = "main" | "alpha" | "functions" | "four";
 
 export class Keypad {
   readonly element: HTMLElement;
@@ -173,7 +221,9 @@ export class Keypad {
     private readonly onEnter: () => void,
     private readonly disabled: ReadonlySet<FunctionGroup>,
     private readonly pages: Page[] = ["main", "alpha", "functions"],
+    private readonly sqrtKey = true,
   ) {
+    this.page = pages[0] ?? "main";
     this.element = document.createElement("div");
     this.element.className = "gc-keypad";
     this.element.setAttribute("role", "group");
@@ -197,7 +247,7 @@ export class Keypad {
       const tabs = document.createElement("div");
       tabs.className = "gc-keypad-tabs";
       tabs.setAttribute("role", "tablist");
-      const names: Record<Page, string> = { main: "123", alpha: "abc", functions: "functions" };
+      const names: Record<Page, string> = { main: "123", alpha: "abc", functions: "functions", four: "123" };
       for (const p of this.pages) {
         const b = document.createElement("button");
         b.type = "button";
@@ -210,12 +260,19 @@ export class Keypad {
       }
       this.element.append(tabs);
     }
-    const rows = this.page === "main" ? MAIN_PAGE : this.page === "alpha" ? ALPHA_PAGE : FUNCTION_PAGE;
+    const rows =
+      this.page === "main"
+        ? MAIN_PAGE
+        : this.page === "alpha"
+          ? ALPHA_PAGE
+          : this.page === "four"
+            ? fourPage(this.sqrtKey)
+            : FUNCTION_PAGE;
     const grid = document.createElement("div");
     grid.className = `gc-keys gc-keys-${this.page}`;
     for (const row of rows) {
       for (const key of row) {
-        if (key.group && this.disabled.has(key.group)) {
+        if ((key.group && this.disabled.has(key.group)) || key.label === "") {
           const gap = document.createElement("span");
           gap.className = "gc-key-gap";
           grid.append(gap);

@@ -917,3 +917,26 @@ describe("FillBlankItemSchema (via ItemSchema)", () => {
     expect(fillBlankMarkerIds("no markers, [b1], [[ b1 ]], [[]]")).toEqual([]);
   });
 });
+
+// Graphing calculator (docs/graphing-calculator-design.md D-7).
+describe("ItemBundleSchema — calculator", () => {
+  const base = { test_id: "t", title: "t", items: [] };
+  test("mode + preset survive; absence stays absent; unknown values are refused", () => {
+    expect(ItemBundleSchema.parse({ ...base, calculator: { mode: "graphing", preset: "state_wa" } }).calculator).toEqual({
+      mode: "graphing",
+      preset: "state_wa",
+    });
+    expect(ItemBundleSchema.parse(base).calculator).toBeUndefined();
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "none", preset: "full" } }).success).toBe(false);
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "graphing", preset: "texas" } }).success).toBe(false);
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "graphing" } }).success).toBe(false);
+  });
+
+  test("no_calculator rides any item type, only as true", () => {
+    const item = { type: "short_text", id: "a", stem: "s", no_calculator: true };
+    expect(ItemBundleSchema.parse({ ...base, items: [item] }).items[0]!.no_calculator).toBe(true);
+    expect(ItemBundleSchema.safeParse({ ...base, items: [{ ...item, no_calculator: false }] }).success).toBe(false);
+    const mc = { type: "multiple_choice_single", id: "b", stem: "s", choices: [{ id: "c", text: "x" }, { id: "d", text: "y" }], no_calculator: true };
+    expect(ItemBundleSchema.parse({ ...base, items: [mc] }).items[0]!.no_calculator).toBe(true);
+  });
+});

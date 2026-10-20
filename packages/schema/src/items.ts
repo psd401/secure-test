@@ -26,6 +26,9 @@ const baseItem = {
   stem: z.string(),
   scoring_method: ScoringMethodSchema.optional(),
   standards: z.array(z.string().min(1).max(80)).max(10).optional(),
+  // Graphing calculator (docs/graphing-calculator-design.md D-7): the test's
+  // calculator is hidden on this question's page. Emitted only when true.
+  no_calculator: z.literal(true).optional(),
 };
 
 export const SingleSelectMCItemSchema = z.object({
@@ -472,6 +475,19 @@ export type StudentFeedback = z.infer<typeof StudentFeedbackSchema>;
 export const AnswersReleaseSchema = z.enum(["at_hand_in", "on_release"]);
 export type AnswersRelease = z.infer<typeof AnswersReleaseSchema>;
 
+// Graphing calculator (docs/graphing-calculator-design.md D-6 / D-7): the
+// calculator every student gets on this test, and its configuration.
+// Emitted only when there is one; absent is no calculator.
+export const CalculatorModeSchema = z.enum(["four_function", "scientific", "graphing"]);
+export type CalculatorMode = z.infer<typeof CalculatorModeSchema>;
+export const CalculatorPresetSchema = z.enum(["full", "state_wa"]);
+export type CalculatorPreset = z.infer<typeof CalculatorPresetSchema>;
+export const CalculatorSettingSchema = z.object({
+  mode: CalculatorModeSchema,
+  preset: CalculatorPresetSchema,
+});
+export type CalculatorSetting = z.infer<typeof CalculatorSettingSchema>;
+
 export const ItemBundleSchema = z.object({
   test_id: z.string().min(1),
   title: z.string(),
@@ -485,6 +501,8 @@ export const ItemBundleSchema = z.object({
   // Passage highlighting (docs/passage-highlighting-design.md): emitted only
   // when true, keeping older bundles byte-stable; absent reads as false.
   allow_highlighting: z.boolean().optional(),
+  // Graphing calculator: emitted only when the test has one.
+  calculator: CalculatorSettingSchema.optional(),
   // E5 slice 1: optional so every bundle written before it parses unchanged.
   item_sets: z.array(TeacherItemSetSchema).optional(),
   // Map<uuid, asset>. Optional — bundles without image refs omit this.

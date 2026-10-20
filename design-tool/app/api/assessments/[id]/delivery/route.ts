@@ -134,9 +134,12 @@ export async function GET(req: Request, ctx: RouteContext) {
     // refuse it here — before begin(), nothing locks. v1.6.0+ maps the code to
     // "update SecureTest in Self Service"; older clients show their generic
     // "could not be opened … tell your teacher".
+    // Graphing calculator (D-7): a calculator is part of what the test
+    // measures, so a client that can't draw it gets the same refusal.
     const minVersion = requiredClientUpgrade(
       req.headers.get(CLIENT_VERSION_HEADER),
       bundle.items.map((i) => i.type),
+      bundle.calculator ? ["calculator"] : [],
     );
     if (minVersion) {
       return NextResponse.json(

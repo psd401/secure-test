@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { DeliveryBundleSchema, type DeliveryBundle } from "@secure-test/schema";
+import { DeliveryBundleSchema, type CalculatorMode, type CalculatorPreset, type DeliveryBundle } from "@secure-test/schema";
 import {
   items,
   ITEM_TYPES,
@@ -244,7 +244,13 @@ export async function buildDeliveryBundle(
   // "this test could not be opened" with nothing anywhere naming the item.
   assertItemsAreBundleable(itemRows);
 
-  const delivered = itemRows.map((row) => mapItemForDelivery(row, attemptId));
+  // Graphing calculator (D-7): the per-question "no calculator" mark rides
+  // every item type, and only when the test has a calculator to hide.
+  const hasCalculator = assessment.calculator_mode !== "none";
+  const delivered = itemRows.map((row) => {
+    const mapped = mapItemForDelivery(row, attemptId);
+    return hasCalculator && row.config?.no_calculator === true ? { ...mapped, no_calculator: true as const } : mapped;
+  });
   // E5 slice 1: stimuli are student-facing; same shape as the teacher bundle,
   // item ids are the same uuids on both sides.
   const plainSets = await exportItemSets(db, assessment.id, itemRows);
@@ -308,6 +314,17 @@ export async function buildDeliveryBundle(
     // not refused (H-1) — it renders the test exactly as before.
     ...(assessment.allow_highlighting && clientSupportsHighlighting(clientVersion)
       ? { allow_highlighting: true }
+      : {}),
+    // Graphing calculator (docs/graphing-calculator-design.md D-7): every
+    // student gets it; emitted only when the test has one. The delivery
+    // route refuses this bundle to a client older than 2.0.0.
+    ...(hasCalculator
+      ? {
+          calculator: {
+            mode: assessment.calculator_mode as CalculatorMode,
+            preset: assessment.calculator_preset as CalculatorPreset,
+          },
+        }
       : {}),
     // Client paging: emitted only as "paged"; absence means one scrolling
     // page, which is what every client before the field did anyway.
