@@ -23,6 +23,7 @@ import {
   type Shape,
   type UserFunction,
 } from "./compile";
+import { compileInterval, compileTruth, type IntervalEnv, type IntervalFn, type Truth } from "./interval";
 import { ParseError, parse } from "./parser";
 
 export interface Row {
@@ -54,6 +55,8 @@ export type Analysis =
       relation: Relation;
       /** lhs − rhs. */
       f: (x: number, y: number) => number;
+      /** lhs − rhs over a box (interval arithmetic). */
+      fi: IntervalFn;
       lhs: Node;
       rhs: Node;
       restrict: ((x: number, y: number) => boolean) | null;
@@ -63,6 +66,8 @@ export type Analysis =
   | {
       kind: "region";
       test: (x: number, y: number) => boolean;
+      /** The same over a box: 0 no, 1 maybe, 2 yes everywhere. */
+      truth: (env: IntervalEnv) => Truth;
       node: Node;
       restrict: ((x: number, y: number) => boolean) | null;
       scope: Scope;
@@ -220,6 +225,11 @@ class ListScope implements Scope {
     };
     top.fnCache.set(name, uf);
     return uf;
+  }
+
+  functionBody(name: string): { params: string[]; body: Node } | undefined {
+    const def = this.top().fns.get(name);
+    return def ? { params: def.params, body: def.body } : undefined;
   }
 
   /** Compiles every function body now so errors surface at analysis time. */
@@ -504,6 +514,7 @@ function plotRow(st: Statement, scope: ListScope, xy: ListScope): Analysis {
         env.y = y;
         return test(env);
       },
+      truth: compileTruth(b, xy),
       node: b,
       restrict: restriction(st, xy),
       scope: xy,
@@ -535,6 +546,7 @@ function plotRow(st: Statement, scope: ListScope, xy: ListScope): Analysis {
       env.y = y;
       return l(env) - r(env);
     },
+    fi: compileInterval({ kind: "sub", left: lhs, right: rhs }, xy),
     lhs,
     rhs,
     restrict: restriction(st, xy),

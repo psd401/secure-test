@@ -38,6 +38,8 @@ export interface Scope {
   point(name: string): PointFn;
   points(name: string): PointsFn;
   userFunction(name: string): UserFunction | undefined;
+  /** A user function's parameters and body, for interval evaluation. */
+  functionBody?(name: string): { params: string[]; body: Node } | undefined;
   /** Names bound by the surrounding context (x, y, a function's params). */
   bound: ReadonlySet<string>;
 }

@@ -365,7 +365,7 @@ export class GraphView {
     if (a.kind === "curve") this.drawCurve(item.id, a, item.color);
     else if (a.kind === "function" && a.plot) this.drawCurve(item.id, a.plot, item.color);
     else if (a.kind === "points") this.drawPoints(a.points, item.color);
-    else if (a.kind === "implicit" || a.kind === "region") drawImplicit(this.ctx, this.v, a, item.color);
+    else if (a.kind === "implicit" || a.kind === "region") drawImplicit(this.ctx, this.v, a, item.color, this.selected === item.id);
   }
 
   private drawCurve(id: string, c: Curve, color: string): void {

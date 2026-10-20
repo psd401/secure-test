@@ -14,6 +14,12 @@ const SAMPLES: SavedGraph = {
     { latex: "f\\left(x\\right)=\\frac{1}{x-3}" },
     { latex: "\\left(2,3\\right),\\left(-4,1\\right)" },
     { latex: "\\operatorname{mean}\\left(1,2,3,10\\right)" },
+    { latex: "x^{2}+y^{2}=16" },
+    { latex: "xy<-2" },
+    { latex: "0<y<x\\left\\{x<4\\right\\}" },
+    { latex: "x^{2}+y^{2}=16" },
+    { latex: "xy<-2" },
+    { latex: "0<y<x\\left\\{x<4\\right\\}" },
   ],
 };
 
