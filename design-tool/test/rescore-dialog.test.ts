@@ -69,6 +69,15 @@ describe("answerKeyChanged (the editor's pointer)", () => {
     ).toBe(true);
   });
 
+  test("a graph key edit counts; the same graph key does not", () => {
+    const point = (x: number, y: number) => ({ tool: "point", points: [[x, y]] });
+    const before = { graph_key: { objects: [point(1, 2)], scoring: "all" } };
+    expect(answerKeyChanged(before, { graph_key: { objects: [point(2, 2)], scoring: "all" } })).toBe(true);
+    expect(answerKeyChanged(before, { graph_key: { objects: [point(1, 2)], scoring: "per_object" } })).toBe(true);
+    expect(answerKeyChanged(before, { graph_key: null })).toBe(true);
+    expect(answerKeyChanged(before, { graph_key: { objects: [point(1, 2)], scoring: "all" } })).toBe(false);
+  });
+
   test("a standards-only save and a first save do not", () => {
     expect(answerKeyChanged(mc, { ...mc, standards: ["WA.MATH.1"] })).toBe(false);
     expect(answerKeyChanged(null, mc)).toBe(false);

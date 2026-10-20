@@ -26,6 +26,7 @@ export const ScoringMethodSchema = z.enum(["auto", "ai", "human", "hybrid"]);
 // D-8): a teacher-authored graph shown with the question — content, not a
 // key, so it rides both bundles. The view's bounds are what the student
 // sees first; alt text is required (it is the graph's accessible name).
+const ViewCoord = z.number().finite().min(-1e6).max(1e6);
 export const StimulusGraphRowSchema = z.object({
   latex: z.string().max(500),
   color: z
@@ -37,11 +38,13 @@ export const StimulusGraphRowSchema = z.object({
 export const StimulusGraphSchema = z
   .object({
     rows: z.array(StimulusGraphRowSchema).min(1).max(20),
+    // Capped like the answer board's coordinates: past ~2^53 a tick counter
+    // stops advancing, so an unbounded view could hang the renderer.
     view: z.object({
-      xmin: z.number().finite(),
-      xmax: z.number().finite(),
-      ymin: z.number().finite(),
-      ymax: z.number().finite(),
+      xmin: ViewCoord,
+      xmax: ViewCoord,
+      ymin: ViewCoord,
+      ymax: ViewCoord,
     }),
     degrees: z.literal(true).optional(),
     alt: z.string().trim().min(1).max(1000),

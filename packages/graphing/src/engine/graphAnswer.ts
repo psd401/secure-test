@@ -90,7 +90,11 @@ export type Invalid =
   | "off_grid"
   | "out_of_bounds"
   | "same_points"
-  | "vertical_parabola_point";
+  | "vertical_parabola_point"
+  | "flat_parabola";
+
+/** Largest |coordinate| in snap units: keeps every key product a safe integer. */
+const MAX_UNITS = 1e6;
 
 /**
  * The shape's canonical key, or why the object isn't a shape at all. Two
@@ -112,6 +116,8 @@ export function canonical(o: GraphObject, board: GraphBoard): { key: string } | 
     const kx = units(x, snap);
     const ky = units(y, snap);
     if (kx === null || ky === null) return { invalid: "off_grid" };
+    // A snap too fine for the board (saved before the schema capped it).
+    if (Math.abs(kx) > MAX_UNITS || Math.abs(ky) > MAX_UNITS) return { invalid: "off_grid" };
     pts.push([kx, ky]);
   }
   const [a, b] = pts as [[number, number], [number, number] | undefined];
@@ -145,6 +151,8 @@ export function canonical(o: GraphObject, board: GraphBoard): { key: string } | 
       return { key: `C ${a[0]},${a[1]},${dx * dx + dy * dy}` };
     case "parabola": {
       if (dx === 0) return { invalid: "vertical_parabola_point" };
+      // Level with the vertex: a = 0 draws the line y = k, whatever h is.
+      if (dy === 0) return { invalid: "flat_parabola" };
       // y − k = a (x − h)², a = dy / dx² in snap units.
       let num = dy;
       let den = dx * dx;

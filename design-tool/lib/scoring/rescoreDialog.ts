@@ -94,7 +94,14 @@ export function rescoreDoneKey(assessmentId: string): string {
  * while locked; `blanks` is compared whole, because a key-only save leaves
  * everything else in it unchanged.
  */
-const KEY_FIELDS = ["correct_choice_ids", "correct_answer", "correct_region_ids", "cell_keys", "blanks"] as const;
+const KEY_FIELDS = [
+  "correct_choice_ids",
+  "correct_answer",
+  "correct_region_ids",
+  "cell_keys",
+  "blanks",
+  "graph_key",
+] as const;
 
 export function answerKeyChanged(
   before: Record<string, unknown> | null,

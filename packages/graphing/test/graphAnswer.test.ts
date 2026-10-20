@@ -8,6 +8,7 @@ import {
   type GraphBoard,
   type GraphObject,
 } from "../src/engine/graphAnswer";
+import { snapInside } from "../src/ui/graphAnswer";
 
 const BOARD: GraphBoard = {
   x: [-10, 10],
@@ -85,6 +86,7 @@ describe("canonical: the same shape, however it was clicked", () => {
   test("not shapes", () => {
     expect(key(o("line", [1, 1], [1, 1]))).toBe("same_points");
     expect(key(o("parabola", [1, 1], [1, 5]))).toBe("vertical_parabola_point");
+    expect(key(o("parabola", [0, 2], [1, 2]))).toBe("flat_parabola");
     expect(key(o("point", [0.5, 1]))).toBe("off_grid");
     expect(key(o("point", [11, 0]))).toBe("out_of_bounds");
     expect(key(o("line", [0, 0]))).toBe("wrong_point_count");
@@ -96,6 +98,12 @@ describe("canonical: the same shape, however it was clicked", () => {
     const c2 = canonical(o("line", [2.5, 3.5], [-0.5, -1]), HALF);
     expect(c1).toEqual(c2);
     expect(canonical(o("point", [0.25, 0]), HALF)).toEqual({ invalid: "off_grid" });
+  });
+
+  test("a snap too fine for the board is refused, not keyed unsafely", () => {
+    const fine = { ...BOARD, x: [-100, 100] as [number, number], y: [-100, 100] as [number, number], snap: "0.000001" };
+    expect(canonical(o("point", [99.999994, 0]), fine)).toEqual({ invalid: "off_grid" });
+    expect("key" in canonical(o("point", [0.000003, 0.000004]), fine)).toBe(true);
   });
 
   test("thirds: 0.1 + 0.2 style noise doesn't break a third-snapped point", () => {
@@ -189,5 +197,23 @@ describe("points and lines for results", () => {
       { text: "point (2, 2)", correct: false },
     ]);
     expect(graphAnswerLines(BOARD, null, [pt])).toEqual([{ text: "point (2, 2)", correct: null }]);
+  });
+});
+
+describe("snapInside (board cursor and clicks)", () => {
+  test("bounds off the snap grid: rounding past an edge steps back inside", () => {
+    const b: GraphBoard = { ...BOARD, x: [-5, 5], y: [-5, 5], snap: "2" };
+    const two = parseSnap("2")!;
+    expect(snapInside([5, 5], b, two)).toEqual([4, 4]);
+    expect(snapInside([-5, -4.9], b, two)).toEqual([-4, -4]);
+    expect(snapInside([3.2, 0], b, two)).toEqual([4, 0]);
+    // Every result places as a shape on the board.
+    for (const p of [snapInside([5, -5], b, two), snapInside([-5, 5], b, two)]) {
+      expect("key" in canonical(o("point", p), b)).toBe(true);
+    }
+  });
+  test("bounds on the grid are unchanged", () => {
+    expect(snapInside([10, -10], BOARD, [1, 1])).toEqual([10, -10]);
+    expect(snapInside([0.4, 0.6], BOARD, [1, 1])).toEqual([0, 1]);
   });
 });

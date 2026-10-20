@@ -35,6 +35,15 @@ function color(c: string | undefined, i: number): string {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
+/**
+ * The number that names a row on the graph and in its legend (D-11, 1.4.1:
+ * curves are told apart by more than colour). Counts every row, hidden or
+ * not, so a row keeps its number when others are hidden.
+ */
+export function graphRowLabel(index: number): string {
+  return String(index + 1);
+}
+
 export function renderGraphSvg(g: SvgGraph, opts: SvgOptions = {}): string {
   const W = opts.width ?? 480;
   const H = opts.height ?? 360;
@@ -98,13 +107,29 @@ export function renderGraphSvg(g: SvgGraph, opts: SvgOptions = {}): string {
     { degrees: g.degrees === true, disabled: new Set() },
   );
   const body: string[] = [];
+  const tags: string[] = [];
   analyses.forEach((a, i) => {
     const row = g.rows[i]!;
     if (row.hidden) return;
     const c = color(row.color, i);
-    body.push(...drawAnalysis(a, c, { W, H, xmin, xmax, ymin, ymax, X, Y, sx, sy, clampPx }));
+    const seen: number[] = [];
+    body.push(...drawAnalysis(a, c, { W, H, xmin, xmax, ymin, ymax, X, Y, sx, sy, clampPx }, seen));
+    // Its number at a point of it that's on screen — staggered along each
+    // curve by row, so labels don't pile up where curves cross.
+    const n = seen.length / 2;
+    if (n === 0) return;
+    const k = Math.min(n - 1, Math.floor((n * (i + 1)) / (g.rows.length + 1)));
+    const tx = Math.min(Math.max(seen[2 * k]! + 6, 4), W - 14);
+    const ty = Math.min(Math.max(seen[2 * k + 1]! - 6, 14), H - 4);
+    tags.push(`<text x="${r1(tx)}" y="${r1(ty)}" fill="${c}">${graphRowLabel(i)}</text>`);
   });
-  out.push(`<g clip-path="url(#${clip})" fill="none" stroke-linecap="round" stroke-linejoin="round">${body.join("")}</g>`, `</svg>`);
+  out.push(`<g clip-path="url(#${clip})" fill="none" stroke-linecap="round" stroke-linejoin="round">${body.join("")}</g>`);
+  if (tags.length) {
+    out.push(
+      `<g font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke">${tags.join("")}</g>`,
+    );
+  }
+  out.push(`</svg>`);
   return out.join("");
 }
 
@@ -144,8 +169,15 @@ function d(points: number[]): string {
   return s;
 }
 
-function drawAnalysis(a: Analysis, c: string, f: Frame): string[] {
+/** Draws one row; pushes its on-screen pixel points (x, y pairs) into `seen`. */
+function drawAnalysis(a: Analysis, c: string, f: Frame, seen: number[]): string[] {
   const out: string[] = [];
+  const onScreen = (pts: number[]) => {
+    for (let k = 0; k < pts.length; k += 2) {
+      const [x, y] = [pts[k]!, pts[k + 1]!];
+      if (x >= 0 && x <= f.W && y >= 0 && y <= f.H) seen.push(x, y);
+    }
+  };
   const curve = a.kind === "curve" ? a : a.kind === "function" ? a.plot : null;
   if (curve) {
     const pieces = curvePaths(curve, f).filter((p) => p.length >= 4);
@@ -163,11 +195,13 @@ function drawAnalysis(a: Analysis, c: string, f: Frame): string[] {
     }
     for (const p of pieces) {
       out.push(`<path d="${d(p)}" stroke="${c}" stroke-width="2.5"${strict ? ' stroke-dasharray="8 6"' : ""}/>`);
+      onScreen(p);
     }
   } else if (a.kind === "points") {
     for (const [x, y] of a.points) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       out.push(`<circle cx="${r1(f.X(x))}" cy="${r1(f.Y(y))}" r="4.5" fill="${c}" stroke="none"/>`);
+      onScreen([f.X(x), f.Y(y)]);
     }
   } else if (a.kind === "implicit" || a.kind === "region") {
     const view = { xmin: f.xmin, xmax: f.xmax, ymin: f.ymin, ymax: f.ymax, widthPx: f.W, heightPx: f.H, leafPx: 2, budget: 60_000 };
@@ -189,6 +223,7 @@ function drawAnalysis(a: Analysis, c: string, f: Frame): string[] {
       const pts: number[] = [];
       for (let k = 0; k < line.length; k += 2) pts.push(f.X(line[k]!), f.Y(line[k + 1]!));
       out.push(`<path d="${d(pts)}" stroke="${c}" stroke-width="2.5"${strict ? ' stroke-dasharray="8 6"' : ""}/>`);
+      onScreen(pts);
     }
   }
   return out;
@@ -252,10 +287,12 @@ export function renderBoardSvg(board: GraphBoard, opts: BoardSvgOptions = {}): s
     `<g font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" fill="#3a404b" stroke="#ffffff" stroke-width="3" paint-order="stroke">${labels.join("")}</g>`,
   );
   const shapes: string[] = [];
-  const draw = (o: GraphObject, color: string, dashed: boolean) => shapes.push(objectSvg(o, color, dashed, board, X, Y, W));
-  for (const o of board.fixed ?? []) draw(o, "#6b7280", false);
-  for (const o of opts.key ?? []) draw(o, "#2c7a37", true);
-  for (const o of opts.answer ?? []) draw(o, "#1f5fa8", false);
+  const draw = (o: GraphObject, color: string, dash: string) => shapes.push(objectSvg(o, color, dash, board, X, Y, W));
+  // Fixed objects dotted, the key dashed, the answer solid — told apart by
+  // more than colour (D-11, 1.4.1), as on the live board.
+  for (const o of board.fixed ?? []) draw(o, "#6b7280", "2 4");
+  for (const o of opts.key ?? []) draw(o, "#2c7a37", "7 5");
+  for (const o of opts.answer ?? []) draw(o, "#1f5fa8", "");
   out.push(`<g clip-path="url(#${clip})" fill="none" stroke-width="2.5" stroke-linecap="round">${shapes.join("")}</g>`, "</svg>");
   return out.join("");
 }
@@ -263,13 +300,13 @@ export function renderBoardSvg(board: GraphBoard, opts: BoardSvgOptions = {}): s
 function objectSvg(
   o: GraphObject,
   color: string,
-  dashed: boolean,
+  dashArray: string,
   board: GraphBoard,
   X: (x: number) => number,
   Y: (y: number) => number,
   W: number,
 ): string {
-  const dash = dashed ? ' stroke-dasharray="7 5"' : "";
+  const dash = dashArray ? ` stroke-dasharray="${dashArray}"` : "";
   const dot = (p: [number, number]) => `<circle cx="${r1(X(p[0]))}" cy="${r1(Y(p[1]))}" r="4.5" fill="${color}" stroke="none"/>`;
   const [a, b] = o.points as [[number, number], [number, number] | undefined];
   if (!a || !Number.isFinite(a[0]) || !Number.isFinite(a[1])) return "";

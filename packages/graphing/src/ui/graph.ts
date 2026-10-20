@@ -957,8 +957,12 @@ export class GraphView {
         return true;
       }
       const other = this.drawn[(k + (e.key === "ArrowDown" ? 1 : n - 1)) % n]!;
+      // The new curve's own axis may differ (y = f(x) vs x = g(y)): take its
+      // parameter from the trace point, not the old curve's parameter.
+      const [oa, ob] = this.along(other);
+      const t = this.trace ? (other.curve.of === "y" ? this.trace.x : this.trace.y) : (oa + ob) / 2;
       this.select(other.id);
-      this.traceAt(other, cur, "Tracing", true);
+      this.traceAt(other, t, "Tracing", true);
       return true;
     }
     return false;

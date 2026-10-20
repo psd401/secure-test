@@ -11,7 +11,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { assertNever } from "@/lib/assertNever";
-import { ALLOWED_SCORING_METHODS, compactBlanks } from "@/lib/api/items";
+import { ALLOWED_SCORING_METHODS, compactBlanks, graphIssues } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
@@ -259,6 +259,22 @@ export async function importBundleForOwner(
       console.error(
         `importBundle: skipping item with unknown type "${it.type}"`,
       );
+    }
+  }
+
+  // F19: a graph item gets the same board/key checks as create and PATCH —
+  // stored as given, a bad snap or off-board key object would refuse every
+  // student save or make full credit impossible. Refuse the bundle, naming
+  // the item, in the page's `schema_invalid:<path>:<message>` form.
+  for (const [n, it] of bundle.items.entries()) {
+    if (it.type !== "graph") continue;
+    const issues = graphIssues(it.board, it.key);
+    if (issues.length > 0) {
+      const first = issues[0]!;
+      return {
+        error: `schema_invalid:items.${n}.${first.path.join(".")}:question ${n + 1} (graph): ${first.message}`,
+        detail: { item_id: it.id, issues },
+      };
     }
   }
 

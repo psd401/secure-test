@@ -82,6 +82,25 @@ describe("renderGraphSvg", () => {
     expect(s).toContain('stroke="#2c7a37"');
   });
 
+  test("each drawn row carries its number, inside the frame, by its original index", () => {
+    const s = svg([
+      { latex: "y=x", hidden: true },
+      { latex: "y=x^{2}-4" },
+      { latex: "\\left(9.9,7.4\\right)" },
+      { latex: "y=100" },
+    ]);
+    const tags = [...s.matchAll(/<text x="([\d.-]+)" y="([\d.-]+)" fill="#[0-9a-fA-F]{6}">(\d+)<\/text>/g)];
+    // Hidden row 1 and off-screen row 4 get none; the others keep numbers 2 and 3.
+    expect(tags.map((t) => t[3])).toEqual(["2", "3"]);
+    for (const t of tags) {
+      expect(Number(t[1])).toBeGreaterThanOrEqual(0);
+      expect(Number(t[1])).toBeLessThanOrEqual(480 - 8);
+      expect(Number(t[2])).toBeGreaterThanOrEqual(12);
+      expect(Number(t[2])).toBeLessThanOrEqual(360);
+    }
+    expect(s).toContain('font-weight="700" stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke"');
+  });
+
   test("axis labels are there", () => {
     const s = svg([]);
     expect(s).toContain(">5</text>");

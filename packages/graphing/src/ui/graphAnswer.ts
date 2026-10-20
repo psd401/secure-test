@@ -137,11 +137,15 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
   area.tabIndex = 0;
   area.setAttribute("role", "application");
   area.setAttribute("aria-roledescription", "graph");
+  // Fixed objects are part of the question: say them, not only draw them.
+  const given = (board.fixed ?? []).map((o) => describeObject(o, board));
   area.setAttribute(
     "aria-label",
     `${opts.label ?? "Graph"}. ${
       readOnly ? "" : "Arrow keys move the cursor one grid step; Enter places a point; Escape cancels. "
-    }x from ${fmt(board.x[0])} to ${fmt(board.x[1])}, y from ${fmt(board.y[0])} to ${fmt(board.y[1])}.`,
+    }x from ${fmt(board.x[0])} to ${fmt(board.x[1])}, y from ${fmt(board.y[0])} to ${fmt(board.y[1])}.${
+      given.length ? ` Given: ${given.join("; ")}.` : ""
+    }`,
   );
   const canvas = document.createElement("canvas");
   canvas.setAttribute("aria-hidden", "true");
@@ -212,7 +216,24 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
   if (!readOnly) root.append(form);
   syncForm();
 
-  // --- list ---
+  // --- lists ---
+  if (given.length) {
+    const box = document.createElement("div");
+    box.className = "gc-answer-given";
+    const title = document.createElement("p");
+    title.className = "gc-answer-hint";
+    title.textContent = "Given on the graph (dotted):";
+    const ul = document.createElement("ul");
+    ul.className = "gc-answer-list";
+    ul.setAttribute("aria-label", "Given on the graph");
+    for (const text of given) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      ul.append(li);
+    }
+    box.append(title, ul);
+    root.append(box);
+  }
   const list = document.createElement("ol");
   list.className = "gc-answer-list";
   list.setAttribute("aria-label", readOnly ? "Objects" : "Your objects");
@@ -226,6 +247,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     }
     if (pts.length === 2 && pts[0]![0] === pts[1]![0] && pts[0]![1] === pts[1]![1]) return "The two points must be different.";
     if (t === "parabola" && pts.length === 2 && pts[0]![0] === pts[1]![0]) return "The second point can't be straight above or below the vertex.";
+    if (t === "parabola" && pts.length === 2 && pts[0]![1] === pts[1]![1]) return "The second point can't be level with the vertex.";
     if (objects.length >= board.max_objects) return `This question takes at most ${board.max_objects}.`;
     return null;
   }
@@ -243,6 +265,11 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       return;
     }
     if (tool === "point") {
+      const problem = placeable(tool, [p]);
+      if (problem) {
+        say(problem);
+        return;
+      }
       objects = [...objects, { tool, points: [p] }];
       changed(`Point (${fmt(p[0])}, ${fmt(p[1])}) added.`);
       return;
@@ -286,11 +313,11 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawObject(c: CanvasRenderingContext2D, o: GraphObject, color: string, dashed: boolean): void {
+  function drawObject(c: CanvasRenderingContext2D, o: GraphObject, color: string, dash: number[]): void {
     c.strokeStyle = color;
     c.fillStyle = color;
     c.lineWidth = 2.5;
-    c.setLineDash(dashed ? [7, 5] : []);
+    c.setLineDash(dash);
     const [a, b] = o.points as [[number, number], [number, number] | undefined];
     const dot = (p: [number, number]) => {
       c.beginPath();
@@ -385,9 +412,10 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       if (Math.abs(y) < 1e-9 || Y(y) < 8 || Y(y) > H - 8) continue;
       c.fillText(tickLabel(y, labelStepY), lx, Y(y));
     }
-    for (const o of board.fixed ?? []) drawObject(c, o, FIXED_COLOR, false);
-    if (opts.key) for (const o of opts.key.objects) drawObject(c, o, KEY_COLOR, true);
-    for (const o of objects) drawObject(c, o, ANSWER_COLOR, false);
+    // Fixed dotted, key dashed, answer solid: more than colour tells them apart.
+    for (const o of board.fixed ?? []) drawObject(c, o, FIXED_COLOR, [2, 4]);
+    if (opts.key) for (const o of opts.key.objects) drawObject(c, o, KEY_COLOR, [7, 5]);
+    for (const o of objects) drawObject(c, o, ANSWER_COLOR, []);
     // In progress: the first point, and the cursor / hover target.
     if (pending) {
       c.strokeStyle = ANSWER_COLOR;
@@ -439,6 +467,10 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
           const gone = describeObject(o, board);
           objects = objects.filter((_, k) => k !== i);
           changed(`${gone} removed.`);
+          // The list was rebuilt: keep focus on the Remove button now in this
+          // place, else the one before it, else the board.
+          const buttons = list.querySelectorAll<HTMLButtonElement>("button.gc-chip");
+          (buttons[Math.min(i, buttons.length - 1)] ?? area).focus();
         });
         li.append(" ", rm);
       }
@@ -465,7 +497,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
   };
   canvas.addEventListener("pointermove", (e) => {
     if (readOnly) return;
-    hover = snapPoint(...local(e), snap);
+    hover = snapInside(local(e), board, snap);
     draw();
   });
   canvas.addEventListener("pointerleave", () => {
@@ -476,7 +508,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     if (readOnly) return;
     e.preventDefault();
     area.focus({ preventScroll: true });
-    const p = snapPoint(...local(e), snap);
+    const p = snapInside(local(e), board, snap);
     cursor = p;
     place(p);
   });
@@ -495,7 +527,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       e.preventDefault();
       const nx = Math.min(board.x[1], Math.max(board.x[0], cursor[0] + mv[0]));
       const ny = Math.min(board.y[1], Math.max(board.y[0], cursor[1] + mv[1]));
-      cursor = snapPoint(nx, ny, snap);
+      cursor = snapInside([nx, ny], board, snap);
       draw();
       say(`(${fmt(cursor[0])}, ${fmt(cursor[1])})`);
     } else if (e.key === "Enter" || e.key === " ") {
@@ -519,6 +551,18 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       root.remove();
     },
   };
+}
+
+/**
+ * The nearest grid point that is still on the board. Bounds needn't be
+ * multiples of the snap (x to 5 with snap 2): rounding can overshoot the
+ * edge, so step back one snap step inside.
+ */
+export function snapInside(p: [number, number], board: GraphBoard, snap: [number, number]): [number, number] {
+  const s = snap[0] / snap[1];
+  const [x, y] = snapPoint(p[0], p[1], snap);
+  const inside = (v: number, [lo, hi]: [number, number]) => (v > hi + 1e-9 ? v - s : v < lo - 1e-9 ? v + s : v);
+  return [inside(x, board.x), inside(y, board.y)];
 }
 
 /** "3", "-2.5", "1/2", "−3/4" → number; anything else → null. */

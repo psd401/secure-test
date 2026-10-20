@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { GraphBoard, GraphKey, GraphObject, GraphTool } from "@secure-test/schema";
-import { describeObject, GRAPH_TOOLS, parseSnap } from "@secure-test/graphing/server";
+import { canonical, describeObject, GRAPH_TOOLS, parseSnap } from "@secure-test/graphing/server";
 
 export const DEFAULT_GRAPH_BOARD: GraphBoard = {
   x: [-10, 10],
@@ -55,7 +55,13 @@ export function GraphItemEditor({
     snap: board.snap,
   });
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [maxDraft, setMaxDraft] = useState(String(board.max_objects));
+  useEffect(() => setMaxDraft(String(board.max_objects)), [board.max_objects]);
   const boardKey = JSON.stringify(board);
+  // The board's onChange is made at mount; it reads the current scoring and
+  // parent callback through this ref so a later Scoring change isn't undone.
+  const latest = useRef({ graphKey, onChange });
+  latest.current = { graphKey, onChange };
 
   // (Re)mount the key board when the board changes; the key drawn so far stays.
   useEffect(() => {
@@ -70,7 +76,9 @@ export function GraphItemEditor({
         readOnly: disabled,
         label: "Answer key",
         onChange: (objects) =>
-          onChange({ graph_key: objects.length ? { objects, scoring: graphKey?.scoring ?? "all" } : null }),
+          latest.current.onChange({
+            graph_key: objects.length ? { objects, scoring: latest.current.graphKey?.scoring ?? "all" } : null,
+          }),
       });
     })().catch((e) => setLoadError(`The grid couldn't load: ${e instanceof Error ? e.message : String(e)}`));
     return () => {
@@ -84,7 +92,9 @@ export function GraphItemEditor({
 
   function applyFields(next: typeof fields) {
     setFields(next);
-    const nums = [next.x0, next.x1, next.y0, next.y1, next.grid].map(Number);
+    const raw = [next.x0, next.x1, next.y0, next.y1, next.grid];
+    if (raw.some((s) => s.trim() === "")) return setFieldError("Fill in every grid number.");
+    const nums = raw.map(Number);
     if (nums.some((n) => !Number.isFinite(n))) return setFieldError("Use numbers for the grid.");
     const [x0, x1, y0, y1, grid] = nums as [number, number, number, number, number];
     if (!(x0 < x1 && y0 < y1)) return setFieldError("Each “from” must be below its “to”.");
@@ -92,7 +102,7 @@ export function GraphItemEditor({
     if ((x1 - x0) / grid > 100 || (y1 - y0) / grid > 100) return setFieldError("At most 100 grid lines across.");
     if (!parseSnap(next.snap)) return setFieldError("Snap to a positive number or a fraction like 1/2.");
     setFieldError(null);
-    onChange({ board: { ...board, x: [x0, x1], y: [y0, y1], grid, snap: next.snap.trim() } });
+    onChange({ board: { ...board, x: [x0, x1], y: [y0, y1], grid, snap: next.snap.replace(/\s+/g, "") } });
   }
 
   function toggleTool(t: GraphTool, on: boolean) {
@@ -100,6 +110,12 @@ export function GraphItemEditor({
     if (tools.length === 0) return;
     onChange({ board: { ...board, tools } });
   }
+
+  // Key objects that no longer fit after a grid, snap or tool change; the
+  // server would refuse the save, so name them for the teacher to fix.
+  const badKey = (graphKey?.objects ?? [])
+    .map((o, i) => ("invalid" in canonical(o, board) || !board.tools.includes(o.tool) ? i + 1 : 0))
+    .filter((n) => n > 0);
 
   const num = (label: string, key: keyof typeof fields, width = "w-20") => (
     <label className="text-sm">
@@ -149,11 +165,17 @@ export function GraphItemEditor({
             type="number"
             min={1}
             max={10}
-            value={board.max_objects}
+            value={maxDraft}
             onChange={(e) => {
-              const n = Math.max(1, Math.min(10, Math.round(Number(e.target.value) || 1)));
-              onChange({ board: { ...board, max_objects: n } });
+              // Commit only a whole number 1–10, so the field can be cleared and retyped.
+              const raw = e.target.value;
+              setMaxDraft(raw);
+              const n = Number(raw);
+              if (raw.trim() !== "" && Number.isInteger(n) && n >= 1 && n <= 10) {
+                onChange({ board: { ...board, max_objects: n } });
+              }
             }}
+            onBlur={() => setMaxDraft(String(board.max_objects))}
             disabled={disabled}
             className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
           />
@@ -188,6 +210,13 @@ export function GraphItemEditor({
                 <option value="per_object">A point for each object in the key</option>
               </select>
             </label>
+            {badKey.length ? (
+              <p className="text-sm text-destructive" role="alert">
+                Key {badKey.length === 1 ? "object" : "objects"} {badKey.join(", ")} no longer{" "}
+                {badKey.length === 1 ? "fits" : "fit"} this grid or its tools — redraw or remove{" "}
+                {badKey.length === 1 ? "it" : "them"}.
+              </p>
+            ) : null}
             {graphKey.objects.length > board.max_objects ? (
               <p className="text-sm text-destructive" role="alert">
                 The key has more objects than students may place.

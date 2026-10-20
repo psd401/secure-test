@@ -506,31 +506,39 @@ export { isKeyedBlank };
 
 // Graphing calculator D-9: every key object (and every fixed object) must be
 // a shape on this board — on the grid, inside it, with a tool it offers —
-// and the key may not hold more objects than students may place.
-const validateGraph = (body: { type: ItemType } & Record<string, unknown>, ctx: z.RefinementCtx) => {
-  if (body.type !== "graph") return;
-  const board = body.board as GraphBoard;
+// and the key may not hold more objects than students may place. Shared with
+// the bundle importer, which stores a graph item's board and key as given.
+export type GraphIssue = { path: (string | number)[]; message: string };
+
+export function graphIssues(board: GraphBoard, key: GraphKey | null | undefined): GraphIssue[] {
   if (!parseSnap(board.snap)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["board", "snap"], message: "the snap must be a positive number or fraction" });
-    return;
+    return [{ path: ["board", "snap"], message: "the snap must be a positive number or fraction" }];
   }
+  const issues: GraphIssue[] = [];
   const check = (objects: GraphObject[], path: string, toolsOnly: boolean) => {
     objects.forEach((o, i) => {
       const c = canonical(o, board);
       if ("invalid" in c) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path, i], message: `not a shape on this board (${c.invalid})` });
+        issues.push({ path: [path, i], message: `not a shape on this board (${c.invalid})` });
       } else if (toolsOnly && !board.tools.includes(o.tool)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path, i], message: `the board doesn't offer the ${o.tool} tool` });
+        issues.push({ path: [path, i], message: `the board doesn't offer the ${o.tool} tool` });
       }
     });
   };
   check(board.fixed ?? [], "board.fixed", false);
-  const key = body.key as GraphKey | null | undefined;
   if (key) {
     check(key.objects, "key.objects", true);
     if (key.objects.length > board.max_objects) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["key", "objects"], message: "the key has more objects than students may place" });
+      issues.push({ path: ["key", "objects"], message: "the key has more objects than students may place" });
     }
+  }
+  return issues;
+}
+
+const validateGraph = (body: { type: ItemType } & Record<string, unknown>, ctx: z.RefinementCtx) => {
+  if (body.type !== "graph") return;
+  for (const { path, message } of graphIssues(body.board as GraphBoard, body.key as GraphKey | null | undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
   }
 };
 

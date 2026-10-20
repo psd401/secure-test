@@ -76,6 +76,10 @@ describe("viewport", () => {
     expect(tickLabel(-10, 5)).toBe("−10");
     expect(tickLabel(2e6, 5e5)).toBe("2×10^6");
     expect(ticks(0, 1e9, 1e-3)).toEqual([]);
+    // Far past 2^53 a k++ counter never advances; this must return, not hang.
+    expect(ticks(1e17, 1e17 + 32, 2)).toEqual([]);
+    expect(ticks(-Infinity, 1, 1)).toEqual([]);
+    expect(ticks(0, 1, 0)).toEqual([]);
   });
 });
 

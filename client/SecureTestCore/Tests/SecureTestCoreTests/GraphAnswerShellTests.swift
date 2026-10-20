@@ -41,6 +41,29 @@ final class GraphAnswerShellTests: XCTestCase {
         XCTAssertNil(BridgeItemTable(bundle: try bundle()).check(message))
     }
 
+    // The board itself can't run in JavaScriptCore (RendererCalculatorTests),
+    // so the page glue's handling of an emptied board is pinned on its source:
+    // it withdraws the saved answer instead of posting `objects: []`, which the
+    // server would store and count as answered.
+    func testAnEmptiedBoardWithdrawsInsteadOfPostingAnEmptyList() {
+        let glue = AssessmentPage.calculatorFunctions
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        XCTAssertTrue(glue.contains("if (!objects.length) { withdraw(p.item.id); return; }"))
+        XCTAssertTrue(glue.contains("post(p.item.id, { type: 'graph', objects: objects });"))
+        XCTAssertFalse(glue.contains("objects.length > 0)"), "no post that can carry an empty list")
+    }
+
+    // D-5: the contrast tokens and the zoom-following font size reach the
+    // boards drawn inside a question (`.graph-stimulus` holders and
+    // `.graph-answer` fields), not only the calculator panel.
+    func testTheTokenRuleCoversStimulusGraphsAndAnswerBoards() {
+        XCTAssertTrue(AssessmentPage.calculatorFunctions.contains(
+            "'.calc-body .gc-root, .graph-stimulus .gc-root, .graph-answer .gc-root { --gc-paper: var(--paper);"
+        ))
+        XCTAssertTrue(AssessmentPage.calculatorFunctions.contains("wrap.className = 'graph-answer';"))
+        XCTAssertTrue(AssessmentPage.calculatorFunctions.contains("holder.className = 'graph-stimulus';"))
+    }
+
     func testAGraphAnswerForAnotherTypeIsRefused() throws {
         let b = try DeliveryBundle.decode(from: Data(#"{"test_id":"t","title":"T","items":[{"type":"short_text","id":"s","stem":"?"}]}"#.utf8))
         let message = ItemResponseMessage(itemID: "s", response: .generic(type: "graph", fields: ["objects": .array([])]))

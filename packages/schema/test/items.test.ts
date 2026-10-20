@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { GraphBoardSchema } from "../src/graph.js";
 import { ItemBundleSchema, ItemSchema, RubricSchema, StimulusGraphSchema, fillBlankMarkerIds } from "../src/items.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -960,5 +961,29 @@ describe("StimulusGraphSchema", () => {
     expect(StimulusGraphSchema.safeParse({ ...ok, rows: Array.from({ length: 21 }, () => ({ latex: "y=x" })) }).success).toBe(false);
     expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "y=x", color: "red" }] }).success).toBe(false);
     expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "x".repeat(501) }] }).success).toBe(false);
+  });
+  test("the view is capped at ±1e6 (a far-off view would hang the tick loop)", () => {
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, xmin: 1e17, xmax: 1e17 + 32 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, ymin: -1e6 - 1 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { xmin: -1e6, xmax: 1e6, ymin: -1, ymax: 1 } }).success).toBe(true);
+  });
+});
+
+// Graph answer boards (graphing calculator D-9).
+describe("GraphBoardSchema", () => {
+  const board = { x: [-10, 10], y: [-10, 10], grid: 1, snap: "1", tools: ["point"], max_objects: 2 };
+  test("a zero snap is refused", () => {
+    for (const snap of ["0", "0.0", "1/0", "0/3"]) {
+      expect(GraphBoardSchema.safeParse({ ...board, snap }).success).toBe(false);
+    }
+    for (const snap of ["1", "0.5", "1/3", "2"]) {
+      expect(GraphBoardSchema.safeParse({ ...board, snap }).success).toBe(true);
+    }
+  });
+  test("a snap too fine for the board is refused", () => {
+    expect(GraphBoardSchema.safeParse({ ...board, x: [-100, 100], y: [-100, 100], grid: 2, snap: "0.000001" }).success).toBe(false);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "1/1000000000" }).success).toBe(false);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "0.00001" }).success).toBe(true);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "0.000001" }).success).toBe(false);
   });
 });

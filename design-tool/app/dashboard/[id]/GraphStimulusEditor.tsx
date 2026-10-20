@@ -91,7 +91,9 @@ export function GraphStimulusEditor({
     const saved = handle.current?.save();
     if (!saved) return;
     const g = toStimulus(saved, "x");
-    setAlt(g ? describeGraph(g) : "");
+    const text = g ? describeGraph(g) : "";
+    setAlt(text);
+    if (text) setError(null);
   }
 
   function save() {
@@ -131,7 +133,18 @@ export function GraphStimulusEditor({
           </figure>
         ) : null}
         <div className="mt-2 flex gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => setOpen(true)}>
+          {/* Reload the description from the saved graph: after Remove or Cancel, the old text must not carry over. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            onClick={() => {
+              setAlt(value?.alt ?? "");
+              setError(null);
+              setOpen(true);
+            }}
+          >
             {value ? "Edit graph" : "Add a graph"}
           </Button>
           {value ? (

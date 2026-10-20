@@ -95,8 +95,9 @@ export function ticks(min: number, max: number, step: number): number[] {
   const out: number[] = [];
   const first = Math.ceil(min / step);
   const last = Math.floor(max / step);
-  if (last - first > 2000) return out;
-  for (let k = first; k <= last; k++) out.push(k * step);
+  // Past 2^53, k + 1 === k: count with a small integer so the loop always ends.
+  if (!Number.isFinite(first) || !Number.isFinite(last) || first + 1 === first || last - first > 2000) return out;
+  for (let i = 0; i <= last - first; i++) out.push((first + i) * step);
   return out;
 }
 

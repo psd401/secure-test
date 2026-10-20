@@ -13,9 +13,16 @@ describe("renderStimulusGraph", () => {
     const html = renderStimulusGraph(g);
     expect(html.startsWith('<figure class="graph-stimulus"><svg ')).toBe(true);
     expect(html).toContain('aria-label="A parabola &lt;with&gt; &quot;quotes&quot;"');
-    expect(html).toContain("<li>y = x² − 4</li>");
+    expect(html).toContain('<li><strong class="graph-legend-n">1</strong> y = x² − 4</li>');
     expect(html).not.toContain("2x − 1");
     expect(html).toContain('<p class="graph-alt">A parabola &lt;with&gt; &quot;quotes&quot;</p>');
     expect(html).not.toContain("<script");
+  });
+
+  test("legend numbers match the numbers on the curves, by original row (D-11)", () => {
+    const html = renderStimulusGraph({ ...g, rows: [{ latex: "y=x", hidden: true as const }, { latex: "y=2x+1" }] });
+    expect(html).toContain('<li><strong class="graph-legend-n">2</strong> y = 2x + 1</li>');
+    expect(html).not.toContain('graph-legend-n">1<');
+    expect(html).toMatch(/<text x="[\d.]+" y="[\d.]+" fill="#[0-9a-fA-F]{6}">2<\/text>/);
   });
 });

@@ -1167,3 +1167,41 @@ describe("import: student_layout (client paging)", () => {
     expect(exp2).not.toHaveProperty("student_layout");
   });
 });
+
+// F19: a graph item gets the create/PATCH board and key checks on import too —
+// stored as given, a bad key would make full credit impossible.
+describe("import: graph items (D-9)", () => {
+  const board = { x: [-10, 10], y: [-10, 10], grid: 1, snap: "1", tools: ["point", "line"], max_objects: 2 };
+  const graph = (id: string, key: unknown) => ({ type: "graph", id, stem: "Graph it.", board, key });
+  const essay = { type: "essay", id: "e1", stem: "Write" };
+  const count = async () => Number((await getDb().execute(sql`select count(*)::int as n from assessments`))[0]!.n);
+
+  test("a graph item whose key fits its board imports", async () => {
+    asUser("teacher-1");
+    const res = await postImport({
+      test_id: "x",
+      title: "Graphs",
+      items: [graph("g1", { objects: [{ tool: "line", points: [[0, 1], [1, 3]] }], scoring: "all" })],
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test("a key object off the grid, or with a tool the board lacks, refuses the import and names the item", async () => {
+    asUser("teacher-1");
+    for (const obj of [
+      { tool: "point", points: [[0.5, 0]] },
+      { tool: "circle", points: [[0, 0], [1, 1]] },
+    ]) {
+      const res = await postImport({
+        test_id: "x",
+        title: "Graphs",
+        items: [essay, graph("g-bad", { objects: [obj], scoring: "all" })],
+      });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string; detail: { item_id: string } };
+      expect(body.error).toStartWith("schema_invalid:items.1.key.objects.0:question 2 (graph)");
+      expect(body.detail.item_id).toBe("g-bad");
+    }
+    expect(await count()).toBe(0);
+  });
+});

@@ -61,7 +61,8 @@ extension AssessmentPage {
 
       // Tokens and rem only, so the eight contrast sets and the nine zoom
       // levels reach the panel; the calculator's own `--gc-*` colours are
-      // mapped onto the page's tokens (D-5).
+      // mapped onto the page's tokens (D-5) — in the panel and in the
+      // in-question stimulus graphs and graph-answer boards alike.
       var CALC_STYLES =
         '.calc-toggle { position: fixed; top: 0.75rem; right: 1rem; z-index: 3; font: inherit; font-size: 0.9375rem;' +
         ' padding: 0.5rem 1rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink); }' +
@@ -79,7 +80,7 @@ extension AssessmentPage {
         ' background: transparent; color: var(--ink); border-radius: 6px; }' +
         '.calc-body { flex: 1; min-height: 0; position: relative; }' +
         '.calc-body, .calc-body * { -webkit-user-select: text; user-select: text; }' +
-        '.calc-body .gc-root { --gc-paper: var(--paper); --gc-ink: var(--ink); --gc-muted: var(--ink-soft);' +
+        '.calc-body .gc-root, .graph-stimulus .gc-root, .graph-answer .gc-root { --gc-paper: var(--paper); --gc-ink: var(--ink); --gc-muted: var(--ink-soft);' +
         ' --gc-line: var(--line); --gc-panel: var(--panel); --gc-accent: var(--accent); --gc-error: var(--danger);' +
         ' --gc-label: var(--ink); --gc-axis: var(--ink); --gc-key: var(--paper); --gc-key-op: var(--panel);' +
         ' --gc-keypad-bg: var(--panel-line); --gc-key-action: var(--ink); --gc-key-action-ink: var(--paper);' +
@@ -230,7 +231,8 @@ extension AssessmentPage {
       // graphing bundle after the page is built; a saved answer (resume)
       // comes back on it. Each change posts the objects through the
       // generic answer channel ({type: 'graph', objects}); clearing the
-      // last object marks the question unanswered again.
+      // last object withdraws the saved answer and marks the question
+      // unanswered again.
       var pendingAnswers = [];
 
       function graphField(item) {
@@ -262,8 +264,13 @@ extension AssessmentPage {
               initial: p.initial,
               label: 'Your answer',
               onChange: function (objects) {
-                post(p.item.id, { type: 'graph', objects: objects }, objects.length > 0);
-                if (!objects.length) markUnanswered(p.item.id);
+                // An empty board withdraws the saved answer (DELETE) rather
+                // than storing an empty one the server would count as answered.
+                if (!objects.length) {
+                  withdraw(p.item.id);
+                  return;
+                }
+                post(p.item.id, { type: 'graph', objects: objects });
               }
             });
             p.wrap.removeChild(p.waiting);

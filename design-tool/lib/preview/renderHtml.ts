@@ -36,7 +36,7 @@ import { assetSrc, renderItemContent, type ResolvedAsset } from "@/lib/items/ren
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
-import { latexToText, renderBoardSvg, renderGraphSvg } from "@secure-test/graphing/server";
+import { graphRowLabel, latexToText, renderBoardSvg, renderGraphSvg } from "@secure-test/graphing/server";
 
 interface Choice {
   id: string;
@@ -363,9 +363,14 @@ export function renderStimulusGraph(g: StimulusGraph): string {
   } catch {
     svg = `<p class="graph-missing">${escapeHtml("(This graph could not be drawn.)")}</p>`;
   }
+  // Each entry carries the number drawn on its curve (D-11: not colour
+  // alone); numbered by the row's original position, hidden rows included.
   const legend = g.rows
-    .filter((r) => !r.hidden && r.latex.trim() !== "")
-    .map((r) => `<li>${escapeHtml(latexToText(r.latex))}</li>`)
+    .map((r, i) =>
+      r.hidden || r.latex.trim() === ""
+        ? ""
+        : `<li><strong class="graph-legend-n">${escapeHtml(graphRowLabel(i))}</strong> ${escapeHtml(latexToText(r.latex))}</li>`,
+    )
     .join("");
   return (
     `<figure class="graph-stimulus">${svg}` +

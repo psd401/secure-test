@@ -26,6 +26,23 @@ export type GraphObject = z.infer<typeof GraphObjectSchema>;
 // Snap as a rational: "1", "1/2", "0.25" (at most 6 decimals).
 const SNAP_RE = /^(\d+(\.\d{1,6})?|\d+\/\d+)$/;
 
+// The snap as p/q (not reduced), or null when zero — the same reading as
+// packages/graphing's parseSnap, which schema can't import.
+function snapRatio(s: string): [number, number] | null {
+  const m = /^(\d+)\/(\d+)$/.exec(s);
+  let p: number;
+  let q: number;
+  if (m) {
+    p = Number(m[1]);
+    q = Number(m[2]);
+  } else {
+    const [whole, decimals = ""] = s.split(".");
+    q = Math.pow(10, decimals.length);
+    p = Number(whole) * q + Number(decimals || "0");
+  }
+  return p > 0 && q > 0 && Number.isSafeInteger(p) && Number.isSafeInteger(q) ? [p, q] : null;
+}
+
 export const GraphBoardSchema = z
   .object({
     x: z.tuple([Coord, Coord]),
@@ -40,7 +57,22 @@ export const GraphBoardSchema = z
   .refine((b) => (b.x[1] - b.x[0]) / b.grid <= 100 && (b.y[1] - b.y[0]) / b.grid <= 100, {
     message: "at most 100 grid lines across",
   })
-  .refine((b) => new Set(b.tools).size === b.tools.length, { message: "a tool is listed twice" });
+  .refine((b) => new Set(b.tools).size === b.tools.length, { message: "a tool is listed twice" })
+  .refine((b) => !SNAP_RE.test(b.snap) || snapRatio(b.snap) !== null, {
+    message: "the snap must be above zero",
+    path: ["snap"],
+  })
+  // Scoring keys multiply coordinates in snap units; at most a million snap
+  // steps from the origin keeps every product an exact integer.
+  .refine(
+    (b) => {
+      const r = snapRatio(b.snap);
+      if (!r) return true;
+      const far = Math.max(Math.abs(b.x[0]), Math.abs(b.x[1]), Math.abs(b.y[0]), Math.abs(b.y[1]));
+      return (far * r[1]) / r[0] <= 1e6;
+    },
+    { message: "the snap is too fine for a board this size", path: ["snap"] },
+  );
 export type GraphBoard = z.infer<typeof GraphBoardSchema>;
 
 export const GraphKeySchema = z.object({
