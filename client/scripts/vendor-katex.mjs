@@ -1,7 +1,8 @@
 // Vendors KaTeX into the shipping client (E5 follow-on, 2026-09-01) — the
 // port of PoC-B's slice 13 (ADR 0009) into SecureTestCore:
-//   1. copies katex.min.js, katex.min.css, contrib/auto-render.min.js and the
-//      woff2 faces from design-tool's node_modules/katex into
+//   1. copies katex.min.js, katex.min.css, contrib/auto-render.min.js, the
+//      woff2 faces and KaTeX's MIT LICENSE (its notice must ship with the
+//      app) from design-tool's node_modules/katex into
 //      Sources/SecureTestCore/Resources/katex/ — the SAME version the design
 //      tool renders with server-side, so a stem renders identically in the
 //      preview and on the student's screen;
@@ -55,6 +56,7 @@ if (import.meta.main) {
     copyFileSync(join(KATEX_DIST, "fonts", f), join(OUT_DIR, "fonts", f));
     fonts += 1;
   }
+  copyFileSync(join(KATEX_DIST, "..", "LICENSE"), join(OUT_DIR, "LICENSE"));
   writeFileSync(join(OUT_DIR, "VERSION"), `${version}\n`);
   const { K12_MACROS } = await import("../../packages/schema/src/macros.ts");
   writeFileSync(GENERATED_SWIFT_PATH, renderGeneratedSwift(K12_MACROS, version), "utf8");

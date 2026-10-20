@@ -31,6 +31,14 @@ final class KatexBundleTests: XCTestCase {
         XCTAssertEqual(onDisk, GeneratedKatexMacros.katexVersion)
     }
 
+    /// KaTeX is MIT: its copyright and permission notice ships with the app.
+    func testKatexLicenceNoticeShipsInTheResourceBundle() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "LICENSE", withExtension: nil, subdirectory: "katex"))
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(text.contains("The MIT License"))
+        XCTAssertTrue(text.contains("Khan Academy"))
+    }
+
     func testStripFallbackFontsLeavesOnlyWoff2() {
         let css = #"src:url(fonts/KaTeX_Main-Regular.woff2) format("woff2"),url(fonts/KaTeX_Main-Regular.woff) format("woff"),url(fonts/KaTeX_Main-Regular.ttf) format("truetype")"#
         XCTAssertEqual(
