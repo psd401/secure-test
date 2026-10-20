@@ -1835,7 +1835,7 @@ calculator on the wire" block of `delivery-api.test.ts`).
 | 668 | Draft a description; Use this graph; save the question; reload | The card shows the graph image and its description; Edit graph reopens with the same rows and view | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
 | 669 | Use this graph with an empty description | Refused with the "Describe the graph…" message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the error now clears when a draft fills the box |
 | 670 | Preview / print | The graph as SVG under the stem, legend and description below | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — numbered curve labels match the legend |
-| 671 | Remove graph; save; reload | Gone from editor, preview and the student page | NOT RUN |
+| 671 | Remove graph; save; reload | Gone from editor, preview and the student page | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB) — on the Duplicate copy: Remove graph → Save question (200) → reload: the item has no graph, the card offers Add a graph, the preview shows none; published and joined as a demo student: Q1 in the 2.0.0 delivery bundle carries no graph (its no-calculator flag kept) |
 | 672 | Publish; Edit graph | Disabled (locked with the question) | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
 
 ### Graph it questions (slice 7)
