@@ -480,6 +480,21 @@ export async function importBundleForOwner(
               },
             };
           }
+          if (it.type === "graph") {
+            // Graphing calculator D-9: board and key as the bundle has them.
+            return {
+              ...base,
+              type: it.type,
+              choices: [],
+              correct_choice_ids: [],
+              correct_answer: null,
+              config: {
+                graph_board: it.board,
+                ...(it.key ? { graph_key: it.key } : {}),
+                ...clampAndCount(it.type, it.scoring_method, false),
+              },
+            };
+          }
           // Slice 46: when the wire schema grows a type, this fails
           // typecheck until an explicit branch above handles it — no more
           // silent import-as-short_text.

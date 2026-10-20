@@ -66,14 +66,17 @@ export function isAnswerKeyOnlyPatch(body: UpdateItemBody, item: ItemRow): boole
   // they never reach the student (ADR 0016), and teachers tag a test after
   // it has run. `standards` is its own column, not config, so the config
   // comparison below never sees it.
+  // Graphing calculator D-9: a graph item's key (`graph_key`) is a key too.
   const {
     correct_region_ids: _next,
     cell_keys: _nextCells,
+    graph_key: _nextGraph,
     ...nextRest
   } = itemConfigForWrite(body, item.config ?? undefined) as Record<string, unknown>;
   const {
     correct_region_ids: _cur,
     cell_keys: _curCells,
+    graph_key: _curGraph,
     ...curRest
   } = (item.config ?? {}) as Record<string, unknown>;
   return stable(withoutBlankKeys(nextRest)) === stable(withoutBlankKeys(curRest));

@@ -3,6 +3,7 @@
 // corpus the parser's grammar is checked against (D-4).
 import { MathfieldElement } from "mathlive";
 import { mountGraphing, type SavedGraph } from "../src/ui/index";
+import { mountGraphAnswer } from "../src/ui/graphAnswer";
 
 const SAMPLES: SavedGraph = {
   rows: [
@@ -72,3 +73,22 @@ document.getElementById("clear")!.addEventListener("click", () => {
   calc.destroy();
   calc = mountGraphing(host, { MathfieldElement, initial: { rows: [] }, onChange: save });
 });
+
+// `#answer`: the graph-answer board (slice 7), with a key for review below.
+if (location.hash === "#answer") {
+  calc.destroy();
+  host.style.overflow = "auto";
+  host.style.padding = "12px";
+  const board = { x: [-6, 6] as [number, number], y: [-6, 6] as [number, number], grid: 1, snap: "1", tools: ["point", "line", "segment", "ray", "circle", "parabola"] as const, max_objects: 3 };
+  const top = document.createElement("div");
+  const bottom = document.createElement("div");
+  host.append(top, bottom);
+  const key = { objects: [{ tool: "line" as const, points: [[0, 1], [1, 3]] as [number, number][] }], scoring: "all" as const };
+  mountGraphAnswer(top, { ...board, tools: [...board.tools] }, { label: "Your answer", onChange: (o) => console.log(JSON.stringify(o)) });
+  mountGraphAnswer(bottom, { ...board, tools: [...board.tools] }, {
+    readOnly: true,
+    key,
+    label: "Review",
+    initial: [{ tool: "line", points: [[1, 3], [2, 5]] }, { tool: "point", points: [[2, 2]] }],
+  });
+}

@@ -114,6 +114,8 @@ export async function GET(req: Request, ctx: RouteContext) {
       show_word_count: r.type === "essay" && r.config?.show_word_count === true,
       // Graphing calculator D-8: any type.
       graph: r.config?.graph ?? null,
+      // Graph answer (D-9): the board, not the key.
+      board: r.config?.graph_board ?? null,
       pairs: r.config?.pairs ?? null,
       sequence: r.config?.sequence ?? null,
       // Slice 49: the key (correct_region_ids) deliberately stays behind.

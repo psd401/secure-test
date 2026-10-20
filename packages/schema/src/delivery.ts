@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ItemResponseSchema } from "./responses.js";
+import { GraphBoardSchema } from "./graph.js";
 import {
   BundleAssetSchema,
   ChoiceSchema,
@@ -171,6 +172,13 @@ export const DeliveryFillBlankItemSchema = z.object({
   blanks: z.array(DeliveryFillBlankBlankSchema).min(1),
 });
 
+// Graph answer (D-9): the board only — the key never leaves the teacher bundle.
+export const DeliveryGraphItemSchema = z.object({
+  type: z.literal("graph"),
+  ...baseDeliveryItem,
+  board: GraphBoardSchema,
+});
+
 // No z.preprocess type-defaulting here. ItemSchema carries that for PoC-B
 // fixtures that predate the `type` field; a delivery bundle has no legacy
 // producers, so an untyped item is a bug and should fail loudly.
@@ -185,6 +193,7 @@ export const DeliveryItemSchema = z.discriminatedUnion("type", [
   DeliveryDrawingUploadItemSchema,
   DeliveryTableItemSchema,
   DeliveryFillBlankItemSchema,
+  DeliveryGraphItemSchema,
 ]);
 
 const UUID_RE =

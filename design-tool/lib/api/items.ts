@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  GraphBoardSchema,
+  GraphKeySchema,
+  type GraphBoard,
+  type GraphKey,
+  type GraphObject,
   StimulusGraphSchema,
   DrawingCanvasSchema,
   RubricSchema,
@@ -10,6 +15,7 @@ import {
   type ScoringMethod,
 } from "@secure-test/schema";
 import { ITEM_TYPES, type ItemConfig, type ItemType } from "@/db/schema";
+import { canonical, parseSnap } from "@secure-test/graphing/server";
 import {
   MAX_STANDARDS,
   MAX_STANDARD_LENGTH,
@@ -272,6 +278,20 @@ const FillBlankItem = z.object({
     .max(20, "a fill-in-the-blank question allows at most 20 blanks"),
 });
 
+// Graphing calculator D-9: objects placed on a snapped grid. The board is
+// what the student gets; the key (optional while drafting, like every key)
+// is drawn on the same board. Its objects must fit the board (checked in
+// validateGraph below).
+const GraphItem = z.object({
+  type: z.literal("graph"),
+  ...BaseItemFields,
+  choices: z.array(ChoiceShape).max(0).default([]),
+  correct_choice_ids: z.array(z.string()).max(0).default([]),
+  correct_answer: z.null().optional(),
+  board: GraphBoardSchema,
+  key: GraphKeySchema.nullable().optional(),
+});
+
 // Slice 36: which scoring methods each type may declare, and the default
 // when unset. auto needs a machine-checkable key (choices / correct_answer),
 // which essay lacks; ai/hybrid need a rubric, which only essay carries.
@@ -286,6 +306,7 @@ export const DEFAULT_SCORING_METHOD: Record<ItemType, ScoringMethod> = {
   drawing_upload: "human",
   table: "auto",
   fill_blank: "auto",
+  graph: "auto",
 };
 
 export const ALLOWED_SCORING_METHODS: Record<
@@ -308,6 +329,7 @@ export const ALLOWED_SCORING_METHODS: Record<
   // FB: one point per keyed blank (lib/scoring/auto.ts), or hand-scored; a
   // fully keyless item is unscorable by auto, like an unkeyed table.
   fill_blank: ["auto", "human"],
+  graph: ["auto", "human"],
 };
 
 // The method scoring actually runs with (slice 37 consumes this): the
@@ -328,6 +350,8 @@ export function effectiveScoringMethod(
   if (type === "fill_blank") {
     return (config?.blanks ?? []).some(isKeyedBlank) ? "auto" : "human";
   }
+  // D-9: like a keyless table, nothing to auto-score until a key exists.
+  if (type === "graph") return config?.graph_key ? "auto" : "human";
   return DEFAULT_SCORING_METHOD[type];
 }
 
@@ -480,6 +504,36 @@ const validateTable = (
 
 export { isKeyedBlank };
 
+// Graphing calculator D-9: every key object (and every fixed object) must be
+// a shape on this board — on the grid, inside it, with a tool it offers —
+// and the key may not hold more objects than students may place.
+const validateGraph = (body: { type: ItemType } & Record<string, unknown>, ctx: z.RefinementCtx) => {
+  if (body.type !== "graph") return;
+  const board = body.board as GraphBoard;
+  if (!parseSnap(board.snap)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["board", "snap"], message: "the snap must be a positive number or fraction" });
+    return;
+  }
+  const check = (objects: GraphObject[], path: string, toolsOnly: boolean) => {
+    objects.forEach((o, i) => {
+      const c = canonical(o, board);
+      if ("invalid" in c) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path, i], message: `not a shape on this board (${c.invalid})` });
+      } else if (toolsOnly && !board.tools.includes(o.tool)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path, i], message: `the board doesn't offer the ${o.tool} tool` });
+      }
+    });
+  };
+  check(board.fixed ?? [], "board.fixed", false);
+  const key = body.key as GraphKey | null | undefined;
+  if (key) {
+    check(key.objects, "key.objects", true);
+    if (key.objects.length > board.max_objects) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["key", "objects"], message: "the key has more objects than students may place" });
+    }
+  }
+};
+
 // FB slice 1: fill_blank cross-field integrity. Every `[[id]]` marker in the
 // stem names exactly one blank and every blank has exactly one marker — the
 // response and the client address blanks by id, and an orphan on either side
@@ -583,12 +637,14 @@ export const CreateItemBody = z
     DrawingUploadItem,
     TableItem,
     FillBlankItem,
+    GraphItem,
   ])
   .superRefine(validateScoring)
   .superRefine(validateUniqueIds)
   .superRefine(validateHotspot)
   .superRefine(validateTable)
   .superRefine(validateFillBlank)
+  .superRefine(validateGraph)
   .superRefine(validateRubricMax);
 export type CreateItemBody = z.infer<typeof CreateItemBody>;
 
@@ -649,6 +705,12 @@ export function itemConfigForWrite(
   }
   if (body.type === "fill_blank") {
     config.blanks = compactBlanks(body.blanks);
+    return config;
+  }
+  if (body.type === "graph") {
+    config.graph_board = body.board;
+    // Stored only when set; null on PATCH clears it.
+    if (body.key) config.graph_key = body.key;
     return config;
   }
   if (body.type !== "essay") return config;

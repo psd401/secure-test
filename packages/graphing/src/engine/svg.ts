@@ -4,6 +4,7 @@
 // Pure string building — no DOM.
 
 import { analyze, type Analysis, type Curve } from "./analyze";
+import type { GraphBoard, GraphObject } from "./graphAnswer";
 import { chainSegments, traceImplicit, traceRegion } from "./implicit";
 import { restricted } from "./index";
 import { sampleCurve } from "./sample";
@@ -191,4 +192,114 @@ function drawAnalysis(a: Analysis, c: string, f: Frame): string[] {
     }
   }
   return out;
+}
+
+// ---------- graph answers (D-9) ----------
+
+
+export interface BoardSvgOptions {
+  width?: number;
+  title?: string;
+  /** The student's objects (solid blue). */
+  answer?: GraphObject[];
+  /** The key's objects (dashed green). */
+  key?: GraphObject[];
+}
+
+/**
+ * A graph-answer board as SVG: the grid at the board's spacing, axes,
+ * labels, the fixed objects, and optionally an answer and / or the key —
+ * for the no-script preview, print, and the teacher's review of an answer.
+ */
+export function renderBoardSvg(board: GraphBoard, opts: BoardSvgOptions = {}): string {
+  const W = opts.width ?? 400;
+  const spanX = board.x[1] - board.x[0];
+  const spanY = board.y[1] - board.y[0];
+  const H = Math.round((W * spanY) / spanX);
+  const X = (x: number) => ((x - board.x[0]) / spanX) * W;
+  const Y = (y: number) => ((board.y[1] - y) / spanY) * H;
+  const title = opts.title ?? "Graph";
+  const clip = `bclip-${W}x${H}`;
+  const out: string[] = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(title)}" class="graph-svg">`,
+    `<title>${esc(title)}</title>`,
+    `<defs><clipPath id="${clip}"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath></defs>`,
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff" stroke="#cfd5dd"/>`,
+  ];
+  const grid = [
+    ...ticks(board.x[0], board.x[1], board.grid).map((x) => `M${r1(X(x))} 0V${H}`),
+    ...ticks(board.y[0], board.y[1], board.grid).map((y) => `M0 ${r1(Y(y))}H${W}`),
+  ];
+  out.push(`<path d="${grid.join("")}" stroke="#e3e7ec" stroke-width="1"/>`);
+  const axes: string[] = [];
+  if (board.y[0] <= 0 && board.y[1] >= 0) axes.push(`M0 ${r1(Y(0))}H${W}`);
+  if (board.x[0] <= 0 && board.x[1] >= 0) axes.push(`M${r1(X(0))} 0V${H}`);
+  if (axes.length) out.push(`<path d="${axes.join("")}" stroke="#2b2f36" stroke-width="1.5"/>`);
+  const labels: string[] = [];
+  const sx = gridStep(spanX, W, 40).major;
+  const sy = gridStep(spanY, H, 40).major;
+  const ly = Math.min(Math.max(Y(0) + 13, 13), H - 3);
+  for (const x of ticks(board.x[0], board.x[1], sx)) {
+    if (Math.abs(x) < sx * 1e-9 || X(x) < 10 || X(x) > W - 10) continue;
+    labels.push(`<text x="${r1(X(x))}" y="${r1(ly)}" text-anchor="middle">${esc(tickLabel(x, sx))}</text>`);
+  }
+  const lx = Math.min(Math.max(X(0) - 4, 20), W - 2);
+  for (const y of ticks(board.y[0], board.y[1], sy)) {
+    if (Math.abs(y) < sy * 1e-9 || Y(y) < 8 || Y(y) > H - 8) continue;
+    labels.push(`<text x="${r1(lx)}" y="${r1(Y(y) + 4)}" text-anchor="end">${esc(tickLabel(y, sy))}</text>`);
+  }
+  out.push(
+    `<g font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" fill="#3a404b" stroke="#ffffff" stroke-width="3" paint-order="stroke">${labels.join("")}</g>`,
+  );
+  const shapes: string[] = [];
+  const draw = (o: GraphObject, color: string, dashed: boolean) => shapes.push(objectSvg(o, color, dashed, board, X, Y, W));
+  for (const o of board.fixed ?? []) draw(o, "#6b7280", false);
+  for (const o of opts.key ?? []) draw(o, "#2c7a37", true);
+  for (const o of opts.answer ?? []) draw(o, "#1f5fa8", false);
+  out.push(`<g clip-path="url(#${clip})" fill="none" stroke-width="2.5" stroke-linecap="round">${shapes.join("")}</g>`, "</svg>");
+  return out.join("");
+}
+
+function objectSvg(
+  o: GraphObject,
+  color: string,
+  dashed: boolean,
+  board: GraphBoard,
+  X: (x: number) => number,
+  Y: (y: number) => number,
+  W: number,
+): string {
+  const dash = dashed ? ' stroke-dasharray="7 5"' : "";
+  const dot = (p: [number, number]) => `<circle cx="${r1(X(p[0]))}" cy="${r1(Y(p[1]))}" r="4.5" fill="${color}" stroke="none"/>`;
+  const [a, b] = o.points as [[number, number], [number, number] | undefined];
+  if (!a || !Number.isFinite(a[0]) || !Number.isFinite(a[1])) return "";
+  if (o.tool === "point" || !b) return dot(a);
+  if (!Number.isFinite(b[0]) || !Number.isFinite(b[1]) || (a[0] === b[0] && a[1] === b[1])) return dot(a);
+  let path = "";
+  if (o.tool === "segment") {
+    path = `<path d="M${r1(X(a[0]))} ${r1(Y(a[1]))}L${r1(X(b[0]))} ${r1(Y(b[1]))}" stroke="${color}"${dash}/>`;
+  } else if (o.tool === "line" || o.tool === "ray") {
+    const big = 4 * Math.max(board.x[1] - board.x[0], board.y[1] - board.y[0]);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const ux = ((b[0] - a[0]) / len) * big;
+    const uy = ((b[1] - a[1]) / len) * big;
+    const s = o.tool === "ray" ? a : [a[0] - ux, a[1] - uy];
+    path = `<path d="M${r1(X(s[0]!))} ${r1(Y(s[1]!))}L${r1(X(a[0] + ux))} ${r1(Y(a[1] + uy))}" stroke="${color}"${dash}/>`;
+  } else if (o.tool === "circle") {
+    const r = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const rx = Math.abs(X(a[0] + r) - X(a[0]));
+    const ry = Math.abs(Y(a[1] + r) - Y(a[1]));
+    path = `<ellipse cx="${r1(X(a[0]))}" cy="${r1(Y(a[1]))}" rx="${r1(rx)}" ry="${r1(ry)}" stroke="${color}"${dash}/>`;
+  } else if (o.tool === "parabola") {
+    if (b[0] === a[0]) return dot(a);
+    const k = (b[1] - a[1]) / ((b[0] - a[0]) * (b[0] - a[0]));
+    const pts: string[] = [];
+    for (let px = 0; px <= W; px += 3) {
+      const x = board.x[0] + (px / W) * (board.x[1] - board.x[0]);
+      const y = k * (x - a[0]) * (x - a[0]) + a[1];
+      pts.push(`${pts.length ? "L" : "M"}${px} ${r1(Math.max(-1e4, Math.min(1e4, Y(y))))}`);
+    }
+    path = `<path d="${pts.join("")}" stroke="${color}"${dash}/>`;
+  }
+  return path + dot(a) + dot(b);
 }

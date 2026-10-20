@@ -25,6 +25,7 @@ import {
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { planRescore } from "@/lib/scoring/rescore";
+import { graphMaxPoints } from "@secure-test/graphing/server";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
 // FINAL scores only. Proposed AI scores are deliberately excluded from
@@ -172,6 +173,10 @@ export function itemMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
   if (item.type === "table") return tableMaxPoints(item.config);
   // FB slice 1: one point per keyed blank (D-2), every blank when keyless.
   if (item.type === "fill_blank") return fillBlankMaxPoints(item.config);
+  // Graphing calculator D-9: per-object scoring has a point per key shape.
+  if (item.type === "graph" && item.config.graph_board && item.config.graph_key) {
+    return graphMaxPoints(item.config.graph_board, item.config.graph_key);
+  }
   return 1;
 }
 

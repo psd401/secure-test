@@ -1837,3 +1837,15 @@ calculator on the wire" block of `delivery-api.test.ts`).
 | 670 | Preview / print | The graph as SVG under the stem, legend and description below | NOT RUN (unit: `preview-graph.test.ts`) |
 | 671 | Remove graph; save; reload | Gone from editor, preview and the student page | NOT RUN |
 | 672 | Publish; Edit graph | Disabled (locked with the question) | NOT RUN |
+
+### Graph it questions (slice 7)
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 673 | Add a question → Graph it | A grid (−10…10, lines every 1, snap 1), Point and Line ticked, at most 2; an empty key board | NOT RUN |
+| 674 | Draw a key line through (0,1) and (2,5); save; reload | The key reads "y = 2x + 1"; Scoring shows All or nothing | NOT RUN |
+| 675 | Change the grid to 0…20 with snap 1/2; tick Circle | The key board redraws; an off-grid key point is refused on save with a message | NOT RUN |
+| 676 | Publish; change only the key | Saves (the key door); changing the grid is refused | NOT RUN (unit: `graph-item.test.ts`) |
+| 677 | Preview and print | The empty grid as SVG, what students may place; print says to draw on the grid | NOT RUN |
+| 678 | A student answers (client row); Results → the student | Each object in words with ✓ / ✗; the score as the scorer gave it | NOT RUN |
+| 679 | Export, import | Grid, tools and key come back | NOT RUN (unit) |

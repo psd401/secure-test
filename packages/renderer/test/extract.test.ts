@@ -210,13 +210,15 @@ describe("the client's renderer", () => {
     expect(css).toContain('content: "\\25BE"');
   });
 
-  test("BRIDGE_REQUIRES = the handlers the page posts to + tts.word_ranges", () => {
+  test("BRIDGE_REQUIRES = the handlers the page posts to + tts.word_ranges + response.generic", () => {
     const handlers = new Set(
       [...js.matchAll(/messageHandlers\.([A-Za-z_]+)/g)].map((m) => m[1]!),
     );
     expect(js).toContain("window.__secureTestSpeech = {");
     expect(js).toMatch(/__secureTestSpeech = \{[\s\S]*?\bword: function/);
-    expect<string[]>([...BRIDGE_REQUIRES].sort()).toEqual([...handlers, "tts.word_ranges"].sort());
+    // Row DC (D-9): graph answers post a type only the generic channel carries.
+    expect(js).toContain("type: 'graph'");
+    expect<string[]>([...BRIDGE_REQUIRES].sort()).toEqual([...handlers, "tts.word_ranges", "response.generic"].sort());
   });
 
   test("the page defines every function the host calls, each under a term it requires", () => {

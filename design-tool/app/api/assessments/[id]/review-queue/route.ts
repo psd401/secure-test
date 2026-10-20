@@ -25,6 +25,7 @@ import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/s
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
+import { graphMaxPoints } from "@secure-test/graphing/server";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -260,7 +261,9 @@ export async function GET(req: Request, ctx: RouteContext) {
             ? tableMaxPoints(item.config)
             : item.type === "fill_blank"
               ? fillBlankMaxPoints(item.config)
-              : 1,
+              : item.type === "graph" && item.config.graph_board && item.config.graph_key
+                ? graphMaxPoints(item.config.graph_board, item.config.graph_key)
+                : 1,
         // E3 slice 2: the grid and its keys, so the hand-scorer sees the
         // student's cells laid out and the expected text beside each keyed
         // one. Teacher-only surface — keys are fine here.

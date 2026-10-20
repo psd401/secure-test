@@ -91,6 +91,7 @@ export const CALCULATOR_CSS = `
 .gc-value { text-align: right; color: var(--gc-muted); font-size: 1.0em; }
 .gc-error { color: var(--gc-error); }
 .gc-error::before { content: "⚠ "; }
+.gc-error:empty::before { content: none; }
 .gc-add-sliders { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; color: var(--gc-muted); }
 .gc-chip {
   border: 1px solid var(--gc-line); background: var(--gc-panel); border-radius: 12px;
@@ -167,6 +168,30 @@ export const CALCULATOR_CSS = `
 .gc-legend-swatch { width: 0.9em; height: 0.9em; border-radius: 50%; flex: none; }
 .gc-stimulus-caption details { margin-top: 0.4em; font-size: 0.9333em; color: var(--gc-muted); }
 .gc-stimulus-caption summary { cursor: pointer; }
+
+/* A graph answer (D-9): tools, hint, board, typed entry, object list. */
+.gc-root.gc-answer { display: block; height: auto; min-height: 0; overflow: visible; margin: 0.5em 0; background: transparent; }
+.gc-answer-tools { display: flex; flex-wrap: wrap; gap: 0.4em; margin-bottom: 0.4em; }
+.gc-answer-tool {
+  border: 1px solid var(--gc-line); background: var(--gc-paper); border-radius: 6px; padding: 0.3em 0.8em;
+  cursor: pointer; min-height: 2em;
+}
+.gc-answer-tool[aria-pressed="true"] { background: var(--gc-accent); border-color: var(--gc-accent); color: #fff; }
+.gc-answer-tool:disabled { opacity: 0.45; cursor: default; }
+.gc-answer-undo { margin-left: auto; }
+.gc-answer-undo + .gc-answer-undo { margin-left: 0; }
+.gc-answer-hint { margin: 0 0 0.4em; font-size: 0.9333em; color: var(--gc-muted); }
+.gc-answer-board { position: relative; max-width: 560px; border: 1px solid var(--gc-line); border-radius: 6px; overflow: hidden; touch-action: none; cursor: crosshair; }
+.gc-answer-board canvas { display: block; }
+.gc-answer-type { margin-top: 0.6em; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25em; }
+.gc-answer-type select, .gc-answer-coord {
+  border: 1px solid var(--gc-line); border-radius: 4px; padding: 0.2em 0.4em; background: var(--gc-paper); color: var(--gc-ink); font: inherit;
+}
+.gc-answer-coord { width: 4.5em; }
+.gc-answer-list { margin: 0.6em 0 0; padding-left: 1.4em; }
+.gc-answer-list li { margin: 0.2em 0; }
+.gc-mark-right { color: #2c7a37; font-weight: 700; }
+.gc-mark-wrong { color: var(--gc-error); font-weight: 700; }
 
 @media (max-width: 640px) {
   .gc-root { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 45%) 1fr auto; }

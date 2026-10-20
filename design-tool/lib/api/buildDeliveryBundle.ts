@@ -196,6 +196,15 @@ function mapItemForDelivery(row: ItemRow, attemptId: string) {
             : { id: b.id, kind: "text" as const },
         ),
       };
+    case "graph":
+      // Graphing calculator D-9: the board only. `graph_key` is the answer
+      // key and is never read here (ADR 0016).
+      return {
+        type: "graph" as const,
+        id: row.id,
+        stem: row.stem,
+        board: config.graph_board!,
+      };
     default:
       return assertNever(type, "delivery: unhandled item type");
   }

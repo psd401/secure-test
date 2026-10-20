@@ -10,6 +10,7 @@ import {
   validateAgainstRubric,
 } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
+import { graphMaxPoints } from "@secure-test/graphing/server";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
 // re-run AI). Loads the response → attempt → assessment chain and enforces
@@ -126,7 +127,9 @@ export function checkManualScore(
       ? tableMaxPoints(item.config)
       : item.type === "fill_blank"
         ? fillBlankMaxPoints(item.config)
-        : 1;
+        : item.type === "graph" && item.config.graph_board && item.config.graph_key
+          ? graphMaxPoints(item.config.graph_board, item.config.graph_key)
+          : 1;
   if (body.max_points !== expectedMax) {
     return {
       ok: false,

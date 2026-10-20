@@ -25,6 +25,8 @@ import type {
   ScoringMethod,
   SequenceEntry,
   StimulusGraph,
+  GraphBoard,
+  GraphKey,
   TableCellKeys,
   TableColumn,
   TableRow,
@@ -194,6 +196,8 @@ export const ITEM_TYPES = [
   "drawing_upload",
   "table",
   "fill_blank",
+  // Graphing calculator D-9: objects placed on a snapped grid, auto-scored.
+  "graph",
 ] as const;
 
 export type ItemType = (typeof ITEM_TYPES)[number];
@@ -219,6 +223,11 @@ export type ItemConfig = {
   // graph shown with the question. Validated at the write boundary by
   // StimulusGraphSchema; stored only when present.
   graph?: StimulusGraph;
+  // Graph answer (D-9), graph items only: the board the student places
+  // objects on, and the key (stored only when set — an answer key, so it
+  // never reaches the delivery bundle).
+  graph_board?: GraphBoard;
+  graph_key?: GraphKey;
   rubric?: Rubric;
   // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
   // COPIED from, if any. Editor metadata only — `rubric` above stays the

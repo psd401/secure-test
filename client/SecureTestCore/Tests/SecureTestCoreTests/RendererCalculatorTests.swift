@@ -126,4 +126,21 @@ final class RendererCalculatorTests: XCTestCase {
             XCTAssertEqual(try h.int("__count('.graph-stimulus')"), 0, graph)
         }
     }
+
+    // D-9: a graph question in JavaScriptCore, where the board can't be
+    // drawn — the student is told, and the rest of the page still works.
+    func testAGraphQuestionThatCannotDrawSaysSo() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[
+          {"type":"graph","id":"g","stem":"Graph it.","board":{"x":[-5,5],"y":[-5,5],"grid":1,"snap":"1","tools":["point"],"max_objects":1}},
+          {"type":"short_text","id":"s","stem":"And this."}]}
+        """)
+        XCTAssertEqual(try h.int("__count('.graph-answer')"), 1)
+        XCTAssertEqual(
+            try h.string("__first('.graph-answer-waiting').textContent"),
+            "This question couldn't be shown. Ask your teacher."
+        )
+        XCTAssertEqual(try h.int("__count('input')"), 1)
+        XCTAssertEqual(try h.int("__count('.unsupported')"), 0, "not the unknown-type placeholder")
+    }
 }

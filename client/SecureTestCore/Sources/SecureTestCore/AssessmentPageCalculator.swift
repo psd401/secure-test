@@ -226,6 +226,55 @@ extension AssessmentPage {
         pendingGraphs = [];
       }
 
+      // Row DC (D-9): a "graph it" question. The board is drawn by the
+      // graphing bundle after the page is built; a saved answer (resume)
+      // comes back on it. Each change posts the objects through the
+      // generic answer channel ({type: 'graph', objects}); clearing the
+      // last object marks the question unanswered again.
+      var pendingAnswers = [];
+
+      function graphField(item) {
+        var wrap = document.createElement('div');
+        wrap.className = 'graph-answer';
+        var saved = savedFor(item);
+        var initial = saved && Array.isArray(saved.objects) ? saved.objects : [];
+        var waiting = document.createElement('p');
+        waiting.className = 'graph-answer-waiting';
+        waiting.textContent = 'Loading the graph…';
+        wrap.appendChild(waiting);
+        pendingAnswers.push({ wrap: wrap, item: item, initial: initial, waiting: waiting });
+        return wrap;
+      }
+
+      function mountGraphAnswers() {
+        if (!pendingAnswers.length) return;
+        calculatorStyle();
+        var lib = null;
+        try {
+          lib = __secureTestGraphing();
+        } catch (e) {
+          console.log('graph answer failed: ' + (e && e.message));
+        }
+        pendingAnswers.forEach(function (p) {
+          try {
+            if (!lib || !p.item.board) throw new Error('no board');
+            lib.mountGraphAnswer(p.wrap, p.item.board, {
+              initial: p.initial,
+              label: 'Your answer',
+              onChange: function (objects) {
+                post(p.item.id, { type: 'graph', objects: objects }, objects.length > 0);
+                if (!objects.length) markUnanswered(p.item.id);
+              }
+            });
+            p.wrap.removeChild(p.waiting);
+          } catch (e) {
+            p.waiting.textContent = "This question couldn't be shown. Ask your teacher.";
+            console.log('graph answer failed: ' + (e && e.message));
+          }
+        });
+        pendingAnswers = [];
+      }
+
       function mountCalculator() {
         try {
           var lib = __secureTestGraphing();

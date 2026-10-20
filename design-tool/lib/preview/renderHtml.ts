@@ -25,6 +25,7 @@ import {
   type Rubric,
   type SequenceEntry,
   type StimulusGraph,
+  type GraphBoard,
   type TableColumn,
   type TableRow,
 } from "@secure-test/schema";
@@ -35,7 +36,7 @@ import { assetSrc, renderItemContent, type ResolvedAsset } from "@/lib/items/ren
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
-import { latexToText, renderGraphSvg } from "@secure-test/graphing/server";
+import { latexToText, renderBoardSvg, renderGraphSvg } from "@secure-test/graphing/server";
 
 interface Choice {
   id: string;
@@ -68,6 +69,8 @@ export interface PreviewItem {
   // server — the preview has no scripts — from the same engine the student's
   // page uses, with the teacher's alt text as its name and its caption.
   graph?: StimulusGraph | null;
+  // Graph answer (D-9): the board only — never the key.
+  board?: GraphBoard | null;
   // Match-only pair list (slice 47). Rights are displayed sorted so the
   // authored order (which IS the answer key) doesn't give matches away.
   pairs?: MatchPair[] | null;
@@ -343,6 +346,15 @@ function renderRichEssayBox(placeholder: string | null | undefined): string {
   );
 }
 
+const GRAPH_TOOL_WORDS: Record<GraphBoard["tools"][number], string> = {
+  point: "points",
+  line: "lines",
+  segment: "segments",
+  ray: "rays",
+  circle: "circles",
+  parabola: "parabolas",
+};
+
 /** A stimulus graph as a figure: the SVG, then its legend and description. */
 export function renderStimulusGraph(g: StimulusGraph): string {
   let svg: string;
@@ -572,6 +584,19 @@ function renderItem(
         ? escapeHtml(item.placeholder)
         : "(student response)";
       body = `<textarea class="essay" rows="6" placeholder="${placeholder}" disabled></textarea>${limit}${rubric}`;
+    }
+  } else if (item.type === "graph") {
+    // Graphing calculator D-9: the empty board (and its fixed objects), and
+    // what the student may place. On paper the student draws on the grid.
+    if (item.board) {
+      const tools = item.board.tools.map((t) => GRAPH_TOOL_WORDS[t]).join(", ");
+      body =
+        `<figure class="graph-stimulus">${renderBoardSvg(item.board, { title: "Graph your answer on this grid" })}` +
+        `<figcaption><p class="graph-alt">${escapeHtml(
+          printMode
+            ? `Draw your answer on the grid (up to ${item.board.max_objects}).`
+            : `Students place ${tools} (up to ${item.board.max_objects}), by clicking, with the keyboard or by typing coordinates.`,
+        )}</p></figcaption></figure>`;
     }
   } else {
     // Same posture as the export route (slice 46): a type nobody handled

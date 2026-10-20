@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GraphResponseSchema } from "./graph.js";
 
 // Slice 35: a student's answer to one item, stored in the design-tool's
 // `responses.response` jsonb column and (later) carried on the wire from the
@@ -149,6 +150,7 @@ export const ItemResponseSchema = z.discriminatedUnion("type", [
   DrawingUploadResponseSchema,
   TableResponseSchema,
   FillBlankResponseSchema,
+  GraphResponseSchema,
 ]);
 
 export type SingleChoiceResponse = z.infer<typeof SingleChoiceResponseSchema>;

@@ -48,9 +48,12 @@ import type {
   TableColumn,
   TableRow,
   StimulusGraph,
+  GraphBoard,
+  GraphKey,
 } from "@secure-test/schema";
 import { MathPreview } from "./MathPreview";
 import { GraphStimulusEditor } from "./GraphStimulusEditor";
+import { DEFAULT_GRAPH_BOARD, GraphItemEditor } from "./GraphItemEditor";
 import { ImagePicker } from "./ImagePicker";
 import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
@@ -189,6 +192,10 @@ interface ItemView {
   // Graphing calculator D-8: a teacher-authored graph shown with the
   // question; null = none. Optional like no_calculator.
   graph?: StimulusGraph | null;
+  // Graphing calculator D-9, graph items only: the board, and the key (an
+  // answer key — it saves through the publish lock like other keys).
+  board?: GraphBoard | null;
+  graph_key?: GraphKey | null;
 }
 
 interface AssessmentView {
@@ -313,6 +320,8 @@ interface ItemRow {
     show_word_count?: boolean | null;
     no_calculator?: boolean | null;
     graph?: StimulusGraph | null;
+    graph_board?: GraphBoard | null;
+    graph_key?: GraphKey | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -355,6 +364,8 @@ function rowToView(r: ItemRow): ItemView {
     show_word_count: r.config?.show_word_count ? true : null,
     no_calculator: r.config?.no_calculator ? true : null,
     graph: r.config?.graph ?? null,
+    board: r.config?.graph_board ?? null,
+    graph_key: r.config?.graph_key ?? null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -431,6 +442,7 @@ const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   drawing_upload: ["human"],
   table: ["auto", "human"],
   fill_blank: ["auto", "human"],
+  graph: ["auto", "human"],
 };
 
 const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
@@ -444,6 +456,7 @@ const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
   drawing_upload: "human",
   table: "auto",
   fill_blank: "auto",
+  graph: "auto",
 };
 
 // E3-F1: a table's unset default depends on whether it has a key yet — the
@@ -457,6 +470,8 @@ function defaultScoringMethod(item: ItemView): ScoringMethod {
   // FB slice 2: the same E3-F1 rule for fill_blank (lib/api/items.ts
   // effectiveScoringMethod — no keyed blank → human).
   if (item.type === "fill_blank") return hasKeyedBlank(item.blanks) ? "auto" : "human";
+  // Graphing calculator D-9: no key → hand-scored (lib/api/items.ts).
+  if (item.type === "graph") return item.graph_key ? "auto" : "human";
   return SCORING_DEFAULT[item.type];
 }
 
@@ -473,7 +488,7 @@ const OSPI_TIER_ORDER: OspiTier[] = ["universal", "designated", "accommodation"]
 // for exactly those edits (the server is still the authority).
 // BG slice 2 (14.1): standards tags save through the same door — the server's
 // isAnswerKeyOnlyPatch admits them while published.
-const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards"]);
+const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards", "graph_key"]);
 function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean {
   if (!before) return false;
   const b = before as unknown as Record<string, unknown>;
@@ -1261,6 +1276,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   ? { ...draft, stem: "New drawing prompt" }
                   : addType === "fill_blank"
                   ? { ...draft, stem: FILL_BLANK_SEED_STEM }
+                  : addType === "graph"
+                  ? { ...draft, stem: "Graph your answer.", board: DEFAULT_GRAPH_BOARD, graph_key: null }
                   : addType === "table"
                     ? {
                         ...draft,
@@ -1378,6 +1395,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       // FB slice 2: stem order, keys only when set (blank accepted answers
       // dropped) — what slice 1's compactBlanks stores anyway.
       body.blanks = blanksForSave(item.stem, item.blanks ?? []);
+    }
+    if (item.type === "graph") {
+      // Graphing calculator D-9: null clears the key.
+      body.board = item.board ?? DEFAULT_GRAPH_BOARD;
+      body.key = item.graph_key ?? null;
     }
     if (item.type === "drawing_upload") {
       body.prompt_asset_id = item.prompt_asset_id;
@@ -3113,6 +3135,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       onChange={(patch) =>
                         updateItem(item.id, (i) => ({ ...i, ...patch }))
                       }
+                      disabled={isLocked}
+                    />
+                  </div>
+                ) : item.type === "graph" ? (
+                  <div className="mt-3">
+                    <GraphItemEditor
+                      board={item.board ?? DEFAULT_GRAPH_BOARD}
+                      graphKey={item.graph_key ?? null}
+                      onChange={(patch) => updateItem(item.id, (i) => ({ ...i, ...patch }))}
                       disabled={isLocked}
                     />
                   </div>

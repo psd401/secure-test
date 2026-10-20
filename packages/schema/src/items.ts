@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GraphBoardSchema, GraphKeySchema } from "./graph.js";
 
 export const ChoiceSchema = z.object({
   id: z.string().min(1),
@@ -334,6 +335,15 @@ export const FillBlankItemSchema = z.object({
   blanks: z.array(FillBlankBlankSchema).min(1),
 });
 
+// Graph answer (D-9): the board and, on the TEACHER bundle only, the key.
+// The key is optional at write time like every other key (2026-09-01).
+export const GraphItemSchema = z.object({
+  type: z.literal("graph"),
+  ...baseItem,
+  board: GraphBoardSchema,
+  key: GraphKeySchema.optional(),
+});
+
 /**
  * FB slice 1: the blank ids a stem's `[[<id>]]` markers name, in order of
  * appearance (a repeated marker appears twice). Shared by the write boundary,
@@ -381,6 +391,7 @@ export const ItemSchema = z.preprocess(
     DrawingUploadItemSchema,
     TableItemSchema,
     FillBlankItemSchema,
+    GraphItemSchema,
   ]),
 );
 

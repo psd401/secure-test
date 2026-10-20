@@ -15,6 +15,7 @@ import type { ItemConfig, ItemRow, ItemType } from "@/db/schema";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { itemMaxPoints } from "@/lib/scoring/results";
 import { fillBlankAnswer, filledBlankAnswerText } from "@/lib/items/fillBlankAnswer";
+import { describeObject, type GraphObject } from "@secure-test/graphing/server";
 
 export type FeedbackLevel = "score" | "right_wrong" | "answers";
 export type FeedbackResult = "correct" | "partial" | "incorrect" | "pending";
@@ -210,6 +211,13 @@ export function yourAnswerText(
         })
         .join("\n");
     }
+    case "graph": {
+      // Graphing calculator D-9: the objects in words, one per line.
+      const board = config.graph_board;
+      const objects = Array.isArray(response.objects) ? (response.objects as GraphObject[]) : [];
+      if (!board || objects.length === 0) return null;
+      return objects.map((o) => describeObject(o, board)).join("\n");
+    }
     default:
       return null;
   }
@@ -247,6 +255,11 @@ export function correctAnswerText(item: FeedbackItemInput): string | null {
       // answer to show.
       const keyed = blankLines(item).filter((b) => b.key !== null);
       return keyed.length > 0 ? keyed.map((b) => `${b.label}: ${b.key}`).join("\n") : null;
+    }
+    case "graph": {
+      const board = config.graph_board;
+      const key = config.graph_key;
+      return board && key ? key.objects.map((o) => describeObject(o, board)).join("\n") : null;
     }
     default:
       return null;

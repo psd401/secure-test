@@ -226,6 +226,17 @@ export async function buildExportBundle(
           blanks: row.config?.blanks ?? [],
           ...scoring,
         };
+      case "graph":
+        // Graphing calculator D-9: the board, and the key when set (the
+        // teacher bundle carries keys; import reads them back).
+        return {
+          type: "graph" as const,
+          id: row.id,
+          stem: row.stem,
+          board: row.config!.graph_board!,
+          ...(row.config?.graph_key ? { key: row.config.graph_key } : {}),
+          ...scoring,
+        };
       default:
         return assertNever(type, "export: unhandled item type");
     }

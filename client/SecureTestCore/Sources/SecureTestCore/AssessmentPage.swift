@@ -5139,6 +5139,8 @@ public enum AssessmentPage {
           case 'hotspot': return hotspotField(item);
           case 'drawing_upload': return drawingField(item);
           case 'table': return tableField(item);
+          // Row DC (D-9): drawn by the graphing bundle once the page is built.
+          case 'graph': return graphField(item);
           default: return unsupported(item.type);
         }
       }
@@ -6720,8 +6722,10 @@ public enum AssessmentPage {
         root.appendChild(buildFinish());
       }
 
-      // Row DC (D-8): draw the stimulus graphs now the tree is built.
+      // Row DC (D-8 / D-9): draw the stimulus graphs and the graph answers
+      // now the tree is built.
       mountStimulusGraphs();
+      mountGraphAnswers();
 
       // Row DC: the calculator button, when the bundle names a calculator.
       // The panel and the calculator itself are built on first open.

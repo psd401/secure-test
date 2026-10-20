@@ -9,6 +9,8 @@
 // renderer-design.md) is added here as "2.0.0"; v2.0 itself needs no entry.
 export const MIN_CLIENT_VERSION_FOR_TYPE: Readonly<Record<string, string>> = {
   fill_blank: "1.6.0",
+  // Graphing calculator D-9: only the served renderer draws the board.
+  graph: "2.0.0",
 };
 
 /** "1.5.0" → [1, 5, 0]; anything unparseable → null. */

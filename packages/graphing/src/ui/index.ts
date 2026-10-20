@@ -4,3 +4,4 @@ export { GraphView, type PlotItem } from "./graph";
 export * from "./state";
 export * from "./viewport";
 export { mountStimulus, type StimulusGraph, type StimulusHandle } from "./stimulus";
+export { mountGraphAnswer, parseCoordinate, type GraphAnswerHandle, type GraphAnswerOptions } from "./graphAnswer";
