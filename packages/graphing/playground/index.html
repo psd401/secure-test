@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphing calculator playground</title>
+<link rel="stylesheet" href="/katex/katex.min.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr auto; }
+  header { padding: 8px 12px; border-bottom: 1px solid #ddd; display: flex; gap: 12px; align-items: center; font-size: 14px; }
+  header h1 { font-size: 15px; margin: 0; }
+  #calc { min-height: 0; }
+  details { border-top: 1px solid #ddd; padding: 6px 12px; font-size: 13px; }
+  textarea { width: 100%; height: 120px; font: 12px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Graphing calculator — playground (row DC, slice 2)</h1>
+  <button id="reset" type="button">Reset to samples</button>
+  <button id="clear" type="button">Clear</button>
+</header>
+<div id="calc"></div>
+<details>
+  <summary>LaTeX corpus (every distinct row value MathLive produced)</summary>
+  <textarea id="corpus" readonly></textarea>
+</details>
+<script src="/app.js"></script>
+</body>
+</html>

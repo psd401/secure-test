@@ -68,15 +68,25 @@ export function tokenize(src: string): Token[] {
   let i = 0;
   const push = (type: TokenType, text: string, pos: number) => out.push({ type, text, pos });
 
-  // Reads a braced word (`{abc}`) after \operatorname / \mathrm.
+  // Reads a braced word (`{abc}`) after \operatorname / \mathrm. MathLive
+  // nests them (`\operatorname{\mathrm{mean}}`), so styling commands and
+  // inner braces are dropped and only the letters kept.
   const bracedWord = (): string => {
     while (src[i] === " ") i++;
     if (src[i] === "*") i++;
     if (src[i] !== "{") throw new ParseError("Expected a name in braces", i);
-    const close = src.indexOf("}", i);
-    if (close < 0) throw new ParseError("Unclosed brace", i);
-    const word = src.slice(i + 1, close).replace(/\\,|\s/g, "");
-    i = close + 1;
+    let depth = 0;
+    let j = i;
+    for (; j < src.length; j++) {
+      if (src[j] === "{") depth++;
+      else if (src[j] === "}" && --depth === 0) break;
+    }
+    if (depth !== 0) throw new ParseError("Unclosed brace", i);
+    const word = src
+      .slice(i + 1, j)
+      .replace(/\\(mathrm|mathit|text|operatorname|mathbf)\b/g, "")
+      .replace(/\\,|[{}\s]/g, "");
+    i = j + 1;
     return word;
   };
 
@@ -507,11 +517,8 @@ class Parser {
       this.next();
       return { kind: "neg", arg: this.exponent() };
     }
-    if (t.type === "num" && t.text.length > 1) {
-      // `x^23` in TeX is x² · 3: split the digit run.
-      this.toks.splice(this.i + 1, 0, { type: "num", text: t.text.slice(1), pos: t.pos + 1 });
-      this.toks[this.i] = { type: "num", text: t.text[0]!, pos: t.pos };
-    }
+    // A bare digit run is the whole exponent: MathLive writes a typed 2¹⁰ as
+    // `2^10` (TeX would read 2¹·0), and that is what students mean.
     const base = this.postfix();
     // `2^3^2` (a TeX error, but typed by hand) reads right to left.
     if (this.isOp("^")) {

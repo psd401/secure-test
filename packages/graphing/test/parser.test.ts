@@ -51,7 +51,9 @@ describe("arithmetic and precedence", () => {
     ["2^3^2", "(^ 2 (^ 3 2))"],
     ["2^{-1}", "(^ 2 (- 1))"],
     ["x^{2}+y^{2}", "(+ (^ x 2) (^ y 2))"],
-    ["x^23", "(* (^ x 2) 3)"],
+    // MathLive writes a typed two-digit exponent without braces.
+    ["x^23", "(^ x 23)"],
+    ["2^10", "(^ 2 10)"],
     ["2\\cdot3", "(* 2 3)"],
     ["2\\times3", "(* 2 3)"],
     ["6\\div3", "(/ 6 3)"],
