@@ -17,7 +17,7 @@ openwiki:
     - design-tool/lib/insights/report.ts
     - design-tool/lib/notify/provider.ts
     - design-tool/lib/email/provider.ts
-  symbols: [sendToPowerSchool, authorizeSend, getPowerSchoolClient, planSend, releaseToGoogleDocs, buildEvidencePack, fillReport, getNotifyPublisher, getEmailSender]
+  symbols: [sendToPowerSchool, authorizeSend, getPowerSchoolClient, listAssignmentSectionIds, gradebookSendConfigured, planSend, releaseToGoogleDocs, buildEvidencePack, fillReport, getNotifyPublisher, getEmailSender]
   test_paths:
     - design-tool/test/gradebook-send.test.ts
     - design-tool/test/gradebook-powerschool.test.ts
@@ -27,6 +27,8 @@ openwiki:
     - design-tool/test/insights-report.test.ts
   invariants:
     - A gradebook send writes only fully scored attempts and points only, and the acting teacher's users_dcid comes from the roster row never from the request.
+    - A re-send first confirms the stored PowerSchool assignment still exists; a missing one archives the push and fails each student as assignment_missing.
+    - The Send to gradebook button appears only when GRADEBOOK_PROVIDER is explicitly live or mock.
     - The insights model sees an evidence pack with no names or ids and every number in a claim is filled server-side from a keyed figure.
     - The Drive token is a one-hour encrypted cookie limited to the drive.file scope and is never stored in the database.
   validation_commands:
@@ -43,9 +45,44 @@ Design page: `docs/gradebook-push-design.md`. Route: `POST /api/assessments/[id]
 
 1. `authorizeSend` (`lib/gradebook/authorizeSend.ts`) decides twice, because PowerSchool does not restrict the plugin by user: the caller needs `edit` on the assessment (a `run`-level substitute is refused), and the sender's own address must currently teach the target section on the roster. Both refusals are the access model's 404. The `users_dcid` sent to PowerSchool comes from that roster row, never from the request body.
 2. The Zod body accepts `target: "powerschool" | "schoology"`, but only `powerschool` is implemented; any other target returns 400 `unsupported_target`.
-3. `sendToPowerSchool` (`lib/gradebook/sendPowerSchool.ts`) selects attempts, creates or reuses the external assignment, writes scores and records the push. Rules: one destination and one section per send; only fully scored attempts are sent, and held-back ones are reported with a reason from `HELD_BACK_REASONS` (`unscored`, `not_on_roster`, `no_dcid`); points only, against the assessment's maximum; a re-send reuses the stored assignment and skips unchanged rows (`skipped_unchanged`); the destination is remembered per (teacher, section) in `gradebook_section_prefs`; a first-send claim row older than `CLAIM_STALE_MS` is treated as a crashed send.
-4. `getPowerSchoolClient` (`lib/gradebook/powerschool.ts`) selects the client by `GRADEBOOK_PROVIDER`: `mock` (default, in-memory, records every call) or `live` (the district plugin's `/ws/xte/` endpoints with an OAuth client-credentials token). The module never logs tokens or bodies. `GradebookConfigError` becomes a not-configured response. The score-write body shape is in a file named `powerschoolScoreBodyUnconfirmed.ts` because it has not been confirmed against the live API; treat it as the least certain part.
-5. Persistence: `gradebook_pushes`, `gradebook_push_scores`, `gradebook_section_prefs` ([data model](data-model.md)). Each written attempt also gets a server-only `gradebook_sent` attempt event ([sittings and attempts](sittings-and-attempts.md#events-and-the-monitor)). `lib/scoring/rescore.ts` reads `gradebook_pushes`/`gradebook_push_scores` to find sections whose already-sent points a rescore would make stale, and a later send re-writes rows whose points changed ([scoring](scoring-and-results.md)).
+3. `sendToPowerSchool` (`lib/gradebook/sendPowerSchool.ts`) selects attempts, creates or reuses the external assignment, writes scores and records the push. Rules: one destination and one section per send; only fully scored attempts are sent, and held-back ones are reported with a reason from `HELD_BACK_REASONS` (`unscored`, `not_on_roster`, `no_dcid`); points only, against the assessment's maximum; a re-send reuses the stored assignment and skips unchanged rows (`skipped_unchanged`); the destination is remembered per (teacher, section) in `gradebook_section_prefs`; a first-send claim row older than `CLAIM_STALE_MS` is treated as a crashed send, and a claim still fresh answers 409 `send_in_progress`.
+4. `getPowerSchoolClient` (`lib/gradebook/powerschool.ts`) selects the client by `GRADEBOOK_PROVIDER`: `mock` (default, in-memory, records every call) or `live` (the district plugin's `/ws/xte/` endpoints with an OAuth client-credentials token). The module never logs tokens or bodies. `GradebookConfigError` becomes a not-configured response. The score-write body shape is in a file named `powerschoolScoreBodyUnconfirmed.ts` because it has not been confirmed against the live API; treat it as the least certain part. The Send button is shown only when `GRADEBOOK_PROVIDER` is set explicitly to `live` or `mock` (`gradebookSendConfigured` in `lib/gradebook/sendDialog.ts`, the results page passes the env value). Without that, an unconfigured server would report "Sent to PowerSchool" while the in-memory mock received it.
+5. **Re-send existence check (GB-2).** A re-send whose scores are all unchanged writes nothing, so a deleted assignment would otherwise go unnoticed. Before the write, `sendToPowerSchool` calls `listAssignmentSectionIds` for the section. If the stored assignment is missing, the push is archived (`archived_at`), every student in the send is reported as `assignment_missing`, and the next send creates a new assignment. An unreadable list answers 502 `gradebook_unavailable` and keeps the push. A score write that PowerTeacher Pro refuses with a missing-assignment body (`isAssignmentSectionMissing`: 404, or the 500 "Unable to find … AssignmentSection" message) takes the same archive path.
+6. **Partial refusal.** PowerTeacher Pro refuses a whole score batch when one student has no association with the assignment. `parseUnassociatedStudents` reads the named students from the 409 body; they are reported as `not_in_powerschool_section` and the rest of the batch is written once more.
+
+7. Persistence: `gradebook_pushes`, `gradebook_push_scores`, `gradebook_section_prefs` ([data model](data-model.md)). Each written attempt also gets a server-only `gradebook_sent` attempt event ([sittings and attempts](sittings-and-attempts.md#events-and-the-monitor)). `lib/scoring/rescore.ts` reads `gradebook_pushes`/`gradebook_push_scores` to find sections whose already-sent points a rescore would make stale, and a later send re-writes rows whose points changed ([scoring](scoring-and-results.md)).
+
+```mermaid
+sequenceDiagram
+  participant T as Teacher page
+  participant R as gradebook-send route
+  participant S as sendToPowerSchool
+  participant D as Database
+  participant P as PowerTeacher Pro client
+  T->>R: POST gradebook-send (section, category, name, due date)
+  R->>R: authorizeSend (edit access and the sender teaches the section)
+  R->>S: send input
+  S->>D: livePush for the assessment and section
+  alt first send
+    S->>D: claim push row (send_in_progress if fresh)
+    S->>P: listCategories, then createAssignment (only when rows are to be written)
+    S->>D: store external_assignment_id
+  else re-send
+    S->>P: listAssignmentSectionIds (GB-2)
+    alt assignment missing
+      S->>D: archive push, fail every student as assignment_missing
+      S-->>R: SendSummary, nothing written
+    end
+  end
+  S->>P: writeScores (changed rows only, skipped when none)
+  alt 409 names students not on the assignment
+    S->>P: writeScores again without them
+  end
+  S->>D: upsert gradebook_push_scores, gradebook_sent events, recordSend
+  S-->>R: SendSummary (sent, updated, unchanged, held back, failed)
+```
+
+Caption: the send path in `sendToPowerSchool`. Every branch that fails a student records a `SendFailure` reason rather than throwing, except an unreadable assignment list, which refuses the send. The missing-assignment branch returns before any write.
 
 Read-only operator checks (`ps-reach`, `student-lookup`) run as one-off ECS tasks ([deployment](../operations/deployment-and-observability.md)).
 
