@@ -264,3 +264,60 @@ describe("export / import / duplicate", () => {
     expect(row!.calculator_mode).toBe("none");
   });
 });
+
+// Stimulus graphs (D-8): content on any item, carried like the mark.
+describe("stimulus graphs", () => {
+  const GRAPH = {
+    rows: [{ latex: "y=x^{2}-4", color: "#1f5fa8" }],
+    view: { xmin: -10, xmax: 10, ymin: -7.5, ymax: 7.5 },
+    alt: "A graph of y = x² − 4.",
+  };
+
+  async function itemPatch(assessmentId: string, itemId: string, body: unknown) {
+    const { PATCH } = await import("../app/api/assessments/[id]/items/[itemId]/route");
+    return PATCH(
+      new Request("http://localhost/x", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ id: assessmentId, itemId }) },
+    );
+  }
+
+  test("an item takes a graph, keeps it when omitted, drops it on null; bad graphs are 400", async () => {
+    const a = await seed();
+    asTeacher();
+    const [first] = await getDb().select().from(items).where(eq(items.assessment_id, a.id)).orderBy(items.position);
+    const base = { type: "short_text", stem: first!.stem, correct_answer: "156" };
+    expect((await itemPatch(a.id, first!.id, { ...base, graph: GRAPH })).status).toBe(200);
+    let [row] = await getDb().select().from(items).where(eq(items.id, first!.id));
+    expect(row!.config?.graph).toEqual(GRAPH);
+    expect((await itemPatch(a.id, first!.id, base)).status).toBe(200);
+    [row] = await getDb().select().from(items).where(eq(items.id, first!.id));
+    expect(row!.config?.graph).toEqual(GRAPH);
+    expect((await itemPatch(a.id, first!.id, { ...base, graph: null })).status).toBe(200);
+    [row] = await getDb().select().from(items).where(eq(items.id, first!.id));
+    expect(row!.config?.graph).toBeUndefined();
+    // No alt text, an inverted view, too many rows: refused.
+    expect((await itemPatch(a.id, first!.id, { ...base, graph: { ...GRAPH, alt: " " } })).status).toBe(400);
+    expect(
+      (await itemPatch(a.id, first!.id, { ...base, graph: { ...GRAPH, view: { xmin: 5, xmax: -5, ymin: 0, ymax: 1 } } })).status,
+    ).toBe(400);
+    const rows = Array.from({ length: 21 }, () => ({ latex: "y=x" }));
+    expect((await itemPatch(a.id, first!.id, { ...base, graph: { ...GRAPH, rows } })).status).toBe(400);
+  });
+
+  test("export carries it; import keeps it", async () => {
+    const source = await seed();
+    const [first] = await getDb().select().from(items).where(eq(items.assessment_id, source.id)).orderBy(items.position);
+    await getDb().update(items).set({ config: { graph: GRAPH } }).where(eq(items.id, first!.id));
+    const built = await buildExportBundle(getDb(), source, TEACHER, true);
+    if (!built.ok) throw new Error("export failed");
+    expect(built.bundle.items[0]!.graph).toEqual(GRAPH);
+    const imported = await importBundleForOwner(built.bundle, TEACHER, TEACHER_EMAIL);
+    if (isImportBundleError(imported)) throw new Error(imported.error);
+    const back = await getDb().select().from(items).where(eq(items.assessment_id, imported.assessment_id)).orderBy(items.position);
+    expect(back[0]!.config?.graph).toEqual(GRAPH);
+  });
+});

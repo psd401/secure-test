@@ -11,6 +11,7 @@ export { formatNumber, formatNumberLatex } from "./format";
 export { ParseError, parse } from "./parser";
 export { clean, extrema, intersections, pointsOfInterest, zeros, type Poi, type PoiKind } from "./poi";
 export { sampleCurve, type Polyline, type SampleOptions } from "./sample";
+export { describeGraph, latexToText, type GraphForWords } from "./describe";
 
 import type { Curve } from "./analyze";
 

@@ -186,6 +186,46 @@ extension AssessmentPage {
         if (calcButton) calcButton.setAttribute('aria-expanded', 'false');
       }
 
+      // Row DC (D-8): a question's stimulus graph. The holder carries the
+      // teacher's description at once; the graph is drawn into it after the
+      // page is built, and if it can't be drawn the description stays as the
+      // question's content — the student is never left with nothing.
+      var pendingGraphs = [];
+
+      function graphStimulusFor(item) {
+        var g = item && item.graph;
+        if (!g || typeof g !== 'object' || !g.rows || !g.view) return null;
+        var holder = document.createElement('div');
+        holder.className = 'graph-stimulus';
+        var alt = document.createElement('p');
+        alt.className = 'graph-stimulus-alt';
+        alt.textContent = String(g.alt || 'A graph.');
+        holder.appendChild(alt);
+        pendingGraphs.push({ holder: holder, graph: g, alt: alt });
+        return holder;
+      }
+
+      function mountStimulusGraphs() {
+        if (!pendingGraphs.length) return;
+        calculatorStyle();
+        var lib = null;
+        try {
+          lib = __secureTestGraphing();
+        } catch (e) {
+          console.log('graph stimulus failed: ' + (e && e.message));
+          return;
+        }
+        pendingGraphs.forEach(function (p) {
+          try {
+            lib.mountStimulus(p.holder, p.graph);
+            p.holder.removeChild(p.alt);
+          } catch (e) {
+            console.log('graph stimulus failed: ' + (e && e.message));
+          }
+        });
+        pendingGraphs = [];
+      }
+
       function mountCalculator() {
         try {
           var lib = __secureTestGraphing();

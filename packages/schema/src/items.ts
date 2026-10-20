@@ -21,6 +21,36 @@ export const ScoringMethodSchema = z.enum(["auto", "ai", "human", "hybrid"]);
 // non-empty, which keeps every bundle written before this byte-stable. Rides
 // the TEACHER bundle only: tags are authoring metadata, and ADR 0016 keeps
 // the delivery bundle to what the student needs.
+// Graphing calculator, stimulus graphs (docs/graphing-calculator-design.md
+// D-8): a teacher-authored graph shown with the question — content, not a
+// key, so it rides both bundles. The view's bounds are what the student
+// sees first; alt text is required (it is the graph's accessible name).
+export const StimulusGraphRowSchema = z.object({
+  latex: z.string().max(500),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  hidden: z.literal(true).optional(),
+});
+export const StimulusGraphSchema = z
+  .object({
+    rows: z.array(StimulusGraphRowSchema).min(1).max(20),
+    view: z.object({
+      xmin: z.number().finite(),
+      xmax: z.number().finite(),
+      ymin: z.number().finite(),
+      ymax: z.number().finite(),
+    }),
+    degrees: z.literal(true).optional(),
+    alt: z.string().trim().min(1).max(1000),
+  })
+  .refine((g) => g.view.xmin < g.view.xmax && g.view.ymin < g.view.ymax, {
+    message: "the view's minimums must be below its maximums",
+    path: ["view"],
+  });
+export type StimulusGraph = z.infer<typeof StimulusGraphSchema>;
+
 const baseItem = {
   id: z.string().min(1),
   stem: z.string(),
@@ -29,6 +59,7 @@ const baseItem = {
   // Graphing calculator (docs/graphing-calculator-design.md D-7): the test's
   // calculator is hidden on this question's page. Emitted only when true.
   no_calculator: z.literal(true).optional(),
+  graph: StimulusGraphSchema.optional(),
 };
 
 export const SingleSelectMCItemSchema = z.object({

@@ -3,3 +3,4 @@ export { mountGraphing, configureMathLive, installStyles, fitBounds, type Calcul
 export { GraphView, type PlotItem } from "./graph";
 export * from "./state";
 export * from "./viewport";
+export { mountStimulus, type StimulusGraph, type StimulusHandle } from "./stimulus";

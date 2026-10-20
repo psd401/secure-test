@@ -5,7 +5,10 @@
   "type": "module",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./ui": "./src/ui/index.ts",
+    "./mathlive": "./src/mathlive.ts"
   },
   "files": [
     "src"

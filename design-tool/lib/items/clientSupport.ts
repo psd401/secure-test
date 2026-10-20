@@ -36,6 +36,8 @@ export const MIN_CLIENT_VERSION_FOR_HIGHLIGHTING = "2.0.0";
  */
 export const MIN_CLIENT_VERSION_FOR_FEATURE: Readonly<Record<string, string>> = {
   calculator: "2.0.0",
+  // A stimulus graph is part of the question; an older client couldn't draw it.
+  graph_stimulus: "2.0.0",
 };
 
 function atLeast(have: number[], need: number[]): boolean {

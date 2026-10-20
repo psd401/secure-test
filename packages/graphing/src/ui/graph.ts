@@ -44,6 +44,12 @@ export interface GraphOptions {
   /** Called when the reset/home control is used. */
   onHome: () => void;
   readOnly?: boolean;
+  /**
+   * Keep the graph-unit bounds when the box changes size (a stimulus: a
+   * question on a hidden page lays out at no size, and the teacher's view
+   * must still be what appears). The calculator instead keeps its scale.
+   */
+  keepBounds?: boolean;
 }
 
 const HIT_PX = 10;
@@ -242,7 +248,11 @@ export class GraphView {
     return this.v;
   }
 
+  /** The student has panned or zoomed: from now on a resize keeps the scale. */
+  private moved = false;
+
   setViewport(v: Viewport, notify = false): void {
+    if (notify) this.moved = true;
     this.v = v;
     this.pinned = null;
     this.trace = null;
@@ -288,7 +298,9 @@ export class GraphView {
     const rect = this.element.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    if (w !== this.v.width || h !== this.v.height) {
+    if ((w !== this.v.width || h !== this.v.height) && this.opts.keepBounds && !this.moved) {
+      this.v = { ...this.v, width: w, height: h };
+    } else if (w !== this.v.width || h !== this.v.height) {
       // Keep the centre and scale; tell the owner so state follows.
       const sx = this.v.width / (this.v.xmax - this.v.xmin);
       const sy = this.v.height / (this.v.ymax - this.v.ymin);

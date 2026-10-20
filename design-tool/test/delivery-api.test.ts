@@ -708,6 +708,22 @@ describe("graphing calculator on the wire", () => {
     expect((await getDelivery(id)).status).toBe(409);
   });
 
+  test("a stimulus graph rides to 2.0 and refuses an older client", async () => {
+    const id = await seedWithCalculator("none");
+    const [first] = await getDb().select().from(items).where(eq(items.assessment_id, id)).orderBy(items.position);
+    const graph = { rows: [{ latex: "y=x" }], view: { xmin: -5, xmax: 5, ymin: -5, ymax: 5 }, alt: "A line." };
+    await getDb()
+      .update(items)
+      .set({ config: { ...(first!.config ?? {}), graph } })
+      .where(eq(items.id, first!.id));
+    const ok = await getDelivery(id, "2.0.0");
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).items[0].graph).toEqual(graph);
+    const old = await getDelivery(id, "1.6.3");
+    expect(old.status).toBe(409);
+    expect((await old.json()).min_version).toBe("2.0.0");
+  });
+
   test("none → no field, no mark, and an older client still opens it", async () => {
     const id = await seedWithCalculator("none", true);
     const res = await getDelivery(id, "1.6.3");

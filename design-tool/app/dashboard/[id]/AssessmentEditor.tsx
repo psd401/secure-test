@@ -47,8 +47,10 @@ import type {
   TableCellKeys,
   TableColumn,
   TableRow,
+  StimulusGraph,
 } from "@secure-test/schema";
 import { MathPreview } from "./MathPreview";
+import { GraphStimulusEditor } from "./GraphStimulusEditor";
 import { ImagePicker } from "./ImagePicker";
 import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
@@ -184,6 +186,9 @@ interface ItemView {
   // Graphing calculator (D-7): hide the test's calculator on this question's
   // page; null = off. Optional so the per-type draft factories need not name it.
   no_calculator?: boolean | null;
+  // Graphing calculator D-8: a teacher-authored graph shown with the
+  // question; null = none. Optional like no_calculator.
+  graph?: StimulusGraph | null;
 }
 
 interface AssessmentView {
@@ -307,6 +312,7 @@ interface ItemRow {
     rich_text?: boolean | null;
     show_word_count?: boolean | null;
     no_calculator?: boolean | null;
+    graph?: StimulusGraph | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -348,6 +354,7 @@ function rowToView(r: ItemRow): ItemView {
     rich_text: r.config?.rich_text ? true : null,
     show_word_count: r.config?.show_word_count ? true : null,
     no_calculator: r.config?.no_calculator ? true : null,
+    graph: r.config?.graph ?? null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -1324,6 +1331,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       correct_answer: item.correct_answer,
       // Graphing calculator (D-7): sent both ways so unticking clears it.
       no_calculator: item.no_calculator === true,
+      // Graphing calculator D-8: null removes it, so send it both ways.
+      graph: item.graph ?? null,
     };
     if (item.type === "essay") {
       // Omit when unset: the essay body schema treats these as optional
@@ -2870,6 +2879,12 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   value={item.standards}
                   onChange={(standards) => updateItem(item.id, (i) => ({ ...i, standards }))}
                   suggestions={usedStandards}
+                />
+                {/* Graphing calculator D-8: a graph shown with the question. */}
+                <GraphStimulusEditor
+                  value={item.graph ?? null}
+                  onChange={(graph) => updateItem(item.id, (i) => ({ ...i, graph }))}
+                  disabled={isLocked}
                 />
                 {/* Graphing calculator (D-7): only when the test has one. */}
                 {calculatorMode !== "none" ? (

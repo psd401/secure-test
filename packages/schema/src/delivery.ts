@@ -10,6 +10,7 @@ import {
   SequenceEntrySchema,
   StudentLayoutSchema,
   CalculatorSettingSchema,
+  StimulusGraphSchema,
   TableColumnSchema,
   TableRowSchema,
   itemSetIssues,
@@ -62,6 +63,8 @@ const baseDeliveryItem = {
   // Graphing calculator (D-7): the calculator is hidden on this question's
   // page (paged layout only). Emitted only when true.
   no_calculator: z.literal(true).optional(),
+  // Stimulus graph (D-8): content, so it rides to the student too.
+  graph: StimulusGraphSchema.optional(),
 };
 
 export const DeliverySingleSelectMCItemSchema = z.object({

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  StimulusGraphSchema,
   DrawingCanvasSchema,
   RubricSchema,
   ScoringMethodSchema,
@@ -53,6 +54,8 @@ const BaseItemFields = {
   // Graphing calculator (D-7): hide the test's calculator on this question's
   // page. Omitted on PATCH preserves the stored value, like scoring_method.
   no_calculator: z.boolean().optional(),
+  // Stimulus graph (D-8): null removes it; omitted on PATCH keeps it.
+  graph: StimulusGraphSchema.nullable().optional(),
 };
 
 // Answer keys are OPTIONAL at write time (James, 2026-09-01). The prod
@@ -606,6 +609,8 @@ export function itemConfigForWrite(
   if (resolvedMethod) config.scoring_method = resolvedMethod;
   // Every type: stored only when on.
   if (body.no_calculator ?? existing?.no_calculator) config.no_calculator = true;
+  const graph = body.graph === null ? undefined : (body.graph ?? existing?.graph);
+  if (graph) config.graph = graph;
   if (body.type === "short_text") {
     // Stored only when ON — absence is the default, like every other
     // optional config key, so existing rows and exports stay byte-stable.

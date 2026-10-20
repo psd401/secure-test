@@ -159,6 +159,15 @@ export const CALCULATOR_CSS = `
 .gc-keys-four { grid-template-columns: repeat(8, 1fr); }
 .gc-note { color: var(--gc-muted); }
 
+/* A stimulus graph: a figure in the question, not a full calculator. */
+.gc-root.gc-stimulus { display: block; height: auto; min-height: 0; overflow: visible; margin: 0.75em 0; background: transparent; }
+.gc-stimulus-graph { position: relative; width: 100%; max-width: 40em; aspect-ratio: 4 / 3; border: 1px solid var(--gc-line); border-radius: 6px; overflow: hidden; background: var(--gc-paper); }
+.gc-legend { list-style: none; margin: 0.5em 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25em 1.25em; }
+.gc-legend li { display: flex; align-items: center; gap: 0.5em; }
+.gc-legend-swatch { width: 0.9em; height: 0.9em; border-radius: 50%; flex: none; }
+.gc-stimulus-caption details { margin-top: 0.4em; font-size: 0.9333em; color: var(--gc-muted); }
+.gc-stimulus-caption summary { cursor: pointer; }
+
 @media (max-width: 640px) {
   .gc-root { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 45%) 1fr auto; }
   .gc-left { order: 2; border-right: 0; border-top: 1px solid var(--gc-line); }

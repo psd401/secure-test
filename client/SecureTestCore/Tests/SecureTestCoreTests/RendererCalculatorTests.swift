@@ -104,4 +104,26 @@ final class RendererCalculatorTests: XCTestCase {
         let h = try pagedWithMark(layout: "scroll")
         XCTAssertFalse(try h.bool("__first('.calc-toggle').disabled"))
     }
+
+    // D-8: a stimulus graph. JavaScriptCore can't draw it, which is exactly
+    // the fallback a student would get: the teacher's description stays.
+    func testAStimulusGraphFallsBackToItsDescription() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"short_text","id":"a","stem":"Where is the vertex?",
+          "graph":{"rows":[{"latex":"y=x^{2}-4"}],"view":{"xmin":-10,"xmax":10,"ymin":-7.5,"ymax":7.5},
+                   "alt":"A graph of y = x² − 4."}}]}
+        """)
+        XCTAssertEqual(try h.int("__count('.graph-stimulus')"), 1)
+        XCTAssertEqual(try h.string("__first('.graph-stimulus-alt').textContent"), "A graph of y = x² − 4.")
+        XCTAssertEqual(try h.int("__count('input')"), 1, "the question still has its answer box")
+    }
+
+    func testAMalformedGraphIsIgnored() throws {
+        for graph in [#""a graph""#, "null", #"{"rows":[]}"#] {
+            let h = try RendererHarness(bundleJSON: """
+            {"test_id":"t","title":"T","items":[{"type":"short_text","id":"a","stem":"s","graph":\(graph)}]}
+            """)
+            XCTAssertEqual(try h.int("__count('.graph-stimulus')"), 0, graph)
+        }
+    }
 }

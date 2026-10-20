@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { ItemBundleSchema, ItemSchema, RubricSchema, fillBlankMarkerIds } from "../src/items.js";
+import { ItemBundleSchema, ItemSchema, RubricSchema, StimulusGraphSchema, fillBlankMarkerIds } from "../src/items.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pocBItemsJsonPath = resolve(
@@ -938,5 +938,27 @@ describe("ItemBundleSchema — calculator", () => {
     expect(ItemBundleSchema.safeParse({ ...base, items: [{ ...item, no_calculator: false }] }).success).toBe(false);
     const mc = { type: "multiple_choice_single", id: "b", stem: "s", choices: [{ id: "c", text: "x" }, { id: "d", text: "y" }], no_calculator: true };
     expect(ItemBundleSchema.parse({ ...base, items: [mc] }).items[0]!.no_calculator).toBe(true);
+  });
+});
+
+// Stimulus graphs (graphing calculator D-8).
+describe("StimulusGraphSchema", () => {
+  const ok = {
+    rows: [{ latex: "y=x", color: "#1f5fa8" }, { latex: "y=-x", hidden: true }],
+    view: { xmin: -10, xmax: 10, ymin: -5, ymax: 5 },
+    alt: "Two lines crossing at the origin.",
+  };
+  test("a valid graph rides any item on the teacher bundle", () => {
+    const b = ItemBundleSchema.parse({ test_id: "t", title: "t", items: [{ type: "essay", id: "e", stem: "s", graph: ok }] });
+    expect(b.items[0]!.graph).toEqual(ok);
+  });
+  test("alt text, a real view, sane rows and colours are required", () => {
+    expect(StimulusGraphSchema.safeParse({ ...ok, alt: "   " }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { xmin: 1, xmax: 1, ymin: 0, ymax: 1 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, xmax: Infinity } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [] }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: Array.from({ length: 21 }, () => ({ latex: "y=x" })) }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "y=x", color: "red" }] }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "x".repeat(501) }] }).success).toBe(false);
   });
 });

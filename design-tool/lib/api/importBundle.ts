@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import type { ItemBundle, ScoringMethod } from "@secure-test/schema";
+import type { ItemBundle, ScoringMethod, StimulusGraph } from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -569,8 +569,20 @@ export function isImportBundleError(
  * than in every type's branch above.
  */
 function withNoCalculator<R extends { config: ItemConfig }>(
-  src: readonly { no_calculator?: true }[],
+  src: readonly { no_calculator?: true; graph?: StimulusGraph }[],
   rows: R[],
 ): R[] {
-  return rows.map((r, i) => (src[i]?.no_calculator ? { ...r, config: { ...r.config, no_calculator: true } } : r));
+  return rows.map((r, i) => {
+    const s = src[i];
+    if (!s?.no_calculator && !s?.graph) return r;
+    return {
+      ...r,
+      config: {
+        ...r.config,
+        ...(s.no_calculator ? { no_calculator: true } : {}),
+        // Stimulus graph (D-8): any type, carried the same way.
+        ...(s.graph ? { graph: s.graph } : {}),
+      },
+    };
+  });
 }

@@ -93,6 +93,8 @@ export async function buildExportBundle(
       ...(tags.length > 0 ? { standards: tags } : {}),
       // Graphing calculator (D-7): any type; only when set.
       ...(row.config?.no_calculator ? { no_calculator: true as const } : {}),
+      // Stimulus graph (D-8): any type; only when present.
+      ...(row.config?.graph ? { graph: row.config.graph } : {}),
     };
     const type = row.type as ItemType;
     switch (type) {

@@ -1826,3 +1826,14 @@ calculator on the wire" block of `delivery-api.test.ts`).
 | 664 | Duplicate the test | Same as 663 | NOT RUN |
 | 665 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | NOT RUN |
 | 666 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | NOT RUN |
+
+### Stimulus graphs (slice 6)
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 667 | A question → Add a graph | The calculator loads in the card (MathLive, KaTeX fonts); typing graphs as in the student calculator | NOT RUN |
+| 668 | Draft a description; Use this graph; save the question; reload | The card shows the graph image and its description; Edit graph reopens with the same rows and view | NOT RUN |
+| 669 | Use this graph with an empty description | Refused with the "Describe the graph…" message | NOT RUN |
+| 670 | Preview / print | The graph as SVG under the stem, legend and description below | NOT RUN (unit: `preview-graph.test.ts`) |
+| 671 | Remove graph; save; reload | Gone from editor, preview and the student page | NOT RUN |
+| 672 | Publish; Edit graph | Disabled (locked with the question) | NOT RUN |

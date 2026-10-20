@@ -249,7 +249,12 @@ export async function buildDeliveryBundle(
   const hasCalculator = assessment.calculator_mode !== "none";
   const delivered = itemRows.map((row) => {
     const mapped = mapItemForDelivery(row, attemptId);
-    return hasCalculator && row.config?.no_calculator === true ? { ...mapped, no_calculator: true as const } : mapped;
+    return {
+      ...mapped,
+      ...(hasCalculator && row.config?.no_calculator === true ? { no_calculator: true as const } : {}),
+      // Stimulus graph (D-8): content, every type.
+      ...(row.config?.graph ? { graph: row.config.graph } : {}),
+    };
   });
   // E5 slice 1: stimuli are student-facing; same shape as the teacher bundle,
   // item ids are the same uuids on both sides.

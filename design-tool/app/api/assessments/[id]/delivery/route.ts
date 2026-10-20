@@ -139,7 +139,10 @@ export async function GET(req: Request, ctx: RouteContext) {
     const minVersion = requiredClientUpgrade(
       req.headers.get(CLIENT_VERSION_HEADER),
       bundle.items.map((i) => i.type),
-      bundle.calculator ? ["calculator"] : [],
+      [
+        ...(bundle.calculator ? ["calculator"] : []),
+        ...(bundle.items.some((i) => i.graph) ? ["graph_stimulus"] : []),
+      ],
     );
     if (minVersion) {
       return NextResponse.json(

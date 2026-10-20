@@ -6363,6 +6363,9 @@ public enum AssessmentPage {
           }, wrap));
         }
         wrap.appendChild(stem);
+        // Row DC (D-8): the teacher's graph, under the stem.
+        var graph = graphStimulusFor(item);
+        if (graph) wrap.appendChild(graph);
         var answer = fillBlank ? fillBlankField(item, stem) : answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
         wrap.appendChild(answer);
@@ -6716,6 +6719,9 @@ public enum AssessmentPage {
         });
         root.appendChild(buildFinish());
       }
+
+      // Row DC (D-8): draw the stimulus graphs now the tree is built.
+      mountStimulusGraphs();
 
       // Row DC: the calculator button, when the bundle names a calculator.
       // The panel and the calculator itself are built on first open.

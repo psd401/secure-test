@@ -24,6 +24,7 @@ import type {
   Rubric,
   ScoringMethod,
   SequenceEntry,
+  StimulusGraph,
   TableCellKeys,
   TableColumn,
   TableRow,
@@ -214,6 +215,10 @@ export type ItemConfig = {
   // Graphing calculator (D-7): any type — the test's calculator is hidden on
   // this question's page (paged layout). Stored only when true.
   no_calculator?: boolean;
+  // Stimulus graph (graphing calculator D-8): any type, a teacher-authored
+  // graph shown with the question. Validated at the write boundary by
+  // StimulusGraphSchema; stored only when present.
+  graph?: StimulusGraph;
   rubric?: Rubric;
   // Rubric library slice 3 (D-4): the `rubrics` row this item's rubric was
   // COPIED from, if any. Editor metadata only — `rubric` above stays the

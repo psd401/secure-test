@@ -24,6 +24,7 @@ import {
   type MatchPair,
   type Rubric,
   type SequenceEntry,
+  type StimulusGraph,
   type TableColumn,
   type TableRow,
 } from "@secure-test/schema";
@@ -34,6 +35,7 @@ import { assetSrc, renderItemContent, type ResolvedAsset } from "@/lib/items/ren
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
+import { latexToText, renderGraphSvg } from "@secure-test/graphing/server";
 
 interface Choice {
   id: string;
@@ -62,6 +64,10 @@ export interface PreviewItem {
   // U-22: a running word count with no maximum. The preview is no-script, so
   // it shows the counter's starting line, "0 words", on screen only.
   show_word_count?: boolean | null;
+  // Stimulus graph (graphing calculator D-8): drawn here as SVG on the
+  // server — the preview has no scripts — from the same engine the student's
+  // page uses, with the teacher's alt text as its name and its caption.
+  graph?: StimulusGraph | null;
   // Match-only pair list (slice 47). Rights are displayed sorted so the
   // authored order (which IS the answer key) doesn't give matches away.
   pairs?: MatchPair[] | null;
@@ -337,6 +343,25 @@ function renderRichEssayBox(placeholder: string | null | undefined): string {
   );
 }
 
+/** A stimulus graph as a figure: the SVG, then its legend and description. */
+export function renderStimulusGraph(g: StimulusGraph): string {
+  let svg: string;
+  try {
+    svg = renderGraphSvg(g, { title: g.alt });
+  } catch {
+    svg = `<p class="graph-missing">${escapeHtml("(This graph could not be drawn.)")}</p>`;
+  }
+  const legend = g.rows
+    .filter((r) => !r.hidden && r.latex.trim() !== "")
+    .map((r) => `<li>${escapeHtml(latexToText(r.latex))}</li>`)
+    .join("");
+  return (
+    `<figure class="graph-stimulus">${svg}` +
+    `<figcaption>${legend ? `<ul class="graph-legend">${legend}</ul>` : ""}` +
+    `<p class="graph-alt">${escapeHtml(g.alt)}</p></figcaption></figure>`
+  );
+}
+
 function renderItem(
   item: PreviewItem,
   index: number,
@@ -355,7 +380,8 @@ function renderItem(
   const stemHtml = fill ? fill.stemHtml : renderItemContent(item.stem, resolved);
   const heading =
     (speech.items ? speechBar("Speak") : "") +
-    `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>`;
+    `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>` +
+    (item.graph ? renderStimulusGraph(item.graph) : "");
 
   let body = "";
   if (
@@ -704,6 +730,10 @@ export function renderAssessmentHtml(
     .source-body { margin: 0; white-space: pre-line; }
     .stimulus-source { margin-top: 8px; padding: 10px 12px; border: 1px dashed #8a94a6; border-radius: 4px; color: #3a4a6a; font-size: 13px; font-style: italic; }
     .stem { margin: 0 0 8px; white-space: pre-line; }
+    .graph-stimulus { margin: 8px 0 12px; max-width: 480px; }
+    .graph-stimulus svg { display: block; width: 100%; height: auto; }
+    .graph-legend { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; }
+    .graph-alt { margin: 4px 0 0; font-size: 13px; color: #555; }
     .choice { display: block; margin: 6px 0; }
     .short-text { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     .essay { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; }
