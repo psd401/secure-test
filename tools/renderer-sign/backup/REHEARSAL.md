@@ -25,7 +25,7 @@ an expired manifest is rejected. Until v2.0 releases that commit is `e542005`
 build, and these tests have to be re-run there.
 
 ```sh
-W=$TMPDIR/st-rehearsal; mkdir -p $W
+W=$TMPDIR/st-rehearsal; mkdir -p $W/sign
 git worktree add --detach $W/verifier rehearsal-verifier-2026-10-15
 git worktree add --detach $W/server b40600b
 
@@ -42,8 +42,10 @@ Then:
   ykman`).
 - The manifest is byte for byte the one above:
   `shasum -a 256 packages/renderer/test/fixtures/backup-rehearsal/manifest.json`.
-  Copy it to a new directory outside the repository (`$W/sign/`) and sign
-  that copy.
+  Copy it outside the repository and sign that copy:
+  `cp packages/renderer/test/fixtures/backup-rehearsal/manifest.json $W/sign/`.
+- `renderer-sign` is built for the "After" check:
+  `(cd tools/renderer-sign && swift build -c release)`.
 - The token's serial, from the ops repository's custody record.
 
 ## 2. At the token (two people)
