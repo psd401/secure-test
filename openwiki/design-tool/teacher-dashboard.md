@@ -75,7 +75,7 @@ Row actions (`DuplicateAssessmentButton`, `ArchiveAssessmentButton`, `DeleteDraf
 | `settings` | Settings | Name, time limit, layout, feedback and answer-release settings, the passage-highlighting checkbox ([passage highlighting](passage-highlighting.md)), archive and delete. |
 | `accommodations` | Allowed on this test | Assessment-wide allowed list, construct-altering flags, and class-period grants. See [accommodations and roster](accommodations-and-roster.md). |
 | `students` | Exceptions for this test | Per-student overrides on this assessment. See [accommodations and roster](accommodations-and-roster.md). |
-| `sessions` | Test sessions | `SittingsPanel`: create sittings, show codes, close early, and see who has joined or submitted. Extend and hand-in controls are on the monitor. See [sittings and attempts](sittings-and-attempts.md). |
+| `sessions` | Test sessions | `SittingsPanel`: create sittings, show codes, close early, continue an ended class sitting in a new session, and see who has joined or submitted. Extend and hand-in controls are on the monitor. See [sittings and attempts](sittings-and-attempts.md). |
 
 The editor receives `access.level`, `access.via`, and `owner_email` from the server. Owner-only actions in the header and Settings tab use them, and a co-teacher's editor is labelled as such. A published assessment shows a lock banner; answer keys and standards stay editable while it is locked, as described in [assessment lifecycle](assessment-lifecycle.md).
 
@@ -96,6 +96,8 @@ flowchart TD
 ```
 
 The monitor polls only while there is something left to watch, and each control calls an existing sitting route.
+
+On an ended class sitting, the header offers **Continue in a new session**, and a banner appears while any student is still `in_progress` to explain that Adjust time alone does not let anyone back in. The rules are in [sittings and attempts](sittings-and-attempts.md#ending-a-sitting-and-continuing-it).
 
 ## Results, scoring, and reports
 
@@ -130,5 +132,8 @@ Routes answer with machine codes (for example `already_granted`, `ends_at_past`)
 - **Focused tests.** `test/all-teachers-ui.test.ts` (toggle and list-mode helpers), `test/reporting-views.test.tsx` (the assessments list and results matrix), `test/co-teach-ui.test.tsx` (owner and co-teacher labels), `test/attendance-view.test.ts` (monitor state), `test/extend-time-control.test.tsx`, `test/hand-in-all-control.test.tsx`, and `test/access-enforcement.test.ts` (route-level 404s).
 - **Minimal validation.** `cd design-tool && bun test test/all-teachers-ui.test.ts` for the list helpers. Database-backed suites need `DATABASE_URL`, as set out in [testing and validation](../testing/testing-and-validation.md).
 - **Scope boundary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
+
+Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.
+undary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
 
 Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.

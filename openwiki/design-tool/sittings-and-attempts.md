@@ -16,6 +16,8 @@ openwiki:
     - design-tool/lib/api/attemptDeadline.ts
     - design-tool/lib/api/sittingOver.ts
     - design-tool/lib/api/extendAttempt.ts
+    - design-tool/app/dashboard/[id]/attendanceView.ts
+    - design-tool/components/app/ContinueInNewSessionControl.tsx
     - design-tool/app/api/test-sessions/route.ts
     - design-tool/app/api/roster/sections/route.ts
     - design-tool/app/api/roster/students/route.ts
@@ -30,11 +32,13 @@ openwiki:
     - design-tool/test/sitting-closed.test.ts
     - design-tool/test/attempt-extend-api.test.ts
     - design-tool/test/session-extend-api.test.ts
+    - design-tool/test/continue-session.test.ts
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererPrefillTests.swift
   invariants:
     - A code alone never admits a student; roster scope is checked too, and misses collapse to session_unavailable.
     - There is one attempt per (assessment, student); rejoining through a new sitting rebinds the attempt.
     - Deadlines are per attempt, not per sitting.
+    - An ended sitting is never reopened; "Continue in a new session" creates a new sitting with a new code and the same scope.
   validation_commands:
     - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/attempt-ingest-api.test.ts
 ---
@@ -109,6 +113,34 @@ Two independent clocks refuse student writes, and each has a grace period for th
 
 The design note for this behaviour is `docs/time-limit-and-unfinished-attempts-design.md`. Neither clock hands the attempt in. The client ends the secure session, the attempt stays `in_progress` and resumable through a later sitting, and finalising is the teacher's hand-in (`app/api/attempts/[attemptId]/hand-in`, `app/api/test-sessions/[sessionId]/hand-in-all`) or the student's Finish later. A student's own submit after the deadline is refused (409), so only the teacher's route stays open.
 
+## Ending a sitting and continuing it
+
+A sitting ends when the teacher presses Close, which sets `status = closed`, or when `expires_at` passes. Nothing flips the status at expiry: redemption and the Monitor read the clock. Once ended, the code no longer admits anyone, so students still mid-test and students who were absent both need a new sitting.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open: Start session
+    open --> closed: teacher Close
+    open --> expired: expires_at passes, read lazily
+    closed --> continued: Continue in a new session
+    expired --> continued: Continue in a new session
+    continued --> [*]: a new sitting with its own code
+```
+
+Caption: an ended sitting stays ended. Continuing creates a separate sitting; it does not reopen the old one.
+
+**Continue in a new session** is offered by `ContinueInNewSessionControl` (`components/app/ContinueInNewSessionControl.tsx`) on the Monitor header and on the sitting's row in the Test sessions tab. `canContinueInNewSession` (`app/dashboard/[id]/attendanceView.ts`) offers it for a class sitting that is closed or past `expires_at`, and never for a practice sitting. The control posts `POST /api/test-sessions` with the body from `continueSessionBody`: the ended sitting's scope (one section, its student list, or all sections when neither is set) plus the length the teacher picks. The route re-checks that scope against the teacher's current roster and sweeps expired sittings before it allocates a code, so the new sitting is an ordinary sitting. The browser then opens the new Monitor on `?code=1`. If the same scope is already open, the 409 `sitting_already_open` answer sends the teacher to that sitting instead.
+
+**Adjust time does not reopen anything.** On an ended sitting, every Adjust time dialog shows `ENDED_SITTING_NOTE` ("students need a new session to get back in"). A deadline set there still applies to the attempt once the student joins a new sitting. The Monitor shows `endedSessionBanner(...)` while any attempt is still `in_progress` on an ended class sitting. The banner says Adjust time alone does not let anyone back in, and it offers the new-session control. The design note is `docs/ended-session-rejoin-design.md`. The rejected option, pushing the old `expires_at` forward, would have reversed the rule that a closed sitting stays closed.
+
+Invariants:
+
+- The old code stays dead. The new sitting has its own code, and the scope is copied, not the code.
+- Students who were mid-test resume in the new sitting through the same rebind rule as any rejoin: the one attempt for that assessment and student moves to the new sitting with its saved answers ([resume prefill](#resume-prefill)).
+- Scope is still checked on join. A student who is in the copied scope is admitted; a student who has left it is refused as usual, and a student who already handed in sees the handed-in state.
+
+Focused tests: `design-tool/test/continue-session.test.ts` covers the pure helpers (`canContinueInNewSession` cases for open-past-end, closed, live, practice and rows without `kind`; `continueSessionBody` for section, student list and all sections; `endedSessionBanner`; `continuedMonitorHref`). The route's general scope and 409 rules are covered by `test-sessions-api.test.ts`, which needs the test database. Validate the pure helpers with `cd design-tool && bun test test/continue-session.test.ts`, which needs no database.
+
 ## Attempt lifecycle
 
 ```mermaid
@@ -182,6 +214,7 @@ Focused tests: `delivery-api.test.ts`, describe "GET /api/assessments/:id/delive
 
 - Start at the route for the verb you are changing, then `lib/api/studentAttempt.ts` (`loadOwnAttempt`, `loadItemForAttempt`, `loadJoinableSitting`) for shared student-side loading.
 - Any new student write door must ask both clocks (`refuseIfSittingOver` then `refuseIfPastDeadline`); the three existing doors are the response write, the drawing-slot completion and submit.
+- A change to the `POST /api/test-sessions` body also changes `continueSessionBody` in `attendanceView.ts`, which builds the Continue in a new session request. Keep the two in step.
 - New bundle fields must be additive and emitted only when meaningful, so older bundles stay byte-identical; add the field to `DeliveryBundleSchema` first.
 - A new response type must parse under `ItemResponseSchema`, or its saved value is silently dropped on resume ([resume prefill](#resume-prefill)); if its ids are sealed per attempt, `sealResponseIds` must map them too.
 - Focused tests: `test-sessions-api.test.ts` (codes, scope), `my-sittings-api.test.ts` (the "Your tests" list: admission, one row per assessment, `time_ran_out`), `resolve-student.test.ts`, `attempt-ingest-api.test.ts` (write guards, 42 KB), `delivery-api.test.ts` (no answer key anywhere in the body; sealing round trips), `attempt-deadline.test.ts`, `sitting-closed.test.ts`, `sitting-over.test.ts`, `attempt-events-api.test.ts`, `peek-api.test.ts`, `attempt-pass-back-api.test.ts`, `attempt-extend-api.test.ts`, `session-extend-api.test.ts`, `session-hand-in-all-api.test.ts`, `attempt-hand-in-api.test.ts`, `practice-sitting.test.ts`, `practice-invisibility.test.ts`, `sittings-attendance-api.test.ts`, `attempt-delete-api.test.ts` (`DELETE /api/attempts/[attemptId]`).
