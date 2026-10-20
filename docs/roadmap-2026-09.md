@@ -1223,3 +1223,48 @@ through the v2.0 served renderer). Investigate before any design note:
 Open with the teacher: which courses (one Amplify page lists digital
 assessments through Algebra 1), and whether a calculator alone covers
 her need.
+
+**Investigated 2026-10-19 (desk research only; nothing built, nothing
+signed).** Findings:
+- **Licensing is the gate.** The Desmos API Terms (v1.0, July 2025) limit
+  the free tier to personal non-commercial use or a 90-day internal trial;
+  "commercial" covers any application end users use in production, so a
+  district tool needs a paid plan. Starter (Desmos-hosted only, up to
+  5,000 users a year, listed at $100/month) or Enterprise (by quote; the
+  ONLY plan that allows self-hosting / offline). Four-function, scientific
+  and geometry are enabled per API key. The calculator API belongs to
+  Desmos Studio, not Amplify (Amplify bought the curriculum, 2022).
+  Contact: Desmos partnerships (the address the terms and API docs name),
+  not the assessments address above. Pricing came from search excerpts;
+  the live pages render client-side and were not read in full.
+- **Fit with the client.** The test page's CSP is `default-src 'none'`
+  and navigation is refused except `about:` (`PageShell.swift`,
+  `AssessmentViewController.swift`) — the page has no network path by
+  design. A Desmos-hosted load would have to open `script-src` /
+  `connect-src` to Desmos and depend on the network mid-test; a
+  self-hosted `calculator.js` inside the signed renderer keeps the CSP
+  closed and works offline. The CDN question above is moot either way:
+  10.7 never affected the client's own traffic.
+- **Configuration.** The API's options (`expressions`, `keypad`,
+  `settingsMenu`, `restrictedFunctions`, `lockViewport`, `images`,
+  `notes`, …) are enough for state-test-style variants; basic
+  integration includes the SAT / ACT / AP configurations.
+- **Alternatives.** macOS Grapher (`com.apple.grapher`) or Calculator as
+  an AAC participant app (the finding #15 mechanism; Calculator proven,
+  Grapher not yet run in a session) — free, not Desmos-like. GeoGebra —
+  free for school non-commercial use, commercial needs a licence; whether
+  a district tool counts is unconfirmed. Desmos Test Mode (iPad app,
+  installs on Apple Silicon) as a participant app — Apple lists it as
+  AAC-compatible on iPad only; long odds. Build our own on open-source
+  parts.
+
+**Decisions (James, 2026-10-19):**
+- A Desmos contract is unlikely; James pursues it separately.
+- Both scientific and graphing are wanted; graphing matters more, as a
+  **stimulus and as an answer type** — graph-entry answers are now IN
+  scope for this row (supersedes the exclusion above).
+- The calculator is both a per-test setting and an accommodation
+  (`desmos_calculator` in the catalog).
+- Next: explore building our own embedded graphing calculator with a
+  Desmos-like look and feel on a long-lived branch,
+  `graphing-calculator`, kept off `main` so it holds up no other work.
