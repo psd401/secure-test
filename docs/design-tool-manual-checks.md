@@ -1824,7 +1824,7 @@ calculator on the wire" block of `delivery-api.test.ts`).
 | 662 | Same, with "One scrolling page" | The box says it takes effect only one question at a time; Settings shows the amber note | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the card note and the amber Settings note |
 | 663 | Export the test, import the file | Calculator, setup and the ticked question all come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — export → import through the API (no file download); calculator, setup, ticked question, stimulus graph identical |
 | 664 | Duplicate the test | Same as 663 | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — Duplicate identical to the original |
-| 665 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | NOT RUN |
+| 665 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | ✅ server half 2026-10-20 local dev (worktree `_gc_demo` DB): a scratch student script got 409 `client_update_required` (min 2.0.0) with no version and with 1.9.0, 200 with 2.0.0; the client's update message itself NOT RUN |
 | 666 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
 
 ### Stimulus graphs (slice 6)
@@ -1847,5 +1847,5 @@ calculator on the wire" block of `delivery-api.test.ts`).
 | 675 | Change the grid to 0…20 with snap 1/2; tick Circle | The key board redraws; an off-grid key point is refused on save with a message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — alert "Key object 2 no longer fits…"; save refused; snap typed "1 / 2" saved as 1/2 |
 | 676 | Publish; change only the key | Saves (the key door); changing the grid is refused | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run: the key board was read-only after publish (no way through the key door), fixed in the following commit; then a key-only change saved (200), grid locked |
 | 677 | Preview and print | The empty grid as SVG, what students may place; print says to draw on the grid | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — print: "Draw your answer on the grid (up to 2)." |
-| 678 | A student answers (client row); Results → the student | Each object in words with ✓ / ✗; the score as the scorer gave it | NOT RUN |
+| 678 | A student answers (client row); Results → the student | Each object in words with ✓ / ✗; the score as the scorer gave it | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB), two demo students answered through the student API: Results "✗ y = x / ✓ point (4, 6)" 1/2 and "✓ y = 2x + 1 / ✓ point (4, 6)" 2/2 (a different pair of points on the key line); an off-board point refused (400). The hand-scored graph item showed raw JSON in the scoring queue — fixed (answer in words), then scored 1/1 there and Results updated (3/4) |
 | 679 | Export, import | Grid, tools and key come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — same round trip as 663 |

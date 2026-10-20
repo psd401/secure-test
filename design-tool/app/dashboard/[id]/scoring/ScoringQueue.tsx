@@ -117,6 +117,12 @@ interface QueueEntry {
    * older payload.
    */
   fill_blank_html?: string | null;
+  /**
+   * Graphing calculator D-9: a graph answer in words, one line per object,
+   * `correct` against the key (null with no key). Null for every other type;
+   * absent from an older payload.
+   */
+  graph_lines?: { text: string; correct: boolean | null }[] | null;
   proposed: {
     score_id: string;
     points: number;
@@ -326,6 +332,13 @@ function picksFromProposal(entry: QueueEntry): Record<string, string> {
 function responseText(entry: QueueEntry): string {
   const r = entry.response;
   if (typeof r.text === "string") return r.text;
+  // A graph answer, one object per line in words (✓ / ✗ against a key).
+  if (entry.graph_lines) {
+    if (!entry.graph_lines.length) return "Nothing placed.";
+    return entry.graph_lines
+      .map((l) => `${l.correct === true ? "✓ " : l.correct === false ? "✗ " : ""}${l.text}`)
+      .join("\n");
+  }
   if (r.choice_id) return `Selected: ${r.choice_id}`;
   if (r.choice_ids) return `Selected: ${r.choice_ids.join(", ")}`;
   // Slice 47: match — pair-id mappings, readable if not pretty.
