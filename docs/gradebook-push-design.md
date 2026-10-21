@@ -654,9 +654,15 @@ own form copies the category's `isdefaultpublishscores`, which we never
 read. Fix (branch `hotfix/publish-scores` from the live `4a812ae`): the
 category parse reads `isdefaultpublishscores` (null when absent) and the
 create sends it as `isscorespublish`, omitted when null — 8.2 applied to
-both halves. `ps-send-check.ts` sends the same body. Not yet confirmed
-against PowerSchool: the test-server check (`--write`) runs before the
-deploy. **Slice 2 (decided 2026-10-20, James):** a Send again turns
+both halves. `ps-send-check.ts` sends the same body. Not confirmed
+against PowerSchool — the test server cannot be reached off the district
+network and may no longer be up — so (James, 2026-10-20, option B) a create
+carrying `isscorespublish` that is refused with a 4xx is retried ONCE
+without it (the create as it was before), logged as stage
+`create_publish_scores`, and the summary tells the teacher to turn on
+Publish Scores; a 5xx or a category with no value is not retried. The
+first production send proves the field; a `create_publish_scores` log line
+means it was refused. **Slice 2 (decided 2026-10-20, James):** a Send again turns
 Publish Scores ON for an existing assignment when its category default is
 on — never off; the assignment update call is unproven, so it is checked
 on the test server before it ships.
