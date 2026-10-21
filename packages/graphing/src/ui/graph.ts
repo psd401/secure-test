@@ -337,6 +337,8 @@ export class GraphView {
 
   render(): void {
     const rect = this.element.getBoundingClientRect();
+    // Hidden (the calculator's Graph toggle): keep the view as it was.
+    if (rect.width === 0 && rect.height === 0) return;
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
     if ((w !== this.v.width || h !== this.v.height) && this.opts.keepBounds && !this.moved) {

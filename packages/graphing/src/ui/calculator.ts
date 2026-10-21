@@ -58,6 +58,8 @@ export interface CalculatorOptions {
 
 export interface CalculatorHandle {
   readonly element: HTMLElement;
+  /** Focus the selected expression row, or the first. */
+  focus(): void;
   save(): SavedGraph;
   load(saved: SavedGraph): void;
   destroy(): void;
@@ -233,6 +235,22 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   const radBtn = angleButton("Radians", false);
   const degBtn = angleButton("Degrees", true);
   toolbar.append(angle);
+  if (graph) {
+    // The graph can be put away to leave just the list (and keypad), for a
+    // student who only wants values; the panel around it can then narrow.
+    const gb = document.createElement("button");
+    gb.type = "button";
+    gb.className = "gc-graph-toggle";
+    gb.textContent = "Graph";
+    gb.setAttribute("aria-pressed", "true");
+    gb.addEventListener("click", () => {
+      right.hidden = !right.hidden;
+      root.classList.toggle("gc-graph-off", right.hidden);
+      gb.setAttribute("aria-pressed", String(!right.hidden));
+      if (!right.hidden) graph.schedule();
+    });
+    toolbar.append(gb);
+  }
   if (keypad) {
     const kb = document.createElement("button");
     kb.type = "button";
@@ -316,6 +334,10 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
 
   return {
     element: root,
+    focus() {
+      const id = selected ?? state.rows[0]?.id;
+      if (id) list.focusRow(id);
+    },
     save,
     load,
     destroy() {

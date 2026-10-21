@@ -73,6 +73,7 @@ extension AssessmentPage {
         ' background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px;' +
         ' box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18); overflow: hidden; }' +
         '.calc-panel[hidden] { display: none; }' +
+        '.calc-panel:has(.gc-graph-off) { width: min(26rem, calc(100vw - 2rem)); }' +
         '.calc-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem 0.25rem 0.75rem;' +
         ' background: var(--panel); border-bottom: 1px solid var(--panel-line); cursor: move; -webkit-user-select: none; user-select: none; touch-action: none; }' +
         '.calc-title { font-weight: 600; font-size: 0.9375rem; flex: 1; }' +
@@ -131,7 +132,10 @@ extension AssessmentPage {
         close.className = 'calc-close';
         close.textContent = '×';
         close.setAttribute('aria-label', 'Close the calculator');
-        close.onclick = closeCalculator;
+        close.onclick = function () {
+          closeCalculator();
+          if (calcButton) calcButton.focus();
+        };
         head.appendChild(title);
         head.appendChild(close);
         var body = document.createElement('div');
@@ -180,6 +184,12 @@ extension AssessmentPage {
         calcPanel.removeAttribute('hidden');
         if (calcButton) calcButton.setAttribute('aria-expanded', 'true');
         if (!calcHandle) mountCalculator();
+        // Into the panel, so the keyboard and VoiceOver's cursor follow it
+        // rather than staying on the question underneath.
+        // A turn later: a field mounted just now is not ready for focus.
+        if (typeof setTimeout === 'function') setTimeout(function () {
+          if (calcHandle && calcHandle.focus && calcPanel.getAttribute('hidden') === null) calcHandle.focus();
+        }, 0);
       }
 
       function closeCalculator() {
