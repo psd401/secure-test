@@ -308,9 +308,8 @@ export async function sendToPowerSchool(
     const claimed = await claim(db, input, name);
     if (!claimed.ok) return { ok: false, status: 409, error: "send_in_progress" };
 
-    let created;
-    try {
-      created = await client.createAssignment(
+    const create = (publishScores: boolean | null) =>
+      client.createAssignment(
         usersDcid,
         buildAssignmentCreateBody({
           sectionDcid: section.dcid!,
@@ -319,9 +318,27 @@ export async function sendToPowerSchool(
           maxPoints: max_points,
           categoryId: category.id,
           publishOption: category.defaultpublishoption,
-          publishScores: category.isdefaultpublishscores,
+          publishScores,
         }),
       );
+    let created;
+    try {
+      try {
+        created = await create(category.isdefaultpublishscores);
+      } catch (err) {
+        // `isscorespublish` has not been written live yet (2026-10-20). If a
+        // create carrying it is refused, try once without it — the create as
+        // it was before — and tell the teacher to turn Publish Scores on.
+        const refused = err instanceof GradebookHttpError && err.status >= 400 && err.status < 500;
+        if (!refused || category.isdefaultpublishscores === null) throw err;
+        logFailure("create_publish_scores", assessment.id, err, plan.writes.length);
+        created = await create(null);
+        if (category.isdefaultpublishscores) {
+          summary.notes.push(
+            "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.",
+          );
+        }
+      }
     } catch (err) {
       await db.delete(gradebook_pushes).where(eq(gradebook_pushes.id, claimed.row.id));
       logFailure("create", assessment.id, err, plan.writes.length);

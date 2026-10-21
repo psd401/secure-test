@@ -30,7 +30,7 @@ import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { authorizeSend } from "../lib/gradebook/authorizeSend";
 import { loadSectionCandidates } from "../lib/gradebook/mapping";
-import { mockPowerSchool } from "../lib/gradebook/powerschool";
+import { defaultMockCategories, mockPowerSchool } from "../lib/gradebook/powerschool";
 import { todayPacific } from "../lib/gradebook/sendPowerSchool";
 import { setLogSink } from "../lib/log";
 import {
@@ -528,6 +528,8 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
   test("a create failure leaves no claim behind and surfaces a 409 body", async () => {
     const s = await scene();
     await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    // Twice: the first refusal is retried once without isscorespublish.
+    mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
     mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
     const res = await send(s.assessment.id, BASE_BODY);
     expect(res.status).toBe(502);
@@ -535,6 +537,43 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(await getDb().select().from(gradebook_pushes)).toEqual([]);
     // A retry goes through.
     expect((await (await send(s.assessment.id, BASE_BODY)).json()).sent).toBe(1);
+  });
+
+  test("a create refused with isscorespublish is retried once without it; the summary says to turn it on", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.failNext("createAssignment", 403, '{"message":"No access to field assignmentsection.isscorespublish"}');
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ ok: true, assignment_created: true, sent: 1 });
+    expect(body.notes).toEqual([
+      "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.",
+    ]);
+    const creates = mockPowerSchool.calls.filter((c) => c.method === "createAssignment");
+    const sections = creates.map((c) => (c.body!._assignmentsections as Record<string, unknown>[])[0]!);
+    expect(sections.map((x) => x.isscorespublish)).toEqual([true, undefined]);
+    expect("isscorespublish" in sections[1]!).toBe(false);
+  });
+
+  test("a server error on create is not retried", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.failNext("createAssignment", 500, "boom");
+    const res = await send(s.assessment.id, BASE_BODY);
+    expect(res.status).toBe(502);
+    expect(mockPowerSchool.calls.filter((c) => c.method === "createAssignment").length).toBe(1);
+  });
+
+  test("a category with no Publish Scores value is not retried", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.setCategories(
+      "8301",
+      defaultMockCategories().map((c) => ({ ...c, isdefaultpublishscores: null })),
+    );
+    mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
+    const res = await send(s.assessment.id, BASE_BODY);
+    expect(res.status).toBe(502);
+    expect(mockPowerSchool.calls.filter((c) => c.method === "createAssignment").length).toBe(1);
   });
 
   test("an assignment deleted in PowerSchool: the push is retired and the next send creates anew", async () => {
