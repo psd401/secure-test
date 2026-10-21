@@ -20,7 +20,10 @@ import {
   defaultCategoryId,
   parseCategories,
   parseCreatedAssignment,
-  parseSectionAssignmentSectionIds,
+  parseSectionAssignments,
+  buildPublishScoresUpdateBody,
+  changedAssignmentFields,
+  sectionScoresPublished,
   isAssignmentSectionMissing,
   parseUnassociatedStudents,
   truncateAssignmentName,
@@ -405,13 +408,36 @@ describe("live client", () => {
     ];
     const { fetch, seen } = fakeFetch([tokenOk(), json(200, list), json(200, { message: "not a list" })]);
     const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
-    expect(await client.listAssignmentSectionIds("8301", "85001")).toEqual(["77001", "77002"]);
+    expect(await client.listSectionAssignments("8301", "85001")).toEqual([
+      { assignmentSectionId: "77001", assignmentId: "1", isScoresPublish: null },
+      { assignmentSectionId: "77002", assignmentId: "2", isScoresPublish: null },
+    ]);
     expect(seen[1]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/?users_dcid=8301&section_ids=85001");
-    await expect(client.listAssignmentSectionIds("8301", "85001")).rejects.toBeInstanceOf(GradebookHttpError);
+    await expect(client.listSectionAssignments("8301", "85001")).rejects.toBeInstanceOf(GradebookHttpError);
 
-    expect(parseSectionAssignmentSectionIds([])).toEqual([]);
-    expect(parseSectionAssignmentSectionIds([{ _assignmentsections: [{}] }, null])).toEqual([]);
-    expect(parseSectionAssignmentSectionIds(null)).toBeNull();
+    expect(parseSectionAssignments([])).toEqual([]);
+    expect(parseSectionAssignments([{ _assignmentsections: [{}] }, null])).toEqual([]);
+    expect(parseSectionAssignments(null)).toBeNull();
+    expect(
+      parseSectionAssignments([
+        { assignmentid: 5, _assignmentsections: [{ assignmentsectionid: 77005, isscorespublish: false }] },
+        { assignmentid: 6, _assignmentsections: [{ assignmentsectionid: 77006, isscorespublish: true }] },
+      ]),
+    ).toEqual([
+      { assignmentSectionId: "77005", assignmentId: "5", isScoresPublish: false },
+      { assignmentSectionId: "77006", assignmentId: "6", isScoresPublish: true },
+    ]);
+  });
+
+  test("slice 2: the assignment GET and PUT paths", async () => {
+    const { fetch, seen } = fakeFetch([tokenOk(), json(200, { assignmentid: 5 }), json(200, {})]);
+    const client = createLivePowerSchoolClient({ baseUrl: BASE, clientId: "i", clientSecret: "s", fetch });
+    expect(await client.getAssignment("8301", "5")).toEqual({ assignmentid: 5 });
+    await client.updateAssignment("8301", "5", { assignmentid: 5 });
+    expect(seen[1]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/5?users_dcid=8301");
+    expect(seen[2]!.url).toBe("https://ps.example.test/ws/xte/section/assignment/5?users_dcid=8301");
+    expect(seen[2]!.init?.method).toBe("PUT");
+    expect(JSON.parse(String(seen[2]!.init?.body))).toEqual({ assignmentid: 5 });
   });
 
   test("a 2xx body over 4 000 characters is parsed whole (long HTML category descriptions)", async () => {
@@ -577,5 +603,48 @@ describe("the mock gradebook", () => {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
+  });
+});
+
+describe("Publish Scores update (slice 2)", () => {
+  const read = {
+    assignmentid: 5,
+    hasstandards: false,
+    _assignmentsections: [
+      { assignmentsectionid: 77005, name: "Unit 3", duedate: "2026-10-01", isscorespublish: false, publishoption: "Immediately" },
+      { assignmentsectionid: 77099, name: "Unit 3", duedate: "2026-10-01", isscorespublish: false },
+    ],
+  };
+
+  test("the body is the read, whole, with only our section's isscorespublish on", () => {
+    const body = buildPublishScoresUpdateBody(read, "77005")!;
+    expect(body).toEqual({
+      ...read,
+      _assignmentsections: [{ ...read._assignmentsections[0], isscorespublish: true }, read._assignmentsections[1]],
+    });
+    expect(read._assignmentsections[0]!.isscorespublish).toBe(false); // not mutated
+    expect(buildPublishScoresUpdateBody([read], "77005")).toEqual(body); // an array read
+    expect(buildPublishScoresUpdateBody(read, "1")).toBeNull();
+    expect(buildPublishScoresUpdateBody(null, "77005")).toBeNull();
+  });
+
+  test("changed fields: names only, isscorespublish ignored", () => {
+    const after = buildPublishScoresUpdateBody(read, "77005")!;
+    expect(changedAssignmentFields(read, after)).toEqual([]);
+    const moved = {
+      ...after,
+      hasstandards: true,
+      _assignmentsections: [{ ...(after._assignmentsections as object[])[0], duedate: "2026-10-21" }, read._assignmentsections[1]],
+    };
+    expect(changedAssignmentFields(read, moved)).toEqual(["_assignmentsections.duedate", "hasstandards"]);
+    expect(changedAssignmentFields(read, { ...read, _assignmentsections: [read._assignmentsections[0]] })).toEqual([
+      "_assignmentsections",
+    ]);
+  });
+
+  test("our section's Publish Scores value", () => {
+    expect(sectionScoresPublished(read, "77005")).toBe(false);
+    expect(sectionScoresPublished(buildPublishScoresUpdateBody(read, "77005"), "77005")).toBe(true);
+    expect(sectionScoresPublished(read, "1")).toBeNull();
   });
 });

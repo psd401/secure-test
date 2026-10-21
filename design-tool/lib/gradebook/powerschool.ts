@@ -17,7 +17,8 @@
 import {
   parseCategories,
   parseCreatedAssignment,
-  parseSectionAssignmentSectionIds,
+  parseSectionAssignments,
+  type PsSectionAssignment,
   psId,
   type PsCategory,
 } from "./powerschoolPayloads";
@@ -70,11 +71,16 @@ export interface PowerSchoolClient {
     body: Record<string, unknown>,
   ): Promise<CreatedAssignment>;
   /**
-   * Every `assignmentsectionid` in the section, for the Send-again check that
-   * an earlier assignment still exists (GB-2). Throws when the list cannot be
-   * read or parsed — never answers an empty list for an unreadable one.
+   * Every assignment section row in the section, for the Send-again check that
+   * an earlier assignment still exists (GB-2) and its Publish Scores value.
+   * Throws when the list cannot be read or parsed — never answers an empty
+   * list for an unreadable one.
    */
-  listAssignmentSectionIds(usersDcid: string, sectionDcid: string): Promise<string[]>;
+  listSectionAssignments(usersDcid: string, sectionDcid: string): Promise<PsSectionAssignment[]>;
+  /** `GET /ws/xte/section/assignment/<assignmentid>`, the body as answered. */
+  getAssignment(usersDcid: string, assignmentId: string): Promise<unknown>;
+  /** `PUT /ws/xte/section/assignment/<assignmentid>` with a whole assignment. */
+  updateAssignment(usersDcid: string, assignmentId: string, body: Record<string, unknown>): Promise<void>;
   /** Writes scores; answers the parsed 2xx body (or null when empty). */
   writeScores(
     usersDcid: string,
@@ -227,14 +233,30 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
       }
       return { ...ids, raw: json, location };
     },
-    async listAssignmentSectionIds(usersDcid, sectionDcid) {
+    async listSectionAssignments(usersDcid, sectionDcid) {
       const { status, json } = await call("GET", "/ws/xte/section/assignment/", {
         users_dcid: usersDcid,
         section_ids: sectionDcid,
       });
-      const ids = parseSectionAssignmentSectionIds(json);
-      if (!ids) throw new GradebookHttpError(status, "section assignment list was not an array", "request");
-      return ids;
+      const rows = parseSectionAssignments(json);
+      if (!rows) throw new GradebookHttpError(status, "section assignment list was not an array", "request");
+      return rows;
+    },
+    async getAssignment(usersDcid, assignmentId) {
+      const { json } = await call(
+        "GET",
+        `/ws/xte/section/assignment/${encodeURIComponent(assignmentId)}`,
+        { users_dcid: usersDcid },
+      );
+      return json;
+    },
+    async updateAssignment(usersDcid, assignmentId, body) {
+      await call(
+        "PUT",
+        `/ws/xte/section/assignment/${encodeURIComponent(assignmentId)}`,
+        { users_dcid: usersDcid },
+        body,
+      );
     },
     async writeScores(usersDcid, termId, body) {
       const { json } = await call(
@@ -251,10 +273,17 @@ export function createLivePowerSchoolClient(options: LiveClientOptions): PowerSc
 // ── mock ─────────────────────────────────────────────────────────────────────
 
 export interface MockCall {
-  method: "listCategories" | "createAssignment" | "listAssignmentSectionIds" | "writeScores";
+  method:
+    | "listCategories"
+    | "createAssignment"
+    | "listSectionAssignments"
+    | "getAssignment"
+    | "updateAssignment"
+    | "writeScores";
   usersDcid: string;
   yearId?: string;
   sectionDcid?: string;
+  assignmentId?: string;
   termId?: string;
   body?: Record<string, unknown>;
 }
@@ -332,16 +361,41 @@ export class MockPowerSchool implements PowerSchoolClient {
     };
   }
 
-  async listAssignmentSectionIds(usersDcid: string, sectionDcid: string): Promise<string[]> {
-    this.calls.push({ method: "listAssignmentSectionIds", usersDcid, sectionDcid });
-    this.maybeFail("listAssignmentSectionIds");
+  async listSectionAssignments(usersDcid: string, sectionDcid: string): Promise<PsSectionAssignment[]> {
+    this.calls.push({ method: "listSectionAssignments", usersDcid, sectionDcid });
+    this.maybeFail("listSectionAssignments");
     const want = String(psId(sectionDcid));
     return [...this.assignments]
-      .filter(([, body]) => {
-        const sections = body._assignmentsections as Record<string, unknown>[] | undefined;
-        return String(sections?.[0]?.sectionsdcid ?? "") === want;
-      })
-      .map(([id]) => id);
+      .filter(([, body]) => String(mockSection(body)?.sectionsdcid ?? "") === want)
+      .map(([id, body]) => {
+        const flag = mockSection(body)?.isscorespublish;
+        return {
+          assignmentSectionId: id,
+          assignmentId: String(Number(id) - 50000),
+          isScoresPublish: typeof flag === "boolean" ? flag : null,
+        };
+      });
+  }
+
+  async getAssignment(usersDcid: string, assignmentId: string): Promise<unknown> {
+    this.calls.push({ method: "getAssignment", usersDcid, assignmentId });
+    this.maybeFail("getAssignment");
+    const sectionId = String(Number(assignmentId) + 50000);
+    const body = this.assignments.get(sectionId);
+    if (!body) throw new GradebookHttpError(404, "not found", "request");
+    return {
+      assignmentid: Number(assignmentId),
+      _assignmentsections: [{ ...mockSection(body), assignmentsectionid: Number(sectionId) }],
+    };
+  }
+
+  async updateAssignment(usersDcid: string, assignmentId: string, body: Record<string, unknown>): Promise<void> {
+    this.calls.push({ method: "updateAssignment", usersDcid, assignmentId, body });
+    this.maybeFail("updateAssignment");
+    const sectionId = String(Number(assignmentId) + 50000);
+    if (!this.assignments.has(sectionId)) throw new GradebookHttpError(404, "not found", "request");
+    const { assignmentsectionid: _id, ...section } = mockSection(body) ?? {};
+    this.assignments.set(sectionId, { _assignmentsections: [section] });
   }
 
   async writeScores(usersDcid: string, termId: string, body: Record<string, unknown>) {
@@ -389,6 +443,11 @@ export class MockPowerSchool implements PowerSchoolClient {
     }
     return { assignment_scores: out };
   }
+}
+
+function mockSection(body: Record<string, unknown>): Record<string, unknown> | undefined {
+  const sections = body._assignmentsections as Record<string, unknown>[] | undefined;
+  return sections?.[0];
 }
 
 /** Synthetic categories for a teacher the mock was not told about. */

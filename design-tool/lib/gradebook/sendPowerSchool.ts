@@ -32,6 +32,10 @@ import {
 import { GradebookHttpError, type PowerSchoolClient } from "./powerschool";
 import {
   buildAssignmentCreateBody,
+  buildPublishScoresUpdateBody,
+  changedAssignmentFields,
+  sectionScoresPublished,
+  type PsSectionAssignment,
   isAssignmentSectionMissing,
   parseUnassociatedStudents,
   truncateAssignmentName,
@@ -252,14 +256,15 @@ export async function sendToPowerSchool(
   // nothing, so a failing write never reveals an assignment deleted in
   // PowerTeacher Pro. Check it still exists first — one read per Send again.
   if (push?.external_assignment_id) {
-    let ids: string[];
+    let rows: PsSectionAssignment[];
     try {
-      ids = await client.listAssignmentSectionIds(usersDcid, section.dcid!);
+      rows = await client.listSectionAssignments(usersDcid, section.dcid!);
     } catch (err) {
       logFailure("assignment_check", assessment.id, err, plan.writes.length);
       return { ok: false, status: 502, error: "gradebook_unavailable" };
     }
-    if (!ids.includes(push.external_assignment_id)) {
+    const existing = rows.find((r) => r.assignmentSectionId === push!.external_assignment_id);
+    if (!existing) {
       await db
         .update(gradebook_pushes)
         .set({ archived_at: new Date() })
@@ -283,6 +288,9 @@ export async function sendToPowerSchool(
       });
       await recordSend(db, push.id, input, summary);
       return { ok: true, summary };
+    }
+    if (existing.isScoresPublish === false) {
+      await turnOnPublishScores(client, input, usersDcid, push, existing, summary);
     }
   }
 
@@ -333,11 +341,7 @@ export async function sendToPowerSchool(
         if (!refused || category.isdefaultpublishscores === null) throw err;
         logFailure("create_publish_scores", assessment.id, err, plan.writes.length);
         created = await create(null);
-        if (category.isdefaultpublishscores) {
-          summary.notes.push(
-            "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.",
-          );
-        }
+        if (category.isdefaultpublishscores) summary.notes.push(PUBLISH_SCORES_MANUAL_NOTE);
       }
     } catch (err) {
       await db.delete(gradebook_pushes).where(eq(gradebook_pushes.id, claimed.row.id));
@@ -381,6 +385,60 @@ export async function sendToPowerSchool(
   await writeScores(db, client, push, input, usersDcid, plan.writes, summary);
   await recordSend(db, push.id, input, summary);
   return { ok: true, summary };
+}
+
+const PUBLISH_SCORES_MANUAL_NOTE =
+  "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.";
+
+/**
+ * Slice 2 (2026-10-21): an assignment created before the 2026-10-21 hotfix
+ * has Publish Scores off. A Send again turns it ON when the push's category
+ * defaults to publishing scores — never off. Read the assignment, PUT it back
+ * whole with only `isscorespublish` set, read it again and log any other field
+ * that changed. Nothing here blocks the score write: any failure leaves the
+ * assignment as it was, is logged, and the teacher is told to turn it on.
+ * The PUT has not been run against PowerSchool yet.
+ */
+async function turnOnPublishScores(
+  client: PowerSchoolClient,
+  input: PowerSchoolSendInput,
+  usersDcid: string,
+  push: GradebookPushRow,
+  existing: PsSectionAssignment,
+  summary: SendSummary,
+): Promise<void> {
+  const assignmentSectionId = existing.assignmentSectionId;
+  try {
+    const categories = await client.listCategories(usersDcid, input.section.year_id!);
+    const category = categories.find((c) => c.id === push.category_id);
+    if (!category?.isdefaultpublishscores) return;
+    if (!existing.assignmentId) throw new Error("assignment list row has no assignmentid");
+    const before = await client.getAssignment(usersDcid, existing.assignmentId);
+    const body = buildPublishScoresUpdateBody(before, assignmentSectionId);
+    if (!body) throw new Error("assignment read has no row for this section");
+    await client.updateAssignment(usersDcid, existing.assignmentId, body);
+    const after = await client.getAssignment(usersDcid, existing.assignmentId);
+    const changed = changedAssignmentFields(before, after);
+    if (changed.length > 0) {
+      log.error("gradebook_assignment_fields_changed", {
+        target: "powerschool",
+        assessment_id: input.assessment.id,
+        fields: changed,
+      });
+    }
+    if (sectionScoresPublished(after, assignmentSectionId) !== true) {
+      throw new Error("Publish Scores still off after the update");
+    }
+    log.info("gradebook_publish_scores_turned_on", {
+      target: "powerschool",
+      assessment_id: input.assessment.id,
+      assignment_section_id: assignmentSectionId,
+    });
+    summary.notes.push("Publish Scores was off on this assignment in PowerTeacher Pro; it is now on, so students can see their scores.");
+  } catch (err) {
+    logFailure("publish_scores_update", input.assessment.id, err, 0);
+    summary.notes.push(PUBLISH_SCORES_MANUAL_NOTE);
+  }
 }
 
 async function writeScores(

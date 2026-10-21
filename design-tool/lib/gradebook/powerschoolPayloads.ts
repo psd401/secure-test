@@ -200,18 +200,116 @@ export function parseCreatedAssignment(
  * Null when the body is not an array — an unreadable list must never read as
  * "the assignment is gone" (that would archive the push and duplicate it).
  */
-export function parseSectionAssignmentSectionIds(body: unknown): string[] | null {
+export interface PsSectionAssignment {
+  assignmentSectionId: string;
+  /** What the assignment GET / PUT take; null when the row had none. */
+  assignmentId: string | null;
+  /** Publish Scores on this section row; null when the row had no value. */
+  isScoresPublish: boolean | null;
+}
+
+function optionalBool(value: unknown): boolean | null {
+  return value === undefined || value === null ? null : asBool(value);
+}
+
+/**
+ * `GET /ws/xte/section/assignment/?section_ids=…` → one row per assignment
+ * section; null when the body is not an array (an unreadable list must never
+ * read as "deleted" — GB-2).
+ */
+export function parseSectionAssignments(body: unknown): PsSectionAssignment[] | null {
   if (!Array.isArray(body)) return null;
-  const ids: string[] = [];
+  const rows: PsSectionAssignment[] = [];
   for (const a of body) {
-    const sections = a && typeof a === "object" ? (a as Record<string, unknown>)._assignmentsections : null;
+    if (!a || typeof a !== "object") continue;
+    const assignment = a as Record<string, unknown>;
+    const sections = assignment._assignmentsections;
     if (!Array.isArray(sections)) continue;
     for (const s of sections) {
-      const id = s && typeof s === "object" ? asIdString((s as Record<string, unknown>).assignmentsectionid) : null;
-      if (id) ids.push(id);
+      if (!s || typeof s !== "object") continue;
+      const section = s as Record<string, unknown>;
+      const id = asIdString(section.assignmentsectionid);
+      if (!id) continue;
+      rows.push({
+        assignmentSectionId: id,
+        assignmentId: asIdString(assignment.assignmentid),
+        isScoresPublish: optionalBool(section.isscorespublish),
+      });
     }
   }
-  return ids;
+  return rows;
+}
+
+/** A single assignment read: the object itself, or the first of an array. */
+function assignmentObject(body: unknown): Record<string, unknown> | null {
+  const row = Array.isArray(body) ? body[0] : body;
+  return row && typeof row === "object" ? (row as Record<string, unknown>) : null;
+}
+
+/**
+ * The `PUT /ws/xte/section/assignment/<assignmentid>` body that turns Publish
+ * Scores on (slice 2, 2026-10-21): the assignment exactly as PowerSchool
+ * answered it, with only our section row's `isscorespublish` set — echoed
+ * whole because a partial PUT might clear what it leaves out. Null when the
+ * read carries no row for that section. Not yet run against PowerSchool.
+ */
+export function buildPublishScoresUpdateBody(
+  assignment: unknown,
+  assignmentSectionId: string,
+): Record<string, unknown> | null {
+  const obj = assignmentObject(assignment);
+  if (!obj || !Array.isArray(obj._assignmentsections)) return null;
+  let found = false;
+  const sections = obj._assignmentsections.map((s) => {
+    if (!s || typeof s !== "object") return s;
+    const section = s as Record<string, unknown>;
+    if (asIdString(section.assignmentsectionid) !== assignmentSectionId) return section;
+    found = true;
+    return { ...section, isscorespublish: true };
+  });
+  return found ? { ...obj, _assignmentsections: sections } : null;
+}
+
+/**
+ * The fields that differ between two reads of one assignment, other than
+ * `isscorespublish` — names only (`_assignmentsections.duedate`), never
+ * values, so a PUT that changed more than asked is visible in the log.
+ */
+export function changedAssignmentFields(before: unknown, after: unknown): string[] {
+  const a = assignmentObject(before) ?? {};
+  const b = assignmentObject(after) ?? {};
+  const changed = new Set<string>();
+  const compare = (x: Record<string, unknown>, y: Record<string, unknown>, prefix: string) => {
+    for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
+      if (key === "isscorespublish" || key === "_assignmentsections") continue;
+      if (JSON.stringify(x[key]) !== JSON.stringify(y[key])) changed.add(prefix + key);
+    }
+  };
+  compare(a, b, "");
+  const sa = Array.isArray(a._assignmentsections) ? a._assignmentsections : [];
+  const sb = Array.isArray(b._assignmentsections) ? b._assignmentsections : [];
+  if (sa.length !== sb.length) changed.add("_assignmentsections");
+  for (let i = 0; i < Math.min(sa.length, sb.length); i++) {
+    const x = sa[i], y = sb[i];
+    if (x && y && typeof x === "object" && typeof y === "object") {
+      compare(x as Record<string, unknown>, y as Record<string, unknown>, "_assignmentsections.");
+    } else if (JSON.stringify(x) !== JSON.stringify(y)) {
+      changed.add("_assignmentsections");
+    }
+  }
+  return [...changed].sort();
+}
+
+/** The Publish Scores value on our section row of an assignment read. */
+export function sectionScoresPublished(assignment: unknown, assignmentSectionId: string): boolean | null {
+  const obj = assignmentObject(assignment);
+  const sections = obj && Array.isArray(obj._assignmentsections) ? obj._assignmentsections : [];
+  for (const s of sections) {
+    if (!s || typeof s !== "object") continue;
+    const section = s as Record<string, unknown>;
+    if (asIdString(section.assignmentsectionid) === assignmentSectionId) return optionalBool(section.isscorespublish);
+  }
+  return null;
 }
 
 /**
