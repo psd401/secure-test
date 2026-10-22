@@ -1,0 +1,9 @@
+# Keeps SHA-pinned `uses:` refs current (psd-dev-standards standards/06 §4 Pinning).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
