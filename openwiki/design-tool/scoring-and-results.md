@@ -63,7 +63,7 @@ Scores live in the append-only `scores` table (see [data model](data-model.md#ta
 
 - Multi-select MC is exact-set, all or nothing.
 - Short text compares plain normalised text first (trim, collapse whitespace, case-fold). Only if that fails does it try, in order, numeric equivalence (`1/2` equals `0.5`, switched off per item by `exact_form`) and a formula fold (strips `$`, `\mathrm`, braces and subscripts so `H_2O` equals `H2O`, but `^` is kept because exponents change value). Each later step can only add matches. Students type these answers with the client's math keypad and formula preview, described in [math keypad](../client/math-keypad.md); the server never sees the keypad, only the typed text.
-- Table items score per keyed cell; fill-in-blank per keyed blank (`tableMaxPoints`, `fillBlankMaxPoints`; the blank rules are in [fill-in-the-blank items](fill-in-the-blank.md#scoring-and-reading)). Items with no key return `null`, which callers count as skipped, never as zero.
+- [Table items](table-items.md) score per keyed cell; fill-in-blank per keyed blank (`tableMaxPoints`, `fillBlankMaxPoints`; the blank rules are in [fill-in-the-blank items](fill-in-the-blank.md#scoring-and-reading)). Items with no key return `null`, which callers count as skipped, never as zero.
 - `runAutoScoringPass` is idempotent: it skips responses that already have a `final`, and ignores `research` rows when deciding that.
 
 When the pass runs: in the same request as the student's own hand-in (`app/api/attempts/[attemptId]/submit/route.ts`) and on demand from the teacher score route. A scoring failure is logged and never fails the hand-in.
