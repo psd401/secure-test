@@ -131,6 +131,8 @@ The bundle's `renderer` field is optional, and `RendererRefSchema` is strict. Th
 
 `REQUIREMENTS` lists the eight bridge handlers (`response`, `withdraw`, `upload`, `submit`, `timer`, `home`, `tts`, `stt`) and two host features that are not handlers: `tts.word_ranges` and `response.generic`. A renderer may name only terms that a shell on the fleet can answer. The placeholder renderer requires `response`, `submit` and `home`. Adding a term is a shell change, not only a renderer change. The bridge handlers themselves are described in [lockdown and security](lockdown-and-security.md) and [client overview](overview.md).
 
+`HOST_CALLBACKS` in the same file maps the page functions the host calls (for example `__secureTestFlushInput` under `response`, `__timeLimit` under `timer`, `__secureTestSpeech` under `tts.word_ranges`) to the term whose feature calls them. A callback has no term of its own. The host guards each call, so a missing function fails silently; `test/extract.test.ts` fails when the bridge-mode page stops defining one.
+
 ## Tests
 
 | Behaviour | Test location |
