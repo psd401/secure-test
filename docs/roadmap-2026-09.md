@@ -1268,3 +1268,21 @@ signed).** Findings:
 - Next: explore building our own embedded graphing calculator with a
   Desmos-like look and feel on a long-lived branch,
   `graphing-calculator`, kept off `main` so it holds up no other work.
+
+## Finding SG-1 — the safeguarding retry re-picks a blank answer every hour (2026-10-22) — design-tool, nothing built
+
+Found while reading the AppServerErrors alarm of 2026-10-22 (three
+`safeguarding_check_failed` lines, a Bedrock 503 on the screener at
+hand-in; the hourly retry covers those). Every hourly `safeguarding_retry`
+line over the scanned window reads `candidates: 1, screened: 0, failed: 0`.
+Cause: `screenPending` (`lib/safeguarding/screening/retry.ts`) selects any
+unscreened essay / short-text response, but `screenCandidates`
+(`screen.ts`) skips an answer whose text is empty or does not parse —
+neither screened nor failed, and never stamped `safeguarding_screened_at` —
+so the same answer (almost certainly a blank one) returns every hour until
+it leaves the 14-day window. Cost is ~$0 (the skip precedes any Bedrock or
+guardrail call); the stuck answers take slots in the 200-per-run batch and
+the info line reads as activity. Fix: stamp a skipped empty answer as
+screened, or exclude empty text in the retry query; a test either way.
+Also discussed, no change: no advisory lock across tasks while production
+runs one task (a rolling deploy's overlap costs pennies at worst).
