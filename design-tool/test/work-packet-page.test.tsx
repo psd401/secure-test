@@ -824,8 +824,11 @@ describe("work packet — anonymous mode (D-1)", () => {
     const packet = html.slice(0, keyAt);
     expect(packet).not.toContain("Fixture, Ada");
     expect(packet).not.toContain("Sample, Ben");
-    // Nor a student number.
-    expect(packet).not.toContain(STUDENT.ps_id);
+    // Nor a student number. UUIDs on the page (upload links) are removed
+    // first: a random one can hold the digits ("…3810010f0feb" failed ci on
+    // 2026-10-23), which is not the number leaking.
+    const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+    expect(packet.replace(UUID, "")).not.toContain(STUDENT.ps_id);
 
     // The key page carries the mapping, the print date, the count and the caveat.
     const key = html.slice(keyAt);
