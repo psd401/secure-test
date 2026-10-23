@@ -1286,3 +1286,16 @@ the info line reads as activity. Fix: stamp a skipped empty answer as
 screened, or exclude empty text in the retry query; a test either way.
 Also discussed, no change: no advisory lock across tasks while production
 runs one task (a rolling deploy's overlap costs pennies at worst).
+
+## Finding WP-1 — math in the work packet's question checklist reads wrong (2026-10-23) — design-tool, nothing built
+
+From hand-check row 343 (2026-10-01; kept open by the 2026-10-22 triage).
+The Print student work toolbar labels each question with `stemExcerpt`
+(`lib/reporting/workPacket.ts`), a plain-text strip of the stem: it drops
+`$` markers, unknown LaTeX commands and braces, so `$x^2$` reads "x^2" and
+`$\frac{1}{2}$` reads "12" — a misleading label on a math test. The
+printed pages themselves render math (KaTeX); only the checklist label is
+affected. `test/work-packet.test.ts` currently asserts both outputs as
+accepted. Fix options: render the excerpt with KaTeX like the stems, or
+map `\frac{a}{b}` → "a/b" and `^` → "^" text in the stripper; update the
+two assertions either way. James (2026-10-23): roadmap it, not urgent.
