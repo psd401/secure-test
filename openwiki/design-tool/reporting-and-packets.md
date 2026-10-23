@@ -50,7 +50,7 @@ The `lib/reporting/` directory holds the pure logic behind the teacher's results
 | `workPacketLinks.ts` | The results page's link into the packet, carrying its section filter (`workPacketHref`) | `app/dashboard/[id]/results/page.tsx` |
 | `runComparison.ts` | Agreement statistics between an AI run and teacher finals | `scripts/compare-runs.ts` |
 | `answerView.ts`, `shortTextView.ts`, `fillBlankView.ts`, `rubricScoreView.ts` | Plain, printable rendering of each answer type and rubric | results pages, work packet |
-| `answerHistoryView.ts` | Labels for an earlier saved answer version and why it was captured | per-student page history list; restore flow in [scoring](scoring-and-results.md) |
+| `answerHistoryView.ts` | Labels for an earlier saved answer version and why it was captured | per-student page history list; restore flow in [answer history](answer-history.md) |
 | `printSummary.ts`, `printIntegrity.ts`, `printFeedback.ts` | Cohort summary, integrity wording, feedback selection for `results/print` | the print report |
 | `timeline.ts` | Turns attempt events into readable timeline lines; `durationLabel`, `speechPreflightText` | per-student page |
 | `analytics.ts` | Per-item statistics and mean formatting | `results/analyticsQuery.ts`, and the class-insights evidence pack in [integrations](integrations.md) |
