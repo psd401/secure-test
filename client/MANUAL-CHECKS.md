@@ -2505,14 +2505,14 @@ maximum, neither.
 
 | Check | Expected | Result |
 |---|---|---|
-| Arrive in the plain essay with a maximum | "Your answer, edit text" (VoiceOver's wording) — no count | NOT RUN |
-| Arrive in the formatted essay with a maximum | "Your answer" and its text-entry role — no count | NOT RUN |
-| From either box, VO-Right (Control-Option-Right) | "0 of 50 words" — not "0 slash 50 words"; "Your answer" is not read again | NOT RUN |
-| Type past 50, then VO-Right from the box | "Over the 50-word limit" once while typing; the counter then reads "52 of 50 words, over the limit" | NOT RUN |
-| Delete back under 50 | "Back within the limit" once | NOT RUN |
-| Count with no maximum: arrive, then VO-Right | "Your answer" on arrival; "3 words" after; nothing announced while typing | NOT RUN |
-| No count | "Your answer"; VO-Right reaches the next question | NOT RUN |
-| Sighted: a contrast set + 3X zoom | The visible counter unchanged ("12 / 50 words", red past the maximum); no stray text shows | NOT RUN |
+| Arrive in the plain essay with a maximum | "Your answer, edit text" (VoiceOver's wording) — no count | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| Arrive in the formatted essay with a maximum | "Your answer" and its text-entry role — no count | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| From either box, VO-Right (Control-Option-Right) | "0 of 50 words" — not "0 slash 50 words"; "Your answer" is not read again | ✅ (speech) 2026-10-23; VoiceOver's cursor outlined an invisible box below the visible counter (the 1 px `sr-only` twin), finding WC-5 — fixed the same day (the spoken count laid over the visible one in a `.word-count-box`); re-run on sitting F7Z5JZ: the outline sits on the visible counter ✅. First run: Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| Type past 50, then VO-Right from the box | "Over the 50-word limit" once while typing; the counter then reads "52 of 50 words, over the limit" | ❌ 2026-10-23 (same run): nothing heard while typing past 50 in either box; VO-Right then read "52 of 50 words, over the limit" as expected. Finding WC-4 — fixed the same day (assertive, said after a 1 s pause in typing, emptied after 5 s); re-run on sitting CDKE5P: "Over the 50-word limit" heard once after the pause ✅ |
+| Delete back under 50 | "Back within the limit" once | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| Count with no maximum: arrive, then VO-Right | "Your answer" on arrival; "3 words" after; nothing announced while typing | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| No count | "Your answer"; VO-Right reaches the next question | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
+| Sighted: a contrast set + 3X zoom | The visible counter unchanged ("12 / 50 words", red past the maximum); no stray text shows | ✅ 2026-10-23, Debug build of `main` (`da6e28a1`, bundled renderer) against local `_demo`, simulated lockdown, Yellow on Black + 3X, James |
 
 ## Passage highlighting (U-21, slices 2–3, ships with v2.0, 2026-10-14)
 

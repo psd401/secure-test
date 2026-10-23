@@ -541,10 +541,14 @@ final class RendererHarness {
     function __spokenCount(field) {
       var label = (field.getAttribute('aria-labelledby') || '').split(' ')[0];
       var id = label.replace('essay-label-', 'essay-count-spoken-');
-      var nodes = __all('.sr-only');
+      var nodes = __all('.word-count-spoken');
       for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) return nodes[i].textContent;
       return '<missing ' + id + '>';
     }
+
+    /// WC-5: the counter's visible text ("12 / 50 words"), its first child;
+    /// the spoken form is the second.
+    function __visibleCount(node) { return __first('.word-count-visible', node).textContent; }
 
     function __count(sel, node) { return __all(sel, node).length; }
 

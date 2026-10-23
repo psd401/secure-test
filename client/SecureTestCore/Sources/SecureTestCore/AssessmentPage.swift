@@ -127,6 +127,14 @@ public enum AssessmentPage {
        maximum since v1.0.0, but no rule ever styled it, so "52 / 50 words"
        read like any other count. --danger is redefined by every contrast set. */
     .word-count.over { color: var(--danger); font-weight: 600; }
+    /* WC-5 (2026-10-23): the spoken count lies over the visible one, same box,
+       text transparent, so VoiceOver's cursor outlines the counter itself. */
+    .word-count-box { position: relative; display: inline-block; }
+    .word-count-spoken {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      overflow: hidden; white-space: nowrap; color: transparent;
+      pointer-events: none; user-select: none; -webkit-user-select: none;
+    }
     /* Multi-source stimulus slice 1 (2026-09-09, docs/multi-source-stimulus-design.md):
        authored newlines were plain whitespace, so a poem or a paragraphed passage
        collapsed into one run of prose. pre-line keeps the breaks and still wraps. */
@@ -2694,31 +2702,59 @@ public enum AssessmentPage {
           return { nodes: nodes, update: function () {} };
         }
         field.setAttribute('aria-labelledby', label.id);
-        // The visible counter is hidden from VoiceOver; the spoken count is
-        // the next node after it (callers append `nodes` right after the
-        // counter), so VO-moving on from the box reaches it.
-        counter.setAttribute('aria-hidden', 'true');
-        var spoken = hiddenText('essay-count-spoken-' + item.id);
+        // WC-5 (2026-10-23): the counter carries both forms itself, the
+        // visible "12 / 50 words" hidden from VoiceOver (no "slash") and the
+        // spoken form laid over it in the same box (transparent text), so
+        // VO-moving on from the box reaches the count and VoiceOver's cursor
+        // outlines the visible counter, not a 1 px twin beside it.
+        var countBox = document.createElement('span');
+        countBox.className = 'word-count-box';
+        var visible = document.createElement('span');
+        visible.className = 'word-count-visible';
+        visible.setAttribute('aria-hidden', 'true');
+        var spoken = document.createElement('span');
+        spoken.className = 'word-count-spoken';
+        spoken.id = 'essay-count-spoken-' + item.id;
+        countBox.appendChild(visible);
+        countBox.appendChild(spoken);
+        counter.textContent = '';
+        counter.appendChild(countBox);
         var live = hiddenText('essay-count-live-' + item.id);
-        live.setAttribute('aria-live', 'polite');
-        nodes.unshift(spoken, live);
+        live.setAttribute('aria-live', 'assertive');
+        nodes.unshift(live);
         var max = item.max_word_count;
         var wasOver = null;
+        var announced = null;
+        var pending = null;
+        var clearing = null;
+        // WC-4 (2026-10-23): a polite crossing was never heard while typing
+        // (VoiceOver's typing echo talks over it). So it is assertive, and it
+        // waits until typing pauses for a second; a crossing undone within
+        // that second says nothing. The text is emptied again after a few
+        // seconds, so VO-moving past it later never hears a stale message.
+        function announce() {
+          pending = null;
+          if (wasOver === announced) return;
+          announced = wasOver;
+          if (clearing) clearTimeout(clearing);
+          live.textContent = wasOver ? 'Over the ' + max + '-word limit' : 'Back within the limit';
+          clearing = setTimeout(function () { clearing = null; live.textContent = ''; }, 5000);
+        }
         return {
           nodes: nodes,
-          // Sets the visible count, its spoken twin and the over class.
+          // Sets the visible count, its spoken form and the over class.
           update: function (n) {
-            counter.textContent = wordCountText(n, item);
+            visible.textContent = wordCountText(n, item);
             spoken.textContent = wordCountSpoken(n, item);
             counter.className = wordCountClass(n, item);
             if (typeof max !== 'number') return;
             var over = n > max;
             // The first call (building, or a restored answer) sets the state
             // without announcing it: only a crossing while typing is news.
-            if (wasOver !== null && over !== wasOver) {
-              live.textContent = over ? 'Over the ' + max + '-word limit' : 'Back within the limit';
-            }
+            if (wasOver === null) announced = over;
             wasOver = over;
+            if (pending) clearTimeout(pending);
+            pending = wasOver !== announced ? setTimeout(announce, 1000) : null;
           }
         };
       }

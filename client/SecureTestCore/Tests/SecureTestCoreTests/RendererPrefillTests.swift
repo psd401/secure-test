@@ -102,7 +102,7 @@ final class RendererPrefillTests: XCTestCase {
         )
         // Essay: the value, and the word counter recomputed from it.
         XCTAssertEqual(try h.string("__first('.essay', __item(\(Index.essay))).value"), "Two words")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(\(Index.essay))).textContent"), "2 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(\(Index.essay)))"), "2 / 400 words")
         // Match: the saved right on each answered row, "Choose…" on the third.
         XCTAssertEqual(try selectValues(h), "\(rights[2]),\(rights[1]),-")
         // Order: the saved arrangement, read off the labels.

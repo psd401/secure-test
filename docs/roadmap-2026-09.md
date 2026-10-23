@@ -1176,6 +1176,17 @@ never renamed (convention in `CLAUDE.md` "Naming").
   test 999); ships with the v2.0 merge (James); rows in
   `client/MANUAL-CHECKS.md` "Word count heard on request" NOT RUN.** Side: renderer (v2.0 —
   ships with a production deploy, no client release).
+  - *Hand-run 2026-10-23* (Debug build of `main`, bundled renderer, local
+    `_demo`, simulated lockdown, James): all eight rows ✅ after two fixes
+    built the same afternoon. **WC-4** — crossing the maximum was never
+    heard while typing (a polite live region under VoiceOver's typing
+    echo); now assertive, said once typing pauses for 1 s, nothing said
+    for a crossing undone within that second, the text emptied after 5 s
+    so VO-moving past it never reads a stale "Over". **WC-5** — VO-Right
+    outlined an invisible 1 px box (the `sr-only` spoken twin) below,
+    then beside, the counter; the spoken form now lies over the visible
+    one in a `.word-count-box` (transparent text), so the outline sits
+    on the counter.
   - *Found:* WC-2 passes, but James does not like the count in the intro
     VoiceOver reads on arriving in the box ("Your answer, 12 of 50 words").
   - *Options weighed:* (a) the count after the name as a description —

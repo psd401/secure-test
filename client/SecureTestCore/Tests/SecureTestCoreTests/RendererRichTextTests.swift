@@ -359,7 +359,7 @@ final class RendererRichTextTests: XCTestCase {
             try h.string("__item(\(Self.essay)).children[1].children.map(function (n) { return n.className; }).slice(0, 3).join('|')"),
             "essay-toolbar|essay essay-rich|word-count"
         )
-        XCTAssertEqual(try h.string("__first('.word-count', \(item)).textContent"), "0 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(\(item))"), "0 / 400 words")
         // An empty box still holds one paragraph to type into.
         XCTAssertEqual(try h.string("__boxHTML(__box())"), "<p><br></br></p>")
         XCTAssertEqual(try h.string("__box().getAttribute('data-empty')"), "true")
@@ -411,7 +411,7 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertEqual(response["html"] as? String, "<p>The author <strong>argues</strong></p><ul><li>first point</li></ul>")
         XCTAssertEqual(response["text"] as? String, "The author argues\n\u{2022} first point")
         // D-7: the counter reads the text, and a list marker is not a word.
-        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "5 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(3))"), "5 / 400 words")
         XCTAssertEqual(try h.string("__box().getAttribute('data-empty')"), "false")
     }
 
@@ -420,9 +420,9 @@ final class RendererRichTextTests: XCTestCase {
     /// (in the box's name since WC-2).
     func testAFormattedEssayShowsAPlainCountWithoutACap() throws {
         let h = try harness(extra: "delete BUNDLE.items[3].max_word_count; BUNDLE.items[3].show_word_count = true;")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "0 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(3))"), "0 words")
         try h.eval("__typeBox(['One two', 'three']);")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "3 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(3))"), "3 words")
         XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(__box())"), "3 words")
     }
@@ -436,7 +436,16 @@ final class RendererRichTextTests: XCTestCase {
         try h.eval("__typeBox(['one two three four']);")
         XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(__box())"), "4 of 3 words, over the limit")
+        // WC-4: said once typing pauses, assertively.
+        XCTAssertEqual(try h.string(live), "")
+        try h.eval("__advance(999);")
+        XCTAssertEqual(try h.string(live), "")
+        try h.eval("__advance(1);")
         XCTAssertEqual(try h.string(live), "Over the 3-word limit")
+        XCTAssertEqual(try h.string("__all('.sr-only', __item(3)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0].getAttribute('aria-live')"), "assertive")
+        // Emptied again a few seconds later.
+        try h.eval("__advance(5000);")
+        XCTAssertEqual(try h.string(live), "")
     }
 
     func testAFormattedEssayWithNeitherShowsNoCounter() throws {
@@ -699,7 +708,7 @@ final class RendererRichTextTests: XCTestCase {
             "<p data-indent=\"first\"><strong>Hi</strong> there</p><ul><li>a</li></ul>"
         )
         XCTAssertEqual(try h.postedMessages().count, 0, "a restore posts nothing (P-1 D-3)")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "3 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(3))"), "3 / 400 words")
         // The restore is the baseline: a blur with nothing changed posts nothing,
         // and there is nothing to undo.
         try h.eval("__box().onblur({});")
@@ -1017,7 +1026,10 @@ final class RendererRichTextTests: XCTestCase {
         XCTAssertNil(try h.string("__box().getAttribute('aria-describedby')"))
         XCTAssertEqual(try h.string("__accessibleName(__box())"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(__box())"), "0 of 400 words")
-        XCTAssertEqual(try h.string("__first('.word-count', \(item)).getAttribute('aria-hidden')"), "true")
+        // WC-5: the counter's visible text is hidden from VoiceOver; the
+        // counter itself is not, so VoiceOver's cursor lands on it.
+        XCTAssertNil(try h.string("__first('.word-count', \(item)).getAttribute('aria-hidden')"))
+        XCTAssertEqual(try h.string("__first('.word-count-visible', \(item)).getAttribute('aria-hidden')"), "true")
         // No count at all: still named.
         let none = try harness(extra: "delete BUNDLE.items[3].max_word_count;")
         XCTAssertNil(try none.string("__box().getAttribute('aria-describedby')"))
@@ -1129,7 +1141,7 @@ final class RendererRichTextTests: XCTestCase {
         try h.eval("__type(\(area), 'one two three');")
         try h.eval("__key(\(area), { key: 'z', metaKey: true });")
         XCTAssertEqual(try h.string("\(area).value"), "one two")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(3)).textContent"), "2 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(3))"), "2 / 400 words")
     }
 
     func testUndoInATypedBlank() throws {

@@ -323,7 +323,7 @@ final class RendererTextAutosaveTests: XCTestCase {
 
         try type(h, essayArea, "one two three")
         XCTAssertEqual(
-            try h.string("__first('.word-count', __item(\(Self.essay))).textContent"),
+            try h.string("__visibleCount(__item(\(Self.essay)))"),
             "3 / 400 words"
         )
         XCTAssertEqual(
