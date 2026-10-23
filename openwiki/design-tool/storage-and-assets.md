@@ -19,8 +19,9 @@ openwiki:
     - design-tool/app/api/assessments/[id]/assets/[assetId]/route.ts
     - design-tool/lib/api/access.ts
     - design-tool/lib/assets/assessmentAssets.ts
+    - design-tool/lib/items/extractAssetRefs.ts
     - design-tool/db/schema.ts
-  symbols: [StorageProvider, PresignedUpload, getStorageProvider, getStorageProviderById, localFsProvider, s3Provider, registerUpload, settlePendingUpload, pruneSupersededUploads, ALLOWED_IMAGE_MIME_TYPES, sha256Hex, authorizeAssessmentAsset]
+  symbols: [StorageProvider, PresignedUpload, getStorageProvider, getStorageProviderById, localFsProvider, s3Provider, registerUpload, settlePendingUpload, pruneSupersededUploads, ALLOWED_IMAGE_MIME_TYPES, sha256Hex, authorizeAssessmentAsset, extractAssetRefs, extractAssetRefsFromMany, assetRefsInContent]
   test_paths:
     - design-tool/test/storage-provider.test.ts
     - design-tool/test/s3-provider.test.ts
@@ -28,6 +29,8 @@ openwiki:
     - design-tool/test/response-uploads-api.test.ts
     - design-tool/test/delete-stored-upload.test.ts
     - design-tool/test/practice-sweep-asset-delete.test.ts
+    - design-tool/test/extract-asset-refs.test.ts
+    - design-tool/test/assessment-assets.test.ts
   invariants:
     - Reads and deletes route by the storage_provider persisted on each row, so changing STORAGE_PROVIDER never strands existing bytes.
     - A drawing upload slot is minted by the server with a key under responses/ scoped to one (attempt, item); the client never chooses the key.
@@ -89,6 +92,19 @@ The production choice (`STORAGE_PROVIDER=s3`) is pinned in the ECS service defin
 - **Deleting**: `DELETE /api/assets/[id]` removes the row first, then deletes the bytes best-effort. An orphaned object is tolerated; the row is the source of truth.
 
 Bundle import re-uploads referenced assets and rewrites `asset:` ids, as described in [authoring](authoring.md#getting-content-in-and-out).
+
+### Asset references in content
+
+Authors embed images as `![alt](asset:<uuid>)` in stems, choices, stimuli and sources ([authoring content syntax](authoring.md)). `lib/items/extractAssetRefs.ts` is the one scanner for that syntax. `extractAssetRefs` returns the lower-cased UUIDs of matching references, and `extractAssetRefsFromMany` returns the deduplicated set across several strings. `assetIdsFromItemConfig` adds the image ids held in `items.config` (`image_asset_id`, `prompt_asset_id`), dropping any value that is not UUID-shaped.
+
+The scanner's rules are strict on purpose. The `![...]` form is required, so a plain link to `asset:<uuid>` is not a reference. A non-UUID id is ignored, since an unchecked value would fail a Postgres `uuid` comparison and break the preview or export.
+
+Every reader that must find the referenced assets uses this one scanner, so they agree on what an assessment references:
+
+- `assetRefsInContent` and `referencedAssetIds` (`lib/assets/assessmentAssets.ts`) build the set that `authorizeAssessmentAsset` checks for co-teachers. An image outside that set is refused to a grantee ([co-teacher gaps](auth-and-access.md#co-teacher-gaps), G-1).
+- Bundle export (`lib/api/bundleAssets.ts`) bundles the referenced bytes, and the preview route (`app/preview/[id]/route.ts`) and the review queue (`app/api/assessments/[id]/review-queue/route.ts`) resolve the same references.
+
+Change guidance: a new place where content can hold an image must be scanned here, or that content will not be exported, previewed or visible to co-teachers. Focused check: `cd design-tool && bun test test/extract-asset-refs.test.ts`.
 
 ## Drawing-upload objects
 
