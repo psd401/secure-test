@@ -1798,3 +1798,13 @@ Same change and method for Send to Google Docs and Send to gradebook. Both open 
 | 656 | A one-section sitting, and a picked-students sitting | The new sitting keeps that section / that list | ACCEPTED 2026-10-19 (James) on the route tests (section + student-list copies) |
 | 657 | `/help.html#run` ("A test that takes more than one class"), the FAQ entry, the quick start, `/roadmap.html` | The "Session already ended?" step, "I adjusted time, but students still can't get back in.", the 2026-10-19 milestone | ✅ 2026-10-19 on the origin (rev 111): the step + FAQ on `/help.html#run`, the milestone on `/roadmap.html`; the quick start checked in the diff |
 
+
+## New assessment records its owner (OE-1, 2026-10-23)
+
+`docs/roadmap-2026-09.md` Finding OE-1 is the record. Hotfix `5279931b` (live 2026-10-23, rev 114): the New assessment form writes `owner_email`; the owner opening an assessment whose `owner_email` is NULL fills it. Migration 0062 (`main`, ships with v2.0) backfills the rest. Unit-covered by `test/owner-email-heal.test.ts` (form write; heal for the owner only, never act-as, never over a value).
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 658 | Production, read-only `query-aurora.sh` count of assessments with NULL `owner_email` (aggregates only), a few school days after the hotfix | Below the 62 of 101 counted 2026-10-23 before the deploy, and new assessments made since never NULL | NOT RUN |
+| 659 | A teacher who has a roster co-teacher: **New assessment**, then **Share** | "From your roster" lists the co-teacher | NOT RUN (needs a staff account with a roster co-teacher; on `_demo` the demo teacher qualifies) |
+| 660 | v2.0 deploy: after migration 0062 applies, the same count | NULL only for owners with no other assessment and no sitting of their own | NOT RUN — ships with v2.0; on the v2.0 deploy checklist |

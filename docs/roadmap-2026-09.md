@@ -954,6 +954,23 @@ to an excerpt, and the excerpt shows `x^2` raw and `\frac{1}{2}` as "12"
 (the earlier excerpt fix covered symbols, not `^` or `\frac`). The page
 body renders the math correctly. Cosmetic; fix where the excerpt is built
 (read math the way MathSpeech-style plain text does, e.g. "1/2", "x²").
+The excerpt is `stemExcerpt` (`lib/reporting/workPacket.ts`), and
+`test/work-packet.test.ts` asserts today's "x^2" / "12" output, so the fix
+updates those two assertions. **James 2026-10-23:** keep it on the roadmap,
+not urgent (the 2026-10-22 hand-check triage kept row 343 open for it).
+
+## Finding OE-1 — New assessment never recorded the owner's email (2026-10-22) — design-tool, FIXED (hotfix `5279931b`, 2026-10-23)
+
+Found on the 2026-10-22 `_demo` hand-run (rows 222/223: no "From your
+roster" suggestions). The New assessment form's server action inserted
+assessments without `owner_email`, so roster co-teacher suggestions,
+teacher-scope grants, a covering sitting's owner email and a grantee's
+shared accommodation records found nothing for them. Production: 62 of 101
+assessments NULL, 36 owners. Fix live 2026-10-23 (rev 114): the form
+writes it, and the owner opening such an assessment fills it. Migration
+0062 on `main` backfills the rest with v2.0. Record: `docs/ledger.md`
+2026-10-23; checks in `docs/design-tool-manual-checks.md` "New assessment
+records its owner".
 
 ## Speech tools — open considerations (James, 2026-10-01) — not decisions, nothing built
 
@@ -1287,15 +1304,3 @@ screened, or exclude empty text in the retry query; a test either way.
 Also discussed, no change: no advisory lock across tasks while production
 runs one task (a rolling deploy's overlap costs pennies at worst).
 
-## Finding WP-1 — math in the work packet's question checklist reads wrong (2026-10-23) — design-tool, nothing built
-
-From hand-check row 343 (2026-10-01; kept open by the 2026-10-22 triage).
-The Print student work toolbar labels each question with `stemExcerpt`
-(`lib/reporting/workPacket.ts`), a plain-text strip of the stem: it drops
-`$` markers, unknown LaTeX commands and braces, so `$x^2$` reads "x^2" and
-`$\frac{1}{2}$` reads "12" — a misleading label on a math test. The
-printed pages themselves render math (KaTeX); only the checklist label is
-affected. `test/work-packet.test.ts` currently asserts both outputs as
-accepted. Fix options: render the excerpt with KaTeX like the stems, or
-map `\frac{a}{b}` → "a/b" and `^` → "^" text in the stripper; update the
-two assertions either way. James (2026-10-23): roadmap it, not urgent.
