@@ -34,6 +34,7 @@ import { z } from "zod";
 import type { getDb } from "@/db/client";
 import {
   access_grants,
+  assessments,
   type AccessGrantRow,
   type AccessGrantScope,
 } from "@/db/schema";
@@ -243,6 +244,31 @@ export async function unseenAssessmentGrantIds(
       ),
     );
   return new Set(rows.map((r) => r.scope_id.toLowerCase()));
+}
+
+/**
+ * Finding OE-1: the New assessment form never wrote `owner_email` before the
+ * fix, so the owner opening such an assessment fills it from their own
+ * session. Only the owner (matched on `owner_sub`), never an act-as session,
+ * and never over an existing value. A no-op for anyone else.
+ */
+export async function healAssessmentOwnerEmail(
+  db: Db,
+  session: Pick<SessionPayload, "sub" | "email" | "actor_sub">,
+  assessmentId: string,
+): Promise<void> {
+  const email = normalizeEmail(session.email);
+  if (!email || session.actor_sub) return;
+  await db
+    .update(assessments)
+    .set({ owner_email: email })
+    .where(
+      and(
+        eq(assessments.id, assessmentId),
+        eq(assessments.owner_sub, session.sub),
+        isNull(assessments.owner_email),
+      ),
+    );
 }
 
 /** The grantee opened the assessment: clear its "New". A no-op for anyone else. */
