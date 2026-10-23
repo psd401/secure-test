@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { assessments } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { CreateAssessmentBody } from "@/lib/api/assessments";
+import { normalizeEmail } from "@/lib/roster/queries";
 
 import type { CreateAssessmentState } from "./state";
 
@@ -70,6 +71,9 @@ export async function createAssessment(
     .insert(assessments)
     .values({
       owner_sub: session.sub,
+      // Finding OE-1: the key roster suggestions and teacher-scope grants
+      // resolve through, as the API create path writes it.
+      owner_email: normalizeEmail(session.email),
       name: parsed.data.name,
       description: parsed.data.description,
       time_limit_seconds: parsed.data.time_limit_seconds ?? null,
