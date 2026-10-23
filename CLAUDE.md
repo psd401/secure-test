@@ -31,7 +31,7 @@ PSD macOS secure-testing browser + teacher-facing assessment-authoring "design-t
 ## Current state and history
 - **History lives in `docs/ledger.md`** (the dated status entries that used to be here, moved 2026-10-19 because this file had grown past 200 KB). Read its newest "STATE AT CLOSE-OUT" / dated entries before starting work; add new entries THERE, not here.
 - Detailed records: `docs/roadmap-2026-09.md` (§Progress), the design notes in `docs/`, `docs/design-tool-manual-checks.md`, `client/MANUAL-CHECKS.md`, `client/RELEASING.md`.
-- As of 2026-10-19: production runs the hotfix `4a812ae` (`hotfix/es-ended-session` = live `3e1ecc58` + row ES); `main` is HELD for v2.0 and carries undeployed work incl. migrations 0060 + 0061 (deploy after 15:30 PT on a weekday or with `--during-school`) plus the row ES commits by cherry-pick; v2.0 waits on IT's signed rehearsal manifest. Check `docs/ledger.md` for anything newer.
+- As of 2026-10-23: production runs the hotfix `5279931b` (`hotfix/owner-email` = live `3e1ecc58` + rows ES, Publish Scores slices 1–2 and OE-1, stacked hotfix on hotfix); `main` is HELD for v2.0 and carries undeployed work incl. migrations 0060 + 0061 + 0062 (deploy after 15:30 PT on a weekday or with `--during-school`) plus every hotfix commit by cherry-pick; v2.0 waits on IT's signed rehearsal manifest. Check `docs/ledger.md` for anything newer.
 
 ## Key working rules
 - Deploy = `design-tool/infra/scripts/deploy.sh` (James runs it if the classifier denies it); the container migrates at boot; read the `health stamp` line, not the exit code. `colima start` first.
