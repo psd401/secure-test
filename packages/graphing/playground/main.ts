@@ -44,7 +44,10 @@ const showCorpus = () => (corpusBox.value = [...corpus].join("\n"));
 showCorpus();
 
 const host = document.getElementById("calc")!;
-let calc = mountGraphing(host, { MathfieldElement, initial: load(), onChange: save });
+// `?mode=four_function&preset=state_wa` (or scientific) shows the other calculators.
+const params = new URLSearchParams(location.search);
+const modeOpts = { mode: (params.get("mode") ?? "graphing") as never, preset: params.get("preset") ?? undefined };
+let calc = mountGraphing(host, { MathfieldElement, initial: load(), onChange: save, ...modeOpts });
 
 function save(g: SavedGraph): void {
   try {
@@ -67,11 +70,11 @@ function save(g: SavedGraph): void {
 
 document.getElementById("reset")!.addEventListener("click", () => {
   calc.destroy();
-  calc = mountGraphing(host, { MathfieldElement, initial: SAMPLES, onChange: save });
+  calc = mountGraphing(host, { MathfieldElement, initial: SAMPLES, onChange: save, ...modeOpts });
 });
 document.getElementById("clear")!.addEventListener("click", () => {
   calc.destroy();
-  calc = mountGraphing(host, { MathfieldElement, initial: { rows: [] }, onChange: save });
+  calc = mountGraphing(host, { MathfieldElement, initial: { rows: [] }, onChange: save, ...modeOpts });
 });
 
 // `#answer`: the graph-answer board (slice 7), with a key for review below.

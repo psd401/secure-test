@@ -13,7 +13,7 @@ export interface Key {
   insert?: string;
   /** Characters to type as if from the keyboard (honours smart fences). */
   type?: string;
-  command?: "left" | "right" | "backspace" | "enter" | "clear";
+  command?: "left" | "right" | "backspace" | "enter" | "clear" | "undo" | "redo";
   group?: FunctionGroup;
   wide?: boolean;
   /** Visual role: digits look quieter than operators. */
@@ -144,48 +144,106 @@ export const FUNCTION_PAGE: Key[][] = [
   ],
 ];
 
-/** The four-function calculator: digits, the four operations, brackets, %. */
+
+/** The previous answer (the row above's value) — see `withAnswers`. */
+const ANS = k("ans", "previous answer", { insert: "\\operatorname{ans}" });
+
+/**
+ * The scientific calculator's main page, laid out like the Desmos WA
+ * scientific calculator (James, 2026-10-24): powers, roots, π, trig and
+ * brackets on the left; the digits with ÷ × − + and ans in the middle; %, the
+ * fraction, the arrows, delete and enter on the right. Nine columns.
+ */
+export const SCIENTIFIC_PAGE: Key[][] = [
+  [
+    k("a²", "squared", { insert: "#@^{2}" }),
+    k("aᵇ", "power", { insert: "#@^{#?}" }),
+    k("|a|", "absolute value", { insert: "\\left|#0\\right|" }),
+    k("7", "7", { type: "7", tone: "digit" }),
+    k("8", "8", { type: "8", tone: "digit" }),
+    k("9", "9", { type: "9", tone: "digit" }),
+    k("÷", "divide", { insert: "\\div", tone: "op" }),
+    k("%", "percent", { insert: "\\%" }),
+    k("a/b", "fraction", { insert: "\\frac{#0}{#?}" }),
+  ],
+  [
+    k("√", "square root", { insert: "\\sqrt{#0}" }),
+    k("ⁿ√", "nth root", { insert: "\\sqrt[#?]{#0}" }),
+    k("π", "pi", { insert: "\\pi" }),
+    k("4", "4", { type: "4", tone: "digit" }),
+    k("5", "5", { type: "5", tone: "digit" }),
+    k("6", "6", { type: "6", tone: "digit" }),
+    k("×", "times", { insert: "\\times", tone: "op" }),
+    NAV[1]!,
+    NAV[2]!,
+  ],
+  [
+    k("sin", "sine", { insert: "\\sin\\left(#0\\right)", group: "trig" }),
+    k("cos", "cosine", { insert: "\\cos\\left(#0\\right)", group: "trig" }),
+    k("tan", "tangent", { insert: "\\tan\\left(#0\\right)", group: "trig" }),
+    k("1", "1", { type: "1", tone: "digit" }),
+    k("2", "2", { type: "2", tone: "digit" }),
+    k("3", "3", { type: "3", tone: "digit" }),
+    k("−", "minus", { type: "-", tone: "op" }),
+    { ...NAV[0]!, wide: true },
+  ],
+  [
+    k("(", "open parenthesis", { type: "(" }),
+    k(")", "close parenthesis", { type: ")" }),
+    k(",", "comma", { type: "," }),
+    k("0", "0", { type: "0", tone: "digit" }),
+    k(".", "decimal point", { type: ".", tone: "digit" }),
+    ANS,
+    k("+", "plus", { type: "+", tone: "op" }),
+    { ...NAV[3]!, wide: true },
+  ],
+];
+
+/**
+ * The four-function calculator, laid out like Desmos's (James, 2026-10-24,
+ * finding FF-1: our first layout added % / a² / a second fraction slot and
+ * read as more than a four-function calculator). Four columns: undo, redo,
+ * clear, delete; brackets, the fraction-or-root key and ÷; the digits with ×
+ * − +; 0 . ans ↵. The WA state test puts a fraction key where Desmos's public
+ * calculator has √ (the Desmos WA sheet, SY2026-27) — `sqrtKey` chooses.
+ */
 export function fourPage(sqrtKey: boolean): Key[][] {
   return [
     [
-      k("(", "open parenthesis", { type: "(" }),
-      k(")", "close parenthesis", { type: ")" }),
-      k("%", "percent", { insert: "\\%" }),
-      k("7", "7", { type: "7", tone: "digit" }),
-      k("8", "8", { type: "8", tone: "digit" }),
-      k("9", "9", { type: "9", tone: "digit" }),
-      k("÷", "divide", { insert: "\\div", tone: "op" }),
+      k("↶", "Undo", { command: "undo", tone: "action" }),
+      k("↷", "Redo", { command: "redo", tone: "action" }),
+      k("clear", "Clear this expression", { command: "clear", tone: "action" }),
       NAV[0]!,
     ],
     [
+      k("(", "open parenthesis", { type: "(" }),
+      k(")", "close parenthesis", { type: ")" }),
       sqrtKey ? k("√", "square root", { insert: "\\sqrt{#0}" }) : k("a/b", "fraction", { insert: "\\frac{#0}{#?}" }),
-      k("a²", "squared", { insert: "#@^{2}" }),
-      k("−", "negative", { type: "-" }),
+      k("÷", "divide", { insert: "\\div", tone: "op" }),
+    ],
+    [
+      k("7", "7", { type: "7", tone: "digit" }),
+      k("8", "8", { type: "8", tone: "digit" }),
+      k("9", "9", { type: "9", tone: "digit" }),
+      k("×", "times", { insert: "\\times", tone: "op" }),
+    ],
+    [
       k("4", "4", { type: "4", tone: "digit" }),
       k("5", "5", { type: "5", tone: "digit" }),
       k("6", "6", { type: "6", tone: "digit" }),
-      k("×", "times", { insert: "\\times", tone: "op" }),
-      NAV[1]!,
+      k("−", "minus", { type: "-", tone: "op" }),
     ],
     [
-      sqrtKey ? k("a/b", "fraction", { insert: "\\frac{#0}{#?}" }) : k("", "", { type: "" }),
-      k("", "", { type: "" }),
-      k("", "", { type: "" }),
       k("1", "1", { type: "1", tone: "digit" }),
       k("2", "2", { type: "2", tone: "digit" }),
       k("3", "3", { type: "3", tone: "digit" }),
-      k("−", "minus", { type: "-", tone: "op" }),
-      NAV[2]!,
+      k("+", "plus", { type: "+", tone: "op" }),
     ],
     [
-      k("", "", { type: "" }),
-      k("", "", { type: "" }),
-      k("", "", { type: "" }),
       k("0", "0", { type: "0", tone: "digit" }),
       k(".", "decimal point", { type: ".", tone: "digit" }),
-      k("=", "equals", { command: "enter", tone: "op" }),
-      k("+", "plus", { type: "+", tone: "op" }),
-      k("C", "clear", { command: "clear", tone: "action" }),
+      ANS,
+      NAV[3]!,
     ],
   ];
 }
@@ -195,6 +253,8 @@ export function press(field: MathfieldElement, key: Key, onEnter: () => void): v
   if (key.command === "enter") return onEnter();
   if (key.command === "clear") {
     field.executeCommand("deleteAll");
+  } else if (key.command === "undo" || key.command === "redo") {
+    field.executeCommand(key.command);
   } else if (key.command === "backspace") {
     field.executeCommand("deleteBackward");
   } else if (key.command === "left") {
@@ -209,7 +269,7 @@ export function press(field: MathfieldElement, key: Key, onEnter: () => void): v
   field.focus();
 }
 
-export type Page = "main" | "alpha" | "functions" | "four";
+export type Page = "main" | "alpha" | "functions" | "four" | "sci";
 
 export class Keypad {
   readonly element: HTMLElement;
@@ -247,7 +307,7 @@ export class Keypad {
       const tabs = document.createElement("div");
       tabs.className = "gc-keypad-tabs";
       tabs.setAttribute("role", "tablist");
-      const names: Record<Page, string> = { main: "123", alpha: "abc", functions: "functions", four: "123" };
+      const names: Record<Page, string> = { main: "main", alpha: "abc", functions: "func", four: "main", sci: "main" };
       for (const p of this.pages) {
         const b = document.createElement("button");
         b.type = "button";
@@ -267,7 +327,9 @@ export class Keypad {
           ? ALPHA_PAGE
           : this.page === "four"
             ? fourPage(this.sqrtKey)
-            : FUNCTION_PAGE;
+            : this.page === "sci"
+              ? SCIENTIFIC_PAGE
+              : FUNCTION_PAGE;
     const grid = document.createElement("div");
     grid.className = `gc-keys gc-keys-${this.page}`;
     for (const row of rows) {

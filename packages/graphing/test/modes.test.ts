@@ -4,7 +4,7 @@ import { curveColor, luminance } from "../src/ui/graph";
 import { ANSWER_COLOR, FIXED_COLOR, KEY_COLOR } from "../src/ui/graphAnswer";
 import { PALETTE } from "../src/ui/state";
 import { isMode, presetFor, PRESETS } from "../src/ui/presets";
-import { fourPage } from "../src/ui/keypad";
+import { fourPage, SCIENTIFIC_PAGE } from "../src/ui/keypad";
 
 const contrast = (a: string, b: string) => {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
@@ -61,12 +61,29 @@ describe("presets", () => {
     expect(isMode(undefined)).toBe(false);
   });
 
-  test("four-function keypad: √ or the fraction key, never both missing", () => {
-    const labels = (rows: { label: string }[][]) => rows.flat().map((k) => k.label);
-    expect(labels(fourPage(true))).toContain("√");
-    expect(labels(fourPage(false))).not.toContain("√");
-    expect(labels(fourPage(false))).toContain("a/b");
-    for (const d of "0123456789") expect(labels(fourPage(false))).toContain(d);
+  const faces = (rows: { label: string }[][]) => rows.map((r) => r.map((k) => k.label));
+
+  test("four-function keypad: the Desmos WA layout (finding FF-1)", () => {
+    expect(faces(fourPage(false))).toEqual([
+      ["↶", "↷", "clear", "⌫"],
+      ["(", ")", "a/b", "÷"],
+      ["7", "8", "9", "×"],
+      ["4", "5", "6", "−"],
+      ["1", "2", "3", "+"],
+      ["0", ".", "ans", "↵"],
+    ]);
+    // Desmos's public calculator has √ where the state test has the fraction.
+    expect(faces(fourPage(true))[1]).toEqual(["(", ")", "√", "÷"]);
+    for (const label of ["%", "a²", "="]) expect(fourPage(false).flat().map((k) => k.label)).not.toContain(label);
+  });
+
+  test("scientific main page: the Desmos WA layout", () => {
+    expect(faces(SCIENTIFIC_PAGE)).toEqual([
+      ["a²", "aᵇ", "|a|", "7", "8", "9", "÷", "%", "a/b"],
+      ["√", "ⁿ√", "π", "4", "5", "6", "×", "←", "→"],
+      ["sin", "cos", "tan", "1", "2", "3", "−", "⌫"],
+      ["(", ")", ",", "0", ".", "ans", "+", "↵"],
+    ]);
   });
 });
 

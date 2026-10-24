@@ -6,6 +6,7 @@ export type { Node, Relation, Statement } from "./ast";
 export { freeVariables } from "./ast";
 export { BUILTINS, type FunctionGroup } from "./builtins";
 export { analyze, DEFAULT_SETTINGS, type Analysis, type Curve, type Row, type Settings } from "./analyze";
+export { analyzeWithAnswers, NO_ANSWER_ABOVE } from "./answers";
 export { CompileError } from "./compile";
 export { formatNumber, formatNumberLatex } from "./format";
 export { ParseError, parse } from "./parser";

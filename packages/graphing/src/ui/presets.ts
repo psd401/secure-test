@@ -46,8 +46,8 @@ export const PRESETS: Record<Mode, Record<string, Preset>> = {
     state_wa: { disabled: WA_LIMITS, degrees: true, functions: true, pages: ["main", "alpha", "functions"], sqrtKey: true },
   },
   scientific: {
-    full: { disabled: [], degrees: false, functions: true, pages: ["main", "alpha", "functions"], sqrtKey: true },
-    state_wa: { disabled: WA_LIMITS, degrees: true, functions: false, pages: ["main", "alpha", "functions"], sqrtKey: true },
+    full: { disabled: [], degrees: false, functions: true, pages: ["sci", "alpha", "functions"], sqrtKey: true },
+    state_wa: { disabled: WA_LIMITS, degrees: true, functions: false, pages: ["sci", "alpha", "functions"], sqrtKey: true },
   },
   four_function: {
     full: { disabled: ALL_GROUPS, degrees: false, functions: false, pages: ["four"], sqrtKey: true },

@@ -176,7 +176,7 @@ export const CALCULATOR_CSS = `
 .gc-mode-scientific, .gc-mode-four_function { grid-template-columns: 1fr; }
 .gc-mode-scientific .gc-right, .gc-mode-four_function .gc-right { display: none; }
 .gc-mode-scientific .gc-left, .gc-mode-four_function .gc-left { border-right: 0; }
-.gc-keys-four { grid-template-columns: repeat(8, 1fr); }
+.gc-keys-four { grid-template-columns: repeat(4, 1fr); }
 .gc-note { color: var(--gc-muted); }
 
 /* A stimulus graph: a figure in the question, not a full calculator. */

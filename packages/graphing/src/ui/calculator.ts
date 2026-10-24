@@ -4,6 +4,7 @@
 
 import type { MathfieldElement } from "mathlive";
 import { analyze, type Analysis } from "../engine/analyze";
+import { analyzeWithAnswers } from "../engine/answers";
 import type { FunctionGroup } from "../engine/builtins";
 import { latexToText } from "../engine/describe";
 import { GraphView } from "./graph";
@@ -133,7 +134,8 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
         f.popoverPolicy = "off";
         f.smartFence = true;
         f.smartSuperscript = true;
-        f.inlineShortcuts = INLINE_SHORTCUTS;
+        // Typed `ans` becomes the same upright word the ans key inserts.
+        f.inlineShortcuts = mode === "graphing" ? INLINE_SHORTCUTS : { ...INLINE_SHORTCUTS, ans: "\\operatorname{ans}" };
         f.keybindings = withoutEscape(f.keybindings);
         // Space is a thin space, as in other calculators — MathLive's default
         // jumps out of the bracket (cos(pi x) became cos(π)x).
@@ -289,7 +291,9 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   }
 
   function render(): void {
-    analyses = analyze(state.rows, { degrees: state.degrees, disabled, functions: preset.functions });
+    const settings = { degrees: state.degrees, disabled, functions: preset.functions };
+    // `ans` is the scientific and four-function calculators' previous answer.
+    analyses = mode === "graphing" ? analyze(state.rows, settings) : analyzeWithAnswers(state.rows, settings);
     let rows = state.rows;
     analyses.forEach((a, i) => {
       if (a.kind === "slider" && !rows[i]!.slider) rows = updateRow(rows, rows[i]!.id, { slider: defaultRange(a.value) });
