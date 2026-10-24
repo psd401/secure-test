@@ -138,6 +138,43 @@ final class RendererVerifierTests: XCTestCase {
         XCTAssertEqual(refusal(result), .badSignature)
     }
 
+    // MARK: - Backup-key rehearsal (slice 3b, signed on the YubiKey 2026-10-23)
+
+    private func rehearsal() throws -> (bytes: Data, sig: Data) {
+        let dir = "packages/renderer/test/fixtures/backup-rehearsal/"
+        return (try repoFile(dir + "manifest.json"), try repoFile(dir + "manifest.sig"))
+    }
+
+    func testRehearsalVerifiesAgainstTheBackupKeyOnly() throws {
+        let r = try rehearsal()
+        // Inside its one-day window and with no minimum version, so only the
+        // signature decides.
+        let inWindow = millis("2026-10-01T12:00:00.000Z")
+        let backup = RendererVerifier.verify(
+            manifestBytes: r.bytes, signature: r.sig, publicKeysPEM: [RendererKeys.backup],
+            now: inWindow, minimumVersion: 0, supported: RendererCapabilities.supported)
+        XCTAssertEqual(try backup.get().version, 1)
+        let working = RendererVerifier.verify(
+            manifestBytes: r.bytes, signature: r.sig, publicKeysPEM: [RendererKeys.working],
+            now: inWindow, minimumVersion: 0, supported: RendererCapabilities.supported)
+        XCTAssertEqual(refusal(working), .badSignature)
+    }
+
+    func testRehearsalIsRefusedByAReleaseShell() throws {
+        // What a v2.0 shell does with it: signed by a release key, refused.
+        let r = try rehearsal()
+        let result = RendererVerifier.verify(
+            manifestBytes: r.bytes, signature: r.sig, publicKeysPEM: RendererKeys.releaseKeys,
+            now: millis("2026-10-23T00:00:00.000Z"), minimumVersion: RendererPolicy.minimumVersion,
+            supported: RendererCapabilities.supported)
+        XCTAssertEqual(refusal(result), .belowMinimumVersion(have: 1, need: RendererPolicy.minimumVersion))
+        let noFloor = RendererVerifier.verify(
+            manifestBytes: r.bytes, signature: r.sig, publicKeysPEM: RendererKeys.releaseKeys,
+            now: millis("2026-10-23T00:00:00.000Z"), minimumVersion: 0,
+            supported: RendererCapabilities.supported)
+        XCTAssertEqual(refusal(noFloor), .expired)
+    }
+
     // MARK: - Keys
 
     func testAnyOfSeveralKeysVerifies() throws {

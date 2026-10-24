@@ -643,3 +643,45 @@ the pilot teacher.
 teacher sent scores to PowerSchool production and verified them in
 PowerTeacher Pro. Confirmed with IT outside collab, so thread `54f59626…`
 (left archived) has no closing message. No new findings reported.
+
+**2026-10-20 — Publish Scores was never set (beta report); hotfix slice 1
+BUILT.** A beta teacher's sent scores showed in PowerTeacher Pro but
+students saw the assignment as "not scored". The teacher (with IT) found the
+assignment's Publish tab had **Publish Scores** off; turning it on fixed it.
+Cause: the create sent `publishoption` (8.2) but never `isscorespublish`,
+and an API create without it leaves Publish Scores off — PowerTeacher Pro's
+own form copies the category's `isdefaultpublishscores`, which we never
+read. Fix (branch `hotfix/publish-scores` from the live `4a812ae`): the
+category parse reads `isdefaultpublishscores` (null when absent) and the
+create sends it as `isscorespublish`, omitted when null — 8.2 applied to
+both halves. `ps-send-check.ts` sends the same body. Not confirmed
+against PowerSchool — the test server cannot be reached off the district
+network and may no longer be up — so (James, 2026-10-20, option B) a create
+carrying `isscorespublish` that is refused with a 4xx is retried ONCE
+without it (the create as it was before), logged as stage
+`create_publish_scores`, and the summary tells the teacher to turn on
+Publish Scores; a 5xx or a category with no value is not retried. The
+first production send proves the field; a `create_publish_scores` log line
+means it was refused. **Slice 2 (decided 2026-10-20, James):** a Send again turns
+Publish Scores ON for an existing assignment when its category default is
+on — never off; the assignment update call is unproven, so it is checked
+on the test server before it ships.
+
+**2026-10-21 — slice 1 LIVE (rev 112, `2adbda9c`); slice 2 BUILT.** A Send
+again now fixes an assignment sent before the hotfix. The GB-2 list read
+(`listSectionAssignments`, was `listAssignmentSectionIds`) returns each
+section row's `assignmentid` and `isscorespublish`. When ours is `false`,
+the send reads the categories and, only if the push's category defaults to
+publishing scores, GETs the assignment, PUTs it back WHOLE to
+`/ws/xte/section/assignment/<assignmentid>` with only our section's
+`isscorespublish: true` (a partial PUT might clear what it leaves out),
+then GETs it again: any other field that changed is logged by NAME as
+`gradebook_assignment_fields_changed`, and Publish Scores still off counts
+as a failure. Never turns it off (James); a teacher who turns it off by
+hand has it turned back on by the next Send again when the category
+default is on (accepted, James 2026-10-21). Any failure (stage
+`publish_scores_update`) leaves the assignment as it was, the scores are
+still written, and the summary tells the teacher to turn it on. The PUT has
+not been run against PowerSchool: the first production Send again on an
+older assignment proves it (`gradebook_publish_scores_turned_on` in the
+log).

@@ -30,7 +30,7 @@ import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
 import { authorizeSend } from "../lib/gradebook/authorizeSend";
 import { loadSectionCandidates } from "../lib/gradebook/mapping";
-import { mockPowerSchool } from "../lib/gradebook/powerschool";
+import { defaultMockCategories, mockPowerSchool } from "../lib/gradebook/powerschool";
 import { todayPacific } from "../lib/gradebook/sendPowerSchool";
 import { setLogSink } from "../lib/log";
 import {
@@ -399,6 +399,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
           iscountedinfinalgrade: true,
           isscoringneeded: true,
           publishoption: "Immediately",
+          isscorespublish: true,
           _assignmentcategoryassociations: [{ teachercategoryid: 602, isprimary: true }],
         },
       ],
@@ -440,14 +441,14 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(body).toMatchObject({ assignment_created: false, sent: 0, updated: 0, skipped_unchanged: 1 });
     expect(body.external_assignment_id).toBe(first.external_assignment_id);
     // Nothing to write: only the GB-2 check that the assignment still exists.
-    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds"]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listSectionAssignments"]);
 
     await scoreAll(ben.id, 1);
     await scoreAll(ada.id, 0);
     mockPowerSchool.calls.length = 0;
     body = await (await send(s.assessment.id, BASE_BODY)).json();
     expect(body).toMatchObject({ sent: 1, updated: 1, skipped_unchanged: 0, held_back: { count: 0 } });
-    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds", "writeScores"]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listSectionAssignments", "writeScores"]);
     const rows = mockPowerSchool.calls[1]!.body!.assignment_scores as Record<string, unknown>[];
     const adaRow = rows.find((r) => r.studentsdcid === 81001)!;
     const benRow = rows.find((r) => r.studentsdcid === 81002)!;
@@ -527,6 +528,8 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
   test("a create failure leaves no claim behind and surfaces a 409 body", async () => {
     const s = await scene();
     await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    // Twice: the first refusal is retried once without isscorespublish.
+    mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
     mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
     const res = await send(s.assessment.id, BASE_BODY);
     expect(res.status).toBe(502);
@@ -534,6 +537,139 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(await getDb().select().from(gradebook_pushes)).toEqual([]);
     // A retry goes through.
     expect((await (await send(s.assessment.id, BASE_BODY)).json()).sent).toBe(1);
+  });
+
+  test("a create refused with isscorespublish is retried once without it; the summary says to turn it on", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.failNext("createAssignment", 403, '{"message":"No access to field assignmentsection.isscorespublish"}');
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ ok: true, assignment_created: true, sent: 1 });
+    expect(body.notes).toEqual([
+      "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.",
+    ]);
+    const creates = mockPowerSchool.calls.filter((c) => c.method === "createAssignment");
+    const sections = creates.map((c) => (c.body!._assignmentsections as Record<string, unknown>[])[0]!);
+    expect(sections.map((x) => x.isscorespublish)).toEqual([true, undefined]);
+    expect("isscorespublish" in sections[1]!).toBe(false);
+  });
+
+  test("a server error on create is not retried", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.failNext("createAssignment", 500, "boom");
+    const res = await send(s.assessment.id, BASE_BODY);
+    expect(res.status).toBe(502);
+    expect(mockPowerSchool.calls.filter((c) => c.method === "createAssignment").length).toBe(1);
+  });
+
+  test("a category with no Publish Scores value is not retried", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    mockPowerSchool.setCategories(
+      "8301",
+      defaultMockCategories().map((c) => ({ ...c, isdefaultpublishscores: null })),
+    );
+    mockPowerSchool.failNext("createAssignment", 409, '{"message":"duedate outside term"}');
+    const res = await send(s.assessment.id, BASE_BODY);
+    expect(res.status).toBe(502);
+    expect(mockPowerSchool.calls.filter((c) => c.method === "createAssignment").length).toBe(1);
+  });
+
+  // Slice 2: an assignment sent before the 2026-10-21 hotfix has Publish Scores off.
+  function publishScoresOff(assignmentSectionId: string): void {
+    const stored = mockPowerSchool.assignments.get(assignmentSectionId)!;
+    const [section] = stored._assignmentsections as Record<string, unknown>[];
+    mockPowerSchool.assignments.set(assignmentSectionId, {
+      _assignmentsections: [{ ...section, isscorespublish: false }],
+    });
+  }
+  const storedPublish = (asid: string) =>
+    (mockPowerSchool.assignments.get(asid)!._assignmentsections as Record<string, unknown>[])[0]!.isscorespublish;
+
+  test("slice 2: a Send again turns Publish Scores on when the category default is on", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    publishScoresOff(first.external_assignment_id);
+    mockPowerSchool.calls.length = 0;
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ ok: true, skipped_unchanged: 1 });
+    expect(body.notes).toEqual([
+      "Publish Scores was off on this assignment in PowerTeacher Pro; it is now on, so students can see their scores.",
+    ]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual([
+      "listSectionAssignments",
+      "listCategories",
+      "getAssignment",
+      "updateAssignment",
+      "getAssignment",
+    ]);
+    expect(storedPublish(first.external_assignment_id)).toBe(true);
+    // The PUT echoes the read: every create field is still there.
+    const put = mockPowerSchool.calls.find((c) => c.method === "updateAssignment")!;
+    const putSection = (put.body!._assignmentsections as Record<string, unknown>[])[0]!;
+    expect(putSection).toMatchObject({ name: "Unit 3 test", duedate: "2026-09-28", isscorespublish: true });
+    expect(logLines.join("\n")).toContain("gradebook_publish_scores_turned_on");
+    expect(logLines.join("\n")).not.toContain("gradebook_assignment_fields_changed");
+
+    // Already on: the next Send again reads the list only.
+    mockPowerSchool.calls.length = 0;
+    await send(s.assessment.id, BASE_BODY);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listSectionAssignments"]);
+  });
+
+  test("slice 2: a category that holds scores back is left alone — never turned off or on", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    publishScoresOff(first.external_assignment_id);
+    mockPowerSchool.setCategories(
+      "8301",
+      defaultMockCategories().map((c) => ({ ...c, isdefaultpublishscores: false })),
+    );
+    mockPowerSchool.calls.length = 0;
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body.notes).toEqual([]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listSectionAssignments", "listCategories"]);
+    expect(storedPublish(first.external_assignment_id)).toBe(false);
+  });
+
+  test("slice 2: a refused update still writes the scores and tells the teacher", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    publishScoresOff(first.external_assignment_id);
+    await scoreAll(ada.id, 0);
+    mockPowerSchool.failNext("updateAssignment", 403, '{"message":"No access"}');
+    const body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body).toMatchObject({ ok: true, updated: 1 });
+    expect(body.notes).toEqual([
+      "Students may not see these scores yet: in PowerTeacher Pro, edit the assignment, open the Publish tab and turn on Publish Scores.",
+    ]);
+    expect(storedPublish(first.external_assignment_id)).toBe(false);
+    expect(logLines.join("\n")).toContain("publish_scores_update");
+  });
+
+  test("slice 2: a PUT that changes another field is logged by field name", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    publishScoresOff(first.external_assignment_id);
+    const real = mockPowerSchool.updateAssignment.bind(mockPowerSchool);
+    mockPowerSchool.updateAssignment = async (usersDcid, assignmentId, b) => {
+      const [section] = b._assignmentsections as Record<string, unknown>[];
+      await real(usersDcid, assignmentId, { ...b, _assignmentsections: [{ ...section, duedate: "2026-10-21" }] });
+    };
+    try {
+      const body = await (await send(s.assessment.id, BASE_BODY)).json();
+      expect(body.notes[0]).toContain("it is now on");
+      const line = logLines.find((l) => l.includes("gradebook_assignment_fields_changed"))!;
+      expect(JSON.parse(line).fields).toEqual(["_assignmentsections.duedate"]);
+      expect(line).not.toContain("2026-10-21");
+    } finally {
+      mockPowerSchool.updateAssignment = real;
+    }
   });
 
   test("an assignment deleted in PowerSchool: the push is retired and the next send creates anew", async () => {
@@ -575,7 +711,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(body.notes).toContain(
       "The assignment was not found in PowerSchool (deleted there?). Send again to create a new one.",
     );
-    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listAssignmentSectionIds"]);
+    expect(mockPowerSchool.calls.map((c) => c.method)).toEqual(["listSectionAssignments"]);
     const [retired] = await getDb().select().from(gradebook_pushes);
     expect(retired!.archived_at).not.toBeNull();
   });
@@ -584,7 +720,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     const s = await scene();
     await attempt(s, STUDENT, s.algebra.id, [1, 1]);
     await send(s.assessment.id, BASE_BODY);
-    mockPowerSchool.failNext("listAssignmentSectionIds", 503, "unavailable");
+    mockPowerSchool.failNext("listSectionAssignments", 503, "unavailable");
     const res = await send(s.assessment.id, BASE_BODY);
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({ ok: false, error: "gradebook_unavailable" });
@@ -657,7 +793,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect((await res.json()).error).toBe("unknown_category");
 
     mockPowerSchool.setCategories("8301", [
-      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null },
+      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null, isdefaultpublishscores: null },
     ]);
     res = await send(s.assessment.id, BASE_BODY);
     expect((await res.json()).error).toBe("unknown_category");
@@ -729,8 +865,8 @@ describe("GET /api/assessments/[id]/gradebook-categories", () => {
 
     // D-6: the Test copy inactive → no default.
     mockPowerSchool.setCategories("8301", [
-      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null },
-      { id: "650", name: "Summative", categorytype: "user", districtteachercategoryid: null, isactive: true, defaultpublishoption: null },
+      { id: "602", name: "Test", categorytype: "district", districtteachercategoryid: 2, isactive: false, defaultpublishoption: null, isdefaultpublishscores: null },
+      { id: "650", name: "Summative", categorytype: "user", districtteachercategoryid: null, isactive: true, defaultpublishoption: null, isdefaultpublishscores: null },
     ]);
     body = await (await categories(s.assessment.id, "target=powerschool&section_ps_id=5001")).json();
     expect(body.default_category_id).toBeNull();

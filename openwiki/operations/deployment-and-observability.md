@@ -1,7 +1,7 @@
 ---
 type: Operations Reference
 title: Deployment, infrastructure, observability and retention
-description: How the design tool is packaged (Docker standalone build, container entrypoint modes), deployed (CDK stack with Aurora, ECS Fargate, S3, roster-sync Lambda), observed (request ids, structured logs, error tables, health check) and pruned (retention sweeps).
+description: How the design tool is packaged (Docker standalone build, container entrypoint modes), deployed (CDK stack with Aurora, ECS Fargate, S3, roster-sync Lambda), observed (request ids, structured logs, error tables, health check, student admission refusal logs and the read-only student lookup) and pruned (retention sweeps).
 tags: [deployment, aws, cdk, ecs, observability, retention]
 openwiki:
   roles: [operations, delivery]
@@ -15,13 +15,17 @@ openwiki:
     - design-tool/infra/lib/roster-sync.ts
     - design-tool/lib/retention/sweep.ts
     - design-tool/lib/log.ts
+    - design-tool/lib/api/resolutionLog.ts
+    - design-tool/lib/roster/lookup.ts
     - design-tool/instrumentation.ts
-  symbols: [DesignToolStack, sweepEventTables, sweepPracticeSittings, recordServerError, onRequestError]
+  symbols: [DesignToolStack, sweepEventTables, sweepPracticeSittings, recordServerError, onRequestError, logResolutionFailure, emailRef, lookupStudent]
   test_paths:
     - design-tool/test/docker-entrypoint.test.ts
     - design-tool/test/retention-sweep.test.ts
     - design-tool/test/server-error-record.test.ts
     - design-tool/test/log.test.ts
+    - design-tool/test/resolution-log.test.ts
+    - design-tool/test/student-lookup.test.ts
   invariants:
     - Logs never carry bodies, headers, tokens, student text, names or emails.
     - The roster Lambda has no route to Bedrock, so Bedrock-dependent background work runs in the web app.
@@ -82,7 +86,7 @@ The same CDK app builds a second, isolated stack when `env=staging` is passed (`
 
 - `sweepEventTables` deletes `server_error_events`, `client_error_events` and `guardrail_events` older than `RETENTION_DAYS_DEFAULT` = 90 days. `feedback` is never swept.
 - `sweepPracticeSittings` deletes practice attempts for practice sittings closed or expired more than `PRACTICE_RETENTION_DAYS` = 7 days ago (through `deleteAttemptRecord`, so the audit row matches a manual delete) and archives the sitting; stored bytes go through the `deleteStoredUpload` path when supplied.
-- `sweepAnswerHistory` prunes `response_revisions` (`ANSWER_HISTORY_RETENTION_DAYS`, 30 days after hand-in).
+- `sweepAnswerHistory` prunes `response_revisions` (`ANSWER_HISTORY_RETENTION_DAYS`, 30 days after hand-in); the rule is in [answer history](../design-tool/answer-history.md#retention).
 - Peek images are swept lazily from the peek routes (60 s TTL) so no scheduler is needed ([sittings and attempts](../design-tool/sittings-and-attempts.md#events-and-the-monitor)).
 - The hourly safeguarding screening retry runs inside the web app (`instrumentation.ts` `register`), because the Lambda has no route to Bedrock ([AI and safeguarding](../design-tool/ai-and-safeguarding.md)).
 - When `RENDERER_DELIVERY=on`, the same `register` hook starts the renderer expiry watch (`lib/renderer/expiryWatch.ts`, `startRendererExpiryWatch`), which resolves the current renderer once two minutes after boot and then hourly. This makes `renderer_expiring` and expiry failures reach the error alarm even when no student requests a bundle ([signed renderer delivery](../client/signed-renderer.md#expiry-watch)).
@@ -92,8 +96,17 @@ The same CDK app builds a second, isolated stack when `env=staging` is passed (`
 - `design-tool/proxy.ts` mints or reuses a request id for every non-static request (`lib/observability/requestId.ts`), sets it on the request and echoes it as the `x-request-id` response header. Error boundaries print it as the "ref" a teacher hands to IT.
 - `lib/log.ts` writes one JSON line per event to stdout (CloudWatch). **Redaction contract:** never a request/response body, query string, header, cookie, token, item stem, student answer, name or email; messages and stacks are truncated to 2000 characters. The roster importer logs counts and codes only.
 - `instrumentation.ts` `onRequestError` calls `recordServerError` (`lib/observability/serverError.ts`), which writes one error log line and one `server_error_events` row joined by `request_id`. Node runtime only.
-- The [student client](../client/lockdown-and-security.md#telemetry-and-diagnostics) reports out-of-attempt errors to `POST /api/client-errors` (`client_error_events`); in-attempt errors travel as `client_error` attempt events. Teachers' feedback goes to `POST /api/feedback` (`feedback`, published to SNS through `lib/notify`, with failures swallowed so a teacher never sees a 500 because SNS hiccuped).
+- The [student client](../client/lockdown-and-security.md#telemetry-and-diagnostics) reports out-of-attempt errors to `POST /api/client-errors` (`client_error_events`); in-attempt errors travel as `client_error` attempt events. Teachers' feedback goes to `POST /api/feedback` (`feedback`, published to SNS through `lib/notify`, with failures swallowed so a teacher never sees a 500 because SNS hiccuped). The header controls and public Help and Roadmap pages that send it are described in [teacher dashboard](../design-tool/teacher-dashboard.md#header-help-roadmap-and-feedback).
 - `GET /api/debug/throw` and `/dashboard/debug/throw` exist to prove the capture path end to end.
+
+## Admission refusals and student lookup
+
+Two read-only paths answer "why can't this student get in?" without a name or a stored address reaching the log or the output.
+
+- `logResolutionFailure` (`lib/api/resolutionLog.ts`) writes one `student_resolution_failed` line when a student's resolution fails in `GET /api/me/sittings`, `POST /api/test-sessions/redeem` or `POST /api/attempts`. The fields are the route, the reason, the session subject, `email_ref`, `email_domain` and the sitting id. `email_ref` is `emailRef`: 16 hex characters of an HMAC over the normalised address, keyed by `DESIGN_TOOL_SESSION_SECRET`. An operator can match a refusal to a lookup through that hash. `not_in_sitting` logs at info because a wrong or foreign code is routine; every account-level refusal logs at warn. The alarm matches level error only, so neither alarms.
+- `lookupStudent` (`lib/roster/lookup.ts`) runs the same admission rules as the join routes (it reuses `isAdmittedToSitting` from `lib/api/resolveStudent.ts`) for an email or a student number. It returns a verdict (`ok`, `no_email`, `not_on_roster` or `identity_conflict`), the roster rows, the enrollments with their current flag, the open sittings that admit the student or belong to one of their teachers, and the `email_ref` to match against logs. Only the address's domain and whether it has student shape are shown. Operators run it through the read-only `student-lookup` one-off mode of the container entrypoint (see [container entrypoint](#container-entrypoint-scriptsdocker-entrypointmjs) above).
+
+The verdict is only as good as the shared rules, so a change to admission in [sittings and attempts](../design-tool/sittings-and-attempts.md#join-and-answer-flow) must be checked against the lookup as well. Tests: `design-tool/test/resolution-log.test.ts` (log level and redaction) and `design-tool/test/student-lookup.test.ts` (verdicts against seeded roster rows; it refuses to run unless `DATABASE_URL` names the test database, so use `$TESTDB`).
 
 ## Secrets and configuration
 
@@ -107,8 +120,6 @@ Names only (values never belong in the repo): `DATABASE_URL` (or `DB_*` in ECS),
 | New operator one-off | add a `bun build` line in `Dockerfile` and a `MODES` entry in `docker-entrypoint.mjs` | `test/docker-entrypoint.test.ts` |
 | Change roster Lambda or sweeps | `lib/roster/syncHandler.ts`, `lib/retention/sweep.ts` | `roster-sync-handler.test.ts`, `retention-sweep.test.ts`, `practice-sweep-asset-delete.test.ts` |
 | Change logging or error capture | `lib/log.ts`, `lib/observability/serverError.ts`, `proxy.ts` | `log.test.ts`, `server-error-record.test.ts`, `health-route.test.ts` |
-
-CDK changes are validated by `cdk synth` in `design-tool/infra` (conditional: only when infra files change; it needs CDK context values). Do not run a full image build to check an app-only change.
-es) |
+| Change refusal logging or the student lookup | `lib/api/resolutionLog.ts`, `lib/roster/lookup.ts` | `resolution-log.test.ts`, `student-lookup.test.ts` (needs `$TESTDB`) |
 
 CDK changes are validated by `cdk synth` in `design-tool/infra` (conditional: only when infra files change; it needs CDK context values). Do not run a full image build to check an app-only change.

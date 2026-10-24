@@ -146,7 +146,7 @@ final class RendererBehaviourTests: XCTestCase {
     func testEssayWordCounterStartsAtZeroAndTracksTyping() throws {
         let h = try harness()
         let item = "__item(\(Index.essay))"
-        XCTAssertEqual(try h.string("__first('.word-count', \(item)).textContent"), "0 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(\(item))"), "0 / 400 words")
 
         try h.eval("""
         var area = __first('textarea', \(item));
@@ -154,7 +154,7 @@ final class RendererBehaviourTests: XCTestCase {
         area.oninput();
         """)
         // Whitespace-separated tokens, matching what a student would count.
-        XCTAssertEqual(try h.string("__first('.word-count', \(item)).textContent"), "3 / 400 words")
+        XCTAssertEqual(try h.string("__visibleCount(\(item))"), "3 / 400 words")
     }
 
     /// Over-limit is flagged, never truncated: silently deleting a student's
@@ -188,37 +188,70 @@ final class RendererBehaviourTests: XCTestCase {
         let area = "__first('textarea', __item(0))"
         XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(\(area))"), "0 of 50 words")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).getAttribute('aria-hidden')"), "true")
         XCTAssertNil(try h.string("\(area).getAttribute('aria-describedby')"))
         // The label is read only as the name, never on its own.
         XCTAssertEqual(try h.string("__all('.sr-only', __item(0)).filter(function (n) { return n.id.indexOf('essay-label-') === 0; })[0].getAttribute('aria-hidden')"), "true")
-        // The spoken count is the node right after the visible counter.
-        XCTAssertEqual(try h.string("(function () { var c = __first('.word-count', __item(0)); var k = c.parentNode.children; return k[k.indexOf(c) + 1].id; })()"), "essay-count-spoken-i")
+        // WC-5: the counter carries both forms — the visible text hidden from
+        // VoiceOver, then the spoken form — and is not hidden itself, so
+        // VoiceOver's cursor outlines the counter, not a 1 px twin below it.
+        XCTAssertNil(try h.string("__first('.word-count', __item(0)).getAttribute('aria-hidden')"))
+        XCTAssertEqual(try h.string("__first('.word-count-visible', __item(0)).getAttribute('aria-hidden')"), "true")
+        XCTAssertEqual(try h.string("__first('.word-count-spoken', __item(0)).id"), "essay-count-spoken-i")
+        XCTAssertEqual(try h.string("__first('.word-count-spoken', __item(0)).parentNode.className"), "word-count-box")
         try h.eval("var a = \(area); a.value = 'one two three'; a.oninput();")
         XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(\(area))"), "3 of 50 words")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "3 / 50 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(0))"), "3 / 50 words")
     }
 
     /// Over the maximum is SAID ("over the limit"), not only coloured, and
     /// crossing it is announced once each way — staying over says nothing new.
+    /// WC-4: assertive, and only once typing pauses (VoiceOver's typing echo
+    /// talked over a polite one); emptied again afterwards.
     func testAPlainEssayAnnouncesCrossingTheLimitOnceEachWay() throws {
         let h = try RendererHarness(bundleJSON: """
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":3}]}
         """)
         let area = "__first('textarea', __item(0))"
+        let liveNode = "__all('.sr-only', __item(0)).filter(function (n) { return n.id.indexOf('essay-count-live-') === 0; })[0]"
+        XCTAssertEqual(try h.string("\(liveNode).getAttribute('aria-live')"), "assertive")
         XCTAssertEqual(try h.string(Self.liveJS), "")
         try h.eval("var a = \(area); a.value = 'one two three four'; a.oninput();")
         XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(\(area))"), "4 of 3 words, over the limit")
-        XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
-        // Still over: the live text is unchanged, so nothing is re-announced.
+        // Not while typing: the announcement waits for a one-second pause.
+        XCTAssertEqual(try h.string(Self.liveJS), "")
+        XCTAssertEqual(try h.int("__timers.filter(function (t) { return t.ms === 1000; }).length"), 1)
+        // Still typing, still over: the wait restarts, one timer only.
         try h.eval("var a = \(area); a.value = 'one two three four five'; a.oninput();")
+        XCTAssertEqual(try h.int("__timers.filter(function (t) { return t.ms === 1000; }).length"), 1)
+        try h.eval("__fireTimers();")
         XCTAssertEqual(try h.string(Self.liveJS), "Over the 3-word limit")
+        // Still over after the announcement: nothing new is scheduled.
+        try h.eval("var a = \(area); a.value = 'one two three four five six'; a.oninput();")
+        XCTAssertEqual(try h.int("__timers.filter(function (t) { return t.ms === 1000; }).length"), 0)
+        // The message is emptied a few seconds later, so VO-moving past it
+        // never reads a stale "Over".
+        try h.eval("__fireTimers();")
+        XCTAssertEqual(try h.string(Self.liveJS), "")
         try h.eval("var a = \(area); a.value = 'one two'; a.oninput();")
         XCTAssertEqual(try h.string("__accessibleName(\(area))"), "Your answer")
         XCTAssertEqual(try h.string("__spokenCount(\(area))"), "2 of 3 words")
+        try h.eval("__fireTimers();")
         XCTAssertEqual(try h.string(Self.liveJS), "Back within the limit")
+    }
+
+    /// WC-4: a crossing undone before typing pauses says nothing at all.
+    func testAPlainEssayCrossingUndoneWithinThePauseSaysNothing() throws {
+        let h = try RendererHarness(bundleJSON: """
+        {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":3}]}
+        """)
+        let area = "__first('textarea', __item(0))"
+        try h.eval("var a = \(area); a.value = 'one two three four'; a.oninput();")
+        try h.eval("var a = \(area); a.value = 'one two three'; a.oninput();")
+        XCTAssertEqual(try h.int("__timers.filter(function (t) { return t.ms === 1000; }).length"), 0)
+        try h.eval("__fireTimers();")
+        XCTAssertEqual(try h.string(Self.liveJS), "")
     }
 
     /// U-22's count without a maximum: "n words" in the name, never "over",
@@ -309,9 +342,9 @@ final class RendererBehaviourTests: XCTestCase {
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","show_word_count":true}]}
         """)
         XCTAssertEqual(try h.int("__count('.word-count')"), 1)
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "0 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(0))"), "0 words")
         try h.eval("var area = __first('textarea', __item(0)); area.value = 'one'; area.oninput();")
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "1 word")
+        XCTAssertEqual(try h.string("__visibleCount(__item(0))"), "1 word")
         try h.eval("""
         var area = __first('textarea', __item(0));
         var words = [];
@@ -319,7 +352,7 @@ final class RendererBehaviourTests: XCTestCase {
         area.value = words.join(' ');
         area.oninput();
         """)
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "5000 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(0))"), "5000 words")
         XCTAssertEqual(try h.string("__first('.word-count', __item(0)).className"), "word-count")
     }
 
@@ -328,7 +361,7 @@ final class RendererBehaviourTests: XCTestCase {
         let h = try RendererHarness(bundleJSON: """
         {"test_id":"t","title":"T","items":[{"type":"essay","id":"i","stem":"s","max_word_count":50,"show_word_count":true}]}
         """)
-        XCTAssertEqual(try h.string("__first('.word-count', __item(0)).textContent"), "0 / 50 words")
+        XCTAssertEqual(try h.string("__visibleCount(__item(0))"), "0 / 50 words")
     }
 
     func testEssayWithoutAWordCapShowsNoCounter() throws {

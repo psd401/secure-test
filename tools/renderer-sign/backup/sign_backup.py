@@ -47,5 +47,7 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# No `if __name__ == "__main__":` guard: `ykman script` runs the file with
+# exec() and empty globals, so __name__ is never "__main__" and a guarded
+# main() silently never runs (found at the 2026-10-23 rehearsal).
+sys.exit(main())

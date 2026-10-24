@@ -9,7 +9,7 @@ openwiki:
   source_paths:
     - client/SecureTestCore/Sources/SecureTestCore/AssessmentPageRichText.swift
     - client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift
-  symbols: [AssessmentPage, richTextStyles, richTextFunctions, richEssayField, richExec, richSanitize, richTextFromHtml, richBuildDom, undoHistory, undoChord, richPlainLines]
+  symbols: [AssessmentPage, richTextStyles, richTextFunctions, richEssayField, richExec, richSanitize, richTextFromHtml, richBuildDom, undoHistory, undoChord, richPlainLines, essayFieldA11y, wordCountSpoken]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererRichTextTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/RendererTextAutosaveTests.swift
@@ -75,7 +75,7 @@ The count is a page-side display of the item's `max_word_count` and `show_word_c
 - A maximum always shows its count as "n / max words" and gets the `word-count over` class when the count passes it.
 - Without a maximum, `show_word_count` shows a plain running "n words" count that is never marked over.
 - Without either key, no count is drawn.
-- The box is named "Your answer". The count is spoken on request, when focus leaves the box, in a hidden phrase such as "12 of 50 words, over the limit", so red alone does not carry the state. Crossing the maximum is announced once in each direction, never word by word.
+- The box is named "Your answer". VoiceOver skips the visible "12 / 50 words" (no "slash" is spoken), and the same counter carries a spoken form, "12 of 50 words, over the limit", that is reached when focus moves on from the box, so red alone does not carry the state. Crossing the maximum is announced once in each direction, never word by word: an assertive live region says "Over the 50-word limit" or "Back within the limit" once typing has paused for a second, and clears itself after five seconds. The first render of a restored answer sets the state without announcing it. The logic is `essayFieldA11y` and `wordCountSpoken` in `AssessmentPage.swift`.
 
 The server derives the stored word count from the sanitised text, so the number the student sees matches the stored one ([rich-text rules](#rules-that-must-stay-in-step-with-the-server)). Focused checks: `cd client/SecureTestCore && swift test --filter RendererRichTextTests` (formatted boxes, including the WC-2 spoken-count and U-22 `show_word_count` cases) and `swift test --filter RendererBehaviourTests` (plain essays, the over-limit and spoken-count cases); server side: `cd design-tool && bun test test/delivery-api.test.ts` (the U-22 test).
 

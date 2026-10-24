@@ -79,6 +79,12 @@ a question for the feedback round, not a backlog item.
   students whether they reached for on-screen digits (touch / motor needs)
   and teachers whether any student needed them.
 - **E11 rescoring after a key change** — teacher input arrived 2026-10-08 (open beta: a wrong MC key fixed after hand-in); SCOPED as a per-item "Rescore with the current key" button, D-1…D-3 decided, nothing built — `docs/rescore-after-key-change-design.md`.
+- **Handing in an essay over its word limit** (James, 2026-10-24, the
+  v2.0.0 RC sitting): a student can hand in with "52 / 50 words". Today
+  that is the design — the counter shows red and nothing is cut (the
+  renderer's own comment defers any submit-time gate to submission,
+  slice 64, never built). Ask beta teachers whether the maximum should be
+  a warning (as now), a confirm at hand-in, or a hard stop.
 - **Gradebook CSV shape** (D-R3) — waits for sample PowerTeacher Pro /
   Schoology exports.
 
@@ -954,6 +960,23 @@ to an excerpt, and the excerpt shows `x^2` raw and `\frac{1}{2}` as "12"
 (the earlier excerpt fix covered symbols, not `^` or `\frac`). The page
 body renders the math correctly. Cosmetic; fix where the excerpt is built
 (read math the way MathSpeech-style plain text does, e.g. "1/2", "x²").
+The excerpt is `stemExcerpt` (`lib/reporting/workPacket.ts`), and
+`test/work-packet.test.ts` asserts today's "x^2" / "12" output, so the fix
+updates those two assertions. **James 2026-10-23:** keep it on the roadmap,
+not urgent (the 2026-10-22 hand-check triage kept row 343 open for it).
+
+## Finding OE-1 — New assessment never recorded the owner's email (2026-10-22) — design-tool, FIXED (hotfix `5279931b`, 2026-10-23)
+
+Found on the 2026-10-22 `_demo` hand-run (rows 222/223: no "From your
+roster" suggestions). The New assessment form's server action inserted
+assessments without `owner_email`, so roster co-teacher suggestions,
+teacher-scope grants, a covering sitting's owner email and a grantee's
+shared accommodation records found nothing for them. Production: 62 of 101
+assessments NULL, 36 owners. Fix live 2026-10-23 (rev 114): the form
+writes it, and the owner opening such an assessment fills it. Migration
+0062 on `main` backfills the rest with v2.0. Record: `docs/ledger.md`
+2026-10-23; checks in `docs/design-tool-manual-checks.md` "New assessment
+records its owner".
 
 ## Speech tools — open considerations (James, 2026-10-01) — not decisions, nothing built
 
@@ -1159,6 +1182,17 @@ never renamed (convention in `CLAUDE.md` "Naming").
   test 999); ships with the v2.0 merge (James); rows in
   `client/MANUAL-CHECKS.md` "Word count heard on request" NOT RUN.** Side: renderer (v2.0 —
   ships with a production deploy, no client release).
+  - *Hand-run 2026-10-23* (Debug build of `main`, bundled renderer, local
+    `_demo`, simulated lockdown, James): all eight rows ✅ after two fixes
+    built the same afternoon. **WC-4** — crossing the maximum was never
+    heard while typing (a polite live region under VoiceOver's typing
+    echo); now assertive, said once typing pauses for 1 s, nothing said
+    for a crossing undone within that second, the text emptied after 5 s
+    so VO-moving past it never reads a stale "Over". **WC-5** — VO-Right
+    outlined an invisible 1 px box (the `sr-only` spoken twin) below,
+    then beside, the counter; the spoken form now lies over the visible
+    one in a `.word-count-box` (transparent text), so the outline sits
+    on the counter.
   - *Found:* WC-2 passes, but James does not like the count in the intro
     VoiceOver reads on arriving in the box ("Your answer, 12 of 50 words").
   - *Options weighed:* (a) the count after the name as a description —
@@ -1268,3 +1302,22 @@ signed).** Findings:
 - Next: explore building our own embedded graphing calculator with a
   Desmos-like look and feel on a long-lived branch,
   `graphing-calculator`, kept off `main` so it holds up no other work.
+
+## Finding SG-1 — the safeguarding retry re-picks a blank answer every hour (2026-10-22) — design-tool, nothing built
+
+Found while reading the AppServerErrors alarm of 2026-10-22 (three
+`safeguarding_check_failed` lines, a Bedrock 503 on the screener at
+hand-in; the hourly retry covers those). Every hourly `safeguarding_retry`
+line over the scanned window reads `candidates: 1, screened: 0, failed: 0`.
+Cause: `screenPending` (`lib/safeguarding/screening/retry.ts`) selects any
+unscreened essay / short-text response, but `screenCandidates`
+(`screen.ts`) skips an answer whose text is empty or does not parse —
+neither screened nor failed, and never stamped `safeguarding_screened_at` —
+so the same answer (almost certainly a blank one) returns every hour until
+it leaves the 14-day window. Cost is ~$0 (the skip precedes any Bedrock or
+guardrail call); the stuck answers take slots in the 200-per-run batch and
+the info line reads as activity. Fix: stamp a skipped empty answer as
+screened, or exclude empty text in the retry query; a test either way.
+Also discussed, no change: no advisory lock across tasks while production
+runs one task (a rolling deploy's overlap costs pennies at worst).
+

@@ -9,7 +9,7 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentIdProvider } from "@/components/app/AssessmentIdContext";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
-import { markAssessmentGrantSeen } from "@/lib/api/grants";
+import { healAssessmentOwnerEmail, markAssessmentGrantSeen } from "@/lib/api/grants";
 import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
 
@@ -55,6 +55,9 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
   // on their home list. An admin acting as the teacher does not.
   if (access.via === "grant" && !session.actor_sub) {
     await markAssessmentGrantSeen(db, session.email, id);
+  }
+  if (access.via === "owner" && !assessment.owner_email) {
+    await healAssessmentOwnerEmail(db, session, id);
   }
 
   const itemRows = await db

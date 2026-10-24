@@ -195,6 +195,26 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v2.0.0 — 2026-10-24** (built from `bebf933ea9d2`, tag on `main`):
+  the server-delivered renderer (`docs/server-delivered-renderer-design.md`
+  slices 4a–4f: the page is a signed renderer the server sends with each
+  bundle, verified before `begin()`; a Release build refuses a bundle
+  without one), passage highlighting (U-21), WC-2 / WC-3 / WC-4 / WC-5 (the
+  essay word count with VoiceOver) and KaTeX 0.18.11 with its licence
+  notice. psd-sign 0.6.1: pre-flight clean (HEAD = `origin/main` after a
+  fast-forward over an OpenWiki bot commit; 2.0.0 > v1.6.3), archive-only
+  Developer ID + hardened runtime (no re-sign), all seven entitlements =
+  `expected-entitlements.txt`, profile `SecureTest Developer ID` to 2044,
+  `PSDBuildCommit` = HEAD. App and pkg notarized (Accepted) and stapled;
+  entitlements intact after stapling; pkg sha256 `52defb92…bd648eae`.
+  Server side live first: `main` `da6e28a1` (2026-10-23 14:51 PT, v2.0
+  server + migrations 0060–0062) then `27824b88` (WC-4 / WC-5 renderer
+  v1792799107). RC sitting on production before publishing: v1.6.3 on the
+  same highlighting test (U-21 row 19) and this build in a real AAC session
+  (U-21 row 18, design-tool rows 255 / 593), practice rows 258 / 259 / 277.
+  `/releases/latest/download/SecureTest-2.0.0.pkg` → v2.0.0. Configuration
+  profile unchanged. Published Saturday so AutoPkg moves the fleet over the
+  weekend (next-day delivery).
 - **v1.6.3 — 2026-10-13** (built from `b8e06aa74f29`, tag on `main`):
   U-22 ("n words" under an essay with `show_word_count` and no maximum),
   WC-1 (an over-limit count is red and bold; the `over` class had no rule
@@ -410,7 +430,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v2.0.0** (`MARKETING_VERSION` = 2.0.0, branch
+- ~~**Next release: v2.0.0**~~ PUBLISHED 2026-10-24 (see Released). (`MARKETING_VERSION` = 2.0.0, branch
   `v2-renderer`) — the server-delivered renderer
   (`docs/server-delivered-renderer-design.md` slices 4a–4f). Carries WC-2
   (VoiceOver hears the essay word count, no v1.6.4) and everything else on

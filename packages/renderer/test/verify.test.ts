@@ -3,6 +3,7 @@ import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildManifest, canonicalManifestBytes, parseManifest } from "../src/manifest";
+import { RENDERER_PUBLIC_KEYS, RENDERER_PUBLIC_KEYS_BY_NAME } from "../src/keys";
 import { checkManifestUse, verifyManifestSignature } from "../src/verify";
 
 const enc = new TextEncoder();
@@ -169,13 +170,16 @@ describe("cross-language fixture (signed by tools/renderer-sign)", () => {
 // version 1 (below RendererPolicy.minimumVersion), a one-day window that
 // ended before the manifest was ever sent for signing, placeholder files, an all-zero commit. IT signs these exact bytes
 // on the YubiKey (tools/renderer-sign/backup/sign_backup.py) and the
-// signature comes back as manifest.sig beside it; until then only the
-// manifest is committed. Standard 11 rule 5 (psd-dev-standards#96): a
+// signature is manifest.sig beside it (signed 2026-10-23 by the two
+// custodians, 71 bytes). Standard 11 rule 5 (psd-dev-standards#96): a
 // rehearsal is a recorded test, not a backup use, only when clients reject
 // the manifest by construction — its window has already ended when signed.
 describe("backup-key rehearsal manifest", () => {
   const dir = join(import.meta.dir, "fixtures", "backup-rehearsal");
   const bytes = new Uint8Array(readFileSync(join(dir, "manifest.json")));
+  const sig = new Uint8Array(readFileSync(join(dir, "manifest.sig")));
+  const backup = RENDERER_PUBLIC_KEYS_BY_NAME["backup"]!;
+  const working = RENDERER_PUBLIC_KEYS_BY_NAME["working"]!;
 
   const REHEARSAL_INPUT = {
     files: {
@@ -203,6 +207,18 @@ describe("backup-key rehearsal manifest", () => {
     const m = parseManifest(bytes);
     expect(new Date(m.not_after).getTime()).toBeLessThan(new Date("2026-10-15T00:00:00.000Z").getTime());
     expect(checkManifestUse(m, { now: new Date("2026-10-15T00:00:00.000Z"), minVersion: 0 })).toEqual({ ok: false, reason: "expired" });
+  });
+
+  test("the custodians' signature verifies against the backup key only", () => {
+    expect(verifyManifestSignature(bytes, sig, [backup])).toBe(true);
+    expect(verifyManifestSignature(bytes, sig, [working])).toBe(false);
+    expect(verifyManifestSignature(bytes, sig, RENDERER_PUBLIC_KEYS)).toBe(true);
+  });
+
+  test("and fails on a changed byte", () => {
+    const tampered = bytes.slice();
+    tampered[10] = tampered[10]! ^ 0x01;
+    expect(verifyManifestSignature(tampered, sig, [backup])).toBe(false);
   });
 });
 

@@ -19,7 +19,7 @@ openwiki:
     - design-tool/lib/auth/admin.ts
     - design-tool/lib/api/impersonation.ts
     - design-tool/app/api/auth/exchange/route.ts
-  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating]
+  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating, healAssessmentOwnerEmail]
   test_paths:
     - design-tool/test/auth-roles.test.ts
     - design-tool/test/auth-identity.test.ts
@@ -35,6 +35,7 @@ openwiki:
     - design-tool/test/impersonation-api.test.ts
     - design-tool/test/assessment-assets.test.ts
     - design-tool/test/practice-sitting.test.ts
+    - design-tool/test/owner-email-heal.test.ts
   invariants:
     - Role is derived from the verified email domain at login and read back from the signed session; no token role claim is trusted.
     - Every cross-owner refusal on an authorize* helper is a 404, never a 403.
@@ -80,7 +81,7 @@ The `ALLOW_TEST_ISSUER=1` escape hatch on `/api/auth/exchange` (caller names its
 
 `authorizeAssessment(db, session, id, need)`, `authorizeSitting`, `authorizeAttempt` (sitting/attempt authorize **through their assessment**; `test_sessions.owner_sub` is provenance, not permission), plus student/rubric/asset variants that resolve only owner or admin (per-teacher tables are not reachable via assessment grants). Resolution order in `grants.effectiveLevel`: owner → `own`; admin → `own` via `"admin"`; else the highest live grant. Each success carries `via: owner | grant | admin` and the grant `scope`. All refusals are `404 not_found` (and malformed ids `400 invalid_id`) so ids cannot be probed.
 
-Grants (`access_grants`, `lib/api/grants.ts`, routes under `/api/assessments/[id]/grants`, `/api/grants`): keyed on **email** (a substitute may not have signed in yet), scopes `assessment` (by id) and `teacher` (by the assessment owner's email, via denormalised `assessments.owner_email`; an assessment with NULL `owner_email` resolves no teacher-scope grant) and `school` (stored, inert — pinned by a test). `loadActiveGrants` is one query per request; `grantedLevel` is pure so list pages (`visibleAssessments.ts`) resolve fifty rows with one query. A `teacher`-scoped grant means substitute: sittings they start stay the granting teacher's (`created_by_sub` records the sub). Each grant has a `seen_at` column (migration `0048_access_grant_seen`): the grantee's home list shows a "New" mark for live assessment-scope grants with `seen_at` still null (`unseenAssessmentGrantIds`, read by `app/dashboard/page.tsx`), and opening the assessment page clears it (`markAssessmentGrantSeen` from `app/dashboard/[id]/page.tsx`). Grants created before the column existed were backfilled as seen, so only new grants show "New". The share and notification side is in [authoring](authoring.md); the behaviour is tested in `share-notifications.test.ts`.
+Grants (`access_grants`, `lib/api/grants.ts`, routes under `/api/assessments/[id]/grants`, `/api/grants`): keyed on **email** (a substitute may not have signed in yet), scopes `assessment` (by id) and `teacher` (by the assessment owner's email, via denormalised `assessments.owner_email`; an assessment with NULL `owner_email` resolves no teacher-scope grant; see the OE-1 entry under [co-teacher gaps](#co-teacher-gaps)) and `school` (stored, inert — pinned by a test). `loadActiveGrants` is one query per request; `grantedLevel` is pure so list pages (`visibleAssessments.ts`) resolve fifty rows with one query. A `teacher`-scoped grant means substitute: sittings they start stay the granting teacher's (`created_by_sub` records the sub). Each grant has a `seen_at` column (migration `0048_access_grant_seen`): the grantee's home list shows a "New" mark for live assessment-scope grants with `seen_at` still null (`unseenAssessmentGrantIds`, read by `app/dashboard/page.tsx`), and opening the assessment page clears it (`markAssessmentGrantSeen` from `app/dashboard/[id]/page.tsx`). Grants created before the column existed were backfilled as seen, so only new grants show "New". The share and notification side is in [authoring](authoring.md); the behaviour is tested in `share-notifications.test.ts`.
 
 Other sharing models: `assessment_shares` (`lib/api/shares.ts`) is **copy semantics** — the recipient accepts and gets an independent import of a lossless export; no access is shared afterward. `lib/roster/coTeachers.ts` (`coTeachersOf`) only *suggests* co-teachers from current roster sections (read-only) — the Share dialog's Co-teach mode decides whether to write an `access_grants` row. The suggestions are served by `GET /api/assessments/[id]/grants/suggestions`, which requires `own` on the assessment because the list describes the owner's roster, not the caller's (test: `grants-suggestions-route.test.ts`). The admin-only grant surface is `/api/grants` (returns 404 to non-admins so its existence is not leaked).
 
@@ -95,6 +96,7 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - **Co-teacher sittings with no section (G-2, built 2026-10-18).** `buildResults` in `lib/scoring/results.ts` looks an unscoped sitting's student up in that sitting owner's current sections (`coTeacherSittingOwners`) before the assessment owner's. Section labels, the section filter, the work packet and the queue then agree. Regression case: `test/co-teacher-tenant.test.ts`.
 - **One open practice sitting per teacher (G-4, built 2026-10-18).** `POST /api/test-sessions` with `kind: practice` answers 409 `sitting_already_open` (with the existing `code` and `test_session_id`) when the caller already has one open on the assessment. `findOpenPracticeSitting` in `lib/api/testSessions.ts` does the lookup. No migration was needed. Test: `test/practice-sitting.test.ts`. See [sittings and attempts](sittings-and-attempts.md#vocabulary).
 - **Email case in section lookups (G-5, closed without change).** The importer lower-cases and trims `roster_students.email` and `roster_section_teachers.teacher_email` (`optionalEmail` in `lib/roster/extract.ts`), so the exact comparisons in `sectionsCurrentlyTaughtBy` and `studentsInTeachersSections` are safe for normalised callers. Pinned by `test/roster-extract.test.ts`.
+- **Owner email on assessments (OE-1, hotfix 2026-10-23).** `assessments.owner_email` is what teacher-scope grants and the roster co-teacher suggestions (`GET /api/assessments/[id]/grants/suggestions`) resolve through. Before the fix, the New assessment server action (`app/dashboard/new/actions.ts`) did not write it, so those assessments resolved nothing. The action now writes the creator's normalised email. `healAssessmentOwnerEmail` (`lib/api/grants.ts`, called from `app/dashboard/[id]/page.tsx`) fills a NULL value when the owner opens the assessment from their own session. It never runs for an act-as session, never overwrites a value, and never runs for anyone else. Migration `0062_owner_email_backfill.sql` fills the remaining rows from the owner's own other assessments, or else from sittings they started (never a co-teacher's sitting). Test: `test/owner-email-heal.test.ts`, which covers the form write and the four heal cases.
 - **Open: a co-teacher's inserted image belongs to the co-teacher (G-6, recorded only).** The editor's Image picker lists the caller's own images. An edit-level co-teacher who inserts a picture therefore references an asset the owner does not own. Students, the owner and the preview then see "[image not found]". Fixing it is an access decision (list the owner's images for grantees, or land uploads under the owner), so it is not built.
 
 ## Change recipes
@@ -102,6 +104,15 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - **New teacher route**: call `requireStaff()`, then `authorizeAssessment(db, session, id, level)` with the *lowest* level that fits the table above; return its `response` unchanged. Never compare `owner_sub` inline.
 - **New student route**: `requireStudentOrPractice()` → `loadOwnAttempt` (404 on mismatch); add the closed-sitting and deadline guards if it writes ([sittings](sittings-and-attempts.md)).
 - **New access level or scope**: touch `accessLevels.ts`, `grants.ts` (`RESOLVED_SCOPES`), the `access_grants` CHECK constraints in `db/schema.ts` + a migration, and `visibleAssessments.ts`; add a stored-but-inert test if the arm is not live.
+- **New allowed email domain**: `STAFF_DOMAINS`/`STUDENT_DOMAINS` only; update `auth-roles.test.ts`.
+
+## Escalate / don't do
+
+- Do not read `.env*` for secrets; the required env names are `DATABASE_URL`, `DESIGN_TOOL_SESSION_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID` (+ optional `DESIGN_TOOL_PKCE_SECRET`, `DESIGN_TOOL_DELIVERY_SECRET`, `OIDC_CLIENT_SECRET`, `OIDC_AUDIENCE`, `ADMIN_EMAILS`).
+- Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
+
+Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
+s level or scope**: touch `accessLevels.ts`, `grants.ts` (`RESOLVED_SCOPES`), the `access_grants` CHECK constraints in `db/schema.ts` + a migration, and `visibleAssessments.ts`; add a stored-but-inert test if the arm is not live.
 - **New allowed email domain**: `STAFF_DOMAINS`/`STUDENT_DOMAINS` only; update `auth-roles.test.ts`.
 
 ## Escalate / don't do

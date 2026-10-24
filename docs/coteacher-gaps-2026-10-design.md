@@ -145,6 +145,11 @@ D-7 exception). A fix means the picker lists the owner's images for a
 grantee, or uploads made inside an assessment land under its owner — an
 access decision of its own.
 
+**Decided 2026-10-23 (James): v2.0 ships with G-6 as a known issue** — it does
+not block the release (G-1 ships with v2.0; hand-check row 594 shows the
+symptom on `_demo`). Until a fix, a co-teacher asks the owner to insert the
+picture.
+
 ## Recommendation
 
 One slice each, in order G-1 (the only one a co-teacher would hit on every
