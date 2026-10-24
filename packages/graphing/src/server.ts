@@ -17,3 +17,4 @@ export {
   type GraphObject,
   type GraphTool,
 } from "./engine/graphAnswer";
+export { helpSections, type HelpSection } from "./ui/help";

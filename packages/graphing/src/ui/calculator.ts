@@ -22,6 +22,7 @@ import {
   type RowState,
   type SliderRange,
 } from "./state";
+import { caretStructure, helpSections, structureHint, type Structure } from "./help";
 import { INLINE_SHORTCUTS, withoutEscape } from "./shortcuts";
 import { CALCULATOR_CSS } from "./styles";
 import { makeViewport, type Viewport } from "./viewport";
@@ -123,6 +124,20 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
   let analyses: Analysis[] = [];
   let selected: string | null = null;
 
+  // The exponent hint (2026-10-24): while the caret is inside a power,
+  // fraction or root, one line under the list says how to get out. A live
+  // region, so VoiceOver says it once on the way in; empty (and collapsed)
+  // otherwise.
+  const hint = document.createElement("p");
+  hint.className = "gc-hint";
+  hint.setAttribute("aria-live", "polite");
+  let hinted: Structure | null = null;
+  const showHint = (s: Structure | null) => {
+    if (s === hinted) return;
+    hinted = s;
+    hint.textContent = s ? structureHint(s) : "";
+  };
+
   const makeField = (): MathfieldElement => {
     const f = new opts.MathfieldElement();
     // Most options need the field in the document; MathLive fires `mount`.
@@ -143,6 +158,10 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
       },
       { once: true },
     );
+    if (!readOnly) {
+      f.addEventListener("selection-change", () => showHint(caretStructure(f)));
+      f.addEventListener("blur", () => showHint(null));
+    }
     return f;
   };
 
@@ -182,6 +201,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     readOnly,
     graphing,
   );
+  if (!readOnly) left.append(hint);
 
   const graph: GraphView | null = !graphing ? null : new GraphView(right, state.viewport, {
     onViewport: (v: Viewport) => {
@@ -266,6 +286,56 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
       graph?.schedule();
     });
     toolbar.append(kb);
+  }
+  if (!readOnly) {
+    // Help (2026-10-24): what THIS calculator has, in plain words, inside the
+    // calculator: a locked test cannot open a web page. Esc closes the help
+    // and is cancelled, so the panel around the calculator stays open.
+    const help = document.createElement("section");
+    help.className = "gc-help";
+    help.hidden = true;
+    help.setAttribute("aria-label", "Calculator help");
+    const heading = document.createElement("h2");
+    heading.textContent = "How to use this calculator";
+    heading.tabIndex = -1;
+    help.append(heading);
+    for (const s of helpSections(mode, preset.sqrtKey)) {
+      const h = document.createElement("h3");
+      h.textContent = s.title;
+      const ul = document.createElement("ul");
+      for (const item of s.items) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        ul.append(li);
+      }
+      help.append(h, ul);
+    }
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "gc-help-close";
+    done.textContent = "Close help";
+    help.append(done);
+    root.append(help);
+
+    const hb = document.createElement("button");
+    hb.type = "button";
+    hb.className = "gc-help-toggle";
+    hb.textContent = "?";
+    hb.setAttribute("aria-label", "Calculator help");
+    hb.setAttribute("aria-expanded", "false");
+    const showHelp = (open: boolean) => {
+      help.hidden = !open;
+      hb.setAttribute("aria-expanded", String(open));
+      (open ? heading : hb).focus({ preventScroll: true });
+    };
+    hb.addEventListener("click", () => showHelp(help.hidden));
+    done.addEventListener("click", () => showHelp(false));
+    help.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      showHelp(false);
+    });
+    toolbar.append(hb);
   }
   // Angles mean nothing to a four-function calculator.
   if (readOnly || mode === "four_function") angle.hidden = true;

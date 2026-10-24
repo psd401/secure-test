@@ -66,6 +66,26 @@ export const CALCULATOR_CSS = `
 }
 .gc-graph-toggle[aria-pressed="true"] { background: var(--gc-key-op); }
 .gc-graph-toggle + .gc-keypad-toggle { margin-left: 0; }
+.gc-help-toggle {
+  margin-left: auto; border: 1px solid var(--gc-line); background: var(--gc-paper); color: var(--gc-ink);
+  border-radius: 50%; width: 28px; height: 28px; font-weight: 700; cursor: pointer;
+}
+.gc-graph-toggle ~ .gc-help-toggle, .gc-keypad-toggle ~ .gc-help-toggle { margin-left: 0; }
+.gc-help-toggle[aria-expanded="true"] { background: var(--gc-key-op); }
+.gc-help {
+  position: absolute; inset: 0; z-index: 5; overflow: auto; padding: 12px 16px;
+  background: var(--gc-paper); color: var(--gc-ink); line-height: 1.45;
+}
+.gc-help h2 { font-size: 1.15em; margin: 0 0 8px; }
+.gc-help h3 { font-size: 1em; margin: 12px 0 4px; }
+.gc-help ul { margin: 0; padding-left: 1.2em; }
+.gc-help li { margin: 2px 0; }
+.gc-help-close {
+  margin-top: 12px; border: 1px solid var(--gc-line); background: var(--gc-key-op); color: var(--gc-ink);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit;
+}
+.gc-hint { margin: 0; padding: 6px 10px; font-size: 0.8667em; color: var(--gc-ink); background: var(--gc-panel); border-top: 1px solid var(--gc-line); }
+.gc-hint:empty { padding: 0; border: 0; }
 .gc-root.gc-graph-off { grid-template-columns: 1fr; }
 .gc-graph-off .gc-left { border-right: 0; }
 

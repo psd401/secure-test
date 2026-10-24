@@ -486,3 +486,15 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   (FF-1); the answer box's Math keys on a four-function test start closed
   with six keys (FF-2). Unit and renderer tests pass; none of it re-run in
   the app yet.
+- 2026-10-24 — calculator help and the exponent hint. A **?** button in the
+  toolbar opens "How to use this calculator" over the calculator, built from
+  `helpSections(mode, sqrtKey)` (`src/ui/help.ts`) so each calculator shows
+  only what it has; middle-school wording (measured ≈ grade 2–3, a test caps
+  it at 8); Esc closes the help and is cancelled so the panel stays. The
+  same text is on `/help.html` with the practice advice from findings
+  Z-1 / Z-2, and a design-tool test keeps the page in step. The hint: while
+  the caret is in a power, subscript, fraction or root (found from MathLive's
+  public `getElementInfo` depth and the closing atom's LaTeX, so brackets
+  give none) a polite live line under the expressions says "Press → to move
+  back out". Tests pass (graphing 496, design-tool 3383, swift 1148); not
+  yet tried in the app.

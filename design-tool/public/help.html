@@ -158,6 +158,10 @@
   .status.err { color: #a04034; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+  details.calc-help { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; margin: 8px 0; background: var(--card); }
+  details.calc-help summary { cursor: pointer; font-weight: 600; }
+  details.calc-help p { margin: 8px 0 2px; }
+  details.calc-help ul { margin: 0 0 4px; }
   @media (max-width: 980px) {
     .topic-body { grid-template-columns: 1fr; }
   }
@@ -306,6 +310,129 @@
             <li>Scoring compares shapes, not clicks: any two points on the right line are the right line. Students can place objects by clicking, with the arrow keys and Enter, or by typing coordinates. Results show each object in words, marked against the key.</li>
           </ol>
           <p>Students open the calculator with the <b class="ui">Calculator</b> button at the top of the test. It works like the graphing calculators they already know: type an expression, press Enter for a new line, add sliders, and tap a curve to see where it crosses the axes and other curves. Every graph, in the calculator or in a question, can also be heard: with the graph selected, <b class="ui">S</b> (or the <b class="ui">≡</b> button) describes it in words, <b class="ui">T</b> walks along a curve point by point with the arrow keys (Shift jumps to the next crossing or turning point), and <b class="ui">H</b> (or <b class="ui">♪</b>) plays the curve as rising and falling notes. Students need SecureTest 2.0 or later; an older version is asked to update before the test opens.</p>
+          <h3 class="sub">What the calculator's help says</h3>
+          <p>Students can press <b class="ui">?</b> in the calculator for short instructions about the calculator they have. While they type in a fraction, power or root, a line under their work says how to get back out. Here is what each calculator's help says:</p>
+          <details class="calc-help">
+            <summary>Four-function (Like the Washington state test)</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>Use ( and ) to group parts of a problem.</li>
+              <li>a/b makes a fraction.</li>
+              <li>⌫ deletes one thing. clear empties the line.</li>
+              <li>↶ undoes your last step. ↷ puts it back.</li>
+            </ul>
+            <p><b>Get out of a fraction</b></p>
+            <ul>
+              <li>After you type in a fraction, press → to move back out.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Four-function (Everything on)</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>Use ( and ) to group parts of a problem.</li>
+              <li>√ makes a square root.</li>
+              <li>⌫ deletes one thing. clear empties the line.</li>
+              <li>↶ undoes your last step. ↷ puts it back.</li>
+            </ul>
+            <p><b>Get out of a root</b></p>
+            <ul>
+              <li>After you type in a root, press → to move back out.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Scientific</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>a² squares a number. aᵇ makes any power.</li>
+              <li>√ makes a square root. a/b makes a fraction.</li>
+              <li>ⁿ√ makes any root, like a cube root.</li>
+              <li>The abc and func tabs have letters and more functions.</li>
+              <li>⌫ deletes one thing.</li>
+            </ul>
+            <p><b>Get out of a fraction or power</b></p>
+            <ul>
+              <li>After you type in a fraction, power or root, press → to move back out.</li>
+              <li>One digit in a power, like x², moves you out by itself.</li>
+            </ul>
+            <p><b>Angles</b></p>
+            <ul>
+              <li>Degrees and Radians at the top choose how angles are measured.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Graphing</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type an equation, like y = 2x + 1. It shows on the graph.</li>
+              <li>Type a number problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>a² squares a number. aᵇ makes any power.</li>
+              <li>√ makes a square root. a/b makes a fraction.</li>
+              <li>The abc and func tabs have letters and more functions.</li>
+              <li>⌫ deletes one thing.</li>
+            </ul>
+            <p><b>Get out of a fraction or power</b></p>
+            <ul>
+              <li>After you type in a fraction, power or root, press → to move back out.</li>
+              <li>One digit in a power, like x², moves you out by itself.</li>
+            </ul>
+            <p><b>Angles</b></p>
+            <ul>
+              <li>Degrees and Radians at the top choose how angles are measured.</li>
+            </ul>
+            <p><b>Use the graph</b></p>
+            <ul>
+              <li>Graph hides or shows the graph.</li>
+              <li>Drag the graph to move it. Pinch or use + and − to zoom.</li>
+              <li>Click a curve to see the points where it crosses.</li>
+              <li>Click the graph, then press S to hear it in words.</li>
+              <li>Press T to walk along a curve with the arrow keys.</li>
+              <li>Press H to hear the curve as sound.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <p><b>Try it before a real test.</b> Have students use the calculator once in a practice or low-stakes test, especially students who use zoom, a color contrast setting or VoiceOver. At large zoom the calculator covers most of the screen, and Tab can move out of the calculator to a box the student can't see. Esc closes the calculator.</p>
         </div>
         <figure class="shot" data-src="/help/sources-side-by-side.png" data-alt="A stimulus card with three labelled sources and the Side by side layout chosen">
           <figcaption>A stimulus with its sources, set to Side by side.</figcaption>
