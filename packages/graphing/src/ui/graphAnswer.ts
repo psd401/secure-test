@@ -19,6 +19,7 @@ import {
   type GraphTool,
 } from "../engine/graphAnswer";
 import { installStyles } from "./calculator";
+import { curveColor, mix } from "./graph";
 import { gridStep, tickLabel, ticks } from "./viewport";
 
 export interface GraphAnswerOptions {
@@ -54,9 +55,9 @@ const TOOL_HINTS: Record<GraphTool, [string, string?]> = {
   parabola: ["Place the vertex.", "Place another point on the parabola."],
 };
 
-const ANSWER_COLOR = "#1f5fa8";
-const KEY_COLOR = "#2c7a37";
-const FIXED_COLOR = "#6b7280";
+export const ANSWER_COLOR = "#1f5fa8";
+export const KEY_COLOR = "#2c7a37";
+export const FIXED_COLOR = "#6b7280";
 
 function fmt(v: number): string {
   const r = Math.round(v * 1e6) / 1e6;
@@ -365,13 +366,22 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     if (!ctx) return;
     size();
     const c = ctx;
+    // Every colour from the page tokens, like the calculator's own graph:
+    // the board ignored the contrast set and drew dark grey on black
+    // (finding C-1, 2026-10-24 hand-run). Labels grow with the page zoom.
     const css = getComputedStyle(root);
-    const paper = css.getPropertyValue("--gc-paper").trim() || "#ffffff";
+    const token = (name: string, dflt: string) => css.getPropertyValue(name).trim() || dflt;
+    const paper = token("--gc-paper", "#ffffff");
+    const ink = token("--gc-ink", "#1d2433");
+    const textScale = (parseFloat(css.fontSize) || 15) / 15;
+    const answerColor = curveColor(ANSWER_COLOR, paper);
+    const keyColor = curveColor(KEY_COLOR, paper);
+    const fixedColor = curveColor(FIXED_COLOR, paper);
     c.fillStyle = paper;
     c.fillRect(0, 0, W, H);
     // Grid at the board's spacing; labels at a readable step.
     c.lineWidth = 1;
-    c.strokeStyle = "#e3e7ec";
+    c.strokeStyle = mix(paper, ink, 0.18);
     c.beginPath();
     for (const x of ticks(board.x[0], board.x[1], board.grid)) {
       c.moveTo(Math.round(X(x)) + 0.5, 0);
@@ -382,7 +392,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       c.lineTo(W, Math.round(Y(y)) + 0.5);
     }
     c.stroke();
-    c.strokeStyle = "#2b2f36";
+    c.strokeStyle = token("--gc-axis", "#2b2f36");
     c.lineWidth = 1.5;
     c.beginPath();
     if (board.y[0] <= 0 && board.y[1] >= 0) {
@@ -395,30 +405,30 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     }
     c.stroke();
     const labelStep = gridStep(board.x[1] - board.x[0], W, 40).major;
-    c.font = "12px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
-    c.fillStyle = "#3a404b";
+    c.font = `${Math.round(12 * textScale)}px -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif`;
+    c.fillStyle = token("--gc-label", "#3a404b");
     c.textAlign = "center";
     c.textBaseline = "top";
-    const ly = Math.min(Math.max(Y(0) + 3, 2), H - 14);
+    const ly = Math.min(Math.max(Y(0) + 3, 2), H - 14 * textScale);
     for (const x of ticks(board.x[0], board.x[1], labelStep)) {
       if (Math.abs(x) < 1e-9 || X(x) < 8 || X(x) > W - 8) continue;
       c.fillText(tickLabel(x, labelStep), X(x), ly);
     }
     c.textAlign = "right";
     c.textBaseline = "middle";
-    const lx = Math.min(Math.max(X(0) - 4, 20), W - 2);
+    const lx = Math.min(Math.max(X(0) - 4, 20 * textScale), W - 2);
     const labelStepY = gridStep(board.y[1] - board.y[0], H, 40).major;
     for (const y of ticks(board.y[0], board.y[1], labelStepY)) {
       if (Math.abs(y) < 1e-9 || Y(y) < 8 || Y(y) > H - 8) continue;
       c.fillText(tickLabel(y, labelStepY), lx, Y(y));
     }
     // Fixed dotted, key dashed, answer solid: more than colour tells them apart.
-    for (const o of board.fixed ?? []) drawObject(c, o, FIXED_COLOR, [2, 4]);
-    if (opts.key) for (const o of opts.key.objects) drawObject(c, o, KEY_COLOR, [7, 5]);
-    for (const o of objects) drawObject(c, o, ANSWER_COLOR, []);
+    for (const o of board.fixed ?? []) drawObject(c, o, fixedColor, [2, 4]);
+    if (opts.key) for (const o of opts.key.objects) drawObject(c, o, keyColor, [7, 5]);
+    for (const o of objects) drawObject(c, o, answerColor, []);
     // In progress: the first point, and the cursor / hover target.
     if (pending) {
-      c.strokeStyle = ANSWER_COLOR;
+      c.strokeStyle = answerColor;
       c.lineWidth = 2;
       c.beginPath();
       c.arc(X(pending[0]), Y(pending[1]), 6, 0, Math.PI * 2);
@@ -426,7 +436,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     }
     const target = hover ?? (document.activeElement === area ? cursor : null);
     if (target && !readOnly) {
-      c.strokeStyle = "#2563c9";
+      c.strokeStyle = token("--gc-accent", "#2563c9");
       c.lineWidth = 2;
       c.beginPath();
       c.arc(X(target[0]), Y(target[1]), 8, 0, Math.PI * 2);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { analyze } from "../src/engine/analyze";
 import { curveColor, luminance } from "../src/ui/graph";
+import { ANSWER_COLOR, FIXED_COLOR, KEY_COLOR } from "../src/ui/graphAnswer";
 import { PALETTE } from "../src/ui/state";
 import { isMode, presetFor, PRESETS } from "../src/ui/presets";
 import { fourPage } from "../src/ui/keypad";
@@ -82,6 +83,14 @@ describe("curve colours on the paper", () => {
       for (const c of PALETTE) {
         const shown = curveColor(c, paper);
         expect(contrast(shown, paper)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  test("the Graph it board's answer, key and given colours are lifted too (finding C-1)", () => {
+    for (const paper of ["#000000", "#1a1a1a", "rgb(0, 0, 51)"]) {
+      for (const c of [ANSWER_COLOR, KEY_COLOR, FIXED_COLOR]) {
+        expect(contrast(curveColor(c, paper), paper)).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
