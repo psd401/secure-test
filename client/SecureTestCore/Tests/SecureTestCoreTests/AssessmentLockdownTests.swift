@@ -63,6 +63,30 @@ final class AssessmentLockdownTests: XCTestCase {
         XCTAssertEqual(session.beginCount, 1)
     }
 
+    /// Ending-session race (2026-10-24): the app opened a new attempt's page
+    /// gate on the `.active` of the PREVIOUS attempt's session, still ending
+    /// after its hand-in, because the no-op `begin()` gave no sign it had done
+    /// nothing. It says so now, and the ending session is left alone.
+    func testBeginReportsWhetherThisCallStartedASession() {
+        let (subject, session) = lockdown(.hangsOnEnd)
+        XCTAssertTrue(subject.begin())
+        subject.end()
+        XCTAssertEqual(subject.state, .active, "end requested, DID END not yet arrived")
+
+        XCTAssertFalse(subject.begin(), "a session is still ending — this call started nothing")
+        XCTAssertEqual(session.beginCount, 1)
+        XCTAssertEqual(subject.state, .active)
+    }
+
+    func testBeginFromIdleAfterAnEndedSessionStartsAFreshOne() {
+        let (subject, session) = lockdown()
+        XCTAssertTrue(subject.begin())
+        subject.end()
+        XCTAssertEqual(subject.state, .idle)
+        XCTAssertTrue(subject.begin())
+        XCTAssertEqual(session.beginCount, 2)
+    }
+
     func testFailingToBeginReturnsToIdleRatherThanLeavingAGhostSession() {
         let (subject, _) = lockdown(.refusesToBegin("entitlement missing"))
         subject.begin()
