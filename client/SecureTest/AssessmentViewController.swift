@@ -655,6 +655,22 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
         view.window?.makeFirstResponder(webView)
     }
 
+    /// Ending-session race (2026-10-24): "Back to your tests" was pressed
+    /// after the hand-in, before `DID END`. The press waits for the session to
+    /// end; this says so instead of leaving the button looking dead. The
+    /// results page, the handed-in page or "Your tests" replaces it at
+    /// `DID END`.
+    func showFinishingSession() {
+        guard !isRetired else { return }
+        stopSpeech(reason: "finishing secure session")
+        stopListening(reason: "finishing secure session")
+        log("handed in: showing the finishing-secure-session notice")
+        loadHostPage(Self.noticePage(
+            "Finishing your secure session…",
+            detail: "Your test is handed in. This takes a few seconds."
+        ))
+    }
+
     // MARK: zoom (C-4 / D-7)
 
     /// The three Session-menu items land here. They go through the MENU rather

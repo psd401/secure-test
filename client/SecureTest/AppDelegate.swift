@@ -103,6 +103,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// RD-1: a hand-in with no feedback still replaces the test page at the
     /// session's end — with the handed-in page instead of the results page.
     private var pendingHandedInPage = false
+    /// Ending-session race (2026-10-24): "Back to your tests" was pressed after
+    /// a hand-in with no feedback while the session was still ending; the
+    /// student goes home at `DID END` instead of being asked to press again.
+    private var leaveOwedAtSessionEnd = false
     /// Time limit slice 2 (`docs/time-limit-and-unfinished-attempts-design.md`,
     /// D-2 / D-3): this attempt's clock, or nil when the assessment has no
     /// limit. One per attempt, started from the bundle's deadline and stopped
@@ -501,6 +505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         attemptHandedIn = false
         pendingFeedback = nil
         pendingHandedInPage = false
+        leaveOwedAtSessionEnd = false
         // Client hygiene (audit #17): no attempt is on screen, so every row
         // still spooled belongs to one that is over — purge whatever is past
         // the 24-hour floor. Rows younger than that stay: a student who lost
@@ -604,6 +609,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         attemptHandedIn = false
         pendingFeedback = nil
         pendingHandedInPage = false
+        leaveOwedAtSessionEnd = false
         countdown?.stop()
         countdown = nil
         sessionEndedByTimeLimit = false
@@ -651,6 +657,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // v1.5.0 smoke test: a press while the hand-in's session is still
             // ending would drop the instant feedback page. Wait for DID END;
             // the results page shows then, and its Done comes back here.
+            // Ending-session race (2026-10-24): with no feedback it waits too —
+            // leaving early let the student join another test under this
+            // session — and goes home at DID END without a second press.
             switch BackToTests.decide(
                 feedbackPending: self.pendingFeedback != nil,
                 sessionActive: self.lockdown?.isActive == true,
@@ -658,6 +667,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             ) {
             case .waitForSessionEnd:
                 Self.log("back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END; the results page shows then")
+                self.controller?.showFinishingSession()
+                return
+            case .leaveAtSessionEnd:
+                Self.log("back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END, then leaving")
+                self.leaveOwedAtSessionEnd = true
+                self.pendingHandedInPage = false
+                self.controller?.showFinishingSession()
                 return
             case .refuse:
                 // Bridge audit H-1 (B-1): leaving here would tear the attempt
@@ -1061,7 +1077,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func beginLockdown() {
         if lockdown == nil { lockdown = makeLockdown() }
-        lockdown?.begin()
+        // Ending-session race (2026-10-24): a begin() that did nothing found a
+        // session already up — a previous attempt's, still ending — and that
+        // session's `.active` must not open THIS attempt's gate. The gate stays
+        // shut; the old session's `.idle` refuses it (this attempt never became
+        // active), and the student goes home told. `BackToTests` keeps the
+        // known route here from happening; this is the backstop.
+        guard lockdown?.begin() == true else {
+            Self.log("page load gate: held — a previous secure session is still up, so this attempt has no session of its own")
+            return
+        }
         // C-1: a cooperative simulated session is `.active` by the time begin()
         // returns (and begin() is a no-op while one is already up), so no
         // further state change is coming and nothing else would open the gate —
@@ -1151,6 +1176,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // stays. Every other end sends the student home itself, just
             // below, and `showEntry` removes this accessory anyway.
             if attemptHandedIn {
+                // Ending-session race (2026-10-24): the student already asked
+                // to go home; the Mac is unlocked now, so go.
+                if leaveOwedAtSessionEnd, pendingFeedback == nil {
+                    Self.log("secure session ended after a hand-in — leaving the attempt screen, as asked")
+                    showEntry()
+                    return
+                }
                 installBackToTestsAccessoryIfNeeded()
                 // IF slice 3 (D-2): `.idle` is the session's end (`DID END`,
                 // or the grace teardown) — the Mac is unlocked, so the

@@ -2611,3 +2611,21 @@ student tester (staging profile) was refused for the student account.
 | A production deploy mid-evening re-signs the renderer | The next join fetches the NEW renderer; the old one stays cached beside it | ✅ 2026-10-14 — `7ae2429a…` (v1792017314) beside `fa425afe…` |
 | WC-2 VoiceOver rows | See "Word count VoiceOver hears" | ✅ after the re-sign (see that section) |
 
+
+## Ending-session race (next client release, 2026-10-24)
+
+Found on James's real-session hand-run 2026-10-24 (Debug, local server):
+after a hand-in with no instant feedback, "Back to your tests" pressed
+before `DID END` left at once; the student joined another test, its
+`begin()` was a no-op against the still-ending session, its page was drawn
+under that session, and that session's `DID END` threw the student out.
+Fix: `BackToTests` waits for `DID END` after every hand-in (with no feedback
+it then goes home on its own), and `beginLockdown()` never opens the gate
+when `begin()` started nothing. Real AAC sessions, Debug build, James at the
+client.
+
+| Check | Expected | Result |
+|---|---|---|
+| **No feedback: hand in, press Back to your tests at once, open another test.** Assessment with instant feedback off | The page shows "Finishing your secure session…" (no second press needed); at `DID END` the client goes to "Your tests" (stderr `waiting for DID END, then leaving` → `lockdown DID END` → `leaving the attempt screen, as asked`); the next join logs its OWN `lockdown begin() called` → `DID BEGIN` → `page load gate: opened`, and no `secure session ended without a hand-in` follows | NOT RUN |
+| **Feedback on: hand in, press Back to your tests at once.** | "Finishing your secure session…" shows, then the results page at `DID END`; its Done goes to "Your tests" | NOT RUN |
+| **Press after `DID END`.** Hand in, wait for the handed-in page, then press its Back to your tests | Goes home at once, as before | NOT RUN |
