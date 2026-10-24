@@ -10,6 +10,10 @@ describe("ans — the previous answer", () => {
     expect(values("3\\times4", "\\operatorname{ans}+1", "ans\\div2")).toEqual([12, 13, 6.5]);
   });
 
+  test("MathLive's re-serialised key form \\operatorname{\\mathrm{ans}} counts as one answer", () => {
+    expect(values("3\\times4", "\\operatorname{\\mathrm{ans}}+1", "3+\\operatorname{\\mathrm{ans}}", "\\mathrm{ans}-1")).toEqual([12, 13, 16, 15]);
+  });
+
   test("skips empty rows and rows without a number", () => {
     expect(values("5", "", "2\\operatorname{ans}")).toEqual([5, "empty", 10]);
   });

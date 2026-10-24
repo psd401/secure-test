@@ -6,7 +6,11 @@
 
 import { analyze, DEFAULT_SETTINGS, type Analysis, type Row, type Settings } from "./analyze";
 
-const ANS = /\\operatorname\{ans\}|(?<![A-Za-z\\])ans(?![A-Za-z])/g;
+// The key inserts \operatorname{ans}; once the student types after it MathLive
+// re-serialises that as \operatorname{\mathrm{ans}} (seen 2026-10-24: the
+// inner `ans` alone was replaced and the row read "unknown function"), and
+// typed letters arrive as a bare `ans`. All three forms are one answer.
+const ANS = /\\operatorname\{(?:\\mathrm\{ans\}|ans)\}|\\mathrm\{ans\}|(?<![A-Za-z\\])ans(?![A-Za-z])/g;
 
 export const NO_ANSWER_ABOVE = "There's no answer above to use yet";
 
