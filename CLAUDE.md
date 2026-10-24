@@ -30,7 +30,7 @@ PSD macOS secure-testing browser + teacher-facing assessment-authoring "design-t
 ## Current state and history
 - **History lives in `docs/ledger.md`** (the dated status entries that used to be here, moved 2026-10-19 because this file had grown past 200 KB). Read its newest "STATE AT CLOSE-OUT" / dated entries before starting work; add new entries THERE, not here.
 - Detailed records: `docs/roadmap-2026-09.md` (§Progress), the design notes in `docs/`, `docs/design-tool-manual-checks.md`, `client/MANUAL-CHECKS.md`, `client/RELEASING.md`.
-- Live commit: read `https://<origin>/api/health` and the newest `docs/ledger.md` entry. `main` is HELD for v2.0 (waits on IT's signed rehearsal manifest; carries undeployed migrations 0060–0062 → deploy after 15:30 PT on a weekday or with `--during-school`); urgent fixes ship as `hotfix/*` (see Key working rules).
+- Live commit: read `https://<origin>/api/health` and the newest `docs/ledger.md` entry. v2.0 shipped 2026-10-24 (server `27824b88`, client v2.0.0): `main` is no longer held and deploys normally; the `hotfix/*` route (Key working rules) is for the next time `main` is held.
 
 ## Key working rules
 - Deploy = `design-tool/infra/scripts/deploy.sh` (James runs it if the classifier denies it); the container migrates at boot; read the `health stamp` line, not the exit code. `colima start` first.
