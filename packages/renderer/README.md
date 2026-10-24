@@ -85,7 +85,7 @@ private half stays outside the repository.
 | `version` | Positive integer: HEAD's committer time in unix seconds. `main` has linear history, so it only rises; the shell compares it with its minimum version (D-2). |
 | `commit` | The 40-hex SHA the files were built from. Only a commit with a green `ci` run on `main` is signed. |
 | `issued_at`, `not_after` | ISO-8601 UTC (`…Z`); `not_after` = `issued_at` + 60 days. |
-| `requires` | Sorted, de-duplicated terms from `src/requires.ts`'s vocabulary (the eight bridge handlers plus host features `tts.word_ranges` and `response.generic`, D-4 / D-5). The bridge renderer requires `BRIDGE_REQUIRES` = all eight handlers + `tts.word_ranges` — not `response.generic`, which arrives with D-5. |
+| `requires` | Sorted, de-duplicated terms from `src/requires.ts`'s vocabulary (the eight bridge handlers plus host features `tts.word_ranges` and `response.generic`, D-4 / D-5). The bridge renderer requires `BRIDGE_REQUIRES` = the seven handlers the page posts to (all but `home`, since 2026-10-24) + `tts.word_ranges` — not `response.generic`, which arrives with D-5. |
 | `files` | Published name → `{ sha256, bytes }`, sha256 as lowercase hex. |
 
 ## Canonical form

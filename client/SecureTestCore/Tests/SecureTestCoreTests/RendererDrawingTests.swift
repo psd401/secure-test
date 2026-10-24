@@ -302,8 +302,20 @@ final class RendererFinishTests: XCTestCase {
         XCTAssertTrue(try h.bool("__first('button', __first('.finish')).disabled"))
         XCTAssertEqual(
             try h.string("__first('.finish-status').textContent"),
-            "Handed in. You can close the app."
+            "Handed in. Finishing your secure session…"
         )
+    }
+
+    /// Ending-session race (2026-10-24): the page offers no way home after the
+    /// hand-in — the secure session is still ending, and the host's own page
+    /// at DID END is the way home.
+    func testASuccessfulHandInOffersNoWayHomeFromThePage() throws {
+        let h = try harness()
+        // The harness has no `home` handler; the old page added its button
+        // only when the shell answered one, so give it one.
+        try h.eval("window.webkit.messageHandlers.home = { postMessage: function () {} };")
+        try h.eval("__first('button', __first('.finish')).onclick(); window.__secureTestSubmitResult(true);")
+        XCTAssertFalse(try h.bool("__first('.finish').textContent.indexOf('Back to your tests') !== -1"))
     }
 
     /// A failure must give the button back — the student has to be able to try
