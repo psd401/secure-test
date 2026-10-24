@@ -205,7 +205,15 @@ export class GraphView {
     this.summary = document.createElement("div");
     this.summary.className = "gc-summary";
     this.summary.hidden = true;
+    this.summary.setAttribute("role", "region");
+    this.summary.setAttribute("aria-label", "Graph description");
     this.summaryText = document.createElement("p");
+    // Focus moves here when the description opens (finding S-1): VoiceOver
+    // dropped the long polite live-region message, and from here it can be
+    // read again. The graph itself is role="application"; "document" puts
+    // VoiceOver back into reading mode for the text.
+    this.summaryText.tabIndex = -1;
+    this.summaryText.setAttribute("role", "document");
     const close = document.createElement("button");
     close.type = "button";
     close.className = "gc-summary-close";
@@ -803,9 +811,11 @@ export class GraphView {
         return;
       case "Escape":
         if (!this.summary.hidden || this.tones.busy) {
+          const inSummary = this.summary.contains(document.activeElement);
           this.summary.hidden = true;
           this.tones.stop();
           e.preventDefault();
+          if (inSummary) this.element.focus({ preventScroll: true });
           return;
         }
         this.element.blur();
@@ -852,7 +862,7 @@ export class GraphView {
     const text = summarizeGraph(sentences, v);
     this.summaryText.textContent = text;
     this.summary.hidden = false;
-    this.say(text);
+    this.summaryText.focus({ preventScroll: true });
   }
 
   private startTrace(): void {
