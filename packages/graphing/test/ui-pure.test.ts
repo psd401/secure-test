@@ -13,6 +13,7 @@ import {
   snapSlider,
   type RowState,
 } from "../src/ui/state";
+import { withoutEscape } from "../src/ui/shortcuts";
 import { fromPx, gridStep, makeViewport, pan, resize, scale, tickLabel, ticks, toPx, zoomAt } from "../src/ui/viewport";
 
 describe("viewport", () => {
@@ -141,5 +142,18 @@ describe("state", () => {
   test("ids are unique", () => {
     const ids = new Set(Array.from({ length: 100 }, () => emptyRow([]).id));
     expect(ids.size).toBe(100);
+  });
+});
+
+describe("withoutEscape (finding E-1)", () => {
+  test("drops MathLive's Escape bindings and keeps the rest", () => {
+    const bindings = [
+      { key: "[Escape]", ifMode: "math", command: ["switchMode", "latex"] },
+      { key: "[Escape]", ifMode: "text", command: ["switchMode", "latex"] },
+      { key: "shift+[Escape]", ifMode: "latex", command: ["complete", "reject"] },
+      { key: "[Tab]", command: "moveToNextGroup" },
+      { key: "[Enter]", ifMode: "latex", command: ["complete", "accept-all"] },
+    ];
+    expect(withoutEscape(bindings).map((b) => b.key)).toEqual(["[Tab]", "[Enter]"]);
   });
 });

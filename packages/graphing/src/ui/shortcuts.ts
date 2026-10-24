@@ -37,3 +37,13 @@ export const INLINE_SHORTCUTS: Record<string, string> = {
   ">=": "\\ge",
   "<=": "\\le",
 };
+
+// MathLive binds Escape in a math field to its LaTeX mode (raw `\frac`-style
+// typing, which a student has no use for). Since focus follows the panel
+// (2026-10-21) the first expression has focus whenever the calculator opens,
+// so that binding cancelled the key before the panel's own Escape could close
+// it (finding E-1, 2026-10-24 hand-run). Dropping every Escape binding lets
+// the key reach the panel.
+export function withoutEscape<T extends { key: string }>(bindings: readonly T[]): T[] {
+  return bindings.filter((b) => !/\[Escape\]/i.test(b.key));
+}

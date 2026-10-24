@@ -21,7 +21,7 @@ import {
   type RowState,
   type SliderRange,
 } from "./state";
-import { INLINE_SHORTCUTS } from "./shortcuts";
+import { INLINE_SHORTCUTS, withoutEscape } from "./shortcuts";
 import { CALCULATOR_CSS } from "./styles";
 import { makeViewport, type Viewport } from "./viewport";
 
@@ -134,6 +134,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
         f.smartFence = true;
         f.smartSuperscript = true;
         f.inlineShortcuts = INLINE_SHORTCUTS;
+        f.keybindings = withoutEscape(f.keybindings);
         // Space is a thin space, as in other calculators — MathLive's default
         // jumps out of the bracket (cos(pi x) became cos(π)x).
         f.mathModeSpace = "\\,";
