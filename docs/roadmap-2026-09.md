@@ -1321,3 +1321,13 @@ screened, or exclude empty text in the retry query; a test either way.
 Also discussed, no change: no advisory lock across tasks while production
 runs one task (a rolling deploy's overlap costs pennies at worst).
 
+
+## Row HW — warn about unanswered questions at hand-in (James, 2026-10-24) — LATER, nothing built
+
+Found in the Row DC client hand-run: a student who cleared a Graph it
+answer could hand in with no warning — and the same is true of every
+question type. The only signals today are the paged strip's marks and the
+review page's "N of M answered". James: roadmap it for later. Shape to
+decide then: one plain-language line in the hand-in confirmation naming
+the unanswered questions (paged and scroll layouts), read by VoiceOver;
+nothing that blocks the hand-in. Client-only; applies to all types.
