@@ -2629,3 +2629,17 @@ client.
 | **No feedback: hand in, press Back to your tests at once, open another test.** Assessment with instant feedback off | The page shows "Finishing your secure session…" (no second press needed); at `DID END` the client goes to "Your tests" (stderr `waiting for DID END, then leaving` → `lockdown DID END` → `leaving the attempt screen, as asked`); the next join logs its OWN `lockdown begin() called` → `DID BEGIN` → `page load gate: opened`, and no `secure session ended without a hand-in` follows | ✅ 2026-10-24 ~15:23–15:45, throwaway Debug build of the `graphing-calculator` branch (`8fe60f66` / `a5b9c1a0`) with `a00ae8de` merged in, uncommitted, against local dev; real AAC sessions; evidence is James's terminal stderr. Three times (graphing; scientific with feedback off, after a pass back; four-function), each: `back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END, then leaving` → `handed in: showing the finishing-secure-session notice` → `lockdown DID END` → `secure session ended after a hand-in — leaving the attempt screen, as asked` → next join → its own `lockdown begin() called` → `DID BEGIN` → `page load gate: opened`; no kick-out |
 | **Feedback on: hand in, press Back to your tests at once.** | "Finishing your secure session…" shows, then the results page at `DID END`; its Done goes to "Your tests" | ✅ 2026-10-24 evening, same build, a FRESH attempt (never passed back) with instant feedback = score: `handed in — instant feedback received (score)` → `lockdown ending: hand-in confirmed` → `lockdown end() called` → `back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END; the results page shows then` → `handed in: showing the finishing-secure-session notice` → `lockdown DID END` → `instant feedback: showing the results page (score, 0 rows)` → Done → `back to your tests pressed (in-page) — leaving the attempt screen` → Your tests. (An earlier run the same afternoon was ◐: the press came only after the results page.) |
 | **Press after `DID END`.** Hand in, wait for the handed-in page, then press its Back to your tests | Goes home at once, as before | ✅ 2026-10-24, same build: `DID END` → `handed in: showing the handed-in page (no instant feedback)` → `back to your tests pressed (in-page) — leaving the attempt screen` |
+## Ending-session race — server-side stopgap (renderer, 2026-10-24)
+
+The served renderer no longer adds "Back to your tests" beside "Handed in."
+(the button that let a student leave before `DID END` and join another test
+under the still-ending session). The status now reads "Handed in. Finishing
+your secure session…"; the shell's own handed-in / results page replaces it
+at `DID END` and is the way home. Reaches v2.0.0 clients with the next
+production deploy (the renderer is re-signed); clients before 2.0 keep
+their bundled page. Real AAC sessions, v2.0.0 client, James at the client.
+
+| Check | Expected | Result |
+|---|---|---|
+| **No feedback: hand in.** v2.0.0 client, renderer from this change | "Handed in. Finishing your secure session…" with NO Back to your tests button; at `DID END` the handed-in page replaces it, and its button goes to "Your tests"; the next join logs its own `lockdown begin() called` → `DID BEGIN` → `page load gate: opened` | NOT RUN |
+| **Feedback on: hand in.** | Same notice, no button; the results page at `DID END`; its Done goes to "Your tests" | NOT RUN |

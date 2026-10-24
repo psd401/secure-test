@@ -5247,18 +5247,13 @@ public enum AssessmentPage {
           if (ok) {
             // Left disabled on success: handing in is not something to undo by
             // pressing the button again.
-            status.textContent = 'Handed in. You can close the app.';
-            // UX pass 2 (James, 2026-08-31): a clear way home beside the
-            // notice — the titlebar route alone was too subtle.
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.home) {
-              var homeBtn = document.createElement('button');
-              homeBtn.textContent = 'Back to your tests';
-              homeBtn.style.marginLeft = '12px';
-              homeBtn.onclick = function () {
-                try { window.webkit.messageHandlers.home.postMessage({}); } catch (e) {}
-              };
-              wrap.appendChild(homeBtn);
-            }
+            // Ending-session race (2026-10-24): no way home from HERE. The
+            // secure session is still ending; a student who left now could
+            // join another test under it, and its DID END threw them out of
+            // that one. The host replaces this page at DID END with the
+            // results page or the handed-in page (RD-1), whose button goes
+            // home with the session down.
+            status.textContent = 'Handed in. Finishing your secure session…';
           } else {
             button.disabled = false;
             status.textContent = 'Could not hand in. Tell your teacher.';
