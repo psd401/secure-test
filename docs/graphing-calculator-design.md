@@ -228,6 +228,12 @@ pure functions testable in `bun test` and the JSC harness:
       definitions, no decimal↔fraction, alphabetical keypad.
     - Four-function (Gr 6 Math, Gr 5 Science): a fraction key in place of
       √ (OSPI paper policy says √ and % — unverified which is current).
+      **Revised 2026-10-24 (James):** both keypads are laid out like the
+      Desmos WA ones — four-function `↶ ↷ clear ⌫ / ( ) a/b ÷ / 7 8 9 × /
+      4 5 6 − / 1 2 3 + / 0 . ans ↵` (√ in the fraction's place on "Full"),
+      scientific `a² aᵇ |a| 7 8 9 ÷ % a/b / √ ⁿ√ π 4 5 6 × ← → / sin cos
+      tan 1 2 3 − ⌫ / ( ) , 0 . ans + ↵`; `ans` is the nearest value above.
+      The sheet (re-checked 2026-10-24, SY2026-27) changes only the √ key.
   - **"Full"** for classroom-style tests.
 - Grade bands are a teacher choice, not enforced.
 - **Placement:** a movable, resizable overlay drawer above the pager
@@ -386,8 +392,9 @@ client is 3 (a Debug-only spike).
   graph canvas**, including inside a real AAC session — no hand row has
   ever covered a canvas in peek. Fallback if blank: the peek shows the
   expression list only.
-- The Washington four-function configuration (Desmos sheet: fraction key
-  instead of √; OSPI paper policy: √ and %) — confirm with OSPI.
+- The Washington four-function configuration — settled 2026-10-24: the
+  Desmos WA layout (fraction key instead of √). OSPI's paper policy (√ and
+  %) covers paper tests only.
 - SBAC/CAI toolbar and scoring rules for graphing items (not public).
 
 ## Sources
@@ -470,3 +477,12 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   on local dev, finding and fixing the editor build break, three editor
   defects (`b37ec83`) and raw JSON in the scoring queue (`835dc210`); CI
   gains `next build` (`8181580a`). Client rows next.
+- 2026-10-24 — client hand-run 2 (real AAC; `docs/ledger.md` and
+  `client/MANUAL-CHECKS.md` hold the results). Fixes after it: Esc closes
+  the panel again (MathLive's Escape bindings dropped, E-1); S moves focus
+  to the description so VoiceOver reads it (S-1); the Graph it board takes
+  the contrast set's colours and scales its labels (C-1); the four-function
+  and scientific keypads follow the Desmos WA layouts with an `ans` key
+  (FF-1); the answer box's Math keys on a four-function test start closed
+  with six keys (FF-2). Unit and renderer tests pass; none of it re-run in
+  the app yet.
