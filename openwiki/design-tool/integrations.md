@@ -122,4 +122,3 @@ Design page: `docs/class-insights-design.md`. Routes: `POST /api/assessments/[id
 | Insights exclusions or claim checks | `evidencePack.ts`, `report.ts`, `reportPrompt.ts`, `chat.ts` | `insights-evidence-pack.test.ts`, `insights-report.test.ts`, `insights-chat.test.ts`, `insights-*-route.test.ts` |
 
 Do not exercise `live` gradebook or Drive paths in automated checks; the mock client and injected `DriveClient` exist for that. Related: [scoring and results](scoring-and-results.md), [accommodations and roster](accommodations-and-roster.md) (section and `dcid` data used for the send).
-eClient` exist for that. Related: [scoring and results](scoring-and-results.md), [accommodations and roster](accommodations-and-roster.md) (section and `dcid` data used for the send).
