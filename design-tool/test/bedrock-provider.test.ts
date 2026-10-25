@@ -466,6 +466,29 @@ describe("bedrockPdfExtractor (text path vs scanned/document path)", () => {
     delete process.env.BEDROCK_PDF_EXTRACT_MODEL;
   });
 
+  // PDF-import slice 3: page images go before the text on the text path;
+  // the scanned path sends the whole PDF and never images.
+  test("page images ride before the text; never with a scanned PDF", async () => {
+    setNextResponse(textResponse("[]"));
+    const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");
+    const a = new Uint8Array([1]);
+    const b = new Uint8Array([2]);
+    await bedrockPdfExtractor.extract({ text: "T", page_count: 2, page_images: [a, b] });
+    const content = (callLog[0]!.messages as Array<{ content: Array<Record<string, unknown>> }>)[0]!.content;
+    expect(content.map((c) => Object.keys(c)[0])).toEqual(["image", "image", "text"]);
+    expect(content[0]).toEqual({ image: { format: "png", source: { bytes: a } } });
+
+    setNextResponse(textResponse("[]"));
+    await bedrockPdfExtractor.extract({
+      text: "",
+      page_count: 1,
+      scanned_pdf: new TextEncoder().encode("%PDF"),
+      page_images: [a],
+    });
+    const scanned = (callLog[1]!.messages as Array<{ content: Array<Record<string, unknown>> }>)[0]!.content;
+    expect(scanned.map((c) => Object.keys(c)[0])).toEqual(["document", "text"]);
+  });
+
   test("pdfExtractSampling picks by model generation", async () => {
     const { pdfExtractSampling } = await import("../lib/pdfImport/bedrockProvider");
     expect(pdfExtractSampling("us.anthropic.claude-sonnet-4-6")).toEqual({ temperature: 0 });

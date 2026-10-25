@@ -740,3 +740,46 @@ export async function extractPdfLayout(
   await (renderDoc as RenderDoc | null)?.destroy();
   return { pageCount: doc.numPages, textWithMarkers: pageTexts.join("\n\n"), figures };
 }
+
+// --- PDF-import slice 3 (2026-10-25): the pages themselves, for the model ---
+// On the text path the model read only the page text with figure markers, so
+// it could not see which figure sits beside which question, which answer
+// lines an answer key has already filled in, or that a question is a drawing.
+// The pages ride the extraction call as images; the text stays the source of
+// every word.
+
+/** Pages beyond this send no images at all (the text path runs as before). */
+export const PAGE_IMAGE_MAX_PAGES = 20;
+/** Claude reads an image at about this many pixels; larger is resized down. */
+export const PAGE_IMAGE_PIXELS = 1_150_000;
+
+/**
+ * Every page as a PNG near PAGE_IMAGE_PIXELS, or null when the document has
+ * more than `maxPages` pages or a page cannot be rendered — the caller then
+ * extracts from the text alone, as before. Never throws.
+ */
+export async function renderPagesForModel(
+  bytes: Uint8Array,
+  maxPages: number = PAGE_IMAGE_MAX_PAGES,
+): Promise<Uint8Array<ArrayBuffer>[] | null> {
+  const canvasImport = defaultCanvasImport;
+  let doc: Awaited<ReturnType<typeof getDocumentProxy>> | null = null;
+  try {
+    const CanvasFactory = await createIsomorphicCanvasFactory(canvasImport);
+    doc = await getDocumentProxy(bytes.slice(), { CanvasFactory });
+    if (doc.numPages > maxPages) return null;
+    const pages: Uint8Array<ArrayBuffer>[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const vp = (await doc.getPage(p)).getViewport({ scale: 1 });
+      const scale = Math.sqrt(PAGE_IMAGE_PIXELS / (vp.width * vp.height));
+      const png = await renderPageAsImage(doc, p, { canvasImport, scale });
+      pages.push(new Uint8Array(png));
+    }
+    return pages;
+  } catch (err) {
+    console.warn("pdf-import: pages could not be rendered for the model", err instanceof Error ? err.message : err);
+    return null;
+  } finally {
+    await doc?.destroy();
+  }
+}

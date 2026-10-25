@@ -67,6 +67,7 @@ export const bedrockPdfExtractor: PdfExtractorProvider = {
         ...(scanned
           ? { document: { bytes: scanned, name: req.file_name ?? "document" } }
           : {}),
+        ...(!scanned && req.page_images?.length ? { images: req.page_images } : {}),
         errPrefix: "bedrock",
         surface: "pdf-import",
         ownerSub,

@@ -136,6 +136,13 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   // digit-led math with no command (`${3x + 7 = 22}$`); shared rule text.
   MATH_DOLLAR_RULE,
   "Leave correct_answer values as plain text.",
+  // PDF-import slice 3 (2026-10-25): the pages ride along as images on the
+  // text path, for layout only.
+  "Images of the document's pages may come before the text. Use them only",
+  "to see the layout — which figure sits with which question, which answer",
+  "lines are blank and which an answer key has filled in, what a question",
+  "asks the student to draw. Copy every word from the text, never from an",
+  "image.",
   "The text may contain markers like [FIGURE 3] where a figure (a graph,",
   "diagram, table or picture) sits in the document. When one or more",
   "questions depend on a figure, or on a passage or data given before them,",

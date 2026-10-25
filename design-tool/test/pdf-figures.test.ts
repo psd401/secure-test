@@ -13,7 +13,7 @@ import {
   isFigureLabel,
 } from "../lib/pdfImport/extractFigures";
 import { PNG_SIGNATURE, encodePng, pngDimensions } from "../lib/pdfImport/png";
-import { makeStyledTextPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
+import { makeMultiPageTextPdf, makeStyledTextPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
 
 const LINES = ["1. First question", "2. Second question", "3. Third", "4. Fourth", "5. Fifth", "6. Sixth"];
 // 120×90 pt image, left 100, bottom 560 → top-left-origin bbox [100,142,220,232]:
@@ -427,5 +427,25 @@ describe("E6 emphasis from font runs", () => {
     );
     expect(layout.textWithMarkers).not.toContain("**");
     expect(layout.textWithMarkers).toContain("Everything here is bold");
+  });
+});
+
+// PDF-import slice 3 (2026-10-25): the pages as images for the model.
+import { PAGE_IMAGE_PIXELS, renderPagesForModel } from "../lib/pdfImport/extractFigures";
+
+describe("renderPagesForModel", () => {
+  test("one PNG per page, near the pixel size the model reads", async () => {
+    const pages = await renderPagesForModel(makeMultiPageTextPdf([["1. One"], ["2. Two"]]));
+    expect(pages).toHaveLength(2);
+    for (const png of pages!) {
+      expect([...png.slice(0, 8)]).toEqual([...PNG_SIGNATURE]);
+      const { width, height } = pngDimensions(png);
+      expect(Math.abs(width * height - PAGE_IMAGE_PIXELS) / PAGE_IMAGE_PIXELS).toBeLessThan(0.01);
+    }
+  });
+
+  test("over the page cap, or unreadable, there are no images (text alone) — never a throw", async () => {
+    expect(await renderPagesForModel(makeMultiPageTextPdf([["a"], ["b"], ["c"]]), 2)).toBeNull();
+    expect(await renderPagesForModel(new TextEncoder().encode("not a pdf"))).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   type ContentBlock,
   type ConverseCommandOutput,
   type DocumentFormat,
+  type ImageFormat,
   type Tool,
   type ToolConfiguration,
 } from "@aws-sdk/client-bedrock-runtime";
@@ -177,6 +178,9 @@ export async function converseTextWithMeta(opts: {
   /** Claude 5-generation models only; omit `temperature` alongside it. */
   effort?: ConverseEffort;
   document?: ConverseDocument;
+  /** PNG images sent after the document and before the text (PDF import
+   * slice 3: the pages, so the model sees the layout). */
+  images?: Uint8Array[];
   errPrefix: string;
   surface: ConverseSurface;
   ownerSub?: string;
@@ -197,6 +201,9 @@ export async function converseTextWithMeta(opts: {
         source: { bytes: opts.document.bytes },
       },
     });
+  }
+  for (const bytes of opts.images ?? []) {
+    content.push({ image: { format: "png" as ImageFormat, source: { bytes } } });
   }
   content.push({ text: opts.userText });
   const startedAt = performance.now();

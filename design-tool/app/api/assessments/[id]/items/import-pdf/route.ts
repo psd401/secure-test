@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { extractPdfText, looksScanned } from "@/lib/pdfImport/extractText";
-import { extractPdfLayout, type PdfFigure } from "@/lib/pdfImport/extractFigures";
+import { extractPdfLayout, renderPagesForModel, type PdfFigure } from "@/lib/pdfImport/extractFigures";
 import { getPdfExtractorProvider } from "@/lib/pdfImport/provider";
 import {
   MAX_OCR_BYTES,
@@ -199,10 +199,16 @@ export async function POST(req: Request, ctx: RouteContext) {
     }
   }
 
+  // PDF-import slice 3: the pages as images, so the model sees the layout.
+  // Off unless PDF_IMPORT_PAGE_IMAGES=1 while it is measured; a document
+  // over the page cap, or one that will not render, goes as text alone.
+  const pageImages =
+    !scanned && process.env.PDF_IMPORT_PAGE_IMAGES === "1" ? await renderPagesForModel(bytes) : null;
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,
     ...(scanned ? { scanned_pdf: bytes, file_name: file.name } : {}),
+    ...(pageImages ? { page_images: pageImages } : {}),
   });
   if (!reqBody.success) {
     return NextResponse.json(

@@ -302,6 +302,22 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // PDF-import slice 3: with page images on, the route renders the pages and
+  // still answers (the mock ignores them; the request shape is covered in
+  // bedrock-provider.test.ts).
+  test("page images on: the import still answers with the same items", async () => {
+    const id = await createAssessment("Page images");
+    process.env.PDF_IMPORT_PAGE_IMAGES = "1";
+    try {
+      const res = await postPdf(id, makeTextPdf(["1. 2.", "MC: #1 What is 2+2? | a:3 | b:4 | *b", "ES: #2 Discuss."]));
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { candidates: unknown[] };
+      expect(body.candidates).toHaveLength(2);
+    } finally {
+      delete process.env.PDF_IMPORT_PAGE_IMAGES;
+    }
+  });
+
   // Import fixes slice 2 (2026-10-25): an answer key's sample drawing under
   // "Responses vary." used to pair with the next question by adjacency —
   // the answer, shown to students as that question's stimulus.

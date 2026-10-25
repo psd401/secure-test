@@ -5,6 +5,9 @@
 //   bun scripts/compare-pdf-import.ts <file.pdf> \
 //     [--model us.anthropic.claude-sonnet-4-6] [--model us.anthropic.claude-sonnet-5-5] [--runs 2] [--summary]
 //
+// A model given as <id>+images also sends the pages as images (slice 3);
+// the suffixes combine (<id>@medium+images).
+//
 // A model given as <id>@<effort> (us.anthropic.claude-sonnet-5-5@medium) runs
 // with BEDROCK_PDF_EXTRACT_EFFORT set to that level, so one call can compare
 // effort levels on the same model.
@@ -19,7 +22,7 @@
 // never paste the output of a real teacher's PDF into a tracked file.
 import { readFileSync } from "node:fs";
 import { setLogSink } from "../lib/log";
-import { extractPdfLayout } from "../lib/pdfImport/extractFigures";
+import { extractPdfLayout, renderPagesForModel } from "../lib/pdfImport/extractFigures";
 import { extractPdfText, looksScanned } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
@@ -103,8 +106,11 @@ const short = (s: unknown, n = 70) => {
   return flat.length > n ? `${flat.slice(0, n - 1)}…` : flat;
 };
 
+let pageImages: Uint8Array<ArrayBuffer>[] | null | undefined;
 for (const spec of models) {
-  const [model, effort] = spec.split("@") as [string, string | undefined];
+  const withImages = spec.endsWith("+images");
+  const [model, effort] = spec.replace(/\+images$/, "").split("@") as [string, string | undefined];
+  if (withImages && pageImages === undefined) pageImages = await renderPagesForModel(bytes);
   for (let run = 1; run <= runs; run += 1) {
     process.env.BEDROCK_PDF_EXTRACT_MODEL = model;
     if (effort) process.env.BEDROCK_PDF_EXTRACT_EFFORT = effort;
@@ -113,7 +119,11 @@ for (const spec of models) {
     const header = `== ${spec}${runs > 1 ? ` (run ${run})` : ""}`;
     let result;
     try {
-      result = await bedrockPdfExtractor.extract({ text, page_count: extracted.pageCount });
+      result = await bedrockPdfExtractor.extract({
+        text,
+        page_count: extracted.pageCount,
+        ...(withImages && pageImages ? { page_images: pageImages } : {}),
+      });
     } catch (err) {
       if (summary) {
         console.log(JSON.stringify({ model: spec, failed: err instanceof Error ? err.message.slice(0, 120) : "error" }));
