@@ -81,6 +81,7 @@ describe("tally and summary", () => {
       scored_proposed: 3,
       scored_final: 1,
       withheld: 0,
+      screening_failed: 0,
       blocked: 1,
       provider_errors: 1,
       skipped_unscorable: 0,
@@ -96,6 +97,7 @@ describe("tally and summary", () => {
         scored_proposed: 18,
         scored_final: 6,
         withheld: 2,
+        screening_failed: 1,
         blocked: 1,
         provider_errors: 1,
         skipped_unscorable: 3,
@@ -106,6 +108,7 @@ describe("tally and summary", () => {
     ).toEqual([
       "24 essays scored — 18 waiting for your review in the scoring queue, 6 finalized by AI (Hybrid).",
       "2 held back: they look like they try to instruct the AI. Read them in the scoring queue.",
+      "1 not scored: the safety check didn't answer, so it was skipped. Run Score with AI again later.",
       "2 were already being scored from another press — check the scoring queue in a minute.",
       "1 stopped by the AI safety filter — score it by hand.",
       "1 couldn't be scored (the AI service didn't answer). Press the button again to retry.",

@@ -273,3 +273,21 @@ INPUT with no input tags, vs a Haiku 4.5 classifier prompt:
   server-side): both alerts written within seconds, both emails arrived as
   specified. The maintainer CC is not yet seen on a real alert (the owner
   was the CC address, so it deduplicated).
+- 2026-10-25: **SEC-05** (security audit 2026-10-24; `security/attempt-and-scoring`).
+  A screen that FAILED wrote no alert, so the D-4 withhold — "is there an
+  injection alert?" — passed an unscreened answer through, and Hybrid could
+  auto-finalize an essay nobody had read for injection. Two changes.
+  `screenedForScoring(db, responseId)` (screen.ts) answers whether an answer is
+  actually screened — `safeguarding_screened_at` set and not older than the
+  answer's last edit — and is true when nothing needs screening (screener
+  off, practice attempt, a non-text item); `aiScoreResponse` adds it to the
+  finalize condition, so an unscreened Hybrid answer lands `proposed`. The
+  attempt-wide `score-ai` also skips an answer whose lazy screen failed this
+  run and reports it as `screening_failed` (the Score essays with AI summary
+  says "not scored: the safety check didn't answer … run again later"); the
+  hourly retry or the next run screens it. `rescore-ai` relies on the finalize
+  gate (a proposal, read in the queue). The mock screener gained an `SG_FAIL`
+  sentinel (throws) so the failed paths are testable. Tests:
+  `test/safeguarding-screening.test.ts` (failed screen skipped and counted;
+  `screenedForScoring` matrix) and `test/essay-scorer.test.ts` (unscreened
+  Hybrid → proposed, screened → final).
