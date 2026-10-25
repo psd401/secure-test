@@ -736,15 +736,36 @@ describe("TIDE import ceilings (SEC-08)", () => {
     { ssid: "3333333333", subject: "Mathematics", tool: "Highlighter", value: "ON" },
   ];
 
-  test("declaredInflatedSize reads the zip's own sizes; non-zip bytes are null", async () => {
-    const { declaredInflatedSize } = await import("../lib/api/importTide");
+  test("inflatedSizeWithin counts the bytes the zip really inflates to; non-zip bytes are null", async () => {
+    const { inflatedSizeWithin } = await import("../lib/api/importTide");
     const buf = await buildTideXlsxBuffer(THREE);
-    const size = declaredInflatedSize(buf);
+    const size = inflatedSizeWithin(buf, 1 << 30);
     expect(size).not.toBeNull();
     expect(Number.isFinite(size)).toBe(true);
     // The sheet XML alone is bigger than the compressed file is small.
     expect(size!).toBeGreaterThan(1000);
-    expect(declaredInflatedSize(Buffer.from("not a zip at all, nowhere near"))).toBeNull();
+    expect(inflatedSizeWithin(buf, size! - 1)).toBe(Infinity);
+    expect(inflatedSizeWithin(buf, size!)).toBe(size);
+    expect(inflatedSizeWithin(Buffer.from("not a zip at all, nowhere near"), 1 << 30)).toBeNull();
+  });
+
+  test("a zip that understates its sizes is still refused: the declared sizes are not trusted (PR #96 review)", async () => {
+    const { parseTideXlsx, TideImportError } = await import("../lib/api/importTide");
+    const buf = Buffer.from(await buildTideXlsxBuffer(THREE));
+    // Rewrite every central-directory entry to declare 1 uncompressed byte.
+    let entries = 0;
+    for (let i = 0; i + 46 <= buf.length; i++) {
+      if (buf.readUInt32LE(i) === 0x02014b50) {
+        buf.writeUInt32LE(1, i + 24);
+        entries++;
+      }
+    }
+    expect(entries).toBeGreaterThan(1);
+    // The declared total is now `entries` bytes, far under the ceiling; the
+    // real one is not.
+    const err = await parseTideXlsx(buf, { maxInflatedBytes: 1000, maxRows: 1000 }).catch((e) => e);
+    expect(err).toBeInstanceOf(TideImportError);
+    expect((err as { code: string }).code).toBe("xlsx_too_large");
   });
 
   test("a workbook that would unpack past the ceiling is refused before inflating", async () => {
@@ -792,14 +813,38 @@ describe("TIDE import ceilings (SEC-08)", () => {
       },
       body: "--x--",
     });
+    // Bun keeps the header on a constructed Request; the 5-byte body would
+    // be a 400 form_parse_failed if the header check did not run first.
+    expect(req.headers.get("content-length")).not.toBeNull();
     const res = await POST(req);
-    if (req.headers.get("content-length") === null) {
-      // This runtime strips the header from a constructed Request; the
-      // file.size check below the header check still holds (existing tests).
-      expect([400, 413]).toContain(res.status);
-      return;
-    }
     expect(res.status).toBe(413);
     expect((await res.json()).error).toBe("file_too_large");
+  });
+
+  test("the route stops reading a body with no length at the cap", async () => {
+    asUser("tide-teacher");
+    const { POST } = await import("../app/api/accommodations/import/route");
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent >= 40) return controller.close();
+        sent++;
+        controller.enqueue(chunk);
+      },
+    });
+    const req = new Request("http://localhost/api/accommodations/import", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=x" },
+      body,
+      // @ts-expect-error -- `duplex` is required for a stream body; not in lib.dom yet.
+      duplex: "half",
+    });
+    expect(req.headers.get("content-length")).toBeNull();
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe("file_too_large");
+    // It stopped at the cap (25 MiB + 64 KiB), not after all 40 MiB.
+    expect(sent).toBeLessThan(40);
   });
 });

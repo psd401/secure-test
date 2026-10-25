@@ -12,6 +12,8 @@ import { stampOverlayOwnerEmail } from "@/lib/accommodations/coTeacherRecords";
 // Larger districts may need a larger cap; revisit when a real export
 // surfaces.
 const MAX_BYTES = 25 * 1024 * 1024;
+// The whole multipart body: the file plus its part headers and boundaries.
+const MAX_BODY_BYTES = MAX_BYTES + 64 * 1024;
 
 // The .xlsx MIME from a browser File picker. Spreadsheet apps emit a
 // few variants — accept the canonical one and the legacy fallback that
@@ -36,10 +38,19 @@ export async function POST(req: Request) {
 
   // SEC-08: the size check used to run after `formData()` had already
   // buffered the whole body. A declared length over the cap is refused
-  // before a byte is read; a body with no length still meets the check
-  // on `file.size` below.
+  // before a byte is read, and the body is then read with a byte counter
+  // (`readBodyWithin`) so one that sends no length, or lies about it, stops
+  // at the cap too. `file.size` below then only checks the file part.
   const declared = Number(req.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > MAX_BYTES) {
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { ok: false, error: "file_too_large", limit: MAX_BYTES },
+      { status: 413 },
+    );
+  }
+
+  const body = await readBodyWithin(req, MAX_BODY_BYTES);
+  if (body === null) {
     return NextResponse.json(
       { ok: false, error: "file_too_large", limit: MAX_BYTES },
       { status: 413 },
@@ -48,7 +59,7 @@ export async function POST(req: Request) {
 
   let file: File;
   try {
-    const form = await req.formData();
+    const form = await new Response(body, { headers: { "content-type": ct } }).formData();
     const candidate = form.get("file");
     if (!(candidate instanceof File)) {
       return NextResponse.json(
@@ -102,4 +113,29 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+/** The request body, or `null` once it passes `max` bytes (SEC-08). */
+async function readBodyWithin(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
 }

@@ -15,6 +15,7 @@
 // import is transactional; partial writes can't strand rows.
 
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { inflateRawSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import { getDb } from "@/db/client";
 import { students, student_accommodations } from "@/db/schema";
@@ -58,11 +59,12 @@ export class TideImportError extends Error {
  * and Cell object per populated row, on a 1 GiB task that also serves the
  * live sittings. A repetitive sheet inflates past 1000:1, and a single cell
  * at row 1,048,576 used to make the old `for (r <= ws.rowCount)` loop
- * allocate a million Row objects. So, before inflating, the zip's own central
- * directory is read for the uncompressed sizes it declares (a few hundred
- * bytes, no decompression), and the row walk visits populated rows only and
- * stops at a count no district export comes near. The limits are parameters
- * so the tests can pin the refusals on small fixtures.
+ * allocate a million Row objects. So, before ExcelJS sees the workbook, every
+ * zip entry is inflated once with a byte budget and the total is counted —
+ * the sizes the zip DECLARES are written by the uploader and are not trusted
+ * (PR #96 review) — and the row walk visits populated rows only and stops at
+ * a count no district export comes near. The limits are parameters so the
+ * tests can pin the refusals on small fixtures.
  */
 export interface TideImportLimits {
   /** Sum of the zip entries' declared uncompressed sizes. */
@@ -78,16 +80,20 @@ export const DEFAULT_TIDE_LIMITS: TideImportLimits = {
 
 const ZIP_EOCD_SIG = 0x06054b50;
 const ZIP_CDIR_SIG = 0x02014b50;
+const ZIP_LOCAL_SIG = 0x04034b50;
 const ZIP64_SIZE = 0xffffffff;
+const ZIP_STORED = 0;
+const ZIP_DEFLATED = 8;
 
 /**
- * The total uncompressed size a zip declares for its entries, read from the
- * central directory without inflating anything. `null` when the bytes are
- * not a zip the reader can walk (ExcelJS then reports its own parse error);
- * `Infinity` for a ZIP64 entry, whose true size is not in the 32-bit field —
- * no TIDE export is ZIP64, so it is refused as too large rather than guessed.
+ * The bytes a zip's entries actually inflate to, counted by inflating each
+ * one with `maxOutputLength` set to what is left of `limit`, so a hostile
+ * entry can never allocate more than the budget. Returns `Infinity` as soon
+ * as the total passes `limit` (and for ZIP64, which no TIDE export is), and
+ * `null` when the bytes are not a zip this reader can walk — ExcelJS then
+ * reports its own parse error. Peak memory is one entry, at most `limit`.
  */
-export function declaredInflatedSize(buf: Buffer): number | null {
+export function inflatedSizeWithin(buf: Buffer, limit: number): number | null {
   // End-of-central-directory record: 22 bytes plus a comment of up to 65535.
   const minEocd = 22;
   if (buf.length < minEocd) return null;
@@ -111,13 +117,35 @@ export function declaredInflatedSize(buf: Buffer): number | null {
   let p = cdirOffset;
   for (let n = 0; n < entries; n++) {
     if (p + 46 > buf.length || buf.readUInt32LE(p) !== ZIP_CDIR_SIG) return null;
-    const uncompressed = buf.readUInt32LE(p + 24);
-    if (uncompressed === ZIP64_SIZE) return Infinity;
-    total += uncompressed;
-    const nameLen = buf.readUInt16LE(p + 28);
-    const extraLen = buf.readUInt16LE(p + 30);
-    const commentLen = buf.readUInt16LE(p + 32);
-    p += 46 + nameLen + extraLen + commentLen;
+    const method = buf.readUInt16LE(p + 10);
+    const compressed = buf.readUInt32LE(p + 20);
+    const localOffset = buf.readUInt32LE(p + 42);
+    if (compressed === ZIP64_SIZE || localOffset === ZIP64_SIZE) return Infinity;
+    if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== ZIP_LOCAL_SIG) {
+      return null;
+    }
+    const dataStart =
+      localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
+    if (dataStart + compressed > buf.length) return null;
+    const remaining = limit - total;
+    if (method === ZIP_STORED) {
+      total += compressed;
+    } else if (method === ZIP_DEFLATED) {
+      try {
+        total += inflateRawSync(buf.subarray(dataStart, dataStart + compressed), {
+          maxOutputLength: Math.max(1, remaining + 1),
+        }).length;
+      } catch (err) {
+        // Node and Bun both throw a RangeError when the budget is hit; any
+        // other inflate error is a corrupt entry for ExcelJS to report.
+        if (err instanceof RangeError) return Infinity;
+        return null;
+      }
+    } else {
+      return null;
+    }
+    if (total > limit) return Infinity;
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
   }
   return total;
 }
@@ -126,11 +154,11 @@ export async function parseTideXlsx(
   buf: Buffer,
   limits: TideImportLimits = DEFAULT_TIDE_LIMITS,
 ): Promise<ParsedRow[]> {
-  const inflated = declaredInflatedSize(buf);
+  const inflated = inflatedSizeWithin(buf, limits.maxInflatedBytes);
   if (inflated !== null && inflated > limits.maxInflatedBytes) {
     throw new TideImportError(
       "xlsx_too_large",
-      `the workbook would unpack to ${inflated === Infinity ? "an undeclared size" : `${inflated} bytes`}; the limit is ${limits.maxInflatedBytes}`,
+      `the workbook unpacks past the limit of ${limits.maxInflatedBytes} bytes`,
     );
   }
   const wb = new ExcelJS.Workbook();
