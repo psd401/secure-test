@@ -515,12 +515,17 @@ describe("delivery bundle refuses an expired attempt (EX-2)", () => {
     expect((await getDelivery(s.assessment.id)).status).toBe(200);
   });
 
-  test("a submitted attempt past its deadline is unchanged -> 200", async () => {
+  // Was "unchanged -> 200" until SEC-01 (security audit 2026-10-24): a
+  // submitted attempt is refused on its own account, before the deadline rule
+  // is consulted, so the time-expired 409 never applies to it.
+  test("a submitted attempt past its deadline is refused as submitted, not as expired", async () => {
     const s = await scenario({ timeLimitSeconds: 600, elapsedSeconds: 700 });
     await getDb()
       .update(attempts)
       .set({ status: "submitted", submitted_at: new Date() })
       .where(eq(attempts.id, s.attempt.id));
-    expect((await getDelivery(s.assessment.id)).status).toBe(200);
+    const res = await getDelivery(s.assessment.id);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("attempt_submitted");
   });
 });
