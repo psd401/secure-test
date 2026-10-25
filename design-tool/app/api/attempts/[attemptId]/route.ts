@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { students } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
-import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
+import {
+  practiceAttemptIsCallers,
+  sessionOpenResponse,
+  sittingIsOpen,
+} from "@/lib/api/staffAttempt";
 import { authorizeAttempt, levelSatisfies, notFoundResponse } from "@/lib/api/access";
 import { deleteAttemptRecord } from "@/lib/api/deleteAttempt";
 import { log } from "@/lib/log";
@@ -60,12 +62,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   // for the staff member whose practice row it is: the overlay student row
   // carries `practice_for_sub`.
   if (attempt.practice) {
-    const [row] = await db
-      .select({ practice_for_sub: students.practice_for_sub })
-      .from(students)
-      .where(eq(students.id, attempt.student_id))
-      .limit(1);
-    if (row?.practice_for_sub !== auth.session.sub) return notFoundResponse();
+    if (!(await practiceAttemptIsCallers(db, attempt, auth.session.sub))) return notFoundResponse();
   } else if (!levelSatisfies(access.level, "own")) {
     return notFoundResponse();
   }

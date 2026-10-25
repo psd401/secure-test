@@ -48,7 +48,13 @@ export default async function MonitorPage({ params, searchParams }: PageProps) {
       studentPsIds={row.sitting.student_ps_ids}
       openCodeOnLoad={codeParam === "1"}
       assessmentUntimed={(row.assessment.time_limit_seconds ?? 0) <= 0}
-      canDeleteAttempts={levelSatisfies(access.level, "own")}
+      // SEC-04: a class row needs `own`; a practice sitting's one row is
+      // deletable by the staff member who practised (the route's rule).
+      canDeleteAttempts={
+        row.sitting.kind === "practice"
+          ? row.sitting.practice_for_sub === session.sub
+          : levelSatisfies(access.level, "own")
+      }
     />
   );
 }
