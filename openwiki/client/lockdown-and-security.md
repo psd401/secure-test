@@ -81,7 +81,7 @@ Rules encoded in `AssessmentLockdown` (documented in its header and covered by `
 
 Student-reachable exits are the titlebar button, Cmd-E, Cmd-Q, window close and SIGTERM. `ExitConfirmation.shouldConfirm` adds one confirming dialog only while a test is open inside a live session and not yet handed in; system-initiated quits (logout, MDM) are never held up. The default button keeps the student in the test.
 
-`PageLoadGate` (an actor, resolved by `open()` / `refuse()`) holds the page build until lockdown is `active`. Only `Outcome.opened` may build the test; `refused` and `timedOut` send the host home with an explanation. The ordering also fixes a layout bug: the renderer reads viewport width once at build time, and building during the AAC window-resize transition picked the wrong layout.
+`PageLoadGate` (an actor, resolved by `open()` / `refuse()`) holds the page build until lockdown is `active`. Its `Outcome` is `opened`, `refused` (the session went back to `idle` without becoming active) or `timedOut`. Only `opened` may build the test; the other two send the host home with an explanation. `AssessmentViewController` waits up to 60 s, and after 20 s shows "Still starting the secure session…" instead of sending the student home, because one student Mac answered `begin()` about 36 s after the call (SS-1, 2026-10-08). The ordering also fixes a layout bug: the renderer reads viewport width once at build time, and building during the AAC window-resize transition picked the wrong layout.
 
 ## Sealed page
 
@@ -104,9 +104,11 @@ Student-reachable exits are the titlebar button, Cmd-E, Cmd-Q, window close and 
 | Intent | Start at | Tests |
 |---|---|---|
 | Exit path or teardown timing | `AssessmentLockdown`, `ExitConfirmation`, app quit handling in `AppDelegate.swift` | `AssessmentLockdownTests`, `SimulatedLockdownSlowTests`, `ExitConfirmationTests` |
+| Page-load wait, slow-start notice or refused start | `PageLoadGate` (`open()` / `refuse()` / `wait(timeout:slowAfter:onSlow:)`), the lockdown wait block in `AssessmentViewController.swift` | `PageLoadGateTests` |
 | Open a new AAC knob for an accommodation | `LockdownConfigurationPlan`, `RealLockdownSession.begin()` | `LockdownConfigurationPlanTests` |
 | Page CSP or document shell | `PageShell`, `JSONEmbedding`, `HTMLEscape` | `PageShellTests`, `JSONEmbeddingTests` |
 | New message handler or payload limit | `AssessmentViewController` channel constants, `BridgeChecks.swift` | `BridgeChecksTests`, `bridge-limits.test.ts` |
 | New client event kind | `AttemptEventKind`, server `ATTEMPT_EVENT_KINDS` | `AttemptEventReporterTests`, `attempt-events-api.test.ts` |
 
 Invariants to keep: arm timers before `begin()`; every code path that can call `begin()` ships an exit; a Release build never falls back to a cooperative simulation; handler payloads are validated before spooling. Narrow check: `cd client/SecureTestCore && swift test --filter AssessmentLockdownTests`. The real AAC behaviour cannot be exercised headlessly: changes to `RealLockdownSession` or the web view need a hand-run on an entitled Mac, and `xcodebuild` is only needed when files under `client/SecureTest/` change. Entitlements can be confirmed with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
+d with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.

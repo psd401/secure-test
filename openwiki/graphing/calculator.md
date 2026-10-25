@@ -73,3 +73,4 @@ sequenceDiagram
 - Do not relax the publish lock for these fields. A change to calculator settings alters the measurement.
 - Check `calculator-help-page.test.ts` when a mode is added; it pins the calculator's in-app help sections that the design tool imports as `helpSections` from `packages/graphing/src/ui/help.ts`.
 - Scope: a graphing-calculator change does not normally need the Next build or the Swift full suite. Run the `GraphingScriptTests` and `calculator-api` checks only.
+- Hand-run fixtures: `design-tool/scripts/hand-run-calculator.ts` is a dev-only script that imports three tests as the demo teacher, publishes them and opens a sitting on each, so the calculator's client checks can be run by hand. It accepts only a local server URL and needs a local database that already holds the demo roster. It is developer tooling, not product runtime, and is not part of the delivery path above.
