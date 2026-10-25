@@ -10,6 +10,7 @@ import {
   attempt_events,
   attempts,
   students,
+  test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
@@ -517,5 +518,86 @@ describe("GET /api/attempts/:attemptId/events", () => {
     principal = null;
     const res = await getEvents(attempt.id);
     expect(res.status).toBe(401);
+  });
+});
+
+// ── SEC-09 (security audit 2026-10-24): ceilings on what one session stores ──
+
+describe("event ceilings (SEC-09)", () => {
+  test("an oversized detail bag is replaced, not stored", async () => {
+    const { MAX_EVENT_DETAIL_BYTES } = await import("../app/api/attempts/[attemptId]/events/route");
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+
+    const res = await postEvent(attempt.id, {
+      kind: "focus_loss",
+      detail: { pad: "p".repeat(MAX_EVENT_DETAIL_BYTES * 4) },
+    });
+    expect(res.status).toBe(201);
+    const [stored] = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(stored!.detail).toEqual({ dropped: "detail_too_large" });
+
+    // A reasonable bag is kept as before.
+    expect((await postEvent(attempt.id, { kind: "focus_loss", detail: { app: "Finder" } })).status).toBe(201);
+  });
+
+  test("a submitted attempt accepts teardown events, then closes after the grace", async () => {
+    const { EVENT_GRACE_SECONDS } = await import("../app/api/attempts/[attemptId]/events/route");
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { status: "submitted" });
+    principal = studentPrincipal(STUDENT.email);
+    expect((await postEvent(attempt.id, { kind: "lockdown_end" })).status).toBe(201);
+
+    await getDb()
+      .update(attempts)
+      .set({ submitted_at: new Date(Date.now() - (EVENT_GRACE_SECONDS + 60) * 1000) })
+      .where(eq(attempts.id, attempt.id));
+    const late = await postEvent(attempt.id, { kind: "focus_loss" });
+    expect(late.status).toBe(409);
+    expect((await late.json()).error).toBe("attempt_closed");
+  });
+
+  test("an attempt whose sitting ended past the grace answers 409 sitting_closed", async () => {
+    const { EVENT_GRACE_SECONDS } = await import("../app/api/attempts/[attemptId]/events/route");
+    const assessment = await seedAssessment();
+    const sitting = await createSitting(assessment.id);
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id, { sessionId: sitting.id });
+    const ago = new Date(Date.now() - (EVENT_GRACE_SECONDS + 60) * 1000);
+    await getDb()
+      .update(test_sessions)
+      .set({ status: "closed", expires_at: ago, updated_at: ago })
+      .where(eq(test_sessions.id, sitting.id));
+
+    principal = studentPrincipal(STUDENT.email);
+    const res = await postEvent(attempt.id, { kind: "focus_loss" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("sitting_closed");
+  });
+
+  test("the per-attempt row ceiling answers 429 and stores nothing more", async () => {
+    const { MAX_EVENTS_PER_ATTEMPT } = await import("../app/api/attempts/[attemptId]/events/route");
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    await getDb()
+      .insert(attempt_events)
+      .values(
+        Array.from({ length: MAX_EVENTS_PER_ATTEMPT }, () => ({
+          attempt_id: attempt.id,
+          kind: "focus_loss",
+        })),
+      );
+    principal = studentPrincipal(STUDENT.email);
+    const res = await postEvent(attempt.id, { kind: "focus_regained" });
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toBe("too_many_events");
+    const [tally] = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(tally?.n).toBe(MAX_EVENTS_PER_ATTEMPT);
   });
 });
