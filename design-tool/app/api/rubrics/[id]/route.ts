@@ -23,7 +23,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  const access = await authorizeRubric(getDb(), auth.session, id, "own", "read");
   if (!access.ok) return access.response;
   const row = access.rubric;
   return NextResponse.json({ rubric: row });
@@ -46,7 +46,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  const access = await authorizeRubric(getDb(), auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const db = getDb();
   // Editing the library row deliberately does NOT touch any item that was
@@ -71,7 +71,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeRubric(getDb(), auth.session, id, "own");
+  const access = await authorizeRubric(getDb(), auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const db = getDb();
   await db.transaction(async (tx) => {

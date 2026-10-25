@@ -90,7 +90,7 @@ export async function GET(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "view");
+  const access = await authorizeAssessment(db, auth.session, id, "view", "read");
   if (!access.ok) return access.response;
 
   const section = normalizeSection(new URL(req.url).searchParams.get("section"));
@@ -139,7 +139,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "edit");
+  const access = await authorizeAssessment(db, auth.session, id, "edit", "write");
   if (!access.ok) return access.response;
 
   const section = normalizeSection(parsed.data.section);

@@ -41,7 +41,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   if (!acc) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  const access = await authorizeStudent(db, auth.session, acc.student_id, "own");
+  const access = await authorizeStudent(db, auth.session, acc.student_id, "own", "write");
   if (!access.ok) return access.response;
   // Only meaningful on a preserved-with-diff row that still knows TIDE's code.
   if (acc.source !== "tide_then_edited" || !acc.tide_code) {

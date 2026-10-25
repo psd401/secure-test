@@ -29,7 +29,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
   const db = getDb();
 
-  const access = await authorizeStudent(db, auth.session, id, "own");
+  const access = await authorizeStudent(db, auth.session, id, "own", "write");
   if (!access.ok) return access.response;
 
   // Conflict: a LIVE row already exists for this (student, subject, tool).

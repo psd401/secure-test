@@ -32,7 +32,7 @@ export async function renderContent(text: string, assessmentId?: string): Promis
 
   const db = getDb();
   if (typeof assessmentId === "string" && UUID_RE.test(assessmentId)) {
-    const access = await authorizeAssessment(db, session, assessmentId, "view");
+    const access = await authorizeAssessment(db, session, assessmentId, "view", "read");
     if (access.ok) {
       return renderItemContent(
         capped,

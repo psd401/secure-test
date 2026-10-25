@@ -19,7 +19,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own", "read");
   if (!access.ok) return access.response;
   return NextResponse.json({ shares: await listSharesForAssessment(id) });
 }
@@ -41,7 +41,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json({ ok: false, error: "invalid_body", detail: message }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const result = await createShare(id, auth.session, body.email);
   if (!result.ok) {

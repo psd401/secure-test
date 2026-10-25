@@ -35,7 +35,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "run");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "run", "read");
   if (!access.ok) return access.response;
 
   await sweepExpiredPeekImages(db);

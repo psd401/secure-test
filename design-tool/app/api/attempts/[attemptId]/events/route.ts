@@ -147,7 +147,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   // The 404-on-everything posture this route already had is the helper's own
   // rule now (access slice 1, D-3); the only thing kept locally is the
   // no-store header on the refusal, which the helper's plain 404 would drop.
-  const access = await authorizeAttempt(db, auth.session, attemptId, "view");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "view", "read");
   if (!access.ok) return notFound();
   const attempt = access.attempt;
 

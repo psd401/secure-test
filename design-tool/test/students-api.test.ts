@@ -23,6 +23,7 @@ const expectTestDb = () => {
 
 let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
+let mockEmail: string | null = null;
 
 mock.module("next/headers", () => ({
   // Slice 58: requireSession now reads an Authorization bearer header as
@@ -37,11 +38,12 @@ mock.module("next/headers", () => ({
 mock.module("../lib/auth/session", () => ({
   ...sessionMod,
   readSessionFromCookies: async () =>
-    mockSub ? { sub: mockSub, role: "staff" } : null,
+    mockSub ? { sub: mockSub, role: "staff", ...(mockEmail ? { email: mockEmail } : {}) } : null,
 }));
 
-function asUser(sub: string | null) {
+function asUser(sub: string | null, email: string | null = null) {
   mockSub = sub;
+  mockEmail = email;
 }
 
 beforeAll(() => {
@@ -271,5 +273,28 @@ describe("DELETE /api/students/[id]", () => {
     expect(del.status).toBe(204);
     const after = await getStudent(id);
     expect(after.status).toBe(404);
+  });
+
+  // Security audit 2026-10-24, SEC-03 (D-6): an admin reads another teacher's
+  // overlay row but cannot delete it — that write, which cascades the child's
+  // attempts, goes through act-as or not at all.
+  test("a non-impersonating admin reads but cannot delete another teacher's student", async () => {
+    const ADMIN_EMAIL = "sysadmin@psd401.net";
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    try {
+      asUser("teacher-1");
+      const c = await createStudent({ ssid: "T001" });
+      const id = ((await c.json()) as { student: { id: string } }).student.id;
+
+      asUser("admin-1", ADMIN_EMAIL);
+      expect((await getStudent(id)).status).toBe(200);
+      const del = await deleteStudent(id);
+      expect(del.status).toBe(404);
+
+      asUser("teacher-1");
+      expect((await getStudent(id)).status).toBe(200);
+    } finally {
+      delete process.env.ADMIN_EMAILS;
+    }
   });
 });

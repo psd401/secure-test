@@ -41,7 +41,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!response) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
-  const access = await authorizeAttempt(db, auth.session, response.attempt_id, "view");
+  const access = await authorizeAttempt(db, auth.session, response.attempt_id, "view", "read");
   if (!access.ok) {
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }

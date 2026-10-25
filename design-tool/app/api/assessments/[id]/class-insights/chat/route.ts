@@ -13,7 +13,7 @@ import {
   type ClassInsightTurnRow,
 } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
-import { authorizeAssessment } from "@/lib/api/access";
+import { authorizeAssessment, type AccessIntent } from "@/lib/api/access";
 import { getProvider } from "@/lib/ai/provider";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import {
@@ -76,7 +76,7 @@ function loadResults(id: string): Promise<AssessmentResults> {
   return buildResults(id, { include_in_progress: true });
 }
 
-async function gate(ctx: RouteContext) {
+async function gate(ctx: RouteContext, intent: AccessIntent) {
   const auth = await requireStaff();
   if (!auth.ok) return { ok: false as const, response: auth.response };
   const { id } = await ctx.params;
@@ -87,7 +87,7 @@ async function gate(ctx: RouteContext) {
     };
   }
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "edit");
+  const access = await authorizeAssessment(db, auth.session, id, "edit", intent);
   if (!access.ok) return { ok: false as const, response: access.response };
   return { ok: true as const, db, id, sub: auth.session.sub };
 }
@@ -207,7 +207,7 @@ async function loadAnswerCandidates(
 }
 
 export async function GET(req: Request, ctx: RouteContext) {
-  const g = await gate(ctx);
+  const g = await gate(ctx, "read");
   if (!g.ok) return g.response;
   const { db, id, sub } = g;
   const section = normalizeSection(new URL(req.url).searchParams.get("section"));
@@ -234,7 +234,7 @@ export async function GET(req: Request, ctx: RouteContext) {
 }
 
 export async function POST(req: Request, ctx: RouteContext) {
-  const g = await gate(ctx);
+  const g = await gate(ctx, "write");
   if (!g.ok) return g.response;
   const { db, id, sub } = g;
 
@@ -456,7 +456,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 }
 
 export async function DELETE(req: Request, ctx: RouteContext) {
-  const g = await gate(ctx);
+  const g = await gate(ctx, "write");
   if (!g.ok) return g.response;
   const { db, id, sub } = g;
   const key = sectionKey(normalizeSection(new URL(req.url).searchParams.get("section")));

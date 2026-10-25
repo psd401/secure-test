@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const session = await readStaffSessionFromCookies();
   const { id } = await params;
   if (!session || !UUID_RE.test(id)) return { title: "Assessment" };
-  const row = await pageAssessment(getDb(), session, id, "view");
+  const row = await pageAssessment(getDb(), session, id, "view", "read");
   return { title: row?.name ?? "Assessment" };
 }
 
@@ -46,7 +46,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
   // needs `via` and `level` too, to gate the owner-only actions in the
   // header and Settings tab and to label a co-teacher's editor — so this
   // calls `authorizeAssessment` directly rather than the page wrapper.
-  const access = await authorizeAssessment(db, session, id, "edit");
+  const access = await authorizeAssessment(db, session, id, "edit", "read");
   if (!access.ok) {
     notFound();
   }

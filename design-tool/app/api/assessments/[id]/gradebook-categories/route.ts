@@ -42,7 +42,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeSend(db, auth.session, id, sectionPsId);
+  const access = await authorizeSend(db, auth.session, id, sectionPsId, "read");
   if (!access.ok) return access.response;
 
   if (target !== "powerschool") {

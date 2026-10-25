@@ -70,7 +70,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
   if (!access.ok) return access.response;
   const { attempt, assessment } = access;
 

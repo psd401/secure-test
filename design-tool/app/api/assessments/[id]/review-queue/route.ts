@@ -48,7 +48,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "view");
+  const access = await authorizeAssessment(db, auth.session, id, "view", "read");
   if (!access.ok) return access.response;
 
   const attemptRows = await db

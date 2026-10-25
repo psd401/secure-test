@@ -25,7 +25,7 @@ async function loadAccForSession(
   session: SessionPayload,
 ) {
   const db = getDb();
-  const access = await authorizeStudent(db, session, studentId, "own");
+  const access = await authorizeStudent(db, session, studentId, "own", "write");
   if (!access.ok) return { ok: false as const, response: access.response };
   const [row] = await db
     .select()

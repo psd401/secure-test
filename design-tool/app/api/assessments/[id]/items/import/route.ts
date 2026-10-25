@@ -44,7 +44,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "edit");
+  const access = await authorizeAssessment(db, auth.session, id, "edit", "write");
   if (!access.ok) return access.response;
   const assessment = access.assessment;
   const draftGuard = requireDraft(assessment);

@@ -68,7 +68,7 @@ export async function loadResponseChain(
   // Access slice 1 (D-3): the attempt's assessment answers who may score this
   // response, and the old 403 for another teacher's response is now the same
   // 404 the missing cases give.
-  const access = await authorizeAttempt(db, session, response.attempt_id, "edit");
+  const access = await authorizeAttempt(db, session, response.attempt_id, "edit", "write");
   if (!access.ok) return { ok: false, status: 404, error: "not_found" };
   const attempt = access.attempt;
   if (attempt.status !== "submitted") {

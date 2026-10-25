@@ -323,13 +323,13 @@ describe("an impersonated session resolves as the target, not as an admin", () =
       actor_email: ADMIN.email,
     } as SessionPayload;
 
-    const own = await authorizeAssessment(getDb(), acting, theirs.id, "own");
+    const own = await authorizeAssessment(getDb(), acting, theirs.id, "own", "read");
     expect(own.ok).toBe(true);
     if (own.ok) expect(own.via).toBe("owner");
 
     // The admin's own session would resolve this one via "admin"; the act-as
     // session must not.
-    const denied = await authorizeAssessment(getDb(), acting, foreign.id, "view");
+    const denied = await authorizeAssessment(getDb(), acting, foreign.id, "view", "read");
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.response.status).toBe(404);
   });

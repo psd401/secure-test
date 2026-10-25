@@ -27,6 +27,19 @@ export type AccessLevel = "view" | "run" | "edit" | "own";
  */
 export type AccessVia = "owner" | "grant" | "admin";
 
+/**
+ * What the caller is about to do with the row (security audit 2026-10-24,
+ * SEC-03). `need` says how much of the ladder an act requires; `intent` says
+ * whether the act changes anything. The two are not the same question: a GET
+ * can need `run` (Monitor attendance) and a POST can need `view`
+ * (acknowledging an alert). D-6 lets an admin READ everything but routes every
+ * admin WRITE outside the admin surface through impersonation, so the helpers
+ * refuse `"write"` to a session that only resolved via `"admin"`. Required
+ * rather than defaulted: the compiler, not a sweep, makes every call say
+ * which it is.
+ */
+export type AccessIntent = "read" | "write";
+
 export const ACCESS_LEVELS: readonly AccessLevel[] = [
   "view",
   "run",

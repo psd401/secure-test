@@ -7,7 +7,7 @@ import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft
 import { UpdateItemBody, itemConfigForWrite } from "@/lib/api/items";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment, notFoundResponse } from "@/lib/api/access";
+import { authorizeAssessment, notFoundResponse, type AccessIntent } from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
 
 interface RouteContext {
@@ -26,9 +26,10 @@ async function loadItemInAssessment(
   assessmentId: string,
   itemId: string,
   session: SessionPayload,
+  intent: AccessIntent,
 ) {
   const db = getDb();
-  const access = await authorizeAssessment(db, session, assessmentId, "edit");
+  const access = await authorizeAssessment(db, session, assessmentId, "edit", intent);
   if (!access.ok) return { ok: false as const, response: access.response };
   const [item] = await db
     .select()
@@ -50,7 +51,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(itemId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  const owned = await loadItemInAssessment(id, itemId, auth.session, "read");
   if (!owned.ok) return owned.response;
   return NextResponse.json({ item: owned.item });
 }
@@ -72,7 +73,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       { status: 400 },
     );
   }
-  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  const owned = await loadItemInAssessment(id, itemId, auth.session, "write");
   if (!owned.ok) return owned.response;
   if (body.type !== owned.item.type) {
     return NextResponse.json(
@@ -134,7 +135,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(itemId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const owned = await loadItemInAssessment(id, itemId, auth.session);
+  const owned = await loadItemInAssessment(id, itemId, auth.session, "write");
   if (!owned.ok) return owned.response;
   const lock = requireDraftStatus(owned.parentStatus);
   if (lock) return lock;

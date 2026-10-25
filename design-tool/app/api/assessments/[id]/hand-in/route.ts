@@ -64,7 +64,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "run");
+  const access = await authorizeAssessment(db, auth.session, id, "run", "write");
   if (!access.ok) return access.response;
 
   const ids = [...new Set(parsed.data.attempt_ids)];

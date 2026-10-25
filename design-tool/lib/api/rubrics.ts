@@ -75,7 +75,7 @@ export async function rejectUnownedRubricId(
   // One ownership path (access slice 1, D-3): the scoped read this used to do
   // inline is now `authorizeRubric`. The 400 below is unchanged — the id came
   // in a body, so the failure is about the body, not about the addressed row.
-  const access = await authorizeRubric(db, session, rubricId, "own");
+  const access = await authorizeRubric(db, session, rubricId, "own", "write");
   if (access.ok) return null;
   return NextResponse.json(
     {

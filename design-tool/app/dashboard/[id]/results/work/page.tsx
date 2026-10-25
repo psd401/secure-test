@@ -349,7 +349,7 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
 
   const db = getDb();
   // `view` and up (G-3); a caller without it gets the SAME answer as a missing row.
-  const assessment = await pageAssessment(db, session, id, "view");
+  const assessment = await pageAssessment(db, session, id, "view", "read");
   if (!assessment) {
     notFound();
   }

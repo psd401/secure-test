@@ -342,7 +342,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
   }
 
   const db = getDb();
-  const access = await authorizeAssessment(db, session, id, "view");
+  const access = await authorizeAssessment(db, session, id, "view", "read");
   if (!access.ok) {
     notFound();
   }

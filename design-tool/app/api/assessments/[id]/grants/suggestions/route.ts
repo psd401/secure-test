@@ -24,7 +24,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "own");
+  const access = await authorizeAssessment(db, auth.session, id, "own", "read");
   if (!access.ok) return access.response;
 
   const owner = access.assessment.owner_email;

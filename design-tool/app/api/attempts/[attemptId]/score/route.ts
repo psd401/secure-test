@@ -24,7 +24,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
   if (attempt.status !== "submitted") {

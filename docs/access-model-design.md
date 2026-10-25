@@ -260,6 +260,13 @@ check and adds the test that keeps it that way.
   above are the design when it is.
 - **D-6** Admin reads everything; admin writes outside the admin surface
   go through impersonation. — **DECIDED as recommended (James, 2026-09-17)**
+  **Enforced in `lib/api/access.ts` 2026-10-25** (security audit 2026-10-24,
+  SEC-03): until then only the UI and one route honoured the second half —
+  every `authorize*` resolved an admin to `own` via `"admin"` and the write
+  routes admitted it. Each `authorize*` / `page*` call now carries a required
+  `intent: "read" | "write"`, and a `"write"` that resolved via `"admin"` is
+  the same 404 as any other row the caller cannot reach. The compiler, not a
+  sweep, makes every call say which it is.
 - **D-7** Principal = a `view` grant on a `school_id`; read-only
   surfaces only in v1. — **DEFERRED (James, 2026-09-17): principals are
   not a user in this release; the `school` scope stays in the table's
@@ -791,3 +798,23 @@ check and adds the test that keeps it that way.
   Biology option pass on it (see above). No existing test changed. No
   migration. Rows 263–267 in `docs/design-tool-manual-checks.md` NOT RUN —
   they need a live co-teach grant (held with 223 / 228 / 230).
+- **2026-10-25 — SEC-03 BUILT (security audit 2026-10-24; branch
+  `security/access-gates`)**: `AccessIntent` in `lib/api/accessLevels.ts`;
+  `admitted(resolved, need, intent)` in `lib/api/access.ts` is the one
+  refusal for a write that only resolved via `"admin"`; the six `authorize*`
+  and four `page*` helpers take `intent` as a required fifth argument. 139
+  call sites updated: GET handlers, pages, server actions and tests say
+  `"read"`; POST/PUT/PATCH/DELETE handlers say `"write"`; the shared loaders
+  (`loadItemInAssessment`, class-insights `gate`, `authorizeSend`) take it
+  from their caller, the rest (`checkSourceItem`, `loadItemSetForSession`,
+  `loadResponseChain`, `rejectUnownedRubricId`, `loadAccForSession`) are only
+  reached from writes and say so. Behaviour change for a non-impersonating
+  admin only: writes on other teachers' rows now 404 (students DELETE/PATCH,
+  accommodations, assessments PATCH/DELETE, shares, per-assessment grants,
+  sitting actions, scoring, gradebook send); reads at every level unchanged,
+  so Monitor attendance (`run`) and the editor page (`edit`) still open. The
+  admin surface (`/api/grants`, `/api/admin/*`) checks `isAdmin` directly and
+  is unaffected; act-as resolves via `"owner"` and is unaffected. Tests:
+  `test/access-grants.test.ts` "an admin reads everything and writes nothing
+  outside the admin surface" (4 cases) and a route case in
+  `test/students-api.test.ts`.

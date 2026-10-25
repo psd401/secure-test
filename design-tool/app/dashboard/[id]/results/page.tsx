@@ -84,7 +84,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // Access slice 1 (D-3): the Forbidden panel this used to render told a
   // stranger the assessment exists. A row the caller cannot reach is a 404,
   // the posture every other surface already had.
-  const access = await authorizeAssessment(db, session, id, "view");
+  const access = await authorizeAssessment(db, session, id, "view", "read");
   if (!access.ok) {
     notFound();
   }

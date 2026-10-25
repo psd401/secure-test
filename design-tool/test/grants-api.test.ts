@@ -392,6 +392,7 @@ describe("/api/grants is the admin surface", () => {
       { sub: "co", role: "staff", email: CO_EMAIL } as sessionMod.SessionPayload,
       a.id,
       "view",
+      "read",
     );
     expect(access.ok).toBe(false);
   });
