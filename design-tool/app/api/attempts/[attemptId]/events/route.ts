@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import {
@@ -28,6 +28,20 @@ import { UUID_RE } from "@/lib/uuid";
 export const MAX_EVENT_DETAIL_BYTES = 4096;
 /** Rows one attempt may hold; the client sends a few dozen in a sitting. */
 export const MAX_EVENTS_PER_ATTEMPT = 1000;
+/**
+ * The kinds that tell the Monitor a test is over. Past the row ceiling each
+ * may still land up to `MAX_END_EVENTS_PER_KIND` times, so an attempt that hit
+ * the cap does not freeze on a stale `last_event` (PR #96 review). Not an
+ * outright exemption: any kind with no bound is the one a looping client
+ * would post. `focus_loss` stays under the ceiling for the same reason —
+ * an attempt that reached it has already shown the teacher hundreds.
+ */
+export const END_OF_TEST_KINDS: ReadonlySet<string> = new Set([
+  "sitting_closed",
+  "lockdown_end",
+  "time_expired",
+]);
+export const MAX_END_EVENTS_PER_KIND = 10;
 /**
  * How long after hand-in, or after the sitting ends, the client's teardown
  * events are still taken. Teardown races the submit by seconds; a quarter
@@ -167,7 +181,19 @@ export async function POST(req: Request, ctx: RouteContext) {
     .from(attempt_events)
     .where(eq(attempt_events.attempt_id, access.attempt.id));
   if ((tally?.n ?? 0) >= MAX_EVENTS_PER_ATTEMPT) {
-    return NextResponse.json({ ok: false, error: "too_many_events" }, { status: 429 });
+    let allowed = false;
+    if (END_OF_TEST_KINDS.has(body.kind)) {
+      const [ofKind] = await db
+        .select({ n: count() })
+        .from(attempt_events)
+        .where(
+          and(eq(attempt_events.attempt_id, access.attempt.id), eq(attempt_events.kind, body.kind)),
+        );
+      allowed = (ofKind?.n ?? 0) < MAX_END_EVENTS_PER_KIND;
+    }
+    if (!allowed) {
+      return NextResponse.json({ ok: false, error: "too_many_events" }, { status: 429 });
+    }
   }
 
   const [event] = await db

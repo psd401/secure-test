@@ -600,4 +600,37 @@ describe("event ceilings (SEC-09)", () => {
       .where(eq(attempt_events.attempt_id, attempt.id));
     expect(tally?.n).toBe(MAX_EVENTS_PER_ATTEMPT);
   });
+
+  test("past the ceiling an end-of-test kind still lands, up to its own bound; focus_loss does not (PR #96 review)", async () => {
+    const { MAX_EVENTS_PER_ATTEMPT, MAX_END_EVENTS_PER_KIND } = await import(
+      "../app/api/attempts/[attemptId]/events/route"
+    );
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    await getDb()
+      .insert(attempt_events)
+      .values(
+        Array.from({ length: MAX_EVENTS_PER_ATTEMPT }, () => ({
+          attempt_id: attempt.id,
+          kind: "focus_loss",
+        })),
+      );
+    principal = studentPrincipal(STUDENT.email);
+
+    expect((await postEvent(attempt.id, { kind: "focus_loss" })).status).toBe(429);
+    for (let i = 0; i < MAX_END_EVENTS_PER_KIND; i++) {
+      expect((await postEvent(attempt.id, { kind: "sitting_closed", detail: { via: "peek" } })).status).toBe(201);
+    }
+    const over = await postEvent(attempt.id, { kind: "sitting_closed", detail: { via: "peek" } });
+    expect(over.status).toBe(429);
+    expect((await over.json()).error).toBe("too_many_events");
+    // Each end-of-test kind has its own bound.
+    expect((await postEvent(attempt.id, { kind: "lockdown_end" })).status).toBe(201);
+
+    const [tally] = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(tally?.n).toBe(MAX_EVENTS_PER_ATTEMPT + MAX_END_EVENTS_PER_KIND + 1);
+  });
 });
