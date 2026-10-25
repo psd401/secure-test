@@ -31,6 +31,7 @@ extension AssessmentPage {
         return c;
       })();
       var calcButton = null;
+      var calcClose = null;
       var calcPanel = null;
       var calcBody = null;
       var calcHandle = null;
@@ -133,11 +134,15 @@ extension AssessmentPage {
         close.textContent = '×';
         close.setAttribute('aria-label', 'Close the calculator');
         close.onclick = function () {
+          // With the calculator's help open, × closes the help only (James,
+          // 2026-10-24); the calculator relabels it while the help is up.
+          if (calcHandle && typeof calcHandle.closeHelp === 'function' && calcHandle.closeHelp()) return;
           closeCalculator();
           if (calcButton) calcButton.focus();
         };
         head.appendChild(title);
         head.appendChild(close);
+        calcClose = close;
         var body = document.createElement('div');
         body.className = 'calc-body';
         panel.appendChild(head);
@@ -300,7 +305,10 @@ extension AssessmentPage {
             MathfieldElement: lib.MathfieldElement,
             mode: mode,
             preset: CALCULATOR.preset,
-            degrees: CALCULATOR.degrees === true || (CALCULATOR.degrees !== false && lib.presetFor(CALCULATOR.preset, mode).degrees)
+            degrees: CALCULATOR.degrees === true || (CALCULATOR.degrees !== false && lib.presetFor(CALCULATOR.preset, mode).degrees),
+            onHelp: function (open) {
+              if (calcClose) calcClose.setAttribute('aria-label', open ? 'Close help' : 'Close the calculator');
+            }
           });
         } catch (e) {
           calcBody.textContent = '';

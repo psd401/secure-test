@@ -56,6 +56,8 @@ export interface CalculatorOptions {
   degrees?: boolean;
   readOnly?: boolean;
   onChange?: (saved: SavedGraph) => void;
+  /** The help opened or closed — the test page relabels its × to match. */
+  onHelp?: (open: boolean) => void;
 }
 
 export interface CalculatorHandle {
@@ -64,6 +66,8 @@ export interface CalculatorHandle {
   focus(): void;
   save(): SavedGraph;
   load(saved: SavedGraph): void;
+  /** Closes the help if it is open; true when it was (the page's × closes it first). */
+  closeHelp(): boolean;
   destroy(): void;
 }
 
@@ -287,6 +291,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     });
     toolbar.append(kb);
   }
+  let closeHelp = (): boolean => false;
   if (!readOnly) {
     // Help (2026-10-24): what THIS calculator has, in plain words, inside the
     // calculator: a locked test cannot open a web page. Esc closes the help
@@ -326,7 +331,13 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     const showHelp = (open: boolean) => {
       help.hidden = !open;
       hb.setAttribute("aria-expanded", String(open));
+      opts.onHelp?.(open);
       (open ? heading : hb).focus({ preventScroll: true });
+    };
+    closeHelp = () => {
+      if (help.hidden) return false;
+      showHelp(false);
+      return true;
     };
     hb.addEventListener("click", () => showHelp(help.hidden));
     done.addEventListener("click", () => showHelp(false));
@@ -415,6 +426,7 @@ export function mountGraphing(container: HTMLElement, opts: CalculatorOptions): 
     },
     save,
     load,
+    closeHelp: () => closeHelp(),
     destroy() {
       graph?.destroy();
       root.remove();
