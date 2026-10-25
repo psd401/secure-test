@@ -430,6 +430,14 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release: v2.0.1** (`MARKETING_VERSION` = 2.0.1, from `main`) — the
+  ending-session race fix (#84: Back to your tests waits for `DID END` after
+  every hand-in; the page gate never opens when `begin()` started nothing),
+  real-AAC rows passed 2026-10-24. Also carries, in the built-in page, what
+  production already serves through the signed renderer (v1792904331): the
+  race stopgap (#85) and the graphing calculator (row DC) — a Release build
+  runs the served renderer, so for students nothing else changes. Built with
+  psd-sign from a clean worktree at `origin/main` after this bump merges.
 - ~~**Next release: v2.0.0**~~ PUBLISHED 2026-10-24 (see Released). (`MARKETING_VERSION` = 2.0.0, branch
   `v2-renderer`) — the server-delivered renderer
   (`docs/server-delivered-renderer-design.md` slices 4a–4f). Carries WC-2
