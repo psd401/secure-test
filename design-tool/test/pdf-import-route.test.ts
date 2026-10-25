@@ -314,12 +314,12 @@ describe("POST items/import-pdf", () => {
     expect(body.print_copies_dropped).toBe(1);
   });
 
-  // PDF-import slice 3: with page images on, the route renders the pages and
-  // still answers (the mock ignores them; the request shape is covered in
-  // bedrock-provider.test.ts).
-  test("page images on: the import still answers with the same items", async () => {
+  // PDF-import slice 3: page images are on by default (every other test here
+  // runs with them); switched off, the route still answers the same (the mock
+  // ignores images; the request shape is covered in bedrock-provider.test.ts).
+  test("page images off: the import still answers with the same items", async () => {
     const id = await createAssessment("Page images");
-    process.env.PDF_IMPORT_PAGE_IMAGES = "1";
+    process.env.PDF_IMPORT_PAGE_IMAGES = "0";
     try {
       const res = await postPdf(id, makeTextPdf(["1. 2.", "MC: #1 What is 2+2? | a:3 | b:4 | *b", "ES: #2 Discuss."]));
       expect(res.status).toBe(200);

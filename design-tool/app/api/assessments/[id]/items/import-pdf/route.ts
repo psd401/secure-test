@@ -201,10 +201,11 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   // PDF-import slice 3: the pages as images, so the model sees the layout.
-  // Off unless PDF_IMPORT_PAGE_IMAGES=1 while it is measured; a document
-  // over the page cap, or one that will not render, goes as text alone.
+  // On by default since slice 3c (James, 2026-10-25); PDF_IMPORT_PAGE_IMAGES=0
+  // turns it off. A document over the page cap, or one that will not
+  // render, goes as text alone.
   const pageImages =
-    !scanned && process.env.PDF_IMPORT_PAGE_IMAGES === "1" ? await renderPagesForModel(bytes) : null;
+    !scanned && process.env.PDF_IMPORT_PAGE_IMAGES !== "0" ? await renderPagesForModel(bytes) : null;
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,

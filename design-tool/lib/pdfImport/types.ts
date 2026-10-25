@@ -18,7 +18,7 @@ export const PdfExtractRequest = z
     scanned_pdf: z.instanceof(Uint8Array).optional(),
     file_name: z.string().optional(),
     // PDF-import slice 3: on the text path, each page as a PNG so the model
-    // sees the layout (PDF_IMPORT_PAGE_IMAGES=1; renderPagesForModel).
+    // sees the layout (on unless PDF_IMPORT_PAGE_IMAGES=0; renderPagesForModel).
     page_images: z.array(z.instanceof(Uint8Array)).max(20).optional(),
   })
   .superRefine((v, ctx) => {
