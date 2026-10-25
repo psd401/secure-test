@@ -163,6 +163,9 @@ export interface VectorChartSpec {
    * and chart exporters do. pdf.js paints a group on a scratch canvas from
    * the document's own canvas factory, not the one handed to render(). */
   transparencyGroup?: boolean;
+  /** Import fixes (2026-10-25): fill the bars white — the invisible boxes a
+   * Google Docs export paints behind its text. */
+  whiteBars?: boolean;
 }
 
 export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
@@ -178,7 +181,7 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
   for (let i = 0; i < spec.bars; i++) {
     const h = region.height * (0.3 + (0.6 * i) / Math.max(1, spec.bars - 1));
     bars.push(
-      `q 0 0 1 rg ${(region.x + i * step + 2).toFixed(2)} ${region.y.toFixed(2)} ${barW.toFixed(2)} ${h.toFixed(2)} re f Q`,
+      `q ${spec.whiteBars ? "1 1 1" : "0 0 1"} rg ${(region.x + i * step + 2).toFixed(2)} ${region.y.toFixed(2)} ${barW.toFixed(2)} ${h.toFixed(2)} re f Q`,
     );
   }
   const form = bars.join("\n");

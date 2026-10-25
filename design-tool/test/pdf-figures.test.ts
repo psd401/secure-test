@@ -168,6 +168,7 @@ import {
   type CanvasImport,
   captionAbove,
   clusterPathBoxes,
+  isTextPanel,
 } from "../lib/pdfImport/extractFigures";
 import { type VectorChartSpec, makeVectorChartPdf } from "./helpers/pdf";
 
@@ -218,6 +219,37 @@ describe("captionAbove", () => {
     expect(captionAbove([{ y: 10, text: "Rate [%] of x", plain: "Rate [%] of x", bold: true, x: 0 }], 20)).toBe(
       "Rate % of x",
     );
+  });
+});
+
+// Import fixes (2026-10-25): a Google Docs export's white boxes behind its
+// text, and a shaded panel of sentences, were cropped as "figures" — text and
+// the real chart inside them — and shown to students on top of the same text.
+describe("extractPdfLayout: page layout is not a figure", () => {
+  test("white-filled boxes are invisible paper, not a drawing", async () => {
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, whiteBars: true }));
+    expect(layout.figures).toEqual([]);
+    expect(layout.textWithMarkers).not.toContain("[FIGURE");
+  });
+
+  test("a drawn box with two lines of prose inside is a text panel; its text stays", async () => {
+    const inside = [
+      "Read the passage below and answer the questions.",
+      "Use evidence from the text in every answer you give.",
+    ];
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
+    expect(layout.figures).toEqual([]);
+    for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+  });
+
+  test("isTextPanel counts only long lines inside the box", () => {
+    const box: Box = [100, 100, 400, 300];
+    const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
+    const long = "A sentence of prose that runs well past thirty characters.";
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(true);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
+    // Prose beside the box (starting left of it) or below it does not count.
+    expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);
   });
 });
 

@@ -237,6 +237,30 @@ export function isFigureLabel(run: { x: number; y: number; str: string }, boxes:
   );
 }
 
+/** A line at least this long inside a drawing is prose, not a label. */
+const PROSE_LINE_CHARS = 30;
+/** This many prose lines inside a drawing make it a text box, not a figure. */
+export const TEXT_PANEL_PROSE_LINES = 2;
+
+/**
+ * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
+ * a table of sentences is drawn with paths too, and clustered as a "figure"
+ * — its text was cropped into a picture and dropped from what the model
+ * reads. A chart carries short labels; two or more lines of prose inside
+ * the box mean it is page layout, and its text stays text. Exported for
+ * tests; pure.
+ */
+export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
+  let prose = 0;
+  for (const l of lines) {
+    const x = l.x ?? 0;
+    if (x < box[0] || x > box[2] || l.y < box[1] || l.y > box[3]) continue;
+    if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
+    if (prose >= TEXT_PANEL_PROSE_LINES) return true;
+  }
+  return false;
+}
+
 export function figureMarker(n: number): string {
   return `[FIGURE ${n}]`;
 }
@@ -436,6 +460,9 @@ export async function extractPdfLayout(
       .map((name) => OPS[name])
       .filter((id): id is number => typeof id === "number"),
   );
+  const FILL_ONLY_OPS = new Set(
+    ["fill", "eoFill"].map((name) => OPS[name]).filter((id): id is number => typeof id === "number"),
+  );
   // pdfjs transfers the buffer it is handed (see extractText.ts) — copy.
   const doc = await getDocumentProxy(bytes.slice());
   const figures: PdfFigure[] = [];
@@ -485,6 +512,13 @@ export async function extractPdfLayout(
     const base = viewport.transform as M;
     const ops = await page.getOperatorList();
     const stack: M[] = [];
+    // Import fixes (2026-10-25): the fill colour, saved and restored with the
+    // CTM. Google Docs exports paint a white rectangle behind each run of
+    // text; on white paper they are invisible, but they clustered into one
+    // page-wide "figure" that was cropped — text, chart and all — and shown
+    // to students on top of the same text and the real chart.
+    const fillStack: string[] = [];
+    let fill = "#000000";
     let ctm: M = base;
     const paints: Paint[] = [];
     // Slice 5: every painted path's page-space box, for clustering below.
@@ -501,8 +535,13 @@ export async function extractPdfLayout(
     for (let i = 0; i < ops.fnArray.length; i++) {
       const fn = ops.fnArray[i];
       const args = ops.argsArray[i] as unknown[];
-      if (fn === OPS.save) stack.push(ctm);
-      else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
+      if (fn === OPS.save) {
+        stack.push(ctm);
+        fillStack.push(fill);
+      } else if (fn === OPS.restore) {
+        ctm = stack.pop() ?? ctm;
+        fill = fillStack.pop() ?? fill;
+      } else if (fn === OPS.setFillRGBColor && typeof args[0] === "string") fill = args[0].toLowerCase();
       else if (fn === OPS.transform) ctm = mul(ctm, args as unknown as M);
       else if (fn === OPS.paintFormXObjectBegin) {
         stack.push(ctm);
@@ -523,6 +562,7 @@ export async function extractPdfLayout(
         // minMax arrives as a typed array, so length is the check, not isArray.
         const paintOp = args[0];
         if (typeof paintOp !== "number" || !PAINT_OPS.has(paintOp)) continue;
+        if (FILL_ONLY_OPS.has(paintOp) && fill === "#ffffff") continue;
         const mm = args[2] as ArrayLike<number> | undefined;
         if (!mm || mm.length !== 4) continue;
         // All four corners, so a rotated CTM still gives the right box.
@@ -582,7 +622,8 @@ export async function extractPdfLayout(
           (c) =>
             c.paths >= MIN_CLUSTER_PATHS &&
             c.box[2] - c.box[0] > MIN_FIGURE_PT &&
-            c.box[3] - c.box[1] > MIN_FIGURE_PT,
+            c.box[3] - c.box[1] > MIN_FIGURE_PT &&
+            !isTextPanel(lines, c.box),
         );
       }
     }
