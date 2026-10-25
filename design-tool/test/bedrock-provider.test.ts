@@ -435,6 +435,59 @@ describe("bedrockPdfExtractor (text path vs scanned/document path)", () => {
     delete process.env.BEDROCK_PDF_EXTRACT_MODEL;
   });
 
+  // Slice 0 of the import fixes (2026-10-25): Sonnet 4.6 keeps temperature 0;
+  // a Claude 5-generation model gets effort "low" and no temperature, which it
+  // would reject.
+  test("Sonnet 4.6 sends temperature 0 and no effort", async () => {
+    setNextResponse(textResponse("[]"));
+    const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");
+    await bedrockPdfExtractor.extract({ text: "T", page_count: 1 });
+    const input = callLog[0]!.input;
+    expect(input.inferenceConfig).toEqual({ maxTokens: 16000, temperature: 0 });
+    expect(input.additionalModelRequestFields).toBeUndefined();
+  });
+
+  test("Sonnet 5.5 sends effort low and no temperature", async () => {
+    process.env.BEDROCK_PDF_EXTRACT_MODEL = "us.anthropic.claude-sonnet-5-5";
+    setNextResponse({
+      output: {
+        message: {
+          // A thinking model's reasoning block comes before the answer text.
+          content: [{} as { text?: string }, { text: '[{"type":"essay","stem":"Q"}]' }],
+        },
+      },
+    });
+    const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");
+    const out = await bedrockPdfExtractor.extract({ text: "T", page_count: 1 });
+    expect(out.candidates).toEqual([{ type: "essay", stem: "Q" }]);
+    const input = callLog[0]!.input;
+    expect(input.inferenceConfig).toEqual({ maxTokens: 16000 });
+    expect(input.additionalModelRequestFields).toEqual({ output_config: { effort: "low" } });
+    delete process.env.BEDROCK_PDF_EXTRACT_MODEL;
+  });
+
+  test("pdfExtractSampling picks by model generation", async () => {
+    const { pdfExtractSampling } = await import("../lib/pdfImport/bedrockProvider");
+    expect(pdfExtractSampling("us.anthropic.claude-sonnet-4-6")).toEqual({ temperature: 0 });
+    expect(pdfExtractSampling("us.anthropic.claude-haiku-4-5-20251001-v1:0")).toEqual({ temperature: 0 });
+    expect(pdfExtractSampling("us.anthropic.claude-sonnet-5-5")).toEqual({ effort: "low" });
+    expect(pdfExtractSampling("us.anthropic.claude-opus-5-5")).toEqual({ effort: "low" });
+  });
+
+  test.each(["refusal", "content_filtered"])(
+    "a %s stop is a typed refusal, not invalid output",
+    async (stopReason) => {
+      setNextResponse({ ...textResponse("I can't help with that."), stopReason });
+      const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");
+      const { PdfExtractError } = await import("../lib/pdfImport/extractCore");
+      const err = await bedrockPdfExtractor
+        .extract({ text: "T", page_count: 1 })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PdfExtractError);
+      expect((err as InstanceType<typeof PdfExtractError>).code).toBe("refused");
+    },
+  );
+
   test("non-JSON model output throws with the bedrock prefix", async () => {
     setNextResponse(textResponse("I found three questions in the document."));
     const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");

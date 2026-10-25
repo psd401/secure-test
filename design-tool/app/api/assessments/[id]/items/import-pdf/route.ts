@@ -46,6 +46,19 @@ function extractionFailure(err: unknown) {
       { status: 422 },
     );
   }
+  if (err instanceof PdfExtractError && err.code === "refused") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "pdf_extract_refused",
+        hint:
+          "The AI extractor declined to read this PDF. Trying again will not " +
+          "change that; import the items by CSV or add them by hand.",
+        detail: err.message,
+      },
+      { status: 422 },
+    );
+  }
   if (err instanceof PdfExtractError) {
     return NextResponse.json(
       {

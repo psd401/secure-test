@@ -15,7 +15,9 @@ export const PDF_EXTRACT_MAX_TOKENS = 16000;
 // Typed failure from the extraction pipeline so the route can answer with a
 // structured, teacher-readable error instead of letting the throw escape as
 // an empty-body 500 (which the panel then rendered as a raw TypeError).
-export type PdfExtractErrorCode = "truncated" | "invalid_json" | "not_array";
+// `refused`: the model declined the document (a Claude 5-generation
+// safety decline) — retrying the same PDF will not help.
+export type PdfExtractErrorCode = "truncated" | "invalid_json" | "not_array" | "refused";
 export class PdfExtractError extends Error {
   readonly code: PdfExtractErrorCode;
   constructor(code: PdfExtractErrorCode, message: string) {

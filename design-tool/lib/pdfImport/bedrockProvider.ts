@@ -1,8 +1,13 @@
-import { converseTextWithMeta } from "@/lib/ai/bedrockConverse";
+import {
+  ConverseRefusalError,
+  converseTextWithMeta,
+  type ConverseEffort,
+} from "@/lib/ai/bedrockConverse";
 import {
   PDF_EXTRACT_MAX_TOKENS,
   PDF_EXTRACT_SYSTEM_PROMPT,
   PDF_OCR_USER_PROMPT,
+  PdfExtractError,
   buildPdfExtractUserPrompt,
   parsePdfExtraction,
 } from "./extractCore";
@@ -21,6 +26,17 @@ import type {
 
 const DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6";
 
+// Sonnet 4.6 runs at temperature 0. Claude 5-generation models (Sonnet 5.5
+// and later) reject a non-default temperature and always think, so they get
+// an effort level instead — `low` keeps the thinking short (James,
+// 2026-10-25; raise it only if the import comparison shows a quality drop).
+const CLAUDE_5_GEN = /claude-(sonnet|opus|haiku|fable)-[5-9]/;
+export function pdfExtractSampling(
+  modelId: string,
+): { temperature: number } | { effort: ConverseEffort } {
+  return CLAUDE_5_GEN.test(modelId) ? { effort: "low" } : { temperature: 0 };
+}
+
 export const bedrockPdfExtractor: PdfExtractorProvider = {
   get id() {
     return `bedrock-${process.env.BEDROCK_PDF_EXTRACT_MODEL ?? DEFAULT_MODEL}`;
@@ -34,19 +50,29 @@ export const bedrockPdfExtractor: PdfExtractorProvider = {
     // so the model reads the pages visually; same system prompt and JSON
     // contract as the text path.
     const scanned = req.scanned_pdf;
-    const { text, stopReason } = await converseTextWithMeta({
-      modelId: process.env.BEDROCK_PDF_EXTRACT_MODEL ?? DEFAULT_MODEL,
-      systemText: PDF_EXTRACT_SYSTEM_PROMPT,
-      userText: scanned ? PDF_OCR_USER_PROMPT : buildPdfExtractUserPrompt(req.text),
-      maxTokens: PDF_EXTRACT_MAX_TOKENS,
-      temperature: 0,
-      ...(scanned
-        ? { document: { bytes: scanned, name: req.file_name ?? "document" } }
-        : {}),
-      errPrefix: "bedrock",
-      surface: "pdf-import",
-      ownerSub,
-    });
+    const modelId = process.env.BEDROCK_PDF_EXTRACT_MODEL ?? DEFAULT_MODEL;
+    let text: string;
+    let stopReason: string | undefined;
+    try {
+      ({ text, stopReason } = await converseTextWithMeta({
+        modelId,
+        systemText: PDF_EXTRACT_SYSTEM_PROMPT,
+        userText: scanned ? PDF_OCR_USER_PROMPT : buildPdfExtractUserPrompt(req.text),
+        maxTokens: PDF_EXTRACT_MAX_TOKENS,
+        ...pdfExtractSampling(modelId),
+        ...(scanned
+          ? { document: { bytes: scanned, name: req.file_name ?? "document" } }
+          : {}),
+        errPrefix: "bedrock",
+        surface: "pdf-import",
+        ownerSub,
+      }));
+    } catch (err) {
+      if (err instanceof ConverseRefusalError) {
+        throw new PdfExtractError("refused", err.message);
+      }
+      throw err;
+    }
     const parsed = parsePdfExtraction(text, "bedrock", {
       truncated: stopReason === "max_tokens",
     });
