@@ -261,7 +261,7 @@ Trigger: notification (email or in-portal) that PSD's Partner Portal account is 
 Pre-checks (1 minute):
 
 - PoC-C client still builds: `cd poc-c-classlink-sso/client && swift build`.
-- PoC-C verify Lambda is still deployed: `curl https://i59aczq3rf.execute-api.us-west-2.amazonaws.com/poc/verify` should return a 4xx (it's POST-only).
+- PoC-C verify Lambda is still deployed: `curl https://<api-id>.execute-api.us-west-2.amazonaws.com/poc/verify` should return a 4xx (it's POST-only).
 - `AWS_PROFILE=<your-sso-profile>` set in your shell.
 
 Steps:
@@ -330,7 +330,7 @@ Steps:
    ```
    curl -X POST -H 'content-type: application/json' \
         -d '{"id_token":"<paste from client log>"}' \
-        https://i59aczq3rf.execute-api.us-west-2.amazonaws.com/poc/verify
+        https://<api-id>.execute-api.us-west-2.amazonaws.com/poc/verify
    ```
    Expect HTTP 200 with `{"ok": true, "header": {...}, "claims": {...}}`. If 401, inspect the error message — signature verification failure could mean a key rotation, an issuer mismatch, or a clock skew.
 

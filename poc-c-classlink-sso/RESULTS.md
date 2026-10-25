@@ -114,11 +114,11 @@ This means PoC-C does NOT need the SwiftPM-to-Xcode conversion that PoC-A requir
    - Token exchange result, including `expires_in` (load-bearing for mid-test re-auth design)
    - Decoded id_token claims — verify presence of `classLink_sourcedId`
 5. Click "Refresh Token" if a refresh_token came back, to characterize the refresh flow lifetime.
-6. POST the id_token to the verify URL (`https://i59aczq3rf.execute-api.us-west-2.amazonaws.com/poc/verify`) and confirm it returns 200 + claims.
+6. POST the id_token to the verify URL (`https://<api-id>.execute-api.us-west-2.amazonaws.com/poc/verify`) and confirm it returns 200 + claims.
 
 ## Cost note
 
-Stack left running. Idle cost is essentially zero. Teardown:
+Stack left running. Idle cost is essentially zero. **Torn down 2026-10-25** (security audit 2026-10-24, SEC-10). The teardown command, for the record:
 
 ```
 cd poc-c-classlink-sso/infra
