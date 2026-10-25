@@ -337,6 +337,20 @@ describe("item sets — sources (multi-source stimulus slice 2)", () => {
     expect(((await cleared.json()) as { item_set: { sources: unknown } }).item_set.sources).toEqual([]);
   });
 
+  test("a set at the schema's maximum saves on create and PATCH: the routes' ceiling sits above the 256 KiB default (PR #101 review)", async () => {
+    const { id, q } = await seed();
+    // 20,000-char stimulus + 12 sources of 20,000 = 260,000 characters; curly
+    // quotes (3 bytes in UTF-8) take the body well past 256 KiB.
+    const text = "\u201c".repeat(20_000);
+    const sources = Array.from({ length: 12 }, (_, i) => ({ label: `Source ${i + 1}`, text }));
+    const created = await createSet(id, { item_ids: [q[0]], stimulus_text: text, sources });
+    expect(created.status).toBe(201);
+    const { item_set } = (await created.json()) as { item_set: { id: string; sources: unknown[] } };
+    expect(item_set.sources).toHaveLength(12);
+    const patched = await patchSet(id, item_set.id, { stimulus_text: text, sources });
+    expect(patched.status).toBe(200);
+  });
+
   test("PATCH accepts side_by_side and still refuses an unknown layout", async () => {
     const { id, q } = await seed();
     const { item_set } = (await (await createSet(id, { item_ids: [q[0]] })).json()) as { item_set: { id: string } };

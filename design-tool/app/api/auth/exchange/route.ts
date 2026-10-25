@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   let parsed;
-  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.small);
   if (!bodyRead.ok) return bodyRead.response;
   try {
     parsed = ExchangeBody.parse(bodyRead.parse());

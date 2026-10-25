@@ -42,7 +42,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   let body;
-  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.longText);
   if (!bodyRead.ok) return bodyRead.response;
   try {
     body = CreateItemSetBody.parse(bodyRead.parse());

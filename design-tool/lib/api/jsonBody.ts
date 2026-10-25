@@ -15,14 +15,19 @@
 import { NextResponse } from "next/server";
 
 export const JSON_BODY_LIMITS = {
-  /** Events (4 KiB detail cap), feedback (2,000-char message). */
+  /**
+   * Events (4 KiB detail cap), feedback (2,000-char message), and the
+   * pre-auth token exchange (a Google id_token is a few KB) — the one route an
+   * unauthenticated caller reaches, so the least it can make the server buffer.
+   */
   small: 16 * 1024,
   /** Everything else: ~18x the largest payload stored in production. */
   default: 256 * 1024,
   /**
    * Long text the schemas allow: an answer (essay 100,000 chars + 200,000 of
-   * HTML), a client error batch (50 entries from a 512 KiB log), rubric or
-   * resource text (200,000 chars).
+   * HTML), an item set (a 20,000-char stimulus + 12 sources of 20,000), a
+   * client error batch (50 entries from a 512 KiB log), rubric or resource
+   * text (200,000 chars).
    */
   longText: 1024 * 1024,
   /** Peek screenshot: 2,000,000 base64 chars. */

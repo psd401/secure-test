@@ -98,8 +98,11 @@ describe("every API route reads JSON through readJsonBody", () => {
   const NON_DEFAULT: Record<string, keyof typeof JSON_BODY_LIMITS> = {
     "attempts/[attemptId]/events/route.ts": "small",
     "feedback/route.ts": "small",
+    "auth/exchange/route.ts": "small",
     "attempts/[attemptId]/responses/[itemId]/route.ts": "longText",
     "client-errors/route.ts": "longText",
+    "assessments/[id]/item-sets/route.ts": "longText",
+    "assessments/[id]/item-sets/[setId]/route.ts": "longText",
     "assessments/[id]/rubrics/extract/route.ts": "longText",
     "ai/generate-items/route.ts": "longText",
     "attempts/[attemptId]/peek/upload/route.ts": "peekImage",
