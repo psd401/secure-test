@@ -5,8 +5,9 @@
 // acting teacher's `users_dcid`, and whatever we pass, it acts as. So the
 // tool decides, twice:
 //
-//   1. `authorizeAssessment(id, "edit")` — the owner, an edit-level
-//      co-teacher (8.4), or an admin; a `run`-level substitute is refused.
+//   1. `authorizeAssessment(id, "edit", intent)` — the owner or an edit-level
+//      co-teacher (8.4); a `run`-level substitute is refused. An admin reads
+//      the categories but cannot send (SEC-03: admin writes go through act-as).
 //   2. The SENDER's own address must currently teach the section on the
 //      roster (active row, today inside its dates, any role). An owner
 //      sending to a section they do not teach, or a plain admin, is refused.
@@ -19,7 +20,13 @@
 // request.
 import type { AssessmentRow } from "@/db/schema";
 import type { getDb } from "@/db/client";
-import { authorizeAssessment, notFoundResponse, type AccessLevel, type AccessVia } from "@/lib/api/access";
+import {
+  authorizeAssessment,
+  notFoundResponse,
+  type AccessIntent,
+  type AccessLevel,
+  type AccessVia,
+} from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { loadSectionIds, loadSenderAssignment, type SectionIds } from "./mapping";
@@ -45,8 +52,10 @@ export async function authorizeSend(
   session: SessionPayload,
   assessmentId: string,
   sectionPsId: string,
+  /** "read" for the categories lookup, "write" for the send (SEC-03). */
+  intent: AccessIntent,
 ): Promise<SendAccess> {
-  const access = await authorizeAssessment(db, session, assessmentId, "edit");
+  const access = await authorizeAssessment(db, session, assessmentId, "edit", intent);
   if (!access.ok) return access;
 
   const email = normalizeEmail(session.email);

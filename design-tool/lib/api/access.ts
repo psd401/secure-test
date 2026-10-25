@@ -23,6 +23,7 @@ import { effectiveLevel } from "@/lib/api/grants";
 import { referencedAssetIds } from "@/lib/assets/assessmentAssets";
 import {
   levelSatisfies,
+  type AccessIntent,
   type AccessLevel,
   type AccessVia,
 } from "@/lib/api/accessLevels";
@@ -48,7 +49,7 @@ export {
   isAccessLevel,
   maxLevel,
 } from "@/lib/api/accessLevels";
-export type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
+export type { AccessIntent, AccessLevel, AccessVia } from "@/lib/api/accessLevels";
 
 type Denied = { ok: false; response: NextResponse };
 
@@ -119,6 +120,28 @@ function denyInvalidId(): Denied {
 }
 
 /**
+ * D-6, enforced here (security audit 2026-10-24, SEC-03). An admin resolves
+ * `own` via `"admin"` on every row, which is right for reads. Before this
+ * check, the same resolution satisfied every write route too — a
+ * non-impersonating admin could DELETE another teacher's overlay student
+ * (cascading the child's attempts), grant, share, archive, or change
+ * accommodations, and none of it carried an actor: the D-6 audit path
+ * (`impersonation_sessions`) exists only when the admin acts AS the teacher.
+ * So a write is admitted only through ownership, a grant, or an act-as
+ * session (whose `sub` is the teacher's, so it resolves via `"owner"`).
+ * Refused with the same 404 as any other row the caller cannot reach.
+ */
+function admitted(
+  resolved: Resolved | null,
+  need: AccessLevel,
+  intent: AccessIntent,
+): resolved is Resolved {
+  if (!resolved || !levelSatisfies(resolved.level, need)) return false;
+  if (intent === "write" && resolved.via === "admin") return false;
+  return true;
+}
+
+/**
  * Resolve the level a session has on an assessment row.
  *
  * Owner → `own`; admin → `own` via `"admin"` (D-1/D-6); else the highest
@@ -173,12 +196,13 @@ export async function authorizeAssessment(
   session: SessionPayload,
   assessmentId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<AssessmentAccess> {
   if (!UUID_RE.test(assessmentId)) return denyInvalidId();
   const assessment = await loadAssessment(db, assessmentId);
   if (!assessment) return denyNotFound();
   const resolved = await resolveAssessmentLevel(db, session, assessment);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, assessment, ...resolved };
 }
 
@@ -196,6 +220,7 @@ export async function authorizeSitting(
   session: SessionPayload,
   sittingId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<SittingAccess> {
   if (!UUID_RE.test(sittingId)) return denyInvalidId();
   const [sitting] = await db
@@ -207,7 +232,7 @@ export async function authorizeSitting(
   const assessment = await loadAssessment(db, sitting.assessment_id);
   if (!assessment) return denyNotFound();
   const resolved = await resolveAssessmentLevel(db, session, assessment);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, sitting, assessment, ...resolved };
 }
 
@@ -217,6 +242,7 @@ export async function authorizeAttempt(
   session: SessionPayload,
   attemptId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<AttemptAccess> {
   if (!UUID_RE.test(attemptId)) return denyInvalidId();
   const [attempt] = await db
@@ -228,7 +254,7 @@ export async function authorizeAttempt(
   const assessment = await loadAssessment(db, attempt.assessment_id);
   if (!assessment) return denyNotFound();
   const resolved = await resolveAssessmentLevel(db, session, assessment);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, attempt, assessment, ...resolved };
 }
 
@@ -243,6 +269,7 @@ export async function authorizeStudent(
   session: SessionPayload,
   studentId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<StudentAccess> {
   if (!UUID_RE.test(studentId)) return denyInvalidId();
   const [student] = await db
@@ -252,7 +279,7 @@ export async function authorizeStudent(
     .limit(1);
   if (!student) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, student.owner_sub);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, student, ...resolved };
 }
 
@@ -262,6 +289,7 @@ export async function authorizeRubric(
   session: SessionPayload,
   rubricId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<RubricAccess> {
   if (!UUID_RE.test(rubricId)) return denyInvalidId();
   const [rubric] = await db
@@ -271,7 +299,7 @@ export async function authorizeRubric(
     .limit(1);
   if (!rubric) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, rubric.owner_sub);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, rubric, ...resolved };
 }
 
@@ -281,6 +309,7 @@ export async function authorizeAsset(
   session: SessionPayload,
   assetId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<AssetAccess> {
   if (!UUID_RE.test(assetId)) return denyInvalidId();
   const [asset] = await db
@@ -290,7 +319,7 @@ export async function authorizeAsset(
     .limit(1);
   if (!asset) return denyNotFound();
   const resolved = resolveOwnerSubLevel(session, asset.owner_sub);
-  if (!resolved || !levelSatisfies(resolved.level, need)) return denyNotFound();
+  if (!admitted(resolved, need, intent)) return denyNotFound();
   return { ok: true, asset, ...resolved };
 }
 
@@ -310,7 +339,7 @@ export async function authorizeAssessmentAsset(
   assetId: string,
 ): Promise<AssetAccess> {
   if (!UUID_RE.test(assessmentId) || !UUID_RE.test(assetId)) return denyInvalidId();
-  const access = await authorizeAssessment(db, session, assessmentId, "view");
+  const access = await authorizeAssessment(db, session, assessmentId, "view", "read");
   if (!access.ok) return access;
   const [asset] = await db
     .select()
@@ -339,8 +368,9 @@ export async function pageAssessment(
   session: SessionPayload,
   assessmentId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<AssessmentRow | null> {
-  const access = await authorizeAssessment(db, session, assessmentId, need);
+  const access = await authorizeAssessment(db, session, assessmentId, need, intent);
   return access.ok ? access.assessment : null;
 }
 
@@ -349,8 +379,9 @@ export async function pageSitting(
   session: SessionPayload,
   sittingId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<{ sitting: TestSessionRow; assessment: AssessmentRow } | null> {
-  const access = await authorizeSitting(db, session, sittingId, need);
+  const access = await authorizeSitting(db, session, sittingId, need, intent);
   return access.ok
     ? { sitting: access.sitting, assessment: access.assessment }
     : null;
@@ -361,8 +392,9 @@ export async function pageAttempt(
   session: SessionPayload,
   attemptId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<{ attempt: AttemptRow; assessment: AssessmentRow } | null> {
-  const access = await authorizeAttempt(db, session, attemptId, need);
+  const access = await authorizeAttempt(db, session, attemptId, need, intent);
   return access.ok
     ? { attempt: access.attempt, assessment: access.assessment }
     : null;
@@ -373,7 +405,8 @@ export async function pageStudent(
   session: SessionPayload,
   studentId: string,
   need: AccessLevel,
+  intent: AccessIntent,
 ): Promise<StudentRow | null> {
-  const access = await authorizeStudent(db, session, studentId, need);
+  const access = await authorizeStudent(db, session, studentId, need, intent);
   return access.ok ? access.student : null;
 }

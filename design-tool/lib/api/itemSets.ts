@@ -92,7 +92,7 @@ export async function checkSourceItem(
   // The item's own assessment answers the access question (access slice 1,
   // D-3) — a source question in an assessment the caller cannot reach is
   // reported as missing, exactly as the old inline owner comparison did.
-  const access = await authorizeAssessment(db, session, row.assessment_id, "edit");
+  const access = await authorizeAssessment(db, session, row.assessment_id, "edit", "write");
   if (!access.ok) return { ok: false, status: 404, error: "source_not_found" };
   if (!SOURCE_ITEM_TYPES.has(row.type)) return { ok: false, status: 400, error: "source_type_not_allowed" };
   if (row.assessment_id === assessmentId) return { ok: false, status: 400, error: "source_in_this_assessment" };
@@ -162,7 +162,7 @@ export async function loadItemSetForSession(
   | { ok: false; response: NextResponse }
 > {
   const db = getDb();
-  const access = await authorizeAssessment(db, session, assessmentId, need);
+  const access = await authorizeAssessment(db, session, assessmentId, need, "write");
   if (!access.ok) return { ok: false, response: access.response };
   const [set] = await db
     .select()

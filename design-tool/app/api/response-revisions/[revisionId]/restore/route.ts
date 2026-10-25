@@ -40,7 +40,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     .limit(1);
   if (!revision) return notFoundResponse();
 
-  const access = await authorizeAttempt(db, auth.session, revision.attempt_id, "edit");
+  const access = await authorizeAttempt(db, auth.session, revision.attempt_id, "edit", "write");
   if (!access.ok) return access.response;
   if (await sittingIsOpen(db, access.attempt)) return sessionOpenResponse();
 

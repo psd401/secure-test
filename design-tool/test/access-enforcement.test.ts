@@ -448,7 +448,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
       .returning();
     const id = row!.id;
 
-    const mine = await authorizeAssessment(db, OWNER, id, "own");
+    const mine = await authorizeAssessment(db, OWNER, id, "own", "read");
     expect(mine.ok).toBe(true);
     if (mine.ok) {
       expect(mine.level).toBe("own");
@@ -458,11 +458,11 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
 
     // Every level the ladder has, since `own` satisfies all of them.
     for (const need of ["view", "run", "edit", "own"] as const) {
-      const at = await authorizeAssessment(db, OWNER, id, need);
+      const at = await authorizeAssessment(db, OWNER, id, need, "read");
       expect(at.ok).toBe(true);
     }
 
-    const theirs = await authorizeAssessment(db, OTHER, id, "view");
+    const theirs = await authorizeAssessment(db, OTHER, id, "view", "read");
     expect(theirs.ok).toBe(false);
     if (!theirs.ok) {
       expect(await status(theirs.response)).toBe(404);
@@ -477,7 +477,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
 
   test("an unknown id is the same 404 as another teacher's row", async () => {
     const unknown = "11111111-1111-4111-8111-111111111111";
-    const missing = await authorizeAssessment(db, OWNER, unknown, "view");
+    const missing = await authorizeAssessment(db, OWNER, unknown, "view", "read");
     expect(missing.ok).toBe(false);
     if (!missing.ok) {
       expect(await status(missing.response)).toBe(404);
@@ -490,12 +490,12 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
 
   test("a malformed id is 400 invalid_id on every entry point", async () => {
     const calls = [
-      authorizeAssessment(db, OWNER, MALFORMED, "view"),
-      authorizeSitting(db, OWNER, MALFORMED, "view"),
-      authorizeAttempt(db, OWNER, MALFORMED, "view"),
-      authorizeStudent(db, OWNER, MALFORMED, "view"),
-      authorizeRubric(db, OWNER, MALFORMED, "view"),
-      authorizeAsset(db, OWNER, MALFORMED, "view"),
+      authorizeAssessment(db, OWNER, MALFORMED, "view", "read"),
+      authorizeSitting(db, OWNER, MALFORMED, "view", "read"),
+      authorizeAttempt(db, OWNER, MALFORMED, "view", "read"),
+      authorizeStudent(db, OWNER, MALFORMED, "view", "read"),
+      authorizeRubric(db, OWNER, MALFORMED, "view", "read"),
+      authorizeAsset(db, OWNER, MALFORMED, "view", "read"),
     ];
     for (const result of await Promise.all(calls)) {
       expect(result.ok).toBe(false);
@@ -524,7 +524,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
       })
       .returning();
 
-    const mine = await authorizeSitting(db, OWNER, sitting!.id, "run");
+    const mine = await authorizeSitting(db, OWNER, sitting!.id, "run", "read");
     expect(mine.ok).toBe(true);
     if (mine.ok) {
       expect(mine.sitting.id).toBe(sitting!.id);
@@ -532,7 +532,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
       expect(mine.level).toBe("own");
     }
 
-    const theirs = await authorizeSitting(db, OTHER, sitting!.id, "view");
+    const theirs = await authorizeSitting(db, OTHER, sitting!.id, "view", "read");
     expect(theirs.ok).toBe(false);
     if (!theirs.ok) expect(await status(theirs.response)).toBe(404);
 
@@ -553,14 +553,14 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
       .values({ assessment_id: assessment!.id, student_id: student!.id })
       .returning();
 
-    const mine = await authorizeAttempt(db, OWNER, attempt!.id, "edit");
+    const mine = await authorizeAttempt(db, OWNER, attempt!.id, "edit", "read");
     expect(mine.ok).toBe(true);
     if (mine.ok) {
       expect(mine.attempt.id).toBe(attempt!.id);
       expect(mine.assessment.id).toBe(assessment!.id);
     }
 
-    const theirs = await authorizeAttempt(db, OTHER, attempt!.id, "view");
+    const theirs = await authorizeAttempt(db, OTHER, attempt!.id, "view", "read");
     expect(theirs.ok).toBe(false);
     if (!theirs.ok) expect(await status(theirs.response)).toBe(404);
 
@@ -593,14 +593,14 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
       })
       .returning();
 
-    expect((await authorizeStudent(db, OWNER, student!.id, "own")).ok).toBe(true);
-    expect((await authorizeRubric(db, OWNER, rubric!.id, "own")).ok).toBe(true);
-    expect((await authorizeAsset(db, OWNER, asset!.id, "own")).ok).toBe(true);
+    expect((await authorizeStudent(db, OWNER, student!.id, "own", "read")).ok).toBe(true);
+    expect((await authorizeRubric(db, OWNER, rubric!.id, "own", "read")).ok).toBe(true);
+    expect((await authorizeAsset(db, OWNER, asset!.id, "own", "read")).ok).toBe(true);
 
     for (const denied of [
-      await authorizeStudent(db, OTHER, student!.id, "view"),
-      await authorizeRubric(db, OTHER, rubric!.id, "view"),
-      await authorizeAsset(db, OTHER, asset!.id, "view"),
+      await authorizeStudent(db, OTHER, student!.id, "view", "read"),
+      await authorizeRubric(db, OTHER, rubric!.id, "view", "read"),
+      await authorizeAsset(db, OTHER, asset!.id, "view", "read"),
     ]) {
       expect(denied.ok).toBe(false);
       if (!denied.ok) expect(await status(denied.response)).toBe(404);

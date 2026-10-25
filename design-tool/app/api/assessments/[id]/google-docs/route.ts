@@ -71,7 +71,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   const body = parsed.data;
 
   const db = getDb();
-  const access = await authorizeAssessment(db, session, id, "edit");
+  const access = await authorizeAssessment(db, session, id, "edit", "write");
   if (!access.ok) return access.response;
 
   const token = await readDriveToken(

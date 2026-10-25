@@ -60,7 +60,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   const body = parsed.data;
 
   const db = getDb();
-  const access = await authorizeSend(db, auth.session, id, body.section_ps_id);
+  const access = await authorizeSend(db, auth.session, id, body.section_ps_id, "write");
   if (!access.ok) return access.response;
 
   if (body.target !== "powerschool") {

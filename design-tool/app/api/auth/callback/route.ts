@@ -122,6 +122,18 @@ export async function GET(req: Request) {
       identity.reason === "no_sub" ? "id_token_no_sub" : "account_not_allowed",
     );
   }
+  // SEC-01 (security audit 2026-10-24): the browser cookie is STAFF-ONLY. A
+  // student has no web surface — proxy.ts turns them away from the dashboard
+  // with `error=student_account` — yet this route minted them a cookie, and
+  // every student-plane route accepts the cookie as well as the client's
+  // bearer, so a student's own Google login from a phone reached the delivery
+  // bundle and the answer routes from outside the locked client. Students
+  // sign in through the native client (POST /api/auth/exchange → bearer);
+  // here they get the same page the proxy would have sent them to, with no
+  // session behind it.
+  if (!isStaff(identity.payload.role)) {
+    return loginErrorRedirect(req, "student_account");
+  }
   const sessionJwt = await mintSessionJWT(identity.payload);
   // U-17 (13.3): a co-teacher's accommodation records are found by email;
   // stamp it on this teacher's overlay rows. Best-effort: never block sign-in.

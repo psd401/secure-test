@@ -36,7 +36,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "edit");
+  const access = await authorizeAssessment(db, auth.session, id, "edit", "write");
   if (!access.ok) return access.response;
 
   if (access.assessment.student_feedback !== "answers") {

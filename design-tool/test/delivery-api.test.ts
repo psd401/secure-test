@@ -15,6 +15,7 @@ import {
   response_uploads,
   responses,
   students,
+  test_sessions,
 } from "../db/schema";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -306,6 +307,65 @@ describe("GET /api/assessments/:id/delivery — who may read it", () => {
   test("404s on an assessment that does not exist", async () => {
     const res = await getDelivery("11111111-1111-4111-8111-111111111111");
     expect(res.status).toBe(404);
+  });
+
+  // SEC-01 (security audit 2026-10-24): the bundle is for an attempt being
+  // taken. The two states in which the client never asks for it again are the
+  // two in which a credential kept outside the locked client must not get it.
+  test("refuses a submitted attempt with 409 attempt_submitted", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    await getDb()
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: new Date() })
+      .where(eq(attempts.id, attempt.id));
+    const res = await getDelivery(id, "2.0.0");
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("attempt_submitted");
+  });
+
+  test("refuses an attempt whose sitting is over with 409 sitting_closed", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    const anHourAgo = new Date(Date.now() - 3_600_000);
+    const [sitting] = await getDb()
+      .insert(test_sessions)
+      .values({
+        assessment_id: id,
+        owner_sub: OWNER,
+        code: `D${Math.floor(Math.random() * 100000)}`,
+        status: "closed",
+        expires_at: anHourAgo,
+        updated_at: anHourAgo,
+      })
+      .returning();
+    await getDb()
+      .update(attempts)
+      .set({ test_session_id: sitting!.id })
+      .where(eq(attempts.id, attempt.id));
+    const res = await getDelivery(id, "2.0.0");
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("sitting_closed");
+  });
+
+  test("still serves an in-progress attempt in an open sitting", async () => {
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    const [sitting] = await getDb()
+      .insert(test_sessions)
+      .values({
+        assessment_id: id,
+        owner_sub: OWNER,
+        code: `D${Math.floor(Math.random() * 100000)}`,
+        status: "open",
+        expires_at: new Date(Date.now() + 3_600_000),
+      })
+      .returning();
+    await getDb()
+      .update(attempts)
+      .set({ test_session_id: sitting!.id })
+      .where(eq(attempts.id, attempt.id));
+    expect((await getDelivery(id, "2.0.0")).status).toBe(200);
   });
 });
 

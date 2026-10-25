@@ -33,7 +33,7 @@ export default async function StudentDetailPage({ params }: PageProps) {
   // access slice 1 (D-3) made universal.
   // The accommodations overlay is per-TEACHER, not per-assessment, so it stays
   // owner-only: no assessment grant reaches it (access slice 2).
-  const student = await pageStudent(db, session, studentId, "own");
+  const student = await pageStudent(db, session, studentId, "own", "read");
   if (!student) notFound();
   const accs = await db
     .select()

@@ -43,7 +43,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeSitting(db, auth.session, sessionId, "own");
+  const access = await authorizeSitting(db, auth.session, sessionId, "own", "write");
   if (!access.ok) return access.response;
   const row = access.sitting;
 

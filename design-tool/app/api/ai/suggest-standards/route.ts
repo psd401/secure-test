@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   const body = parsed.data;
 
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "edit");
+  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "edit", "write");
   if (!access.ok) return access.response;
   if (!access.assessment.allow_llm_authoring) {
     return NextResponse.json({ ok: false, error: "llm_authoring_disabled" }, { status: 403 });

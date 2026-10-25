@@ -19,7 +19,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id) || !UUID_RE.test(shareId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const db = getDb();
   const deleted = await db

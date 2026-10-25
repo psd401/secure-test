@@ -19,6 +19,7 @@ import {
   authorizeAssessment,
   authorizeRubric,
   authorizeSitting,
+  authorizeStudent,
 } from "../lib/api/access";
 import {
   createGrant,
@@ -131,14 +132,14 @@ async function grant(values: {
 describe("grant resolution inside authorize*", () => {
   test("the owner still resolves own/owner and an outsider still gets 404", async () => {
     const a = await makeAssessment();
-    const mine = await authorizeAssessment(db, OWNER, a.id, "own");
+    const mine = await authorizeAssessment(db, OWNER, a.id, "own", "read");
     expect(mine.ok).toBe(true);
     if (mine.ok) {
       expect(mine.level).toBe("own");
       expect(mine.via).toBe("owner");
       expect(mine.scope).toBeNull();
     }
-    const theirs = await authorizeAssessment(db, OUTSIDER, a.id, "view");
+    const theirs = await authorizeAssessment(db, OUTSIDER, a.id, "view", "read");
     expect(theirs.ok).toBe(false);
     if (!theirs.ok) expect(theirs.response.status).toBe(404);
   });
@@ -150,7 +151,7 @@ describe("grant resolution inside authorize*", () => {
     expect(isAdmin(OUTSIDER)).toBe(false);
 
     const a = await makeAssessment();
-    const asAdmin = await authorizeAssessment(db, ADMIN, a.id, "own");
+    const asAdmin = await authorizeAssessment(db, ADMIN, a.id, "own", "read");
     expect(asAdmin.ok).toBe(true);
     if (asAdmin.ok) {
       expect(asAdmin.level).toBe("own");
@@ -165,7 +166,7 @@ describe("grant resolution inside authorize*", () => {
         rubric: { style: "holistic", criteria: [] },
       })
       .returning();
-    const asAdminRubric = await authorizeRubric(db, ADMIN, rubric!.id, "view");
+    const asAdminRubric = await authorizeRubric(db, ADMIN, rubric!.id, "view", "read");
     expect(asAdminRubric.ok).toBe(true);
     // …and a co-teacher's assessment grant does NOT reach it.
     await grant({
@@ -174,7 +175,7 @@ describe("grant resolution inside authorize*", () => {
       scope_id: a.id,
       level: "edit",
     });
-    const coRubric = await authorizeRubric(db, CO, rubric!.id, "view");
+    const coRubric = await authorizeRubric(db, CO, rubric!.id, "view", "read");
     expect(coRubric.ok).toBe(false);
   });
 
@@ -195,7 +196,7 @@ describe("grant resolution inside authorize*", () => {
         level: step.level,
       });
       for (const need of step.allowed) {
-        const access = await authorizeAssessment(db, CO, a.id, need);
+        const access = await authorizeAssessment(db, CO, a.id, need, "read");
         expect(access.ok).toBe(true);
         if (access.ok) {
           expect(access.level).toBe(step.level);
@@ -204,7 +205,7 @@ describe("grant resolution inside authorize*", () => {
         }
       }
       for (const need of step.refused) {
-        const access = await authorizeAssessment(db, CO, a.id, need);
+        const access = await authorizeAssessment(db, CO, a.id, need, "read");
         expect(access.ok).toBe(false);
         // The refusal is the SAME 404 as a missing row — a `view` grantee must
         // not learn from the status code that the assessment exists and they
@@ -224,8 +225,8 @@ describe("grant resolution inside authorize*", () => {
       scope_id: a.id,
       level: "view",
     });
-    expect((await authorizeAssessment(db, CO, a.id, "view")).ok).toBe(true);
-    const edit = await authorizeAssessment(db, CO, a.id, "edit");
+    expect((await authorizeAssessment(db, CO, a.id, "view", "read")).ok).toBe(true);
+    const edit = await authorizeAssessment(db, CO, a.id, "edit", "read");
     expect(edit.ok).toBe(false);
     if (!edit.ok) expect(edit.response.status).toBe(404);
   });
@@ -246,7 +247,7 @@ describe("grant resolution inside authorize*", () => {
         level: "edit",
         ...c,
       });
-      const access = await authorizeAssessment(db, CO, a.id, "view");
+      const access = await authorizeAssessment(db, CO, a.id, "view", "read");
       expect(access.ok).toBe(false);
       expect((await loadActiveGrants(db, CO.email)).empty).toBe(true);
     }
@@ -261,7 +262,7 @@ describe("grant resolution inside authorize*", () => {
       level: "edit",
       ends_at: new Date(Date.now() + HOUR),
     });
-    expect((await authorizeAssessment(db, CO, a.id, "edit")).ok).toBe(true);
+    expect((await authorizeAssessment(db, CO, a.id, "edit", "read")).ok).toBe(true);
   });
 
   test("a teacher-scope grant resolves through the assessment's owner_email", async () => {
@@ -272,7 +273,7 @@ describe("grant resolution inside authorize*", () => {
       scope_id: OWNER.email!,
       level: "run",
     });
-    const access = await authorizeAssessment(db, SUB, a.id, "run");
+    const access = await authorizeAssessment(db, SUB, a.id, "run", "read");
     expect(access.ok).toBe(true);
     if (access.ok) {
       expect(access.level).toBe("run");
@@ -280,13 +281,13 @@ describe("grant resolution inside authorize*", () => {
       expect(access.scope).toBe("teacher");
     }
     // `run` does not reach `edit`: a substitute runs the day, they do not author.
-    expect((await authorizeAssessment(db, SUB, a.id, "edit")).ok).toBe(false);
+    expect((await authorizeAssessment(db, SUB, a.id, "edit", "read")).ok).toBe(false);
 
     // The deviation the note records: an assessment whose owner_email is still
     // NULL (nothing has written it since the 0038 backfill) resolves no
     // teacher-scope grant at all.
     const legacy = await makeAssessment(OWNER, { owner_email: null });
-    expect((await authorizeAssessment(db, SUB, legacy.id, "view")).ok).toBe(false);
+    expect((await authorizeAssessment(db, SUB, legacy.id, "view", "read")).ok).toBe(false);
   });
 
   test("a school-scope grant confers nothing (D-7 deferred)", async () => {
@@ -304,7 +305,7 @@ describe("grant resolution inside authorize*", () => {
     const grants = await loadActiveGrants(db, OUTSIDER.email);
     expect(grants.empty).toBe(true);
     expect(grantedLevel(grants, a)).toBeNull();
-    expect((await authorizeAssessment(db, OUTSIDER, a.id, "view")).ok).toBe(false);
+    expect((await authorizeAssessment(db, OUTSIDER, a.id, "view", "read")).ok).toBe(false);
     const rows = await visibleAssessments(db, OUTSIDER);
     expect(rows).toEqual([]);
   });
@@ -340,16 +341,100 @@ describe("grant resolution inside authorize*", () => {
       })
       .returning();
     // Before the grant: invisible, even though the sitting exists.
-    expect((await authorizeSitting(db, CO, sitting!.id, "view")).ok).toBe(false);
+    expect((await authorizeSitting(db, CO, sitting!.id, "view", "read")).ok).toBe(false);
     await grant({
       grantee_email: CO.email!,
       scope_kind: "assessment",
       scope_id: a.id,
       level: "edit",
     });
-    const access = await authorizeSitting(db, CO, sitting!.id, "run");
+    const access = await authorizeSitting(db, CO, sitting!.id, "run", "read");
     expect(access.ok).toBe(true);
     if (access.ok) expect(access.sitting.id).toBe(sitting!.id);
+  });
+});
+
+// ── D-6 writes (security audit 2026-10-24, SEC-03) ──────────────────────────
+
+describe("an admin reads everything and writes nothing outside the admin surface", () => {
+  const LEVELS = ["view", "run", "edit", "own"] as const;
+
+  test("assessment: every level reads via admin; no level writes", async () => {
+    process.env.ADMIN_EMAILS = ADMIN.email!;
+    const a = await makeAssessment();
+    for (const need of LEVELS) {
+      const read = await authorizeAssessment(db, ADMIN, a.id, need, "read");
+      expect(read.ok).toBe(true);
+      if (read.ok) expect(read.via).toBe("admin");
+      const write = await authorizeAssessment(db, ADMIN, a.id, need, "write");
+      expect(write.ok).toBe(false);
+      if (!write.ok) {
+        expect(write.response.status).toBe(404);
+        expect(await write.response.json()).toEqual({ ok: false, error: "not_found" });
+      }
+    }
+  });
+
+  test("sitting, overlay student and rubric: the same rule through their own doors", async () => {
+    process.env.ADMIN_EMAILS = ADMIN.email!;
+    const a = await makeAssessment();
+    const [sitting] = await db
+      .insert(test_sessions)
+      .values({
+        assessment_id: a.id,
+        owner_sub: OWNER.sub,
+        code: "ADMW01",
+        expires_at: new Date(Date.now() + HOUR),
+      })
+      .returning();
+    const [student] = await db
+      .insert(students)
+      .values({ owner_sub: OWNER.sub, ssid: "AW0000001", name: "" })
+      .returning();
+    const [rubric] = await db
+      .insert((await import("../db/schema")).rubrics)
+      .values({ owner_sub: OWNER.sub, title: "Admin-write fixture", rubric: { style: "holistic", criteria: [] } })
+      .returning();
+
+    expect((await authorizeSitting(db, ADMIN, sitting!.id, "run", "read")).ok).toBe(true);
+    expect((await authorizeSitting(db, ADMIN, sitting!.id, "run", "write")).ok).toBe(false);
+    expect((await authorizeStudent(db, ADMIN, student!.id, "own", "read")).ok).toBe(true);
+    expect((await authorizeStudent(db, ADMIN, student!.id, "own", "write")).ok).toBe(false);
+    expect((await authorizeRubric(db, ADMIN, rubric!.id, "own", "read")).ok).toBe(true);
+    expect((await authorizeRubric(db, ADMIN, rubric!.id, "own", "write")).ok).toBe(false);
+  });
+
+  test("the owner, an edit grantee, and an act-as session still write", async () => {
+    process.env.ADMIN_EMAILS = ADMIN.email!;
+    const a = await makeAssessment();
+    expect((await authorizeAssessment(db, OWNER, a.id, "own", "write")).ok).toBe(true);
+
+    await grant({ grantee_email: CO.email!, scope_kind: "assessment", scope_id: a.id, level: "edit" });
+    const co = await authorizeAssessment(db, CO, a.id, "edit", "write");
+    expect(co.ok).toBe(true);
+    if (co.ok) expect(co.via).toBe("grant");
+
+    // D-8: acting as the owner, the session's sub IS the owner's, so the write
+    // resolves via "owner" and the impersonation row is the audit record.
+    const actingAs = {
+      ...OWNER,
+      actor_sub: ADMIN.sub,
+      actor_email: ADMIN.email,
+    } as SessionPayload;
+    const acted = await authorizeAssessment(db, actingAs, a.id, "own", "write");
+    expect(acted.ok).toBe(true);
+    if (acted.ok) expect(acted.via).toBe("owner");
+  });
+
+  test("an admin who also holds a grant writes through the grant, not through admin", async () => {
+    // effectiveLevel resolves admin BEFORE grants (the audit story should not
+    // depend on an unrelated row), so an admin-with-a-grant is reported as an
+    // admin and refused the write. Pinned so a reorder is a deliberate change.
+    process.env.ADMIN_EMAILS = ADMIN.email!;
+    const a = await makeAssessment();
+    await grant({ grantee_email: ADMIN.email!, scope_kind: "assessment", scope_id: a.id, level: "edit" });
+    const write = await authorizeAssessment(db, ADMIN, a.id, "edit", "write");
+    expect(write.ok).toBe(false);
   });
 });
 
@@ -532,7 +617,7 @@ describe("grant creation rules", () => {
       scope_id: a.id,
     });
     expect(revoked?.revoked_at).not.toBeNull();
-    expect((await authorizeAssessment(db, CO, a.id, "view")).ok).toBe(false);
+    expect((await authorizeAssessment(db, CO, a.id, "view", "read")).ok).toBe(false);
     expect(await listGrantsOnScope(db, "assessment", a.id)).toHaveLength(0);
     expect(await listGrantsFor(db, CO.email!)).toHaveLength(1);
 
@@ -584,7 +669,7 @@ describe("a sitting created under a grant", () => {
       scope_id: a.id,
       level: "edit",
     });
-    const asCo = await authorizeAssessment(db, CO, a.id, "run");
+    const asCo = await authorizeAssessment(db, CO, a.id, "run", "read");
     expect(asCo.ok).toBe(true);
     if (asCo.ok) {
       const coveringForTeacher = asCo.via === "grant" && asCo.scope === "teacher";
@@ -597,7 +682,7 @@ describe("a sitting created under a grant", () => {
       scope_id: OWNER.email!,
       level: "run",
     });
-    const asSub = await authorizeAssessment(db, SUB, a.id, "run");
+    const asSub = await authorizeAssessment(db, SUB, a.id, "run", "read");
     expect(asSub.ok).toBe(true);
     if (asSub.ok) {
       const coveringForTeacher = asSub.via === "grant" && asSub.scope === "teacher";
@@ -625,14 +710,14 @@ describe("a sitting created under a grant", () => {
     expect(sitting!.created_by_sub).toBe(SUB.sub);
     // Audit only: the column does not authorize. The sub reaches the sitting
     // through their teacher-scope grant, and without one they do not.
-    expect((await authorizeSitting(db, SUB, sitting!.id, "run")).ok).toBe(false);
+    expect((await authorizeSitting(db, SUB, sitting!.id, "run", "read")).ok).toBe(false);
     await grant({
       grantee_email: SUB.email!,
       scope_kind: "teacher",
       scope_id: OWNER.email!,
       level: "run",
     });
-    expect((await authorizeSitting(db, SUB, sitting!.id, "run")).ok).toBe(true);
+    expect((await authorizeSitting(db, SUB, sitting!.id, "run", "read")).ok).toBe(true);
     await db.delete(test_sessions).where(eq(test_sessions.id, sitting!.id));
     await db.delete(students);
   });

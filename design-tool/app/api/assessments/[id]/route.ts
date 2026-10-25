@@ -37,7 +37,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   // A read of the assessment and its items — `view`, the same level the results
   // and export routes take (export carries the answer keys too, so `view` is
   // already the level at which a key is readable).
-  const access = await authorizeAssessment(getDb(), auth.session, id, "view");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "view", "read");
   if (!access.ok) return access.response;
   const db = getDb();
   const itemRows = await db
@@ -86,6 +86,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     auth.session,
     id,
     isArchivePatch ? "own" : "edit",
+    "write",
   );
   if (!access.ok) return access.response;
 
@@ -277,7 +278,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
-  const access = await authorizeAssessment(getDb(), auth.session, id, "own");
+  const access = await authorizeAssessment(getDb(), auth.session, id, "own", "write");
   if (!access.ok) return access.response;
 
   // C10: every edit path on a published assessment 409s, but DELETE had no

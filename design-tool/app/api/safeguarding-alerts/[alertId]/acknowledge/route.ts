@@ -36,7 +36,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   const db = getDb();
   const alert = await loadAlert(db, alertId);
   if (!alert || !alert.assessment_id) return notFoundResponse();
-  const access = await authorizeAssessment(db, auth.session, alert.assessment_id, "view");
+  const access = await authorizeAssessment(db, auth.session, alert.assessment_id, "view", "write");
   if (!access.ok) return access.response;
   // A system admin resolves view on every assessment (D-7: they read every
   // alert), but acknowledging would clear the TEACHER's badge, and access-model D-6 keeps

@@ -138,7 +138,7 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
   const db = getDb();
   // Owner-only, and a non-owner gets the SAME answer as a missing row: this
   // URL must not tell a stranger that an assessment exists.
-  const assessment = await pageAssessment(db, session, id, "view");
+  const assessment = await pageAssessment(db, session, id, "view", "read");
   if (!assessment) {
     notFound();
   }

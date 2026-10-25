@@ -279,7 +279,7 @@ describe("authorizeSend", () => {
 
   test("the owner on a section they teach: ids from the roster", async () => {
     const s = await scene();
-    const r = await authorizeSend(db, owner(), s.assessment.id, "5001");
+    const r = await authorizeSend(db, owner(), s.assessment.id, "5001", "write");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.teacher).toEqual({ sub: OWNER, email: TEACHER_EMAIL, users_dcid: "8301" });
@@ -289,7 +289,7 @@ describe("authorizeSend", () => {
 
   test("the owner on a section they do not teach → 404", async () => {
     const s = await scene();
-    const r = await authorizeSend(db, owner(), s.assessment.id, "5002");
+    const r = await authorizeSend(db, owner(), s.assessment.id, "5002", "write");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.response.status).toBe(404);
   });
@@ -298,16 +298,16 @@ describe("authorizeSend", () => {
     const s = await scene();
     // Roster row, no grant.
     await addCoTeacherRow();
-    let r = await authorizeSend(db, co(), s.assessment.id, "5001");
+    let r = await authorizeSend(db, co(), s.assessment.id, "5001", "write");
     expect(r.ok).toBe(false);
     // Grant + roster row: allowed, as their OWN users_dcid.
     await grant(s.assessment.id, "edit");
-    r = await authorizeSend(db, co(), s.assessment.id, "5001");
+    r = await authorizeSend(db, co(), s.assessment.id, "5001", "write");
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.teacher.users_dcid).toBe("8399");
     // Grant, no roster row: refused.
     await db.delete(roster_section_teachers).where(eq(roster_section_teachers.teacher_ps_id, "399"));
-    r = await authorizeSend(db, co(), s.assessment.id, "5001");
+    r = await authorizeSend(db, co(), s.assessment.id, "5001", "write");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.response.status).toBe(404);
   });
@@ -316,7 +316,7 @@ describe("authorizeSend", () => {
     const s = await scene();
     await addCoTeacherRow();
     await grant(s.assessment.id, "run");
-    const r = await authorizeSend(db, co(), s.assessment.id, "5001");
+    const r = await authorizeSend(db, co(), s.assessment.id, "5001", "write");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.response.status).toBe(404);
   });
@@ -328,7 +328,7 @@ describe("authorizeSend", () => {
       actor_sub: "gradebook-admin",
       actor_email: ADMIN_EMAIL,
     } as SessionPayload;
-    const r = await authorizeSend(db, actingAs, s.assessment.id, "5001");
+    const r = await authorizeSend(db, actingAs, s.assessment.id, "5001", "write");
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.teacher.sub).toBe(OWNER);
@@ -337,7 +337,7 @@ describe("authorizeSend", () => {
 
     process.env.ADMIN_EMAILS = ADMIN_EMAIL;
     const plainAdmin = staffPrincipal("gradebook-admin", ADMIN_EMAIL) as SessionPayload;
-    const denied = await authorizeSend(db, plainAdmin, s.assessment.id, "5001");
+    const denied = await authorizeSend(db, plainAdmin, s.assessment.id, "5001", "write");
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.response.status).toBe(404);
   });

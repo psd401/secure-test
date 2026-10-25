@@ -28,7 +28,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   const db = getDb();
-  const access = await authorizeAssessment(db, auth.session, id, "own");
+  const access = await authorizeAssessment(db, auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const result = await duplicateAssessment(
     db,

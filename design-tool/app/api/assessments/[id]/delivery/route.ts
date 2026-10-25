@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/buildDeliveryBundle";
 import { IncompleteItemError } from "@/lib/api/itemIntegrity";
 import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
 import { currentRenderer } from "@/lib/renderer/current";
 
@@ -87,6 +88,19 @@ export async function GET(req: Request, ctx: RouteContext) {
     // should be indistinguishable from one that does not exist.
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
+
+  // SEC-01 (security audit 2026-10-24): the bundle is for an attempt that is
+  // being TAKEN. Once it is handed in, or its sitting is over, there is no
+  // page left to render — the client never asks again (a submitted attempt
+  // joins as "already handed in", and me/sittings lists open sittings only) —
+  // so the content is not re-served to whoever still holds the student's
+  // credential. Checked before the deadline rule, which is about time, and
+  // with the same 409 shape and close grace the write routes use.
+  if (attempt.status !== "in_progress") {
+    return NextResponse.json({ ok: false, error: "attempt_submitted" }, { status: 409 });
+  }
+  const closed = await refuseIfSittingOver(db, attempt);
+  if (closed) return closed;
 
   // EX-2: an in-progress attempt whose time is up (deadline + the shared
   // grace) gets the same 409 the write routes give, rather than a bundle

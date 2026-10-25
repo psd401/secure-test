@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAsset(db, auth.session, id, "own");
+  const access = await authorizeAsset(db, auth.session, id, "own", "read");
   if (!access.ok) return access.response;
   return assetResponse(access.asset);
 }
@@ -35,7 +35,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAsset(db, auth.session, id, "own");
+  const access = await authorizeAsset(db, auth.session, id, "own", "write");
   if (!access.ok) return access.response;
   const row = access.asset;
 

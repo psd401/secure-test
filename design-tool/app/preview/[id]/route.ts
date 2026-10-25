@@ -43,7 +43,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   // until the level table was written out route by route. `view`, like the other
   // read surfaces; `test/access-enforcement.test.ts` now sweeps this directory
   // too, so the next non-api route cannot repeat it.
-  const access = await authorizeAssessment(db, auth.session, id, "view");
+  const access = await authorizeAssessment(db, auth.session, id, "view", "read");
   if (!access.ok) return access.response;
   const assessmentRow = access.assessment;
   const itemRows = await db

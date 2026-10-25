@@ -104,7 +104,7 @@ export async function POST(req: Request) {
   const db = getDb();
   // A sitting may only be started on an assessment the caller may run; the
   // 404-for-not-yours posture is the helper's (access slice 1, D-3).
-  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "run");
+  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "run", "write");
   if (!access.ok) return access.response;
   const assessment = access.assessment;
   // Slice 82: only a published assessment can be sat. A draft is still being
