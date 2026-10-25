@@ -169,7 +169,8 @@ for (const spec of models) {
       .map(([rawIndex]) => sourceNumbers[rawIndex] ?? []);
     // As the route: the answer key's own drawings go in no set.
     const keyFigures = new Set(keyFiguresFromText(text));
-    const modelSets = withoutKeyFigures(sets.sets, keyFigures);
+    const neverShown = new Set([...keyFigures, ...layout.figures.filter((f) => f.answer_area).map((f) => f.n)]);
+    const modelSets = withoutKeyFigures(sets.sets, neverShown);
     const allSets = [
       ...modelSets,
       ...adjacencyFallback(
@@ -178,7 +179,7 @@ for (const spec of models) {
         validSourceNumbers,
         modelSets,
         new Set(layout.figures.filter((f) => f.beside).map((f) => f.n)),
-        keyFigures,
+        neverShown,
       ),
     ];
 

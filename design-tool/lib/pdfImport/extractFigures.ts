@@ -52,6 +52,10 @@ export interface PdfFigure {
    * figure at the same height — it is printed beside its question, so it
    * belongs to that question (questionAfterFigure), not the next one. */
   beside?: true;
+  /** PDF-import fixes (2026-10-25): a ruled area with most of its cells
+   * empty — a blank graph grid or a table for the student to fill. It is
+   * where the answer goes, not something to read: never a stimulus. */
+  answer_area?: true;
 }
 
 export interface PdfLayout {
@@ -259,6 +263,48 @@ export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
     if (prose >= TEXT_PANEL_PROSE_LINES) return true;
   }
   return false;
+}
+
+/** A ruled area: at least this share of its painted paths are thin rules. */
+const RULED_SHARE = 0.8;
+/** A rule is thinner than this on one side (points). */
+const RULE_PT = 2;
+/** Fewer rules than this is a box or an underline, not a grid or table. */
+const MIN_RULES = 8;
+
+/** Distinct positions, merged within RULE_PT. */
+function positions(values: number[]): number[] {
+  const out: number[] = [];
+  for (const v of [...values].sort((a, b) => a - b)) {
+    if (out.length === 0 || v - out[out.length - 1]! > RULE_PT) out.push(v);
+  }
+  return out;
+}
+
+/**
+ * PDF-import fixes (2026-10-25): a vector drawing that is a blank answer
+ * area — a graph grid, or a table whose cells the student fills. Measured on
+ * the samples: grids, tables and ruled boxes are 85–100% thin rules, charts
+ * and diagrams 0–27%. Among ruled areas, a filled data table has text in
+ * most of its cells, an answer table in a few (its row and column labels)
+ * and a grid in none; under half filled is an answer area. `paths` are the
+ * drawing's painted path boxes, `runs` the text runs' baseline starts, both
+ * in page space. Exported for tests; pure.
+ */
+export function isBlankAnswerArea(paths: readonly Box[], runs: readonly { x: number; y: number }[]): boolean {
+  const thin = paths.filter((b) => b[2] - b[0] < RULE_PT || b[3] - b[1] < RULE_PT);
+  if (thin.length < MIN_RULES || thin.length < paths.length * RULED_SHARE) return false;
+  const rows = positions(thin.filter((b) => b[3] - b[1] < RULE_PT).map((b) => (b[1] + b[3]) / 2));
+  const cols = positions(thin.filter((b) => b[2] - b[0] < RULE_PT).map((b) => (b[0] + b[2]) / 2));
+  if (rows.length < 2 || cols.length < 2) return false;
+  const cells = (rows.length - 1) * (cols.length - 1);
+  const filled = new Set<string>();
+  for (const r of runs) {
+    const ri = rows.findIndex((y, i) => i + 1 < rows.length && r.y > y && r.y <= rows[i + 1]! + RULE_PT);
+    const ci = cols.findIndex((x, i) => i + 1 < cols.length && r.x >= x - RULE_PT && r.x < cols[i + 1]!);
+    if (ri >= 0 && ci >= 0) filled.add(`${ri}:${ci}`);
+  }
+  return filled.size * 2 < cells;
 }
 
 export function figureMarker(n: number): string {
@@ -609,6 +655,12 @@ export async function extractPdfLayout(
       return style;
     };
     const items = content.items as { str: string; transform: number[]; fontName?: string }[];
+    const runStarts = items
+      .filter((it) => it.str?.trim())
+      .map((it) => {
+        const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
+        return { x, y };
+      });
     const lines = linesOf(items, base, styleOf);
 
     // Slice 5: painted paths close together are one drawing; a drawing big
@@ -695,6 +747,9 @@ export async function extractPdfLayout(
         }
       } else {
         const caption = captionAbove(lines, entry.box[1]);
+        const inside = (b: Box) =>
+          b[0] >= entry.box[0] - 1 && b[2] <= entry.box[2] + 1 && b[1] >= entry.box[1] - 1 && b[3] <= entry.box[3] + 1;
+        if (isBlankAnswerArea(pathBoxes.filter(inside), runStarts)) fig.answer_area = true;
         if (caption) fig.caption = caption;
         figureBoxes.push(entry.box);
         const crop = cropFromPage(canvas!, pageImage!, entry.box);

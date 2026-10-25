@@ -449,3 +449,51 @@ describe("renderPagesForModel", () => {
     expect(await renderPagesForModel(new TextEncoder().encode("not a pdf"))).toBeNull();
   });
 });
+
+// PDF-import fixes (2026-10-25): a blank graph grid or a table to fill is
+// where the answer goes — flagged, so it is never shown as a stimulus.
+import { isBlankAnswerArea } from "../lib/pdfImport/extractFigures";
+import { makeRuledGridPdf } from "./helpers/pdf";
+
+describe("blank answer areas", () => {
+  // A 4×3 table of rules: 5 horizontal, 4 vertical, at x 100–400, y 100–300.
+  const rules: Box[] = [
+    ...[100, 150, 200, 250, 300].map((y): Box => [100, y - 0.25, 400, y + 0.25]),
+    ...[100, 200, 300, 400].map((x): Box => [x - 0.25, 100, x + 0.25, 300]),
+  ];
+  const cell = (r: number, c: number) => ({ x: 103 + c * 100, y: 146 + r * 50 });
+
+  test("an empty grid, or a table with only its labels, is an answer area", () => {
+    expect(isBlankAnswerArea(rules, [])).toBe(true);
+    // Header row + first column labelled (5 of 12 cells), the rest empty.
+    expect(isBlankAnswerArea(rules, [cell(0, 0), cell(0, 1), cell(0, 2), cell(1, 0), cell(2, 0)])).toBe(true);
+    // Half filled is not "under half".
+    expect(isBlankAnswerArea(rules, [cell(0, 0), cell(0, 1), cell(0, 2), cell(1, 0), cell(2, 0), cell(3, 0)])).toBe(false);
+  });
+
+  test("a filled table, a drawing, or a single box is not", () => {
+    const all = [0, 1, 2, 3].flatMap((r) => [0, 1, 2].map((c) => cell(r, c)));
+    expect(isBlankAnswerArea(rules, all)).toBe(false);
+    const diagonal: Box[] = [[100, 100, 200, 200], [150, 120, 300, 260], [210, 100, 330, 240], ...rules.slice(0, 4)];
+    expect(isBlankAnswerArea(diagonal, [])).toBe(false);
+    expect(isBlankAnswerArea(rules.slice(0, 4), [])).toBe(false);
+  });
+
+  test("a real PDF: an empty grid is flagged; a filled table is not", async () => {
+    const region = { x: 120, y: 300, width: 300, height: 200 };
+    const grid = await extractPdfLayout(makeRuledGridPdf({ region, rows: 10, cols: 10, above: ["7. Graph the means."] }));
+    expect(grid.figures).toHaveLength(1);
+    expect(grid.figures[0]!.answer_area).toBe(true);
+    const filled = await extractPdfLayout(
+      // 4×2: 8 rules, the fewest a drawing may have (MIN_CLUSTER_PATHS).
+      makeRuledGridPdf({
+        region,
+        rows: 4,
+        cols: 2,
+        cells: [["Decade", "Passengers"], ["1950s", "648 million"], ["1960s", "1.7 billion"], ["1970s", "5.4 billion"]],
+      }),
+    );
+    expect(filled.figures).toHaveLength(1);
+    expect(filled.figures[0]!.answer_area).toBeUndefined();
+  });
+});

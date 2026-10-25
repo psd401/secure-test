@@ -308,7 +308,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   // under "Responses vary.") go in no set, so no student sees the answer.
   // A scan has no text to read the cue from (and no figures).
   const keyFigures = new Set(scanned ? [] : keyFiguresFromText(modelText));
-  const modelSets = withoutKeyFigures(setValidation.sets, keyFigures);
+  // And blank answer areas (an empty graph grid, a table to fill): where the
+  // answer goes, never a picture above the question.
+  const neverShown = new Set([...keyFigures, ...figures.filter((f) => f.answer_area).map((f) => f.n)]);
+  const modelSets = withoutKeyFigures(setValidation.sets, neverShown);
   const proposed_sets = [
     ...modelSets,
     ...(scanned
@@ -319,7 +322,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           validSourceNumbers,
           modelSets,
           new Set(figures.filter((f) => f.beside).map((f) => f.n)),
-          keyFigures,
+          neverShown,
         )),
     // Multi-source stimulus slice 3: the model tends to abbreviate long
     // verbatim text, so compare each returned source with the document's own
