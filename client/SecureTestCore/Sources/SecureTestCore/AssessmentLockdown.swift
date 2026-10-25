@@ -207,10 +207,16 @@ public final class AssessmentLockdown {
 
     // MARK: Entering
 
-    public func begin() {
+    /// Returns whether THIS call began a session (`true` even if it then
+    /// failed at once — read `state` for that). `false` means one was already
+    /// up — possibly a previous attempt's, still ending — so its state says
+    /// nothing about the caller's attempt (ending-session race, 2026-10-24):
+    /// the caller must not read `.active` as its own.
+    @discardableResult
+    public func begin() -> Bool {
         guard state == .idle else {
             onLog?("lockdown already up — end it before beginning another")
-            return
+            return false
         }
 
         let session = makeSession()
@@ -226,6 +232,7 @@ public final class AssessmentLockdown {
         } else {
             onLog?("lockdown begin() called; no watchdog armed for this build")
         }
+        return true
     }
 
     // MARK: Leaving

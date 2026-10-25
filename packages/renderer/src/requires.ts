@@ -35,14 +35,18 @@ export function isRequirement(value: unknown): value is Requirement {
 // What the bridge-mode renderer (D-9 — the page code extracted from the
 // client's `AssessmentPage.rendererScript`) uses: each
 // `window.webkit.messageHandlers.<name>.postMessage` in the page (response,
-// withdraw, upload, submit, timer, home, tts, stt) plus `tts.word_ranges`
+// withdraw, upload, submit, timer, tts, stt) plus `tts.word_ranges`
 // (the page defines `window.__secureTestSpeech.word`, which the host calls
 // with each spoken word's range), and `response.generic` since row DC's
 // graph answers (a type the shell's typed decoder doesn't know).
 // test/extract.test.ts re-derives the handler list from the extracted page
 // and fails when the two drift.
+//
+// Not `home` since the ending-session race (2026-10-24): the page's only post
+// on it was the "Back to your tests" button after a hand-in, removed because
+// it let a student leave before DID END. The shell still answers `home` for
+// its own results and handed-in pages.
 export const BRIDGE_REQUIRES: readonly Requirement[] = [
-  "home",
   "response",
   // Row DC (D-9): a graph answer posts {type: "graph", objects} — a type the
   // shell's typed decoder doesn't know, so it rides the generic channel.

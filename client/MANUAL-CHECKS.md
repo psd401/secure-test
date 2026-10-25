@@ -2669,3 +2669,35 @@ Findings from the 2026-10-24 client hand-run (James, real AAC, Debug `25ae6386`,
 - **R-1 — a test opened under the previous test's ending session (not calculator code; `main`).** Hand in, press Back to your tests before DID END, open another sitting: `lockdown already up` → `page load gate: opened` → the old session's DID END throws the student out of the new test. Fixed separately on `main` (high priority).
 - Row 668 (a client older than 2.0 refused) is still to run, with a Debug build of `v1.6.3` (the installed Release 1.6.3 obeys this Mac's managed ServerURL).
 
+## Ending-session race (next client release, 2026-10-24)
+
+Found on James's real-session hand-run 2026-10-24 (Debug, local server):
+after a hand-in with no instant feedback, "Back to your tests" pressed
+before `DID END` left at once; the student joined another test, its
+`begin()` was a no-op against the still-ending session, its page was drawn
+under that session, and that session's `DID END` threw the student out.
+Fix: `BackToTests` waits for `DID END` after every hand-in (with no feedback
+it then goes home on its own), and `beginLockdown()` never opens the gate
+when `begin()` started nothing. Real AAC sessions, Debug build, James at the
+client.
+
+| Check | Expected | Result |
+|---|---|---|
+| **No feedback: hand in, press Back to your tests at once, open another test.** Assessment with instant feedback off | The page shows "Finishing your secure session…" (no second press needed); at `DID END` the client goes to "Your tests" (stderr `waiting for DID END, then leaving` → `lockdown DID END` → `leaving the attempt screen, as asked`); the next join logs its OWN `lockdown begin() called` → `DID BEGIN` → `page load gate: opened`, and no `secure session ended without a hand-in` follows | ✅ 2026-10-24 ~15:23–15:45, throwaway Debug build of the `graphing-calculator` branch (`8fe60f66` / `a5b9c1a0`) with `a00ae8de` merged in, uncommitted, against local dev; real AAC sessions; evidence is James's terminal stderr. Three times (graphing; scientific with feedback off, after a pass back; four-function), each: `back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END, then leaving` → `handed in: showing the finishing-secure-session notice` → `lockdown DID END` → `secure session ended after a hand-in — leaving the attempt screen, as asked` → next join → its own `lockdown begin() called` → `DID BEGIN` → `page load gate: opened`; no kick-out |
+| **Feedback on: hand in, press Back to your tests at once.** | "Finishing your secure session…" shows, then the results page at `DID END`; its Done goes to "Your tests" | ✅ 2026-10-24 evening, same build, a FRESH attempt (never passed back) with instant feedback = score: `handed in — instant feedback received (score)` → `lockdown ending: hand-in confirmed` → `lockdown end() called` → `back to your tests pressed (in-page) while the secure session is still ending — waiting for DID END; the results page shows then` → `handed in: showing the finishing-secure-session notice` → `lockdown DID END` → `instant feedback: showing the results page (score, 0 rows)` → Done → `back to your tests pressed (in-page) — leaving the attempt screen` → Your tests. (An earlier run the same afternoon was ◐: the press came only after the results page.) |
+| **Press after `DID END`.** Hand in, wait for the handed-in page, then press its Back to your tests | Goes home at once, as before | ✅ 2026-10-24, same build: `DID END` → `handed in: showing the handed-in page (no instant feedback)` → `back to your tests pressed (in-page) — leaving the attempt screen` |
+## Ending-session race — server-side stopgap (renderer, 2026-10-24)
+
+The served renderer no longer adds "Back to your tests" beside "Handed in."
+(the button that let a student leave before `DID END` and join another test
+under the still-ending session). The status now reads "Handed in. Finishing
+your secure session…"; the shell's own handed-in / results page replaces it
+at `DID END` and is the way home. Reaches v2.0.0 clients with the next
+production deploy (the renderer is re-signed); clients before 2.0 keep
+their bundled page. Real AAC sessions, v2.0.0 client, James at the client.
+
+| Check | Expected | Result |
+|---|---|---|
+| **No feedback: hand in.** v2.0.0 client, renderer from this change | "Handed in. Finishing your secure session…" with NO Back to your tests button; at `DID END` the handed-in page replaces it, and its button goes to "Your tests"; the next join logs its own `lockdown begin() called` → `DID BEGIN` → `page load gate: opened` | ✅ 2026-10-24 evening, a Debug build of `0e197d31` (the stopgap branch = `main` + this change) against local dev on a fresh sitting, signed in as `<demo-student-A>` by token; the page is the app's bundled copy (`renderer: bundled (Debug fallback) — the bundle names no renderer`), byte-identical to the served renderer per `check-extraction.sh` — a dev-signed renderer is not served by a local server, and the production key signs only `main`. Real AAC session; James at the client, by eye and stderr. No button beside "Handed in." (James); stderr `handed in` → `hand-in confirmed` → `end() called` → `DID END` → `showing the handed-in page (no instant feedback)` → `back to your tests pressed (in-page)` (the handed-in page's button) — no in-page press before `DID END`; the next join (graphing, 5 items) logged its own `begin() called` → `DID BEGIN` → `page load gate: opened` (that session was then ended with the emergency control, the ordinary no-hand-in path) |
+| **Feedback on: hand in.** | Same notice, no button; the results page at `DID END`; its Done goes to "Your tests" | ✅ 2026-10-24 evening, same build and student, a fresh attempt with feedback = score: no button beside "Handed in." (James); `handed in — instant feedback received (score)` → `hand-in confirmed` → `end() called` → `DID END` → `instant feedback: showing the results page (score, 0 rows)` → Done → `back to your tests pressed (in-page) — leaving the attempt screen` |
+| **Stranded: `DID END` never arrives after a hand-in.** Debug build of this branch with `SECURE_TEST_SIMULATE_LOCKDOWN=hangs` (end() is accepted and never answered), any server-delivered test; hand in (review on #85, 2026-10-24) | "Handed in. Finishing your secure session…" with no in-page button; the titlebar End secure session control is still there; stderr `still waiting for DID END after 10s (grace 20s)` → `lockdown did not confirm within 20s — unrecoverable` → `lockdown UNRECOVERABLE — exiting` (exit 70, with its `errors.log` line); the `handed in` line precedes the end, so the hand-in is recorded — check the teacher side shows it handed in. Not stranded past the grace — the same bound as before this change, when the in-page button only left the screen with the Mac still locked | NOT RUN |
