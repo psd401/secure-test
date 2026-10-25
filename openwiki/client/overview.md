@@ -118,7 +118,7 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 
 | Intent | Start at | Tests |
 |---|---|---|
-| Offline bundle open path or screen state | `OfflineBundle.swift`, `AssessmentViewController.loadPage`, `AppDelegate` open handlers | `OfflineBundleTests` |
+| Offline bundle open path or screen state | `OfflineBundle.swift`, `AssessmentViewController.loadPage`, `AppDelegate` open handlers | `OfflineBundleTests`; the offline page's standing notice is `RendererOfflineNoticeTests`, and the offline flag is in `AssessmentPageTests` |
 | New or changed item rendering | `AssessmentPage*.swift` renderer script, `DeliveryItem.swift` | `Renderer*Tests.swift` (e.g. `RendererMatchTests`, `RendererFillBlankTests`) run through `RendererHarness.swift` |
 | New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
 | Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
@@ -133,11 +133,13 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 | "Graph it" board, graph answers on the generic channel, `response.generic` and its caps ([graph items](../graphing/graph-items.md#student-answer-on-the-client)) | `AssessmentPageCalculator.swift` (`graphField`, `mountGraphAnswers`), `ItemResponse.swift` (`generic`), `BridgeChecks.swift` (generic caps), `RendererKeys.swift` | `GraphAnswerShellTests`, `GenericAnswerChannelTests`, `GraphingScriptTests` |
 | Formatted essay box, toolbar, undo/redo, paste rule ([rich-text essay editor](rich-text-essay.md)) | `AssessmentPageRichText.swift`, `AssessmentPage.swift` (`richEssayField`, `RICH_TOOLS`) | `RendererRichTextTests` (plus `RendererTextAutosaveTests` for save timing) |
 | Drawing canvas tools, auto-save, paper background | `AssessmentPage.swift` drawing section, `PageShell.swift` | `RendererDrawingToolsTests`, `RendererDrawingAutoSaveTests`, `RendererDrawingBackgroundTests` ([drawing canvas](drawing-canvas.md)) |
-| Math keypad, formula preview on short-text fields ([math keypad](math-keypad.md)) | `AssessmentPage.swift` (`MATH_KEY_ROWS`, `insertMath`, `mathKeypad`, `formulaTex`) | `RendererMathKeysTests`, `RendererFormulaInputTests`, `RendererKeyboardReachTests` |
+| Math keypad, formula preview on short-text fields ([math keypad](math-keypad.md)) | `AssessmentPage.swift` (`MATH_KEY_ROWS`, `insertMath`, `mathKeypad`, `formulaTex`) | `RendererMathKeysTests`, `RendererFormulaInputTests`, `RendererKeyboardReachTests`; screen-reader text without the LaTeX source is `RendererTexAnnotationTests`, and the page-wide math pass is `RendererMathPassTests` |
+| Order item: numbered rows, Move up and Move down, pointer drag, saved order ([ordering items](../design-tool/order-items.md#student-page-macos-client)) | `AssessmentPage.swift` (`orderField`, `order-row`, `order-move`) | `RendererOrderTests`, `RendererOrderDragTests`, `RendererPrefillTests` |
+| `**bold**` and `_italic_` markup in stems, choices, pairs, table labels and stimulus (built as elements, never inside math) | `AssessmentPage.swift` (page renderer) | `RendererEmphasisTests`, `RendererTableTests` |
+| Calculator button, panel open and close, and the page glue for a calculator that cannot start ([test calculator](../graphing/calculator.md)) | `AssessmentPageCalculator.swift`, `AssessmentPage.swift` | `RendererCalculatorTests` |
 | Single- or multiple-choice answer, Clear answer, one tab stop per single-choice question | `AssessmentPage.swift` (choice rendering, `refreshClear`, `refreshRadioStop`) | `RendererClearAnswerTests`, `RendererKeyboardReachTests`, `RendererPrefillTests` |
 | Vendored KaTeX, fonts or macros | `client/scripts/vendor-katex.mjs`, `vendor-fonts.mjs` | `KatexBundleTests`, `PageFontsTests`, `packages/schema/test/macros.test.ts` |
 
 Narrow check: `cd client/SecureTestCore && swift test --filter <TestClass>`. The full `swift test` is moderate; `xcodebuild` of the app is conditional on changes under `client/SecureTest/` or the project file. Never hand-edit generated or vendored resources (`GeneratedKatexMacros.swift`, `Resources/katex`, `Resources/fonts`); rerun the vendor scripts.
 
 Related: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
-d: [architecture overview](../architecture/overview.md), [testing](../testing/testing-and-validation.md).
