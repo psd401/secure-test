@@ -2701,3 +2701,20 @@ their bundled page. Real AAC sessions, v2.0.0 client, James at the client.
 | **No feedback: hand in.** v2.0.0 client, renderer from this change | "Handed in. Finishing your secure session…" with NO Back to your tests button; at `DID END` the handed-in page replaces it, and its button goes to "Your tests"; the next join logs its own `lockdown begin() called` → `DID BEGIN` → `page load gate: opened` | ✅ 2026-10-24 evening, a Debug build of `0e197d31` (the stopgap branch = `main` + this change) against local dev on a fresh sitting, signed in as `<demo-student-A>` by token; the page is the app's bundled copy (`renderer: bundled (Debug fallback) — the bundle names no renderer`), byte-identical to the served renderer per `check-extraction.sh` — a dev-signed renderer is not served by a local server, and the production key signs only `main`. Real AAC session; James at the client, by eye and stderr. No button beside "Handed in." (James); stderr `handed in` → `hand-in confirmed` → `end() called` → `DID END` → `showing the handed-in page (no instant feedback)` → `back to your tests pressed (in-page)` (the handed-in page's button) — no in-page press before `DID END`; the next join (graphing, 5 items) logged its own `begin() called` → `DID BEGIN` → `page load gate: opened` (that session was then ended with the emergency control, the ordinary no-hand-in path) |
 | **Feedback on: hand in.** | Same notice, no button; the results page at `DID END`; its Done goes to "Your tests" | ✅ 2026-10-24 evening, same build and student, a fresh attempt with feedback = score: no button beside "Handed in." (James); `handed in — instant feedback received (score)` → `hand-in confirmed` → `end() called` → `DID END` → `instant feedback: showing the results page (score, 0 rows)` → Done → `back to your tests pressed (in-page) — leaving the attempt screen` |
 | **Stranded: `DID END` never arrives after a hand-in.** Debug build of this branch with `SECURE_TEST_SIMULATE_LOCKDOWN=hangs` (end() is accepted and never answered), any server-delivered test; hand in (review on #85, 2026-10-24) | "Handed in. Finishing your secure session…" with no in-page button; the titlebar End secure session control is still there; stderr `still waiting for DID END after 10s (grace 20s)` → `lockdown did not confirm within 20s — unrecoverable` → `lockdown UNRECOVERABLE — exiting` (exit 70, with its `errors.log` line); the `handed in` line precedes the end, so the hand-in is recorded — check the teacher side shows it handed in. Not stranded past the grace — the same bound as before this change, when the in-page button only left the screen with the Mac still locked | NOT RUN |
+
+## Bundle fetch refused 409 (server SEC-01, next client release, 2026-10-25)
+
+The server (PR #94, SEC-01) now refuses the delivery bundle with 409
+`sitting_closed` for a closed sitting and 409 `attempt_submitted` for a
+handed-in attempt. The client fetches the bundle right after flushing any
+answers spooled while a sitting was closed, so a teacher's Close session or
+Hand in during that flush lands here. Before this change both read as
+`BUNDLE FETCH FAILED` + a `bundle_fetch_failed` error event + "This test
+could not be opened." The window is narrow (seconds); the rows below widen
+it by closing / handing in while "Loading your test…" shows. No secure
+session is begun in either case.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Close the session while the test loads.** Student presses Resume; teacher presses Close session on the Monitor before the test page draws | stderr `bundle refused: the sitting is closed — not starting the secure session`, then the student is sent home told (the Row CS path); no `BUNDLE FETCH FAILED`, no `bundle_fetch_failed` in `errors.log` | ☐ |
+| **Hand in from the Monitor while the test loads.** Same, but the teacher presses Hand in on the student's row | stderr `bundle refused: the attempt is already handed in — not starting the secure session`; the page reads "This test is already handed in." with the join's handed-in line; no `bundle_fetch_failed` | ☐ |

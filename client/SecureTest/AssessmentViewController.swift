@@ -496,6 +496,25 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     guard !self.isRetired else { return }
                     self.log("time limit: server refused the bundle (time_expired) — not starting the secure session")
                     self.onTimeRanOutBeforeStart?("server")
+                } catch let error as APIError where error.isSittingClosed {
+                    // SEC-01 (server PR #94): the delivery route now refuses a
+                    // closed sitting. The teacher closed it during the deferred
+                    // flush above — an expected answer, not a fetch failure.
+                    // Lockdown was never begun, so the host sends the student
+                    // home told (`sittingClosedDuringAttempt`).
+                    guard !self.isRetired else { return }
+                    self.log("bundle refused: the sitting is closed — not starting the secure session")
+                    self.noteSittingClosed()
+                } catch let error as APIError where error.isAttemptSubmitted {
+                    // SEC-01 (server PR #94): refused because the attempt was
+                    // handed in (a teacher's hand-in during the flush above).
+                    // Expected, so no error log line; same words as the join.
+                    guard !self.isRetired else { return }
+                    self.log("bundle refused: the attempt is already handed in — not starting the secure session")
+                    self.loadHostPage(Self.noticePage(
+                        "This test is already handed in.",
+                        detail: JoinOutcome.handedInMessage
+                    ))
                 } catch {
                     // Refusing beats rendering a partial test: a student handed
                     // fewer items than assigned has no way to know.
