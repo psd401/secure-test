@@ -51,6 +51,7 @@ RUN cd design-tool && bun build scripts/seed-essays.ts --target=node --format=es
  && bun build scripts/roster-health.ts --target=node --format=esm --outfile scripts/roster-health.mjs \
  && bun build scripts/ps-reach.ts --target=node --format=esm --outfile scripts/ps-reach.mjs \
  && bun build scripts/student-lookup.ts --target=node --format=esm --outfile scripts/student-lookup.mjs \
+ && bun build scripts/payload-sizes.ts --target=node --format=esm --outfile scripts/payload-sizes.mjs \
  && bun build scripts/seed-staging.ts --target=node --format=esm --outfile scripts/seed-staging.mjs
 
 FROM node:22.23.2-slim AS runner
@@ -83,7 +84,7 @@ COPY --from=builder /repo/design-tool/node_modules/@napi-rs ./design-tool/node_m
 # Boot shim (slice 3): assembles DATABASE_URL from the ECS-injected DB_*
 # secret vars, then imports server.js — or, with a mode as its argument, one
 # of the bundled operator scripts (`migrate`, `corpus`, `compare`,
-# `seed-essays`, `roster-health`, `ps-reach`, `student-lookup`,
+# `seed-essays`, `roster-health`, `ps-reach`, `student-lookup`, `payload-sizes`,
 # `seed-staging` — the last refuses anywhere but the staging stack; a one-off
 # ECS run-task, infra/README.md "Migrating Aurora" and "Corpus runs on
 # Aurora"). Local runs that set DATABASE_URL directly pass straight through.
@@ -94,6 +95,7 @@ COPY --from=builder /repo/design-tool/scripts/seed-essays.mjs ./design-tool/scri
 COPY --from=builder /repo/design-tool/scripts/roster-health.mjs ./design-tool/scripts/roster-health.mjs
 COPY --from=builder /repo/design-tool/scripts/ps-reach.mjs ./design-tool/scripts/ps-reach.mjs
 COPY --from=builder /repo/design-tool/scripts/student-lookup.mjs ./design-tool/scripts/student-lookup.mjs
+COPY --from=builder /repo/design-tool/scripts/payload-sizes.mjs ./design-tool/scripts/payload-sizes.mjs
 COPY --from=builder /repo/design-tool/scripts/seed-staging.mjs ./design-tool/scripts/seed-staging.mjs
 COPY --from=builder /repo/design-tool/db/migrate.mjs ./design-tool/db/migrate.mjs
 COPY --from=builder /repo/design-tool/db/migrations ./design-tool/db/migrations

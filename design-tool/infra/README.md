@@ -595,6 +595,22 @@ scripts/oneoff-aurora.sh roster-health <teacher@psd401.net> # plus that teacher'
 
 Read-only. Exit 1 means the latest sync run did not succeed.
 
+## Payload sizes — evidence for the JSON body caps
+
+`scripts/payload-sizes.ts` prints, per category, the row count and the
+p50 / p99 / max size of the JSON text the API routes have stored — the
+nearest measure of the request bodies that wrote them, and the evidence for
+the per-route JSON body caps (the zod advisory GHSA-mrhx-c7xc-m3w5
+stopgap, 2026-10-25):
+
+```bash
+scripts/oneoff-aurora.sh payload-sizes
+```
+
+Read-only, aggregates only: no id, no content and no per-row line reach
+stdout (it lands in CloudWatch). Locally:
+`bun --env-file=.env.local scripts/payload-sizes.ts`.
+
 ## Student lookup — "my student can't get in"
 
 `scripts/student-lookup.ts` answers one student at a time with the join
