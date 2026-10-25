@@ -33,7 +33,11 @@ import {
   buildScreeningUserMessage,
 } from "../lib/safeguarding/screening/prompt";
 import { getScreeningProvider } from "../lib/safeguarding/screening/provider";
-import { screenAttempt, screenResponse } from "../lib/safeguarding/screening/screen";
+import {
+  screenAttempt,
+  screenResponse,
+  screenedForScoring,
+} from "../lib/safeguarding/screening/screen";
 import { RETRY_GRACE_MS, RETRY_WINDOW_DAYS, screenPending } from "../lib/safeguarding/screening/retry";
 import type { ScreeningProvider } from "../lib/safeguarding/screening/types";
 import type { GuardrailProvider } from "../lib/safeguarding/types";
@@ -630,6 +634,51 @@ describe("D-4: AI scoring withheld behind an injection alert", () => {
     expect(body.withheld).toBe(1);
     expect(body.scored_proposed).toBe(0);
     expect(await s.db.select().from(scores)).toHaveLength(0);
+  });
+
+  // SEC-05 (security audit 2026-10-24): a screen that fails writes no alert,
+  // so the injection check alone would pass the answer through. The route
+  // skips and counts it; the finalize gate (below) refuses to make it final.
+  test("score-ai: a failed screen is skipped and counted, not scored", async () => {
+    process.env.SAFEGUARDING_SCREENER_PROVIDER = "mock";
+    const s = await seed({ texts: { essay: "SG_FAIL the model is down." } });
+    const res = await postScoreAi(s.attempt.id);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.screening_failed).toBe(1);
+    expect(body.withheld).toBe(0);
+    expect(body.scored_proposed).toBe(0);
+    expect(body.scored_final).toBe(0);
+    expect(await s.db.select().from(scores)).toHaveLength(0);
+    expect(await screenedAt(s.essay.id)).toBeNull();
+  });
+
+  test("screenedForScoring: off, practice and non-text answers are clear; an unscreened or edited text answer is not", async () => {
+    const s = await seed();
+    // Screening off: nothing to wait for.
+    expect(await screenedForScoring(s.db, s.essay.id)).toBe(true);
+
+    process.env.SAFEGUARDING_SCREENER_PROVIDER = "mock";
+    expect(await screenedForScoring(s.db, s.essay.id)).toBe(false);
+    expect(await screenedForScoring(s.db, s.short.id)).toBe(false);
+    expect(await screenedForScoring(s.db, s.mc.id)).toBe(true);
+    expect(await screenedForScoring(s.db, "11111111-1111-4111-8111-111111111111")).toBe(false);
+
+    await screenResponse(s.db, s.essay.id);
+    expect(await screenedForScoring(s.db, s.essay.id)).toBe(true);
+
+    // Edited after the screen (a pass-back): stale again.
+    await s.db
+      .update(responses)
+      .set({ updated_at: new Date(Date.now() + 60_000) })
+      .where(eq(responses.id, s.essay.id));
+    expect(await screenedForScoring(s.db, s.essay.id)).toBe(false);
+  });
+
+  test("screenedForScoring: a practice attempt is never waited on", async () => {
+    process.env.SAFEGUARDING_SCREENER_PROVIDER = "mock";
+    const p = await seed({ practice: true });
+    expect(await screenedForScoring(p.db, p.essay.id)).toBe(true);
   });
 
   test("score-ai with screening off: withheld 0, scores as before", async () => {

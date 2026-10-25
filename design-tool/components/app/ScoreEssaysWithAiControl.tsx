@@ -67,6 +67,12 @@ export type ScoreAiTally = {
   scored_proposed: number;
   scored_final: number;
   withheld: number;
+  /**
+   * Essays whose safety screen failed this run (SEC-05): not scored, not
+   * flagged — unknown. Absent from routes before that change, so it reads
+   * as 0.
+   */
+  screening_failed: number;
   blocked: number;
   provider_errors: number;
   skipped_unscorable: number;
@@ -89,6 +95,7 @@ export const EMPTY_TALLY: ScoreAiTally = {
   scored_proposed: 0,
   scored_final: 0,
   withheld: 0,
+  screening_failed: 0,
   blocked: 0,
   provider_errors: 0,
   skipped_unscorable: 0,
@@ -113,6 +120,7 @@ export function addToTally(
     scored_proposed: tally.scored_proposed + n("scored_proposed"),
     scored_final: tally.scored_final + n("scored_final"),
     withheld: tally.withheld + n("withheld"),
+    screening_failed: tally.screening_failed + n("screening_failed"),
     blocked: tally.blocked + n("blocked"),
     provider_errors: tally.provider_errors + n("provider_errors"),
     skipped_unscorable: tally.skipped_unscorable + n("skipped_unscorable"),
@@ -142,6 +150,12 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
       `${t.withheld} held back: ${t.withheld === 1 ? "it looks" : "they look"} like ` +
         `${t.withheld === 1 ? "it tries" : "they try"} to instruct the AI. Read ` +
         `${t.withheld === 1 ? "it" : "them"} in the scoring queue.`,
+    );
+  }
+  if (t.screening_failed > 0) {
+    lines.push(
+      `${t.screening_failed} not scored: the safety check didn't answer, so ` +
+        `${t.screening_failed === 1 ? "it was" : "they were"} skipped. Run Score with AI again later.`,
     );
   }
   if (t.in_progress > 0) {

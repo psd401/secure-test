@@ -37,6 +37,7 @@ import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsContro
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
 import { docUrl } from "@/lib/googleDocs/drive";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { practiceAttemptIsCallers } from "@/lib/api/staffAttempt";
 import { deadlineNote } from "../../attendanceView";
 import { ExtendTimeAndReload } from "../ExtendTimeAndReload";
 import { HandInAttemptAndReload } from "../HandInAttemptAndReload";
@@ -362,6 +363,10 @@ export default async function AttemptResultPage({ params }: PageProps) {
     notFound();
   }
 
+  const canDelete = attempt.practice
+    ? await practiceAttemptIsCallers(db, attempt, session.sub)
+    : levelSatisfies(access.level, "own");
+
   const results = await buildResults(id, {
     include_in_progress: true,
     // Practice (docs/practice-sitting-design.md, D-4): the one reader that
@@ -618,18 +623,22 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 timed={timed}
               />
             ) : null}
-            <DeleteAttemptAndReturn
-              attemptId={attemptId}
-              assessmentId={id}
-              studentName={
-                row.student.name || row.student.ssid || "this student"
-              }
-              disabledReason={
-                row.status === "in_progress" && row.sitting_open
-                  ? "End the test session first, then delete."
-                  : undefined
-              }
-            />
+            {/* SEC-04: Delete attempt is `own` (D-R5), or the practiser's own
+            practice attempt; the route applies the same rule. */}
+            {canDelete ? (
+              <DeleteAttemptAndReturn
+                attemptId={attemptId}
+                assessmentId={id}
+                studentName={
+                  row.student.name || row.student.ssid || "this student"
+                }
+                disabledReason={
+                  row.status === "in_progress" && row.sitting_open
+                    ? "End the test session first, then delete."
+                    : undefined
+                }
+              />
+            ) : null}
           </div>
         </div>
       </div>

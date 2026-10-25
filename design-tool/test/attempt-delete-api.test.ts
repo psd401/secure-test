@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import {
+  access_grants,
   assessments,
   attempt_deletions,
   attempt_events,
@@ -30,7 +31,7 @@ const expectTestDb = () => {
   }
 };
 
-let mockSession: { sub: string; role: string } | null = null;
+let mockSession: { sub: string; role: string; email?: string } | null = null;
 let originalSessionSecret: string | undefined;
 let originalRoot: string | undefined;
 
@@ -270,6 +271,32 @@ describe("DELETE /api/attempts/[attemptId]", () => {
     expect((await deleteAttempt(s.attempt.id)).status).toBe(404);
     expect((await countRows(s.attempt.id)).attempt).toBeDefined();
     expect(existsSync(join("./storage-test", s.storageKey))).toBe(true);
+  });
+
+  // SEC-04 (security audit 2026-10-24): D-R5 says owner-only, but the route
+  // sat at `run` from access slice 2 until now, so a co-teacher (edit) or a
+  // substitute (run) could erase handed-in work once the sitting closed.
+  test("an edit-level co-teacher and a run-level substitute get 404; the attempt survives", async () => {
+    const GRANTEE = "co-teacher@psd401.net";
+    for (const level of ["edit", "run"] as const) {
+      const s = await seedAttempt({ status: "submitted" });
+      await getDb().insert(access_grants).values({
+        grantee_email: GRANTEE,
+        scope_kind: "assessment",
+        scope_id: s.assessment.id,
+        level,
+        starts_at: new Date(Date.now() - 3_600_000),
+        granted_by_sub: OWNER,
+        granted_by_email: "owner@psd401.net",
+      });
+      mockSession = { sub: `grantee-${level}`, role: "staff", email: GRANTEE };
+      expect((await deleteAttempt(s.attempt.id)).status).toBe(404);
+      expect((await countRows(s.attempt.id)).attempt).toBeDefined();
+      expect(existsSync(join("./storage-test", s.storageKey))).toBe(true);
+      await getDb().execute(sql`truncate table access_grants restart identity cascade`);
+      await getDb().execute(sql`truncate table assessments restart identity cascade`);
+      await getDb().execute(sql`truncate table students restart identity cascade`);
+    }
   });
 
   test("a student session gets 403; no session 401", async () => {

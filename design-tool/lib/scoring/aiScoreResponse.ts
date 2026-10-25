@@ -27,6 +27,7 @@ import type {
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { hasInjectionAlert } from "@/lib/safeguarding/alerts";
+import { screenedForScoring } from "@/lib/safeguarding/screening/screen";
 
 // Slice 39 refactor: the score-one-response core shared by the attempt-wide
 // score-ai route (slice 38) and the per-response re-run action (slice 39).
@@ -38,7 +39,9 @@ import { hasInjectionAlert } from "@/lib/safeguarding/alerts";
 // Semantics (confirmed 2026-07-09): ai → status=proposed always; hybrid →
 // final at confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE, else proposed —
 // and, since Hybrid transparency slice 3, proposed whenever the answer
-// carries a prompt-injection alert.
+// carries a prompt-injection alert; and, since SEC-05 (security audit
+// 2026-10-24), proposed whenever the answer has not actually been screened
+// while a screener is configured (a failed screen is not a clean one).
 
 export type AiScoreOutcome =
   | { kind: "scored"; status: "proposed" | "final" }
@@ -261,7 +264,10 @@ async function scoreClaimed(opts: {
   const finalize =
     method === "hybrid" &&
     result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE &&
-    !(await hasInjectionAlert(db, response.id));
+    !(await hasInjectionAlert(db, response.id)) &&
+    // SEC-05: a screening that failed leaves no alert; an unscreened answer
+    // gets a proposal a teacher reads, never a final.
+    (await screenedForScoring(db, response.id));
   const status = finalize ? ("final" as const) : ("proposed" as const);
   // The insert stays inside a catch, as it was before the slice-2 extraction:
   // a failed write is this caller's provider_error, not a thrown route 500.

@@ -392,3 +392,15 @@ sitting though the panel links it only while open); the disabled
 open+in-progress state and the drop to "not joined" wait for a live client
 sitting. Row 71's ✓ Complete case was seen on the same attempt first.
 Row 78 still needs a second staff account.
+
+**Delete attempt is `own` again (SEC-04, security audit 2026-10-24; built
+2026-10-25 on `security/attempt-and-scoring`).** Access slice 2 had moved the
+route's level from owner-only to `run` without a record, so an edit-level
+co-teacher or a run-level substitute could erase a student's handed-in work
+once the sitting closed. `DELETE /api/attempts/[attemptId]` now needs `own` on
+a class attempt (D-R5 as written); a practice attempt stays at `run` and only
+for the staff member whose practice row it is (`students.practice_for_sub`,
+Practice again D-6). Monitor and the per-student page render the control only
+at `own`. Tests: `test/attempt-delete-api.test.ts` (edit and run grantees →
+404, attempt and bytes survive); the practice case in
+`test/practice-sitting.test.ts` is unchanged.

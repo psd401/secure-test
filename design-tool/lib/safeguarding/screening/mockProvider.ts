@@ -9,7 +9,8 @@ import type {
 // hand-in hook and the AI-scoring withhold (D-4) are testable without
 // Bedrock. Only literal sentinels fire — never ordinary essay text:
 //   SG_SUICIDE → suicidal_ideation, SG_SELFHARM → self_harm,
-//   SG_ABUSE → abuse, SG_INJECT → injection detected.
+//   SG_ABUSE → abuse, SG_INJECT → injection detected,
+//   SG_FAIL → the screener throws (a model outage), for the SEC-05 paths.
 // `evidence` is the sentence carrying the sentinel, as the real screener
 // quotes the triggering sentence.
 
@@ -27,6 +28,9 @@ function sentenceWith(text: string, token: string): string {
 export const mockScreener: ScreeningProvider = {
   id: "mock",
   async screen({ text }: ScreeningInput): Promise<ScreeningResult> {
+    if (text.includes("SG_FAIL")) {
+      throw new Error("safeguarding_screener_api_error_503: mock outage (SG_FAIL)");
+    }
     const hit = WELLBEING_SENTINELS.find(([token]) => text.includes(token));
     const injected = text.includes("SG_INJECT");
     return {

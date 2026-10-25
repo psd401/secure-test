@@ -101,6 +101,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   let blocked = 0;
   let providerErrors = 0;
   let withheld = 0;
+  let screeningFailed = 0;
   let inProgress = 0;
 
   for (const response of responseRows) {
@@ -118,9 +119,18 @@ export async function POST(_req: Request, ctx: RouteContext) {
       continue;
     }
     // Lazy screening (a no-op when off or already screened), then D-4.
-    await screenResponse(db, response.id);
+    const screening = await screenResponse(db, response.id);
     if (await injectionAlertFor(db, response.id)) {
       withheld++;
+      continue;
+    }
+    // SEC-05 (security audit 2026-10-24): a screen that FAILED wrote no
+    // alert, so the check above passes it. "Never screened" is not "screened
+    // clean": skip it this run, count it separately, and let the next run (or
+    // the hourly retry) screen it. aiScoreResponse also refuses to finalize
+    // an unscreened answer, so even a path that reaches it lands proposed.
+    if (screening.failed > 0) {
+      screeningFailed++;
       continue;
     }
     const outcome = await aiScoreResponse({
@@ -166,6 +176,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     skipped_unscorable: skippedUnscorable,
     blocked,
     withheld,
+    screening_failed: screeningFailed,
     in_progress: inProgress,
     provider_errors: providerErrors,
     total_responses: responseRows.length,

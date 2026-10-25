@@ -111,6 +111,11 @@ interface Props {
   studentPsIds?: string[] | null;
   /** Row ES: arrived from "Continue in a new session" — open on the code. */
   openCodeOnLoad?: boolean;
+  /** SEC-04 (security audit 2026-10-24): Delete attempt is `own` on the
+   * assessment (D-R5); a run- or edit-level grantee monitoring the sitting
+   * gets no button, matching the route's 404. Optional so callers that
+   * predate it (tests) render as before. */
+    canDeleteAttempts?: boolean;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -150,6 +155,7 @@ export function MonitorView({
   sectionPsId = null,
   studentPsIds = null,
   openCodeOnLoad = false,
+  canDeleteAttempts = true,
 }: Props) {
   // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
   // or "Extend time" at the header level, same exclusions the Test sessions
@@ -603,6 +609,7 @@ export function MonitorView({
                     selected={r.attempt_id !== null && selected.has(r.attempt_id)}
                     onToggleSelected={toggleSelected}
                     assessmentUntimed={assessmentUntimed}
+                    canDelete={canDeleteAttempts}
                   />
                 ))}
               </TableBody>
@@ -673,6 +680,7 @@ function StudentRow({
   selectable,
   selected,
   onToggleSelected,
+  canDelete,
 }: {
   row: AttendanceRow;
   state: StudentState;
@@ -687,6 +695,7 @@ function StudentRow({
   selectable: boolean;
   selected: boolean;
   onToggleSelected: (attemptId: string) => void;
+  canDelete: boolean;
 }) {
   const idle = idleFor(r, now);
   const current = st === "needs_attention";
@@ -867,17 +876,19 @@ function StudentRow({
                 ) : null}
                 {/* Roadmap 2026-09: a wrong-student join or a retake. Disabled
                 while the student may still be locked in — the route 409s
-                for the same case (`session_open`). */}
-                <DeleteAttemptControl
-                  attemptId={r.attempt_id}
-                  studentName={r.name}
-                  onDeleted={onDeleted}
-                  disabledReason={
-                    r.status === "submitted" || sessionClosed
-                      ? undefined
-                      : "End the test session first, then delete."
-                  }
-                />
+                for the same case (`session_open`). Owner-only (SEC-04). */}
+                {canDelete ? (
+                  <DeleteAttemptControl
+                    attemptId={r.attempt_id}
+                    studentName={r.name}
+                    onDeleted={onDeleted}
+                    disabledReason={
+                      r.status === "submitted" || sessionClosed
+                        ? undefined
+                        : "End the test session first, then delete."
+                    }
+                  />
+                ) : null}
               </>
             )}
           </div>

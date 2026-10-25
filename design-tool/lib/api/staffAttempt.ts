@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { test_sessions, type AttemptRow } from "@/db/schema";
+import { students, test_sessions, type AttemptRow } from "@/db/schema";
 import type { getDb } from "@/db/client";
 
 // The owner check that used to live here (`loadOwnedAttempt`) is now
@@ -34,6 +34,25 @@ export async function sittingIsOpen(db: Db, attempt: AttemptRow): Promise<boolea
     .where(eq(test_sessions.id, attempt.test_session_id))
     .limit(1);
   return sitting?.status === "open";
+}
+
+/**
+ * Is this a practice attempt (D-6) whose overlay student row belongs to `sub`?
+ * SEC-04: the one way below `own` to delete an attempt. The DELETE route and
+ * the results page both ask it, so the button and the route cannot drift.
+ */
+export async function practiceAttemptIsCallers(
+  db: Db,
+  attempt: AttemptRow,
+  sub: string,
+): Promise<boolean> {
+  if (!attempt.practice) return false;
+  const [row] = await db
+    .select({ practice_for_sub: students.practice_for_sub })
+    .from(students)
+    .where(eq(students.id, attempt.student_id))
+    .limit(1);
+  return row?.practice_for_sub === sub;
 }
 
 export function sessionOpenResponse(): NextResponse {

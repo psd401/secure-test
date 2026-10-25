@@ -397,6 +397,41 @@ describe("Practice again (D-6)", () => {
     );
     expect(refused.status).toBe(409);
   });
+
+  test("SEC-04: only the practiser deletes a practice attempt — a run-level practiser may, even the owner may not", async () => {
+    await seedAssessment();
+    const db = getDb();
+    await db.insert(access_grants).values({
+      grantee_email: "colleague@psd401.net",
+      scope_kind: "assessment",
+      scope_id: assessmentId,
+      level: "run",
+      note: "substitute",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+    });
+    try {
+      asColleague();
+      const created = await createSitting({ kind: "practice" });
+      expect(created.status).toBe(201);
+      const sitting = ((await created.json()) as { test_session: TestSessionRow }).test_session;
+      const { attempt } = (await (await join(sitting.id)).json()) as { attempt: AttemptRow };
+      const del = () =>
+        call("../app/api/attempts/[attemptId]/route", "DELETE", `/api/attempts/${attempt.id}`, {
+          attemptId: attempt.id,
+        });
+
+      asOwner();
+      expect((await del()).status).toBe(404);
+      expect(await db.select().from(attempts).where(eq(attempts.id, attempt.id))).toHaveLength(1);
+
+      asColleague();
+      expect((await del()).status).toBe(204);
+      expect(await db.select().from(attempts).where(eq(attempts.id, attempt.id))).toHaveLength(0);
+    } finally {
+      await db.execute(sql`truncate table access_grants restart identity cascade`);
+    }
+  });
 });
 
 describe("the nightly practice sweep (D-7)", () => {

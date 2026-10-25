@@ -464,6 +464,36 @@ describe("POST /api/attempts/:id/score-ai", () => {
     expect(await db.select().from(scores)).toHaveLength(2);
   });
 
+  // SEC-05 (security audit 2026-10-24): the finalize gate itself. With a
+  // screener configured, a Hybrid answer nobody has screened lands proposed
+  // however confident the model is; once screened, the same answer is final.
+  test("hybrid ≥ gate but unscreened while a screener is configured → proposed; screened → final", async () => {
+    process.env.SAFEGUARDING_SCREENER_PROVIDER = "mock";
+    try {
+      const { db, attempt, itemRows } = await seedAiScenario();
+      const hybrid = itemRows[1]!;
+      const [response] = await db
+        .select()
+        .from(responses)
+        .where(eq(responses.item_id, hybrid.id));
+      const { aiScoreResponse } = await import("../lib/scoring/aiScoreResponse");
+
+      const unscreened = await aiScoreResponse({ item: hybrid, response: response!, ownerSub: OWNER });
+      expect(unscreened).toEqual({ kind: "scored", status: "proposed" });
+
+      await db
+        .update(responses)
+        .set({ safeguarding_screened_at: new Date(Date.now() + 1_000) })
+        .where(eq(responses.id, response!.id));
+      const [fresh] = await db.select().from(responses).where(eq(responses.id, response!.id));
+      const screened = await aiScoreResponse({ item: hybrid, response: fresh!, ownerSub: OWNER });
+      expect(screened).toEqual({ kind: "scored", status: "final" });
+      void attempt;
+    } finally {
+      delete process.env.SAFEGUARDING_SCREENER_PROVIDER;
+    }
+  });
+
   test("hybrid below the confidence gate lands proposed", async () => {
     process.env.MOCK_ESSAY_SCORER_CONFIDENCE = "0.5";
     const { db, attempt } = await seedAiScenario();

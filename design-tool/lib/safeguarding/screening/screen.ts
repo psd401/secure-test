@@ -169,6 +169,45 @@ export async function screenResponse(
   }
 }
 
+/**
+ * May a Hybrid score auto-finalize on this answer? (SEC-05, security audit
+ * 2026-10-24.) Before this, `score-ai` ran the lazy screen, then asked only
+ * "is there an injection alert?" — and a screening that FAILED (model down,
+ * unparseable JSON) left no alert, so "never screened" and "screened clean"
+ * were indistinguishable and an unscreened essay could land as `final` with
+ * no review. Now a finalize also needs the answer to be actually screened:
+ * `safeguarding_screened_at` set and not older than the answer's last edit.
+ *
+ * True when nothing needs screening — screening off, a practice attempt, or
+ * an item type the screener does not read — so those paths finalize as
+ * before. False on an unreadable row: unknown is not clean.
+ */
+export async function screenedForScoring(
+  db: Db,
+  responseId: string,
+  deps: Pick<ScreeningDeps, "screener"> = {},
+): Promise<boolean> {
+  const screener = deps.screener !== undefined ? deps.screener : getScreeningProvider();
+  if (!screener) return true;
+  const [row] = await db
+    .select({
+      screened_at: responses.safeguarding_screened_at,
+      updated_at: responses.updated_at,
+      type: items.type,
+      practice: attempts.practice,
+    })
+    .from(responses)
+    .innerJoin(items, eq(items.id, responses.item_id))
+    .innerJoin(attempts, eq(attempts.id, responses.attempt_id))
+    .where(eq(responses.id, responseId))
+    .limit(1);
+  if (!row) return false;
+  if (row.practice) return true;
+  if (!(SCREENED_TYPES as readonly string[]).includes(row.type)) return true;
+  if (!row.screened_at) return false;
+  return row.screened_at.getTime() >= row.updated_at.getTime();
+}
+
 async function screenCandidates(
   db: Db,
   candidates: Candidate[],
