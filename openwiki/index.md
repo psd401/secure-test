@@ -11,5 +11,6 @@ okf_version: "0.1"
 - [architecture](architecture/)
 - [client](client/)
 - [design-tool](design-tool/)
+- [graphing](graphing/)
 - [operations](operations/)
 - [testing](testing/)
