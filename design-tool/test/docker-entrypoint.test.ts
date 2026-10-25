@@ -196,4 +196,3 @@ describe("every mode's script ships in the image", () => {
     }
   });
 });
-

@@ -9,6 +9,8 @@
 import { closeDb, getDb } from "../db/client";
 import { formatPayloadSizes, measurePayloadSizes } from "../lib/observability/payloadSizes";
 
-const rows = await measurePayloadSizes(getDb());
-await closeDb();
-console.log(formatPayloadSizes(rows));
+try {
+  console.log(formatPayloadSizes(await measurePayloadSizes(getDb())));
+} finally {
+  await closeDb();
+}

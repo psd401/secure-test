@@ -64,7 +64,23 @@ export const PAYLOAD_CATEGORIES: ReadonlyArray<{ category: string; size: SQL; fr
 
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Math.round(Number(v)));
 
+/**
+ * Each percentile sorts every row of its table on the live writer, so the
+ * whole read runs in one READ ONLY transaction with a per-statement timeout:
+ * a table grown past what a one-off should scan fails the task instead of
+ * loading the cluster, and nothing here can write.
+ */
+export const PAYLOAD_STATEMENT_TIMEOUT = "60s";
+
 export async function measurePayloadSizes(db: Db): Promise<PayloadSizeRow[]> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`set transaction read only`);
+    await tx.execute(sql.raw(`set local statement_timeout = '${PAYLOAD_STATEMENT_TIMEOUT}'`));
+    return measureEach(tx);
+  });
+}
+
+async function measureEach(db: Pick<Db, "execute">): Promise<PayloadSizeRow[]> {
   const out: PayloadSizeRow[] = [];
   for (const c of PAYLOAD_CATEGORIES) {
     const [r] = (await db.execute(sql`

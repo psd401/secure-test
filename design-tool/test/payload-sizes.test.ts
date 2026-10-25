@@ -20,13 +20,21 @@ const expectTestDb = () => {
 const SHORT_STEM = "Pick one of these";
 const LONG_STEM = "Q".repeat(6000);
 
-beforeAll(() => {
+// Other files share this database: start from empty tables, not from
+// whatever they left. Truncating assessments cascades to items, attempts,
+// responses, attempt_events and peek_requests; rubrics hang off no
+// assessment, so they are truncated on their own.
+const clear = async () => {
+  await getDb().execute(sql`truncate table assessments restart identity cascade`);
+  await getDb().execute(sql`truncate table rubrics restart identity cascade`);
+};
+
+beforeAll(async () => {
   expectTestDb();
+  await clear();
 });
 
-afterEach(async () => {
-  await getDb().execute(sql`truncate table assessments restart identity cascade`);
-});
+afterEach(clear);
 
 afterAll(async () => {
   await closeDb();
@@ -81,6 +89,22 @@ describe("measurePayloadSizes", () => {
     expect(itemsRow.p50!).toBeGreaterThan(Number(expected!.min));
     expect(itemsRow.p50!).toBeLessThan(itemsRow.max!);
     expect(itemsRow.p99!).toBeLessThanOrEqual(itemsRow.max!);
+  });
+});
+
+describe("the read runs read-only", () => {
+  test("a write inside the measuring transaction is refused", async () => {
+    // The same transaction setup, then a write: Postgres must refuse it.
+    const err = await getDb()
+      .transaction(async (tx) => {
+        await tx.execute(sql`set transaction read only`);
+        await tx.execute(sql`insert into rubrics (owner_sub, title, rubric) values ('x', 'x', '{}'::jsonb)`);
+      })
+      .catch((e) => e);
+    // drizzle wraps the driver error; Postgres's own code is on the cause.
+    // 25006 = read_only_sql_transaction.
+    const cause = (err as { cause?: { code?: string } })?.cause ?? err;
+    expect((cause as { code?: string }).code).toBe("25006");
   });
 });
 
