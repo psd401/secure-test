@@ -12,6 +12,10 @@
 // with BEDROCK_PDF_EXTRACT_EFFORT set to that level, so one call can compare
 // effort levels on the same model.
 //
+// --expected <answers.json> scores each run against the hand-checked entry for
+// this file name (scripts/pdfImportScore.ts); the answer set describes
+// teacher documents, so it stays gitignored in samples/.
+//
 // --summary prints one JSON line per model run (counts, tokens, cost; no
 // stems, no file name) for aggregating over many PDFs.
 //
@@ -21,12 +25,15 @@
 // local measurement, nothing is saved. Stems are printed to the terminal only;
 // never paste the output of a real teacher's PDF into a tracked file.
 import { readFileSync } from "node:fs";
+import { basename } from "node:path";
+import { scoreImport, type ExpectedImport } from "./pdfImportScore";
 import { setLogSink } from "../lib/log";
 import { extractPdfLayout, renderPagesForModel } from "../lib/pdfImport/extractFigures";
 import { extractPdfText, looksScanned } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
   countNumberedItems,
+  formsReport,
   keyFiguresFromText,
   withoutKeyFigures,
   numberingReport,
@@ -37,7 +44,7 @@ import {
 import { bedrockPdfExtractor } from "../lib/pdfImport/bedrockProvider";
 
 const USAGE =
-  "usage: bun scripts/compare-pdf-import.ts <file.pdf> [--model <bedrock id> …] [--runs n] [--summary]";
+  "usage: bun scripts/compare-pdf-import.ts <file.pdf> [--model <bedrock id> …] [--runs n] [--summary] [--expected <answers.json>]";
 const DEFAULT_MODELS = ["us.anthropic.claude-sonnet-4-6", "us.anthropic.claude-sonnet-5-5"];
 // Bedrock us. on-demand $ per 1M tokens, in / out — same table as
 // infra/scripts/ai-usage.sh (2026-10-03); a model missing here prints "?".
@@ -51,6 +58,7 @@ let file: string | undefined;
 const models: string[] = [];
 let runs = 1;
 let summary = false;
+let expectedPath: string | undefined;
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i]!;
@@ -64,6 +72,8 @@ for (let i = 0; i < argv.length; i += 1) {
       console.error("--runs must be 1–5");
       process.exit(2);
     }
+  } else if (arg === "--expected") {
+    expectedPath = argv[++i];
   } else if (arg === "--summary") {
     summary = true;
   } else if (!arg.startsWith("--") && !file) {
@@ -78,6 +88,13 @@ if (!file) {
   process.exit(2);
 }
 if (models.length === 0) models.push(...DEFAULT_MODELS);
+const expected = expectedPath
+  ? ((JSON.parse(readFileSync(expectedPath, "utf8")) as Record<string, ExpectedImport>)[basename(file)] ?? null)
+  : null;
+if (expectedPath && !expected) {
+  console.error(`no entry for "${basename(file)}" in ${expectedPath}`);
+  process.exit(2);
+}
 
 // The extractor logs one ai_usage line per call; keep the last one for tokens.
 let lastUsage: { input_tokens?: number; output_tokens?: number; latency_ms?: number } = {};
@@ -165,6 +182,23 @@ for (const spec of models) {
     const inTok = lastUsage.input_tokens ?? 0;
     const outTok = lastUsage.output_tokens ?? 0;
     const cost = price ? `$${((inTok * price[0] + outTok * price[1]) / 1e6).toFixed(4)}` : "?";
+    const checks = expected
+      ? scoreImport(expected, {
+          items: candidates.map((c, i) => {
+            const cand = c as { type: string; correct_answer?: string | null };
+            return { type: cand.type, numbers: validSourceNumbers[i] ?? [], correct_answer: cand.correct_answer };
+          }),
+          sets: allSets,
+          key_figures: [...keyFigures],
+          forms: (() => {
+            const groups = formsReport(validSourceNumbers, text)?.groups;
+            return groups
+              ? { sizes: groups.map((g) => new Set(g.flatMap((i) => validSourceNumbers[i] ?? [])).size) }
+              : null;
+          })(),
+        })
+      : null;
+    const failed = checks?.filter((c) => !c.pass) ?? [];
     if (summary) {
       const types: Record<string, number> = {};
       for (const c of result.candidates) {
@@ -180,6 +214,13 @@ for (const spec of models) {
           rejected: rejected.length,
           missing: numbering.missing_numbers?.length ?? null,
           model_sets: sets.sets.length,
+          ...(checks
+            ? {
+                passed: checks.length - failed.length,
+                checks: checks.length,
+                failed: failed.map((c) => (c.detail ? `${c.name}: ${c.detail}` : c.name)),
+              }
+            : {}),
           figures: figureCount,
           in: inTok,
           out: outTok,
@@ -191,6 +232,10 @@ for (const spec of models) {
       continue;
     }
     console.log(header);
+    if (checks) {
+      console.log(`score ${checks.length - failed.length}/${checks.length}`);
+      for (const c of failed) console.log(`  ✗ ${c.name}${c.detail ? `: ${c.detail}` : ""}`);
+    }
     console.log(
       `tokens ${inTok} in / ${outTok} out · ${cost} · ${((lastUsage.latency_ms ?? 0) / 1000).toFixed(1)} s · ` +
         `${candidates.length} valid, ${rejected.length} rejected · missing numbers: ` +
