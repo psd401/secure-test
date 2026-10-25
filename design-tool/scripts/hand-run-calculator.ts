@@ -101,4 +101,6 @@ await Bun.write(
   }),
 );
 console.log(out.join("\n"));
-console.log(`student token (${student.first_name}) → ${outDir}/student-token.txt`);
+// No student identifier on stdout (FERPA rule; PR #86 review), even for the
+// fictional demo roster: the index says which demo student it is.
+console.log(`student token (demo student ${studentIndex}) → ${outDir}/student-token.txt`);

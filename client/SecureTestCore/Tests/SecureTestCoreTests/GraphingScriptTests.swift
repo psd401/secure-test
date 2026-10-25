@@ -42,6 +42,27 @@ final class GraphingScriptTests: XCTestCase {
         XCTAssertFalse(script.contains("localStorage"))
     }
 
+    /// Our own page code is guarded by `rendererScriptWithoutVendored`; the
+    /// vendored part (all from MathLive — packages/graphing/src has no HTML
+    /// APIs) keeps its HTML sinks to this exact set, so a MathLive bump that adds
+    /// one fails here and gets read (PR #86 review). The 22 `innerHTML =` sites
+    /// write MathLive's own markup — rendered LaTeX, keyboard plates, menus,
+    /// its stylesheet — and authored LaTeX is escaped on the way: on 2026-10-24
+    /// a field given `\text{<img onerror=…>}`, `x_{<svg onload=…>}` and three
+    /// more produced no element and ran nothing. The page CSP allows inline
+    /// script (`unsafe-inline`), so this escaping is the wall that matters.
+    func testItsHTMLSinksArePinned() {
+        func count(_ pattern: String) -> Int {
+            let re = try! NSRegularExpression(pattern: pattern)
+            return re.numberOfMatches(in: script, range: NSRange(script.startIndex..., in: script))
+        }
+        XCTAssertEqual(count(#"\.innerHTML\s*="#), 22, "an innerHTML site was added or removed: read it, then update this count")
+        XCTAssertEqual(count(#"\.innerHTML\s*\+="#), 0)
+        XCTAssertEqual(count(#"outerHTML\s*="#), 0)
+        XCTAssertEqual(count("insertAdjacentHTML"), 0)
+        XCTAssertEqual(count(#"document\.write"#), 0)
+    }
+
     func testThePageSplicesItOnceAndOursStaysSeparable() {
         let page = AssessmentPage.rendererScript
         XCTAssertEqual(page.components(separatedBy: script).count, 2)
