@@ -1,0 +1,5 @@
+# Files
+
+- [Test calculator - mode, preset, per-question mark and client panel](calculator.md) - How a teacher's calculator_mode and calculator_preset settings, the per-item no_calculator mark, and the delivery bundle's calculator object make a calculator available in the macOS SecureTest page, including the publish lock and the client 2.0.0 refusal.
+- [Graph items and stimulus graphs - board, key, student objects and scoring](graph-items.md) - The "graph it" item type (a snapped board the student places points, lines, circles and parabolas on), its shape-based auto-scoring with all and per_object modes, the stimulus graph attached to any item, and how each flows through authoring, export, delivery, scoring, review and preview.
+- [Graphing calculator and graph items (packages/graphing)](overview.md) - The @secure-test/graphing workspace package that powers three product features - the student graphing calculator, stimulus graphs and "graph it" answer items - how each crosses the design tool, the schema, and the macOS client, and which client version gates them.
