@@ -90,8 +90,11 @@ const ZIP_DEFLATED = 8;
  * one with `maxOutputLength` set to what is left of `limit`, so a hostile
  * entry can never allocate more than the budget. Returns `Infinity` as soon
  * as the total passes `limit` (and for ZIP64, which no TIDE export is), and
- * `null` when the bytes are not a zip this reader can walk — ExcelJS then
- * reports its own parse error. Peak memory is one entry, at most `limit`.
+ * `null` when the bytes are not a zip this reader can walk — a corrupt entry,
+ * an unknown method, offsets that do not land on their signatures (bytes
+ * prepended to the archive). The caller refuses `null` too: an archive the
+ * budget cannot walk is never handed to ExcelJS, which may read what this
+ * cannot (PR #96 re-review). Peak memory is one entry, at most `limit`.
  */
 export function inflatedSizeWithin(buf: Buffer, limit: number): number | null {
   // End-of-central-directory record: 22 bytes plus a comment of up to 65535.
@@ -155,7 +158,15 @@ export async function parseTideXlsx(
   limits: TideImportLimits = DEFAULT_TIDE_LIMITS,
 ): Promise<ParsedRow[]> {
   const inflated = inflatedSizeWithin(buf, limits.maxInflatedBytes);
-  if (inflated !== null && inflated > limits.maxInflatedBytes) {
+  // Fail closed: honest TIDE exports are plain zips the walker reads end to
+  // end, so `null` costs nothing on real input.
+  if (inflated === null) {
+    throw new TideImportError(
+      "xlsx_parse_failed",
+      "the workbook is not a zip archive the import can read",
+    );
+  }
+  if (inflated > limits.maxInflatedBytes) {
     throw new TideImportError(
       "xlsx_too_large",
       `the workbook unpacks past the limit of ${limits.maxInflatedBytes} bytes`,

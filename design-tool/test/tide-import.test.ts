@@ -776,6 +776,35 @@ describe("TIDE import ceilings (SEC-08)", () => {
     expect((err as { code: string }).code).toBe("xlsx_too_large");
   });
 
+  test("an archive the budget cannot walk is refused, never handed to ExcelJS (PR #96 re-review)", async () => {
+    const { inflatedSizeWithin, parseTideXlsx, TideImportError } = await import("../lib/api/importTide");
+    const good = await buildTideXlsxBuffer(THREE);
+    const refusedAs = async (buf: Buffer) => {
+      const err = await parseTideXlsx(buf, { maxInflatedBytes: 1 << 30, maxRows: 1000 }).catch((e) => e);
+      expect(err).toBeInstanceOf(TideImportError);
+      return (err as { code: string }).code;
+    };
+
+    // One entry's deflate stream made invalid: its first byte declares
+    // block type 3, which no inflater accepts.
+    const corrupt = Buffer.from(good);
+    const local = corrupt.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    expect(corrupt.readUInt16LE(local + 8)).toBe(8);
+    const data = local + 30 + corrupt.readUInt16LE(local + 26) + corrupt.readUInt16LE(local + 28);
+    corrupt[data] = 0xff;
+    expect(inflatedSizeWithin(corrupt, 1 << 30)).toBeNull();
+    expect(await refusedAs(corrupt)).toBe("xlsx_parse_failed");
+
+    // Bytes prepended to the archive: every central-directory offset is now
+    // off by 16, so the walker cannot place a single entry.
+    const prepended = Buffer.concat([Buffer.alloc(16), good]);
+    expect(inflatedSizeWithin(prepended, 1 << 30)).toBeNull();
+    expect(await refusedAs(prepended)).toBe("xlsx_parse_failed");
+
+    // The untouched workbook still parses.
+    expect(await parseTideXlsx(good, { maxInflatedBytes: 1 << 30, maxRows: 1000 })).toHaveLength(3);
+  });
+
   test("more populated rows than the ceiling is refused; at the ceiling parses", async () => {
     const { parseTideXlsx, TideImportError } = await import("../lib/api/importTide");
     const buf = await buildTideXlsxBuffer(THREE);
