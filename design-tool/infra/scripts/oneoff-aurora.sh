@@ -23,6 +23,7 @@
 #   oneoff-aurora.sh roster-health [teacher@psd401.net]
 #   oneoff-aurora.sh ps-reach [teacher@psd401.net]   # read-only PowerSchool check
 #   oneoff-aurora.sh student-lookup <email | student-number>  # read-only
+#   oneoff-aurora.sh payload-sizes   # read-only; stored-size aggregates only
 #   STACK=SecureTestDesignToolStaging oneoff-aurora.sh seed-staging \
 #       --teacher <staff email> --student <demo student email>=<number>
 #       # STAGING only (README "Staging"); refuses on production
@@ -40,7 +41,7 @@ set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
   echo "usage: oneoff-aurora.sh <mode> [args…]" >&2
-  echo "  modes: migrate, corpus, compare, seed-essays, roster-health, ps-reach, student-lookup, seed-staging" >&2
+  echo "  modes: migrate, corpus, compare, seed-essays, roster-health, ps-reach, student-lookup, payload-sizes, seed-staging" >&2
   exit 2
 fi
 MODE="$1"

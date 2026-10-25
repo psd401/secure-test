@@ -32,6 +32,7 @@ beforeAll(async () => {
   );
   await writeFile(path.join(dir, "scripts", "score-corpus.mjs"), STUB("corpus"));
   await writeFile(path.join(dir, "scripts", "compare-runs.mjs"), STUB("compare"));
+  await writeFile(path.join(dir, "scripts", "payload-sizes.mjs"), STUB("payload-sizes"));
   await writeFile(path.join(dir, "db", "migrate.mjs"), STUB("migrate"));
   await writeFile(path.join(dir, "server.js"), STUB("server"));
 });
@@ -119,7 +120,7 @@ describe("docker-entrypoint mode dispatch", () => {
   });
 
   test("each mode runs its own bundled script", async () => {
-    for (const mode of ["migrate", "corpus", "compare"]) {
+    for (const mode of ["migrate", "corpus", "compare", "payload-sizes"]) {
       const { code, out } = await run([mode]);
       expect(out).toBe(`${mode} []`);
       expect(code).toBe(0);
@@ -176,3 +177,23 @@ describe("docker-entrypoint mode dispatch", () => {
     expect(err).toContain("no DATABASE_URL and missing");
   });
 });
+
+// A mode the entrypoint names but the image never builds or copies only fails
+// on Aurora, mid-incident. Every bundled script a mode points at must have its
+// `bun build` line in the builder stage and its COPY into the runner.
+describe("every mode's script ships in the image", () => {
+  test("Dockerfile builds and copies each MODES target", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "..", "scripts", "docker-entrypoint.mjs")).text();
+    const docker = await Bun.file(path.join(import.meta.dir, "..", "Dockerfile")).text();
+    const block = src.slice(src.indexOf("const MODES = {"), src.indexOf("};", src.indexOf("const MODES = {")));
+    const targets = [...block.matchAll(/:\s*"(\.{1,2}\/[^"]+\.mjs)"/g)].map((m) => m[1]!);
+    expect(targets.length).toBeGreaterThan(5);
+    for (const t of targets) {
+      // ./x.mjs lives in scripts/, ../db/x.mjs in db/.
+      const rel = t.startsWith("../") ? t.slice(3) : `scripts/${t.slice(2)}`;
+      expect(docker).toContain(`--outfile ${rel}`);
+      expect(docker).toContain(`/repo/design-tool/${rel} ./design-tool/${rel}`);
+    }
+  });
+});
+
