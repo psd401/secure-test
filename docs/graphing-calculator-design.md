@@ -392,6 +392,7 @@ client is 3 (a Debug-only spike).
   graph canvas**, including inside a real AAC session — no hand row has
   ever covered a canvas in peek. Fallback if blank: the peek shows the
   expression list only.
+  **2026-10-24:** moved to the post-deploy smoke (James).
 - The Washington four-function configuration — settled 2026-10-24: the
   Desmos WA layout (fraction key instead of √). OSPI's paper policy (√ and
   %) covers paper tests only.
@@ -428,6 +429,11 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   no effect and stays hidden.
 - D-7: whether `calculator_non_calc_items` keeps the calculator on
   no-calculator items.
+- **Decided for v1 (James, 2026-10-24):** the accommodation stays hidden
+  and grants nothing without a test calculator, and `calculator_non_calc_items`
+  is not used (a no-calculator question stays so for everyone). Both move to
+  roadmap Row DC-A. Findings Z-1 / Z-2 (zoom, Tab) ship as documented
+  findings; a high-zoom layout is roadmap Row DC-Z.
 
 ## Progress
 
@@ -498,3 +504,13 @@ student the calculator; D-9 v1 as proposed; KaTeX licence notice fixed on
   give none) a polite live line under the expressions says "Press → to move
   back out". Tests pass (graphing 496, design-tool 3383, swift 1148); not
   yet tried in the app.
+- 2026-10-24 — merge prep: `main` (the race fix #84 and its stopgap #85)
+  merged in (`28e35ce0`). Release path checked: the signed renderer's
+  extract includes `GeneratedGraphing.swift` and the calculator page glue,
+  every client change on the branch is page script, and the shipped 2.0.0
+  client already accepts `response.generic` — so a server deploy (0063 at
+  boot) with a re-signed renderer brings the calculator to 2.0 students, no
+  client release. Not yet run: a Release-path session on the served
+  renderer — part of the post-deploy smoke, with the teacher peek. The
+  MathLive "relative paths" console error at first open is accepted as
+  documented.
