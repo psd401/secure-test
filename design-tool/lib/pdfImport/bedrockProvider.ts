@@ -30,11 +30,15 @@ const DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6";
 // and later) reject a non-default temperature and always think, so they get
 // an effort level instead — `low` keeps the thinking short (James,
 // 2026-10-25; raise it only if the import comparison shows a quality drop).
+// BEDROCK_PDF_EXTRACT_EFFORT overrides the level; an unknown value is ignored.
 const CLAUDE_5_GEN = /claude-(sonnet|opus|haiku|fable)-[5-9]/;
+const EFFORTS: readonly ConverseEffort[] = ["low", "medium", "high", "xhigh", "max"];
 export function pdfExtractSampling(
   modelId: string,
 ): { temperature: number } | { effort: ConverseEffort } {
-  return CLAUDE_5_GEN.test(modelId) ? { effort: "low" } : { temperature: 0 };
+  if (!CLAUDE_5_GEN.test(modelId)) return { temperature: 0 };
+  const override = process.env.BEDROCK_PDF_EXTRACT_EFFORT as ConverseEffort | undefined;
+  return { effort: override && EFFORTS.includes(override) ? override : "low" };
 }
 
 export const bedrockPdfExtractor: PdfExtractorProvider = {

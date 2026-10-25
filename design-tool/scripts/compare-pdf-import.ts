@@ -5,6 +5,10 @@
 //   bun scripts/compare-pdf-import.ts <file.pdf> \
 //     [--model us.anthropic.claude-sonnet-4-6] [--model us.anthropic.claude-sonnet-5-5] [--runs 2] [--summary]
 //
+// A model given as <id>@<effort> (us.anthropic.claude-sonnet-5-5@medium) runs
+// with BEDROCK_PDF_EXTRACT_EFFORT set to that level, so one call can compare
+// effort levels on the same model.
+//
 // --summary prints one JSON line per model run (counts, tokens, cost; no
 // stems, no file name) for aggregating over many PDFs.
 //
@@ -97,17 +101,20 @@ const short = (s: unknown, n = 70) => {
   return flat.length > n ? `${flat.slice(0, n - 1)}…` : flat;
 };
 
-for (const model of models) {
+for (const spec of models) {
+  const [model, effort] = spec.split("@") as [string, string | undefined];
   for (let run = 1; run <= runs; run += 1) {
     process.env.BEDROCK_PDF_EXTRACT_MODEL = model;
+    if (effort) process.env.BEDROCK_PDF_EXTRACT_EFFORT = effort;
+    else delete process.env.BEDROCK_PDF_EXTRACT_EFFORT;
     lastUsage = {};
-    const header = `== ${model}${runs > 1 ? ` (run ${run})` : ""}`;
+    const header = `== ${spec}${runs > 1 ? ` (run ${run})` : ""}`;
     let result;
     try {
       result = await bedrockPdfExtractor.extract({ text, page_count: extracted.pageCount });
     } catch (err) {
       if (summary) {
-        console.log(JSON.stringify({ model, failed: err instanceof Error ? err.message.slice(0, 120) : "error" }));
+        console.log(JSON.stringify({ model: spec, failed: err instanceof Error ? err.message.slice(0, 120) : "error" }));
         continue;
       }
       console.log(`${header}\nFAILED: ${err instanceof Error ? err.message : String(err)}\n`);
@@ -144,7 +151,7 @@ for (const model of models) {
       }
       console.log(
         JSON.stringify({
-          model,
+          model: spec,
           pages: extracted.pageCount,
           numbered: numbering.numbered_items,
           valid: candidates.length,

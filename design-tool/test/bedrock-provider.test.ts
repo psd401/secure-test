@@ -474,6 +474,17 @@ describe("bedrockPdfExtractor (text path vs scanned/document path)", () => {
     expect(pdfExtractSampling("us.anthropic.claude-opus-5-5")).toEqual({ effort: "low" });
   });
 
+  test("BEDROCK_PDF_EXTRACT_EFFORT overrides the level; unknown values fall back to low", async () => {
+    const { pdfExtractSampling } = await import("../lib/pdfImport/bedrockProvider");
+    process.env.BEDROCK_PDF_EXTRACT_EFFORT = "medium";
+    expect(pdfExtractSampling("us.anthropic.claude-sonnet-5-5")).toEqual({ effort: "medium" });
+    // Sonnet 4.6 ignores it: no effort field there.
+    expect(pdfExtractSampling("us.anthropic.claude-sonnet-4-6")).toEqual({ temperature: 0 });
+    process.env.BEDROCK_PDF_EXTRACT_EFFORT = "extreme";
+    expect(pdfExtractSampling("us.anthropic.claude-sonnet-5-5")).toEqual({ effort: "low" });
+    delete process.env.BEDROCK_PDF_EXTRACT_EFFORT;
+  });
+
   test.each(["refusal", "content_filtered"])(
     "a %s stop is a typed refusal, not invalid output",
     async (stopReason) => {
