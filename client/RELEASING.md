@@ -195,6 +195,24 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v2.0.1 — 2026-10-24** (built from `44663c6fe519`; the tag landed on
+  `d794cbe3`, one OpenWiki-only commit later, because the release command had
+  no `--target <full sha>` — pass it next time): the ending-session race fix
+  (#84: Back to your tests waits for `DID END` after every hand-in, with a
+  "Finishing your secure session…" notice; the page gate never opens when
+  `begin()` started nothing), plus, in the built-in page, the stopgap (#85)
+  and the graphing calculator that production already serves in signed
+  renderer v1792904331. psd-sign 0.6.1: pre-flight clean (HEAD =
+  `origin/main`; 2.0.1 > v2.0.0), archive-only Developer ID + hardened
+  runtime (no re-sign), all seven entitlements = `expected-entitlements.txt`,
+  profile `SecureTest Developer ID` to 2044, `PSDBuildCommit` = HEAD. App and
+  pkg notarized (Accepted) and stapled; `latest` resolves to v2.0.1.
+  Hand-run: the ending-session rows passed in real AAC sessions on a
+  development build carrying the fix; this signed build was smoke-run from an
+  expanded pkg against production (Release posture, served renderer from
+  cache v1792904331, calculator test opened, real lockdown, emergency end) —
+  the race-fix path itself was not repeated on the signed build. Same
+  configuration profile as before.
 - **v2.0.0 — 2026-10-24** (built from `bebf933ea9d2`, tag on `main`):
   the server-delivered renderer (`docs/server-delivered-renderer-design.md`
   slices 4a–4f: the page is a signed renderer the server sends with each
@@ -430,7 +448,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v2.0.1** (`MARKETING_VERSION` = 2.0.1, from `main`) — the
+- ~~**Next release: v2.0.1**~~ PUBLISHED 2026-10-24 (see Released). (`MARKETING_VERSION` = 2.0.1, from `main`) — the
   ending-session race fix (#84: Back to your tests waits for `DID END` after
   every hand-in; the page gate never opens when `begin()` started nothing),
   real-AAC rows passed 2026-10-24. Also carries, in the built-in page, what
