@@ -34,6 +34,18 @@ export async function POST(req: Request) {
     );
   }
 
+  // SEC-08: the size check used to run after `formData()` had already
+  // buffered the whole body. A declared length over the cap is refused
+  // before a byte is read; a body with no length still meets the check
+  // on `file.size` below.
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > MAX_BYTES) {
+    return NextResponse.json(
+      { ok: false, error: "file_too_large", limit: MAX_BYTES },
+      { status: 413 },
+    );
+  }
+
   let file: File;
   try {
     const form = await req.formData();

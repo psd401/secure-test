@@ -726,3 +726,80 @@ describe("POST /api/accommodations/import (slice 23a)", () => {
     expect(accB[0]!.ssid).toBe("TB-001");
   });
 });
+
+// ── SEC-08 (security audit 2026-10-24): the import's ceilings ───────────────
+
+describe("TIDE import ceilings (SEC-08)", () => {
+  const THREE: TideFixtureRow[] = [
+    { ssid: "1111111111", subject: "Mathematics", tool: "Highlighter", value: "ON" },
+    { ssid: "2222222222", subject: "Mathematics", tool: "Highlighter", value: "ON" },
+    { ssid: "3333333333", subject: "Mathematics", tool: "Highlighter", value: "ON" },
+  ];
+
+  test("declaredInflatedSize reads the zip's own sizes; non-zip bytes are null", async () => {
+    const { declaredInflatedSize } = await import("../lib/api/importTide");
+    const buf = await buildTideXlsxBuffer(THREE);
+    const size = declaredInflatedSize(buf);
+    expect(size).not.toBeNull();
+    expect(Number.isFinite(size)).toBe(true);
+    // The sheet XML alone is bigger than the compressed file is small.
+    expect(size!).toBeGreaterThan(1000);
+    expect(declaredInflatedSize(Buffer.from("not a zip at all, nowhere near"))).toBeNull();
+  });
+
+  test("a workbook that would unpack past the ceiling is refused before inflating", async () => {
+    const { parseTideXlsx, TideImportError } = await import("../lib/api/importTide");
+    const buf = await buildTideXlsxBuffer(THREE);
+    const err = await parseTideXlsx(buf, { maxInflatedBytes: 10, maxRows: 1000 }).catch((e) => e);
+    expect(err).toBeInstanceOf(TideImportError);
+    expect((err as { code: string }).code).toBe("xlsx_too_large");
+  });
+
+  test("more populated rows than the ceiling is refused; at the ceiling parses", async () => {
+    const { parseTideXlsx, TideImportError } = await import("../lib/api/importTide");
+    const buf = await buildTideXlsxBuffer(THREE);
+    const err = await parseTideXlsx(buf, { maxInflatedBytes: 1 << 30, maxRows: 2 }).catch((e) => e);
+    expect(err).toBeInstanceOf(TideImportError);
+    expect((err as { code: string }).code).toBe("too_many_rows");
+    expect((await parseTideXlsx(buf, { maxInflatedBytes: 1 << 30, maxRows: 3 })).length).toBe(3);
+  });
+
+  test("a lone cell far down the sheet is one row to walk, not a million", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const { parseTideXlsx } = await import("../lib/api/importTide");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Accommodations");
+    ws.addRow(["Student ID", "Subject", "Tool Name", "Value"]);
+    ws.addRow(["1111111111", "Mathematics", "Highlighter", "ON"]);
+    ws.getCell(1_000_000, 1).value = "x";
+    const buf = Buffer.from((await wb.xlsx.writeBuffer()) as ArrayBuffer);
+    const started = Date.now();
+    const rows = await parseTideXlsx(buf, { maxInflatedBytes: 1 << 30, maxRows: 5 });
+    expect(rows).toHaveLength(1);
+    // The old `for (r <= ws.rowCount)` loop took seconds here; the populated
+    // walk is a handful of rows.
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("the route refuses a declared Content-Length over the cap before reading the body", async () => {
+    asUser("tide-teacher");
+    const { POST } = await import("../app/api/accommodations/import/route");
+    const req = new Request("http://localhost/api/accommodations/import", {
+      method: "POST",
+      headers: {
+        "content-type": "multipart/form-data; boundary=x",
+        "content-length": String(30 * 1024 * 1024),
+      },
+      body: "--x--",
+    });
+    const res = await POST(req);
+    if (req.headers.get("content-length") === null) {
+      // This runtime strips the header from a constructed Request; the
+      // file.size check below the header check still holds (existing tests).
+      expect([400, 413]).toContain(res.status);
+      return;
+    }
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe("file_too_large");
+  });
+});
