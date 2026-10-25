@@ -302,6 +302,18 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // PDF-import fixes (2026-10-25): a form printed twice comes back twice; the
+  // copy is dropped and counted.
+  test("a repeated question (a printed copy) is dropped and counted", async () => {
+    const id = await createAssessment("Print copies");
+    const stem = "A train covers 120 km in 1.5 hours. What is its speed in km/h, to one decimal?";
+    const res = await postPdf(id, makeTextPdf(["1. 2. 3.", `ES: #1 ${stem}`, "ES: #2 Another question.", `ES: #3 ${stem}`]));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { candidates: unknown[]; print_copies_dropped: number };
+    expect(body.candidates).toHaveLength(2);
+    expect(body.print_copies_dropped).toBe(1);
+  });
+
   // PDF-import slice 3: with page images on, the route renders the pages and
   // still answers (the mock ignores them; the request shape is covered in
   // bedrock-provider.test.ts).

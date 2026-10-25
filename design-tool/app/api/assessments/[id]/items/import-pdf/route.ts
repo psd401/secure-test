@@ -9,6 +9,7 @@ import {
   PdfExtractError,
   adjacencyFallback,
   countNumberedItems,
+  dropPrintCopies,
   flagShortenedSources,
   formsReport,
   keyFiguresFromText,
@@ -261,15 +262,22 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
 
+  // PDF-import fixes (2026-10-25): a form printed twice on one page comes
+  // back twice; the repeat is dropped before anything else reads the list.
+  const printCopies = dropPrintCopies(outcome.result.candidates, outcome.result.proposed_sets ?? []);
+  const rawCandidates = printCopies.candidates;
+
   // E14: figures.length is 0 on every scan, which turns on the
   // `[FIGURE n]` strip — a marker there points at nothing.
   const { candidates, rejected, truncated } = validatePdfCandidates(
-    outcome.result.candidates,
+    rawCandidates,
     { figureCount: figures.length },
   );
   // E8 (2026-09-01): compare the document's own numbering with what came
   // back so a teacher learns which questions to author by hand. Scanned
   // PDFs have no text layer to count.
+  // The list before print copies were dropped: a copy's printed numbers
+  // were found, so they are not "missing".
   const numbering = numberingReport(
     scanned ? null : countNumberedItems(modelText),
     outcome.result.candidates,
@@ -282,17 +290,17 @@ export async function POST(req: Request, ctx: RouteContext) {
   const rejectedIdx = new Set(rejected.map((r) => r.index));
   const rawToValid = new Map<number, number>();
   let valid = 0;
-  for (let i = 0; i < Math.min(outcome.result.candidates.length, candidates.length + rejected.length); i++) {
+  for (let i = 0; i < Math.min(rawCandidates.length, candidates.length + rejected.length); i++) {
     if (!rejectedIdx.has(i)) rawToValid.set(i, valid++);
   }
-  const setValidation = validateProposedSets(outcome.result.proposed_sets ?? [], rawToValid, figures.length);
-  const rawSourceNumbers = readSourceNumbers(outcome.result.candidates);
+  const setValidation = validateProposedSets(printCopies.proposedSets, rawToValid, figures.length);
+  const rawSourceNumbers = readSourceNumbers(rawCandidates);
   const validSourceNumbers = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawSourceNumbers[rawIndex] ?? []);
   // Beta feedback 2026-10-07: per validated candidate, what the model
   // changed from the printed text; the card flags it in blue.
-  const rawChanges = readCandidateChanges(outcome.result.candidates);
+  const rawChanges = readCandidateChanges(rawCandidates);
   const changes = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawChanges[rawIndex] ?? []);
@@ -341,6 +349,8 @@ export async function POST(req: Request, ctx: RouteContext) {
     // Aligned with `candidates`: [] for an item printed as is.
     changes,
     truncated,
+    // Repeated questions (a form printed twice) left out of `candidates`.
+    print_copies_dropped: printCopies.dropped,
     ...numbering,
     // E5 slice 4: every raster figure above MIN_FIGURE_PT, in document order,
     // with its page and (unless omitted for size) a PNG data URL.

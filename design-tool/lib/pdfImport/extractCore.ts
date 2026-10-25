@@ -1287,3 +1287,56 @@ export function withoutKeyFigures(sets: readonly ProposedSet[], key: ReadonlySet
     }))
     .filter((s) => s.figures.length > 0 || s.stimulus.trim() !== "" || s.sources.length > 0);
 }
+
+// --- PDF-import fixes (2026-10-25): print copies --------------------------
+// Teachers print two copies of a form on one page and cut the sheet in half.
+// The model reads the second copy as more questions — the same two again,
+// sometimes renumbered 3) and 4) — which doubled a form's questions or made
+// the copy look like a form of its own (6 forms detected where 4 exist).
+
+/** A stem shorter than this ("Explain.", "Show your work.") can repeat on
+ * purpose; only longer ones are compared. */
+const MIN_COPY_STEM_CHARS = 30;
+
+function copyKey(cand: unknown): string | null {
+  if (!cand || typeof cand !== "object") return null;
+  const { type, stem, choices } = cand as { type?: unknown; stem?: unknown; choices?: unknown };
+  if (typeof stem !== "string") return null;
+  const norm = (s: string) => withoutEmphasis(s).toLowerCase().replace(/[\s$\\{}]+/g, "");
+  const body = norm(stem);
+  if (body.length < MIN_COPY_STEM_CHARS) return null;
+  const opts = Array.isArray(choices)
+    ? choices.map((c) => (c && typeof c === "object" && "text" in c ? norm(String((c as { text: unknown }).text)) : "")).join("|")
+    : "";
+  return `${String(type)}\u0000${body}\u0000${opts}`;
+}
+
+/**
+ * Drops a raw candidate that repeats an earlier one word for word (same
+ * type, stem and choices) and remaps the raw proposed sets' item_indexes
+ * past it. Pure; exported for tests. `dropped` counts the copies removed.
+ */
+export function dropPrintCopies(
+  candidates: readonly unknown[],
+  proposedSets: readonly unknown[],
+): { candidates: unknown[]; proposedSets: unknown[]; dropped: number } {
+  const seen = new Set<string>();
+  const newIndex = new Map<number, number>();
+  const kept: unknown[] = [];
+  candidates.forEach((cand, i) => {
+    const key = copyKey(cand);
+    if (key !== null && seen.has(key)) return;
+    if (key !== null) seen.add(key);
+    newIndex.set(i, kept.length);
+    kept.push(cand);
+  });
+  if (kept.length === candidates.length) return { candidates: [...candidates], proposedSets: [...proposedSets], dropped: 0 };
+  const sets = proposedSets.flatMap((set) => {
+    if (!set || typeof set !== "object") return [set];
+    const idx = (set as { item_indexes?: unknown }).item_indexes;
+    if (!Array.isArray(idx)) return [set];
+    const remapped = idx.flatMap((i) => (typeof i === "number" && newIndex.has(i) ? [newIndex.get(i)!] : []));
+    return remapped.length > 0 ? [{ ...(set as object), item_indexes: remapped }] : [];
+  });
+  return { candidates: kept, proposedSets: sets, dropped: candidates.length - kept.length };
+}

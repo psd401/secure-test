@@ -33,6 +33,7 @@ import { extractPdfText, looksScanned } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
   countNumberedItems,
+  dropPrintCopies,
   formsReport,
   keyFiguresFromText,
   withoutKeyFigures,
@@ -149,16 +150,19 @@ for (const spec of models) {
       console.log(`${header}\nFAILED: ${err instanceof Error ? err.message : String(err)}\n`);
       continue;
     }
-    const { candidates, rejected } = validatePdfCandidates(result.candidates, { figureCount });
+    // As the route: print copies out first; numbering reads the full list.
     const numbering = numberingReport(countNumberedItems(text), result.candidates);
-    const sourceNumbers = readSourceNumbers(result.candidates);
+    const printCopies = dropPrintCopies(result.candidates, result.proposed_sets ?? []);
+    const raw = printCopies.candidates;
+    const { candidates, rejected } = validatePdfCandidates(raw, { figureCount });
+    const sourceNumbers = readSourceNumbers(raw);
     const rejectedIdx = new Set(rejected.map((r) => r.index));
     const rawToValid = new Map<number, number>();
     let valid = 0;
-    result.candidates.forEach((_, i) => {
+    raw.forEach((_, i) => {
       if (!rejectedIdx.has(i)) rawToValid.set(i, valid++);
     });
-    const sets = validateProposedSets(result.proposed_sets ?? [], rawToValid, figureCount);
+    const sets = validateProposedSets(printCopies.proposedSets, rawToValid, figureCount);
     // The route adds a set per unplaced figure (the adjacency rule); show both.
     const validSourceNumbers = [...rawToValid.entries()]
       .sort((a, b) => a[1] - b[1])
@@ -201,7 +205,7 @@ for (const spec of models) {
     const failed = checks?.filter((c) => !c.pass) ?? [];
     if (summary) {
       const types: Record<string, number> = {};
-      for (const c of result.candidates) {
+      for (const c of raw) {
         const t = String((c as { type?: unknown }).type);
         types[t] = (types[t] ?? 0) + 1;
       }
@@ -214,6 +218,7 @@ for (const spec of models) {
           rejected: rejected.length,
           missing: numbering.missing_numbers?.length ?? null,
           model_sets: sets.sets.length,
+          print_copies: printCopies.dropped,
           ...(checks
             ? {
                 passed: checks.length - failed.length,
@@ -241,7 +246,7 @@ for (const spec of models) {
         `${candidates.length} valid, ${rejected.length} rejected · missing numbers: ` +
         `${numbering.missing_numbers?.join(", ") || "none"}`,
     );
-    result.candidates.forEach((c, i) => {
+    raw.forEach((c, i) => {
       const cand = c as { type?: unknown; stem?: unknown; correct_choice_ids?: unknown };
       const nums = sourceNumbers[i]?.join(",") || "-";
       const flag = rejectedIdx.has(i) ? " [REJECTED]" : "";

@@ -11,6 +11,7 @@ import {
 } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
+  dropPrintCopies,
   keyFiguresFromText,
   withoutKeyFigures,
   parsePdfExtraction,
@@ -1327,5 +1328,38 @@ describe("answer-key figures", () => {
     const text = "1. Q1\nResponses vary.\n[FIGURE 1]\n2. Q2";
     expect(adjacencyFallback(1, text, [[1], [2]], [])).toHaveLength(1);
     expect(adjacencyFallback(1, text, [[1], [2]], [], new Set(), new Set([1]))).toEqual([]);
+  });
+});
+
+// PDF-import fixes (2026-10-25): a form printed twice on one page.
+describe("dropPrintCopies", () => {
+  const q = (stem: string, extra: Record<string, unknown> = {}) => ({ type: "essay", stem, ...extra });
+  const long1 = "A train covers 120 km in 1.5 hours. What is its average speed in km/h?";
+  const long2 = "A recipe needs 3 cups of flour for 12 rolls. How much makes 30 rolls?";
+
+  test("a repeat — even renumbered, even with different emphasis — is dropped and sets remap", () => {
+    const raw = [
+      q(long1, { source_number: 1 }),
+      q(long2, { source_number: 2 }),
+      q(long1, { source_number: 3 }),
+      q(`**${long2}**`, { source_number: 4 }),
+      q("A different third question entirely, long enough to compare.", { source_number: 5 }),
+    ];
+    const out = dropPrintCopies(raw, [{ item_indexes: [1, 3] }, { item_indexes: [3] }, { item_indexes: [4] }]);
+    expect(out.dropped).toBe(2);
+    expect(out.candidates).toEqual([raw[0], raw[1], raw[4]]);
+    expect(out.proposedSets).toEqual([{ item_indexes: [1] }, { item_indexes: [2] }]);
+  });
+
+  test("short stems, different types and different choices are not copies", () => {
+    const raw = [
+      q("Explain."),
+      q("Explain."),
+      q(long1),
+      { type: "short_text", stem: long1 },
+      { type: "multiple_choice_single", stem: long2, choices: [{ id: "a", text: "1" }] },
+      { type: "multiple_choice_single", stem: long2, choices: [{ id: "a", text: "2" }] },
+    ];
+    expect(dropPrintCopies(raw, []).dropped).toBe(0);
   });
 });

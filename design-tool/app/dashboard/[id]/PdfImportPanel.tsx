@@ -80,6 +80,9 @@ interface ExtractResult {
   // E9: several forms in one PDF — `groups` are validated candidate indexes
   // per form (null when only "Form A / Form B" labels were seen).
   forms: { count: number; groups: number[][] | null; source: "numbering" | "labels" } | null;
+  /** PDF-import fixes (2026-10-25): repeated questions (a form printed twice
+   * on a page) left out of `candidates`. */
+  print_copies_dropped?: number;
 }
 
 // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md): a
@@ -660,6 +663,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   {result.truncated ? " · list truncated" : ""}
                   {keyless > 0 ? ` · ${keyless} need an answer key` : ""}
                   {result.forms ? ` · ${result.forms.count} forms` : ""}
+                  {result.print_copies_dropped
+                    ? ` · ${result.print_copies_dropped} repeated question${result.print_copies_dropped === 1 ? "" : "s"} (a printed copy) left out`
+                    : ""}
                 </span>
                 {result.candidates.length > 0 ? (
                   <button
