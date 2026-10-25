@@ -17,6 +17,9 @@ pattern \b[0-9]{4,10}@edtools\.psd401\.net
 pattern securetest\.psd401\.ai
 pattern \b168\.212\.[0-9]+\.[0-9]+\b
 pattern docs/requests/
+# Security audit 2026-10-24 (SEC-10): an API Gateway endpoint host names a
+# live stack in the district account. Placeholder is <api-id>.
+pattern [a-z0-9]{10}\.execute-api\.
 
 # Files that carry the patterns themselves, or document them.
 exclude .github/identifier-sweep.txt

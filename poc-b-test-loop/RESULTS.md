@@ -139,7 +139,7 @@ These are tracked as part of the broader Plan risk #1 (layered lockdown) and wil
 
 ## Cost note
 
-Stack left running at end of session. Idle cost is essentially zero (no provisioned resources beyond a Lambda that costs only per invocation; API Gateway has no idle cost; CloudWatch log retention is 1 week). Teardown command if/when wanted:
+Stack left running at end of session. Idle cost is essentially zero (no provisioned resources beyond a Lambda that costs only per invocation; API Gateway has no idle cost; CloudWatch log retention is 1 week). **Torn down 2026-10-25** (security audit 2026-10-24, SEC-10: the unauthenticated POST endpoint was a cost lever in the district account). The teardown command, for the record:
 
 ```
 cd poc-b-test-loop/infra
@@ -149,7 +149,7 @@ AWS_PROFILE=<your-sso-profile> AWS_REGION=us-west-2 bunx cdk destroy
 ## API URL (for re-running the client locally)
 
 ```
-https://jevcfd1w54.execute-api.us-west-2.amazonaws.com/poc/responses
+https://<api-id>.execute-api.us-west-2.amazonaws.com/poc/responses
 ```
 
 This is in the playground account; it's a stub and not secret, but no need to share more broadly than this repo.
