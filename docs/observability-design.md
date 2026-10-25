@@ -533,3 +533,17 @@ and one ALB-5xx alarm, read from the log group):**
   `log.error("essay_score_failed" | "essay_score_insert_failed")` with
   `response_id` + truncated message, so the next provider failure alarms
   through the same path as everything else.
+- **2026-10-25 — SEC-09** (security audit 2026-10-24; `security/size-caps`).
+  `POST /api/attempts/[attemptId]/events` gained three ceilings: a `detail`
+  bag over 4 KiB is replaced with `{ dropped: "detail_too_large" }` for every
+  kind (only `client_error` and `speech_preflight` were bounded before); an
+  attempt holds at most 1,000 rows (429 `too_many_events` beyond it); and
+  events are refused 409 once the attempt has been handed in, or its sitting
+  over, for longer than a 15-minute teardown grace (`attempt_closed` /
+  `sitting_closed`). Before, a student session could post multi-megabyte
+  bags for days after hand-in, and the Monitor poll for the room and the
+  per-student page load every row of every attempt. The client's reporter
+  retries a bounded number of times and then drops, so a refusal is cheap.
+  Not done: a retention sweep for `attempt_events` (the integrity timeline is
+  read for as long as the attempt exists; a rule needs a product decision).
+  Tests: `test/attempt-events-api.test.ts` "event ceilings".

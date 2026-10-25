@@ -457,6 +457,15 @@ export function tideImportErrorCopy(code: string): ErrorCopy {
       return { message: "Choose the TIDE export first.", showCode: false };
     case "file_too_large":
       return { message: "That file is too large to import.", showCode: false };
+    // SEC-08: the workbook is small on disk but would unpack past the server's
+    // ceiling, or names more rows than any Student Settings export.
+    case "xlsx_too_large":
+    case "too_many_rows":
+      return {
+        message:
+          "That workbook is too large to import. Export Student Settings from TIDE for one year group and try again.",
+        showCode: true,
+      };
     case "unsupported_mime":
     case "expected_multipart":
     case "form_parse_failed":

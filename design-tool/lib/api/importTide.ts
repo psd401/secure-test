@@ -15,6 +15,7 @@
 // import is transactional; partial writes can't strand rows.
 
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { inflateRawSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import { getDb } from "@/db/client";
 import { students, student_accommodations } from "@/db/schema";
@@ -50,7 +51,127 @@ export class TideImportError extends Error {
   }
 }
 
-export async function parseTideXlsx(buf: Buffer): Promise<ParsedRow[]> {
+/**
+ * SEC-08 (security audit 2026-10-24): the ceilings an import must fit under.
+ *
+ * The route caps the COMPRESSED upload (25 MiB), but an .xlsx is a zip and
+ * ExcelJS inflates the whole workbook into memory as one string and one Row
+ * and Cell object per populated row, on a 1 GiB task that also serves the
+ * live sittings. A repetitive sheet inflates past 1000:1, and a single cell
+ * at row 1,048,576 used to make the old `for (r <= ws.rowCount)` loop
+ * allocate a million Row objects. So, before ExcelJS sees the workbook, every
+ * zip entry is inflated once with a byte budget and the total is counted —
+ * the sizes the zip DECLARES are written by the uploader and are not trusted
+ * (PR #96 review) — and the row walk visits populated rows only and stops at
+ * a count no district export comes near. The limits are parameters so the
+ * tests can pin the refusals on small fixtures.
+ */
+export interface TideImportLimits {
+  /** Sum of the zip entries' declared uncompressed sizes. */
+  maxInflatedBytes: number;
+  /** Populated data rows below the header. */
+  maxRows: number;
+}
+
+export const DEFAULT_TIDE_LIMITS: TideImportLimits = {
+  maxInflatedBytes: 64 * 1024 * 1024,
+  maxRows: 200_000,
+};
+
+const ZIP_EOCD_SIG = 0x06054b50;
+const ZIP_CDIR_SIG = 0x02014b50;
+const ZIP_LOCAL_SIG = 0x04034b50;
+const ZIP64_SIZE = 0xffffffff;
+const ZIP_STORED = 0;
+const ZIP_DEFLATED = 8;
+
+/**
+ * The bytes a zip's entries actually inflate to, counted by inflating each
+ * one with `maxOutputLength` set to what is left of `limit`, so a hostile
+ * entry can never allocate more than the budget. Returns `Infinity` as soon
+ * as the total passes `limit` (and for ZIP64, which no TIDE export is), and
+ * `null` when the bytes are not a zip this reader can walk — a corrupt entry,
+ * an unknown method, offsets that do not land on their signatures (bytes
+ * prepended to the archive). The caller refuses `null` too: an archive the
+ * budget cannot walk is never handed to ExcelJS, which may read what this
+ * cannot (PR #96 re-review). Peak memory is one entry, at most `limit`.
+ */
+export function inflatedSizeWithin(buf: Buffer, limit: number): number | null {
+  // End-of-central-directory record: 22 bytes plus a comment of up to 65535.
+  const minEocd = 22;
+  if (buf.length < minEocd) return null;
+  const scanFrom = Math.max(0, buf.length - minEocd - 0xffff);
+  let eocd = -1;
+  for (let i = buf.length - minEocd; i >= scanFrom; i--) {
+    if (buf.readUInt32LE(i) === ZIP_EOCD_SIG) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) return null;
+  const entries = buf.readUInt16LE(eocd + 10);
+  const cdirSize = buf.readUInt32LE(eocd + 12);
+  const cdirOffset = buf.readUInt32LE(eocd + 16);
+  if (entries === 0xffff || cdirSize === ZIP64_SIZE || cdirOffset === ZIP64_SIZE) {
+    return Infinity;
+  }
+  if (cdirOffset + cdirSize > buf.length) return null;
+  let total = 0;
+  let p = cdirOffset;
+  for (let n = 0; n < entries; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== ZIP_CDIR_SIG) return null;
+    const method = buf.readUInt16LE(p + 10);
+    const compressed = buf.readUInt32LE(p + 20);
+    const localOffset = buf.readUInt32LE(p + 42);
+    if (compressed === ZIP64_SIZE || localOffset === ZIP64_SIZE) return Infinity;
+    if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== ZIP_LOCAL_SIG) {
+      return null;
+    }
+    const dataStart =
+      localOffset + 30 + buf.readUInt16LE(localOffset + 26) + buf.readUInt16LE(localOffset + 28);
+    if (dataStart + compressed > buf.length) return null;
+    const remaining = limit - total;
+    if (method === ZIP_STORED) {
+      total += compressed;
+    } else if (method === ZIP_DEFLATED) {
+      try {
+        total += inflateRawSync(buf.subarray(dataStart, dataStart + compressed), {
+          maxOutputLength: Math.max(1, remaining + 1),
+        }).length;
+      } catch (err) {
+        // Node and Bun both throw a RangeError when the budget is hit; any
+        // other inflate error is a corrupt entry for ExcelJS to report.
+        if (err instanceof RangeError) return Infinity;
+        return null;
+      }
+    } else {
+      return null;
+    }
+    if (total > limit) return Infinity;
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  return total;
+}
+
+export async function parseTideXlsx(
+  buf: Buffer,
+  limits: TideImportLimits = DEFAULT_TIDE_LIMITS,
+): Promise<ParsedRow[]> {
+  const inflated = inflatedSizeWithin(buf, limits.maxInflatedBytes);
+  // Fail closed: honest TIDE exports are plain zips the walker reads end to
+  // end, so `null` costs nothing on real input.
+  if (inflated === null) {
+    throw new TideImportError(
+      "xlsx_parse_failed",
+      "the workbook is not a zip archive the import can read",
+    );
+  }
+  if (inflated > limits.maxInflatedBytes) {
+    throw new TideImportError(
+      "xlsx_too_large",
+      `the workbook unpacks past the limit of ${limits.maxInflatedBytes} bytes`,
+    );
+  }
   const wb = new ExcelJS.Workbook();
   try {
     // exceljs's typings ask for a Node Buffer alias that doesn't quite
@@ -111,20 +232,31 @@ export async function parseTideXlsx(buf: Buffer): Promise<ParsedRow[]> {
   const valueCol = colIndex.value!;
 
   const out: ParsedRow[] = [];
-  for (let r = headerRowIdx + 1; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
+  let seen = 0;
+  // Populated rows only (SEC-08): `ws.rowCount` is the highest row INDEX the
+  // file names, and `getRow` on every index up to it materialises a Row for
+  // each gap.
+  ws.eachRow({ includeEmpty: false }, (row, r) => {
+    if (r <= headerRowIdx) return;
+    seen++;
+    if (seen > limits.maxRows) {
+      throw new TideImportError(
+        "too_many_rows",
+        `more than ${limits.maxRows} data rows; a TIDE Student Settings export is far smaller`,
+      );
+    }
     const ssid = stringify(row.getCell(ssidCol).value);
     const subject = stringify(row.getCell(subjectCol).value);
     const tool = stringify(row.getCell(toolCol).value);
     const value = stringify(row.getCell(valueCol).value);
-    if (!ssid && !subject && !tool && !value) continue; // blank line
+    if (!ssid && !subject && !tool && !value) return; // blank line
     if (!ssid || !subject || !tool || !value) {
       // Partial row — skip but don't fail the whole import. The caller
       // surfaces rows_dropped to the UI.
-      continue;
+      return;
     }
     out.push({ ssid, subject, tool, value });
-  }
+  });
   return out;
 }
 

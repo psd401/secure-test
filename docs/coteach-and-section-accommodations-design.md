@@ -337,3 +337,17 @@ backup file unchanged.
   periods" in the whole-period answer, re-captured `by-class-period.png`,
   quick start; rows 486–491.
 
+- **2026-10-25 — SEC-08** (security audit 2026-10-24; `security/size-caps`):
+  the TIDE import's memory ceilings. The route capped the compressed upload
+  (25 MiB) only after `formData()` had buffered it, and `parseTideXlsx`
+  inflated the whole workbook then walked `1..ws.rowCount` with `getRow`, so
+  a repetitive sheet (1000:1 is routine) or one cell at row 1,048,576 could
+  take down the single app task. Now: the route refuses a declared
+  `Content-Length` over the cap before reading; `declaredInflatedSize` reads
+  the zip's central directory (no inflation) and `parseTideXlsx` refuses a
+  workbook declaring more than 64 MiB unpacked (`xlsx_too_large`, ZIP64
+  counts as too large); the row walk is `eachRow({ includeEmpty: false })` and
+  stops past 200,000 data rows (`too_many_rows`). Limits are a parameter
+  (`TideImportLimits`) so the tests pin the refusals on small fixtures; the
+  import panel shows one line for both new codes. Tests:
+  `test/tide-import.test.ts` "TIDE import ceilings".
