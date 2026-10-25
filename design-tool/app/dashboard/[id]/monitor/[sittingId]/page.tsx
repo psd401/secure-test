@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { UUID_RE } from "@/lib/uuid";
-import { pageSitting } from "@/lib/api/access";
+import { authorizeSitting, levelSatisfies } from "@/lib/api/access";
 import { MonitorView } from "./MonitorView";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +29,11 @@ export default async function MonitorPage({ params, searchParams }: PageProps) {
   if (!UUID_RE.test(id) || !UUID_RE.test(sittingId)) notFound();
 
   const db = getDb();
-  const row = await pageSitting(db, session, sittingId, "run", "read");
+  const access = await authorizeSitting(db, session, sittingId, "run", "read");
   // The sitting must be the one this URL names, not merely one the caller may
   // monitor — the assessment id in the path is part of the address.
-  if (!row || row.sitting.assessment_id !== id) notFound();
+  if (!access.ok || access.sitting.assessment_id !== id) notFound();
+  const row = { sitting: access.sitting, assessment: access.assessment };
 
   return (
     <MonitorView
@@ -47,6 +48,7 @@ export default async function MonitorPage({ params, searchParams }: PageProps) {
       studentPsIds={row.sitting.student_ps_ids}
       openCodeOnLoad={codeParam === "1"}
       assessmentUntimed={(row.assessment.time_limit_seconds ?? 0) <= 0}
+      canDeleteAttempts={levelSatisfies(access.level, "own")}
     />
   );
 }

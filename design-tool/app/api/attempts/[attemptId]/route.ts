@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { students } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
-import { authorizeAttempt } from "@/lib/api/access";
+import { authorizeAttempt, levelSatisfies, notFoundResponse } from "@/lib/api/access";
 import { deleteAttemptRecord } from "@/lib/api/deleteAttempt";
 import { log } from "@/lib/log";
 import { getStorageProviderById } from "@/lib/storage/provider";
@@ -41,12 +43,32 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  // Owner check and the open-sitting guard both live in lib/api/staffAttempt.ts
-  // now — the hand-in route (docs/time-limit-and-unfinished-attempts-design.md)
-  // applies the identical rules, and they must not be able to drift apart.
+  // `run` loads the attempt; the level that actually permits the delete is
+  // decided below once it is known whether this is a class or a practice
+  // attempt. The open-sitting guard lives in lib/api/staffAttempt.ts — the
+  // hand-in route (docs/time-limit-and-unfinished-attempts-design.md) applies
+  // the identical rule, and they must not be able to drift apart.
   const access = await authorizeAttempt(db, auth.session, attemptId, "run", "write");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
+
+  // SEC-04 (security audit 2026-10-24): D-R5 says owner-only, and the access
+  // ladder puts delete beside share and grant at `own` — but access slice 2
+  // had left this route at `run`, so an edit- or run-level grantee could erase
+  // a student's handed-in work once the sitting closed. A class attempt needs
+  // `own`. A practice attempt (D-6, Practice again) stays at `run`, and only
+  // for the staff member whose practice row it is: the overlay student row
+  // carries `practice_for_sub`.
+  if (attempt.practice) {
+    const [row] = await db
+      .select({ practice_for_sub: students.practice_for_sub })
+      .from(students)
+      .where(eq(students.id, attempt.student_id))
+      .limit(1);
+    if (row?.practice_for_sub !== auth.session.sub) return notFoundResponse();
+  } else if (!levelSatisfies(access.level, "own")) {
+    return notFoundResponse();
+  }
 
   // Practice again (docs/practice-sitting-design.md, D-6): a practice
   // attempt is the caller's own, so the open-sitting refusal is relaxed —

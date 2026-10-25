@@ -618,18 +618,21 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 timed={timed}
               />
             ) : null}
-            <DeleteAttemptAndReturn
-              attemptId={attemptId}
-              assessmentId={id}
-              studentName={
-                row.student.name || row.student.ssid || "this student"
-              }
-              disabledReason={
-                row.status === "in_progress" && row.sitting_open
-                  ? "End the test session first, then delete."
-                  : undefined
-              }
-            />
+            {/* SEC-04: Delete attempt is `own` (D-R5); the route 404s below it. */}
+            {levelSatisfies(access.level, "own") ? (
+              <DeleteAttemptAndReturn
+                attemptId={attemptId}
+                assessmentId={id}
+                studentName={
+                  row.student.name || row.student.ssid || "this student"
+                }
+                disabledReason={
+                  row.status === "in_progress" && row.sitting_open
+                    ? "End the test session first, then delete."
+                    : undefined
+                }
+              />
+            ) : null}
           </div>
         </div>
       </div>
