@@ -67,6 +67,9 @@ interface ExtractResult {
     omitted?: string;
     source?: "raster" | "vector";
     caption?: string;
+    /** Import fixes slice 2: the answer key's own drawing (a sample answer).
+     * Labelled, never offered for a question. */
+    answer_key?: boolean;
   }[];
   figure_count: number;
   // E5 slice 3: proposed stimulus sets over candidate indexes. `source` says
@@ -774,7 +777,11 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             <span className="ml-1 rounded bg-primary/10 px-1 py-0.5">chart</span>
                           ) : null}
                         </span>
-                        {(() => {
+                        {f.answer_key ? (
+                          <span className="mt-0.5 block rounded bg-muted px-1 py-0.5 text-[11px]">
+                            Answer key drawing — not shown to students
+                          </span>
+                        ) : (() => {
                           const use = figureUseLabel(sets, f.n);
                           return use ? (
                             <span className="block text-[11px]">{use}</span>
@@ -784,7 +791,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             </span>
                           );
                         })()}
-                        {f.data_url && attachable.length > 0 ? (
+                        {f.data_url && !f.answer_key && attachable.length > 0 ? (
                           <select
                             value=""
                             disabled={disabled || busy}
@@ -816,7 +823,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                     ))}
                   </ul>
                   {(() => {
-                    const savable = result.figures.filter((f) => f.data_url).map((f) => f.n);
+                    // Slice 2: "Save all" leaves the key's drawings out; one can
+                    // still be saved on its own, deliberately.
+                    const savable = result.figures.filter((f) => f.data_url && !f.answer_key).map((f) => f.n);
                     const left = savable.filter((n) => !savedFigures.has(n));
                     return savable.length > 1 ? (
                       <button
@@ -906,7 +915,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             </ul>
                           ) : null}
                           {(() => {
-                            const others = result.figures.filter((f) => f.data_url && !set.figures.includes(f.n));
+                            const others = result.figures.filter(
+                              (f) => f.data_url && !f.answer_key && !set.figures.includes(f.n),
+                            );
                             return !setAdded && others.length > 0 ? (
                               <select
                                 value=""

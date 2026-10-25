@@ -1069,8 +1069,10 @@ export function adjacencyFallback(
   existing: readonly ProposedSet[],
   /** Figure numbers printed beside their question (PdfFigure.beside). */
   beside: ReadonlySet<number> = new Set(),
+  /** Slice 2: figures never to place (the answer key's own drawings). */
+  exclude: ReadonlySet<number> = new Set(),
 ): ProposedSet[] {
-  const usedFigures = new Set(existing.flatMap((s) => s.figures));
+  const usedFigures = new Set([...existing.flatMap((s) => s.figures), ...exclude]);
   const taken = new Set(existing.flatMap((s) => s.item_indexes));
   const out: ProposedSet[] = [];
   let seq = existing.length;
@@ -1221,4 +1223,60 @@ export function flagShortenedSources(
     const returned = comparableLength(s.text.split("\n"));
     return returned < SHORTENED_SOURCE_RATIO * span ? { ...s, shortened: true } : s;
   });
+}
+
+// --- Import fixes slice 2 (2026-10-25): the answer key's own figures -------
+// An answer key prints a sample drawing under "Responses vary." — the answer
+// to a drawing question. Attached to the question it would be shown to the
+// students as a stimulus. The cue line above the marker marks one. Asking the
+// model as well was tried on the reported quiz and dropped: in one run of two
+// it marked one of question 4's own triangles as the key's, which would have
+// taken it away from the question; the cue rule was right in every run.
+
+/** A line that introduces a key's sample answer. */
+const KEY_CUE_RE =
+  /\b(?:responses?|answers?)\s+(?:will\s+|may\s+)?vary\b|\b(?:sample|possible|example|exemplar)\s+(?:student\s+)?(?:responses?|answers?|solutions?)\b/i;
+/** How many text lines above a marker the cue may sit. */
+const KEY_CUE_LINES = 2;
+
+/**
+ * Figure numbers whose marker has a key cue on one of the KEY_CUE_LINES
+ * text lines just above it (other markers skipped). Pure; exported for
+ * tests.
+ */
+export function keyFiguresFromText(textWithMarkers: string): number[] {
+  const lines = withoutEmphasis(textWithMarkers).split("\n");
+  const out: number[] = [];
+  lines.forEach((line, i) => {
+    const m = /^\s*\[FIGURE (\d+)\]\s*$/.exec(line);
+    if (!m) return;
+    const above: string[] = [];
+    for (let j = i - 1; j >= 0 && above.length < KEY_CUE_LINES; j--) {
+      const l = lines[j]!.trim();
+      if (l === "") break; // a page break
+      if (/^\[FIGURE \d+\]$/.test(l)) continue;
+      above.push(l);
+    }
+    if (above.some((l) => KEY_CUE_RE.test(l))) out.push(Number(m[1]));
+  });
+  return out;
+}
+
+/**
+ * Takes key figures out of proposed sets (and their markers out of source
+ * texts); a set left with no figure, no stimulus and no source is dropped.
+ */
+export function withoutKeyFigures(sets: readonly ProposedSet[], key: ReadonlySet<number>): ProposedSet[] {
+  if (key.size === 0) return [...sets];
+  const strip = (text: string) =>
+    text
+      .replace(/^[ \t]*\[FIGURE (\d+)\][ \t]*\n?/gm, (whole, n) => (key.has(Number(n)) ? "" : whole))
+      .replace(/\[FIGURE (\d+)\]/g, (whole, n) => (key.has(Number(n)) ? "" : whole));
+  return sets
+    .map((s) => ({
+      ...s,
+      figures: s.figures.filter((n) => !key.has(n)),
+      sources: s.sources.map((src) => ({ ...src, text: strip(src.text) })),
+    }))
+    .filter((s) => s.figures.length > 0 || s.stimulus.trim() !== "" || s.sources.length > 0);
 }

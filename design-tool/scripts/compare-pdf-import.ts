@@ -24,6 +24,8 @@ import { extractPdfText, looksScanned } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
   countNumberedItems,
+  keyFiguresFromText,
+  withoutKeyFigures,
   numberingReport,
   readSourceNumbers,
   validatePdfCandidates,
@@ -134,14 +136,18 @@ for (const spec of models) {
     const validSourceNumbers = [...rawToValid.entries()]
       .sort((a, b) => a[1] - b[1])
       .map(([rawIndex]) => sourceNumbers[rawIndex] ?? []);
+    // As the route: the answer key's own drawings go in no set.
+    const keyFigures = new Set(keyFiguresFromText(text));
+    const modelSets = withoutKeyFigures(sets.sets, keyFigures);
     const allSets = [
-      ...sets.sets,
+      ...modelSets,
       ...adjacencyFallback(
         figureCount,
         text,
         validSourceNumbers,
-        sets.sets,
+        modelSets,
         new Set(layout.figures.filter((f) => f.beside).map((f) => f.n)),
+        keyFigures,
       ),
     ];
 
@@ -193,6 +199,7 @@ for (const spec of models) {
       });
       console.log(`  set (${s.source}): figures [${s.figures.join(", ")}] → questions ${qs.join(", ")}`);
     }
+    if (keyFigures.size) console.log(`  answer-key figures: [${[...keyFigures].join(", ")}]`);
     if (sets.rejected.length) console.log(`  rejected sets: ${sets.rejected.length}`);
     console.log("");
   }

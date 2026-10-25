@@ -11,6 +11,8 @@ import {
 } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
+  keyFiguresFromText,
+  withoutKeyFigures,
   parsePdfExtraction,
   questionAfterFigure,
   validateProposedSets,
@@ -1276,5 +1278,54 @@ describe("fill-in-the-blank candidates (FB slice 4)", () => {
       { id: "b2", kind: "text", keys: ["leeward", "lee"] },
     ]);
     expect((v.candidates[1] as { blanks: unknown[] }).blanks).toEqual([{ id: "b1", kind: "text" }]);
+  });
+});
+
+// Import fixes slice 2 (2026-10-25): the answer key's own drawings.
+describe("answer-key figures", () => {
+  test("a marker with a key cue on one of the two lines above it is the key's", () => {
+    const quiz = [
+      "**4.** Do these two shapes match?",
+      "Explain how you know.",
+      "[FIGURE 5]",
+      "_Responses vary._",
+      "• They match because each side has a partner.",
+      "**5.** Draw and label one pair of matching shapes.",
+      "Mark each statement as you use it.",
+      "_Responses vary._",
+      "[FIGURE 7]",
+    ].join("\n");
+    // Figure 5 is above the cue (the question's own triangles), 7 below it.
+    expect(keyFiguresFromText(quiz)).toEqual([7]);
+    expect(keyFiguresFromText("Sample answer:\nthe graph below\n[FIGURE 1]")).toEqual([1]);
+    expect(keyFiguresFromText("Answers will vary.\n[FIGURE 1]\n[FIGURE 2]")).toEqual([1, 2]);
+    expect(keyFiguresFromText("Possible response\n[FIGURE 3]")).toEqual([3]);
+  });
+
+  test("a cue too far above, or on the page before, does not count", () => {
+    expect(keyFiguresFromText("Responses vary.\none\ntwo\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Responses vary.\n\n[FIGURE 1]")).toEqual([]);
+    // Words that only look like a cue.
+    expect(keyFiguresFromText("Temperatures vary by season.\n[FIGURE 1]")).toEqual([]);
+  });
+
+  test("key figures leave every set; a set left empty is dropped; adjacency skips them", () => {
+    const set = (id: string, figures: number[], stimulus = "", sources: { label: string; text: string }[] = []) => ({
+      id, stimulus, figures, item_indexes: [0], source: "model" as const, sources, layout: "inline" as const,
+    });
+    const out = withoutKeyFigures(
+      [
+        set("s1", [7]),
+        set("s2", [6, 7]),
+        set("s3", [7], "Shared passage"),
+        set("s4", [7], "", [{ label: "Source A", text: "Intro\n[FIGURE 7]\nMore" }]),
+      ],
+      new Set([7]),
+    );
+    expect(out.map((s) => [s.id, s.figures])).toEqual([["s2", [6]], ["s3", []], ["s4", []]]);
+    expect(out[2]!.sources[0]!.text).toBe("Intro\nMore");
+    const text = "1. Q1\nResponses vary.\n[FIGURE 1]\n2. Q2";
+    expect(adjacencyFallback(1, text, [[1], [2]], [])).toHaveLength(1);
+    expect(adjacencyFallback(1, text, [[1], [2]], [], new Set(), new Set([1]))).toEqual([]);
   });
 });

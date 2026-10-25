@@ -11,11 +11,13 @@ import {
   countNumberedItems,
   flagShortenedSources,
   formsReport,
+  keyFiguresFromText,
   numberingReport,
   readSourceNumbers,
   readCandidateChanges,
   validatePdfCandidates,
   validateProposedSets,
+  withoutKeyFigures,
 } from "@/lib/pdfImport/extractCore";
 import { PdfExtractRequest, type PdfExtractResult } from "@/lib/pdfImport/types";
 import { runGuarded, type GuardedOutcome } from "@/lib/safeguarding/guard";
@@ -288,16 +290,22 @@ export async function POST(req: Request, ctx: RouteContext) {
   const changes = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawChanges[rawIndex] ?? []);
+  // Import fixes slice 2: the answer key's own drawings (a sample answer
+  // under "Responses vary.") go in no set, so no student sees the answer.
+  // A scan has no text to read the cue from (and no figures).
+  const keyFigures = new Set(scanned ? [] : keyFiguresFromText(modelText));
+  const modelSets = withoutKeyFigures(setValidation.sets, keyFigures);
   const proposed_sets = [
-    ...setValidation.sets,
+    ...modelSets,
     ...(scanned
       ? []
       : adjacencyFallback(
           figures.length,
           modelText,
           validSourceNumbers,
-          setValidation.sets,
+          modelSets,
           new Set(figures.filter((f) => f.beside).map((f) => f.n)),
+          keyFigures,
         )),
     // Multi-source stimulus slice 3: the model tends to abbreviate long
     // verbatim text, so compare each returned source with the document's own
@@ -330,7 +338,9 @@ export async function POST(req: Request, ctx: RouteContext) {
     ...numbering,
     // E5 slice 4: every raster figure above MIN_FIGURE_PT, in document order,
     // with its page and (unless omitted for size) a PNG data URL.
-    figures,
+    // Slice 2: `answer_key: true` on the key's own drawings; the panel
+    // labels them and offers no way to put one with a question.
+    figures: figures.map((f) => (keyFigures.has(f.n) ? { ...f, answer_key: true } : f)),
     figure_count: figures.length,
     // E5 slice 3: sets over validated candidate indexes; `source` says
     // whether the model paired them or the adjacency rule did.

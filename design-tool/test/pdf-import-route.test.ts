@@ -302,6 +302,31 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // Import fixes slice 2 (2026-10-25): an answer key's sample drawing under
+  // "Responses vary." used to pair with the next question by adjacency —
+  // the answer, shown to students as that question's stimulus.
+  test("a figure under a key cue is the answer key's: flagged and in no set", async () => {
+    const id = await createAssessment("Key figure");
+    // Baselines 720, 704, 688, 672, 656; the image (bottom 640, 45 tall, top
+    // 685 — over MIN_FIGURE_PT) sits between "Responses vary." (688) and
+    // "2. Second" (672).
+    const res = await postPdf(
+      id,
+      makeTextAndImagePdf(
+        ["1. First", "ES: #1 Draw it.", "Responses vary.", "2. Second", "ES: #2 Two"],
+        { x: 100, y: 640, width: 100, height: 45 },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      figures: { n: number; answer_key?: boolean }[];
+      proposed_sets: { figures: number[] }[];
+    };
+    expect(body.figures).toHaveLength(1);
+    expect(body.figures[0]!.answer_key).toBe(true);
+    expect(body.proposed_sets.flatMap((s) => s.figures)).toEqual([]);
+  });
+
   // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md):
   // the AP Seminar shape — one essay prompt plus labelled sources printed
   // after it. The sources ride the response with the card's layout default,
