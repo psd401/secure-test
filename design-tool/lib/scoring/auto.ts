@@ -1,5 +1,6 @@
 import { isKeyedBlank, type ItemResponse } from "@secure-test/schema";
 import type { ItemRow } from "@/db/schema";
+import { graphMaxPoints, graphPoints } from "@secure-test/graphing/server";
 
 // Slice 37: pure auto-scoring for the objectively markable types. Policy
 // defaults resolved in docs/phase-3-slices.md ("Open policy decisions"):
@@ -565,6 +566,15 @@ export function scoreResponse(
     }
     if (max === 0) return null; // no answer key
     return { points, max_points: max };
+  }
+
+  // Graphing calculator D-9: shapes compared exactly (packages/graphing);
+  // all-or-nothing is 1 point, per-object one per key shape. No key → skip.
+  if (response.type === "graph") {
+    const board = item.config?.graph_board;
+    const key = item.config?.graph_key;
+    if (!board || !key) return null; // no answer key
+    return { points: graphPoints(board, key, response.objects), max_points: graphMaxPoints(board, key) };
   }
 
   // essay (and any future type without an objective key)

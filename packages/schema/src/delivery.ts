@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ItemResponseSchema } from "./responses.js";
+import { GraphBoardSchema } from "./graph.js";
 import {
   BundleAssetSchema,
   ChoiceSchema,
@@ -9,6 +10,8 @@ import {
   RubricSchema,
   SequenceEntrySchema,
   StudentLayoutSchema,
+  CalculatorSettingSchema,
+  StimulusGraphSchema,
   TableColumnSchema,
   TableRowSchema,
   itemSetIssues,
@@ -58,6 +61,11 @@ import {
 const baseDeliveryItem = {
   id: z.string().min(1),
   stem: z.string(),
+  // Graphing calculator (D-7): the calculator is hidden on this question's
+  // page (paged layout only). Emitted only when true.
+  no_calculator: z.literal(true).optional(),
+  // Stimulus graph (D-8): content, so it rides to the student too.
+  graph: StimulusGraphSchema.optional(),
 };
 
 export const DeliverySingleSelectMCItemSchema = z.object({
@@ -164,6 +172,13 @@ export const DeliveryFillBlankItemSchema = z.object({
   blanks: z.array(DeliveryFillBlankBlankSchema).min(1),
 });
 
+// Graph answer (D-9): the board only — the key never leaves the teacher bundle.
+export const DeliveryGraphItemSchema = z.object({
+  type: z.literal("graph"),
+  ...baseDeliveryItem,
+  board: GraphBoardSchema,
+});
+
 // No z.preprocess type-defaulting here. ItemSchema carries that for PoC-B
 // fixtures that predate the `type` field; a delivery bundle has no legacy
 // producers, so an untyped item is a bug and should fail loudly.
@@ -178,6 +193,7 @@ export const DeliveryItemSchema = z.discriminatedUnion("type", [
   DeliveryDrawingUploadItemSchema,
   DeliveryTableItemSchema,
   DeliveryFillBlankItemSchema,
+  DeliveryGraphItemSchema,
 ]);
 
 const UUID_RE =
@@ -247,6 +263,11 @@ export const DeliveryBundleSchema = z
     // is never refused, it simply gets no field and no tool). Highlights live
     // in page memory only — nothing is posted back.
     allow_highlighting: z.boolean().optional(),
+    // Graphing calculator (docs/graphing-calculator-design.md D-7): every
+    // student gets this calculator. Emitted only when the test has one, and
+    // the delivery route refuses a client older than 2.0.0 such a bundle
+    // (the calculator is part of what the test measures).
+    calculator: CalculatorSettingSchema.optional(),
     // Client paging (docs/client-paging-design.md): emitted only as "paged".
     // Absent means one scrolling page — a client that predates the field
     // renders as it always has.

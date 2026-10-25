@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
-import type { ItemBundle, ScoringMethod } from "@secure-test/schema";
+import type { ItemBundle, ScoringMethod, StimulusGraph } from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import {
   assessments,
@@ -11,7 +11,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { assertNever } from "@/lib/assertNever";
-import { ALLOWED_SCORING_METHODS, compactBlanks } from "@/lib/api/items";
+import { ALLOWED_SCORING_METHODS, compactBlanks, graphIssues } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
@@ -262,6 +262,22 @@ export async function importBundleForOwner(
     }
   }
 
+  // F19: a graph item gets the same board/key checks as create and PATCH —
+  // stored as given, a bad snap or off-board key object would refuse every
+  // student save or make full credit impossible. Refuse the bundle, naming
+  // the item, in the page's `schema_invalid:<path>:<message>` form.
+  for (const [n, it] of bundle.items.entries()) {
+    if (it.type !== "graph") continue;
+    const issues = graphIssues(it.board, it.key);
+    if (issues.length > 0) {
+      const first = issues[0]!;
+      return {
+        error: `schema_invalid:items.${n}.${first.path.join(".")}:question ${n + 1} (graph): ${first.message}`,
+        detail: { item_id: it.id, issues },
+      };
+    }
+  }
+
   let sourcesDropped = 0;
   const result = await db.transaction(async (tx) => {
     const existing = await tx
@@ -289,6 +305,9 @@ export async function importBundleForOwner(
         answers_release: bundle.answers_release ?? "on_release",
         // Passage highlighting: absent reads as off.
         allow_highlighting: bundle.allow_highlighting ?? false,
+        // Graphing calculator: absent reads as none.
+        calculator_mode: bundle.calculator?.mode ?? "none",
+        calculator_preset: bundle.calculator?.preset ?? "full",
       })
       .returning();
     // E5 slice 1: the new item ids come back by position (position = index
@@ -296,7 +315,7 @@ export async function importBundleForOwner(
     const insertedIds = new Map<number, string>();
     if (importable.length > 0) {
       const inserted = await tx.insert(items).values(
-        importable.map((it, idx) => {
+        withNoCalculator(importable, importable.map((it, idx) => {
           const stem = rewriteAssetRefs(it.stem, remap);
           const base = {
             assessment_id: row!.id,
@@ -477,11 +496,26 @@ export async function importBundleForOwner(
               },
             };
           }
+          if (it.type === "graph") {
+            // Graphing calculator D-9: board and key as the bundle has them.
+            return {
+              ...base,
+              type: it.type,
+              choices: [],
+              correct_choice_ids: [],
+              correct_answer: null,
+              config: {
+                graph_board: it.board,
+                ...(it.key ? { graph_key: it.key } : {}),
+                ...clampAndCount(it.type, it.scoring_method, false),
+              },
+            };
+          }
           // Slice 46: when the wire schema grows a type, this fails
           // typecheck until an explicit branch above handles it — no more
           // silent import-as-short_text.
           return assertNever(it, "importBundle: unhandled item type");
-        }),
+        })),
       ).returning({ id: items.id, position: items.position });
       for (const r of inserted) insertedIds.set(r.position, r.id);
     }
@@ -558,4 +592,28 @@ export function isImportBundleError(
   r: ImportBundleResult | ImportBundleError,
 ): r is ImportBundleError {
   return "error" in r;
+}
+
+/**
+ * Graphing calculator (D-7): the per-question "no calculator" mark rides
+ * every item type, so it is added to each built row's config here rather
+ * than in every type's branch above.
+ */
+function withNoCalculator<R extends { config: ItemConfig }>(
+  src: readonly { no_calculator?: true; graph?: StimulusGraph }[],
+  rows: R[],
+): R[] {
+  return rows.map((r, i) => {
+    const s = src[i];
+    if (!s?.no_calculator && !s?.graph) return r;
+    return {
+      ...r,
+      config: {
+        ...r.config,
+        ...(s.no_calculator ? { no_calculator: true } : {}),
+        // Stimulus graph (D-8): any type, carried the same way.
+        ...(s.graph ? { graph: s.graph } : {}),
+      },
+    };
+  });
 }

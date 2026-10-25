@@ -3,7 +3,7 @@
 // queue membership rules. Same harness as the other API tests.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import type { Rubric } from "@secure-test/schema";
+import type { GraphBoard, Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
@@ -1150,5 +1150,60 @@ describe("unreviewed AI finals (Hybrid transparency slice 2)", () => {
     const other = (await (await getQueueWith(assessment.id, "?section=Period%202")).json()) as Body;
     expect(other.unreviewed).toHaveLength(0);
     expect(other.entries).toHaveLength(0);
+  });
+});
+
+// Graphing calculator D-9: a hand-scored graph answer reaches the queue in
+// words (one line per object), marked against a key when the item has one.
+describe("graph answers in the queue", () => {
+  const BOARD: GraphBoard = { x: [-10, 10], y: [-10, 10], grid: 1, snap: "1", tools: ["point", "line"], max_objects: 2 };
+  type GraphEntry = { graph_lines: { text: string; correct: boolean | null }[] | null };
+
+  async function seedGraph(config: Record<string, unknown>) {
+    const db = getDb();
+    const [a] = await db.insert(assessments).values({ owner_sub: OWNER, name: "Graph queue" }).returning();
+    const [item] = await db
+      .insert(items)
+      .values({ assessment_id: a!.id, position: 0, type: "graph", stem: "Graph it", config: { graph_board: BOARD, ...config } })
+      .returning();
+    const [student] = await db.insert(students).values({ owner_sub: OWNER, ssid: "889", name: "Graph Student" }).returning();
+    const [attempt] = await db
+      .insert(attempts)
+      .values({ assessment_id: a!.id, student_id: student!.id, status: "submitted", submitted_at: new Date() })
+      .returning();
+    await db.insert(responses).values({
+      attempt_id: attempt!.id,
+      item_id: item!.id,
+      response: { type: "graph", objects: [{ tool: "line", points: [[0, 1], [1, 3]] }, { tool: "point", points: [[2, 2]] }] },
+    });
+    return a!.id;
+  }
+
+  test("keyless: each object in words, unmarked", async () => {
+    const id = await seedGraph({});
+    const body = (await (await getQueue(id)).json()) as { entries: GraphEntry[] };
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0]!.graph_lines).toEqual([
+      { text: "y = 2x + 1", correct: null },
+      { text: "point (2, 2)", correct: null },
+    ]);
+  });
+
+  test("keyed but hand-scored: marked against the key", async () => {
+    const id = await seedGraph({
+      graph_key: { objects: [{ tool: "line", points: [[1, 3], [2, 5]] }], scoring: "all" },
+      scoring_method: "human",
+    });
+    const body = (await (await getQueue(id)).json()) as { entries: GraphEntry[] };
+    expect(body.entries[0]!.graph_lines).toEqual([
+      { text: "y = 2x + 1", correct: true },
+      { text: "point (2, 2)", correct: false },
+    ]);
+  });
+
+  test("a non-graph entry carries graph_lines null", async () => {
+    const { assessment } = await seedQueueScenario();
+    const body = (await (await getQueue(assessment.id)).json()) as { entries: GraphEntry[] };
+    expect(body.entries.every((e) => e.graph_lines === null)).toBe(true);
   });
 });

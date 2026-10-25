@@ -1808,3 +1808,50 @@ Same change and method for Send to Google Docs and Send to gradebook. Both open 
 | 658 | Production, read-only `query-aurora.sh` count of assessments with NULL `owner_email` (aggregates only), a few school days after the hotfix | Below the 62 of 101 counted 2026-10-23 before the deploy, and new assessments made since never NULL | NOT RUN |
 | 659 | A teacher who has a roster co-teacher: **New assessment**, then **Share** | "From your roster" lists the co-teacher | NOT RUN (needs a staff account with a roster co-teacher; on `_demo` the demo teacher qualifies) |
 | 660 | v2.0 deploy: after migration 0062 applies, the same count | NULL only for owners with no other assessment and no sitting of their own | NOT RUN — ships with v2.0; on the v2.0 deploy checklist |
+
+## Calculator setting (row DC slice 5, branch `graphing-calculator`, 2026-10-20)
+
+`docs/graphing-calculator-design.md` D-7 is the record. Migration 0063
+(`calculator_mode`, `calculator_preset`) is on the branch only; renumber it
+if `main` gains a migration first. Rows 661–669 NOT RUN (the API half is
+covered by `design-tool/test/calculator-api.test.ts` and the "graphing
+calculator on the wire" block of `delivery-api.test.ts`). Renumbered
+2026-10-24 on the merge from `main`: migration 0062 → 0063 and rows
+658–679 → 661–682 (main's OE-1 rows hold 658–660); dated entries in
+`docs/ledger.md` keep the old numbers.
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 661 | Settings → Calculator → Graphing; Save settings; reload | Graphing still chosen; "Calculator setup" appears with "Everything on" | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 662 | Calculator setup → Like the Washington state test; Save; reload | Kept | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 663 | Publish, then try to change the calculator | Both selects disabled (locked like the layout) | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — both selects and the per-question box disabled |
+| 664 | With a calculator set, a question card shows "No calculator on this question"; tick it on one; save; reload | Ticked; with no calculator set the box isn't shown | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 665 | Same, with "One scrolling page" | The box says it takes effect only one question at a time; Settings shows the amber note | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the card note and the amber Settings note |
+| 666 | Export the test, import the file | Calculator, setup and the ticked question all come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — export → import through the API (no file download); calculator, setup, ticked question, stimulus graph identical |
+| 667 | Duplicate the test | Same as 666 | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — Duplicate identical to the original |
+| 668 | Join from a SecureTest older than 2.0 | Refused before the test opens with the update message | ✅ server half 2026-10-20 local dev (worktree `_gc_demo` DB): a scratch student script got 409 `client_update_required` (min 2.0.0) with no version and with 1.9.0, 200 with 2.0.0; the client's update message itself NOT RUN; ✅ client half 2026-10-24 (James): a Debug build of tag `v1.6.3` (reports 1.6.3; the installed Release obeys this Mac's managed ServerURL) against :3010, joining the graphing calculator sitting — stderr `BUNDLE FETCH FAILED: refused(status: 409, code: "client_update_required")`, no `lockdown begin()` (refused before anything locks), and the update message on screen |
+| 669 | `/help.html#sources` "Give students a calculator" and the FAQ entry | Present and accurate | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+
+### Stimulus graphs (slice 6)
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 670 | A question → Add a graph | The calculator loads in the card (MathLive, KaTeX fonts); typing graphs as in the student calculator | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run found the page failing to build (MathLive SSR export, fixed in `1c6e1b4`); values set through the math-field API (Chrome automation's typing is not delivered to MathLive; real key presses are) |
+| 671 | Draft a description; Use this graph; save the question; reload | The card shows the graph image and its description; Edit graph reopens with the same rows and view | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+| 672 | Use this graph with an empty description | Refused with the "Describe the graph…" message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — the error now clears when a draft fills the box |
+| 673 | Preview / print | The graph as SVG under the stem, legend and description below | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — numbered curve labels match the legend |
+| 674 | Remove graph; save; reload | Gone from editor, preview and the student page | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB) — on the Duplicate copy: Remove graph → Save question (200) → reload: the item has no graph, the card offers Add a graph, the preview shows none; published and joined as a demo student: Q1 in the 2.0.0 delivery bundle carries no graph (its no-calculator flag kept) |
+| 675 | Publish; Edit graph | Disabled (locked with the question) | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) |
+
+### Graph it questions (slice 7)
+
+| # | Steps | Expected | Result |
+|---|---|---|---|
+| 676 | Add a question → Graph it | A grid (−10…10, lines every 1, snap 1), Point and Line ticked, at most 2; an empty key board | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run: Add question refused ("isn't complete yet"; the default carried two empty choices), fixed in the following commit |
+| 677 | Draw a key line through (0,1) and (2,5); save; reload | The key reads "y = 2x + 1"; Scoring shows All or nothing | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — also: Scoring changed to per-object stayed per-object after adding a key object |
+| 678 | Change the grid to 0…20 with snap 1/2; tick Circle | The key board redraws; an off-grid key point is refused on save with a message | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — alert "Key object 2 no longer fits…"; save refused; snap typed "1 / 2" saved as 1/2 |
+| 679 | Publish; change only the key | Saves (the key door); changing the grid is refused | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — first run: the key board was read-only after publish (no way through the key door), fixed in the following commit; then a key-only change saved (200), grid locked |
+| 680 | Preview and print | The empty grid as SVG, what students may place; print says to draw on the grid | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — print: "Draw your answer on the grid (up to 2)." |
+| 681 | A student answers (client row); Results → the student | Each object in words with ✓ / ✗; the score as the scorer gave it | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB), two demo students answered through the student API: Results "✗ y = x / ✓ point (4, 6)" 1/2 and "✓ y = 2x + 1 / ✓ point (4, 6)" 2/2 (a different pair of points on the key line); an off-board point refused (400). The hand-scored graph item showed raw JSON in the scoring queue — fixed (answer in words), then scored 1/1 there and Results updated (3/4) |
+| 682 | Export, import | Grid, tools and key come back | ✅ 2026-10-20 local dev (worktree `_gc_demo` DB, Chrome) — same round trip as 666 |
+| 683 | `/help.html#sources` → "What the calculator's help says": open each of the four lists; read the "Try it before a real test" paragraph | Four collapsible lists (two four-function setups, scientific, graphing) matching what students see under **?**; the practice advice names zoom, colour contrast and VoiceOver | ✅ 2026-10-24 (James, by eye on local :3010: the four lists and the practice paragraph) (`calculator-help-page.test.ts` checks every line of the in-app help is on the page; the local server serves the four lists) |

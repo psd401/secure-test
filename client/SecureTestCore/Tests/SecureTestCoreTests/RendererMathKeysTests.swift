@@ -125,6 +125,28 @@ final class RendererMathKeysTests: XCTestCase {
         XCTAssertEqual(try h.int("__keys(0).filter(function (b) { return b.getAttribute('aria-pressed') !== null; }).length"), 0)
     }
 
+    /// Row DC finding FF-2 (2026-10-24): on a four-function test the pad is one
+    /// row of six keys and starts closed even where the stem carries `$`.
+    func testAFourFunctionTestGetsSixKeysClosed() throws {
+        let bundle = Self.bundle.replacingOccurrences(
+            of: "\"title\": \"Math keys\",",
+            with: "\"title\": \"Math keys\", \"calculator\": { \"mode\": \"four_function\" },"
+        )
+        XCTAssertNotEqual(bundle, Self.bundle)
+        let h = try RendererHarness(bundleJSON: bundle)
+        try h.eval("""
+        function __pad(n) { return __first('.math-keys', __item(n)); }
+        function __toggle(n) { return __first('.math-keys-toggle', __item(n)); }
+        """)
+        XCTAssertEqual(try h.string("__toggle(0).getAttribute('aria-expanded')"), "false")
+        XCTAssertNotEqual(try h.string("String(__pad(0).getAttribute('hidden'))"), "null")
+        XCTAssertEqual(
+            try strings(h, "__all('button', __pad(0)).map(function (b) { return b.getAttribute('data-key'); })"),
+            ["fraction", "percent", "minus", "times", "divide", "decimal"]
+        )
+        XCTAssertEqual(try h.int("__count('.math-keys-row', __item(0))"), 1)
+    }
+
     func testThePadIsAToolbarTheToggleControls() throws {
         let h = try harness()
         XCTAssertEqual(try h.string("__pad(0).getAttribute('role')"), "toolbar")

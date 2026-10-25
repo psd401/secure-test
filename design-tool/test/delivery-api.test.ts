@@ -665,6 +665,75 @@ describe("passage highlighting on the wire", () => {
   });
 });
 
+// Graphing calculator (docs/graphing-calculator-design.md D-7): the setting
+// and the per-question mark ride the bundle, and a client older than 2.0 is
+// REFUSED (the calculator is part of what is measured), unlike highlighting.
+describe("graphing calculator on the wire", () => {
+  async function seedWithCalculator(mode: "none" | "graphing" | "scientific", markFirst = false) {
+    const id = await seedAllTypes();
+    await getDb()
+      .update(assessments)
+      .set({ calculator_mode: mode, calculator_preset: "state_wa" })
+      .where(eq(assessments.id, id));
+    if (markFirst) {
+      const [first] = await getDb().select().from(items).where(eq(items.assessment_id, id)).orderBy(items.position);
+      await getDb()
+        .update(items)
+        .set({ config: { ...(first!.config ?? {}), no_calculator: true } })
+        .where(eq(items.id, first!.id));
+    }
+    await admitStudent(id);
+    return id;
+  }
+
+  test("graphing + client 2.0.0 → calculator and the per-question mark", async () => {
+    const id = await seedWithCalculator("graphing", true);
+    const res = await getDelivery(id, "2.0.0");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.calculator).toEqual({ mode: "graphing", preset: "state_wa" });
+    expect(body.items[0].no_calculator).toBe(true);
+    expect(body.items.slice(1).some((i: { no_calculator?: boolean }) => i.no_calculator)).toBe(false);
+  });
+
+  test("graphing + client 1.6.3 → 409 update required, nothing delivered", async () => {
+    const id = await seedWithCalculator("graphing");
+    const res = await getDelivery(id, "1.6.3");
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "client_update_required", min_version: "2.0.0" });
+  });
+
+  test("graphing + no version header → 409", async () => {
+    const id = await seedWithCalculator("scientific");
+    expect((await getDelivery(id)).status).toBe(409);
+  });
+
+  test("a stimulus graph rides to 2.0 and refuses an older client", async () => {
+    const id = await seedWithCalculator("none");
+    const [first] = await getDb().select().from(items).where(eq(items.assessment_id, id)).orderBy(items.position);
+    const graph = { rows: [{ latex: "y=x" }], view: { xmin: -5, xmax: 5, ymin: -5, ymax: 5 }, alt: "A line." };
+    await getDb()
+      .update(items)
+      .set({ config: { ...(first!.config ?? {}), graph } })
+      .where(eq(items.id, first!.id));
+    const ok = await getDelivery(id, "2.0.0");
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).items[0].graph).toEqual(graph);
+    const old = await getDelivery(id, "1.6.3");
+    expect(old.status).toBe(409);
+    expect((await old.json()).min_version).toBe("2.0.0");
+  });
+
+  test("none → no field, no mark, and an older client still opens it", async () => {
+    const id = await seedWithCalculator("none", true);
+    const res = await getDelivery(id, "1.6.3");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).not.toHaveProperty("calculator");
+    expect(body.items.some((i: { no_calculator?: boolean }) => i.no_calculator)).toBe(false);
+  });
+});
+
 // E5 slice 1: stimuli are student-facing — the delivery bundle carries the
 // sets with the same item ids the items use, and nothing key-shaped.
 describe("item sets on the delivery bundle (E5 slice 1)", () => {

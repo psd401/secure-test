@@ -197,6 +197,17 @@ export function buildResponseFor(item: ItemRow): ItemResponse {
       }
       return ItemResponseSchema.parse({ type: "fill_blank", answers });
     }
+    case "graph": {
+      // Graphing calculator D-9: the key half the time, else one point at the
+      // origin (or the board's lower corner when 0 is off the board).
+      const board = item.config.graph_board;
+      if (!board) throw new Error(`item ${item.id} is graph but has no board`);
+      const key = item.config.graph_key;
+      if (key && Math.random() < 0.5) return ItemResponseSchema.parse({ type: "graph", objects: key.objects });
+      const x = board.x[0] <= 0 && board.x[1] >= 0 ? 0 : board.x[0];
+      const y = board.y[0] <= 0 && board.y[1] >= 0 ? 0 : board.y[0];
+      return ItemResponseSchema.parse({ type: "graph", objects: board.tools.includes("point") ? [{ tool: "point", points: [[x, y]] }] : [] });
+    }
     default:
       throw new Error(`unknown item type "${item.type}" (item ${item.id})`);
   }

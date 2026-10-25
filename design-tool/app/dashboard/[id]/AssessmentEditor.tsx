@@ -47,8 +47,13 @@ import type {
   TableCellKeys,
   TableColumn,
   TableRow,
+  StimulusGraph,
+  GraphBoard,
+  GraphKey,
 } from "@secure-test/schema";
 import { MathPreview } from "./MathPreview";
+import { GraphStimulusEditor } from "./GraphStimulusEditor";
+import { DEFAULT_GRAPH_BOARD, GraphItemEditor } from "./GraphItemEditor";
 import { ImagePicker } from "./ImagePicker";
 import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
@@ -181,6 +186,16 @@ interface ItemView {
   // BG slice 2: standards tags (`scheme:code` or the teacher's own text);
   // every type, [] when none.
   standards: string[];
+  // Graphing calculator (D-7): hide the test's calculator on this question's
+  // page; null = off. Optional so the per-type draft factories need not name it.
+  no_calculator?: boolean | null;
+  // Graphing calculator D-8: a teacher-authored graph shown with the
+  // question; null = none. Optional like no_calculator.
+  graph?: StimulusGraph | null;
+  // Graphing calculator D-9, graph items only: the board, and the key (an
+  // answer key — it saves through the publish lock like other keys).
+  board?: GraphBoard | null;
+  graph_key?: GraphKey | null;
 }
 
 interface AssessmentView {
@@ -199,6 +214,9 @@ interface AssessmentView {
   answers_released_at: string | null;
   /** Passage highlighting (docs/passage-highlighting-design.md). */
   allow_highlighting: boolean;
+  /** Graphing calculator (docs/graphing-calculator-design.md D-7). */
+  calculator_mode: "none" | "four_function" | "scientific" | "graphing";
+  calculator_preset: "full" | "state_wa";
   allowed_accommodations: string[];
   construct_altering: string[];
   /** U-18: per class period (lib/accommodations/sections.ts). */
@@ -300,6 +318,10 @@ interface ItemRow {
     placeholder?: string | null;
     rich_text?: boolean | null;
     show_word_count?: boolean | null;
+    no_calculator?: boolean | null;
+    graph?: StimulusGraph | null;
+    graph_board?: GraphBoard | null;
+    graph_key?: GraphKey | null;
     rubric?: Rubric | null;
     rubric_id?: string | null;
     pairs?: MatchPair[] | null;
@@ -340,6 +362,10 @@ function rowToView(r: ItemRow): ItemView {
     placeholder: r.config?.placeholder ?? null,
     rich_text: r.config?.rich_text ? true : null,
     show_word_count: r.config?.show_word_count ? true : null,
+    no_calculator: r.config?.no_calculator ? true : null,
+    graph: r.config?.graph ?? null,
+    board: r.config?.graph_board ?? null,
+    graph_key: r.config?.graph_key ?? null,
     rubric: r.config?.rubric ?? null,
     rubric_id: r.config?.rubric_id ?? null,
     pairs: r.config?.pairs ?? null,
@@ -416,6 +442,7 @@ const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   drawing_upload: ["human"],
   table: ["auto", "human"],
   fill_blank: ["auto", "human"],
+  graph: ["auto", "human"],
 };
 
 const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
@@ -429,6 +456,7 @@ const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
   drawing_upload: "human",
   table: "auto",
   fill_blank: "auto",
+  graph: "auto",
 };
 
 // E3-F1: a table's unset default depends on whether it has a key yet — the
@@ -442,6 +470,8 @@ function defaultScoringMethod(item: ItemView): ScoringMethod {
   // FB slice 2: the same E3-F1 rule for fill_blank (lib/api/items.ts
   // effectiveScoringMethod — no keyed blank → human).
   if (item.type === "fill_blank") return hasKeyedBlank(item.blanks) ? "auto" : "human";
+  // Graphing calculator D-9: no key → hand-scored (lib/api/items.ts).
+  if (item.type === "graph") return item.graph_key ? "auto" : "human";
   return SCORING_DEFAULT[item.type];
 }
 
@@ -458,7 +488,7 @@ const OSPI_TIER_ORDER: OspiTier[] = ["universal", "designated", "accommodation"]
 // for exactly those edits (the server is still the authority).
 // BG slice 2 (14.1): standards tags save through the same door — the server's
 // isAnswerKeyOnlyPatch admits them while published.
-const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards"]);
+const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards", "graph_key"]);
 function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean {
   if (!before) return false;
   const b = before as unknown as Record<string, unknown>;
@@ -683,6 +713,37 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
       standards: [],
     };
   }
+  if (type === "graph") {
+    // Graphing calculator D-9: the default grid, no key yet; no choices.
+    return {
+      type,
+      stem: "",
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      max_word_count: null,
+      placeholder: null,
+      rubric: null,
+      rubric_id: null,
+      pairs: null,
+      sequence: null,
+      image_asset_id: null,
+      regions: null,
+      correct_region_ids: null,
+      prompt_asset_id: null,
+      canvas: null,
+      columns: null,
+      rows: null,
+      corner: null,
+      cell_keys: null,
+      blanks: null,
+      exact_form: null,
+      scoring_method: null,
+      standards: [],
+      board: DEFAULT_GRAPH_BOARD,
+      graph_key: null,
+    };
+  }
   if (type === "table") {
     // E3 slice 2: a 2 × 2 grid to start; the teacher renames and resizes it.
     return {
@@ -790,6 +851,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   }
   const [allowLlm, setAllowLlm] = useState(assessment.allow_llm_authoring);
   const [studentLayout, setStudentLayout] = useState<"scroll" | "paged">(assessment.student_layout);
+  const [calculatorMode, setCalculatorMode] = useState(assessment.calculator_mode);
+  const [calculatorPreset, setCalculatorPreset] = useState(assessment.calculator_preset);
   const [settingsSave, setSettingsSave] = useState<SaveState>({ kind: "idle" });
   const [allowHighlighting, setAllowHighlighting] = useState(assessment.allow_highlighting);
   const [highlightSave, setHighlightSave] = useState<SaveState>({ kind: "idle" });
@@ -1046,6 +1109,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           time_limit_seconds,
           allow_llm_authoring: allowLlm,
           student_layout: studentLayout,
+          calculator_mode: calculatorMode,
+          calculator_preset: calculatorPreset,
         }),
       });
       setSettingsSave({ kind: "saved", at: new Date() });
@@ -1242,6 +1307,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   ? { ...draft, stem: "New drawing prompt" }
                   : addType === "fill_blank"
                   ? { ...draft, stem: FILL_BLANK_SEED_STEM }
+                  : addType === "graph"
+                  ? { ...draft, stem: "Graph your answer.", board: DEFAULT_GRAPH_BOARD, key: null }
                   : addType === "table"
                     ? {
                         ...draft,
@@ -1310,6 +1377,10 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       choices: item.choices,
       correct_choice_ids: item.correct_choice_ids,
       correct_answer: item.correct_answer,
+      // Graphing calculator (D-7): sent both ways so unticking clears it.
+      no_calculator: item.no_calculator === true,
+      // Graphing calculator D-8: null removes it, so send it both ways.
+      graph: item.graph ?? null,
     };
     if (item.type === "essay") {
       // Omit when unset: the essay body schema treats these as optional
@@ -1355,6 +1426,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       // FB slice 2: stem order, keys only when set (blank accepted answers
       // dropped) — what slice 1's compactBlanks stores anyway.
       body.blanks = blanksForSave(item.stem, item.blanks ?? []);
+    }
+    if (item.type === "graph") {
+      // Graphing calculator D-9: null clears the key.
+      body.board = item.board ?? DEFAULT_GRAPH_BOARD;
+      body.key = item.graph_key ?? null;
     }
     if (item.type === "drawing_upload") {
       body.prompt_asset_id = item.prompt_asset_id;
@@ -1893,6 +1969,55 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             unaffected.
           </span>
         </label>
+        {/* Graphing calculator (docs/graphing-calculator-design.md D-7):
+            every student gets it; part of what the test measures, so it is
+            saved with the settings above and locked once Published. */}
+        <label className="block">
+          <span className="block text-sm font-medium">Calculator</span>
+          <NativeSelect
+            size="sm"
+            value={calculatorMode}
+            onChange={(e) => setCalculatorMode(e.target.value as AssessmentView["calculator_mode"])}
+            disabled={isLocked}
+            className="mt-1"
+          >
+            <NativeSelectOption value="none">No calculator</NativeSelectOption>
+            <NativeSelectOption value="four_function">Four-function</NativeSelectOption>
+            <NativeSelectOption value="scientific">Scientific</NativeSelectOption>
+            <NativeSelectOption value="graphing">Graphing</NativeSelectOption>
+          </NativeSelect>
+          <span className="block text-xs text-muted-foreground">
+            Every student gets this calculator during the test. Needs {PRODUCT_NAME} 2.0 or later;
+            an older version is asked to update before the test opens.
+          </span>
+        </label>
+        {calculatorMode !== "none" ? (
+          <label className="block">
+            <span className="block text-sm font-medium">Calculator setup</span>
+            <NativeSelect
+              size="sm"
+              value={calculatorPreset}
+              onChange={(e) => setCalculatorPreset(e.target.value as AssessmentView["calculator_preset"])}
+              disabled={isLocked}
+              className="mt-1"
+            >
+              <NativeSelectOption value="full">Everything on</NativeSelectOption>
+              <NativeSelectOption value="state_wa">Like the Washington state test</NativeSelectOption>
+            </NativeSelect>
+            <span className="block text-xs text-muted-foreground">
+              &ldquo;Like the Washington state test&rdquo; starts in degrees and turns off what the
+              state test&rsquo;s calculator leaves out.
+            </span>
+          </label>
+        ) : null}
+        {calculatorMode !== "none" &&
+        studentLayout === "scroll" &&
+        items.some((i) => i.no_calculator === true) ? (
+          <p className="text-xs text-amber-800" role="note">
+            Some questions are marked &ldquo;No calculator on this question&rdquo;. That only takes effect
+            when students see one question at a time.
+          </p>
+        ) : null}
         <label className="flex items-start gap-2">
           <input
             type="checkbox"
@@ -2808,6 +2933,33 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   onChange={(standards) => updateItem(item.id, (i) => ({ ...i, standards }))}
                   suggestions={usedStandards}
                 />
+                {/* Graphing calculator D-8: a graph shown with the question. */}
+                <GraphStimulusEditor
+                  value={item.graph ?? null}
+                  onChange={(graph) => updateItem(item.id, (i) => ({ ...i, graph }))}
+                  disabled={isLocked}
+                />
+                {/* Graphing calculator (D-7): only when the test has one. */}
+                {calculatorMode !== "none" ? (
+                  <label className="mt-2 flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={item.no_calculator === true}
+                      onChange={(e) =>
+                        updateItem(item.id, (i) => ({ ...i, no_calculator: e.target.checked ? true : null }))
+                      }
+                      disabled={isLocked}
+                    />
+                    <span>
+                      No calculator on this question
+                      {studentLayout === "scroll" ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Takes effect only when students see one question at a time.
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ) : null}
                 <StandardSuggestionChips
                   suggestions={suggestions[item.id] ?? []}
                   entries={suggestionEntries}
@@ -3014,6 +3166,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       onChange={(patch) =>
                         updateItem(item.id, (i) => ({ ...i, ...patch }))
                       }
+                      disabled={isLocked}
+                    />
+                  </div>
+                ) : item.type === "graph" ? (
+                  <div className="mt-3">
+                    <GraphItemEditor
+                      board={item.board ?? DEFAULT_GRAPH_BOARD}
+                      graphKey={item.graph_key ?? null}
+                      onChange={(patch) => updateItem(item.id, (i) => ({ ...i, ...patch }))}
                       disabled={isLocked}
                     />
                   </div>

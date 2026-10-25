@@ -55,7 +55,7 @@ final class RendererEmphasisTests: XCTestCase {
     func testNothingAuthoredBecomesMarkup() throws {
         // The renderer still never parses authored text: a stem shaped like a
         // tag is characters, and the script cannot close its own element.
-        XCTAssertFalse(AssessmentPage.rendererScript.contains("innerHTML"))
+        XCTAssertFalse(AssessmentPage.rendererScriptWithoutVendored.contains("innerHTML"))
         XCTAssertFalse(AssessmentPage.rendererScript.contains("</"))
     }
 }

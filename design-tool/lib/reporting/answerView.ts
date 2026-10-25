@@ -12,6 +12,7 @@
 
 import type { FillBlankBlank, MatchPair, SequenceEntry } from "@secure-test/schema";
 import { fillBlankAnswer, filledBlankAnswerText } from "@/lib/items/fillBlankAnswer";
+import { graphAnswerLines, type GraphBoard, type GraphKey, type GraphObject } from "@secure-test/graphing/server";
 
 export interface AnswerViewItem {
   type: string;
@@ -25,6 +26,8 @@ export interface AnswerViewItem {
     sequence?: SequenceEntry[];
     correct_region_ids?: string[];
     blanks?: FillBlankBlank[];
+    graph_board?: GraphBoard;
+    graph_key?: GraphKey;
   };
 }
 
@@ -159,6 +162,16 @@ export function describeAnswer(
           correct: b.right,
         })),
       };
+    }
+
+    case "graph": {
+      // Graphing calculator D-9: each object in words ("y = 2x + 1"), ✓ / ✗
+      // against the key by the scorer's own rule.
+      const board = item.config.graph_board;
+      const objects = Array.isArray(response.objects) ? (response.objects as GraphObject[]) : [];
+      if (!board) return { kind: "lines", lines: [{ text: "Answer saved", correct: null }] };
+      const lines = graphAnswerLines(board, item.config.graph_key ?? null, objects);
+      return { kind: "lines", lines: lines.length ? lines : [{ text: "Nothing placed", correct: null }] };
     }
 
     default:

@@ -537,3 +537,19 @@ describe("DeliveryBundleSchema renderer (server-delivered renderer, slice 3)", (
     }
   });
 });
+
+// Graphing calculator (docs/graphing-calculator-design.md D-7).
+describe("DeliveryBundleSchema calculator", () => {
+  const base = { test_id: "t", title: "t", items: [] };
+  test("the setting and the per-question mark", () => {
+    const b = DeliveryBundleSchema.parse({
+      ...base,
+      calculator: { mode: "scientific", preset: "full" },
+      items: [{ type: "short_text", id: "a", stem: "s", no_calculator: true }],
+    });
+    expect(b.calculator).toEqual({ mode: "scientific", preset: "full" });
+    expect(b.items[0]!.no_calculator).toBe(true);
+    expect(DeliveryBundleSchema.parse(base).calculator).toBeUndefined();
+    expect(DeliveryBundleSchema.safeParse({ ...base, calculator: { mode: "abacus", preset: "full" } }).success).toBe(false);
+  });
+});

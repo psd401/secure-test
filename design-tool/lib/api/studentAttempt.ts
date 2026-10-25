@@ -22,6 +22,7 @@ import {
   resolveStudentForOwner,
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
+import { canonical } from "@secure-test/graphing/server";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -212,6 +213,18 @@ export function unsealResponseIds(
   // the student cleared the pick). Anything else is a refusal for the same
   // reason a stale match id is: it would be stored as an answer no scorer or
   // teacher view can place.
+  // Graphing calculator D-9: at most the board's number of objects, each a
+  // real shape on this board with a tool it offers. The page only posts
+  // complete, snapped objects; anything else is a forged or stale write.
+  if (response.type === "graph") {
+    const board = item.config?.graph_board;
+    if (!board || response.objects.length > board.max_objects) return null;
+    for (const o of response.objects) {
+      if (!board.tools.includes(o.tool) || "invalid" in canonical(o, board)) return null;
+    }
+    return response;
+  }
+
   if (response.type === "fill_blank") {
     const blanks = new Map((item.config?.blanks ?? []).map((b) => [b.id, b] as const));
     for (const [blankId, answer] of Object.entries(response.answers)) {

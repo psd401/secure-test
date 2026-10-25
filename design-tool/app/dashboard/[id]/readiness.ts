@@ -26,6 +26,8 @@ export interface ReadinessItem {
   rows?: { label: string }[] | null;
   /** FB slice 2: a fill_blank's blanks; keys are optional (no key = hand-scored, E3-F1). */
   blanks?: FillBlankBlank[] | null;
+  /** Graphing calculator D-9: the grid; a key is optional (no key = hand-scored). */
+  board?: { tools: string[] } | null;
 }
 
 export interface ReadinessCheck {
@@ -142,6 +144,10 @@ export function questionGaps(item: ReadinessItem): string[] {
     }
     case "fill_blank":
       gaps.push(...fillBlankGaps(item.stem, item.blanks ?? []));
+      break;
+    case "graph":
+      if (!item.board) gaps.push("needs a grid");
+      else if (item.board.tools.length === 0) gaps.push("needs at least one tool");
       break;
     case "essay":
     case "drawing_upload":

@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { ItemBundleSchema, ItemSchema, RubricSchema, fillBlankMarkerIds } from "../src/items.js";
+import { GraphBoardSchema } from "../src/graph.js";
+import { ItemBundleSchema, ItemSchema, RubricSchema, StimulusGraphSchema, fillBlankMarkerIds } from "../src/items.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pocBItemsJsonPath = resolve(
@@ -915,5 +916,74 @@ describe("FillBlankItemSchema (via ItemSchema)", () => {
   test("fillBlankMarkerIds lists marker ids in order, repeats included", () => {
     expect(fillBlankMarkerIds("a [[b1]] b [[b2]] c [[b1]]")).toEqual(["b1", "b2", "b1"]);
     expect(fillBlankMarkerIds("no markers, [b1], [[ b1 ]], [[]]")).toEqual([]);
+  });
+});
+
+// Graphing calculator (docs/graphing-calculator-design.md D-7).
+describe("ItemBundleSchema — calculator", () => {
+  const base = { test_id: "t", title: "t", items: [] };
+  test("mode + preset survive; absence stays absent; unknown values are refused", () => {
+    expect(ItemBundleSchema.parse({ ...base, calculator: { mode: "graphing", preset: "state_wa" } }).calculator).toEqual({
+      mode: "graphing",
+      preset: "state_wa",
+    });
+    expect(ItemBundleSchema.parse(base).calculator).toBeUndefined();
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "none", preset: "full" } }).success).toBe(false);
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "graphing", preset: "texas" } }).success).toBe(false);
+    expect(ItemBundleSchema.safeParse({ ...base, calculator: { mode: "graphing" } }).success).toBe(false);
+  });
+
+  test("no_calculator rides any item type, only as true", () => {
+    const item = { type: "short_text", id: "a", stem: "s", no_calculator: true };
+    expect(ItemBundleSchema.parse({ ...base, items: [item] }).items[0]!.no_calculator).toBe(true);
+    expect(ItemBundleSchema.safeParse({ ...base, items: [{ ...item, no_calculator: false }] }).success).toBe(false);
+    const mc = { type: "multiple_choice_single", id: "b", stem: "s", choices: [{ id: "c", text: "x" }, { id: "d", text: "y" }], no_calculator: true };
+    expect(ItemBundleSchema.parse({ ...base, items: [mc] }).items[0]!.no_calculator).toBe(true);
+  });
+});
+
+// Stimulus graphs (graphing calculator D-8).
+describe("StimulusGraphSchema", () => {
+  const ok = {
+    rows: [{ latex: "y=x", color: "#1f5fa8" }, { latex: "y=-x", hidden: true }],
+    view: { xmin: -10, xmax: 10, ymin: -5, ymax: 5 },
+    alt: "Two lines crossing at the origin.",
+  };
+  test("a valid graph rides any item on the teacher bundle", () => {
+    const b = ItemBundleSchema.parse({ test_id: "t", title: "t", items: [{ type: "essay", id: "e", stem: "s", graph: ok }] });
+    expect(b.items[0]!.graph).toEqual(ok);
+  });
+  test("alt text, a real view, sane rows and colours are required", () => {
+    expect(StimulusGraphSchema.safeParse({ ...ok, alt: "   " }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { xmin: 1, xmax: 1, ymin: 0, ymax: 1 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, xmax: Infinity } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [] }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: Array.from({ length: 21 }, () => ({ latex: "y=x" })) }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "y=x", color: "red" }] }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, rows: [{ latex: "x".repeat(501) }] }).success).toBe(false);
+  });
+  test("the view is capped at ±1e6 (a far-off view would hang the tick loop)", () => {
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, xmin: 1e17, xmax: 1e17 + 32 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { ...ok.view, ymin: -1e6 - 1 } }).success).toBe(false);
+    expect(StimulusGraphSchema.safeParse({ ...ok, view: { xmin: -1e6, xmax: 1e6, ymin: -1, ymax: 1 } }).success).toBe(true);
+  });
+});
+
+// Graph answer boards (graphing calculator D-9).
+describe("GraphBoardSchema", () => {
+  const board = { x: [-10, 10], y: [-10, 10], grid: 1, snap: "1", tools: ["point"], max_objects: 2 };
+  test("a zero snap is refused", () => {
+    for (const snap of ["0", "0.0", "1/0", "0/3"]) {
+      expect(GraphBoardSchema.safeParse({ ...board, snap }).success).toBe(false);
+    }
+    for (const snap of ["1", "0.5", "1/3", "2"]) {
+      expect(GraphBoardSchema.safeParse({ ...board, snap }).success).toBe(true);
+    }
+  });
+  test("a snap too fine for the board is refused", () => {
+    expect(GraphBoardSchema.safeParse({ ...board, x: [-100, 100], y: [-100, 100], grid: 2, snap: "0.000001" }).success).toBe(false);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "1/1000000000" }).success).toBe(false);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "0.00001" }).success).toBe(true);
+    expect(GraphBoardSchema.safeParse({ ...board, snap: "0.000001" }).success).toBe(false);
   });
 });

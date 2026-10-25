@@ -24,6 +24,8 @@ import {
   type MatchPair,
   type Rubric,
   type SequenceEntry,
+  type StimulusGraph,
+  type GraphBoard,
   type TableColumn,
   type TableRow,
 } from "@secure-test/schema";
@@ -34,6 +36,7 @@ import { assetSrc, renderItemContent, type ResolvedAsset } from "@/lib/items/ren
 import { renderAroundBlanks } from "@/lib/items/renderAroundBlanks";
 import { VISIBLE_ACCOMMODATION_CATALOG } from "@/lib/accommodations/catalog";
 import { getKatexCss } from "./katexCss";
+import { graphRowLabel, latexToText, renderBoardSvg, renderGraphSvg } from "@secure-test/graphing/server";
 
 interface Choice {
   id: string;
@@ -62,6 +65,12 @@ export interface PreviewItem {
   // U-22: a running word count with no maximum. The preview is no-script, so
   // it shows the counter's starting line, "0 words", on screen only.
   show_word_count?: boolean | null;
+  // Stimulus graph (graphing calculator D-8): drawn here as SVG on the
+  // server — the preview has no scripts — from the same engine the student's
+  // page uses, with the teacher's alt text as its name and its caption.
+  graph?: StimulusGraph | null;
+  // Graph answer (D-9): the board only — never the key.
+  board?: GraphBoard | null;
   // Match-only pair list (slice 47). Rights are displayed sorted so the
   // authored order (which IS the answer key) doesn't give matches away.
   pairs?: MatchPair[] | null;
@@ -337,6 +346,39 @@ function renderRichEssayBox(placeholder: string | null | undefined): string {
   );
 }
 
+const GRAPH_TOOL_WORDS: Record<GraphBoard["tools"][number], string> = {
+  point: "points",
+  line: "lines",
+  segment: "segments",
+  ray: "rays",
+  circle: "circles",
+  parabola: "parabolas",
+};
+
+/** A stimulus graph as a figure: the SVG, then its legend and description. */
+export function renderStimulusGraph(g: StimulusGraph): string {
+  let svg: string;
+  try {
+    svg = renderGraphSvg(g, { title: g.alt });
+  } catch {
+    svg = `<p class="graph-missing">${escapeHtml("(This graph could not be drawn.)")}</p>`;
+  }
+  // Each entry carries the number drawn on its curve (D-11: not colour
+  // alone); numbered by the row's original position, hidden rows included.
+  const legend = g.rows
+    .map((r, i) =>
+      r.hidden || r.latex.trim() === ""
+        ? ""
+        : `<li><strong class="graph-legend-n">${escapeHtml(graphRowLabel(i))}</strong> ${escapeHtml(latexToText(r.latex))}</li>`,
+    )
+    .join("");
+  return (
+    `<figure class="graph-stimulus">${svg}` +
+    `<figcaption>${legend ? `<ul class="graph-legend">${legend}</ul>` : ""}` +
+    `<p class="graph-alt">${escapeHtml(g.alt)}</p></figcaption></figure>`
+  );
+}
+
 function renderItem(
   item: PreviewItem,
   index: number,
@@ -355,7 +397,8 @@ function renderItem(
   const stemHtml = fill ? fill.stemHtml : renderItemContent(item.stem, resolved);
   const heading =
     (speech.items ? speechBar("Speak") : "") +
-    `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>`;
+    `<p class="stem"><strong>${index + 1}.</strong> ${stemHtml}</p>` +
+    (item.graph ? renderStimulusGraph(item.graph) : "");
 
   let body = "";
   if (
@@ -547,6 +590,19 @@ function renderItem(
         : "(student response)";
       body = `<textarea class="essay" rows="6" placeholder="${placeholder}" disabled></textarea>${limit}${rubric}`;
     }
+  } else if (item.type === "graph") {
+    // Graphing calculator D-9: the empty board (and its fixed objects), and
+    // what the student may place. On paper the student draws on the grid.
+    if (item.board) {
+      const tools = item.board.tools.map((t) => GRAPH_TOOL_WORDS[t]).join(", ");
+      body =
+        `<figure class="graph-stimulus">${renderBoardSvg(item.board, { title: "Graph your answer on this grid" })}` +
+        `<figcaption><p class="graph-alt">${escapeHtml(
+          printMode
+            ? `Draw your answer on the grid (up to ${item.board.max_objects}).`
+            : `Students place ${tools} (up to ${item.board.max_objects}), by clicking, with the keyboard or by typing coordinates.`,
+        )}</p></figcaption></figure>`;
+    }
   } else {
     // Same posture as the export route (slice 46): a type nobody handled
     // fails loudly instead of printing a question with no answer area.
@@ -704,6 +760,10 @@ export function renderAssessmentHtml(
     .source-body { margin: 0; white-space: pre-line; }
     .stimulus-source { margin-top: 8px; padding: 10px 12px; border: 1px dashed #8a94a6; border-radius: 4px; color: #3a4a6a; font-size: 13px; font-style: italic; }
     .stem { margin: 0 0 8px; white-space: pre-line; }
+    .graph-stimulus { margin: 8px 0 12px; max-width: 480px; }
+    .graph-stimulus svg { display: block; width: 100%; height: auto; }
+    .graph-legend { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; }
+    .graph-alt { margin: 4px 0 0; font-size: 13px; color: #555; }
     .choice { display: block; margin: 6px 0; }
     .short-text { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     .essay { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; }

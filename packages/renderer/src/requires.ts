@@ -37,8 +37,8 @@ export function isRequirement(value: unknown): value is Requirement {
 // `window.webkit.messageHandlers.<name>.postMessage` in the page (response,
 // withdraw, upload, submit, timer, tts, stt) plus `tts.word_ranges`
 // (the page defines `window.__secureTestSpeech.word`, which the host calls
-// with each spoken word's range). Not `response.generic`: the page still
-// posts the typed `response` shapes; the generic channel arrives with D-5.
+// with each spoken word's range), and `response.generic` since row DC's
+// graph answers (a type the shell's typed decoder doesn't know).
 // test/extract.test.ts re-derives the handler list from the extracted page
 // and fails when the two drift.
 //
@@ -48,6 +48,9 @@ export function isRequirement(value: unknown): value is Requirement {
 // its own results and handed-in pages.
 export const BRIDGE_REQUIRES: readonly Requirement[] = [
   "response",
+  // Row DC (D-9): a graph answer posts {type: "graph", objects} — a type the
+  // shell's typed decoder doesn't know, so it rides the generic channel.
+  "response.generic",
   "stt",
   "submit",
   "timer",

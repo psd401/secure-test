@@ -1321,3 +1321,37 @@ screened, or exclude empty text in the retry query; a test either way.
 Also discussed, no change: no advisory lock across tasks while production
 runs one task (a rolling deploy's overlap costs pennies at worst).
 
+
+## Row HW — warn about unanswered questions at hand-in (James, 2026-10-24) — LATER, nothing built
+
+Found in the Row DC client hand-run: a student who cleared a Graph it
+answer could hand in with no warning — and the same is true of every
+question type. The only signals today are the paged strip's marks and the
+review page's "N of M answered". James: roadmap it for later. Shape to
+decide then: one plain-language line in the hand-in confirmation naming
+the unanswered questions (paged and scroll layouts), read by VoiceOver;
+nothing that blocks the hand-in. Client-only; applies to all types.
+
+## Row DC-Z — a calculator that works at high zoom (James, 2026-10-24) — LATER, nothing built
+
+From the Row DC client hand-run (findings Z-1 / Z-2 in
+`client/MANUAL-CHECKS.md`): at 2.5X zoom the calculator panel covers most
+of the screen and the question is hard to work with, and Tab can move out
+of the panel to a field hidden behind it. James (2026-10-24): merge the
+calculator with these as documented findings — the in-app help tells
+students "Tab can move you out of the calculator … press Esc", and the
+teacher help page asks for a low-stakes try with zoom, contrast and
+VoiceOver first. Revisit once students have used it: candidates are a
+panel that caps its size (or docks) at high zoom and graph-off by default
+there; keeping Tab inside the open panel costs keyboard users their way
+back to the question, so it needs care.
+
+## Row DC-A — the calculator accommodation and no-calculator questions (D-7 deferred items; James, 2026-10-24) — LATER, nothing built
+
+Decided for v1 (2026-10-24): (1) the `desmos_calculator` accommodation
+stays hidden and grants nothing on a test that has no calculator; (2)
+`calculator_non_calc_items` is not used — a question marked "No calculator
+on this question" stays that way for every student. Revisit together:
+which calculator the accommodation would grant (the scientific is the
+candidate) and whether it overrides the per-question mark, likely with the
+TIDE accommodation mapping.

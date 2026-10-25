@@ -158,6 +158,10 @@
   .status.err { color: #a04034; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+  details.calc-help { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; margin: 8px 0; background: var(--card); }
+  details.calc-help summary { cursor: pointer; font-weight: 600; }
+  details.calc-help p { margin: 8px 0 2px; }
+  details.calc-help ul { margin: 0 0 4px; }
   @media (max-width: 980px) {
     .topic-body { grid-template-columns: 1fr; }
   }
@@ -287,6 +291,148 @@
             <li>With the keyboard, they press <b class="ui">Highlight mode</b>, move sentence by sentence with the arrow keys, press Space to highlight or remove the sentence, and press Escape to leave. It works with VoiceOver.</li>
           </ol>
           <p>Highlights are only for the student's own reading. They are not saved, so they disappear if the student quits, reopens the test or resumes later. You will not see them in results, though View screen may show them while the student is working. Copying passage text stays blocked unless the test allows the clipboard. Students need SecureTest 2.0 or later; on older versions the test works normally, without highlighting.</p>
+          <h3 class="sub">Give students a calculator</h3>
+          <ol class="steps">
+            <li>In <b class="ui">Settings</b>, choose a <b class="ui">Calculator</b>: <b class="ui">Four-function</b>, <b class="ui">Scientific</b> or <b class="ui">Graphing</b>, then <b class="ui">Save settings</b>. Every student gets it. Like the other settings, it can't change once the test is published.</li>
+            <li>Under <b class="ui">Calculator setup</b>, <b class="ui">Like the Washington state test</b> starts in degrees and leaves out what the state test's calculator leaves out. <b class="ui">Everything on</b> is the full calculator.</li>
+            <li>To keep the calculator away from a question, tick <b class="ui">No calculator on this question</b> on it. That works when students see one question at a time; on one scrolling page every question is on screen at once, so the calculator stays.</li>
+          </ol>
+          <h3 class="sub">Show a graph with a question</h3>
+          <ol class="steps">
+            <li>On a question, press <b class="ui">Add a graph</b>. Type expressions the way students do, then pan and zoom to the view students should see first.</li>
+            <li>Describe the graph for students who can't see it. <b class="ui">Draft a description</b> writes a first version from the expressions and the view; edit it, then press <b class="ui">Use this graph</b> and save the question.</li>
+            <li>Students can move and zoom the graph and tap a curve to see its key points; the home button brings back your view. The description is read aloud by screen readers and shown under the graph when a student asks. Print and preview show the same graph.</li>
+          </ol>
+          <h3 class="sub">Ask students to graph their answer</h3>
+          <ol class="steps">
+            <li>Add a <b class="ui">Graph it</b> question. Set the grid (how far it reaches, where its lines are, and what steps points snap to), which objects students may place — points, lines, segments, rays, circles, parabolas — and how many.</li>
+            <li>Draw the answer key on the same grid, as a student would. Each object is read back in words (&ldquo;y = 2x + 1&rdquo;) so you can check it. Choose <b class="ui">All or nothing</b> or <b class="ui">A point for each object</b>. With no key, the question is scored by hand.</li>
+            <li>Scoring compares shapes, not clicks: any two points on the right line are the right line. Students can place objects by clicking, with the arrow keys and Enter, or by typing coordinates. Results show each object in words, marked against the key.</li>
+          </ol>
+          <p>Students open the calculator with the <b class="ui">Calculator</b> button at the top of the test. It works like the graphing calculators they already know: type an expression, press Enter for a new line, add sliders, and tap a curve to see where it crosses the axes and other curves. Every graph, in the calculator or in a question, can also be heard: with the graph selected, <b class="ui">S</b> (or the <b class="ui">≡</b> button) describes it in words, <b class="ui">T</b> walks along a curve point by point with the arrow keys (Shift jumps to the next crossing or turning point), and <b class="ui">H</b> (or <b class="ui">♪</b>) plays the curve as rising and falling notes. Students need SecureTest 2.0 or later; an older version is asked to update before the test opens.</p>
+          <h3 class="sub">What the calculator's help says</h3>
+          <p>Students can press <b class="ui">?</b> in the calculator for short instructions about the calculator they have. While they type in a fraction, power or root, a line under their work says how to get back out. Here is what each calculator's help says:</p>
+          <details class="calc-help">
+            <summary>Four-function (Like the Washington state test)</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>Use ( and ) to group parts of a problem.</li>
+              <li>a/b makes a fraction.</li>
+              <li>⌫ deletes one thing. clear empties the line.</li>
+              <li>↶ undoes your last step. ↷ puts it back.</li>
+            </ul>
+            <p><b>Get out of a fraction</b></p>
+            <ul>
+              <li>After you type in a fraction, press → to move back out.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Four-function (Everything on)</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>Use ( and ) to group parts of a problem.</li>
+              <li>√ makes a square root.</li>
+              <li>⌫ deletes one thing. clear empties the line.</li>
+              <li>↶ undoes your last step. ↷ puts it back.</li>
+            </ul>
+            <p><b>Get out of a root</b></p>
+            <ul>
+              <li>After you type in a root, press → to move back out.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Scientific</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type a problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+              <li>ans means the answer on the line above. Try ans + 1.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>a² squares a number. aᵇ makes any power.</li>
+              <li>√ makes a square root. a/b makes a fraction.</li>
+              <li>ⁿ√ makes any root, like a cube root.</li>
+              <li>The abc and func tabs have letters and more functions.</li>
+              <li>⌫ deletes one thing.</li>
+            </ul>
+            <p><b>Get out of a fraction or power</b></p>
+            <ul>
+              <li>After you type in a fraction, power or root, press → to move back out.</li>
+              <li>One digit in a power, like x², moves you out by itself.</li>
+            </ul>
+            <p><b>Angles</b></p>
+            <ul>
+              <li>Degrees and Radians at the top choose how angles are measured.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <details class="calc-help">
+            <summary>Graphing</summary>
+            <p><b>Type a problem</b></p>
+            <ul>
+              <li>Type an equation, like y = 2x + 1. It shows on the graph.</li>
+              <li>Type a number problem, like 3 × 4. The answer shows under it.</li>
+              <li>Press Enter or ↵ to start a new line.</li>
+            </ul>
+            <p><b>Use the keys</b></p>
+            <ul>
+              <li>a² squares a number. aᵇ makes any power.</li>
+              <li>√ makes a square root. a/b makes a fraction.</li>
+              <li>The abc and func tabs have letters and more functions.</li>
+              <li>⌫ deletes one thing.</li>
+            </ul>
+            <p><b>Get out of a fraction or power</b></p>
+            <ul>
+              <li>After you type in a fraction, power or root, press → to move back out.</li>
+              <li>One digit in a power, like x², moves you out by itself.</li>
+            </ul>
+            <p><b>Angles</b></p>
+            <ul>
+              <li>Degrees and Radians at the top choose how angles are measured.</li>
+            </ul>
+            <p><b>Use the graph</b></p>
+            <ul>
+              <li>Graph hides or shows the graph.</li>
+              <li>Drag the graph to move it. Pinch or use + and − to zoom.</li>
+              <li>Click a curve to see the points where it crosses.</li>
+              <li>Click the graph, then press S to hear it in words.</li>
+              <li>Press T to walk along a curve with the arrow keys.</li>
+              <li>Press H to hear the curve as sound.</li>
+            </ul>
+            <p><b>Close it</b></p>
+            <ul>
+              <li>Press Esc or × to close the calculator.</li>
+              <li>Tab can move you out of the calculator. If you can&rsquo;t see where you are typing, press Esc.</li>
+            </ul>
+          </details>
+          <p><b>Try it before a real test.</b> Have students use the calculator once in a practice or low-stakes test, especially students who use zoom, a color contrast setting or VoiceOver. At large zoom the calculator covers most of the screen, and Tab can move out of the calculator to a box the student can't see. Esc closes the calculator.</p>
         </div>
         <figure class="shot" data-src="/help/sources-side-by-side.png" data-alt="A stimulus card with three labelled sources and the Side by side layout chosen">
           <figcaption>A stimulus with its sources, set to Side by side.</figcaption>
@@ -547,6 +693,8 @@
         <dd>That student's SecureTest is older than 1.6.0, which fill in the blank needs. The Mac updates on its own, usually by the next day; the student can also update SecureTest from Self Service. Other tests still open on the older version.</dd>
         <dt>A student says highlighting isn't there.</dt>
         <dd>Their Mac has a SecureTest older than 2.0, which can't highlight. It updates on its own, usually by the next day. The test works normally in the meantime, so the student can carry on. Check that <b class="ui">Let students highlight passages</b> is ticked in <b class="ui">Settings</b>. See <a href="#sources">Readings and sources</a>.</dd>
+        <dt>"This test needs a newer version of SecureTest" on a test with a calculator.</dt>
+        <dd>A calculator needs SecureTest 2.0 or later, and it is part of the test, so an older version can't open it. The Mac updates on its own, usually by the next day; the student can also update SecureTest from Self Service. Other tests still open on the older version.</dd>
         <dt>"This Mac isn't set up for SecureTest yet."</dt>
         <dd>That Mac hasn't received its settings from IT yet. Contact IT, not the project.</dd>
         <dt>Wi-Fi drops mid-test.</dt>

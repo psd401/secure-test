@@ -9,6 +9,8 @@
 // renderer-design.md) is added here as "2.0.0"; v2.0 itself needs no entry.
 export const MIN_CLIENT_VERSION_FOR_TYPE: Readonly<Record<string, string>> = {
   fill_blank: "1.6.0",
+  // Graphing calculator D-9: only the served renderer draws the board.
+  graph: "2.0.0",
 };
 
 /** "1.5.0" → [1, 5, 0]; anything unparseable → null. */
@@ -27,6 +29,19 @@ export function parseClientVersion(value: string | null | undefined): number[] |
  */
 export const MIN_CLIENT_VERSION_FOR_HIGHLIGHTING = "2.0.0";
 
+/**
+ * Graphing calculator (docs/graphing-calculator-design.md D-7): features of
+ * a bundle, beyond its item types, that only a newer client can honour.
+ * Unlike highlighting, a calculator is part of what the test measures, so a
+ * client that can't draw it is REFUSED (the same 409 as an item type),
+ * never silently given a test without it.
+ */
+export const MIN_CLIENT_VERSION_FOR_FEATURE: Readonly<Record<string, string>> = {
+  calculator: "2.0.0",
+  // A stimulus graph is part of the question; an older client couldn't draw it.
+  graph_stimulus: "2.0.0",
+};
+
 function atLeast(have: number[], need: number[]): boolean {
   for (let i = 0; i < 3; i++) {
     if (have[i]! !== need[i]!) return have[i]! > need[i]!;
@@ -43,11 +58,16 @@ function atLeast(have: number[], need: number[]): boolean {
 export function requiredClientUpgrade(
   clientVersion: string | null,
   types: Iterable<string>,
+  /** Bundle features with a minimum (MIN_CLIENT_VERSION_FOR_FEATURE). */
+  features: Iterable<string> = [],
 ): string | null {
   const have = parseClientVersion(clientVersion);
   let needed: string | null = null;
-  for (const type of new Set(types)) {
-    const min = MIN_CLIENT_VERSION_FOR_TYPE[type];
+  const minimums = [
+    ...[...new Set(types)].map((t) => MIN_CLIENT_VERSION_FOR_TYPE[t]),
+    ...[...new Set(features)].map((f) => MIN_CLIENT_VERSION_FOR_FEATURE[f]),
+  ];
+  for (const min of minimums) {
     if (!min) continue;
     if (have && atLeast(have, parseClientVersion(min)!)) continue;
     if (!needed || atLeast(parseClientVersion(min)!, parseClientVersion(needed)!)) needed = min;

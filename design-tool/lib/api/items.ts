@@ -1,5 +1,11 @@
 import { z } from "zod";
 import {
+  GraphBoardSchema,
+  GraphKeySchema,
+  type GraphBoard,
+  type GraphKey,
+  type GraphObject,
+  StimulusGraphSchema,
   DrawingCanvasSchema,
   RubricSchema,
   ScoringMethodSchema,
@@ -9,6 +15,7 @@ import {
   type ScoringMethod,
 } from "@secure-test/schema";
 import { ITEM_TYPES, type ItemConfig, type ItemType } from "@/db/schema";
+import { canonical, parseSnap } from "@secure-test/graphing/server";
 import {
   MAX_STANDARDS,
   MAX_STANDARD_LENGTH,
@@ -50,6 +57,11 @@ const BaseItemFields = {
   // PATCH.) Cross-field rules live in the superRefine on the union below.
   scoring_method: ScoringMethodSchema.nullable().optional(),
   standards: StandardsField.optional(),
+  // Graphing calculator (D-7): hide the test's calculator on this question's
+  // page. Omitted on PATCH preserves the stored value, like scoring_method.
+  no_calculator: z.boolean().optional(),
+  // Stimulus graph (D-8): null removes it; omitted on PATCH keeps it.
+  graph: StimulusGraphSchema.nullable().optional(),
 };
 
 // Answer keys are OPTIONAL at write time (James, 2026-09-01). The prod
@@ -266,6 +278,20 @@ const FillBlankItem = z.object({
     .max(20, "a fill-in-the-blank question allows at most 20 blanks"),
 });
 
+// Graphing calculator D-9: objects placed on a snapped grid. The board is
+// what the student gets; the key (optional while drafting, like every key)
+// is drawn on the same board. Its objects must fit the board (checked in
+// validateGraph below).
+const GraphItem = z.object({
+  type: z.literal("graph"),
+  ...BaseItemFields,
+  choices: z.array(ChoiceShape).max(0).default([]),
+  correct_choice_ids: z.array(z.string()).max(0).default([]),
+  correct_answer: z.null().optional(),
+  board: GraphBoardSchema,
+  key: GraphKeySchema.nullable().optional(),
+});
+
 // Slice 36: which scoring methods each type may declare, and the default
 // when unset. auto needs a machine-checkable key (choices / correct_answer),
 // which essay lacks; ai/hybrid need a rubric, which only essay carries.
@@ -280,6 +306,7 @@ export const DEFAULT_SCORING_METHOD: Record<ItemType, ScoringMethod> = {
   drawing_upload: "human",
   table: "auto",
   fill_blank: "auto",
+  graph: "auto",
 };
 
 export const ALLOWED_SCORING_METHODS: Record<
@@ -302,6 +329,7 @@ export const ALLOWED_SCORING_METHODS: Record<
   // FB: one point per keyed blank (lib/scoring/auto.ts), or hand-scored; a
   // fully keyless item is unscorable by auto, like an unkeyed table.
   fill_blank: ["auto", "human"],
+  graph: ["auto", "human"],
 };
 
 // The method scoring actually runs with (slice 37 consumes this): the
@@ -322,6 +350,8 @@ export function effectiveScoringMethod(
   if (type === "fill_blank") {
     return (config?.blanks ?? []).some(isKeyedBlank) ? "auto" : "human";
   }
+  // D-9: like a keyless table, nothing to auto-score until a key exists.
+  if (type === "graph") return config?.graph_key ? "auto" : "human";
   return DEFAULT_SCORING_METHOD[type];
 }
 
@@ -474,6 +504,44 @@ const validateTable = (
 
 export { isKeyedBlank };
 
+// Graphing calculator D-9: every key object (and every fixed object) must be
+// a shape on this board — on the grid, inside it, with a tool it offers —
+// and the key may not hold more objects than students may place. Shared with
+// the bundle importer, which stores a graph item's board and key as given.
+export type GraphIssue = { path: (string | number)[]; message: string };
+
+export function graphIssues(board: GraphBoard, key: GraphKey | null | undefined): GraphIssue[] {
+  if (!parseSnap(board.snap)) {
+    return [{ path: ["board", "snap"], message: "the snap must be a positive number or fraction" }];
+  }
+  const issues: GraphIssue[] = [];
+  const check = (objects: GraphObject[], path: string, toolsOnly: boolean) => {
+    objects.forEach((o, i) => {
+      const c = canonical(o, board);
+      if ("invalid" in c) {
+        issues.push({ path: [path, i], message: `not a shape on this board (${c.invalid})` });
+      } else if (toolsOnly && !board.tools.includes(o.tool)) {
+        issues.push({ path: [path, i], message: `the board doesn't offer the ${o.tool} tool` });
+      }
+    });
+  };
+  check(board.fixed ?? [], "board.fixed", false);
+  if (key) {
+    check(key.objects, "key.objects", true);
+    if (key.objects.length > board.max_objects) {
+      issues.push({ path: ["key", "objects"], message: "the key has more objects than students may place" });
+    }
+  }
+  return issues;
+}
+
+const validateGraph = (body: { type: ItemType } & Record<string, unknown>, ctx: z.RefinementCtx) => {
+  if (body.type !== "graph") return;
+  for (const { path, message } of graphIssues(body.board as GraphBoard, body.key as GraphKey | null | undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+  }
+};
+
 // FB slice 1: fill_blank cross-field integrity. Every `[[id]]` marker in the
 // stem names exactly one blank and every blank has exactly one marker — the
 // response and the client address blanks by id, and an orphan on either side
@@ -577,12 +645,14 @@ export const CreateItemBody = z
     DrawingUploadItem,
     TableItem,
     FillBlankItem,
+    GraphItem,
   ])
   .superRefine(validateScoring)
   .superRefine(validateUniqueIds)
   .superRefine(validateHotspot)
   .superRefine(validateTable)
   .superRefine(validateFillBlank)
+  .superRefine(validateGraph)
   .superRefine(validateRubricMax);
 export type CreateItemBody = z.infer<typeof CreateItemBody>;
 
@@ -601,6 +671,10 @@ export function itemConfigForWrite(
       ? undefined
       : (body.scoring_method ?? existing?.scoring_method);
   if (resolvedMethod) config.scoring_method = resolvedMethod;
+  // Every type: stored only when on.
+  if (body.no_calculator ?? existing?.no_calculator) config.no_calculator = true;
+  const graph = body.graph === null ? undefined : (body.graph ?? existing?.graph);
+  if (graph) config.graph = graph;
   if (body.type === "short_text") {
     // Stored only when ON — absence is the default, like every other
     // optional config key, so existing rows and exports stay byte-stable.
@@ -639,6 +713,12 @@ export function itemConfigForWrite(
   }
   if (body.type === "fill_blank") {
     config.blanks = compactBlanks(body.blanks);
+    return config;
+  }
+  if (body.type === "graph") {
+    config.graph_board = body.board;
+    // Stored only when set; null on PATCH clears it.
+    if (body.key) config.graph_key = body.key;
     return config;
   }
   if (body.type !== "essay") return config;

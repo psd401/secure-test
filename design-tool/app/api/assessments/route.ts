@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       student_feedback: body.student_feedback,
       answers_release: body.answers_release,
       allow_highlighting: body.allow_highlighting,
+      calculator_mode: body.calculator_mode,
+      calculator_preset: body.calculator_preset,
       allowed_accommodations: body.allowed_accommodations,
       construct_altering: body.construct_altering,
     })

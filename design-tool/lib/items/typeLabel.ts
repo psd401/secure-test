@@ -14,6 +14,8 @@ export const ITEM_TYPE_LABEL: Record<ItemType, string> = {
   table: "Table",
   // FB D-10: the teacher-facing name.
   fill_blank: "Fill in the blank",
+  // Graphing calculator D-9.
+  graph: "Graph it",
 };
 
 /** Label for a type string that may not be a known type (model output). */

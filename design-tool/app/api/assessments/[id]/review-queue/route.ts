@@ -25,6 +25,7 @@ import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/s
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
+import { graphAnswerLines, graphMaxPoints, type GraphObject } from "@secure-test/graphing/server";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -260,7 +261,9 @@ export async function GET(req: Request, ctx: RouteContext) {
             ? tableMaxPoints(item.config)
             : item.type === "fill_blank"
               ? fillBlankMaxPoints(item.config)
-              : 1,
+              : item.type === "graph" && item.config.graph_board && item.config.graph_key
+                ? graphMaxPoints(item.config.graph_board, item.config.graph_key)
+                : 1,
         // E3 slice 2: the grid and its keys, so the hand-scorer sees the
         // student's cells laid out and the expected text beside each keyed
         // one. Teacher-only surface — keys are fine here.
@@ -310,6 +313,17 @@ export async function GET(req: Request, ctx: RouteContext) {
               response.response as unknown as Record<string, unknown>,
               resolvedAssets,
               { showKey: true, summary: true, handScored: fillBlankHandScored(item.config) },
+            )
+          : null,
+      // Graphing calculator D-9: a graph answer in words, one line per
+      // object ("y = 2x + 1"), marked against the key when there is one —
+      // teacher-only, like the table's keys. Null for every other type.
+      graph_lines:
+        item.type === "graph" && item.config.graph_board
+          ? graphAnswerLines(
+              item.config.graph_board,
+              item.config.graph_key ?? null,
+              ((response.response as { objects?: GraphObject[] }).objects ?? []) as GraphObject[],
             )
           : null,
       proposed: proposed

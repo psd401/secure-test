@@ -94,7 +94,7 @@ final class RendererOrderDragTests: XCTestCase {
                 "\(handler) must be gone — no dual path"
             )
         }
-        let script = AssessmentPage.rendererScript
+        let script = AssessmentPage.rendererScriptWithoutVendored
         XCTAssertFalse(script.contains("ondragstart"))
         XCTAssertFalse(script.contains("dataTransfer"))
         XCTAssertFalse(AssessmentPage.itemStyles.contains("-webkit-user-drag"))

@@ -1142,6 +1142,8 @@ public enum AssessmentPage {
       // `$…$` run by one rule. Spliced here unchanged.
     \#(mathPassFunctions)
     \#(richTextFunctions)
+    \#(calculatorFunctions)
+    \#(graphingScript)
 
       function italicNodes(text, into) {
         var last = 0, m;
@@ -2415,6 +2417,24 @@ public enum AssessmentPage {
         ]
       ];
 
+      // Row DC finding FF-2 (James, 2026-10-24): on a test whose calculator is
+      // four-function the full pad offered roots, Greek and exponents the
+      // question has no use for. There the pad is one row of six keys and
+      // starts closed.
+      var FOUR_FUNCTION_KEY_ROWS = [
+        [
+          MATH_KEY_ROWS[0][0],
+          { key: 'percent', label: 'Percent', text: '%', before: '%' },
+          { key: 'minus', label: 'Minus', text: '−', before: '−' },
+          MATH_KEY_ROWS[1][0],
+          MATH_KEY_ROWS[1][1],
+          { key: 'decimal', label: 'Decimal point', text: '.', before: '.' }
+        ]
+      ];
+      function fourFunctionTest() {
+        return !!(BUNDLE && BUNDLE.calculator && BUNDLE.calculator.mode === 'four_function');
+      }
+
       // D-1.4: the caret contract. With nothing selected the insertion is the
       // empty structure and the caret lands in its FIRST slot, so the preview
       // shows an empty fraction bar the moment the key is pressed and fills in
@@ -2473,7 +2493,9 @@ public enum AssessmentPage {
         // question is math-shaped (the same signal the hint uses). State is per
         // item, in this closure, and is not persisted: a paging turn rebuilds
         // the page and re-opening is one click.
-        var open = /\$/.test(item.stem || '');
+        var limited = fourFunctionTest();
+        var keyRows = limited ? FOUR_FUNCTION_KEY_ROWS : MATH_KEY_ROWS;
+        var open = !limited && /\$/.test(item.stem || '');
         function applyOpen() {
           toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
           if (open) pad.removeAttribute('hidden');
@@ -2547,11 +2569,11 @@ public enum AssessmentPage {
           return button;
         }
 
-        for (var r = 0; r < MATH_KEY_ROWS.length; r++) {
+        for (var r = 0; r < keyRows.length; r++) {
           var row = document.createElement('div');
           row.className = 'math-keys-row';
-          for (var k = 0; k < MATH_KEY_ROWS[r].length; k++) {
-            var button = keyButton(MATH_KEY_ROWS[r][k]);
+          for (var k = 0; k < keyRows[r].length; k++) {
+            var button = keyButton(keyRows[r][k]);
             keyButtons.push(button);
             row.appendChild(button);
           }
@@ -5173,6 +5195,8 @@ public enum AssessmentPage {
           case 'hotspot': return hotspotField(item);
           case 'drawing_upload': return drawingField(item);
           case 'table': return tableField(item);
+          // Row DC (D-9): drawn by the graphing bundle once the page is built.
+          case 'graph': return graphField(item);
           default: return unsupported(item.type);
         }
       }
@@ -6392,6 +6416,9 @@ public enum AssessmentPage {
           }, wrap));
         }
         wrap.appendChild(stem);
+        // Row DC (D-8): the teacher's graph, under the stem.
+        var graph = graphStimulusFor(item);
+        if (graph) wrap.appendChild(graph);
         var answer = fillBlank ? fillBlankField(item, stem) : answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
         wrap.appendChild(answer);
@@ -6696,6 +6723,9 @@ public enum AssessmentPage {
             }
           });
           var page = pages[n];
+          // Row DC (D-7): a page holding a "no calculator" question closes
+          // and disables the calculator; any other page offers it again.
+          if (CALCULATOR) calculatorForPage(page.items);
           // The passage travels to whichever page is open (one element).
           if (page.holder && page.set && page.set.__block) page.holder.appendChild(page.set.__block);
           current.textContent = page.label;
@@ -6741,6 +6771,18 @@ public enum AssessmentPage {
           root.appendChild(itemBlock(item));
         });
         root.appendChild(buildFinish());
+      }
+
+      // Row DC (D-8 / D-9): draw the stimulus graphs and the graph answers
+      // now the tree is built.
+      mountStimulusGraphs();
+      mountGraphAnswers();
+
+      // Row DC: the calculator button, when the bundle names a calculator.
+      // The panel and the calculator itself are built on first open.
+      if (CALCULATOR) {
+        var calcAt = document.body && document.body.contains(root) ? document.body : root;
+        calcAt.appendChild(buildCalculatorButton(calcAt));
       }
 
       // HS-1 / ME-1: the whole built page once. The body when it holds the

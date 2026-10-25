@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GraphBoardSchema, GraphKeySchema } from "./graph.js";
 
 export const ChoiceSchema = z.object({
   id: z.string().min(1),
@@ -21,11 +22,48 @@ export const ScoringMethodSchema = z.enum(["auto", "ai", "human", "hybrid"]);
 // non-empty, which keeps every bundle written before this byte-stable. Rides
 // the TEACHER bundle only: tags are authoring metadata, and ADR 0016 keeps
 // the delivery bundle to what the student needs.
+// Graphing calculator, stimulus graphs (docs/graphing-calculator-design.md
+// D-8): a teacher-authored graph shown with the question — content, not a
+// key, so it rides both bundles. The view's bounds are what the student
+// sees first; alt text is required (it is the graph's accessible name).
+const ViewCoord = z.number().finite().min(-1e6).max(1e6);
+export const StimulusGraphRowSchema = z.object({
+  latex: z.string().max(500),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  hidden: z.literal(true).optional(),
+});
+export const StimulusGraphSchema = z
+  .object({
+    rows: z.array(StimulusGraphRowSchema).min(1).max(20),
+    // Capped like the answer board's coordinates: past ~2^53 a tick counter
+    // stops advancing, so an unbounded view could hang the renderer.
+    view: z.object({
+      xmin: ViewCoord,
+      xmax: ViewCoord,
+      ymin: ViewCoord,
+      ymax: ViewCoord,
+    }),
+    degrees: z.literal(true).optional(),
+    alt: z.string().trim().min(1).max(1000),
+  })
+  .refine((g) => g.view.xmin < g.view.xmax && g.view.ymin < g.view.ymax, {
+    message: "the view's minimums must be below its maximums",
+    path: ["view"],
+  });
+export type StimulusGraph = z.infer<typeof StimulusGraphSchema>;
+
 const baseItem = {
   id: z.string().min(1),
   stem: z.string(),
   scoring_method: ScoringMethodSchema.optional(),
   standards: z.array(z.string().min(1).max(80)).max(10).optional(),
+  // Graphing calculator (docs/graphing-calculator-design.md D-7): the test's
+  // calculator is hidden on this question's page. Emitted only when true.
+  no_calculator: z.literal(true).optional(),
+  graph: StimulusGraphSchema.optional(),
 };
 
 export const SingleSelectMCItemSchema = z.object({
@@ -300,6 +338,15 @@ export const FillBlankItemSchema = z.object({
   blanks: z.array(FillBlankBlankSchema).min(1),
 });
 
+// Graph answer (D-9): the board and, on the TEACHER bundle only, the key.
+// The key is optional at write time like every other key (2026-09-01).
+export const GraphItemSchema = z.object({
+  type: z.literal("graph"),
+  ...baseItem,
+  board: GraphBoardSchema,
+  key: GraphKeySchema.optional(),
+});
+
 /**
  * FB slice 1: the blank ids a stem's `[[<id>]]` markers name, in order of
  * appearance (a repeated marker appears twice). Shared by the write boundary,
@@ -347,6 +394,7 @@ export const ItemSchema = z.preprocess(
     DrawingUploadItemSchema,
     TableItemSchema,
     FillBlankItemSchema,
+    GraphItemSchema,
   ]),
 );
 
@@ -472,6 +520,19 @@ export type StudentFeedback = z.infer<typeof StudentFeedbackSchema>;
 export const AnswersReleaseSchema = z.enum(["at_hand_in", "on_release"]);
 export type AnswersRelease = z.infer<typeof AnswersReleaseSchema>;
 
+// Graphing calculator (docs/graphing-calculator-design.md D-6 / D-7): the
+// calculator every student gets on this test, and its configuration.
+// Emitted only when there is one; absent is no calculator.
+export const CalculatorModeSchema = z.enum(["four_function", "scientific", "graphing"]);
+export type CalculatorMode = z.infer<typeof CalculatorModeSchema>;
+export const CalculatorPresetSchema = z.enum(["full", "state_wa"]);
+export type CalculatorPreset = z.infer<typeof CalculatorPresetSchema>;
+export const CalculatorSettingSchema = z.object({
+  mode: CalculatorModeSchema,
+  preset: CalculatorPresetSchema,
+});
+export type CalculatorSetting = z.infer<typeof CalculatorSettingSchema>;
+
 export const ItemBundleSchema = z.object({
   test_id: z.string().min(1),
   title: z.string(),
@@ -485,6 +546,8 @@ export const ItemBundleSchema = z.object({
   // Passage highlighting (docs/passage-highlighting-design.md): emitted only
   // when true, keeping older bundles byte-stable; absent reads as false.
   allow_highlighting: z.boolean().optional(),
+  // Graphing calculator: emitted only when the test has one.
+  calculator: CalculatorSettingSchema.optional(),
   // E5 slice 1: optional so every bundle written before it parses unchanged.
   item_sets: z.array(TeacherItemSetSchema).optional(),
   // Map<uuid, asset>. Optional — bundles without image refs omit this.

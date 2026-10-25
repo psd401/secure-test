@@ -45,6 +45,10 @@ export function assertItemsAreBundleable(rows: readonly ItemRow[]): void {
     // FB slice 1: the API requires at least one blank, and two options on
     // every dropdown; anything less is a direct DB write the bundle schemas
     // would reject anonymously.
+    // Graphing calculator D-9: the API requires a board on every write.
+    if (row.type === "graph" && !row.config?.graph_board) {
+      throw new IncompleteItemError(row.id, "a graph item needs a board");
+    }
     if (row.type === "fill_blank") {
       const blanks = row.config?.blanks ?? [];
       if (blanks.length < 1) {

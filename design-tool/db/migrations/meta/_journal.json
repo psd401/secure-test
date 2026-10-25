@@ -442,6 +442,13 @@
       "when": 1792771150378,
       "tag": "0062_owner_email_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792870532388,
+      "tag": "0063_calculator_setting",
+      "breakpoints": true
     }
   ]
 }
