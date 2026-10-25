@@ -290,7 +290,15 @@ export async function POST(req: Request, ctx: RouteContext) {
     .map(([rawIndex]) => rawChanges[rawIndex] ?? []);
   const proposed_sets = [
     ...setValidation.sets,
-    ...(scanned ? [] : adjacencyFallback(figures.length, modelText, validSourceNumbers, setValidation.sets)),
+    ...(scanned
+      ? []
+      : adjacencyFallback(
+          figures.length,
+          modelText,
+          validSourceNumbers,
+          setValidation.sets,
+          new Set(figures.filter((f) => f.beside).map((f) => f.n)),
+        )),
     // Multi-source stimulus slice 3: the model tends to abbreviate long
     // verbatim text, so compare each returned source with the document's own
     // span under the same heading. The scanned path has no text to compare.

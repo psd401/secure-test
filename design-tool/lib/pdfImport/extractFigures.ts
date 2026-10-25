@@ -48,6 +48,10 @@ export interface PdfFigure {
    * line within CAPTION_GAP_PT). It stays in the page text as well and is
    * used as the image's alt text. Raster figures have none. */
   caption?: string;
+  /** Import fixes slice 1 (2026-10-25): text starts to the left of the
+   * figure at the same height — it is printed beside its question, so it
+   * belongs to that question (questionAfterFigure), not the next one. */
+  beside?: true;
 }
 
 export interface PdfLayout {
@@ -86,6 +90,11 @@ export const VECTOR_RENDER_SCALE = 2;
 export const VECTOR_CROP_PAD_PT = 4;
 /** A bold line this far above a cluster (points) is its printed title. */
 export const CAPTION_GAP_PT = 24;
+/** Import fixes slice 1: a short run (a vertex or point label: "R", "AB")
+ * this close to a vector figure belongs to the drawing, not the text line
+ * it shares a baseline with. */
+export const FIGURE_LABEL_PAD_PT = 12;
+const MAX_LABEL_CHARS = 4;
 /** Longest caption kept (it becomes an image's alt text). */
 const MAX_CAPTION_CHARS = 200;
 /** Beyond this many painted paths a page is not clustered — the O(n²) merge
@@ -196,6 +205,38 @@ export function captionAbove(lines: readonly TextLine[], top: number, gap: numbe
   return text.length > 0 ? text.slice(0, MAX_CAPTION_CHARS) : undefined;
 }
 
+/** A line shorter than this is a label (an axis title letter, a point
+ * name), not question text, for the beside test. */
+const MIN_BESIDE_LINE_CHARS = 12;
+
+/**
+ * Import fixes slice 1: a figure is beside text when a line of real text at
+ * its height starts to its left, clear of its labels (a question in the left
+ * column, the figure in the right). Exported for tests; pure.
+ */
+export function isBesideText(lines: readonly TextLine[], box: Box): boolean {
+  return lines.some(
+    (l) =>
+      l.y >= box[1] &&
+      l.y <= box[3] &&
+      (l.x ?? 0) < box[0] - FIGURE_LABEL_PAD_PT &&
+      (l.plain ?? l.text).trim().length >= MIN_BESIDE_LINE_CHARS,
+  );
+}
+
+/**
+ * Import fixes slice 1: drop short runs sitting on or just outside a vector
+ * drawing — its point labels — so they stop riding on the question line
+ * beside it (a question line ending in "… R A"). Exported for tests; pure.
+ */
+export function isFigureLabel(run: { x: number; y: number; str: string }, boxes: readonly Box[]): boolean {
+  if (run.str.trim().length > MAX_LABEL_CHARS) return false;
+  const pad = FIGURE_LABEL_PAD_PT;
+  return boxes.some(
+    (b) => run.x >= b[0] - pad && run.x <= b[2] + pad && run.y >= b[1] - pad && run.y <= b[3] + pad,
+  );
+}
+
 export function figureMarker(n: number): string {
   return `[FIGURE ${n}]`;
 }
@@ -294,6 +335,7 @@ function linesOf(
   items: { str: string; transform: number[]; fontName?: string }[],
   base: M,
   styleOf: (fontName: string | undefined) => RunStyle = () => NO_STYLE,
+  drop: (run: { x: number; y: number; str: string }) => boolean = () => false,
 ): TextLine[] {
   const runs = items
     .filter((it) => it.str && it.str.trim().length > 0)
@@ -301,6 +343,7 @@ function linesOf(
       const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
       return { x, y, str: it.str, style: styleOf(it.fontName) };
     })
+    .filter((r) => !drop(r))
     .sort((a, b) => a.y - b.y || a.x - b.x);
   const mark = emphasisMarks(runs);
   const lines: { y: number; parts: { x: number; str: string; style: RunStyle }[] }[] = [];
@@ -525,7 +568,8 @@ export async function extractPdfLayout(
       styleCache.set(key, style);
       return style;
     };
-    const lines = linesOf(content.items as { str: string; transform: number[]; fontName?: string }[], base, styleOf);
+    const items = content.items as { str: string; transform: number[]; fontName?: string }[];
+    const lines = linesOf(items, base, styleOf);
 
     // Slice 5: painted paths close together are one drawing; a drawing big
     // enough and with enough paths in it is a chart.
@@ -627,18 +671,23 @@ export async function extractPdfLayout(
         fig.bytes = png.length;
         fig.data_url = `data:image/png;base64,${png.toString("base64")}`;
       }
+      // Slice 1: a figure beside its question is marked at its middle, so
+      // the marker (and the model) reads inside that question.
+      const beside = isBesideText(lines, entry.box);
+      if (beside) fig.beside = true;
       figures.push(fig);
-      pageFigures.push({ n, top: entry.box[1] });
+      pageFigures.push({ n, top: beside ? (entry.box[1] + entry.box[3]) / 2 : entry.box[1] });
     }
 
     // Slice 5: a text line whose baseline sits inside a vector figure is part
     // of the picture (axis values, tick labels, a legend) — it leaves the page
     // text so a source stops carrying chart noise. The caption line is above
     // the cluster and stays.
+    // Import fixes slice 1: and its point labels leave the lines beside it.
     const kept =
       figureBoxes.length === 0
         ? lines
-        : lines.filter(
+        : linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter(
             (l) =>
               !figureBoxes.some(
                 (b) => (l.x ?? 0) >= b[0] && (l.x ?? 0) <= b[2] && l.y >= b[1] && l.y <= b[3],

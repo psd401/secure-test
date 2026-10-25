@@ -1019,15 +1019,33 @@ const LINE_START_NUMBER_RE = /^[ \t]*(\d{1,3})[.)](?=\s)/gm;
  * answer choices come after the figure and before the next number, the
  * figure is inside the question numbered just above it.
  *
+ * Import fixes slice 1 (2026-10-25, a geometry quiz): a figure printed
+ * BESIDE its question (text to its left at the same height) belongs to the
+ * question it sits beside, not the next one. extractPdfLayout places a
+ * beside figure's marker at the figure's middle and reports it in
+ * `beside`; such a figure takes the last question number above its marker
+ * on the same page, and only falls back to the rule above when the page
+ * has none (a figure beside a passage at the top of a page).
+ *
  * null when nothing numbered fits (a figure after the last question, cover
  * art on a title page).
  */
-export function questionAfterFigure(textWithMarkers: string, n: number): number | null {
+export function questionAfterFigure(
+  textWithMarkers: string,
+  n: number,
+  beside = false,
+): number | null {
   const marker = `[FIGURE ${n}]`;
   const marked = withoutEmphasis(textWithMarkers);
   const at = marked.indexOf(marker);
   if (at < 0) return null;
   const before = marked.slice(0, at).replace(/\[FIGURE \d+\]/g, " ");
+  if (beside) {
+    // Pages are joined by a blank line; look back on this page only.
+    const page = before.slice(before.lastIndexOf("\n\n") + 1);
+    const prev = [...page.matchAll(LINE_START_NUMBER_RE)].at(-1);
+    if (prev) return Number(prev[1]);
+  }
   const rest = marked.slice(at + marker.length).replace(/\[FIGURE \d+\]/g, " ");
   const next = new RegExp(QUESTION_NUMBER_RE.source).exec(rest);
   const upToNext = next ? rest.slice(0, next.index) : rest;
@@ -1049,6 +1067,8 @@ export function adjacencyFallback(
   textWithMarkers: string,
   validSourceNumbers: readonly (readonly number[])[],
   existing: readonly ProposedSet[],
+  /** Figure numbers printed beside their question (PdfFigure.beside). */
+  beside: ReadonlySet<number> = new Set(),
 ): ProposedSet[] {
   const usedFigures = new Set(existing.flatMap((s) => s.figures));
   const taken = new Set(existing.flatMap((s) => s.item_indexes));
@@ -1056,7 +1076,7 @@ export function adjacencyFallback(
   let seq = existing.length;
   for (let n = 1; n <= figureCount; n++) {
     if (usedFigures.has(n)) continue;
-    const q = questionAfterFigure(textWithMarkers, n);
+    const q = questionAfterFigure(textWithMarkers, n, beside.has(n));
     if (q === null) continue;
     const idx = validSourceNumbers.findIndex((nums) => nums.includes(q));
     if (idx < 0) continue;

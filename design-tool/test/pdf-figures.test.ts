@@ -6,8 +6,11 @@ import {
   DEFAULT_FIGURE_LIMITS,
   MIN_FIGURE_PT,
   extractPdfLayout,
+  FIGURE_LABEL_PAD_PT,
   figureMarker,
   interleaveMarkers,
+  isBesideText,
+  isFigureLabel,
 } from "../lib/pdfImport/extractFigures";
 import { PNG_SIGNATURE, encodePng, pngDimensions } from "../lib/pdfImport/png";
 import { makeStyledTextPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
@@ -59,6 +62,45 @@ describe("interleaveMarkers", () => {
     );
     expect(text.split("\n")).toEqual(["1. a", "[FIGURE 1]", "2. b", "[FIGURE 2]", "3. c"]);
     expect(figureMarker(7)).toBe("[FIGURE 7]");
+  });
+});
+
+// Import fixes slice 1 (2026-10-25): which figures sit beside a question,
+// and which short runs are a drawing's point labels.
+describe("beside figures and point labels", () => {
+  const box: [number, number, number, number] = [360, 480, 430, 540];
+
+  test("a figure with question text to its left at the same height is beside it", () => {
+    expect(isBesideText([{ y: 500, x: 72, text: "3. Lena moved one shape onto another with" }], box)).toBe(true);
+  });
+
+  test("text above or below, a short label at its left edge, or text inside it is not", () => {
+    expect(isBesideText([{ y: 470, x: 72, text: "3. Lena moved one shape onto another with" }], box)).toBe(false);
+    expect(isBesideText([{ y: 550, x: 72, text: "a Name the matching shape." }], box)).toBe(false);
+    expect(isBesideText([{ y: 500, x: 350, text: "R" }], box)).toBe(false);
+    // A long line starting within the label pad is the figure's own text.
+    expect(isBesideText([{ y: 500, x: 355, text: "Population (millions)" }], box)).toBe(false);
+  });
+
+  test("short runs on or near a vector drawing are labels; text and far runs are not", () => {
+    expect(isFigureLabel({ x: 349, y: 478, str: "R" }, [box])).toBe(true);
+    expect(isFigureLabel({ x: box[2] + FIGURE_LABEL_PAD_PT, y: 520, str: "AB" }, [box])).toBe(true);
+    expect(isFigureLabel({ x: box[2] + FIGURE_LABEL_PAD_PT + 1, y: 520, str: "AB" }, [box])).toBe(false);
+    expect(isFigureLabel({ x: 365, y: 500, str: "shapes matched exactly." }, [box])).toBe(false);
+    expect(isFigureLabel({ x: 152, y: 500, str: "No" }, [box])).toBe(false);
+  });
+
+  test("a real PDF: a picture right of lines 2–5 is beside them, marked at its middle", async () => {
+    // bbox [300, 80, 400, 140]; baselines are 72, 88, 104, 120, 136, 152.
+    const layout = await extractPdfLayout(
+      makeTextAndImagePdf(LINES, { x: 300, y: 652, width: 100, height: 60 }),
+    );
+    expect(layout.figures[0]!.beside).toBe(true);
+    const text = layout.textWithMarkers.split("\n");
+    expect(text.indexOf("[FIGURE 1]")).toBe(text.indexOf("3. Third") + 1);
+    // The fixture above sits below its lines, not beside them.
+    const below = await extractPdfLayout(makeTextAndImagePdf(LINES, IMAGE));
+    expect(below.figures[0]!.beside).toBeUndefined();
   });
 });
 

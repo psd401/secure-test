@@ -704,6 +704,47 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
       { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
     ]);
   });
+
+  // Import fixes slice 1 (2026-10-25, a geometry quiz): two triangles printed
+  // to the right of question 4 were paired with question 5 — the next number
+  // below their markers. A figure beside its question takes that question.
+  describe("figures printed beside their question", () => {
+    const quiz = [
+      "**3.** Lena moved one shape onto another with",
+      "two slides and a turn so that the",
+      "[FIGURE 1]",
+      "shapes matched exactly.",
+      "[FIGURE 2]",
+      "**a** Name the matching shape.",
+      "",
+      "**4.** Do these two shapes match?",
+      "Explain how you know.",
+      "[FIGURE 3]",
+      "[FIGURE 4]",
+      "**5.** Read the statements about two shapes.",
+    ].join("\n");
+
+    test("a beside figure takes the question above its marker", () => {
+      expect(questionAfterFigure(quiz, 1, true)).toBe(3);
+      expect(questionAfterFigure(quiz, 2, true)).toBe(3);
+      expect(questionAfterFigure(quiz, 3, true)).toBe(4);
+      // The same marker without `beside` keeps the old rule (next number).
+      expect(questionAfterFigure(quiz, 3)).toBe(5);
+    });
+
+    test("looks back on its own page only, else falls back to the question below", () => {
+      // Page 2 starts with a passage and a figure beside it, then question 4.
+      const paged = "**3.** Q3\n\nA passage about rivers\n[FIGURE 1]\n**4.** Q4";
+      expect(questionAfterFigure(paged, 1, true)).toBe(4);
+    });
+
+    test("both triangles of each pair land in one set on their own question", () => {
+      expect(adjacencyFallback(4, quiz, [[3], [4], [5]], [], new Set([1, 2, 3, 4]))).toEqual([
+        { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
+        { id: "s2", stimulus: "", figures: [3, 4], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+      ]);
+    });
+  });
 });
 
 describe("mockPdfExtractor SET segments (E5 slice 3)", () => {

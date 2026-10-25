@@ -136,7 +136,13 @@ for (const spec of models) {
       .map(([rawIndex]) => sourceNumbers[rawIndex] ?? []);
     const allSets = [
       ...sets.sets,
-      ...adjacencyFallback(figureCount, text, validSourceNumbers, sets.sets),
+      ...adjacencyFallback(
+        figureCount,
+        text,
+        validSourceNumbers,
+        sets.sets,
+        new Set(layout.figures.filter((f) => f.beside).map((f) => f.n)),
+      ),
     ];
 
     const price = PRICES[model];
