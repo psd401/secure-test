@@ -6,6 +6,7 @@ import { closeDb, getDb } from "../db/client";
 import { assessments, items } from "../db/schema";
 import {
   PAYLOAD_CATEGORIES,
+  PAYLOAD_STATEMENT_TIMEOUT,
   formatPayloadSizes,
   measurePayloadSizes,
 } from "../lib/observability/payloadSizes";
@@ -92,19 +93,34 @@ describe("measurePayloadSizes", () => {
   });
 });
 
-describe("the read runs read-only", () => {
-  test("a write inside the measuring transaction is refused", async () => {
-    // The same transaction setup, then a write: Postgres must refuse it.
-    const err = await getDb()
-      .transaction(async (tx) => {
-        await tx.execute(sql`set transaction read only`);
-        await tx.execute(sql`insert into rubrics (owner_sub, title, rubric) values ('x', 'x', '{}'::jsonb)`);
-      })
-      .catch((e) => e);
-    // drizzle wraps the driver error; Postgres's own code is on the cause.
-    // 25006 = read_only_sql_transaction.
-    const cause = (err as { cause?: { code?: string } })?.cause ?? err;
-    expect((cause as { code?: string }).code).toBe("25006");
+describe("the read runs read-only, under a statement timeout", () => {
+  test("measurePayloadSizes' own transaction is READ ONLY with the timeout set", async () => {
+    // Wrap the real db so the transaction measurePayloadSizes opens is the
+    // real one; at its first measuring query, ask Postgres what mode that
+    // transaction is in. Deleting either SET from the function fails this.
+    const seen: Array<Record<string, unknown>> = [];
+    const real = getDb();
+    const spy = {
+      transaction: (fn: (tx: unknown) => Promise<unknown>) =>
+        real.transaction(async (tx) =>
+          fn({
+            execute: async (q: Parameters<typeof tx.execute>[0]) => {
+              if (seen.length === 0 && JSON.stringify(q).includes("percentile_cont")) {
+                const [ro] = (await tx.execute(sql`show transaction_read_only`)) as unknown as Array<Record<string, unknown>>;
+                const [to] = (await tx.execute(sql`show statement_timeout`)) as unknown as Array<Record<string, unknown>>;
+                seen.push({ ...ro, ...to });
+              }
+              return tx.execute(q);
+            },
+          }),
+        ),
+    } as unknown as ReturnType<typeof getDb>;
+
+    const rows = await measurePayloadSizes(spy);
+    expect(rows).toHaveLength(PAYLOAD_CATEGORIES.length);
+    // Postgres reports `SET statement_timeout = '60s'` back as "1min".
+    expect(PAYLOAD_STATEMENT_TIMEOUT).toBe("60s");
+    expect(seen).toEqual([{ transaction_read_only: "on", statement_timeout: "1min" }]);
   });
 });
 
