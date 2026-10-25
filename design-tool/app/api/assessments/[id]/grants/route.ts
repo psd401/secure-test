@@ -20,6 +20,7 @@ import {
 import { UUID_RE } from "@/lib/uuid";
 import { appOrigin } from "@/lib/auth/appOrigin";
 import { sendShareEmail } from "@/lib/email/shareNotifications";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -58,8 +59,10 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateAssessmentGrantBody.parse(await req.json());
+    body = CreateAssessmentGrantBody.parse(bodyRead.parse());
   } catch (err) {
     const detail = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(

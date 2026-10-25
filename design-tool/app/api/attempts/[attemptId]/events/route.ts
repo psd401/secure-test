@@ -15,6 +15,7 @@ import { loadOwnAttempt } from "@/lib/api/studentAttempt";
 import { attemptSittingIsOver } from "@/lib/api/sittingOver";
 import { authorizeAttempt } from "@/lib/api/access";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 /**
  * SEC-09 (security audit 2026-10-24): the three ceilings on what one student
@@ -149,8 +150,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.small);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

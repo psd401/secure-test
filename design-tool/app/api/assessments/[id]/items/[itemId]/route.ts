@@ -9,6 +9,7 @@ import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, notFoundResponse, type AccessIntent } from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string; itemId: string }>;
@@ -64,8 +65,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = UpdateItemBody.parse(await req.json());
+    body = UpdateItemBody.parse(bodyRead.parse());
   } catch (err) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(

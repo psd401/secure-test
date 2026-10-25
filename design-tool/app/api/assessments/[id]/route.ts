@@ -22,6 +22,7 @@ import {
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
 import { validateSectionAccommodations } from "@/lib/accommodations/sections";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -57,8 +58,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
   let body;
   let rawKeys: string[] = [];
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    const raw = await req.json();
+    const raw = bodyRead.parse();
     body = UpdateAssessmentBody.parse(raw);
     rawKeys =
       raw && typeof raw === "object" && !Array.isArray(raw)

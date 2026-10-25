@@ -1014,6 +1014,29 @@ describe("PUT a formatted essay (RT slice 1)", () => {
     return row?.response;
   };
 
+  test("a maximum-length essay in a 3-byte script saves: the answer route's ceiling sits above the 256 KiB default", async () => {
+    const s = await started(false);
+    // 100,000 characters (ESSAY_TEXT_MAX_LENGTH) of a 3-byte UTF-8 character
+    // is ~300 KB of body: refused under the default tier, accepted under
+    // JSON_BODY_LIMITS.longText.
+    const text = "中".repeat(100_000);
+    const res = await put(s.attempt.id, s.essay.id, { type: "essay", text });
+    expect(res.status).toBe(200);
+    expect(((await stored(s.attempt.id, s.essay.id)) as { text: string }).text).toHaveLength(100_000);
+  });
+
+  test("a body past the answer route's ceiling is 413 body_too_large and nothing is stored", async () => {
+    const { JSON_BODY_LIMITS } = await import("../lib/api/jsonBody");
+    const s = await started(false);
+    const res = await put(s.attempt.id, s.essay.id, {
+      type: "essay",
+      text: "x".repeat(JSON_BODY_LIMITS.longText + 1),
+    });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ ok: false, error: "body_too_large", limit: JSON_BODY_LIMITS.longText });
+    expect(await stored(s.attempt.id, s.essay.id)).toBeUndefined();
+  });
+
   test("rich_text on: html is cleaned and text is derived from it, whatever the client sent", async () => {
     const s = await started(true);
     const res = await put(s.attempt.id, s.essay.id, {

@@ -6,6 +6,7 @@ import { test_sessions } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -36,8 +37,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = PatchBody.parse(await req.json());
+    body = PatchBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

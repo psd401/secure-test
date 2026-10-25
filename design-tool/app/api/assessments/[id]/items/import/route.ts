@@ -9,6 +9,7 @@ import { requireDraft } from "@/lib/api/requireDraft";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -34,8 +35,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   let body: z.infer<typeof Body>;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.csvImport);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(bodyRead.parse());
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: "invalid_body", detail: String(err) },

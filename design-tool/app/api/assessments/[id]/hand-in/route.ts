@@ -9,6 +9,7 @@ import { isPastDeadline, loadDeadline } from "@/lib/api/attemptDeadline";
 import { handInAttempt } from "@/lib/api/handInAttempt";
 import { sessionOpenResponse, sittingIsOpen } from "@/lib/api/staffAttempt";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -53,8 +54,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   let raw: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    raw = await req.json();
+    raw = bodyRead.parse();
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

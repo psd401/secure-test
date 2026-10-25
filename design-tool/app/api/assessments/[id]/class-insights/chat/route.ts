@@ -42,6 +42,7 @@ import { runGuarded } from "@/lib/safeguarding/guard";
 import { buildResults, type AssessmentResults } from "@/lib/scoring/results";
 import { lookupTags } from "@/lib/standards/search";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 // Class insights slice 4 (docs/class-insights-design.md, D-4 / D-5 / D-6):
 // the teacher's own conversation about one (assessment, section filter).
@@ -239,8 +240,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   const { db, id, sub } = g;
 
   let rawBody: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    rawBody = await req.json();
+    rawBody = bodyRead.parse();
   } catch {
     return NextResponse.json(
       { ok: false, error: "invalid_body", detail: "body is not JSON" },

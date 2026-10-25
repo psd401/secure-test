@@ -25,6 +25,7 @@ import {
 import type { CreateItemBody } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { itemProposalText } from "@/lib/safeguarding/itemText";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 // BG slice 3 (docs/batch-item-generation-design.md, D-3 … D-7): up to ten AI
 // item proposals in one call, tied to standards / an objective / a resource.
@@ -58,8 +59,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "form_parse_failed" }, { status: 400 });
     }
   } else {
+    const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.longText);
+    if (!bodyRead.ok) return bodyRead.response;
     try {
-      rawBody = await req.json();
+      rawBody = bodyRead.parse();
     } catch {
       return invalid("body is not JSON");
     }

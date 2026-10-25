@@ -22,6 +22,7 @@ import {
   sectionsCurrentlyTaughtBy,
   studentsInTeachersSections,
 } from "@/lib/roster/queries";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 const PsId = z.string().min(1).max(64);
 
@@ -95,8 +96,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateBody.parse(await req.json());
+    body = CreateBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

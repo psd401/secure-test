@@ -23,6 +23,7 @@ import {
   listGrantsOnScope,
   validateGrantRequest,
 } from "@/lib/api/grants";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 /**
  * `?grantee=<email>` — every grant that address holds, live or revoked.
@@ -67,8 +68,10 @@ export async function POST(req: Request) {
   if (!isAdmin(auth.session)) return notFoundResponse();
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateScopedGrantBody.parse(await req.json());
+    body = CreateScopedGrantBody.parse(bodyRead.parse());
   } catch (err) {
     const detail = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(

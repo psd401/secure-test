@@ -14,6 +14,7 @@ import {
   statusForResolutionFailure,
 } from "@/lib/api/resolveStudent";
 import { logResolutionFailure } from "@/lib/api/resolutionLog";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 const RedeemBody = z.object({ code: z.string().min(1).max(32) });
 
@@ -34,8 +35,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = RedeemBody.parse(await req.json());
+    body = RedeemBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

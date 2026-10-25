@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { rubrics } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { CreateRubricBody, rubricSummary } from "@/lib/api/rubrics";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 // Rubric library slice 3 (docs/rubric-upload-design.md §"Rubric library and
 // reuse", D-4). Owner-scoped, like /api/students: the list is the caller's
@@ -29,8 +30,10 @@ export async function POST(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateRubricBody.parse(await req.json());
+    body = CreateRubricBody.parse(bodyRead.parse());
   } catch (err) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(

@@ -23,6 +23,7 @@ import {
 import { captureBeforeWrite } from "@/lib/api/answerHistory";
 import { essayResponseForStorage } from "@/lib/richText/essayHtml";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ attemptId: string; itemId: string }>;
@@ -60,8 +61,10 @@ export async function PUT(req: Request, ctx: RouteContext) {
   }
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.longText);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = WriteBody.parse(await req.json());
+    body = WriteBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

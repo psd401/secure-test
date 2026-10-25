@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveExpectedAudience, verifyIdToken } from "@/lib/auth/verifyIdToken";
 import { sessionFromIdTokenClaims } from "@/lib/auth/identity";
 import { mintSessionJWT, sessionCookieAttributes } from "@/lib/auth/session";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 const ExchangeBody = z.object({
   id_token: z.string().min(1),
@@ -35,8 +36,10 @@ export async function POST(req: Request) {
   }
 
   let parsed;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    parsed = ExchangeBody.parse(await req.json());
+    parsed = ExchangeBody.parse(bodyRead.parse());
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: "invalid request body" },

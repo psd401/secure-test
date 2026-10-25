@@ -19,6 +19,7 @@ import {
   type SuggestStandardsInput,
 } from "@/lib/ai/types";
 import { runGuarded } from "@/lib/safeguarding/guard";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 // BG slice 5 (docs/batch-item-generation-design.md, D-2 / D-2a): "Suggest
 // standards" for the assessment's UNTAGGED items. WRITES NOTHING — the
@@ -40,8 +41,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let rawBody: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    rawBody = await req.json();
+    rawBody = bodyRead.parse();
   } catch {
     return invalid("body is not JSON");
   }

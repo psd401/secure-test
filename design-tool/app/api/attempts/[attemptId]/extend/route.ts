@@ -11,6 +11,7 @@ import {
   type ExtendTarget,
 } from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ attemptId: string }>;
@@ -72,8 +73,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   const attempt = access.attempt;
 
   let target: ExtendTarget;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    const body = Body.parse(await req.json());
+    const body = Body.parse(bodyRead.parse());
     if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
     target = toExtendTarget(body);
   } catch {

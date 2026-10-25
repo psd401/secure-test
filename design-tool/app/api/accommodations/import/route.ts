@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/api/requireSession";
+import { readBodyWithin } from "@/lib/api/jsonBody";
 import {
   applyTideImport,
   parseTideXlsx,
@@ -113,29 +114,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
-
-/** The request body, or `null` once it passes `max` bytes (SEC-08). */
-async function readBodyWithin(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (!req.body) return new Uint8Array(0);
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.byteLength;
-  }
-  return out;
 }

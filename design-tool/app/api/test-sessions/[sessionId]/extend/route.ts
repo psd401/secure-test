@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/extendAttempt";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -84,8 +85,10 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   let target: ExtendTarget;
   let attemptIds: string[] | undefined;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    const body = Body.parse(await req.json());
+    const body = Body.parse(bodyRead.parse());
     if (!hasExactlyOneTarget(body)) throw new Error("ends_at xor no_limit");
     target = toExtendTarget(body);
     attemptIds = body.attempt_ids;

@@ -7,6 +7,7 @@ import { EditAccommodationValueBody } from "@/lib/api/students";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeStudent, notFoundResponse } from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string; accId: string }>;
@@ -50,8 +51,10 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = EditAccommodationValueBody.parse(await req.json());
+    body = EditAccommodationValueBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
