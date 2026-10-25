@@ -112,12 +112,3 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
 
 Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
-s level or scope**: touch `accessLevels.ts`, `grants.ts` (`RESOLVED_SCOPES`), the `access_grants` CHECK constraints in `db/schema.ts` + a migration, and `visibleAssessments.ts`; add a stored-but-inert test if the arm is not live.
-- **New allowed email domain**: `STAFF_DOMAINS`/`STUDENT_DOMAINS` only; update `auth-roles.test.ts`.
-
-## Escalate / don't do
-
-- Do not read `.env*` for secrets; the required env names are `DATABASE_URL`, `DESIGN_TOOL_SESSION_SECRET`, `OIDC_ISSUER`, `OIDC_CLIENT_ID` (+ optional `DESIGN_TOOL_PKCE_SECRET`, `DESIGN_TOOL_DELIVERY_SECRET`, `OIDC_CLIENT_SECRET`, `OIDC_AUDIENCE`, `ADMIN_EMAILS`).
-- Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
-
-Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.

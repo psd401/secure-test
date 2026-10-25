@@ -176,24 +176,4 @@ Routes answer with machine codes (for example `already_granted`, `ends_at_past`)
 - **Scope boundary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
 
 Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.
-undary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
 
-Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.
-nerateQuestionsDialog`, `SuggestStandardsDialog`, `SafeguardingPanel`, and `SendToGoogleDocsControl`. `components/ui/` holds the shared UI primitives. `AppChrome` resolves the header from the session and is shared with `/admin`; it shows the act-as banner when the session is an impersonation.
-
-### Teacher-facing error copy
-
-Routes answer with machine codes (for example `already_granted`, `ends_at_past`). `lib/ui/errorCopy.ts` turns a code into one sentence a teacher can act on, and each panel calls the helper for its own surface: `itemErrorCopy` in the assessment editor, `sessionErrorCopy` and `attemptDeleteErrorCopy` on sittings and the monitor, `attemptHandInErrorCopy`, `extendErrorCopy` and `passBackErrorCopy` on attempt controls, `accommodationErrorCopy` and `tideImportErrorCopy` on accommodations, `coTeachErrorCopy` in the share dialog, `importErrorCopy` and `uploadErrorCopy` on import and uploads, and `authErrorCopy` on the login page. Each helper returns `{ message, showCode }`. `showCode` is true when the fix belongs to IT rather than the teacher, so the raw code stays visible for search. An unknown code falls back to a generic message that still shows the code. A new route code therefore needs a case in the matching helper, or the teacher sees the fallback. Tests `co-teach-ui.test.tsx` and `pass-back-control.test.tsx` pin the exact wording for their helpers. Copy rules are not enforced by the routes, so a wording change is a UI-only change.
-
-## Change navigation
-
-- **Where to start.** Find the route in the route map, then read its page source. Rules usually live behind `lib/api/*`, not in the page.
-- **Invariants.** Visitors without a staff session are redirected to login. An assessment or sitting the caller cannot reach is a 404, not a forbidden panel. The All-teachers view is admin-only. The monitor polls only while a sitting is open or a student is still working.
-- **Focused tests.** `test/all-teachers-ui.test.ts` (toggle and list-mode helpers), `test/reporting-views.test.tsx` (the assessments list and results matrix), `test/co-teach-ui.test.tsx` (owner and co-teacher labels), `test/attendance-view.test.ts` (monitor state), `test/extend-time-control.test.tsx`, `test/hand-in-all-control.test.tsx`, and `test/access-enforcement.test.ts` (route-level 404s).
-- **Minimal validation.** `cd design-tool && bun test test/all-teachers-ui.test.ts` for the list helpers. Database-backed suites need `DATABASE_URL`, as set out in [testing and validation](../testing/testing-and-validation.md).
-- **Scope boundary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
-
-Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.
-undary.** Changing a button's behaviour usually means changing the route or `lib/api` helper, not the component.
-
-Related pages: the [architecture overview](../architecture/overview.md) gives the system context, and the [data model](data-model.md) covers the tables behind these pages.

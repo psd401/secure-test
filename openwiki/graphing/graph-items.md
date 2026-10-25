@@ -7,9 +7,9 @@ timestamp: 2026-10-25T00:00:00.000Z
 openwiki:
   roles: [domain, integration]
   change_kinds: [item-type, scoring, wire-format]
-  source_paths: [packages/schema/src/graph.ts, packages/schema/src/items.ts, packages/graphing/src/engine/graphAnswer.ts, design-tool/lib/api/items.ts, design-tool/lib/api/buildDeliveryBundle.ts, design-tool/lib/api/studentAttempt.ts, design-tool/lib/scoring/auto.ts, design-tool/lib/api/reviewActions.ts, design-tool/lib/api/importBundle.ts]
-  symbols: [GraphBoardSchema, GraphKeySchema, GraphResponseSchema, StimulusGraphSchema, scoreGraph, canonical, parseSnap, graphIssues, graphMaxPoints, graphAnswerLines]
-  test_paths: [design-tool/test/graph-item.test.ts, design-tool/test/calculator-api.test.ts, design-tool/test/import-api.test.ts, design-tool/test/review-queue.test.ts, design-tool/test/preview-graph.test.ts, packages/graphing/test/graphAnswer.test.ts]
+  source_paths: [packages/schema/src/graph.ts, packages/schema/src/items.ts, packages/graphing/src/engine/graphAnswer.ts, packages/graphing/src/ui/graphAnswer.ts, packages/graphing/src/page.ts, design-tool/lib/api/items.ts, design-tool/lib/api/buildDeliveryBundle.ts, design-tool/lib/api/studentAttempt.ts, design-tool/lib/scoring/auto.ts, design-tool/lib/api/reviewActions.ts, design-tool/lib/api/importBundle.ts, client/SecureTestCore/Sources/SecureTestCore/AssessmentPageCalculator.swift, client/SecureTestCore/Sources/SecureTestCore/ItemResponse.swift]
+  symbols: [GraphBoardSchema, GraphKeySchema, GraphResponseSchema, StimulusGraphSchema, scoreGraph, canonical, parseSnap, graphIssues, graphMaxPoints, graphAnswerLines, mountGraphAnswer, mountGraphAnswers, ItemResponse]
+  test_paths: [design-tool/test/graph-item.test.ts, design-tool/test/calculator-api.test.ts, design-tool/test/import-api.test.ts, design-tool/test/review-queue.test.ts, design-tool/test/preview-graph.test.ts, packages/graphing/test/graphAnswer.test.ts, client/SecureTestCore/Tests/SecureTestCoreTests/GraphAnswerShellTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/GenericAnswerChannelTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/GraphingScriptTests.swift]
   invariants:
     - A graph item needs a board; a key is optional, and a graph item without a key is hand-scored (scoring_method human), while one with a key is auto-scored.
     - The student's objects may not exceed board.max_objects, and every tool must be one the board offers; anything else is rejected at write time.
@@ -60,6 +60,18 @@ sequenceDiagram
 - The review queue (`design-tool/lib/api/reviewActions.ts`, `review-queue` route) shows a graph answer as `graph_lines` built by `graphAnswerLines`. The `review-queue.test.ts` suite "graph answers in the queue" pins the output.
 - The teacher export (`design-tool/lib/api/exportBundle.ts`) writes `board`, and `key` only when one exists. The importer stores what it reads.
 - Changing a key on a published test is allowed, because `isAnswerKeyOnlyPatch` in `requireDraft.ts` treats `graph_key` like other answer keys. A change to `graph_board` is locked. Auto-scoring re-runs only for unscored responses, and the rescore dialog counts a graph key edit as a change (`rescore-dialog.test.ts`).
+
+## Student answer on the client
+
+The student's board is `mountGraphAnswer` in `packages/graphing/src/ui/graphAnswer.ts`. `packages/graphing/src/page.ts` exposes it on the page's `__gcOut` surface, next to the calculator and stimulus mounts. On the macOS client, `graphField` in `client/SecureTestCore/Sources/SecureTestCore/AssessmentPageCalculator.swift` reserves a holder for each graph item, and `mountGraphAnswers` draws the boards once the graphing script has loaded. A saved answer comes back as `initial`, so a resumed attempt reopens with its objects in place.
+
+The same board serves three purposes: the student's answer, the teacher's key drawing and a read-only review against the key (the `key` and `readOnly` options). A student places objects three ways that produce identical objects: a click snaps to the grid, arrow keys move a cursor one snap step and Enter places it, and typed coordinates go through a form (fractions accepted). Every object is listed in words with a Remove button, and each change is announced to screen readers.
+
+Each change posts `{type: 'graph', objects}` through the generic answer channel. Clearing the last object withdraws the saved answer instead of posting an empty list, because the server would store an empty answer and count the question as answered. `GraphAnswerShellTests` pins this on the page glue's source, since the board cannot run in JavaScriptCore.
+
+The generic channel is what lets a graph item ship without a new client shell. `ItemResponse.generic(type:fields:)` in `ItemResponse.swift` carries any response type the Swift model does not name. `BridgeChecks` checks such a response against the generic caps (depth 8, 256 KB) rather than a per-type check. The renderer declares `response.generic` among its requirements (`RendererKeys.swift`, see [signed renderer delivery](../client/signed-renderer.md)). `GraphAnswerShellTests` also confirms that ten two-point objects, the largest answer `GraphResponseSchema` accepts, fit inside those caps. The client's floor for graph items is 2.0.0 ([graphing overview](overview.md#gating-client-200)).
+
+Validation: the engine's `packages/graphing/test/graphAnswer.test.ts` covers the shapes, and `cd client/SecureTestCore && swift test --filter GraphAnswerShellTests` covers the decode, caps and page-glue rules. The generic channel itself is tested by `GenericAnswerChannelTests`. Changing the generated graphing literal needs `GraphingScriptTests` as well (see [graphing overview](overview.md)).
 
 ## Stimulus graphs
 
