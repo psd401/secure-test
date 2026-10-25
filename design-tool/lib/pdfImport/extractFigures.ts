@@ -243,8 +243,11 @@ export function isFigureLabel(run: { x: number; y: number; str: string }, boxes:
 
 /** A line at least this long inside a drawing is prose, not a label. */
 const PROSE_LINE_CHARS = 30;
-/** This many prose lines inside a drawing make it a text box, not a figure. */
-export const TEXT_PANEL_PROSE_LINES = 2;
+/** This many prose lines inside a drawing make it a text box, not a figure.
+ * Review on #102: two was enough for a chart with two long legend or
+ * category labels inside its box to lose its picture; the text panels in
+ * the samples hold 5–30 such lines. */
+export const TEXT_PANEL_PROSE_LINES = 3;
 
 /**
  * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
@@ -272,6 +275,10 @@ const RULE_PT = 2;
 /** Fewer rules than this is a box or an underline, not a grid or table. */
 const MIN_RULES = 8;
 
+/** `b` lies within `outer` (1 pt of slack). */
+const insideBox = (b: Box, outer: Box): boolean =>
+  b[0] >= outer[0] - 1 && b[2] <= outer[2] + 1 && b[1] >= outer[1] - 1 && b[3] <= outer[3] + 1;
+
 /** Distinct positions, merged within RULE_PT. */
 function positions(values: number[]): number[] {
   const out: number[] = [];
@@ -292,19 +299,40 @@ function positions(values: number[]): number[] {
  * in page space. Exported for tests; pure.
  */
 export function isBlankAnswerArea(paths: readonly Box[], runs: readonly { x: number; y: number }[]): boolean {
+  const fill = ruledCells(paths, runs);
+  return fill !== null && fill.filled * 2 < fill.cells;
+}
+
+/**
+ * Review on #102: the other half of a ruled area — a table with text in at
+ * least half its cells is data, and its text is the content. As a cropped
+ * picture its text also left what the model reads (lines inside a vector
+ * figure are dropped as chart labels), and a sub-question that leaned on it
+ * was lost. It stays text, not a figure. Exported for tests; pure.
+ */
+export function isFilledTable(paths: readonly Box[], runs: readonly { x: number; y: number }[]): boolean {
+  const fill = ruledCells(paths, runs);
+  return fill !== null && fill.filled * 2 >= fill.cells;
+}
+
+/** A ruled area's cell count and how many hold text; null when the drawing
+ * is not ruled (a chart, a diagram) or has no grid of rules. */
+function ruledCells(
+  paths: readonly Box[],
+  runs: readonly { x: number; y: number }[],
+): { cells: number; filled: number } | null {
   const thin = paths.filter((b) => b[2] - b[0] < RULE_PT || b[3] - b[1] < RULE_PT);
-  if (thin.length < MIN_RULES || thin.length < paths.length * RULED_SHARE) return false;
+  if (thin.length < MIN_RULES || thin.length < paths.length * RULED_SHARE) return null;
   const rows = positions(thin.filter((b) => b[3] - b[1] < RULE_PT).map((b) => (b[1] + b[3]) / 2));
   const cols = positions(thin.filter((b) => b[2] - b[0] < RULE_PT).map((b) => (b[0] + b[2]) / 2));
-  if (rows.length < 2 || cols.length < 2) return false;
-  const cells = (rows.length - 1) * (cols.length - 1);
+  if (rows.length < 2 || cols.length < 2) return null;
   const filled = new Set<string>();
   for (const r of runs) {
     const ri = rows.findIndex((y, i) => i + 1 < rows.length && r.y > y && r.y <= rows[i + 1]! + RULE_PT);
     const ci = cols.findIndex((x, i) => i + 1 < cols.length && r.x >= x - RULE_PT && r.x < cols[i + 1]!);
     if (ri >= 0 && ci >= 0) filled.add(`${ri}:${ci}`);
   }
-  return filled.size * 2 < cells;
+  return { cells: (rows.length - 1) * (cols.length - 1), filled: filled.size };
 }
 
 export function figureMarker(n: number): string {
@@ -675,7 +703,8 @@ export async function extractPdfLayout(
             c.paths >= MIN_CLUSTER_PATHS &&
             c.box[2] - c.box[0] > MIN_FIGURE_PT &&
             c.box[3] - c.box[1] > MIN_FIGURE_PT &&
-            !isTextPanel(lines, c.box),
+            !isTextPanel(lines, c.box) &&
+            !isFilledTable(pathBoxes.filter((b) => insideBox(b, c.box)), runStarts),
         );
       }
     }
@@ -747,9 +776,7 @@ export async function extractPdfLayout(
         }
       } else {
         const caption = captionAbove(lines, entry.box[1]);
-        const inside = (b: Box) =>
-          b[0] >= entry.box[0] - 1 && b[2] <= entry.box[2] + 1 && b[1] >= entry.box[1] - 1 && b[3] <= entry.box[3] + 1;
-        if (isBlankAnswerArea(pathBoxes.filter(inside), runStarts)) fig.answer_area = true;
+        if (isBlankAnswerArea(pathBoxes.filter((b) => insideBox(b, entry.box)), runStarts)) fig.answer_area = true;
         if (caption) fig.caption = caption;
         figureBoxes.push(entry.box);
         const crop = cropFromPage(canvas!, pageImage!, entry.box);
@@ -807,6 +834,12 @@ export async function extractPdfLayout(
 export const PAGE_IMAGE_MAX_PAGES = 20;
 /** Claude reads an image at about this many pixels; larger is resized down. */
 export const PAGE_IMAGE_PIXELS = 1_150_000;
+
+/** Whether an import sends page images: on unless PDF_IMPORT_PAGE_IMAGES=0
+ * (slice 3c, James 2026-10-25); never for a scan, which sends the PDF. */
+export function pageImagesWanted(scanned: boolean, env: Record<string, string | undefined> = process.env): boolean {
+  return !scanned && env.PDF_IMPORT_PAGE_IMAGES !== "0";
+}
 
 /**
  * Every page as a PNG near PAGE_IMAGE_PIXELS, or null when the document has

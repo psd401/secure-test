@@ -71,6 +71,7 @@ export const bedrockPdfExtractor: PdfExtractorProvider = {
         errPrefix: "bedrock",
         surface: "pdf-import",
         ownerSub,
+        throwOnRefusal: true,
       }));
     } catch (err) {
       if (err instanceof ConverseRefusalError) {

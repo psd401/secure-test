@@ -1308,6 +1308,10 @@ describe("answer-key figures", () => {
     expect(keyFiguresFromText("Responses vary.\n\n[FIGURE 1]")).toEqual([]);
     // Words that only look like a cue.
     expect(keyFiguresFromText("Temperatures vary by season.\n[FIGURE 1]")).toEqual([]);
+    // Review on #102: a student instruction that contains the cue words is
+    // not a key line — the figure below it is the student's.
+    expect(keyFiguresFromText("3. Explain your reasoning. Answers may vary.\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Use the sample answer format shown below.\n[FIGURE 1]")).toEqual([]);
   });
 
   test("key figures leave every set; a set left empty is dropped; adjacency skips them", () => {

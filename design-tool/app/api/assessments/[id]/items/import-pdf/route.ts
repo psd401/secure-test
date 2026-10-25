@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { extractPdfText, looksScanned } from "@/lib/pdfImport/extractText";
-import { extractPdfLayout, renderPagesForModel, type PdfFigure } from "@/lib/pdfImport/extractFigures";
+import {
+  extractPdfLayout,
+  pageImagesWanted,
+  renderPagesForModel,
+  type PdfFigure,
+} from "@/lib/pdfImport/extractFigures";
 import { getPdfExtractorProvider } from "@/lib/pdfImport/provider";
 import {
   MAX_OCR_BYTES,
@@ -204,8 +209,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   // On by default since slice 3c (James, 2026-10-25); PDF_IMPORT_PAGE_IMAGES=0
   // turns it off. A document over the page cap, or one that will not
   // render, goes as text alone.
-  const pageImages =
-    !scanned && process.env.PDF_IMPORT_PAGE_IMAGES !== "0" ? await renderPagesForModel(bytes) : null;
+  const pageImages = pageImagesWanted(scanned) ? await renderPagesForModel(bytes) : null;
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,

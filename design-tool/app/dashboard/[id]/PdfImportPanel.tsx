@@ -68,10 +68,11 @@ interface ExtractResult {
     source?: "raster" | "vector";
     caption?: string;
     /** Import fixes slice 2: the answer key's own drawing (a sample answer).
-     * Labelled, never offered for a question. */
+     * Labelled and in no proposed set; the teacher can still add it to a
+     * question on purpose with "Use with item…". */
     answer_key?: boolean;
     /** PDF-import fixes: a blank answer area (an empty grid or table to fill).
-     * Labelled, never offered for a question. */
+     * Same handling as `answer_key`. */
     answer_area?: boolean;
   }[];
   figure_count: number;
@@ -789,6 +790,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                         {f.answer_key || f.answer_area ? (
                           <span className="mt-0.5 block rounded bg-muted px-1 py-0.5 text-[11px]">
                             {f.answer_key ? "Answer key drawing" : "Blank answer space"} — not shown to students
+                            unless you add it
                           </span>
                         ) : (() => {
                           const use = figureUseLabel(sets, f.n);
@@ -800,7 +802,12 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             </span>
                           );
                         })()}
-                        {f.data_url && !f.answer_key && !f.answer_area && attachable.length > 0 ? (
+                        {/* Review on #102: a flagged figure can still be put with a
+                            question here, deliberately — the rules that flag
+                            them can be wrong, and nothing else would bring
+                            one back. The per-set "Add a figure…" leaves them
+                            out. */}
+                        {f.data_url && attachable.length > 0 ? (
                           <select
                             value=""
                             disabled={disabled || busy}

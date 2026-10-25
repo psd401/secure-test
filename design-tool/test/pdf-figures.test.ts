@@ -10,10 +10,21 @@ import {
   figureMarker,
   interleaveMarkers,
   isBesideText,
+  isBlankAnswerArea,
   isFigureLabel,
+  isFilledTable,
+  PAGE_IMAGE_PIXELS,
+  pageImagesWanted,
+  renderPagesForModel,
 } from "../lib/pdfImport/extractFigures";
 import { PNG_SIGNATURE, encodePng, pngDimensions } from "../lib/pdfImport/png";
-import { makeMultiPageTextPdf, makeStyledTextPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
+import {
+  makeMultiPageTextPdf,
+  makeRuledGridPdf,
+  makeStyledTextPdf,
+  makeTextAndImagePdf,
+  makeTextPdf,
+} from "./helpers/pdf";
 
 const LINES = ["1. First question", "2. Second question", "3. Third", "4. Fourth", "5. Fifth", "6. Sixth"];
 // 120×90 pt image, left 100, bottom 560 → top-left-origin bbox [100,142,220,232]:
@@ -232,21 +243,30 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     expect(layout.textWithMarkers).not.toContain("[FIGURE");
   });
 
-  test("a drawn box with two lines of prose inside is a text panel; its text stays", async () => {
+  test("a drawn box with three lines of prose inside is a text panel; its text stays", async () => {
     const inside = [
       "Read the passage below and answer the questions.",
       "Use evidence from the text in every answer you give.",
+      "Write in complete sentences and check your spelling.",
     ];
     const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
     expect(layout.figures).toEqual([]);
     for (const line of inside) expect(layout.textWithMarkers).toContain(line);
   });
 
+  test("a chart with two long labels inside its box keeps its picture", async () => {
+    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
+    expect(layout.figures).toHaveLength(1);
+    expect(layout.figures[0]!.source).toBe("vector");
+  });
+
   test("isTextPanel counts only long lines inside the box", () => {
     const box: Box = [100, 100, 400, 300];
     const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
     const long = "A sentence of prose that runs well past thirty characters.";
-    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(true);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
     expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
     // Prose beside the box (starting left of it) or below it does not count.
     expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);
@@ -431,7 +451,6 @@ describe("E6 emphasis from font runs", () => {
 });
 
 // PDF-import slice 3 (2026-10-25): the pages as images for the model.
-import { PAGE_IMAGE_PIXELS, renderPagesForModel } from "../lib/pdfImport/extractFigures";
 
 describe("renderPagesForModel", () => {
   test("one PNG per page, near the pixel size the model reads", async () => {
@@ -444,6 +463,13 @@ describe("renderPagesForModel", () => {
     }
   });
 
+  test("page images are on by default, off with PDF_IMPORT_PAGE_IMAGES=0, never for a scan", () => {
+    expect(pageImagesWanted(false, {})).toBe(true);
+    expect(pageImagesWanted(false, { PDF_IMPORT_PAGE_IMAGES: "1" })).toBe(true);
+    expect(pageImagesWanted(false, { PDF_IMPORT_PAGE_IMAGES: "0" })).toBe(false);
+    expect(pageImagesWanted(true, {})).toBe(false);
+  });
+
   test("over the page cap, or unreadable, there are no images (text alone) — never a throw", async () => {
     expect(await renderPagesForModel(makeMultiPageTextPdf([["a"], ["b"], ["c"]]), 2)).toBeNull();
     expect(await renderPagesForModel(new TextEncoder().encode("not a pdf"))).toBeNull();
@@ -452,8 +478,6 @@ describe("renderPagesForModel", () => {
 
 // PDF-import fixes (2026-10-25): a blank graph grid or a table to fill is
 // where the answer goes — flagged, so it is never shown as a stimulus.
-import { isBlankAnswerArea } from "../lib/pdfImport/extractFigures";
-import { makeRuledGridPdf } from "./helpers/pdf";
 
 describe("blank answer areas", () => {
   // A 4×3 table of rules: 5 horizontal, 4 vertical, at x 100–400, y 100–300.
@@ -471,15 +495,18 @@ describe("blank answer areas", () => {
     expect(isBlankAnswerArea(rules, [cell(0, 0), cell(0, 1), cell(0, 2), cell(1, 0), cell(2, 0), cell(3, 0)])).toBe(false);
   });
 
-  test("a filled table, a drawing, or a single box is not", () => {
+  test("a filled table, a drawing, or a single box is not (and only the filled table is a filled table)", () => {
     const all = [0, 1, 2, 3].flatMap((r) => [0, 1, 2].map((c) => cell(r, c)));
     expect(isBlankAnswerArea(rules, all)).toBe(false);
     const diagonal: Box[] = [[100, 100, 200, 200], [150, 120, 300, 260], [210, 100, 330, 240], ...rules.slice(0, 4)];
     expect(isBlankAnswerArea(diagonal, [])).toBe(false);
     expect(isBlankAnswerArea(rules.slice(0, 4), [])).toBe(false);
+    expect(isFilledTable(rules, all)).toBe(true);
+    expect(isFilledTable(rules, [])).toBe(false);
+    expect(isFilledTable(diagonal, all)).toBe(false);
   });
 
-  test("a real PDF: an empty grid is flagged; a filled table is not", async () => {
+  test("a real PDF: an empty grid is flagged; a filled table is text, not a figure", async () => {
     const region = { x: 120, y: 300, width: 300, height: 200 };
     const grid = await extractPdfLayout(makeRuledGridPdf({ region, rows: 10, cols: 10, above: ["7. Graph the means."] }));
     expect(grid.figures).toHaveLength(1);
@@ -493,7 +520,10 @@ describe("blank answer areas", () => {
         cells: [["Decade", "Passengers"], ["1950s", "648 million"], ["1960s", "1.7 billion"], ["1970s", "5.4 billion"]],
       }),
     );
-    expect(filled.figures).toHaveLength(1);
-    expect(filled.figures[0]!.answer_area).toBeUndefined();
+    // Review on #102: a filled table is data — no picture, and its cells stay
+    // in the text the model reads.
+    expect(filled.figures).toEqual([]);
+    expect(filled.textWithMarkers).toContain("648 million");
+    expect(filled.textWithMarkers).not.toContain("[FIGURE");
   });
 });

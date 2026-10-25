@@ -134,7 +134,10 @@ for (const spec of models) {
     if (effort) process.env.BEDROCK_PDF_EXTRACT_EFFORT = effort;
     else delete process.env.BEDROCK_PDF_EXTRACT_EFFORT;
     lastUsage = {};
-    const header = `== ${spec}${runs > 1 ? ` (run ${run})` : ""}`;
+    const imagesSent = withImages && !!pageImages;
+    const header =
+      `== ${spec}${runs > 1 ? ` (run ${run})` : ""}` +
+      (withImages && !imagesSent ? " — TEXT ONLY: pages over the cap or not rendered" : "");
     let result;
     try {
       result = await bedrockPdfExtractor.extract({
@@ -213,6 +216,7 @@ for (const spec of models) {
       console.log(
         JSON.stringify({
           model: spec,
+          images_sent: imagesSent,
           pages: extracted.pageCount,
           numbered: numbering.numbered_items,
           valid: candidates.length,
@@ -260,6 +264,7 @@ for (const spec of models) {
       });
       console.log(`  set (${s.source}): figures [${s.figures.join(", ")}] → questions ${qs.join(", ")}`);
     }
+    for (const r of rejected) console.log(`  rejected #${r.index}: ${r.errors.join("; ").slice(0, 200)}`);
     if (keyFigures.size) console.log(`  answer-key figures: [${[...keyFigures].join(", ")}]`);
     if (sets.rejected.length) console.log(`  rejected sets: ${sets.rejected.length}`);
     console.log("");

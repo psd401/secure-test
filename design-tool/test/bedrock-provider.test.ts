@@ -522,6 +522,22 @@ describe("bedrockPdfExtractor (text path vs scanned/document path)", () => {
     },
   );
 
+  // Review on #102: only PDF import opts in; every other surface still gets
+  // a refusal's text back, as before.
+  test("without the opt-in, a refusal's text is returned, not thrown", async () => {
+    setNextResponse({ ...textResponse("I can't score this."), stopReason: "refusal" });
+    const { converseTextWithMeta } = await import("../lib/ai/bedrockConverse");
+    const out = await converseTextWithMeta({
+      modelId: "us.anthropic.claude-sonnet-4-6",
+      systemText: "s",
+      userText: "u",
+      maxTokens: 16,
+      errPrefix: "essay",
+      surface: "essay-score",
+    });
+    expect(out).toEqual({ text: "I can't score this.", stopReason: "refusal" });
+  });
+
   test("non-JSON model output throws with the bedrock prefix", async () => {
     setNextResponse(textResponse("I found three questions in the document."));
     const { bedrockPdfExtractor } = await import("../lib/pdfImport/bedrockProvider");

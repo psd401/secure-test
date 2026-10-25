@@ -1240,9 +1240,12 @@ export function flagShortenedSources(
 // it marked one of question 4's own triangles as the key's, which would have
 // taken it away from the question; the cue rule was right in every run.
 
-/** A line that introduces a key's sample answer. */
+/** A line that introduces a key's sample answer — the cue is the whole line
+ * ("Responses vary.", "Sample answer:"). Review on #102: a student
+ * instruction that merely contains the words ("Explain. Answers may vary.")
+ * must not take a figure the student needs. */
 const KEY_CUE_RE =
-  /\b(?:responses?|answers?)\s+(?:will\s+|may\s+)?vary\b|\b(?:sample|possible|example|exemplar)\s+(?:student\s+)?(?:responses?|answers?|solutions?)\b/i;
+  /^(?:(?:responses?|answers?)\s+(?:will\s+|may\s+)?vary|(?:sample|possible|example|exemplar)\s+(?:student\s+)?(?:responses?|answers?|solutions?))\s*[.:!]?$/i;
 /** How many text lines above a marker the cue may sit. */
 const KEY_CUE_LINES = 2;
 

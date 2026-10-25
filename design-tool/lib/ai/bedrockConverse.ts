@@ -181,6 +181,10 @@ export async function converseTextWithMeta(opts: {
   /** PNG images sent after the document and before the text (PDF import
    * slice 3: the pages, so the model sees the layout). */
   images?: Uint8Array[];
+  /** Throw ConverseRefusalError on a `refusal` / `content_filtered` stop
+   * instead of returning the text. Opt-in (PDF import only): the essay
+   * scorer and the other surfaces keep reading a refusal's text as before. */
+  throwOnRefusal?: boolean;
   errPrefix: string;
   surface: ConverseSurface;
   ownerSub?: string;
@@ -235,7 +239,7 @@ export async function converseTextWithMeta(opts: {
     usage: response.usage,
     startedAt,
   });
-  if (response.stopReason && REFUSAL_STOP_REASONS.has(response.stopReason)) {
+  if (opts.throwOnRefusal && response.stopReason && REFUSAL_STOP_REASONS.has(response.stopReason)) {
     throw new ConverseRefusalError(opts.errPrefix, response.stopReason);
   }
   // A thinking model puts reasoning blocks before the answer; take the text.
