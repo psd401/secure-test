@@ -700,6 +700,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Renderer slice 4c (D-6, D-11): the served renderer could not be
         // loaded, or (Release) the bundle named none. Fired before
         // `onBundleLoaded`, so lockdown was never begun.
+        // SEC-01 (server PR #94): handed in by the teacher while it loaded.
+        // Fired before `onBundleLoaded`, so lockdown was never begun.
+        controller.onHandedInBeforeStart = { [weak self] in
+            self?.handedInBeforeStart()
+        }
         controller.onRendererRefused = { [weak self] refusal in
             self?.rendererRefused(refusal)
         }
@@ -1413,6 +1418,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let alert = NSAlert()
         alert.messageText = JoinErrorCopy.timeRanOutMessage
         alert.informativeText = JoinErrorCopy.timeRanOutInformative
+        alert.addButton(withTitle: "OK")
+        presentOnEntryWindow(alert)
+    }
+
+    /// SEC-01 (server PR #94, PR #97 review): the delivery route refused the
+    /// bundle because the attempt is handed in — a teacher's Hand in landed
+    /// while the test loaded. Like EX-2, nothing began, so this is a way home,
+    /// not a hand-in: `showEntry()` tears down the attempt screen's peek poll
+    /// and countdown, and the sheet uses the join's own handed-in words. Not
+    /// an error — no errors.log line.
+    private func handedInBeforeStart() {
+        guard screen == .serverAttempt, !quitInProgress else { return }
+        Self.log("attempt already handed in on arrival — no secure session, back to Your tests")
+        // Defensive, as in EX-2: lockdown is never begun on this path.
+        endLockdown(reason: "attempt already handed in on arrival")
+        showEntry()
+        let alert = NSAlert()
+        alert.messageText = JoinOutcome.handedInMessage
         alert.addButton(withTitle: "OK")
         presentOnEntryWindow(alert)
     }

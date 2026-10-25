@@ -194,6 +194,13 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// begun and no page is built; the host goes home and says so.
     var onRendererRefused: ((RendererStart.Refusal) -> Void)?
 
+    /// SEC-01 (server PR #94): the delivery route refused the bundle 409
+    /// `attempt_submitted` — a teacher handed the attempt in while it loaded.
+    /// Fired BEFORE `onBundleLoaded`, so no secure session is begun and no
+    /// page is built; the host goes home and says so (the attempt screen's
+    /// peek poll and countdown go with it).
+    var onHandedInBeforeStart: (() -> Void)?
+
     /// Slice 4c: the verified served renderer this attempt's page is built
     /// from; nil until it loads, and nil on the bundled paths (offline, Debug
     /// fallback). The host keeps its hash out of the cache eviction.
@@ -511,10 +518,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     // Expected, so no error log line; same words as the join.
                     guard !self.isRetired else { return }
                     self.log("bundle refused: the attempt is already handed in — not starting the secure session")
-                    self.loadHostPage(Self.noticePage(
-                        "This test is already handed in.",
-                        detail: JoinOutcome.handedInMessage
-                    ))
+                    self.onHandedInBeforeStart?()
                 } catch {
                     // Refusing beats rendering a partial test: a student handed
                     // fewer items than assigned has no way to know.
