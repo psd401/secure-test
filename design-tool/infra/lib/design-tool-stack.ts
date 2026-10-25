@@ -44,10 +44,13 @@ export interface DesignToolStackProps extends cdk.StackProps {
 // Aurora Postgres Serverless v2 cluster for the design tool (Slice 24).
 //
 // Public-access pattern: Aurora is `publiclyAccessible: true` and gated
-// solely by the security group. This avoids NAT (~$32/mo). Acceptable
-// because (a) playground account, (b) no production data yet, (c) password
-// is a 30-char auto-generated secret, (d) the SG admits only two peers,
-// SG→SG: the roster importer Lambda and the Fargate app service.
+// solely by the security group. This avoids NAT (~$32/mo). Chosen when the
+// account was a playground with no production data; the cluster now holds
+// production student data (v2.0, 2026-10-24), and moving it to private
+// subnets is an open item (security audit 2026-10-24, SEC-02). What still
+// holds: the password is a 30-char auto-generated secret and the SG admits
+// only two peers, SG→SG: the roster importer Lambda and the Fargate app
+// service.
 //
 // No CIDR ingress (infra slice, 2026-09-01). The former `allowedIngressCidr`
 // was James's home IP; the district's egress address is the WSIPC/K-20 NAT
@@ -157,7 +160,17 @@ export class DesignToolStack extends cdk.Stack {
         : "secure_test_design_tool",
       credentials: rds.Credentials.fromGeneratedSecret("secure_test_admin"),
       storageEncrypted: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Security audit 2026-10-24 (SEC-06): the production cluster holds
+      // every assessment, attempt and response. It keeps a final snapshot
+      // if the stack is ever deleted, refuses deletion while protected, and
+      // keeps 7 days of automated backups (the ledger records a 2026-10-06
+      // recovery that fit inside the old 1-day window only by luck).
+      // Staging stays disposable (D-7).
+      removalPolicy: props.staging
+        ? cdk.RemovalPolicy.DESTROY
+        : cdk.RemovalPolicy.SNAPSHOT,
+      deletionProtection: !props.staging,
+      backup: { retention: cdk.Duration.days(props.staging ? 1 : 7) },
     });
 
     this.clusterEndpoint = cluster.clusterEndpoint.hostname;
@@ -186,7 +199,11 @@ export class DesignToolStack extends cdk.Stack {
     // (10.4); an abort-incomplete-multipart lifecycle rule, no versioning
     // (10.5); per-env bucket name (10.1).
     const envName = props.envName ?? "dev";
-    const isProd = envName === "prod";
+    // Production's resources carry the historical suffix "dev" (see
+    // bin/design-tool.ts), so `envName === "prod"` was never true and both
+    // buckets were DESTROY + autoDeleteObjects in production. Security audit
+    // 2026-10-24 (SEC-07): production is "not staging".
+    const isProd = !props.staging;
 
     const assetBucket = new s3.Bucket(this, "AssetBucket", {
       bucketName: `secure-test-design-tool-${envName}`,
@@ -197,7 +214,7 @@ export class DesignToolStack extends cdk.Stack {
       lifecycleRules: [
         { abortIncompleteMultipartUploadAfter: cdk.Duration.days(7) },
       ],
-      // dev is disposable; prod retains its bucket on stack deletion.
+      // staging is disposable; production retains its bucket on stack deletion.
       removalPolicy: isProd
         ? cdk.RemovalPolicy.RETAIN
         : cdk.RemovalPolicy.DESTROY,

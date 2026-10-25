@@ -10,7 +10,7 @@ CDK stack `SecureTestDesignTool` provisioning an Aurora Postgres Serverless v2 c
 - Security group with **SG→SG ingress only** on 5432: the roster importer Lambda and the Fargate app service. No CIDR rules since 2026-09-01 — laptop access is a temporary hand-added rule (below), never a standing one; the district's egress IP is the WSIPC/K-20 NAT shared by the whole network.
 - Master credentials in Secrets Manager (auto-generated 30-char password).
 - Default database: `secure_test_design_tool`.
-- S3 asset bucket `secure-test-design-tool-<env>` (Slice 31, ADR 0008): SSE-S3 encryption, public access blocked, abort-incomplete-multipart lifecycle, no versioning. dev auto-deletes on `cdk destroy`; prod retains.
+- S3 asset bucket `secure-test-design-tool-<env>` (Slice 31, ADR 0008): SSE-S3 encryption, public access blocked, abort-incomplete-multipart lifecycle, no versioning. Staging auto-deletes on `cdk destroy`; production (the `dev`-suffixed stack) retains.
 - Managed policy `secure-test-design-tool-<env>-asset-access` granting object Put/Get/Delete on the bucket — attach to the app role or a local-testing IAM user (the S3 parallel to `secure-test-bedrock`).
 - **Roster sync (Slice 76, ADR 0017)** — `lib/roster-sync.ts`:
   - Bucket `secure-test-roster-<env>` (SSE-S3, public-blocked, TLS-only). Objects under `roster/` expire after 30 days: a snapshot names every student, and the bucket is a mailbox, not an archive.
@@ -31,7 +31,7 @@ List prices, us-west-2. The stack never idles to zero: roughly **$105/month** be
 - CloudWatch (30-day logs, four alarms, one custom metric), ECR image storage, S3, SNS, SES and the once-a-day Lambda: single dollars combined.
 - Bedrock is per use (no floor): Sonnet 4.6 $3.30 / $16.50 and Haiku 4.5 $1.10 / $5.50 per million input / output tokens (the `us.` cross-region rate, 10% above AWS's global rate), plus ApplyGuardrail per text unit. The `ai_usage` log line records tokens per call; **`scripts/ai-usage.sh`** (read-only Logs Insights, `--days 1–30`, `--exclude-sub <sub>` or `AI_USAGE_EXCLUDE_SUBS` to drop test accounts, `--by-owner`) prints calls, average tokens and estimated cost per surface. Its price table is in the script — update it when a model or price changes.
 
-`cdk destroy` removes everything; `RemovalPolicy.DESTROY` is set for dev.
+`cdk destroy` removes everything on **staging**. On production the stack has termination protection, the Aurora cluster has deletion protection plus a final snapshot, and both buckets are retained (security audit 2026-10-24, SEC-06/07) — see Tear down.
 
 ## Deploy
 
@@ -345,9 +345,19 @@ fix (System Settings → Privacy & Security → Microphone, before the test).
 
 ## Tear down
 
+Staging:
+
 ```bash
-bunx cdk destroy
+bunx cdk destroy --context env=staging
 ```
+
+Production (no `env` context) refuses to tear down by design (security audit
+2026-10-24, SEC-06/07): the stack has termination protection, the Aurora
+cluster has `deletionProtection` and a `SNAPSHOT` removal policy, and the
+asset and roster buckets are `RETAIN`. Removing it on purpose means lifting
+termination protection and the cluster's deletion protection in the console
+first, then `bunx cdk destroy`; the final snapshot and both buckets survive
+and are deleted by hand.
 
 ## Observability (slice 1, `docs/observability-design.md`)
 

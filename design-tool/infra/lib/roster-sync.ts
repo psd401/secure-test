@@ -62,7 +62,9 @@ export class RosterSync extends Construct {
   constructor(scope: Construct, id: string, props: RosterSyncProps) {
     super(scope, id);
 
-    const isProd = props.envName === "prod";
+    // Production's envName is the historical "dev" (bin/design-tool.ts), so
+    // production is "not staging" — security audit 2026-10-24, SEC-07.
+    const isProd = !props.staging;
     const prefix = "roster/";
 
     this.bucket = new s3.Bucket(this, "Bucket", {

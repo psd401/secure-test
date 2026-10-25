@@ -95,6 +95,10 @@ new DesignToolStack(app, isStaging ? "SecureTestDesignToolStaging" : "SecureTest
       : "Design tool — Aurora Postgres Serverless v2 cluster (Slice 24), S3 asset bucket (Slice 31), roster sync (Slice 76), Fargate app service (ADR 0014).",
   envName,
   staging: isStaging,
+  // Security audit 2026-10-24 (SEC-06): `cdk destroy` of the production
+  // stack is refused until termination protection is lifted by hand in the
+  // CloudFormation console. Staging stays disposable.
+  terminationProtection: !isStaging,
   producerRoleArns,
   oidcWebClientId,
   oidcNativeClientId,
