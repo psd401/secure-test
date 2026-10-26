@@ -1343,3 +1343,46 @@ export function dropPrintCopies(
   });
   return { candidates: kept, proposedSets: sets, dropped: candidates.length - kept.length };
 }
+
+// --- PDF-import fixes (2026-10-25): blank table headings ------------------
+// A printed table to fill can leave header cells blank (the student writes
+// the headings too). The model copies them as "" and the item's write schema
+// refuses an empty column label, so the whole question was rejected — in 3
+// of 6 runs on one exam. A blank heading becomes "Column N", as the
+// pipe-table backstop above already does, and the card says so.
+
+/**
+ * Fills each blank column label of a raw `table` candidate with "Column N"
+ * and records one change for the teacher. Other candidates pass through.
+ * Pure; exported for tests.
+ */
+export function fillBlankTableHeadings(candidates: readonly unknown[]): unknown[] {
+  return candidates.map((cand) => {
+    if (!cand || typeof cand !== "object") return cand;
+    const obj = cand as Record<string, unknown>;
+    if (obj.type !== "table" || !Array.isArray(obj.columns)) return cand;
+    const filled: string[] = [];
+    const columns = obj.columns.map((col, i) => {
+      const label = typeof col === "string" ? col : col && typeof col === "object" ? (col as { label?: unknown }).label : undefined;
+      if (typeof label === "string" && label.trim().length > 0) return col;
+      if (label !== undefined && label !== null && typeof label !== "string") return col;
+      const name = `Column ${i + 1}`;
+      filled.push(name);
+      return typeof col === "string" ? name : { ...(col as object), label: name };
+    });
+    if (filled.length === 0) return cand;
+    const changes = Array.isArray(obj.changes) ? obj.changes : [];
+    return {
+      ...obj,
+      columns,
+      changes: [
+        ...changes,
+        {
+          original: filled.length === 1 ? "(a blank column heading)" : "(blank column headings)",
+          changed_to: filled.join(", "),
+          reason: "the printed heading is blank — rename it before you add the question",
+        },
+      ],
+    };
+  });
+}

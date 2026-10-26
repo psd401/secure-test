@@ -302,6 +302,22 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // PDF-import fixes (2026-10-25): a table whose printed headings are blank is
+  // kept (headings named) and the card says what changed.
+  test("a table with blank headings is kept, renamed and reported", async () => {
+    const id = await createAssessment("Blank headings");
+    const res = await postPdf(id, makeTextPdf(["1.", "TB: #1 Fill in the table. | cols=,,Total | rows=Observed,Expected"]));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string; columns: { label: string }[] }[];
+      rejected: unknown[];
+      changes: { original: string; changed_to: string }[][];
+    };
+    expect(body.rejected).toEqual([]);
+    expect(body.candidates[0]!.columns.map((c) => c.label)).toEqual(["Column 1", "Column 2", "Total"]);
+    expect(body.changes[0]![0]).toMatchObject({ original: "(blank column headings)", changed_to: "Column 1, Column 2" });
+  });
+
   // PDF-import fixes (2026-10-25): a form printed twice comes back twice; the
   // copy is dropped and counted.
   test("a repeated question (a printed copy) is dropped and counted", async () => {

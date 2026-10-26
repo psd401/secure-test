@@ -15,6 +15,7 @@ import {
   adjacencyFallback,
   countNumberedItems,
   dropPrintCopies,
+  fillBlankTableHeadings,
   flagShortenedSources,
   formsReport,
   keyFiguresFromText,
@@ -270,7 +271,9 @@ export async function POST(req: Request, ctx: RouteContext) {
   // PDF-import fixes (2026-10-25): a form printed twice on one page comes
   // back twice; the repeat is dropped before anything else reads the list.
   const printCopies = dropPrintCopies(outcome.result.candidates, outcome.result.proposed_sets ?? []);
-  const rawCandidates = printCopies.candidates;
+  // And a table's blank printed headings get a name (the write schema
+  // refuses an empty label), reported on the card.
+  const rawCandidates = fillBlankTableHeadings(printCopies.candidates);
 
   // E14: figures.length is 0 on every scan, which turns on the
   // `[FIGURE n]` strip — a marker there points at nothing.

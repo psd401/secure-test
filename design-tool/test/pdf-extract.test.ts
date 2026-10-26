@@ -12,6 +12,7 @@ import {
 import {
   adjacencyFallback,
   dropPrintCopies,
+  fillBlankTableHeadings,
   keyFiguresFromText,
   withoutKeyFigures,
   parsePdfExtraction,
@@ -1365,5 +1366,35 @@ describe("dropPrintCopies", () => {
       { type: "multiple_choice_single", stem: long2, choices: [{ id: "a", text: "2" }] },
     ];
     expect(dropPrintCopies(raw, []).dropped).toBe(0);
+  });
+});
+
+// PDF-import fixes (2026-10-25): a table's blank printed headings were
+// copied as "" and the write schema rejected the whole question.
+describe("fillBlankTableHeadings", () => {
+  test("blank, whitespace and null labels become Column N, with one change on the card", () => {
+    const raw = [
+      { type: "table", stem: "Fill it in.", columns: ["", "  ", "Total"], rows: ["Observed"] },
+      { type: "table", stem: "Again.", columns: [{ id: "c1", label: null }, { id: "c2", label: "Total" }], rows: [""] },
+    ];
+    const [a, b] = fillBlankTableHeadings(raw) as { columns: unknown[]; changes: unknown[] }[];
+    expect(a!.columns).toEqual(["Column 1", "Column 2", "Total"]);
+    expect(b!.columns).toEqual([{ id: "c1", label: "Column 1" }, { id: "c2", label: "Total" }]);
+    const changes = readCandidateChanges(fillBlankTableHeadings(raw));
+    expect(changes[0]).toEqual([
+      { original: "(blank column headings)", changed_to: "Column 1, Column 2", reason: "the printed heading is blank — rename it before you add the question" },
+    ]);
+    expect(changes[1]![0]!.original).toBe("(a blank column heading)");
+    // The filled candidate now passes the write schema.
+    expect(validatePdfCandidates(fillBlankTableHeadings(raw)).rejected).toEqual([]);
+    expect(validatePdfCandidates(raw).rejected).toHaveLength(2);
+  });
+
+  test("a table with every heading, and other types, pass through unchanged", () => {
+    const raw = [
+      { type: "table", stem: "S", columns: ["A", "B"], rows: ["x"], changes: [] },
+      { type: "essay", stem: "E" },
+    ];
+    expect(fillBlankTableHeadings(raw)).toEqual(raw);
   });
 });

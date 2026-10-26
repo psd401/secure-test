@@ -34,6 +34,7 @@ import {
   adjacencyFallback,
   countNumberedItems,
   dropPrintCopies,
+  fillBlankTableHeadings,
   formsReport,
   keyFiguresFromText,
   withoutKeyFigures,
@@ -156,7 +157,7 @@ for (const spec of models) {
     // As the route: print copies out first; numbering reads the full list.
     const numbering = numberingReport(countNumberedItems(text), result.candidates);
     const printCopies = dropPrintCopies(result.candidates, result.proposed_sets ?? []);
-    const raw = printCopies.candidates;
+    const raw = fillBlankTableHeadings(printCopies.candidates);
     const { candidates, rejected } = validatePdfCandidates(raw, { figureCount });
     const sourceNumbers = readSourceNumbers(raw);
     const rejectedIdx = new Set(rejected.map((r) => r.index));
