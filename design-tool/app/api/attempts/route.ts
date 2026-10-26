@@ -14,6 +14,7 @@ import { loadJoinableSitting } from "@/lib/api/studentAttempt";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { UUID_RE } from "@/lib/uuid";
 import { logResolutionFailure } from "@/lib/api/resolutionLog";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 const StartBody = z.object({
   test_session_id: z.string().regex(UUID_RE, "test_session_id must be a uuid"),
@@ -43,8 +44,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = StartBody.parse(await req.json());
+    body = StartBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

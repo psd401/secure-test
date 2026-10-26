@@ -23,6 +23,7 @@ import {
   MAX_UPLOAD_BYTES as MAX_BYTES,
   allowedUploadFor as allowedFor,
 } from "@/lib/ai/documentUpload";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -157,8 +158,10 @@ export async function POST(req: Request, ctx: RouteContext) {
     source = { kind: "file", bytes: file.size, format: allowed.format };
   } else {
     let body: unknown;
+    const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.longText);
+    if (!bodyRead.ok) return bodyRead.response;
     try {
-      body = await req.json();
+      body = bodyRead.parse();
     } catch {
       return NextResponse.json({ ok: false, error: "invalid_json_body" }, { status: 400 });
     }

@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { getNotifyPublisher } from "@/lib/notify/provider";
 import { log, truncate } from "@/lib/log";
 import { PRODUCT_NAME } from "@/lib/brand";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 /**
  * Batch 3 slice 3 (docs/observability-design.md): "Send feedback" from the
@@ -42,8 +43,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let raw: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.small);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    raw = await req.json();
+    raw = bodyRead.parse();
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

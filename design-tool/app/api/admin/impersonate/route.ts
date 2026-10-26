@@ -26,6 +26,7 @@ import {
   startImpersonation,
 } from "@/lib/api/impersonation";
 import { mintSessionJWT, sessionCookieAttributes } from "@/lib/auth/session";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 export async function POST(req: Request) {
   const auth = await requireStaff();
@@ -33,8 +34,10 @@ export async function POST(req: Request) {
   if (!isAdmin(auth.session)) return notFoundResponse();
 
   let body: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = await req.json();
+    body = bodyRead.parse();
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

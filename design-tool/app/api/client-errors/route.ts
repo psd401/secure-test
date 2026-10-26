@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { OBSERVABILITY_TEXT_MAX, client_error_events } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
 import { log, truncate } from "@/lib/log";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 /**
  * Batch 3 slice 2 (docs/observability-design.md): the macOS client's error
@@ -68,8 +69,10 @@ export async function POST(req: Request) {
   if (!auth.ok) return auth.response;
 
   let raw: unknown;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.longText);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    raw = await req.json();
+    raw = bodyRead.parse();
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }

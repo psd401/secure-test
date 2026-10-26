@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ responseId: string }>;
@@ -30,8 +31,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   let body: ChangeScoreBody;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = ChangeScoreBody.parse(await req.json());
+    body = ChangeScoreBody.parse(bodyRead.parse());
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: "invalid_body", detail: String(err) },

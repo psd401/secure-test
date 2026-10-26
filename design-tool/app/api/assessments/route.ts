@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { CreateAssessmentBody } from "@/lib/api/assessments";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { visibleAssessments } from "@/lib/api/visibleAssessments";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 export async function GET(req?: Request) {
   const auth = await requireStaff();
@@ -35,8 +36,10 @@ export async function POST(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateAssessmentBody.parse(await req.json());
+    body = CreateAssessmentBody.parse(bodyRead.parse());
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: "invalid_body" },

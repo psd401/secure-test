@@ -5,6 +5,7 @@ import { students, student_accommodations } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { CreateStudentBody } from "@/lib/api/students";
 import { normalizeEmail } from "@/lib/roster/queries";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 export async function GET() {
   const auth = await requireStaff();
@@ -40,8 +41,10 @@ export async function POST(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateStudentBody.parse(await req.json());
+    body = CreateStudentBody.parse(bodyRead.parse());
   } catch {
     return NextResponse.json(
       { ok: false, error: "invalid_body" },

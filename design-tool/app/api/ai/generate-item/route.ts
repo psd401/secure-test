@@ -8,14 +8,17 @@ import { GenerateItemRequest } from "@/lib/ai/types";
 import { CreateItemBody } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { itemProposalText } from "@/lib/safeguarding/itemText";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 export async function POST(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
 
   let body;
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = GenerateItemRequest.parse(await req.json());
+    body = GenerateItemRequest.parse(bodyRead.parse());
   } catch (err) {
     const detail = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(

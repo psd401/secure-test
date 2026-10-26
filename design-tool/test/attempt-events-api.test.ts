@@ -532,7 +532,9 @@ describe("event ceilings (SEC-09)", () => {
 
     const res = await postEvent(attempt.id, {
       kind: "focus_loss",
-      detail: { pad: "p".repeat(MAX_EVENT_DETAIL_BYTES * 4) },
+      // Over the 4 KiB detail cap, under the route's 16 KiB body ceiling
+      // (JSON_BODY_LIMITS.small) — a bigger body is refused 413 before this.
+      detail: { pad: "p".repeat(MAX_EVENT_DETAIL_BYTES * 2) },
     });
     expect(res.status).toBe(201);
     const [stored] = await getDb()
@@ -576,6 +578,24 @@ describe("event ceilings (SEC-09)", () => {
     const res = await postEvent(attempt.id, { kind: "focus_loss" });
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("sitting_closed");
+  });
+
+  test("a body past the events route's 16 KiB ceiling is 413 body_too_large and stores nothing", async () => {
+    const { JSON_BODY_LIMITS } = await import("../lib/api/jsonBody");
+    const assessment = await seedAssessment();
+    const attempt = await seedAttempt(assessment.id, STUDENT.ps_id);
+    principal = studentPrincipal(STUDENT.email);
+    const res = await postEvent(attempt.id, {
+      kind: "focus_loss",
+      detail: { pad: "x".repeat(JSON_BODY_LIMITS.small) },
+    });
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe("body_too_large");
+    const [tally] = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, attempt.id));
+    expect(tally?.n).toBe(0);
   });
 
   test("the per-attempt row ceiling answers 429 and stores nothing more", async () => {
