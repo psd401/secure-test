@@ -98,6 +98,7 @@ describe("every API route reads JSON through readJsonBody", () => {
   const NON_DEFAULT: Record<string, keyof typeof JSON_BODY_LIMITS> = {
     "attempts/[attemptId]/events/route.ts": "small",
     "feedback/route.ts": "small",
+    "me/preferences/route.ts": "small",
     "auth/exchange/route.ts": "small",
     "attempts/[attemptId]/responses/[itemId]/route.ts": "longText",
     "client-errors/route.ts": "longText",
@@ -121,7 +122,7 @@ describe("every API route reads JSON through readJsonBody", () => {
       expect(tier, `${rel} reads with ${calls[0]}`).toBeDefined();
       seen[rel] = tier!;
     }
-    expect(Object.keys(seen).length).toBe(45);
+    expect(Object.keys(seen).length).toBe(46);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

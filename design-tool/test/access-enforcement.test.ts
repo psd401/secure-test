@@ -101,6 +101,8 @@ const NO_OWNED_ROW = new Map<string, string>([
   [join("google", "drive", "callback"), "Drive authorization for the caller's own account"],
   [join("debug", "throw"), "row 67's knob; reads nothing, writes nothing"],
   [join("feedback"), "writes a feedback row of the caller's own"],
+  // Editor redesign R-12: the caller's own new-authoring opt-in, keyed by sub.
+  [join("me", "preferences"), "reads/writes the caller's own preference row"],
   [
     join("assessments"),
     "LIST + CREATE: the WHERE clause is the scope, widened in access slice 2",
@@ -379,6 +381,7 @@ describe("ownership enforcement across every teacher route", () => {
       [join("google", "drive", "start"), "an act-as session may not grant Drive (GD slice 2)"],
       [join("google", "drive", "callback"), "an act-as session may not grant Drive (GD slice 2)"],
       [join("assessments", "[id]", "google-docs"), "an act-as session may not send to Drive (GD slice 3)"],
+      [join("me", "preferences"), "an act-as session may not change the teacher's editor opt-in (R-12)"],
     ]);
     const wrong: string[] = [];
     for (const { path, source } of staffRoutes) {

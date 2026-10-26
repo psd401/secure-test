@@ -2287,3 +2287,25 @@ export const google_doc_releases = pgTable(
 
 export type GoogleDocFolderRow = typeof google_doc_folders.$inferSelect;
 export type GoogleDocReleaseRow = typeof google_doc_releases.$inferSelect;
+
+// --- Per-staff preferences (docs/editor-redesign-design.md, R-12) ----------
+//
+// One row per staff member, keyed by the session `sub` like
+// `gradebook_section_prefs`. A missing row means every default, so nothing is
+// written until a teacher changes something and existing staff need no
+// backfill.
+//
+// `new_authoring` is R-12's single flag for the new authoring experience (the
+// new editor, side-by-side preview, import redesign, start screen). Default
+// off: teachers see the current editor until they opt in, and Phase 9 flips
+// the default. Read only through `isNewAuthoringEnabled`
+// (lib/authoring/flag.ts) so the cutover is one change.
+export const staff_preferences = pgTable("staff_preferences", {
+  staff_sub: text("staff_sub").primaryKey(),
+  new_authoring: boolean("new_authoring").notNull().default(false),
+  updated_at: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type StaffPreferencesRow = typeof staff_preferences.$inferSelect;

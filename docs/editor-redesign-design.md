@@ -323,3 +323,13 @@ unless noted.
   The parser follows the server's general rule (ER-F1, ER-F2). The editor
   should treat a marker inside math or alt text as unrepresentable (Risks:
   open read-only) rather than reproduce either renderer.
+- 2026-10-26 — **Phase 3 slice A: the R-12 flag** (prototype track). One
+  per-staff row in a new `staff_preferences` table (`new_authoring`, default
+  false; migration 0064, additive), read only through
+  `isNewAuthoringEnabled(db, session)` in `design-tool/lib/authoring/flag.ts`
+  so Phase 9's cutover is one constant (`NEW_AUTHORING_DEFAULT`). Opt-in and
+  opt-out at `/dashboard/beta` (linked from nowhere while the default is off)
+  through `GET` / `POST /api/me/preferences`; an act-as session reads the
+  teacher's choice but cannot change it (403). Tiptap and dnd-kit added as
+  design-tool dependencies for the slices that follow; nothing imports them
+  yet. With the flag off nothing a teacher sees has changed.

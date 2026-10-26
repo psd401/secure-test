@@ -1874,3 +1874,20 @@ The `pdf-import` input check now records instead of blocking (`inputMode: "recor
 |---|---|---|---|
 | 687 | Local dev on `_demo`, `GUARDRAIL_PROVIDER=bedrock`: import the hand-built one-page PDF whose box reads "Read the passage below and answer the questions. Use evidence from the text in every answer." plus two numbered questions | Both questions proposed (before: 422 `blocked_by_guardrail`, stage input); `guardrail_events` (categories only — never select `text_snippet`) shows `pdf-import / input / flag` with `content_filter PROMPT_ATTACK`, then `output / allow` | ✅ 2026-10-25 local, `_demo` DB, real guardrail + Sonnet 4.6 (the import route's POST driven from a scratch bun script with a mocked staff session, owner `hand-run-row-687`, not through the browser): 200, two essay questions proposed; `guardrail_events` `input / flag / content_filter PROMPT_ATTACK` then `output / allow`. The scratch assessment was deleted afterwards; its two event rows stay. A variant with a three-sentence passage under the box was `input / allow` — the passage dilutes the directions below the filter's threshold, so the block hits short direction-only pages |
 | 688 | Same PDF: read the proposed questions | The box's direction is handled as before the fence (carried onto each question it affects, or reported in the changes); nothing in the proposal treats the direction as an instruction to the AI | ◐ 2026-10-25, same run + an A/B of the text path (no page images), the pre-fence prompt vs the fenced one, Sonnet 4.6, 6 runs per arm. Nothing treated the direction as an instruction to the AI in any run. **With the passage:** "Use evidence…" carried onto both questions old 2/6, new 6/6. **Box only (no passage — the page says "the passage below" but has none):** old 3/6, new 4/6; both arms opened with prose about the missing passage every time, and 2/6 per arm came back as invalid JSON (pre-existing — the same in both arms). The route run itself (with page images) put the box text on question 1 only, not question 2 — the "every item it affects" rule is not always followed, before or after the fence. Small samples; no regression seen |
+
+## New editor (editor redesign, R-12 flag ON; branch `prototype/editor-redesign`)
+
+Every row in this section runs with the R-12 flag ON for the signing-in account (`/dashboard/beta` → **Try the new editor (beta)**), except where a row says OFF. With the flag OFF every older row in this file still describes what teachers see.
+
+### Phase 3 slice A — the flag (2026-10-26)
+
+`staff_preferences.new_authoring` (default false), read through `isNewAuthoringEnabled` (`lib/authoring/flag.ts`) and set by `POST /api/me/preferences`. The opt-in page `/dashboard/beta` is linked from nowhere. Helper and route covered by `test/new-authoring-flag.test.ts`; these rows are the page in a browser.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 689 | Flag OFF (fresh account): open `/dashboard`, an assessment's Questions tab, the header | Unchanged: no beta link, badge or control anywhere | NOT RUN |
+| 690 | Open `/dashboard/beta` | "You are using the current editor." and a **Try the new editor (beta)** button; breadcrumb back to Assessments | NOT RUN |
+| 691 | Click **Try the new editor (beta)** | Back on `/dashboard/beta` with "The new editor is on for your account." and **Switch back to the current editor**; reload keeps it | NOT RUN |
+| 692 | Click **Switch back to the current editor** | "You are using the current editor." again | NOT RUN |
+| 693 | As an admin, act as a teacher who opted in; open `/dashboard/beta` | Shows the teacher's state, no button, and the line saying it can't be changed while acting as them | NOT RUN |
+| 694 | Signed out, open `/dashboard/beta` | Redirects to `/login?next=/dashboard/beta` | ✅ 2026-10-26 (curl against local :3000: 307 to `/login?next=%2Fdashboard%2Fbeta`) |
