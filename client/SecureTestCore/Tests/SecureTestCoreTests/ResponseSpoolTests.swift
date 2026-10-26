@@ -507,6 +507,16 @@ final class ResponseSpoolFlushTests: XCTestCase {
         XCTAssertFalse(APIError.notAuthenticated.isSittingClosed)
     }
 
+    /// The bundle fetch tells a handed-in attempt apart from a failed fetch
+    /// (server SEC-01 answers 409 `attempt_submitted` on delivery).
+    func testTheAttemptSubmittedErrorCodeMapping() {
+        XCTAssertTrue(APIError.refused(status: 409, code: "attempt_submitted").isAttemptSubmitted)
+        XCTAssertFalse(APIError.refused(status: 409, code: "sitting_closed").isAttemptSubmitted)
+        XCTAssertFalse(APIError.refused(status: 409, code: "time_expired").isAttemptSubmitted)
+        XCTAssertFalse(APIError.refused(status: 409, code: nil).isAttemptSubmitted)
+        XCTAssertFalse(APIError.notAuthenticated.isAttemptSubmitted)
+    }
+
     func testRetryableStatusesAreNotDropped() async throws {
         for status in [408, 429] {
             let spoolPath = NSTemporaryDirectory() + "retry-\(status)-\(UUID().uuidString).sqlite"

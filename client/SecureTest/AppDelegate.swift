@@ -703,17 +703,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         controller.onRendererRefused = { [weak self] refusal in
             self?.rendererRefused(refusal)
         }
+        // SEC-01 (server PR #94): handed in by the teacher while it loaded.
+        // Fired before `onBundleLoaded`, so lockdown was never begun.
+        controller.onHandedInBeforeStart = { [weak self] in
+            self?.handedInBeforeStart()
+        }
         controller.onTimerDismissed = { [weak self] in
             // D-3: the banner is hidden for the rest of the attempt. The clock
             // keeps running — the notices and the end of the session at zero
             // are not the student's to switch off.
             self?.countdown?.dismiss()
         }
-        // Row CS (D-5): a write refused with 409 `sitting_closed`. Off-main
+        // Row CS (D-5): a write refused with 409 `sitting_closed` ("write"),
+        // or the bundle fetch refused the same way ("bundle", SEC-01). Off-main
         // (the spool's flush has its own Task), so hop before touching any of
         // this.
-        controller.onSittingClosed = { [weak self] in
-            Task { @MainActor in self?.sittingClosedDuringAttempt(via: "write") }
+        controller.onSittingClosed = { [weak self] source in
+            Task { @MainActor in self?.sittingClosedDuringAttempt(via: source) }
         }
         controller.onHandedIn = { [weak self] feedback in
             guard let self else { return }
@@ -1413,6 +1419,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let alert = NSAlert()
         alert.messageText = JoinErrorCopy.timeRanOutMessage
         alert.informativeText = JoinErrorCopy.timeRanOutInformative
+        alert.addButton(withTitle: "OK")
+        presentOnEntryWindow(alert)
+    }
+
+    /// SEC-01 (server PR #94, PR #97 review): the delivery route refused the
+    /// bundle because the attempt is handed in — a teacher's Hand in landed
+    /// while the test loaded. Like EX-2, nothing began, so this is a way home,
+    /// not a hand-in: `showEntry()` tears down the attempt screen's peek poll
+    /// and countdown, and the sheet uses the join's own handed-in words. Not
+    /// an error — no errors.log line.
+    private func handedInBeforeStart() {
+        guard screen == .serverAttempt, !quitInProgress else { return }
+        Self.log("attempt already handed in on arrival — no secure session, back to Your tests")
+        // Defensive, as in EX-2: lockdown is never begun on this path.
+        endLockdown(reason: "attempt already handed in on arrival")
+        showEntry()
+        let alert = NSAlert()
+        alert.messageText = JoinOutcome.handedInMessage
         alert.addButton(withTitle: "OK")
         presentOnEntryWindow(alert)
     }
