@@ -662,6 +662,23 @@ unless noted.
   parses, creates, saves back through the item PATCH validator and has no
   Before-publishing gap; the start choices; the AI gate with the flag on and
   off). Hand-check rows 813–825. Flag off: today's home and form.
+- 2026-10-26 — **Prototype track close-out** (Phases 1, 3, 4, 5, 7, 8 on
+  `prototype/editor-redesign`, then unpushed; landed on `main` as six PRs,
+  2026-10-27 entry below). First signed-in render of the
+  flagged editor (Chrome, local dev): the editor page answered 500 for
+  every teacher, flag on or off — Phase 8 had put a database import into
+  the client editor's bundle (`lib/authoring/startScreen.ts` →
+  `planImport` → `db/client.ts`); fixed by moving `exampleQuestionRows` to
+  `lib/authoring/exampleQuestion.ts`. dnd-kit's generated ids caused a
+  hydration mismatch; `SortableRows` now passes `useId()`. Seen working in
+  the browser, flag on: start screen and templates, a template draft,
+  the WYSIWYG stem (bold without markers), autosave (stored as markup,
+  one snapshot), the "+" menu, History, the interactive preview (answer,
+  hand in, 2 of 2 scored), live refresh keeping answers, the Word review
+  with two-way linking (mock provider) and the JSON preview; flag off, the
+  current editor. Not yet like the mockup: History shows raw markup
+  (`**mostly**`; fixed before landing, `2e25cd29` in #122), and stimulus
+  text is still a markup textarea with Save stimulus. Hand-check rows 689–825 are otherwise NOT RUN.
 - 2026-10-27 — **Decision: item import is not gated on `allow_llm_authoring`**
   (James, resolving the open question in the Phase 7 slice B entry above).
   PDF and Word item import stay ungated, as PDF import always has been.
@@ -671,3 +688,24 @@ unless noted.
   which is not gated either. Cost and privacy are handled elsewhere
   (ADR 0007 questions 7.3 and 7.5, the guardrail surfaces), not by this
   setting. The slice B entry is a dated record and stays as written.
+- 2026-10-27 — **Landed on `main` as six PRs behind R-12** (D-9; NOT
+  deployed). Each PR is cherry-picked from `prototype/editor-redesign`
+  (kept local as the reference) onto a fresh `origin/main`: PR 1 #118
+  (this note + `packages/markup`), PR 2 #119 (R-12 flag, migration 0064,
+  the WYSIWYG field), PR 3 #122 (autosave + History, migration 0065,
+  outline rail, every type in the field, the `AssessmentEditor.tsx`
+  split), PR 4 #124 (interactive preview; ADR 0019 Accepted), PR 5 #127
+  (PDF triage review, Word import, JSON import preview), PR 6 (start
+  screen and this close-out). #125 made every partial `mock.module` in the
+  tests spread the real module. Review fixes made while landing, beyond
+  the prototype: clean paste keeps ProseMirror-marked HTML only for this
+  tab's own copy, and strips scripts and comments without re-forming them
+  (#119); the History copy reads the item under a row lock, and a vanished
+  item is a 404 (#122); preview tab ARIA and a visible bundle failure
+  (#124); a `.docx` that lists a wanted zip entry twice is refused (#127).
+  Decisions: ADR 0019 Accepted as written; Word import sends text; empty
+  question text warns, never blocks; item import is not gated on
+  `allow_llm_authoring`. Hand-check numbering: #119's paste row moved from
+  714 to 826. Still open: the AI-draft card always shows; stimulus text is
+  a markup textarea; hand-check rows 689–826 apart from the walk-through;
+  Phase 9 (cutover) is not started.
