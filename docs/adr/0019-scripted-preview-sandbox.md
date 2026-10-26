@@ -55,9 +55,22 @@ frame-ancestors 'self'
 |---|---|
 | `response` (and `response.generic`), `withdraw` | The parent stores the answer in memory for this preview only. |
 | `submit` | The parent scores the stored answers against **the key the editor already holds** (the item view in `AssessmentEditor`), using the same pure scoring functions the server uses (`lib/scoring/auto.ts`). It shows the result in the **parent's** UI, outside the frame. |
-| `tts`, `stt`, `upload`, `timer` | No-op in this ADR. Wiring any of them (for example R-11's read-aloud through the parent's speech synthesis) is a change to this table and needs the same review. |
+| `tts` | *Amended by slice B (2026-10-26), for review with the rest of this ADR.* The parent speaks the validated segments with the browser's speech synthesis, **on-device voices only** (a voice with `localService`; none → nothing is spoken and the teacher is told), and posts the word, finish and cancel callbacks back on the port. Only the text the frame already holds is spoken; nothing new goes into the frame but `(id, segment, offset, length)`. |
+| `stt`, `upload`, `timer`, `home` | No-op. A drawing's bytes are dropped by the bootstrap and never leave the frame. Wiring any of them is a change to this table and needs the same review. |
 
 The parent treats every message from the frame as untrusted input, the way the shell does under ADR 0018. Each body is validated against its handler's shape, unknown handlers are dropped, and nothing from the frame is ever rendered as HTML in the parent. The key, the score and the correct answer **never go into the frame**.
+
+## As built (slice B, 2026-10-26)
+
+Recorded here so the review of this ADR covers what was built. Where slice B goes past §1–§5:
+
+- **CSP header adds `sandbox allow-scripts`.** It keeps the shell document opaque-origin even when its URL is opened outside the editor's iframe. The `<meta>` cannot carry it (or `frame-ancestors`).
+- **The bootstrap's own messages**, beside the bridge: `rendered {linked, items}`, `jump {item_id}` (a click in a question: click-to-jump), and `error {message}` from the frame; `scroll_to {item_id, smooth}` (scroll linking, editor → preview only) and `speech {event, id, …}` from the parent. Each is validated like a bridge body (`lib/preview/interactive/protocol.ts`). The bootstrap tags each rendered `.item` block with its position. When the blocks do not line up one-to-one with the bundle's items, linking is reported off rather than guessed.
+- **`offline: true`.** Nothing in the preview reaches a server, and the renderer's offline labels are the ones that say so. They do not leave a "Saving…" or "Handing in…" that never resolves.
+- **Answers survive a live refresh.** Each edit builds a fresh frame document. The answers given so far ride the next bundle as `saved_responses`, the student's own prefill field, so no new field was needed. Sealed ids stay stable for the editor session.
+- **Risk 2, as built.** Each frame document loads once. A second `load` on the same iframe is treated as self-navigation: its port is dropped and a fresh frame is built. The parent accepts one `ready` per frame.
+- **The projection is shared, not copied.** The per-item mapping moved unchanged out of `buildDeliveryBundle.ts` into `lib/api/deliveryItem.ts` (pure). The delivery route passes its HMAC sealing, and the preview passes its random sealing and a stable shuffle (sorted by sealed id).
+- **Hand-check rows.** Risk 6's browser checks are in `docs/design-tool-manual-checks.md` (new-editor section).
 
 ## Consequences
 

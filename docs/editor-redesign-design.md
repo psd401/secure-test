@@ -492,3 +492,42 @@ unless noted.
   shown outside the frame. Seven residual risks recorded; slice B owes a
   test that no key value reaches the posted payload, and the browser rows.
   Nothing built; no hand-check rows (no UI).
+- 2026-10-26 — **Phase 5 slice B: the interactive side-by-side preview**
+  (prototype track, D-2, R-3, R-11; ADR 0019 still **Proposed**, its "As
+  built" section records where this goes past §1–§5). With the R-12 flag on,
+  the Questions tab is editor | student preview at ≥ 1280 px (page width
+  widened for the flag only) and an Editor / Student preview toggle below.
+  The preview is `/preview/shell` (staff + flag only, else 404) in an iframe
+  with `sandbox="allow-scripts"` only and `allow=""`: a fixed document with
+  KaTeX, the student's `renderer.js` / `renderer.css` (the current signed
+  renderer, else `packages/renderer/dist`) and a bootstrap
+  (`lib/preview/interactive/bootstrap.ts`), the three pinned by SHA-256
+  hashes computed from the served bytes (`shell.ts`); CSP `default-src
+  'none'`, `connect-src 'none'`, `data:` fonts and images, `frame-ancestors
+  'self'`, `sandbox allow-scripts`. Content goes in over the frame's
+  MessageChannel after a `ready` accepted only from our iframe
+  (`protocol.ts`): a bundle built in the editor page from unsaved state by
+  the student's own per-item projection — moved unchanged from
+  `buildDeliveryBundle.ts` to `lib/api/deliveryItem.ts` — with sealed match /
+  order ids minted per editor session and parsed by `DeliveryBundleSchema`
+  (`bundle.ts`); a draft the schema refuses is listed, not fatal. Live
+  refresh is debounced (600 ms); the new frame loads hidden and replaces the
+  old once rendered, and answers so far ride as `saved_responses`. The stub
+  bridge keeps answers in memory; **Finish and hand in** is scored in the
+  editor page with `scoreResponse` (`lib/scoring/auto.ts`) against the
+  editor's key (`score.ts`), shown under the preview. Scroll linking follows
+  the editor's top question (can be turned off); a click in the preview
+  scrolls the editor to it. Views: **Read aloud** (TTS scope on; the parent
+  speaks with an on-device voice and relays word highlights — ADR 0019's
+  `tts` row amended), **One question per page** (paged layout). Shell inputs
+  copied from the client with drift tests: `PageShell.baseStyles`
+  (`pageShell.generated.ts`, `scripts/vendor-page-shell.ts`) and
+  `katex.min.js` (`lib/preview/katex.min.js.ts`,
+  `scripts/vendor-katex-js.mjs`). Tests: `test/preview-interactive.test.ts`
+  (key boundary for a keyed fixture of every type, protocol validation,
+  sealing, scoring, speech ranges) and `test/preview-shell.test.ts` (CSP /
+  hashes, drift, the bootstrap running the real renderer in the client
+  harness's DOM shim, route gating). Browser behaviour, including ADR 0019
+  risk 6, is hand-check rows 767–781. Not built: speech-to-text, time-limit
+  strip, contrast / zoom / font views; the math read-aloud is a plain
+  reading of the TeX, not the client's MathSpeech.
