@@ -97,6 +97,33 @@ export function slotAfter(list: readonly Positioned[], itemId: string): number {
   return block ? block.start + block.items.length : list.length;
 }
 
+/**
+ * Where a "/" is typed, not a shortcut. `math-field` is MathLive's element
+ * (graph expressions, the graph item's board): its keys arrive from a
+ * contenteditable inside its shadow root, so outside the field the event's
+ * target is the `<math-field>` host, which the contenteditable selector
+ * does not match.
+ */
+export const TEXT_ENTRY_SELECTOR = "input, textarea, select, [contenteditable='true'], math-field";
+
+/**
+ * Pure: whether a keydown on a question card is the "/" shortcut for the add
+ * menu. Not with a modifier, not inside a text field, and not when something
+ * inside the card already handled the key (MathLive turns "/" into a fraction
+ * and calls preventDefault without stopping propagation).
+ */
+export function slashOpensInsertMenu(e: {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  defaultPrevented: boolean;
+  inTextField: boolean;
+}): boolean {
+  if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return false;
+  return !e.defaultPrevented && !e.inTextField;
+}
+
 /** Insert `item` at `index` (clamped to the list). */
 export function insertAt<T>(list: readonly T[], item: T, index: number): T[] {
   const next = [...list];

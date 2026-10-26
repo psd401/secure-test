@@ -14,8 +14,10 @@ import {
   moveBlockTo,
   moveInList,
   outlineBlocks,
+  slashOpensInsertMenu,
   slotAfter,
   splitsSet,
+  TEXT_ENTRY_SELECTOR,
 } from "../lib/authoring/outline";
 import { INSERT_MENU_COMMON, INSERT_MENU_MORE, filterInsertTypes } from "../lib/authoring/insertTypes";
 import { ITEM_TYPE_LABEL } from "../lib/items/typeLabel";
@@ -110,6 +112,18 @@ describe("insertion", () => {
     expect(slotAfter(LIST, "q3")).toBe(4);
     expect(slotAfter(LIST, "q7")).toBe(7);
     expect(slotAfter(LIST, "missing")).toBe(7);
+  });
+
+  test("'/' opens the menu only on the card itself, not in a field or a math field", () => {
+    const key = { key: "/", metaKey: false, ctrlKey: false, altKey: false, defaultPrevented: false, inTextField: false };
+    expect(slashOpensInsertMenu(key)).toBe(true);
+    expect(slashOpensInsertMenu({ ...key, key: "a" })).toBe(false);
+    expect(slashOpensInsertMenu({ ...key, metaKey: true })).toBe(false);
+    expect(slashOpensInsertMenu({ ...key, inTextField: true })).toBe(false);
+    // Review finding: MathLive's "/" (a fraction) calls preventDefault and
+    // bubbles out with the <math-field> host as its target.
+    expect(slashOpensInsertMenu({ ...key, defaultPrevented: true })).toBe(false);
+    expect(TEXT_ENTRY_SELECTOR.split(",").map((s) => s.trim())).toContain("math-field");
   });
 
   test("insertAt puts the item at the index, clamped", () => {

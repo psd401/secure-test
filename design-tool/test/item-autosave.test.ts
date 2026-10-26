@@ -2,8 +2,9 @@
 // pure autosave and history logic — no DB, no fetch, fake timers.
 //
 // - createItemAutosaver: one debounce per question card, so typing in one card
-//   never delays another, a failed save is not retried in a loop, and an edit
-//   undone before the timer fires is never written.
+//   never delays another, a failed save is not retried in a loop, an edit
+//   undone before the timer fires is never written, and a held card (restore
+//   in flight) is never autosaved.
 // - autosaveSummary: what the one save indicator says.
 // - shouldCapture: when an item PATCH keeps a history copy.
 // - beforePublishing: the readiness checks as links to questions.
@@ -137,6 +138,25 @@ describe("createItemAutosaver (debounce per card)", () => {
     clock.tick(5000);
     await flushMicrotasks();
     expect(calls).toEqual([["q2", "x"]]);
+  });
+
+  test("a held card (restore / type change in flight) schedules nothing until released", async () => {
+    // Review finding: the restored content on the card must not go out as an
+    // ordinary autosave (no `restore`, so no copy of what it replaces).
+    const { clock, calls, saver, entry } = setup();
+    saver.sync([entry("q1", "current")]);
+    saver.hold("q1");
+    saver.sync([entry("q1", "restored"), entry("q2", "x")]);
+    clock.tick(5000);
+    await flushMicrotasks();
+    expect(calls).toEqual([["q2", "x"]]);
+    // Released after a refused restore with the current content back on the
+    // card: its own pending edit (if any) saves as usual.
+    saver.release("q1");
+    saver.sync([entry("q1", "current")]);
+    clock.tick(1000);
+    await flushMicrotasks();
+    expect(calls).toEqual([["q2", "x"], ["q1", "current"]]);
   });
 
   test("an edit typed while a save is in flight goes out after it, never alongside", async () => {

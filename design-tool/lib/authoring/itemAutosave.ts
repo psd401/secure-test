@@ -29,6 +29,14 @@ export interface ItemAutosaver<T> {
   flushAll(): Promise<void>;
   /** Drop a card's pending save (deleted card, restore replacing it). */
   cancel(id: string): void;
+  /**
+   * Drop a card's pending save and schedule nothing for it until `release`:
+   * while a restore or type change is in flight, the card shows content its
+   * own PATCH (with `restore`) is sending, and an ordinary autosave of that
+   * same content must not race it — or, if it fails, outlive it.
+   */
+  hold(id: string): void;
+  release(id: string): void;
   /** Send this value now even if the same content was already attempted. */
   retry(id: string, value: T): Promise<void>;
 }
@@ -48,6 +56,7 @@ export function createItemAutosaver<T>({
 }): ItemAutosaver<T> {
   const savers = new Map<string, Autosave<T>>();
   const scheduled = new Map<string, string>();
+  const held = new Set<string>();
 
   function saverFor(id: string): Autosave<T> {
     let s = savers.get(id);
@@ -68,7 +77,7 @@ export function createItemAutosaver<T>({
   return {
     sync(entries) {
       for (const e of entries) {
-        if (!e.pending) {
+        if (!e.pending || held.has(e.id)) {
           if (scheduled.has(e.id)) {
             scheduled.delete(e.id);
             savers.get(e.id)?.cancel();
@@ -89,6 +98,14 @@ export function createItemAutosaver<T>({
     cancel(id) {
       scheduled.delete(id);
       savers.get(id)?.cancel();
+    },
+    hold(id) {
+      held.add(id);
+      scheduled.delete(id);
+      savers.get(id)?.cancel();
+    },
+    release(id) {
+      held.delete(id);
     },
     async retry(id, value) {
       const s = saverFor(id);

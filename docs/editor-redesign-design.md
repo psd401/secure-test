@@ -462,3 +462,17 @@ unless noted.
   pass. Not split: the question card's header, stem field, scoring select and
   save row, and the stimulus-set / autosave / outline handlers, which still
   live in the editor. Hand-check rows 761–762.
+- 2026-10-26 — **Phase 4 review findings fixed** (prototype track). (1) A
+  History restore that failed left the old version on the card and let an
+  ordinary autosave (no `restore`, so inside the 2-minute window no copy
+  kept) write it over the current content. The autosaver now has
+  `hold(id)` / `release(id)` (`lib/authoring/itemAutosave.ts`): a held card
+  schedules nothing, so the restore's own PATCH is the only write, and a
+  refused restore puts the current content back on the card as
+  `changeType` already did (which now holds the card too, for the same
+  race). (2) "/" typed in a MathLive `<math-field>` (graph expressions, the
+  graph item's board) also opened the add menu: the event reaches the card
+  with the `<math-field>` host as its target and MathLive calls
+  `preventDefault` without stopping it. The card's check is now
+  `slashOpensInsertMenu` + `TEXT_ENTRY_SELECTOR` in `lib/authoring/outline.ts`
+  (skips `math-field` and any key already handled). Hand-check rows 763–766.

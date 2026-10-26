@@ -53,8 +53,10 @@ import {
   moveBlockTo,
   moveInList,
   outlineBlocks,
+  slashOpensInsertMenu,
   slotAfter,
   splitsSet,
+  TEXT_ENTRY_SELECTOR,
 } from "@/lib/authoring/outline";
 import { newItemSeed } from "@/lib/authoring/insertTypes";
 import { changeItemType, typeChangeTargets } from "@/lib/authoring/typeChange";
@@ -802,17 +804,24 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
 
   /** R-5: History → Restore. Anything still waiting to autosave is sent
    * first, so the server's copy of "the version this replaces" is current;
-   * then the version is saved through the ordinary PATCH (`restore`). */
+   * then the version is saved through the ordinary PATCH (`restore`). The
+   * card is held out of autosave meanwhile, and a refused restore puts the
+   * current content back (as changeType does) — otherwise an ordinary
+   * autosave, without `restore`, could write the old version over the
+   * current one with no copy kept of it. */
   async function restoreVersion(current: ItemView, version: ItemVersion): Promise<boolean> {
     await autosaverRef.current?.flush(current.id);
-    autosaverRef.current?.cancel(current.id);
+    autosaverRef.current?.hold(current.id);
     const next: ItemView = {
       ...rowToView(version.item),
       position: current.position,
       item_set_id: current.item_set_id ?? null,
     };
     updateItem(current.id, () => next);
-    return persistItem(next, { restore: true });
+    const ok = await persistItem(next, { restore: true });
+    autosaverRef.current?.release(current.id);
+    if (!ok) updateItem(current.id, () => current);
+    return ok;
   }
 
   function onSuggested(outcome: SuggestOutcome) {
@@ -969,9 +978,12 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   async function changeType(item: ItemView, target: ItemType) {
     const { item: next } = changeItemType(item, target, defaultItemFor(target), (t) => SCORING_OPTIONS[t]);
     await autosaverRef.current?.flush(item.id);
-    autosaverRef.current?.cancel(item.id);
+    // Held, as in restoreVersion: no ordinary autosave of `next` races this PATCH.
+    autosaverRef.current?.hold(item.id);
     updateItem(item.id, () => next);
-    if (await persistItem(next, { restore: true })) {
+    const ok = await persistItem(next, { restore: true });
+    autosaverRef.current?.release(item.id);
+    if (ok) {
       setOutlineMessage(`Question ${items.findIndex((i) => i.id === item.id) + 1} is now ${TYPE_LABEL[target]}.`);
     } else {
       // Refused (e.g. students have answered it): keep the question as it was;
@@ -1537,9 +1549,17 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     ? (e) => {
                         // R-6: "/" on a card, outside a text field, opens the
                         // add menu just after this question (or its stimulus group).
-                        if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
-                        const t = e.target as HTMLElement;
-                        if (t.closest("input, textarea, select, [contenteditable='true']")) return;
+                        if (
+                          !slashOpensInsertMenu({
+                            key: e.key,
+                            metaKey: e.metaKey,
+                            ctrlKey: e.ctrlKey,
+                            altKey: e.altKey,
+                            defaultPrevented: e.defaultPrevented,
+                            inTextField: (e.target as HTMLElement).closest(TEXT_ENTRY_SELECTOR) !== null,
+                          })
+                        )
+                          return;
                         e.preventDefault();
                         setInsertSlot(slotAfter(items, item.id));
                       }
