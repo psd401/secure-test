@@ -7,7 +7,13 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { ItemBundleSchema, ItemResponseSchema, MAX_ASSESSMENT_LIST, MAX_ITEM_LIST } from "@secure-test/schema";
+import {
+  ItemBundleSchema,
+  ItemResponseSchema,
+  MAX_ASSESSMENT_LIST,
+  MAX_ITEM_LIST,
+  boundedRecord,
+} from "@secure-test/schema";
 import { CreateItemBody } from "../lib/api/items";
 
 const ROOT = path.join(import.meta.dir, "..");
@@ -21,18 +27,40 @@ const SCANNED = [
 ];
 
 /**
- * Left unbounded on purpose — none parses request data:
- * - delivery.ts: the student bundle the server builds and validates itself;
- *   a bound there could only refuse a large assessment's own delivery.
+ * Left unbounded on purpose — none parses request data. Matched by full path,
+ * so a new file of the same name elsewhere is still scanned (PR #104 review):
+ * - packages/schema/src/delivery.ts: the student bundle the server builds and
+ *   validates itself; a bound there could only refuse a large assessment's
+ *   own delivery.
  */
-const EXEMPT = new Set(["delivery.ts"]);
+const EXEMPT = new Set([path.join(ROOT, "..", "packages", "schema", "src", "delivery.ts")]);
+/** Where `boundedRecord` itself wraps `z.record`. */
+const RECORD_HELPER = path.join(ROOT, "..", "packages", "schema", "src", "limits.ts");
 
 function tsFiles(dir: string): string[] {
   const out: string[] = [];
   for (const e of readdirSync(dir)) {
     const p = path.join(dir, e);
     if (statSync(p).isDirectory()) out.push(...tsFiles(p));
-    else if (/\.ts$/.test(e) && !EXEMPT.has(e)) out.push(p);
+    else if (/\.ts$/.test(e) && !EXEMPT.has(p)) out.push(p);
+  }
+  return out;
+}
+
+/** Every raw `z.record(...)` (either spelling, `z.record(` or `z\n  .record(`)
+ * with its argument text. */
+function recordsIn(src: string): Array<{ line: number; args: string }> {
+  const out: Array<{ line: number; args: string }> = [];
+  const re = /\bz\s*\.\s*record\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    const start = m.index + m[0].length;
+    let i = start;
+    for (let depth = 1; depth > 0 && i < src.length; i++) {
+      if (src[i] === "(") depth++;
+      else if (src[i] === ")") depth--;
+    }
+    out.push({ line: src.slice(0, m.index).split("\n").length, args: src.slice(start, i - 1) });
   }
   return out;
 }
@@ -65,7 +93,7 @@ function arraysIn(src: string): Array<{ line: number; chain: string }> {
   return out;
 }
 
-describe("every request-reachable list schema is bounded", () => {
+describe("every request-reachable list and record schema is bounded", () => {
   test("no z.array without .max() / .length() in app/api, lib/api or packages/schema", () => {
     const unbounded: string[] = [];
     let seen = 0;
@@ -79,6 +107,31 @@ describe("every request-reachable list schema is bounded", () => {
     }
     expect(seen).toBeGreaterThan(50);
     expect(unbounded).toEqual([]);
+  });
+
+  test("no raw z.record whose values can fail: use boundedRecord (PR #104 review)", () => {
+    // A record keeps an issue per failing value, and zod has no size check for
+    // records. `z.unknown()` values cannot fail, so those records cannot
+    // amplify (event detail, client-error context) and stay raw.
+    const raw: string[] = [];
+    for (const dir of SCANNED) {
+      for (const f of tsFiles(dir)) {
+        if (f === RECORD_HELPER) continue;
+        for (const r of recordsIn(readFileSync(f, "utf8"))) {
+          if (!/,\s*z\.unknown\(\)\s*$/.test(r.args)) raw.push(`${path.relative(ROOT, f)}:${r.line}`);
+        }
+      }
+    }
+    expect(raw).toEqual([]);
+  });
+
+  test("the record scanner sees both spellings and reads the value schema", () => {
+    const found = recordsIn(`a = z.record(z.string(), z.unknown());\nb = z\n  .record(z.string(), z.record(z.string(), z.string()));`);
+    expect(found.map((r) => r.args)).toEqual([
+      "z.string(), z.unknown()",
+      "z.string(), z.record(z.string(), z.string())",
+      "z.string(), z.string()",
+    ]);
   });
 
   test("the scanner sees a chain that spans lines and nested parens", () => {
@@ -96,7 +149,10 @@ describe("a bound turns a huge bad list into one issue", () => {
       choice_ids: new Array(BAD).fill(1),
     });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.length).toBeLessThanOrEqual(2);
+    if (!r.success) {
+      expect(r.error.issues.length).toBeLessThanOrEqual(2);
+      expect(r.error.issues.some((i) => i.code === "too_big")).toBe(true);
+    }
   });
 
   test("an item's choices past MAX_ITEM_LIST", () => {
@@ -107,13 +163,19 @@ describe("a bound turns a huge bad list into one issue", () => {
       correct_choice_ids: [],
     });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.length).toBeLessThanOrEqual(2);
+    if (!r.success) {
+      expect(r.error.issues.length).toBeLessThanOrEqual(2);
+      expect(r.error.issues.some((i) => i.code === "too_big")).toBe(true);
+    }
   });
 
   test("a bundle's items past MAX_ASSESSMENT_LIST", () => {
     const r = ItemBundleSchema.safeParse({ test_id: "t", title: "t", items: new Array(BAD).fill(1) });
     expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.issues.length).toBeLessThanOrEqual(2);
+    if (!r.success) {
+      expect(r.error.issues.length).toBeLessThanOrEqual(2);
+      expect(r.error.issues.some((i) => i.code === "too_big")).toBe(true);
+    }
   });
 
   test("the bounds are generous: at MAX_ITEM_LIST choices an item still parses", () => {
@@ -126,6 +188,25 @@ describe("a bound turns a huge bad list into one issue", () => {
     });
     expect(r.success).toBe(true);
     expect(MAX_ASSESSMENT_LIST).toBeGreaterThan(MAX_ITEM_LIST);
+  });
+
+  test("a match answer with too many keys: one issue, from the key count", () => {
+    const matches: Record<string, number> = {};
+    for (let i = 0; i < BAD; i++) matches[`k${i}`] = 1;
+    const r = ItemResponseSchema.safeParse({ type: "match", matches });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues).toHaveLength(1);
+      expect(r.error.issues[0]!.message).toBe(`at most ${MAX_ITEM_LIST} keys`);
+    }
+  });
+
+  test("boundedRecord still parses a valid record and still reports a non-object as a type error", () => {
+    const rec = boundedRecord(z.string(), z.string(), 3);
+    expect(rec.parse({ a: "x", b: "y" })).toEqual({ a: "x", b: "y" });
+    const r = rec.safeParse("not an object");
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0]!.code).toBe("invalid_type");
   });
 
   test("control: the same bad list without a bound costs an issue per element", () => {

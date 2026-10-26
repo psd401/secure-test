@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GraphBoardSchema, GraphKeySchema } from "./graph.js";
-import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST } from "./limits.js";
+import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST, boundedRecord } from "./limits.js";
 
 export const ChoiceSchema = z.object({
   id: z.string().min(1),
@@ -289,9 +289,10 @@ export const TableRowSchema = z.object({
   label: z.string(),
 });
 
-export const TableCellKeysSchema = z.record(
+export const TableCellKeysSchema = boundedRecord(
   z.string().min(1),
-  z.record(z.string().min(1), z.string().min(1)),
+  boundedRecord(z.string().min(1), z.string().min(1), MAX_ITEM_LIST),
+  MAX_ITEM_LIST,
 );
 
 export const TableItemSchema = z.object({
@@ -554,7 +555,7 @@ export const ItemBundleSchema = z.object({
   // Map<uuid, asset>. Optional — bundles without image refs omit this.
   // Key shape is validated via .superRefine since z.record's key
   // validator is positional rather than schema-driven.
-  assets: z.record(z.string(), BundleAssetSchema).optional(),
+  assets: boundedRecord(z.string(), BundleAssetSchema, MAX_ASSESSMENT_LIST).optional(),
   // Slice 21: assessment-level accommodations metadata. Both fields are
   // optional on the wire; the importing side validates IDs against its
   // own catalog and clamps construct_altering to a subset of
