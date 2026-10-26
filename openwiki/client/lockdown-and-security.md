@@ -19,6 +19,7 @@ openwiki:
   symbols: [AssessmentLockdown, SimulatedLockdownSession, RefusedLockdownSession, LockdownConfigurationPlan, PageLoadGate, PageShell, BridgeItemTable, BridgeLimits, DrawingPayload, AttemptEventReporter, ExitConfirmation, CrashReporter]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/AssessmentLockdownTests.swift
+    - client/SecureTestCore/Tests/SecureTestCoreTests/BackToTestsTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/SimulatedLockdownSlowTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/PageLoadGateTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/PageShellTests.swift
@@ -82,6 +83,8 @@ Rules encoded in `AssessmentLockdown` (documented in its header and covered by `
 Student-reachable exits are the titlebar button, Cmd-E, Cmd-Q, window close and SIGTERM. `ExitConfirmation.shouldConfirm` adds one confirming dialog only while a test is open inside a live session and not yet handed in; system-initiated quits (logout, MDM) are never held up. The default button keeps the student in the test.
 
 `PageLoadGate` (an actor, resolved by `open()` / `refuse()`) holds the page build until lockdown is `active`. Its `Outcome` is `opened`, `refused` (the session went back to `idle` without becoming active) or `timedOut`. Only `opened` may build the test; the other two send the host home with an explanation. `AssessmentViewController` waits up to 60 s, and after 20 s shows "Still starting the secure session…" instead of sending the student home, because one student Mac answered `begin()` about 36 s after the call (SS-1, 2026-10-08). The ordering also fixes a layout bug: the renderer reads viewport width once at build time, and building during the AAC window-resize transition picked the wrong layout.
+
+**Leaving after a hand-in (ending-session race, 2026-10-24).** `AssessmentLockdown.begin()` returns whether that call started a session. A `false` means a previous session is still up, so its state says nothing about the new attempt, and `beginLockdown()` keeps the gate shut. The in-page "Back to your tests" is decided by `BackToTests.decide(feedbackPending:sessionActive:handedIn:)`. It returns `leave` when no session is active, `refuse` when the page asks to go home mid-session without a hand-in, `waitForSessionEnd` when instant feedback is pending (the results page appears at `DID END`), and `leaveAtSessionEnd` otherwise (the student goes home at `DID END`). Before this rule, a press before `DID END` left at once, and joining another test while the old session was still ending drew the new test under that session. The served renderer no longer posts `home` for this reason, so `BRIDGE_REQUIRES` in `packages/renderer/src/requires.ts` omits it (see [signed renderer delivery](signed-renderer.md)).
 
 ## Sealed page
 

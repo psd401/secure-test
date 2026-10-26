@@ -33,7 +33,7 @@ openwiki:
 | `responses.ts` | What a student may PUT: `ItemResponseSchema` (discriminated union), length caps (`ESSAY_TEXT_MAX_LENGTH`, `SHORT_TEXT_MAX_LENGTH`, `RESPONSE_CELL_MAX_LENGTH`, `ESSAY_HTML_MAX_LENGTH`). |
 | `macros.ts` | `K12_MACROS` — KaTeX macros (`\degree`, `\percent`, `\plusminus`, `\half`, `\third`, `\quarter`). |
 
-Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on either side.
+Wire keys are **snake_case** everywhere (ADR 0002); no camelCase transform on either side. Every list a request can reach carries a `.max()` from `packages/schema/src/limits.ts` (`MAX_ITEM_LIST`, `MAX_ASSESSMENT_LIST`), and raw records with failing values use `boundedRecord`. The byte ceilings on request bodies are in [request size ceilings](input-limits.md).
 
 ## Item types
 
