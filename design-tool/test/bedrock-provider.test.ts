@@ -398,7 +398,7 @@ describe("bedrockPdfExtractor (text path vs scanned/document path)", () => {
       content: Array<Record<string, unknown>>;
     }>;
     expect(msg[0]!.content).toHaveLength(1);
-    expect(String(msg[0]!.content[0]!.text)).toContain("TEST DOCUMENT TEXT");
+    expect(String(msg[0]!.content[0]!.text)).toContain("<test_document>");
     expect(String(msg[0]!.content[0]!.text)).toContain("Some extracted test text");
   });
 
