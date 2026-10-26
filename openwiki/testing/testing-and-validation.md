@@ -51,6 +51,7 @@ The `bunfig.toml` root matters: without it `bun test` also sweeps CDK image-asse
 - **UI tests** (`*.test.tsx`: monitor controls, reporting print, editors) use static markup (`renderToStaticMarkup`) and pure copy functions; there is no DOM or testing-library harness, so clicks are hand-run checks.
 - **Synthetic roster guard.** `roster-fixture-synthetic-ids.test.ts` fails if fixtures or `test/helpers/roster.ts` contain real-shaped student ids. Keep fixture data synthetic ([roster](../design-tool/accommodations-and-roster.md)).
 - **Operations helpers** have unit tests too: `docker-entrypoint.test.ts`, `delete-stored-upload.test.ts` (imports `infra/lambda/deleteStoredUpload`), `log.test.ts`, `server-error-record.test.ts`; see [deployment and observability](../operations/deployment-and-observability.md).
+- **Measurement and hand-run scripts are not tests.** `scripts/compare-pdf-import.ts` and `scripts/pdfImportScore.ts` measure a PDF-import change on one document against a hand-checked answer set, using live Bedrock credentials ([PDF import](../design-tool/pdf-import.md#change-guidance)). `scripts/hand-run-calculator.ts` seeds sittings on a local dev server for the calculator client hand rows ([test calculator](../graphing/calculator.md)). Run them only when the change is about model output or a manual check, never as ordinary validation.
 
 ## Pilot seeding helpers
 
