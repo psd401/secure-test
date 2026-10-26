@@ -53,7 +53,7 @@ Two entrances mint the **same** session JWT:
 
 | Entrance | Route | Used by |
 | --- | --- | --- |
-| Browser OIDC + PKCE | `GET /api/auth/start` → IdP → `GET /api/auth/callback` | teachers on the web (PKCE state lives in a signed `secure-test-pkce` cookie, ADR 0004; `lib/auth/pkce*.ts`, `safeNext.ts` guards `?next=`) |
+| Browser OIDC + PKCE | `GET /api/auth/start` → IdP → `GET /api/auth/callback` | teachers on the web (PKCE state lives in a signed `secure-test-pkce` cookie, ADR 0004; `lib/auth/pkce*.ts`, `safeNext.ts` guards `?next=`). A student account is sent to `/login?error=student_account` and gets no cookie, because the browser cookie is staff-only (SEC-01, security audit 2026-10-24); students authenticate through the client's bearer exchange |
 | Token exchange | `POST /api/auth/exchange` (body `id_token`) | the macOS client, which runs its own Google PKCE flow (`GoogleSignIn.swift`) and sends the id_token; response includes `session_token` and sets the cookie |
 
 Both end in `sessionFromIdTokenClaims` (`lib/auth/identity.ts`): requires `sub`, lowercases `email`, requires `email_verified`, then calls `roleForEmail` (`lib/auth/roles.ts`). `STAFF_DOMAINS = ["psd401.net"]`, `STUDENT_DOMAINS = ["edtools.psd401.net"]`; anything else → `account_not_allowed` and no session. `emailDomain` rejects multi-`@` strings to block allow-list smuggling. Token verification (`verifyIdToken.ts`) requires an explicit audience (`resolveExpectedAudience`: `OIDC_AUDIENCE` or `OIDC_CLIENT_ID`, comma-separated so both web and native client ids work).
@@ -85,7 +85,7 @@ Grants (`access_grants`, `lib/api/grants.ts`, routes under `/api/assessments/[id
 
 Other sharing models: `assessment_shares` (`lib/api/shares.ts`) is **copy semantics** — the recipient accepts and gets an independent import of a lossless export; no access is shared afterward. `lib/roster/coTeachers.ts` (`coTeachersOf`) only *suggests* co-teachers from current roster sections (read-only) — the Share dialog's Co-teach mode decides whether to write an `access_grants` row. The suggestions are served by `GET /api/assessments/[id]/grants/suggestions`, which requires `own` on the assessment because the list describes the owner's roster, not the caller's (test: `grants-suggestions-route.test.ts`). The admin-only grant surface is `/api/grants` (returns 404 to non-admins so its existence is not leaked).
 
-**Admin** is a config list, not a role: `ADMIN_EMAILS` (comma list, `lib/auth/admin.ts`). It widens only the *ownership* check (admin → `own` everywhere), never the role check. **Impersonation** (`POST /api/admin/impersonate[/stop]`, `lib/api/impersonation.ts`, `impersonation_sessions` audit table): mints a session whose `sub/email/role` are the target teacher's with `actor_sub` set; `isAdmin()` is false while `actor_sub` is set, so act-as cannot reach admin pages or chain. A target can only be a staff address that owns an `assessments`/`test_sessions` row.
+**Admin** is a config list, not a role: `ADMIN_EMAILS` (comma list, `lib/auth/admin.ts`). It widens only the *ownership* check (admin → `own` for reads; a non-impersonating admin's writes to other teachers' rows are refused, see the `intent` rule above), never the role check. **Impersonation** (`POST /api/admin/impersonate[/stop]`, `lib/api/impersonation.ts`, `impersonation_sessions` audit table): mints a session whose `sub/email/role` are the target teacher's with `actor_sub` set; `isAdmin()` is false while `actor_sub` is set, so act-as cannot reach admin pages or chain. A target can only be a staff address that owns an `assessments`/`test_sessions` row.
 
 ## Co-teacher gaps
 
@@ -112,3 +112,4 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
 
 Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
+/architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
