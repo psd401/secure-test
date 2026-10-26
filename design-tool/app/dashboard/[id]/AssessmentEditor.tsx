@@ -70,6 +70,7 @@ import { RubricEditor } from "./RubricEditor";
 import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
+import { usesRichTextField } from "@/lib/authoring/richTextTypes";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
 import {
   VISIBLE_ACCOMMODATION_CATALOG,
@@ -293,10 +294,6 @@ interface Props {
   /** R-12 (docs/editor-redesign-design.md): the staff member opted in to the new editor. */
   newAuthoring?: boolean;
 }
-
-// Phase 3 slice B (R-4): the item types whose stem (and choices) use the new
-// WYSIWYG field when the R-12 flag is on. Every other type keeps the textarea.
-const RICH_TEXT_TYPES = new Set(["multiple_choice", "multiple_choice_multi", "short_text"]);
 
 type AiProposal = {
   type: ItemType;
@@ -2883,7 +2880,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </div>
                 </div>
 
-                {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? (
+                {newAuthoring && usesRichTextField(item.type) ? (
                   <div className="mt-3 block">
                     <span className="block text-sm font-medium">Question</span>
                     <RichTextField
@@ -3410,7 +3407,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                             >
                               {c.id.toUpperCase()}
                             </span>
-                            {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? (
+                            {newAuthoring && usesRichTextField(item.type) ? (
                               <div className="min-w-0 flex-1 [&_.rt-field]:mt-0">
                                 <RichTextField
                                   singleLine
@@ -3462,7 +3459,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                               <X aria-hidden />
                             </Button>
                           </div>
-                          {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? null : (
+                          {newAuthoring && usesRichTextField(item.type) ? null : (
                           <>
                           <div className="mt-1 flex flex-wrap items-start gap-2">
                             <ImagePicker

@@ -13,6 +13,8 @@ import golden from "../../packages/markup/test/fixtures/golden.json";
 import { prng, randomMarkup } from "../../packages/markup/test/fuzz";
 import { docToMarkup, markupToDoc } from "@/lib/authoring/markupDoc";
 import { markupExtensions } from "@/lib/authoring/markupExtensions";
+import { RICH_TEXT_TYPES, usesRichTextField } from "@/lib/authoring/richTextTypes";
+import { ITEM_TYPES } from "@/db/schema";
 
 const schema = getSchema(markupExtensions());
 
@@ -147,5 +149,19 @@ describe("saving what a teacher typed", () => {
   test("a picture keeps its id and alt", () => {
     const doc = p(text("See "), { type: "image", attrs: { alt: "map", id: "11111111-1111-1111-1111-111111111111", scheme: null } });
     expect(docToMarkup(doc).markup).toBe("See ![map](asset:11111111-1111-1111-1111-111111111111)");
+  });
+});
+
+// Review finding (Phase 3): the set once named "multiple_choice", which is not
+// an item type, so single-answer multiple choice (the default type) never got
+// the new field. Pin the exact membership against the real type list.
+describe("which item types use the new field (R-12 on)", () => {
+  test("every listed type is a real item type", () => {
+    for (const t of RICH_TEXT_TYPES) expect(ITEM_TYPES as readonly string[]).toContain(t);
+  });
+  test("single-answer MC, multi-select MC and short answer use it; nothing else does", () => {
+    const on = ITEM_TYPES.filter((t) => usesRichTextField(t));
+    expect(on).toEqual(["multiple_choice_single", "multiple_choice_multi", "short_text"]);
+    expect(usesRichTextField("multiple_choice")).toBe(false);
   });
 });

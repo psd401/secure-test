@@ -1916,3 +1916,4 @@ Every row in this section runs with the R-12 flag ON for the signing-in account 
 | 710 | ⌘Z / ⌘⇧Z in the field | Undo / redo the field's own edits | NOT RUN |
 | 711 | Keyboard + VoiceOver (quit Claude first): Tab into the stem, then a choice | Announced as "Question N, text field" / "Choice A text"; the B / I buttons announce pressed state | NOT RUN |
 | 712 | A fill-in-the-blank, essay or match question with the flag ON | Unchanged textarea editor | NOT RUN |
+| 713 | Flag ON: **Add question** with the type left at its default (single-answer multiple choice), then open an existing single-answer question | Both show the new field for the stem and every choice (no B / I, Image…, Math… row; no preview strip) — same as multi-select and short answer. Review finding 2026-10-26: the type list once misnamed single-answer MC, leaving it on the textarea | NOT RUN |

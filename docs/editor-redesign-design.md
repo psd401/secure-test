@@ -358,3 +358,9 @@ unless noted.
   fixtures) keep text, bold, italic and line breaks only; the Docs
   `font-weight:normal` wrapper is not bold; pictures are dropped and counted.
   Browser behaviour is hand-check rows 695–712.
+- 2026-10-26 — **Phase 3 review fix.** The new field's type list named
+  `multiple_choice`, which is not an item type, so single-answer multiple
+  choice (the default type) kept the textarea with the flag on. The list now
+  lives in `lib/authoring/richTextTypes.ts`, typed as `ItemType` so a
+  misspelt name fails typecheck, and `test/authoring-editor.test.ts` pins its
+  membership against `ITEM_TYPES`. Hand-check row 713.
