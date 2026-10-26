@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -57,6 +57,9 @@ export function SortableRows({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const position = (id: string | number) => ids.indexOf(String(id)) + 1;
+  // A stable id, or dnd-kit numbers its aria-describedby targets with a
+  // module counter that differs between the server render and hydration.
+  const dndId = useId();
 
   function onDragEnd(e: DragEndEvent) {
     if (!e.over || e.active.id === e.over.id) return;
@@ -67,6 +70,7 @@ export function SortableRows({
 
   return (
     <DndContext
+      id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={onDragEnd}
