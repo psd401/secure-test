@@ -700,13 +700,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Renderer slice 4c (D-6, D-11): the served renderer could not be
         // loaded, or (Release) the bundle named none. Fired before
         // `onBundleLoaded`, so lockdown was never begun.
+        controller.onRendererRefused = { [weak self] refusal in
+            self?.rendererRefused(refusal)
+        }
         // SEC-01 (server PR #94): handed in by the teacher while it loaded.
         // Fired before `onBundleLoaded`, so lockdown was never begun.
         controller.onHandedInBeforeStart = { [weak self] in
             self?.handedInBeforeStart()
-        }
-        controller.onRendererRefused = { [weak self] refusal in
-            self?.rendererRefused(refusal)
         }
         controller.onTimerDismissed = { [weak self] in
             // D-3: the banner is hidden for the rest of the attempt. The clock
@@ -714,11 +714,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // are not the student's to switch off.
             self?.countdown?.dismiss()
         }
-        // Row CS (D-5): a write refused with 409 `sitting_closed`. Off-main
+        // Row CS (D-5): a write refused with 409 `sitting_closed` ("write"),
+        // or the bundle fetch refused the same way ("bundle", SEC-01). Off-main
         // (the spool's flush has its own Task), so hop before touching any of
         // this.
-        controller.onSittingClosed = { [weak self] in
-            Task { @MainActor in self?.sittingClosedDuringAttempt(via: "write") }
+        controller.onSittingClosed = { [weak self] source in
+            Task { @MainActor in self?.sittingClosedDuringAttempt(via: source) }
         }
         controller.onHandedIn = { [weak self] feedback in
             guard let self else { return }

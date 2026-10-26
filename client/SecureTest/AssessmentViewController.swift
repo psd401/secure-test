@@ -161,7 +161,10 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// Fires at most once per controller; the host ends the secure session and
     /// sends the student home. NOT called on the main actor (the spool's flush
     /// runs on its own Task), so the host hops.
-    var onSittingClosed: (() -> Void)?
+    /// The argument says what was refused — "write" (a response, drawing
+    /// slot or the submit) or "bundle" (the delivery fetch, SEC-01) — for the
+    /// log and the teacher's timeline.
+    var onSittingClosed: ((String) -> Void)?
 
     /// C-1 (`docs/multi-source-stimulus-design.md`): the page build waits on
     /// this before it reads the viewport width, because `onBundleLoaded` begins
@@ -511,7 +514,7 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
                     // home told (`sittingClosedDuringAttempt`).
                     guard !self.isRetired else { return }
                     self.log("bundle refused: the sitting is closed — not starting the secure session")
-                    self.noteSittingClosed()
+                    self.noteSittingClosed(via: "bundle")
                 } catch let error as APIError where error.isAttemptSubmitted {
                     // SEC-01 (server PR #94): refused because the attempt was
                     // handed in (a teacher's hand-in during the flush above).
@@ -1013,11 +1016,12 @@ final class AssessmentViewController: NSObject, WKScriptMessageHandler, WKNaviga
     /// [security] log rather than letting the answers vanish silently.
     /// Row CS (D-5): once per controller, whatever refused first — a response
     /// write, a drawing upload slot, or the submit.
-    private func noteSittingClosed() {
+    private func noteSittingClosed(via source: String = "write") {
         guard !sittingClosed else { return }
         sittingClosed = true
-        log("sitting closed: the server refused a write for this attempt (teacher closed the session, or it expired)")
-        onSittingClosed?()
+        let what = source == "bundle" ? "the test for this attempt" : "a write for this attempt"
+        log("sitting closed: the server refused \(what) (teacher closed the session, or it expired)")
+        onSittingClosed?(source)
     }
 
     /// v1.3.4 (D-5): the one retry pass, run before the bundle is fetched.
