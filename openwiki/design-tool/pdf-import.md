@@ -15,7 +15,7 @@ openwiki:
     - design-tool/lib/pdfImport/bedrockProvider.ts
     - design-tool/lib/pdfImport/mockProvider.ts
     - design-tool/app/dashboard/[id]/PdfImportPanel.tsx
-  symbols: [PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, countNumberedItems, numberingReport, readSourceNumbers, readCandidateChanges, detectForms, formsReport, validateProposedSets, adjacencyFallback, flagShortenedSources, extractPdfText, looksScanned, extractPdfLayout, pageImagesWanted, renderPagesForModel, runGuarded]
+  symbols: [PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, countNumberedItems, numberingReport, readSourceNumbers, readCandidateChanges, detectForms, formsReport, validateProposedSets, adjacencyFallback, flagShortenedSources, extractPdfText, looksScanned, extractPdfLayout, pageImagesWanted, renderPagesForModel, runGuarded, pdfExtractSampling, dropPrintCopies]
   test_paths:
     - design-tool/test/pdf-extract.test.ts
     - design-tool/test/pdf-import-route.test.ts
@@ -106,7 +106,7 @@ Extraction writes no assets. Figures travel in the response as data URLs. When t
 
 ## Errors
 
-A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "output"` (the input stage never blocks here). Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
+A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "output"` (the input stage never blocks here). Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), `pdf_extract_refused` (the model declined the document; retrying will not change that, so import by CSV or by hand), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
 
 ## Change guidance
 
@@ -118,6 +118,13 @@ A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "outp
 Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms, the prompt fence, the output screen text and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
 
 Live behaviour of the fence and the record-only input check against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
+ by `test/changed-from-pdf.test.tsx`.
+DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
+ute.test.ts`.
+test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
+ute.test.ts`.
+.
+k against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
  by `test/changed-from-pdf.test.tsx`.
 DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
 ute.test.ts`.
