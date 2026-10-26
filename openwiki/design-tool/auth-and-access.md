@@ -19,7 +19,7 @@ openwiki:
     - design-tool/lib/auth/admin.ts
     - design-tool/lib/api/impersonation.ts
     - design-tool/app/api/auth/exchange/route.ts
-  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating, healAssessmentOwnerEmail]
+  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, AccessIntent, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating, healAssessmentOwnerEmail]
   test_paths:
     - design-tool/test/auth-roles.test.ts
     - design-tool/test/auth-identity.test.ts
@@ -80,6 +80,8 @@ The `ALLOW_TEST_ISSUER=1` escape hatch on `/api/auth/exchange` (caller names its
 | `own` | share, archive, delete, grant |
 
 `authorizeAssessment(db, session, id, need)`, `authorizeSitting`, `authorizeAttempt` (sitting/attempt authorize **through their assessment**; `test_sessions.owner_sub` is provenance, not permission), plus student/rubric/asset variants that resolve only owner or admin (per-teacher tables are not reachable via assessment grants). Resolution order in `grants.effectiveLevel`: owner → `own`; admin → `own` via `"admin"`; else the highest live grant. Each success carries `via: owner | grant | admin` and the grant `scope`. All refusals are `404 not_found` (and malformed ids `400 invalid_id`) so ids cannot be probed.
+
+**Read and write intent (SEC-03, security audit 2026-10-24).** Every `authorize*` and `page*` helper also takes a required `intent: "read" | "write"` (`AccessIntent` in `lib/api/accessLevels.ts`). An admin resolves `own` via `"admin"` on every row, which is right for reads. A `write` that resolved only through `"admin"` is refused with the same 404 (`admitted()` in `lib/api/access.ts`). So an admin changes another teacher's row only by acting as that teacher, where the resolution is `"owner"` and the act is recorded in `impersonation_sessions`. Adding a route means passing the intent explicitly, because the compiler checks every call site.
 
 Grants (`access_grants`, `lib/api/grants.ts`, routes under `/api/assessments/[id]/grants`, `/api/grants`): keyed on **email** (a substitute may not have signed in yet), scopes `assessment` (by id) and `teacher` (by the assessment owner's email, via denormalised `assessments.owner_email`; an assessment with NULL `owner_email` resolves no teacher-scope grant; see the OE-1 entry under [co-teacher gaps](#co-teacher-gaps)) and `school` (stored, inert — pinned by a test). `loadActiveGrants` is one query per request; `grantedLevel` is pure so list pages (`visibleAssessments.ts`) resolve fifty rows with one query. A `teacher`-scoped grant means substitute: sittings they start stay the granting teacher's (`created_by_sub` records the sub). Each grant has a `seen_at` column (migration `0048_access_grant_seen`): the grantee's home list shows a "New" mark for live assessment-scope grants with `seen_at` still null (`unseenAssessmentGrantIds`, read by `app/dashboard/page.tsx`), and opening the assessment page clears it (`markAssessmentGrantSeen` from `app/dashboard/[id]/page.tsx`). Grants created before the column existed were backfilled as seen, so only new grants show "New". The share and notification side is in [authoring](authoring.md); the behaviour is tested in `share-notifications.test.ts`.
 

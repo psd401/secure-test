@@ -51,15 +51,14 @@ Unlike passage highlighting, the calculator is part of what the test measures, s
 
 ## Runtime relationships
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Heuristic: an unescaped angle bracket inside a label breaks rendering; rephrase the label. -->
-```text
+```mermaid
 flowchart LR
-  Author[Teacher editors<br/>GraphItemEditor, GraphStimulusEditor] -->|config| DB[(items.config)]
-  DB --> Bundle[buildDeliveryBundle<br/>board only, no key]
-  Bundle -->|X-SecureTest-Version gate| Client[macOS client page<br/>graphingScript]
-  Client -->|GraphResponse objects| Attempt[studentAttempt<br/>canonical + max_objects]
-  Attempt --> Score[scoreGraph<br/>scoring auto]
-  Score --> Review[review queue<br/>graph_lines]
+  Author["Teacher editors: GraphItemEditor, GraphStimulusEditor"] -->|config| DB[(items.config)]
+  DB --> Bundle["buildDeliveryBundle: board only, no key"]
+  Bundle -->|X-SecureTest-Version gate| Client["macOS client page: graphingScript"]
+  Client -->|GraphResponse objects| Attempt["studentAttempt: canonical and max_objects"]
+  Attempt --> Score["scoreGraph: scoring auto"]
+  Score --> Review["review queue: graph_lines"]
 ```
 
 The key never leaves the server. `buildDeliveryBundle` emits only `board` for a graph item, and the `graph_key` is read only by scoring and review. The same rule is in [wire formats](../architecture/wire-formats.md) and [scoring and results](../design-tool/scoring-and-results.md).
