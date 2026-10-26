@@ -43,7 +43,7 @@ const Entry = z.object({
 });
 
 const Body = z.object({
-  errors: z.array(Entry).min(1),
+  errors: z.array(Entry).max(MAX_ENTRIES).min(1),
 });
 
 /** Drops a context bag that is too big rather than storing a truncated one:

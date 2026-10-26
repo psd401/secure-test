@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GraphBoardSchema, GraphKeySchema } from "./graph.js";
+import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST } from "./limits.js";
 
 export const ChoiceSchema = z.object({
   id: z.string().min(1),
@@ -69,17 +70,17 @@ const baseItem = {
 export const SingleSelectMCItemSchema = z.object({
   type: z.literal("multiple_choice_single"),
   ...baseItem,
-  choices: z.array(ChoiceSchema).min(2),
+  choices: z.array(ChoiceSchema).max(MAX_ITEM_LIST).min(2),
   correct_choice_id: z.string().min(1).optional(),
 });
 
 export const MultiSelectMCItemSchema = z.object({
   type: z.literal("multiple_choice_multi"),
   ...baseItem,
-  choices: z.array(ChoiceSchema).min(2),
+  choices: z.array(ChoiceSchema).max(MAX_ITEM_LIST).min(2),
   // 2026-09-01: keyless items are legal drafts (design-tool slice B), so a
   // multi-select may ride the bundle with no correct ids yet.
-  correct_choice_ids: z.array(z.string().min(1)),
+  correct_choice_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST),
 });
 
 // Numeric equivalence (James, 2026-09-15; docs/math-entry-design.md
@@ -119,13 +120,13 @@ export const RubricLevelSchema = z.object({
 export const RubricCriterionSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(200),
-  levels: z.array(RubricLevelSchema).min(1),
+  levels: z.array(RubricLevelSchema).max(MAX_ITEM_LIST).min(1),
 });
 
 export const RubricSchema = z
   .object({
     style: z.enum(["analytic", "holistic", "single_point"]),
-    criteria: z.array(RubricCriterionSchema).min(1),
+    criteria: z.array(RubricCriterionSchema).max(MAX_ITEM_LIST).min(1),
     // Slice 33: teacher-controlled student visibility. `during_test` mirrors
     // into the design-tool preview now and rides the bundle to the student
     // client; `with_feedback` is stored now, consumed in Phase 3 (no results
@@ -201,7 +202,7 @@ export const MatchPairSchema = z.object({
 export const MatchItemSchema = z.object({
   type: z.literal("match"),
   ...baseItem,
-  pairs: z.array(MatchPairSchema).min(2),
+  pairs: z.array(MatchPairSchema).max(MAX_ITEM_LIST).min(2),
 });
 
 // Phase 4 slice 48: ordering item. `sequence` is the answer key — entries
@@ -216,7 +217,7 @@ export const SequenceEntrySchema = z.object({
 export const OrderItemSchema = z.object({
   type: z.literal("order"),
   ...baseItem,
-  sequence: z.array(SequenceEntrySchema).min(2),
+  sequence: z.array(SequenceEntrySchema).max(MAX_ITEM_LIST).min(2),
 });
 
 // Phase 4 slice 49: hotspot item. An image (referenced by asset uuid, same
@@ -237,8 +238,8 @@ export const HotspotItemSchema = z.object({
   type: z.literal("hotspot"),
   ...baseItem,
   image_asset_id: z.string().min(1).nullable().optional(),
-  regions: z.array(HotspotRegionSchema).default([]),
-  correct_region_ids: z.array(z.string().min(1)).default([]),
+  regions: z.array(HotspotRegionSchema).max(MAX_ITEM_LIST).default([]),
+  correct_region_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).default([]),
 });
 
 // Phase 4 slice 50: drawing/upload item — AUTHORING ONLY. There is
@@ -296,8 +297,8 @@ export const TableCellKeysSchema = z.record(
 export const TableItemSchema = z.object({
   type: z.literal("table"),
   ...baseItem,
-  columns: z.array(TableColumnSchema).min(1),
-  rows: z.array(TableRowSchema).min(1),
+  columns: z.array(TableColumnSchema).max(MAX_ITEM_LIST).min(1),
+  rows: z.array(TableRowSchema).max(MAX_ITEM_LIST).min(1),
   corner: z.string().optional(),
   cell_keys: TableCellKeysSchema.optional(),
 });
@@ -316,14 +317,14 @@ export const TableItemSchema = z.object({
 export const FillBlankDropdownSchema = z.object({
   id: z.string().min(1),
   kind: z.literal("dropdown"),
-  options: z.array(ChoiceSchema).min(2),
+  options: z.array(ChoiceSchema).max(MAX_ITEM_LIST).min(2),
   correct_option_id: z.string().min(1).optional(),
 });
 
 export const FillBlankTextSchema = z.object({
   id: z.string().min(1),
   kind: z.literal("text"),
-  keys: z.array(z.string().min(1)).optional(),
+  keys: z.array(z.string().min(1)).max(MAX_ITEM_LIST).optional(),
   exact_form: z.boolean().optional(),
 });
 
@@ -335,7 +336,7 @@ export const FillBlankBlankSchema = z.discriminatedUnion("kind", [
 export const FillBlankItemSchema = z.object({
   type: z.literal("fill_blank"),
   ...baseItem,
-  blanks: z.array(FillBlankBlankSchema).min(1),
+  blanks: z.array(FillBlankBlankSchema).max(MAX_ITEM_LIST).min(1),
 });
 
 // Graph answer (D-9): the board and, on the TEACHER bundle only, the key.
@@ -443,7 +444,7 @@ export const ItemSetSchema = z.object({
   // student-facing by definition, like the stimulus itself. Bundles written
   // before this slice parse with `sources: []`.
   sources: z.array(StimulusSourceSchema).max(12).default([]),
-  item_ids: z.array(z.string().min(1)).min(1),
+  item_ids: z.array(z.string().min(1)).max(MAX_ASSESSMENT_LIST).min(1),
 });
 export type ItemSet = z.infer<typeof ItemSetSchema>;
 export type ItemSetLayout = z.infer<typeof ItemSetLayoutSchema>;
@@ -536,7 +537,7 @@ export type CalculatorSetting = z.infer<typeof CalculatorSettingSchema>;
 export const ItemBundleSchema = z.object({
   test_id: z.string().min(1),
   title: z.string(),
-  items: z.array(ItemSchema),
+  items: z.array(ItemSchema).max(MAX_ASSESSMENT_LIST),
   // Client paging: emitted only when `paged`, keeping older bundles byte-stable.
   student_layout: StudentLayoutSchema.optional(),
   // Instant feedback: emitted only when not the default, keeping older
@@ -549,7 +550,7 @@ export const ItemBundleSchema = z.object({
   // Graphing calculator: emitted only when the test has one.
   calculator: CalculatorSettingSchema.optional(),
   // E5 slice 1: optional so every bundle written before it parses unchanged.
-  item_sets: z.array(TeacherItemSetSchema).optional(),
+  item_sets: z.array(TeacherItemSetSchema).max(MAX_ASSESSMENT_LIST).optional(),
   // Map<uuid, asset>. Optional — bundles without image refs omit this.
   // Key shape is validated via .superRefine since z.record's key
   // validator is positional rather than schema-driven.
@@ -559,8 +560,8 @@ export const ItemBundleSchema = z.object({
   // own catalog and clamps construct_altering to a subset of
   // allowed_accommodations. The bundle layer is permissive on purpose —
   // import code is the chokepoint for catalog drift.
-  allowed_accommodations: z.array(z.string()).optional(),
-  construct_altering: z.array(z.string()).optional(),
+  allowed_accommodations: z.array(z.string()).max(MAX_ASSESSMENT_LIST).optional(),
+  construct_altering: z.array(z.string()).max(MAX_ASSESSMENT_LIST).optional(),
 }).superRefine((bundle, ctx) => {
   if (bundle.item_sets) {
     for (const message of itemSetIssues(bundle.items.map((i) => i.id), bundle.item_sets)) {

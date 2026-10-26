@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GraphResponseSchema } from "./graph.js";
+import { MAX_ITEM_LIST } from "./limits.js";
 
 // Slice 35: a student's answer to one item, stored in the design-tool's
 // `responses.response` jsonb column and (later) carried on the wire from the
@@ -24,7 +25,7 @@ export const SingleChoiceResponseSchema = z.object({
 
 export const MultiChoiceResponseSchema = z.object({
   type: z.literal("multiple_choice_multi"),
-  choice_ids: z.array(z.string().min(1)).min(1),
+  choice_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Bridge audit B-7 (2026-10-08, docs/server-delivered-renderer-design.md):
@@ -81,13 +82,13 @@ export const MatchResponseSchema = z.object({
 // ids, first to last. Fully correct = the item's authored sequence order.
 export const OrderResponseSchema = z.object({
   type: z.literal("order"),
-  ordered_ids: z.array(z.string().min(1)).min(1),
+  ordered_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Phase 4 slice 49: hotspot. The region id(s) the student marked.
 export const HotspotResponseSchema = z.object({
   type: z.literal("hotspot"),
-  region_ids: z.array(z.string().min(1)).min(1),
+  region_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Slice 65: drawing/upload. The response is a REFERENCE to an uploaded file,
