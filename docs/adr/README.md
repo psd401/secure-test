@@ -40,3 +40,4 @@ Numbering is monotonic; never renumber. To reverse a decision, write a new ADR t
 - [0016 — Two wire formats — the teacher's export carries the answer keys, the student's delivery cannot express one](0016-two-wire-formats-teacher-export-and-student-delivery.md)
 - [0017 — Roster from the PSD warehouse, identity from Google — not ClassLink](0017-roster-from-warehouse-and-google-identity.md)
 - [0018 — Serve the test page's renderer from the server; keep the native shell signed](0018-server-delivered-renderer.md) (Proposed)
+- [0019 — Run the student renderer in the editor preview inside an opaque-origin, hash-pinned sandbox](0019-scripted-preview-sandbox.md) (Proposed; revises 0006 for the scripted preview only)

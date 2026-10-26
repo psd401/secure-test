@@ -476,3 +476,19 @@ unless noted.
   `preventDefault` without stopping it. The card's check is now
   `slashOpensInsertMenu` + `TEXT_ENTRY_SELECTOR` in `lib/authoring/outline.ts`
   (skips `math-field` and any key already handled). Hand-check rows 763–766.
+- 2026-10-26 — **Phase 5 slice A: the preview ADR** (prototype track, R-3).
+  `docs/adr/0019-scripted-preview-sandbox.md`, **Proposed** (R-3 accepted;
+  the ADR text not yet reviewed; Accepted needed before Phase 9's cutover).
+  Revises ADR 0006 for the scripted preview only — `/preview/[id]` keeps
+  0006. Posture: a fixed shell route (no content, no key) in an iframe with
+  `sandbox="allow-scripts"` only (opaque origin) and `allow=""`; CSP
+  `default-src 'none'`, three hash-pinned scripts (bootstrap, KaTeX,
+  renderer — R-3's "renderer only" widened, none content-dependent), hashes
+  computed from the served bytes, `connect-src 'none'`, `data:` images and
+  fonts, `frame-ancestors 'self'`; content over a `MessageChannel` after a
+  `ready` handshake checked by `event.source`, parsed by
+  `DeliveryBundleSchema` before posting; a stub `messageHandlers` bridge
+  whose `submit` is scored in the parent against the editor's key, result
+  shown outside the frame. Seven residual risks recorded; slice B owes a
+  test that no key value reaches the posted payload, and the browser rows.
+  Nothing built; no hand-check rows (no UI).
