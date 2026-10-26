@@ -16,7 +16,7 @@ openwiki:
     - client/SecureTest/RealLockdownSession.swift
     - client/SecureTest/LockedDownWebView.swift
     - client/SecureTest/AssessmentViewController.swift
-  symbols: [AssessmentLockdown, SimulatedLockdownSession, RefusedLockdownSession, LockdownConfigurationPlan, PageLoadGate, PageShell, BridgeItemTable, BridgeLimits, DrawingPayload, AttemptEventReporter, ExitConfirmation, CrashReporter]
+  symbols: [AssessmentLockdown, SimulatedLockdownSession, RefusedLockdownSession, LockdownConfigurationPlan, PageLoadGate, PageShell, BridgeItemTable, BridgeLimits, DrawingPayload, AttemptEventReporter, ExitConfirmation, CrashReporter, onHandedInBeforeStart, onSittingClosed, onTimeRanOutBeforeStart, sittingClosedDuringAttempt, handedInBeforeStart]
   test_paths:
     - client/SecureTestCore/Tests/SecureTestCoreTests/AssessmentLockdownTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/BackToTestsTests.swift
@@ -86,6 +86,35 @@ Student-reachable exits are the titlebar button, Cmd-E, Cmd-Q, window close and 
 
 **Leaving after a hand-in (ending-session race, 2026-10-24).** `AssessmentLockdown.begin()` returns whether that call started a session. A `false` means a previous session is still up, so its state says nothing about the new attempt, and `beginLockdown()` keeps the gate shut. The in-page "Back to your tests" is decided by `BackToTests.decide(feedbackPending:sessionActive:handedIn:)`. It returns `leave` when no session is active, `refuse` when the page asks to go home mid-session without a hand-in, `waitForSessionEnd` when instant feedback is pending (the results page appears at `DID END`), and `leaveAtSessionEnd` otherwise (the student goes home at `DID END`). Before this rule, a press before `DID END` left at once, and joining another test while the old session was still ending drew the new test under that session. The served renderer no longer posts `home` for this reason, so `BRIDGE_REQUIRES` in `packages/renderer/src/requires.ts` omits it (see [signed renderer delivery](signed-renderer.md)).
 
+## Refusals before a secure session begins
+
+The delivery request is made by `AssessmentViewController` after the attempt is created, and every refusal in this section is decided before `onBundleLoaded` runs, so no lockdown session is begun and no lockdown event is written for the refused start. The host (`AppDelegate`) sends the student back to "Your tests" with the sheet that matches the cause.
+
+```mermaid
+flowchart TD
+  A["Delivery request for the attempt"] --> B{"HTTP 409 code?"}
+  B -- "time_expired" --> T["onTimeRanOutBeforeStart: home, time-ran-out sheet"]
+  B -- "sitting_closed" --> C["noteSittingClosed(via: bundle): sittingClosedDuringAttempt, closed-sitting sheet"]
+  B -- "attempt_submitted" --> H["onHandedInBeforeStart: home, handed-in sheet"]
+  B -- "other failure" --> F["bundle_fetch_failed: 'This test could not be opened.'"]
+  B -- "200" --> D{"deadline passed beyond the 30 s grace?"}
+  D -- yes --> T
+  D -- no --> R{"renderer named and verified?"}
+  R -- "refused" --> RR["onRendererRefused: home, renderer_load_failed event"]
+  R -- "ok or none needed" --> L["speech pre-flight, then onBundleLoaded begins lockdown"]
+```
+
+The order of the bundle checks in `AssessmentViewController`, and the host handler each refusal reaches.
+
+- **Time already run out (EX-2).** A 409 `time_expired`, or a bundle whose deadline is past the server's grace, fires `onTimeRanOutBeforeStart`. Nothing begins, so there is no session to end, and the host shows the time-ran-out sheet.
+- **Sitting closed (SEC-01, Row CS).** A 409 `sitting_closed` on the delivery route is an expected answer, so it logs no error. `sittingClosedDuringAttempt` writes a `sitting_closed` event with `via: "bundle"` and ends the flow the same way as a closed sitting seen by the peek poll. The attempt stays `in_progress` and resumable. This is the same landing as the time limit, not a hand-in.
+- **Attempt already handed in (SEC-01).** A 409 `attempt_submitted` fires `onHandedInBeforeStart`. The student goes home with the join's handed-in wording (`JoinOutcome.handedInMessage`), and the attempt screen's peek poll and countdown stop. Nothing is written to `errors.log`.
+- **Renderer refused.** Covered in [signed renderer delivery](signed-renderer.md#client-verification-path). The refusal is also written to the teacher's timeline as `renderer_load_failed`.
+
+Any other fetch failure still shows "This test could not be opened." with the error's message and writes `bundle_fetch_failed`. Before the SEC-01 branches existed, a closed sitting or a handed-in attempt that landed during the load fell into that generic failure.
+
+Focused tests: `ResponseSpoolTests` (`testTheSittingClosedErrorCodeMapping`, `testTheAttemptSubmittedErrorCodeMapping`) pin how `APIError` classifies those two codes. The fetch-task branches themselves are not unit tested, so a change to them needs a real sitting. Add a new refusal as its own `catch let error as APIError where …` branch above the generic catch, keep it before `onBundleLoaded`, and give it a host handler that uses `showEntry()`.
+
 ## Sealed page
 
 - **Document.** `PageShell` assembles HTML loaded with `loadHTMLString(_, baseURL: nil)`, a no-origin document with no `localStorage` or cookies. Item content is never interpolated into markup; the page receives JSON and builds DOM with `textContent` (see `JSONEmbedding`). Only the title is interpolated, through `HTMLEscape`.
@@ -115,3 +144,4 @@ Student-reachable exits are the titlebar button, Cmd-E, Cmd-Q, window close and 
 
 Invariants to keep: arm timers before `begin()`; every code path that can call `begin()` ships an exit; a Release build never falls back to a cooperative simulation; handler payloads are validated before spooling. Narrow check: `cd client/SecureTestCore && swift test --filter AssessmentLockdownTests`. The real AAC behaviour cannot be exercised headlessly: changes to `RealLockdownSession` or the web view need a hand-run on an entitled Mac, and `xcodebuild` is only needed when files under `client/SecureTest/` change. Entitlements can be confirmed with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
 d with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
+nts -` against `client/expected-entitlements.txt`.

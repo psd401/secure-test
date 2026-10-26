@@ -78,7 +78,7 @@ The session JWT lives only in memory (`InMemoryTokenStore`): every launch is sig
 ## Server contract (`APIClient.swift`)
 
 - Transport is the `HTTPTransport` protocol (`URLSessionTransport` in the app, fakes in tests) and the token store is the `TokenStore` protocol, so every request and response decode is testable offline. Every call sends the version header `X-SecureTest-Version` that the server's `requiredClientUpgrade` reads ([sittings and attempts](../design-tool/sittings-and-attempts.md)).
-- Server errors are `{ ok: false, error }`; `APIError.refused(status:code:)` carries the string. Codes the UI branches on: `sitting_closed`, `time_expired`, `attempt_submitted`, `session_unavailable`, `not_on_roster`; a 401 means the 8-hour session ended (`isSessionExpired`).
+- Server errors are `{ ok: false, error }`; `APIError.refused(status:code:)` carries the string. Codes the UI branches on: `sitting_closed`, `time_expired`, `attempt_submitted`, `session_unavailable`, `not_on_roster`; a 401 means the 8-hour session ended (`isSessionExpired`). The bundle fetch's reaction to `time_expired`, `sitting_closed` and `attempt_submitted` before any session begins is in [refusals before a secure session begins](lockdown-and-security.md#refusals-before-a-secure-session-begins).
 - Student-plane endpoints used: `/api/me/sittings` (`MySittings`), `/api/test-sessions/redeem`, `/api/attempts`, `/api/assessments/:id/delivery`, `/api/attempts/:id/responses/:itemId`, upload slots, `/events`, `/peek/pending`, `/submit`, `/api/client-errors`.
 - Configuration (`ClientConfiguration`) resolves the server URL and Google client id from launch argument, environment, then MDM managed preference; a Release build inverts the order so a managed preference always wins.
 
