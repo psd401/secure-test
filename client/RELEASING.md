@@ -195,6 +195,22 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v2.0.2 — 2026-10-25** (built from `c7641e7dcbd1`, the #112 merge on
+  `main`; tag on that commit via `--target <full sha>`): the bundle-fetch
+  409s (#97) — a closed sitting (`sitting_closed`) or a handed-in attempt
+  (`attempt_submitted`) refused at the delivery fetch (server SEC-01, #94)
+  is an expected answer, not `BUNDLE FETCH FAILED`: a closed sitting sends
+  the student home told (timeline `sitting_closed` `via: "bundle"`), a
+  handed-in attempt goes back to Your tests with the handed-in sheet, and no
+  secure session is begun. psd-sign 0.6.1: pre-flight clean (HEAD =
+  `origin/main`; 2.0.2 > v2.0.1), archive-only Developer ID + hardened
+  runtime (no re-sign), all seven entitlements = `expected-entitlements.txt`,
+  profile `SecureTest Developer ID` to 2044, `PSDBuildCommit` = HEAD. App and
+  pkg notarized (Accepted) and stapled; `latest` resolves to v2.0.2.
+  Hand-run: both "Bundle fetch refused 409" rows passed on a Debug build of
+  `f5c0567b` with simulated lockdown (row 1 only with a forced stalled
+  network); the signed build was not smoke-run before publishing. Same
+  configuration profile as before.
 - **v2.0.1 — 2026-10-24** (built from `44663c6fe519`; the tag landed on
   `d794cbe3`, one OpenWiki-only commit later, because the release command had
   no `--target <full sha>` — pass it next time): the ending-session race fix
@@ -448,7 +464,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v2.0.2** (`MARKETING_VERSION` = 2.0.2, from `main`) — the
+- ~~**Next release: v2.0.2**~~ PUBLISHED 2026-10-25 (see Released). (`MARKETING_VERSION` = 2.0.2, from `main`) — the
   bundle-fetch 409s (#97): since SEC-01 (#94) the delivery route refuses a
   closed sitting (`sitting_closed`) and a handed-in attempt
   (`attempt_submitted`); the client now treats both as expected answers, not
