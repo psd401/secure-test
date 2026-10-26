@@ -163,6 +163,12 @@ export function itemErrorCopy(code: string): ErrorCopy {
           "Students have already answered this question, so it can't be deleted.",
         showCode: false,
       };
+    case "type_change_has_responses":
+      return {
+        message:
+          "Students have already answered this question, so its type can't change. Add a new question instead.",
+        showCode: false,
+      };
     case "type_change_not_supported":
       return {
         message: "A question's type can't change. Add a new question instead.",

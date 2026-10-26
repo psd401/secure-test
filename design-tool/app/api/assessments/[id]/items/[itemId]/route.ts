@@ -4,7 +4,8 @@ import { getDb } from "@/db/client";
 import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft";
-import { UpdateItemBody, itemConfigForWrite } from "@/lib/api/items";
+import { itemConfigForWrite, parseItemBody, wantsEmptyStem } from "@/lib/api/items";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, notFoundResponse, type AccessIntent } from "@/lib/api/access";
@@ -68,8 +69,12 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   let body;
   const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
   if (!bodyRead.ok) return bodyRead.response;
+  // R-12: the new editor allows an empty stem and an in-place type change (R-6).
+  let newAuthoring: boolean | null = null;
+  const flagOn = async () => (newAuthoring ??= await isNewAuthoringEnabled(getDb(), auth.session));
   try {
-    body = UpdateItemBody.parse(bodyRead.parse());
+    const raw = bodyRead.parse();
+    body = parseItemBody(raw, { allowEmptyStem: wantsEmptyStem(raw) && (await flagOn()) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(
@@ -79,11 +84,24 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
   const owned = await loadItemInAssessment(id, itemId, auth.session, "write");
   if (!owned.ok) return owned.response;
-  if (body.type !== owned.item.type) {
+  const typeChanged = body.type !== owned.item.type;
+  if (typeChanged && !(await flagOn())) {
     return NextResponse.json(
       { ok: false, error: "type_change_not_supported" },
       { status: 400 },
     );
+  }
+  // R-6: a type change is a draft-only edit (the publish lock below refuses
+  // it, since it is never key-only), and is refused once students have
+  // answered the question — their answers are in the old type's shape.
+  if (typeChanged && owned.parentStatus === "draft") {
+    const [answered] = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(responses)
+      .where(eq(responses.item_id, itemId));
+    if ((answered?.n ?? 0) > 0) {
+      return NextResponse.json({ ok: false, error: "type_change_has_responses" }, { status: 409 });
+    }
   }
   // Publish lock (slice 19) with one door: answer-key-only edits
   // (2026-09-01, see isAnswerKeyOnlyPatch). Everything else still 409s.
@@ -118,11 +136,14 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     const [row] = await tx
       .update(items)
       .set({
+        type: body.type,
         stem: body.stem,
         choices: body.choices,
         correct_choice_ids: body.correct_choice_ids,
         correct_answer: body.correct_answer ?? null,
-        config: itemConfigForWrite(body, owned.item.config),
+        // A type change starts the config afresh: nothing the old type stored
+        // (a scoring method it allowed, a rubric's provenance) carries over.
+        config: itemConfigForWrite(body, typeChanged ? undefined : (owned.item.config ?? undefined)),
         // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
         // older caller must not wipe them); an array replaces them.
         ...(body.standards !== undefined ? { standards: body.standards } : {}),

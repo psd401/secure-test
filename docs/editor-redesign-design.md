@@ -388,3 +388,34 @@ unless noted.
   round-trip for three types, publish lock, route access). Browser behaviour
   is hand-check rows 714–726. Not built: autosave for stimulus sets and
   assessment settings (they keep their own Save buttons).
+- 2026-10-26 — **Phase 4 slice B: outline, insertion, type change** (prototype
+  track, R-6, R-7). With the R-12 flag on: an **outline rail** beside the
+  question list (`OutlineRail.tsx`), one row per block — a lone question or a
+  stimulus set, which move whole so no order can split a set — reordered by
+  drag (@dnd-kit, pointer and keyboard) or by selecting a row and Move up /
+  Move down (WCAG 2.2 SC 2.5.7), both announced in a live region and saved
+  through the existing reorder route (refusals put the order back). A **"+"**
+  before every block and **Add question** at the end open the add menu
+  (`InsertQuestionMenu.tsx`): six types first, the rest under More types,
+  type-to-filter; "/" on a card outside a text field opens it after that
+  block. The new question is created through the existing items POST and
+  moved into place with the reorder route (UX3-4), and starts **empty** with
+  placeholders (UX3-1) — the item routes accept an empty stem only for
+  flagged staff (`parseItemBody` in `lib/api/items.ts`); matching, ordering,
+  table and fill-in-the-blank keep their starter text because the write
+  boundary requires it. **In-place type change** (`TypeChangeControl.tsx`,
+  `lib/authoring/typeChange.ts`): stem always kept; choices kept between the
+  two multiple-choice types and mapped to / from ordering steps; a warning
+  names what goes (an answer key first) before the change; matching, table
+  and fill-in-the-blank are not offered as targets. The item PATCH accepts a
+  type change only for flagged staff, only in draft and not once students have
+  answered (`type_change_has_responses`, 409); the config starts afresh, and
+  the editor saves it with `?restore=1` so History can restore across types.
+  **Choice reorder** (multiple choice in the new field): drag handle plus
+  Move up / Move down, letters by position as the preview shows them. Pure
+  logic in `lib/authoring/outline.ts` and `insertTypes.ts`; tests
+  `test/authoring-outline.test.ts`, `test/authoring-type-change.test.ts`,
+  `test/item-insert-type-change-api.test.ts`. Browser behaviour is hand-check
+  rows 727–746. Not built: within-set reordering from the rail, match / order
+  key reordering by drag (they keep their own controls), and splitting
+  `AssessmentEditor.tsx`.

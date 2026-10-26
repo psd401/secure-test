@@ -31,6 +31,8 @@ interface Props {
   singleLine?: boolean;
   /** For tests / hand-checks that need to find the field. */
   id?: string;
+  /** R-6 (UX3-1): shown while the field is empty; never saved. */
+  placeholder?: string;
 }
 
 const btn = "rounded border border-border px-2 py-0.5 text-xs hover:bg-accent disabled:opacity-40 aria-pressed:bg-accent";
@@ -45,7 +47,7 @@ const btn = "rounded border border-border px-2 py-0.5 text-xs hover:bg-accent di
  * Text it cannot hold exactly opens read-only with "Show source" (Risks:
  * round-trip loss); opening an item never rewrites it.
  */
-export function RichTextField({ value, onChange, label, disabled = false, singleLine = false, id }: Props) {
+export function RichTextField({ value, onChange, label, disabled = false, singleLine = false, id, placeholder }: Props) {
   const assessmentId = useAssessmentId();
   const lastEmitted = useRef(value);
   const pastedSliceHtml = useRef<string | null>(null);
@@ -75,6 +77,7 @@ export function RichTextField({ value, onChange, label, disabled = false, single
         "aria-label": label,
         role: "textbox",
         "aria-multiline": String(!singleLine),
+        ...(placeholder ? { "aria-placeholder": placeholder } : {}),
         class:
           "min-h-[2.25rem] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       },
@@ -184,7 +187,14 @@ export function RichTextField({ value, onChange, label, disabled = false, single
 
   return (
     <div className="rt-field mt-1">
-      <EditorContent editor={editor} />
+      <div className="relative">
+        <EditorContent editor={editor} />
+        {placeholder && value === "" ? (
+          <span aria-hidden className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
+            {placeholder}
+          </span>
+        ) : null}
+      </div>
 
       {!loaded.representable ? (
         <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">

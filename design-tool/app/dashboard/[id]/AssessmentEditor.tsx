@@ -4,7 +4,7 @@ import { assessmentAssetUrl } from "@/lib/assets/assessmentAssetUrl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, ListPlus, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, ListPlus, Plus, Trash2, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -74,6 +74,24 @@ import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
+import {
+  blockMoveAnnouncement,
+  choiceLetter,
+  choiceMoveAnnouncement,
+  insertAt,
+  insertionSlots,
+  moveBlockTo,
+  moveInList,
+  outlineBlocks,
+  slotAfter,
+  splitsSet,
+} from "@/lib/authoring/outline";
+import { newItemSeed } from "@/lib/authoring/insertTypes";
+import { changeItemType, typeChangeTargets } from "@/lib/authoring/typeChange";
+import { OutlineRail } from "./OutlineRail";
+import { InsertQuestionMenu } from "./InsertQuestionMenu";
+import { TypeChangeControl } from "./TypeChangeControl";
+import { MoveAnnouncer, SortableRows, type DragBits } from "./SortableRows";
 import { autosaveSummary, createItemAutosaver, type ItemAutosaver } from "@/lib/authoring/itemAutosave";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
 import {
@@ -528,7 +546,7 @@ function keyOnlyEdit(persistedFp: string | undefined, item: ItemView): boolean {
   );
 }
 
-function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
+export function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
   if (type === "essay") {
     return {
       type,
@@ -1022,6 +1040,21 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     if (!id) return;
     focusItemId.current = null;
     const el = document.getElementById(`stem-${id}`);
+    if (newAuthoring) {
+      // R-6: the new card is empty (nothing to select). The rich-text field
+      // mounts its editable element a frame or two after the card, so wait
+      // for it briefly.
+      let tries = 0;
+      const land = () => {
+        const target = document.getElementById(`stem-${id}`);
+        if (target) {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+          target.focus({ preventScroll: true });
+        } else if (tries++ < 20) requestAnimationFrame(land);
+      };
+      land();
+      return;
+    }
     if (el instanceof HTMLTextAreaElement) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       el.focus();
@@ -1546,6 +1579,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     });
   }
   const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
+  // R-6: where the new editor's "+" insertion points sit (list indexes).
+  const slotSet = new Set(newAuthoring ? insertionSlots(items) : []);
   useEffect(() => {
     autosaverRef.current?.sync(
       items.map((item) => {
@@ -1677,6 +1712,92 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setItems(items);
       setError(describe(e));
     }
+  }
+
+  // ---- R-6 / R-7 (docs/editor-redesign-design.md, Phase 4 slice B), new editor only ----
+  // Which "+" slot's menu is open (a list index; see insertionSlots).
+  const [insertSlot, setInsertSlot] = useState<number | null>(null);
+  const [outlineMessage, setOutlineMessage] = useState("");
+  const [choiceMessage, setChoiceMessage] = useState("");
+
+  /** Save a new order through the existing reorder route; put the old one back if it is refused. */
+  async function saveOrder(next: ItemView[], movedId: string) {
+    setError(null);
+    const before = items;
+    setItems(next);
+    setOutlineMessage(blockMoveAnnouncement(before, next, movedId));
+    try {
+      await call(`${apiBase}/items/reorder`, jsonInit("POST", { ordered_ids: next.map((i) => i.id) }));
+    } catch (e) {
+      setItems(before);
+      setOutlineMessage("The order could not be saved, so it is back as it was.");
+      setError(describe(e));
+    }
+  }
+
+  /** The outline rail: drag (from → to) or Move up / Move down on the selected block. */
+  function moveOutlineBlock(from: number, to: number) {
+    const blocks = outlineBlocks(items);
+    const moved = blocks[from]?.items[0];
+    const next = moveBlockTo(items, from, to);
+    if (!moved || !next || splitsSet(next)) return;
+    void saveOrder(next, moved.id);
+  }
+
+  /** "+" / "/" menu: a new, EMPTY question of `type` at list index `index` (UX3-1, UX3-4). */
+  async function insertItem(type: ItemType, index: number) {
+    setError(null);
+    setAdding(true);
+    try {
+      const draft: ItemView = { ...defaultItemFor(type), ...newItemSeed(type), id: "", position: 0 } as ItemView;
+      const res = await call(`${apiBase}/items`, jsonInit("POST", itemPatchBody(draft)));
+      const created = rowToView(((await res.json()) as { item: ItemRow }).item);
+      // The route appends; the reorder route then puts it where the "+" was.
+      const order = insertAt(items.map((i) => i.id), created.id, index);
+      setItems((prev) => insertAt(prev, created, index));
+      setPersisted((prev) => ({ ...prev, [created.id]: fingerprint(created) }));
+      focusItemId.current = created.id;
+      if (index < items.length) {
+        try {
+          await call(`${apiBase}/items/reorder`, jsonInit("POST", { ordered_ids: order }));
+        } catch (e) {
+          // It exists, at the end: show it where the server has it.
+          setItems((prev) => [...prev.filter((i) => i.id !== created.id), created]);
+          setError(describe(e));
+        }
+      }
+    } catch (e) {
+      setError(describe(e));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  /**
+   * In-place type change (R-6). Saved at once rather than on the autosave
+   * timer, with `restore` so the server always keeps the version it replaces
+   * — the warning tells the teacher History can bring it back.
+   */
+  async function changeType(item: ItemView, target: ItemType) {
+    const { item: next } = changeItemType(item, target, defaultItemFor(target), (t) => SCORING_OPTIONS[t]);
+    await autosaverRef.current?.flush(item.id);
+    autosaverRef.current?.cancel(item.id);
+    updateItem(item.id, () => next);
+    if (await persistItem(next, { restore: true })) {
+      setOutlineMessage(`Question ${items.findIndex((i) => i.id === item.id) + 1} is now ${TYPE_LABEL[target]}.`);
+    } else {
+      // Refused (e.g. students have answered it): keep the question as it was;
+      // persistItem has put the reason on the card.
+      updateItem(item.id, () => item);
+    }
+  }
+
+  /** Choice reorder (R-7): drag or Move up / Move down. Ids (and so the key) stay with their text. */
+  function moveChoice(itemId: string, from: number, to: number) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || to < 0 || to >= item.choices.length || from === to) return;
+    updateItem(itemId, (i) => ({ ...i, choices: moveInList(i.choices, from, to) }));
+    setChoiceMessage(choiceMoveAnnouncement(from, to, item.choices.length));
   }
 
   function updateItem(itemId: string, mut: (item: ItemView) => ItemView) {
@@ -2408,7 +2529,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           onImported={reloadFromServer}
         />
 
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 empty:hidden">
+          {/* R-6: the new editor adds questions where they go, with the "+"
+              between questions and "Add question" at the end of the list. */}
+          {newAuthoring ? null : (
+          <>
           <label htmlFor="add-type" className="text-sm font-medium">
             Add a question
           </label>
@@ -2430,6 +2555,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             <Plus aria-hidden />
             {adding ? "Adding…" : "Add question"}
           </Button>
+          </>
+          )}
           {assessment.allow_llm_authoring && !isLocked ? (
             <Button
               type="button"
@@ -2627,12 +2754,44 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </div>
         ) : null}
 
+        {/* R-6 / R-7: the new editor puts the outline rail beside the list. */}
+        <div className={newAuthoring && items.length > 0 ? "grid items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]" : undefined}>
+        {newAuthoring && items.length > 0 ? (
+          <OutlineRail
+            items={items}
+            disabled={isPending || isLocked || adding}
+            locked={isLocked}
+            onMoveBlock={moveOutlineBlock}
+            onShow={(id) => document.getElementById(`question-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })}
+            announcement={outlineMessage}
+          />
+        ) : null}
+        <div className="min-w-0">
         {items.length === 0 ? (
+          newAuthoring ? (
+            <div className="space-y-3">
+              <EmptyState
+                icon={<ListPlus />}
+                title="No questions yet"
+                description="Add one below, or import them from a CSV or PDF."
+              />
+              <InsertQuestionMenu
+                prominent
+                open={insertSlot === 0}
+                onOpenChange={(open) => setInsertSlot(open ? 0 : null)}
+                onInsert={(type) => insertItem(type, 0)}
+                disabled={isLocked}
+                busy={adding}
+                label="Add a question"
+              />
+            </div>
+          ) : (
           <EmptyState
             icon={<ListPlus />}
             title="No questions yet"
             description="Add a question above, or import them from a CSV or PDF."
           />
+          )
         ) : (
           <ol className="space-y-4">
             {items.map((item, idx) => {
@@ -2654,6 +2813,19 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               const setState = set ? (setSave[set.id] ?? { kind: "idle" as const }) : null;
               return (
               <Fragment key={item.id}>
+              {/* R-6: a "+" before every block (never inside a set). */}
+              {newAuthoring && slotSet.has(idx) ? (
+                <li>
+                  <InsertQuestionMenu
+                    open={insertSlot === idx}
+                    onOpenChange={(open) => setInsertSlot(open ? idx : null)}
+                    onInsert={(type) => insertItem(type, idx)}
+                    disabled={isLocked}
+                    busy={adding}
+                    label={`Add a question before question ${idx + 1}`}
+                  />
+                </li>
+              ) : null}
               {opensSet && set && bounds ? (
                 <li
                   className="rounded-lg border border-primary/40 bg-primary/5 p-4"
@@ -2897,6 +3069,19 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               <li
                 id={newAuthoring ? `question-${item.id}` : undefined}
                 tabIndex={newAuthoring ? -1 : undefined}
+                onKeyDown={
+                  newAuthoring && !isLocked
+                    ? (e) => {
+                        // R-6: "/" on a card, outside a text field, opens the
+                        // add menu just after this question (or its stimulus group).
+                        if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+                        const t = e.target as HTMLElement;
+                        if (t.closest("input, textarea, select, [contenteditable='true']")) return;
+                        e.preventDefault();
+                        setInsertSlot(slotAfter(items, item.id));
+                      }
+                    : undefined
+                }
                 className={
                   set
                     ? "ml-4 rounded-lg border border-l-4 border-l-primary/40 bg-card p-4"
@@ -2917,6 +3102,18 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     {dirty && !newAuthoring ? <Badge variant="outline">Unsaved changes</Badge> : null}
                   </div>
                   <div className="flex items-center gap-1">
+                    {newAuthoring ? (
+                      <TypeChangeControl
+                        itemLabel={`question ${idx + 1}`}
+                        type={item.type}
+                        targets={typeChangeTargets(item, Object.keys(TYPE_LABEL) as ItemType[])}
+                        disabled={isPending || isLocked || save.kind === "saving"}
+                        preview={(target) =>
+                          changeItemType(item, target, defaultItemFor(target), (t) => SCORING_OPTIONS[t])
+                        }
+                        onChange={(target) => void changeType(item, target)}
+                      />
+                    ) : null}
                     {set ? (
                       <Button
                         type="button"
@@ -2999,6 +3196,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     <RichTextField
                       id={`stem-${item.id}`}
                       label={`Question ${idx + 1}`}
+                      placeholder="Type the question"
                       value={item.stem}
                       disabled={isLocked}
                       onChange={(stem) => updateItem(item.id, (i) => ({ ...i, stem }))}
@@ -3024,6 +3222,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       }))
                     }
                     rows={2}
+                    placeholder={newAuthoring ? "Type the question" : undefined}
                     className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                   />
                   <div className="mt-1 flex flex-wrap items-start gap-2">
@@ -3489,17 +3688,34 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                 ) : (
                   <div className="mt-3 space-y-2">
                     <div className="text-sm font-medium">Choices</div>
-                    {item.choices.map((c, ci) => {
+                    {(() => {
+                    // R-7: in the new editor a choice row drags by its handle
+                    // and has Move up / Move down; it is lettered by position,
+                    // as the preview letters it. The old editor's rows are as
+                    // before (no `drag`, lettered by id).
+                    const renderChoice = (c: Choice, ci: number, drag?: DragBits) => {
                       const isMulti = item.type === "multiple_choice_multi";
                       const checked = item.correct_choice_ids.includes(c.id);
+                      const letter = drag ? choiceLetter(ci) : c.id.toUpperCase();
                       return (
-                        <div key={c.id}>
+                        <div key={c.id} ref={drag?.setNodeRef} style={drag?.style} className={drag?.isDragging ? "rounded-md bg-card shadow" : undefined}>
                           <div className="flex items-center gap-2">
+                            {drag ? (
+                              <button
+                                type="button"
+                                className="cursor-grab rounded p-0.5 text-muted-foreground hover:bg-accent disabled:cursor-default disabled:opacity-40"
+                                aria-label={`Drag choice ${letter}`}
+                                disabled={isLocked}
+                                {...drag.handleProps}
+                              >
+                                <GripVertical className="size-4" aria-hidden />
+                              </button>
+                            ) : null}
                             <input
                               type={isMulti ? "checkbox" : "radio"}
                               name={`correct-${item.id}`}
                               checked={checked}
-                              aria-label={`Mark choice ${c.id.toUpperCase()} as correct`}
+                              aria-label={`Mark choice ${letter} as correct`}
                               title="Correct answer"
                               onChange={() =>
                                 updateItem(item.id, (i) => ({
@@ -3518,13 +3734,14 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                               className="w-5 text-center font-mono text-xs text-muted-foreground"
                               aria-hidden
                             >
-                              {c.id.toUpperCase()}
+                              {letter}
                             </span>
                             {newAuthoring && usesRichTextField(item.type) ? (
                               <div className="min-w-0 flex-1 [&_.rt-field]:mt-0">
                                 <RichTextField
                                   singleLine
-                                  label={`Choice ${c.id.toUpperCase()} text`}
+                                  label={`Choice ${letter} text`}
+                                  placeholder={`Choice ${letter}`}
                                   value={c.text}
                                   disabled={isLocked}
                                   onChange={(text) =>
@@ -3548,10 +3765,34 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                               }
                               disabled={isLocked}
                               className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                              aria-label={`Choice ${c.id.toUpperCase()} text`}
-                              placeholder={`Choice ${c.id.toUpperCase()}`}
+                              aria-label={`Choice ${letter} text`}
+                              placeholder={`Choice ${letter}`}
                             />
                             )}
+                            {drag ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => moveChoice(item.id, ci, ci - 1)}
+                                  disabled={ci === 0 || isLocked}
+                                  aria-label={`Move choice ${letter} up`}
+                                >
+                                  <ArrowUp aria-hidden />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  onClick={() => moveChoice(item.id, ci, ci + 1)}
+                                  disabled={ci === item.choices.length - 1 || isLocked}
+                                  aria-label={`Move choice ${letter} down`}
+                                >
+                                  <ArrowDown aria-hidden />
+                                </Button>
+                              </>
+                            ) : null}
                             <Button
                               type="button"
                               variant="ghost"
@@ -3566,7 +3807,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                                 }))
                               }
                               disabled={item.choices.length <= 2 || isLocked}
-                              aria-label={`Remove choice ${c.id.toUpperCase()}`}
+                              aria-label={`Remove choice ${letter}`}
                               title={item.choices.length <= 2 ? "Need at least 2 choices" : "Remove choice"}
                             >
                               <X aria-hidden />
@@ -3621,7 +3862,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                           )}
                         </div>
                       );
-                    })}
+                    };
+                    return newAuthoring && usesRichTextField(item.type) ? (
+                      <>
+                        <SortableRows
+                          ids={item.choices.map((c) => c.id)}
+                          onMove={(from, to) => moveChoice(item.id, from, to)}
+                          describe={(id) => `Choice ${choiceLetter(item.choices.findIndex((c) => c.id === id))}`}
+                          disabled={isLocked}
+                        >
+                          {(_id, ci, drag) => renderChoice(item.choices[ci]!, ci, drag)}
+                        </SortableRows>
+                        <MoveAnnouncer message={choiceMessage} />
+                      </>
+                    ) : (
+                      item.choices.map((c, ci) => renderChoice(c, ci))
+                    );
+                    })()}
                     <Button
                       type="button"
                       variant="outline"
@@ -3735,8 +3992,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               </Fragment>
               );
             })}
+            {newAuthoring ? (
+              <li>
+                <InsertQuestionMenu
+                  prominent
+                  open={insertSlot === items.length}
+                  onOpenChange={(open) => setInsertSlot(open ? items.length : null)}
+                  onInsert={(type) => insertItem(type, items.length)}
+                  disabled={isLocked}
+                  busy={adding}
+                  label="Add a question at the end"
+                />
+              </li>
+            ) : null}
           </ol>
         )}
+        </div>
+        </div>
 
         <NextStepCard
           status={assessment.status}

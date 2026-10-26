@@ -659,6 +659,33 @@ export const CreateItemBody = z
   .superRefine(validateRubricMax);
 export type CreateItemBody = z.infer<typeof CreateItemBody>;
 
+/**
+ * R-6 (docs/editor-redesign-design.md, Phase 4 slice B): the new editor's
+ * questions start EMPTY, with placeholders rather than seeded text (UX3-1),
+ * and save themselves as the teacher types (R-5), so a question may be saved
+ * before its text is written. With `allowEmptyStem` (the routes pass the
+ * R-12 flag), an empty stem is accepted; readiness lists it as "needs
+ * question text". Off, the rule is unchanged: a stem needs a character.
+ *
+ * The body is checked with a one-space stand-in for the empty stem, so every
+ * other rule runs as written; the only rule that reads the stem
+ * (fill-in-the-blank's markers) finds none in either.
+ */
+export function parseItemBody(raw: unknown, opts: { allowEmptyStem?: boolean } = {}): CreateItemBody {
+  const empty =
+    opts.allowEmptyStem === true &&
+    typeof raw === "object" &&
+    raw !== null &&
+    (raw as { stem?: unknown }).stem === "";
+  if (!empty) return CreateItemBody.parse(raw);
+  return { ...CreateItemBody.parse({ ...(raw as object), stem: " " }), stem: "" };
+}
+
+/** Does this raw body ask for an empty stem? (The routes read the flag only then.) */
+export function wantsEmptyStem(raw: unknown): boolean {
+  return typeof raw === "object" && raw !== null && (raw as { stem?: unknown }).stem === "";
+}
+
 // Map a validated item body to the items.config jsonb value. Emits a key
 // only when set so config stays minimal (and export stays byte-stable).
 // `existing` is the item's current config on PATCH (omitted on create):
