@@ -22,10 +22,10 @@ import {
 import {
   aiDraftAllowed,
   editorStartAction,
-  exampleQuestionRows,
   parseStartChoice,
   startRedirect,
 } from "../lib/authoring/startScreen";
+import { exampleQuestionRows } from "../lib/authoring/exampleQuestion";
 import { UpdateItemBody } from "../lib/api/items";
 import { itemPatchBody, rowToView } from "../app/dashboard/[id]/editorModel";
 import { beforePublishing } from "../app/dashboard/[id]/readiness";

@@ -10,10 +10,10 @@ import { normalizeEmail } from "@/lib/roster/queries";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import {
   aiDraftAllowed,
-  exampleQuestionRows,
   parseStartChoice,
   startRedirect,
 } from "@/lib/authoring/startScreen";
+import { exampleQuestionRows } from "@/lib/authoring/exampleQuestion";
 import { templateById, templateBundle } from "@/lib/authoring/templates";
 
 import type { CreateAssessmentState } from "./state";

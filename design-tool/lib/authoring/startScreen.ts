@@ -1,7 +1,3 @@
-import { ItemBundleSchema } from "@secure-test/schema";
-import { planImport } from "@/lib/api/importBundle";
-import { EXAMPLE_QUESTION_BUNDLE } from "./templates";
-
 /**
  * Editor redesign Phase 8 (D-5): the start screen's choices that go through
  * the New assessment form. Each one creates an ordinary draft; what differs
@@ -57,10 +53,4 @@ export function editorStartAction(
   if (param === "import") return "import";
   if (param === "ai" && ctx.allowLlm) return "ai";
   return null;
-}
-
-/** The example question's row, exactly as the import would store it (minus assessment_id). */
-export function exampleQuestionRows() {
-  const plan = planImport(ItemBundleSchema.parse(EXAMPLE_QUESTION_BUNDLE), new Map());
-  return plan.rows;
 }
