@@ -5,6 +5,9 @@ import { items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { authorizeAssessment, notFoundResponse } from "@/lib/api/access";
 import { listItemSnapshots } from "@/lib/authoring/itemHistory";
+import { versionStemHtml } from "@/lib/authoring/versionStemHtml";
+import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
+import { extractAssetRefs } from "@/lib/items/extractAssetRefs";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -38,12 +41,17 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .limit(1);
   if (!item) return notFoundResponse();
   const versions = await listItemSnapshots(db, itemId);
+  // `stem_html`: the version's question as it looks, for the History list.
+  // Pictures resolve under the assessment's owner, as in the live preview.
+  const refs = [...new Set(versions.flatMap((v) => extractAssetRefs(v.content.stem ?? "")))];
+  const resolved = await resolveAssessmentAssets(db, access.assessment, refs);
   return NextResponse.json({
     versions: versions.map((v) => ({
       id: v.id,
       saved_at: v.saved_at.toISOString(),
       captured_at: v.captured_at.toISOString(),
       item: { ...v.content, ...item },
+      stem_html: versionStemHtml(v.content, resolved),
     })),
   });
 }

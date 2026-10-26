@@ -101,7 +101,7 @@ async function getHistory(assessmentId: string, itemId: string) {
   });
 }
 
-type Version = { id: string; saved_at: string; captured_at: string; item: Record<string, unknown> & { stem: string } };
+type Version = { id: string; saved_at: string; captured_at: string; stem_html: string; item: Record<string, unknown> & { stem: string } };
 
 async function versions(assessmentId: string, itemId: string): Promise<Version[]> {
   const res = await getHistory(assessmentId, itemId);
@@ -154,6 +154,17 @@ describe("capture on the item PATCH", () => {
     await ageSnapshots(id);
     await patchItem(a, id, { ...MC, stem: "Version three" });
     expect((await versions(a, id)).map((x) => x.item.stem)).toEqual(["Version two", "Version one"]);
+  });
+
+  test("each version carries its question rendered, not its markup", async () => {
+    asUser("teacher-1");
+    const a = await createAssessment("History");
+    const id = await createItem(a, { ...MC, stem: "Which is **ABIOTIC**? $x^2$" });
+    await patchItem(a, id, { ...MC, stem: "Version two" });
+    const [v] = await versions(a, id);
+    expect(v!.stem_html).toContain("<strong>ABIOTIC</strong>");
+    expect(v!.stem_html).toContain("katex");
+    expect(v!.stem_html).not.toContain("**");
   });
 
   test("a PATCH that changes nothing keeps nothing", async () => {

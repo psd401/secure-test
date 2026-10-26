@@ -18,6 +18,8 @@ export interface ItemVersion {
   saved_at: string;
   captured_at: string;
   item: ItemRow;
+  /** The version's question as it looks (server-rendered, escaped: renderItemContent). */
+  stem_html: string;
 }
 
 type Load =
@@ -114,7 +116,16 @@ export function ItemHistoryDialog({
               <li key={v.id} className="flex items-start justify-between gap-3 rounded-md border p-2">
                 <div className="min-w-0">
                   <div className="font-medium">{formatDateTime(v.saved_at)}</div>
-                  <div className="break-words text-muted-foreground">{versionExcerpt(v.item.stem)}</div>
+                  {v.item.stem.trim() ? (
+                    // stem_html is the history route's server render: text
+                    // HTML-escaped, math KaTeX, pictures as <img> (as MathPreview).
+                    <div
+                      className="line-clamp-3 whitespace-pre-line break-words text-muted-foreground"
+                      dangerouslySetInnerHTML={{ __html: v.stem_html }}
+                    />
+                  ) : (
+                    <div className="text-muted-foreground">{versionExcerpt(v.item.stem)}</div>
+                  )}
                 </div>
                 <Button
                   type="button"
