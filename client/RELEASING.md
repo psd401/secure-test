@@ -448,6 +448,17 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release: v2.0.2** (`MARKETING_VERSION` = 2.0.2, from `main`) — the
+  bundle-fetch 409s (#97): since SEC-01 (#94) the delivery route refuses a
+  closed sitting (`sitting_closed`) and a handed-in attempt
+  (`attempt_submitted`); the client now treats both as expected answers, not
+  `BUNDLE FETCH FAILED`. A closed sitting sends the student home told
+  (timeline `sitting_closed` `via: "bundle"`); a handed-in attempt goes back
+  to Your tests with the handed-in sheet; no secure session is begun in
+  either. Both "Bundle fetch refused 409" rows in `MANUAL-CHECKS.md` passed
+  2026-10-25 on a Debug build (simulated lockdown; row 1 needed a forced
+  stalled network). No server change, no version gate. Built with psd-sign
+  from a clean worktree at `origin/main` after this bump merges.
 - ~~**Next release: v2.0.1**~~ PUBLISHED 2026-10-24 (see Released). (`MARKETING_VERSION` = 2.0.1, from `main`) — the
   ending-session race fix (#84: Back to your tests waits for `DID END` after
   every hand-in; the page gate never opens when `begin()` started nothing),
