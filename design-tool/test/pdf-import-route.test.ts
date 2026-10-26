@@ -302,6 +302,32 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // Before merging #102: a drawing with two prose lines inside (an
+  // instructions box or a two-label chart) is flagged, kept out of every set,
+  // and its lines stay in what the model read.
+  test("a drawing with two prose lines inside is flagged and in no set", async () => {
+    const id = await createAssessment("Text inside");
+    const res = await postPdf(
+      id,
+      makeVectorChartPdf({
+        region: { x: 120, y: 380, width: 320, height: 72 },
+        bars: 9,
+        caption: "Directions",
+        inside: ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."],
+        above: ["1. 2.", "ES: #1 Explain the main idea."],
+        below: ["ES: #2 Summarize the passage."],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      figures: { n: number; text_inside?: boolean }[];
+      proposed_sets: { figures: number[] }[];
+    };
+    expect(body.figures).toHaveLength(1);
+    expect(body.figures[0]!.text_inside).toBe(true);
+    expect(body.proposed_sets.flatMap((s) => s.figures)).toEqual([]);
+  });
+
   // PDF-import fixes (2026-10-25): a table whose printed headings are blank is
   // kept (headings named) and the card says what changed.
   test("a table with blank headings is kept, renamed and reported", async () => {

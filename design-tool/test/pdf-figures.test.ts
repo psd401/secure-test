@@ -180,6 +180,7 @@ import {
   captionAbove,
   clusterPathBoxes,
   isTextPanel,
+  proseLinesInside,
 } from "../lib/pdfImport/extractFigures";
 import { type VectorChartSpec, makeVectorChartPdf } from "./helpers/pdf";
 
@@ -254,41 +255,36 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     for (const line of inside) expect(layout.textWithMarkers).toContain(line);
   });
 
-  test("a chart with two long labels inside its box keeps its picture", async () => {
-    // Only the two long labels inside the box — no ticks or values (a pie
-    // chart, a legend-only bar chart). The drawing is most of the box.
-    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
-    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
-    expect(layout.figures).toHaveLength(1);
-    expect(layout.figures[0]!.source).toBe("vector");
-  });
+  // Before merging #102 (James, 2026-10-25): exactly two prose lines inside a
+  // drawing — a chart with two long labels, or a decorated instructions box,
+  // at any size or padding — keep the picture (flagged `text_inside`) AND
+  // keep both lines in the text the model reads. Nothing is lost either way.
+  const LABELS = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
+  const INSTRUCTIONS = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
+  const SHORT_INSTRUCTIONS = ["Read the passage, then answer them.", "Cite the text in every answer."];
+  const cases: [string, readonly string[], number][] = [
+    ["a 180 pt chart whose only text is two long labels", LABELS, 180],
+    ["a 72 pt chart whose only text is two long labels", LABELS, 72],
+    ["a 60 pt chart whose only text is two long labels", LABELS, 60],
+    ["a 42 pt chart whose only text is two long labels", LABELS, 42],
+    ["a tight 48 pt decorated two-line instructions box", INSTRUCTIONS, 48],
+    ["a padded 72 pt decorated two-line instructions box", INSTRUCTIONS, 72],
+    ["a decorated box with two shorter prose lines", SHORT_INSTRUCTIONS, 72],
+  ];
+  for (const [name, inside, height] of cases) {
+    test(`${name}: the picture is kept and flagged, and its lines stay in the text`, async () => {
+      const region = height === 180 ? CHART.region : { x: 120, y: 520, width: 360, height };
+      const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, region, inside: [...inside] }));
+      expect(layout.figures).toHaveLength(1);
+      expect(layout.figures[0]!.text_inside).toBe(true);
+      for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+    });
+  }
 
-  test("a small chart (60 pt) whose only text is two long labels keeps its picture", async () => {
-    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
-    const layout = await extractPdfLayout(
-      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 60 }, inside }),
-    );
-    expect(layout.figures).toHaveLength(1);
-  });
-
-  test("a 72 pt chart whose only text is two long labels keeps its picture", async () => {
-    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
-    const layout = await extractPdfLayout(
-      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 72 }, inside }),
-    );
-    expect(layout.figures).toHaveLength(1);
-  });
-
-  // Before merging #102: a two-line instructions box decorated with 8+
-  // shapes that are not a grid (here the fixture's bars stand in for icons
-  // or a dotted frame) is mostly text, so it is a panel and its text stays.
-  test("a decorated two-line instructions box is a text panel; its text stays", async () => {
-    const inside = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
-    const layout = await extractPdfLayout(
-      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 48 }, inside }),
-    );
-    expect(layout.figures).toEqual([]);
-    for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+  test("a chart with short labels is not flagged, and its labels stay the chart's", async () => {
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART }));
+    expect(layout.figures[0]!.text_inside).toBeUndefined();
+    expect(layout.textWithMarkers).not.toContain("\n20\n");
   });
 
   // A plain bordered or lined two-line box never becomes a figure at all:
@@ -309,13 +305,9 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
     const long = "A sentence of prose that runs well past thirty characters.";
     expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
-    // Two prose lines: a panel only when their text fills TEXT_PANEL_FILL of
-    // the box — a box sized to them is; a chart much bigger than them is not.
-    const wide = (x: number, y: number) => ({ ...line(x, y, long), width: 280, height: 12 });
-    expect(isTextPanel([wide(110, 160), wide(110, 176)], [100, 140, 400, 190])).toBe(true);
-    expect(isTextPanel([wide(110, 150), wide(110, 170)], box)).toBe(false);
-    // Lines without measured extents never fill a box.
-    expect(isTextPanel([line(110, 160, long), line(110, 176, long)], [100, 140, 400, 190])).toBe(false);
+    // Two prose lines are never a panel (they make a `text_inside` figure).
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
+    expect(proseLinesInside([line(110, 150, long), line(110, 170, long), line(110, 190, "10")], box)).toBe(2);
     expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
     // Prose beside the box (starting left of it) or below it does not count.
     expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);

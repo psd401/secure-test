@@ -317,8 +317,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   // A scan has no text to read the cue from (and no figures).
   const keyFigures = new Set(scanned ? [] : keyFiguresFromText(modelText));
   // And blank answer areas (an empty graph grid, a table to fill): where the
-  // answer goes, never a picture above the question.
-  const neverShown = new Set([...keyFigures, ...figures.filter((f) => f.answer_area).map((f) => f.n)]);
+  // answer goes, never a picture above the question. And a drawing with two
+  // prose lines inside (`text_inside`: an instructions box or a chart — the
+  // import cannot tell): its text is already in the questions' text, so it
+  // is not added as a picture unless the teacher chooses to.
+  const neverShown = new Set([
+    ...keyFigures,
+    ...figures.filter((f) => f.answer_area || f.text_inside).map((f) => f.n),
+  ]);
   const modelSets = withoutKeyFigures(setValidation.sets, neverShown);
   const proposed_sets = [
     ...modelSets,

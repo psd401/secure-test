@@ -56,6 +56,12 @@ export interface PdfFigure {
    * empty — a blank graph grid or a table for the student to fill. It is
    * where the answer goes, not something to read: never a stimulus. */
   answer_area?: true;
+  /** Before merging #102 (James, 2026-10-25): two prose lines are printed
+   * inside this drawing — it may be a decorated instructions box or a chart
+   * with two long labels. Its lines stay in the page text (instructions are
+   * never lost) and it is in no proposed set (no picture of text repeats
+   * the text); the panel labels it and the teacher decides. */
+  text_inside?: true;
 }
 
 export interface PdfLayout {
@@ -140,10 +146,6 @@ interface TextLine {
   bold?: boolean;
   /** Slice 5: the line without E6 emphasis markers, for a caption. */
   plain?: string;
-  /** The line's extent in points — left of its first run to the right of
-   * its last, and its tallest run — for "how much of a box is text". */
-  width?: number;
-  height?: number;
 }
 
 export type Box = [number, number, number, number];
@@ -253,19 +255,13 @@ const PROSE_LINE_CHARS = 30;
  * the samples hold 5–30 such lines. A shorter instructions box never needs
  * this rule: a plain border is too few paths to be a drawing at all
  * (MIN_CLUSTER_PATHS), and a box drawn with 8+ rules is a ruled table, whose
- * text stays text (isFilledTable). Two rounds of a two-line special case
- * (prose only; then prose only and short) each lost some small chart. A
- * decorated two-line box (icons, a dotted frame — 8+ shapes, no grid) is
- * told apart from a two-label chart by how much of its box the text fills
- * (isTextPanel, TEXT_PANEL_FILL). */
+ * text stays text (isFilledTable). Exactly two prose lines inside a drawing
+ * are ambiguous — a decorated instructions box or a chart with two long
+ * labels — and every size or fill threshold tried on review lost one or the
+ * other somewhere. So the import does not guess: such a drawing stays a
+ * figure flagged `text_inside`, its prose lines stay in the text the model
+ * reads, and it is not attached to a question unless the teacher does so. */
 export const TEXT_PANEL_PROSE_LINES = 3;
-/** Two prose lines make a text panel when their text covers this share of
- * the box: a box sized to its two lines is about half text, a chart with two
- * legend lines a quarter or less (measured on the test fixtures; the
- * samples have neither shape). */
-export const TEXT_PANEL_FILL = 0.4;
-/** A line's box is its font height times this (leading). */
-const TEXT_LINE_LEADING = 1.2;
 
 /**
  * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
@@ -276,21 +272,19 @@ const TEXT_LINE_LEADING = 1.2;
  * tests; pure.
  */
 export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
+  return proseLinesInside(lines, box) >= TEXT_PANEL_PROSE_LINES;
+}
+
+/** How many prose lines (PROSE_LINE_CHARS or longer) start inside `box`.
+ * Exported for tests; pure. */
+export function proseLinesInside(lines: readonly TextLine[], box: Box): number {
   let prose = 0;
-  let textArea = 0;
   for (const l of lines) {
     const x = l.x ?? 0;
     if (x < box[0] || x > box[2] || l.y < box[1] || l.y > box[3]) continue;
     if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
-    textArea += (l.width ?? 0) * (l.height ?? 0) * TEXT_LINE_LEADING;
   }
-  if (prose >= TEXT_PANEL_PROSE_LINES) return true;
-  // Before merging #102 (James, 2026-10-25): a two-line instructions box —
-  // even one decorated with icons or a dotted frame — is mostly text, while
-  // a chart whose only text is two long labels is mostly drawing. So two
-  // prose lines make a panel when the text fills TEXT_PANEL_FILL of the box.
-  const boxArea = (box[2] - box[0]) * (box[3] - box[1]);
-  return prose >= 2 && boxArea > 0 && textArea >= boxArea * TEXT_PANEL_FILL;
+  return prose;
 }
 
 /** A ruled area: at least this share of its painted paths are thin rules. */
@@ -455,7 +449,7 @@ export function emphasisMarks(runs: readonly StyledRun[]): RunStyle {
 // left to right. pdf.js gives each run its own transform; item[5] is the
 // baseline y in user space, mapped here through the viewport transform.
 function linesOf(
-  items: { str: string; transform: number[]; fontName?: string; width?: number; height?: number }[],
+  items: { str: string; transform: number[]; fontName?: string }[],
   base: M,
   styleOf: (fontName: string | undefined) => RunStyle = () => NO_STYLE,
   drop: (run: { x: number; y: number; str: string }) => boolean = () => false,
@@ -464,29 +458,24 @@ function linesOf(
     .filter((it) => it.str && it.str.trim().length > 0)
     .map((it) => {
       const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
-      return { x, y, str: it.str, style: styleOf(it.fontName), w: it.width ?? 0, h: it.height ?? 0 };
+      return { x, y, str: it.str, style: styleOf(it.fontName) };
     })
     .filter((r) => !drop(r))
     .sort((a, b) => a.y - b.y || a.x - b.x);
   const mark = emphasisMarks(runs);
-  type Part = { x: number; str: string; style: RunStyle; w: number; h: number };
-  const lines: { y: number; parts: Part[] }[] = [];
+  const lines: { y: number; parts: { x: number; str: string; style: RunStyle }[] }[] = [];
   for (const r of runs) {
     const last = lines[lines.length - 1];
-    const part = { x: r.x, str: r.str, style: r.style, w: r.w, h: r.h };
-    if (last && Math.abs(last.y - r.y) <= 2.5) last.parts.push(part);
-    else lines.push({ y: r.y, parts: [part] });
+    if (last && Math.abs(last.y - r.y) <= 2.5) last.parts.push({ x: r.x, str: r.str, style: r.style });
+    else lines.push({ y: r.y, parts: [{ x: r.x, str: r.str, style: r.style }] });
   }
   return lines.map((l) => {
     const parts = l.parts.sort((a, b) => a.x - b.x);
     const filled = parts.filter((p) => p.str.trim().length > 0);
-    const left = parts[0]?.x ?? 0;
     return {
       y: l.y,
       text: emphasizeRuns(parts, mark),
-      x: left,
-      width: Math.max(0, ...parts.map((p) => p.x + p.w)) - left,
-      height: Math.max(0, ...parts.map((p) => p.h)),
+      x: parts[0]?.x ?? 0,
       // Slice 5: the RAW style, not the page's majority-guarded mark — a
       // caption is found by how the line is set, not by how it is written out.
       bold: filled.length > 0 && filled.every((p) => p.style.bold),
@@ -712,7 +701,7 @@ export async function extractPdfLayout(
       styleCache.set(key, style);
       return style;
     };
-    const items = content.items as { str: string; transform: number[]; fontName?: string; width?: number; height?: number }[];
+    const items = content.items as { str: string; transform: number[]; fontName?: string }[];
     const runStarts = items
       .filter((it) => it.str?.trim())
       .map((it) => {
@@ -779,6 +768,8 @@ export async function extractPdfLayout(
     const pageFigures: { n: number; top: number }[] = [];
     /** Vector figures own the text drawn inside them (axis labels, legends). */
     const figureBoxes: Box[] = [];
+    /** …except a `text_inside` figure's prose lines, which stay in the text. */
+    const textInsideBoxes: Box[] = [];
     for (const entry of pending) {
       if (n >= limits.maxFigures) break;
       n += 1;
@@ -807,6 +798,10 @@ export async function extractPdfLayout(
       } else {
         const caption = captionAbove(lines, entry.box[1]);
         if (isBlankAnswerArea(pathBoxes.filter((b) => insideBox(b, entry.box)), runStarts)) fig.answer_area = true;
+        if (proseLinesInside(lines, entry.box) >= 2) {
+          fig.text_inside = true;
+          textInsideBoxes.push(entry.box);
+        }
         if (caption) fig.caption = caption;
         figureBoxes.push(entry.box);
         const crop = cropFromPage(canvas!, pageImage!, entry.box);
@@ -840,12 +835,11 @@ export async function extractPdfLayout(
     const kept =
       figureBoxes.length === 0
         ? lines
-        : linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter(
-            (l) =>
-              !figureBoxes.some(
-                (b) => (l.x ?? 0) >= b[0] && (l.x ?? 0) <= b[2] && l.y >= b[1] && l.y <= b[3],
-              ),
-          );
+        : linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter((l) => {
+            const inside = (b: Box) => (l.x ?? 0) >= b[0] && (l.x ?? 0) <= b[2] && l.y >= b[1] && l.y <= b[3];
+            if (!figureBoxes.some(inside)) return true;
+            return textInsideBoxes.some(inside) && (l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS;
+          });
     pageTexts.push(interleaveMarkers(kept, pageFigures));
   }
 
