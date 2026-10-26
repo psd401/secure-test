@@ -254,8 +254,11 @@ const PROSE_LINE_CHARS = 30;
  * Known limitation (recorded in docs/ledger.md, 2026-10-25): a
  * two-line instructions box decorated with 8+ other painted shapes (icons,
  * a dotted frame, a strip) that are not a ruled grid is still cropped as a
- * figure, and its two lines leave the text the model reads. No sample has
- * one; a signal that separates it from a two-label chart was not found. */
+ * figure, and its two lines leave the text the model reads — so those
+ * instructions can be missing from the proposed questions (the teacher sees
+ * them only inside the picture, which a student would see too if it is
+ * attached). No sample has one; a signal that separates it from a
+ * two-label chart was not found. */
 export const TEXT_PANEL_PROSE_LINES = 3;
 
 /**
