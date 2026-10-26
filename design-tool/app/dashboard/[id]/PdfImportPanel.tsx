@@ -26,6 +26,8 @@ import {
   type UnconvertedProposal,
 } from "@/lib/pdfImport/triage";
 import { PdfSourcePane, type SourceRegion } from "./PdfSourcePane";
+import { DocxSourcePane } from "./DocxSourcePane";
+import type { WordBlock } from "@/lib/docxImport/document";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
 // for scanned/image PDFs, has the model read the pages directly — slice 44
@@ -114,7 +116,14 @@ interface ExtractResult {
   pages?: { width: number; height: number }[];
   /** Aligned with `rejected`: each refused proposal as text. */
   unconverted?: (UnconvertedProposal & { source_numbers: number[]; region: CandidateRegion | null })[];
+  // Editor redesign Phase 7 slice B (R-10): a Word document (flag on only)
+  // comes back with its blocks for the review's left pane.
+  source_kind?: "pdf" | "docx";
+  document?: { blocks: WordBlock[]; pictures: number };
 }
+
+/** R-10 (flag on): the file types the picker offers. */
+const WORD_ACCEPT = ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md): a
 // labelled source the model read out of the document.
@@ -284,6 +293,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   }, [reviewOpen]);
 
   const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
+  // R-10: a Word result is only ever returned with the flag on, so with it
+  // off every string below still says "PDF".
+  const isWord = result?.source_kind === "docx";
+  const srcNoun = isWord ? "document" : "PDF";
   const needFigure = sets.filter((s) => s.needs_figure && !addedSets.has(s.id)).length;
   // The questions a figure can still go with: shown, not added, and not in
   // a set that was added.
@@ -625,6 +638,11 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     sets.filter((s) => !addedSets.has(s.id)),
     new Set([...hidden, ...added]),
   );
+  /** A card's link to its place in the source. A Word document has no pages. */
+  function sourceLinkLabel(region: CandidateRegion): string {
+    if (isWord) return region.how === "order" ? "Position not found — show in document" : "Show in document";
+    return `Page ${region.page}${region.how === "order" ? " (by order)" : ""} — show in PDF`;
+  }
   function cardKey(i: number): string {
     return `c${i}`;
   }
@@ -789,19 +807,33 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-2 text-sm font-medium"
       >
-        <span>Import items from PDF</span>
+        <span>{newAuthoring ? "Import items from PDF or Word" : "Import items from PDF"}</span>
         <span aria-hidden>{open ? "−" : "+"}</span>
       </button>
       {open ? (
         <div className="space-y-3 border-t border-border p-4">
+          {newAuthoring ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Upload a PDF or a Word document (.docx). The proposed questions open in a review beside the
+                document: accept the ones you want, then edit them in place. Scanned/image PDFs are read by AI
+                OCR (up to 30 pages); Word documents can be up to 5 MB, and their pictures are not imported.
+              </p>
+              <p id="pdf-import-gdocs-tip" className="text-xs text-muted-foreground">
+                From Google Docs: <b>File → Download → Microsoft Word (.docx)</b>, then choose that file here.
+              </p>
+            </>
+          ) : (
           <p className="text-xs text-muted-foreground">
             Upload a PDF. Proposed items appear below for review — add the
             ones you want, then edit them in place. Scanned/image PDFs are
             read by AI OCR (up to 30 pages).
           </p>
+          )}
           <FilePicker
-            accept="application/pdf,.pdf"
-            label="Choose a PDF…"
+            accept={newAuthoring ? `application/pdf,.pdf,${WORD_ACCEPT}` : "application/pdf,.pdf"}
+            label={newAuthoring ? "Choose a PDF or Word file…" : "Choose a PDF…"}
+            aria-describedby={newAuthoring ? "pdf-import-gdocs-tip" : undefined}
             disabled={disabled || busy}
             onFile={(f) => {
               if (f) void extract(f);
@@ -822,7 +854,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
           {result && newAuthoring ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-muted-foreground">
-                {result.candidates.length} proposed from {file?.name ?? "the PDF"}
+                {result.candidates.length} proposed from {file?.name ?? `the ${srcNoun}`}
               </span>
               <button
                 type="button"
@@ -846,8 +878,12 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {result.candidates.length} proposed · {result.page_count}{" "}
+                  {result.candidates.length} proposed · {isWord ? "Word document" : (
+                    <>
+                  {result.page_count}{" "}
                   page(s)
+                    </>
+                  )}
                   {result.ocr_used ? " · scanned PDF, read by AI OCR" : ""}
                   {result.rejected_count > 0
                     ? ` · ${result.rejected_count} unparseable skipped`
@@ -889,7 +925,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
               {result.forms ? (
                 <div className="rounded border border-warning-foreground/30 p-2 text-xs text-warning-foreground">
                   <p>
-                    This PDF looks like {result.forms.count} forms
+                    This {srcNoun} looks like {result.forms.count} forms
                     {result.forms.groups
                       ? ` (${result.forms.groups.map((g) => g.length).join(" / ")} questions, each numbered from 1)`
                       : " (it names Form A, B… but its numbering runs on, so the questions cannot be split by form)"}
@@ -941,12 +977,12 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
               ) : null}
               {result.shortfall && result.numbered_items != null ? (
                 <p className="rounded border border-warning-foreground/30 p-2 text-xs text-warning-foreground">
-                  This PDF numbers its questions up to {result.numbered_items};{" "}
+                  This {srcNoun} numbers its questions up to {result.numbered_items};{" "}
                   {result.extracted_count} were extracted.
                   {result.missing_numbers && result.missing_numbers.length > 0
                     ? ` Not found: ${result.missing_numbers.join(", ")}.`
                     : ""}{" "}
-                  Questions that are only an image or a table in the PDF need to
+                  Questions that are only an image or a table in the {srcNoun} need to
                   be added by hand.
                 </p>
               ) : null}
@@ -1368,7 +1404,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                     disabled={!u.region}
                     className="underline disabled:no-underline disabled:text-muted-foreground"
                   >
-                    {u.region ? `Page ${u.region.page}${u.region.how === "order" ? " (by order)" : ""} — show in PDF` : "Not found in the PDF"}
+                    {u.region ? sourceLinkLabel(u.region) : `Not found in the ${srcNoun}`}
                   </button>
                 </div>
                 {u.stem ? <RenderedText text={u.stem} className="block text-sm" /> : <p className="text-sm text-muted-foreground">(no question text came back)</p>}
@@ -1481,7 +1517,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
               onClick={() => setPane(p)}
               className={`rounded px-2 py-0.5 ${pane === p ? "bg-primary/10 font-medium" : ""}`}
             >
-              {p === "source" ? "Source PDF" : "Proposed questions"}
+              {p === "source" ? (isWord ? "Source document" : "Source PDF") : "Proposed questions"}
             </button>
           ))}
         </div>
@@ -1494,11 +1530,21 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
               </p>
             ) : result.candidates.length > 0 && located < result.candidates.length ? (
               <p className="mb-2 text-xs text-muted-foreground">
-                {located} of {result.candidates.length} questions were found on the page by their printed number. The
-                others are shown on the page of the question before them, or not at all.
+                {isWord
+                  ? `${located} of ${result.candidates.length} questions were found in the document by their printed number. The others are listed above it.`
+                  : `${located} of ${result.candidates.length} questions were found on the page by their printed number. The others are shown on the page of the question before them, or not at all.`}
               </p>
             ) : null}
-            {file ? (
+            {isWord && result.document ? (
+              <DocxSourcePane
+                blocks={result.document.blocks}
+                pictures={result.document.pictures}
+                regions={sourceRegions}
+                activeKey={activeKey}
+                onSelect={showCard}
+                focusRequest={focusRequest}
+              />
+            ) : file && !isWord ? (
               <PdfSourcePane
                 file={file}
                 regions={sourceRegions}
@@ -1557,9 +1603,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             disabled={!region}
                             className="underline disabled:no-underline disabled:text-muted-foreground"
                           >
-                            {region
-                              ? `Page ${region.page}${region.how === "order" ? " (by order)" : ""} — show in PDF`
-                              : "Not found in the PDF"}
+                            {region ? sourceLinkLabel(region) : `Not found in the ${srcNoun}`}
                           </button>
                         </div>
                       ) : null}

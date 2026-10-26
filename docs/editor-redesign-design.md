@@ -576,3 +576,35 @@ unless noted.
   ignores them and is unchanged. Tests: `test/pdf-import-triage.test.ts`,
   a review-fields case in `test/pdf-import-route.test.ts`. Hand-check rows
   784–795.
+- 2026-10-26 — **Phase 7 slice B built** (R-10 Word only, prototype track,
+  flag on only; no Drive picker). With the flag on, the import panel takes
+  a `.docx` as well as a PDF, through the same route
+  (`/api/assessments/[id]/items/import-pdf`) and the same review. The file
+  type and the 5 MiB cap come from `lib/ai/documentUpload.ts` (the rubric
+  and batch-generation document path). **Deviation, for James's review:**
+  the model does not receive the file as a Converse document block. The
+  server reads the `.docx` itself (`lib/docxImport/`: a minimal zip reader
+  on `node:zlib` with a per-part inflate cap, and a WordprocessingML reader;
+  no new dependency) and sends its text on the existing text path, because
+  (1) Word's automatic list numbers live in `numbering.xml`, not in the
+  text, and the review places proposals by those numbers, so the model and
+  the review must read the same numbers; (2) the guardrail's input stage
+  can then screen the text (record-only, as for PDFs), which the
+  document-block path skips; (3) the mock provider exercises the real
+  path. The left pane is a simple rendering of the document's text and
+  structure from that reader (headings, list numbers, bold / italic,
+  tables, a placeholder per picture), drawn as React elements from data,
+  never HTML; a numbered outline surrounds the paragraphs each proposal
+  covers (`locateCandidates` over a one-block-per-unit pseudo-page,
+  `regionBlockRange`, `docxGroups`). Not imported: pictures (counted and
+  said), text boxes, tracked deletions, field codes, footnotes, headers and
+  footers, and numbering that comes from a paragraph style. A question
+  numbered inside a table cell is not placed. The drop-zone tip reads
+  "From Google Docs: File → Download → Microsoft Word (.docx)". Gating: the
+  PDF item import has never been gated on `allow_llm_authoring` (only the
+  generate / suggest surfaces are); Word import follows the PDF import,
+  so it is not gated either — open question for James. Flag off, a `.docx`
+  still goes to the PDF reader and is refused (`pdf_parse_failed`), and
+  every PDF hint is unchanged. Tests: `test/docx-document.test.ts`,
+  `test/docx-import-route.test.ts` (hand-built `.docx` fixtures,
+  `test/helpers/docx.ts`; mock provider). Hand-check rows 796–803.

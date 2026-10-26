@@ -36,6 +36,10 @@ import { requireDraft } from "@/lib/api/requireDraft";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
+import { MAX_UPLOAD_BYTES, allowedUploadFor } from "@/lib/ai/documentUpload";
+import { DocxReadError, readDocx } from "@/lib/docxImport/readDocx";
+import type { WordDocument } from "@/lib/docxImport/document";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -45,7 +49,9 @@ interface RouteContext {
 // as an empty-body 500, and the panel rendered the resulting JSON-parse
 // TypeError. Every extraction failure now maps to a structured body with a
 // teacher-facing hint; `detail` carries the underlying message for staff.
-function extractionFailure(err: unknown) {
+// Phase 7 slice B: `noun` is "Word document" on the Word path; "PDF" keeps
+// every PDF hint as it was.
+function extractionFailure(err: unknown, noun = "PDF") {
   if (err instanceof PdfExtractError && err.code === "truncated") {
     return NextResponse.json(
       {
@@ -53,7 +59,9 @@ function extractionFailure(err: unknown) {
         error: "pdf_extract_truncated",
         hint:
           "This document has more items than one extraction can return. " +
-          "Split the PDF into parts of about 6–8 pages and import each part.",
+          (noun === "PDF"
+            ? "Split the PDF into parts of about 6–8 pages and import each part."
+            : `Split the ${noun} into smaller parts and import each part.`),
         detail: err.message,
       },
       { status: 422 },
@@ -65,7 +73,7 @@ function extractionFailure(err: unknown) {
         ok: false,
         error: "pdf_extract_refused",
         hint:
-          "The AI extractor declined to read this PDF. Trying again will not " +
+          `The AI extractor declined to read this ${noun}. Trying again will not ` +
           "change that; import the items by CSV or add them by hand.",
         detail: err.message,
       },
@@ -78,7 +86,7 @@ function extractionFailure(err: unknown) {
         ok: false,
         error: "pdf_extract_invalid_output",
         hint:
-          "The AI extractor did not return an item list for this PDF. Try " +
+          `The AI extractor did not return an item list for this ${noun}. Try ` +
           "again; if it repeats, split the document or import the items by CSV.",
         detail: err.message,
       },
@@ -90,7 +98,7 @@ function extractionFailure(err: unknown) {
     {
       ok: false,
       error: "pdf_extract_failed",
-      hint: "The AI extractor could not process this PDF right now. Try again in a minute.",
+      hint: `The AI extractor could not process this ${noun} right now. Try again in a minute.`,
       detail: err instanceof Error ? err.message : String(err),
     },
     { status: 502 },
@@ -152,17 +160,61 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
+  // Editor redesign Phase 7 slice B (R-10): with the R-12 flag on, a Word
+  // document (.docx, recognised by documentUpload's own type table) takes
+  // the same pipeline. Its text is read here (lib/docxImport) and goes to the
+  // model on the text path, so the guardrail's input stage screens it and
+  // the numbers the model reports are the list numbers the review finds.
+  // Flag off, a .docx falls through to the PDF reader and is refused as
+  // before.
+  const word =
+    allowedUploadFor(file)?.ext === "docx" && (await isNewAuthoringEnabled(db, auth.session));
+  let wordDoc: WordDocument | null = null;
   let extracted;
-  try {
-    extracted = await extractPdfText(bytes);
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "pdf_parse_failed" },
-      { status: 400 },
-    );
+  if (word) {
+    // The cap every other document upload has (rubric, batch generation).
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "file_too_large",
+          limit: MAX_UPLOAD_BYTES,
+          hint:
+            "Word documents are limited to 5 MB here. Pictures make a document " +
+            "large: save a copy without them, or split the document.",
+        },
+        { status: 413 },
+      );
+    }
+    try {
+      wordDoc = readDocx(bytes);
+    } catch (err) {
+      if (!(err instanceof DocxReadError)) console.warn("pdf-import: docx read failed", err);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "docx_parse_failed",
+          hint:
+            "This Word document could not be read. Open it in Word or Google " +
+            "Docs and save (or download) it again as .docx.",
+        },
+        { status: 400 },
+      );
+    }
+    extracted = { text: wordDoc.text, pageCount: 1 };
+  } else {
+    try {
+      extracted = await extractPdfText(bytes);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "pdf_parse_failed" },
+        { status: 400 },
+      );
+    }
   }
+  const noun = word ? "Word document" : "PDF";
 
-  const scanned = looksScanned(extracted.text, extracted.pageCount);
+  const scanned = !word && looksScanned(extracted.text, extracted.pageCount);
   if (scanned) {
     if (extracted.pageCount > MAX_OCR_PAGES) {
       return NextResponse.json(
@@ -202,7 +254,13 @@ export async function POST(req: Request, ctx: RouteContext) {
   // for placing each proposal on its page in the import review.
   let pages: PageSize[] = [];
   let anchors: QuestionAnchor[] = [];
-  if (!scanned) {
+  if (wordDoc) {
+    // A Word document has no pages: its blocks are measured on one
+    // pseudo-page (lib/docxImport/document.ts WORD_BLOCK_UNIT), and its
+    // pictures are not imported (the panel says how many).
+    pages = wordDoc.pages;
+    anchors = wordDoc.anchors;
+  } else if (!scanned) {
     try {
       const layout = await extractPdfLayout(bytes);
       figures = layout.figures;
@@ -220,7 +278,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   // On by default since slice 3c (James, 2026-10-25); PDF_IMPORT_PAGE_IMAGES=0
   // turns it off. A document over the page cap, or one that will not
   // render, goes as text alone.
-  const pageImages = pageImagesWanted(scanned) ? await renderPagesForModel(bytes) : null;
+  const pageImages = !word && pageImagesWanted(scanned) ? await renderPagesForModel(bytes) : null;
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,
@@ -229,7 +287,11 @@ export async function POST(req: Request, ctx: RouteContext) {
   });
   if (!reqBody.success) {
     return NextResponse.json(
-      { ok: false, error: "text_too_large_or_empty" },
+      {
+        ok: false,
+        error: "text_too_large_or_empty",
+        ...(word ? { hint: "This Word document has no text to import, or more than one import can read." } : {}),
+      },
       { status: 400 },
     );
   }
@@ -258,7 +320,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     outputText: (r) => proposalScreenText([r.candidates, r.proposed_sets ?? []]),
     });
   } catch (err) {
-    return extractionFailure(err);
+    return extractionFailure(err, noun);
   }
   if (!outcome.ok) {
     return NextResponse.json(
@@ -269,7 +331,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         // The panel shows `hint` in place of the code. The input check only
         // records on this surface, so it is the AI's proposed questions
         // that were stopped, not the teacher's PDF.
-        hint: "The AI safety filter stopped the questions proposed from this PDF. Add these items by hand, or try importing a smaller part of the document.",
+        hint: `The AI safety filter stopped the questions proposed from this ${noun}. Add these items by hand, or try importing a smaller part of the document.`,
       },
       { status: 422 },
     );
@@ -432,8 +494,14 @@ export async function POST(req: Request, ctx: RouteContext) {
       const from = rawType(i);
       return from && from !== candidates[v]!.type ? { from, to: candidates[v]!.type } : null;
     }),
-    pages,
+    // A Word document's pseudo-page is internal: no page sizes go out.
+    pages: wordDoc ? [] : pages,
     // Aligned with `rejected`.
     unconverted,
+    // Phase 7 slice B (R-10): what was imported, and for a Word document the
+    // blocks the review's left pane draws (data, never HTML) and how many
+    // pictures were left out.
+    source_kind: word ? "docx" : "pdf",
+    ...(wordDoc ? { document: { blocks: wordDoc.blocks, pictures: wordDoc.pictures } } : {}),
   });
 }
