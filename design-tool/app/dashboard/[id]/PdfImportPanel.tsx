@@ -15,6 +15,7 @@ import type { CandidateRegion } from "@/lib/pdfImport/regions";
 import {
   TRIAGE_LABEL,
   TRIAGE_ORDER,
+  acceptSkip,
   convertUnconverted,
   readyToAccept,
   triageCandidate,
@@ -592,9 +593,11 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
       setBusy(true);
       try {
         for (let k = 1; k < formGroups.length; k++) {
-          const draft = await createSiblingDraft(k + 1);
+          // "Accept all ready" (`only`) can leave a form with nothing ready:
+          // no empty draft is made for it.
           const group = formGroups[k]!.filter((i) => !only || only.has(i));
           if (group.length === 0) continue;
+          const draft = await createSiblingDraft(k + 1);
           failed += await addRange(group, draft.id);
           setCreatedDrafts((prev) => [...prev, { ...draft, count: group.length }]);
         }
@@ -636,7 +639,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   const readyIndexes = readyToAccept(
     triages.map((t) => t.status),
     sets.filter((s) => !addedSets.has(s.id)),
-    new Set([...hidden, ...added]),
+    acceptSkip(formChoice, hidden, added),
   );
   /** A card's link to its place in the source. A Word document has no pages. */
   function sourceLinkLabel(region: CandidateRegion): string {

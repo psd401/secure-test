@@ -61,9 +61,6 @@ export const WORD_BLOCK_UNIT = 100;
 
 // ---- XML ----
 
-const TOKEN_RE =
-  /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[([\s\S]*?)\]\]>|<(\/?)([A-Za-z_][\w.:-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>|([^<]+)/g;
-
 function decodeEntities(s: string): string {
   return s.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, (_, e: string) => {
     if (e === "amp") return "&";
@@ -99,13 +96,72 @@ interface Token {
   text: string | null;
 }
 
+const NAME_START = /[A-Za-z_]/;
+const NAME_CHAR = /[\w.:-]/;
+
+/** Thrown for markup that is not well-formed XML (a construct that never
+ * closes); the route reports it as an unreadable document. */
+export class WordXmlError extends Error {}
+
+/** One left-to-right pass, so time is linear in the part's length.
+ * Review fix (2026-10-26): this was one regex whose attribute group, a lazy
+ * repeat over alternatives, backtracked super-linearly on a '<' with no
+ * '>' (60 KB of "<a " took 26 s on the server's event loop). A comment,
+ * processing instruction, CDATA section, tag or quoted attribute value
+ * that never closes now throws WordXmlError rather than being searched
+ * for again from every later '<'. A '<' not followed by a name (not XML)
+ * is skipped, as the regex did. */
 function* tokens(xml: string): Generator<Token> {
-  for (const m of xml.matchAll(TOKEN_RE)) {
-    if (m[6] !== undefined) yield { close: false, name: "", attrs: "", selfClose: false, text: decodeEntities(m[6]) };
-    else if (m[1] !== undefined) yield { close: false, name: "", attrs: "", selfClose: false, text: m[1] };
-    else if (m[3] !== undefined) {
-      yield { close: m[2] === "/", name: m[3], attrs: m[4] ?? "", selfClose: m[5] === "/", text: null };
+  const n = xml.length;
+  let i = 0;
+  const closeAt = (from: number, end: string): number => {
+    const j = xml.indexOf(end, from);
+    if (j < 0) throw new WordXmlError(`unterminated ${end} construct`);
+    return j;
+  };
+  while (i < n) {
+    const lt = xml.indexOf("<", i);
+    if (lt !== i) {
+      const end = lt < 0 ? n : lt;
+      yield { close: false, name: "", attrs: "", selfClose: false, text: decodeEntities(xml.slice(i, end)) };
+      i = end;
+      continue;
     }
+    if (xml.startsWith("<!--", i)) {
+      i = closeAt(i + 4, "-->") + 3;
+      continue;
+    }
+    if (xml.startsWith("<?", i)) {
+      i = closeAt(i + 2, "?>") + 2;
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", i)) {
+      const j = closeAt(i + 9, "]]>");
+      yield { close: false, name: "", attrs: "", selfClose: false, text: xml.slice(i + 9, j) };
+      i = j + 3;
+      continue;
+    }
+    let k = i + 1;
+    const close = xml[k] === "/";
+    if (close) k++;
+    if (k >= n || !NAME_START.test(xml[k]!)) {
+      i++; // not a tag: drop the '<'
+      continue;
+    }
+    const nameStart = k;
+    while (k < n && NAME_CHAR.test(xml[k]!)) k++;
+    const name = xml.slice(nameStart, k);
+    const attrsStart = k;
+    // Scan to the '>' outside quotes; a '>' inside a quoted value is data.
+    while (k < n && xml[k] !== ">") {
+      const ch = xml[k];
+      if (ch === '"' || ch === "'") k = closeAt(k + 1, ch) + 1;
+      else k++;
+    }
+    if (k >= n) throw new WordXmlError("unterminated tag");
+    const selfClose = xml[k - 1] === "/" && k - 1 >= attrsStart;
+    yield { close, name, attrs: xml.slice(attrsStart, selfClose ? k - 1 : k), selfClose, text: null };
+    i = k + 1;
   }
 }
 

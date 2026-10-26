@@ -164,6 +164,21 @@ export function triageCounts(statuses: readonly TriageStatus[]): Record<TriageSt
 }
 
 /**
+ * The questions "Accept all ready" must skip under an E9 form choice.
+ * "first" hides forms 2..n, so they are skipped; "split" also hides them
+ * from the review but sends them to drafts of their own, so only the
+ * questions already added are skipped. Review fix (2026-10-26): passing the
+ * hidden forms under "split" left every sibling draft out.
+ */
+export function acceptSkip(
+  formChoice: "all" | "first" | "split",
+  hidden: ReadonlySet<number>,
+  added: ReadonlySet<number>,
+): Set<number> {
+  return new Set(formChoice === "split" ? added : [...hidden, ...added]);
+}
+
+/**
  * What "Accept all ready" takes, in document order: every ready question
  * not yet accepted and not skipped (hidden by the form choice). A question in
  * a proposed stimulus set goes only with its whole set, so a set is taken

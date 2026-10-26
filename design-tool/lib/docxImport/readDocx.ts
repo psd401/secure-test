@@ -1,5 +1,5 @@
 import { inflateRawSync } from "node:zlib";
-import { parseWordDocument, type WordDocument } from "./document";
+import { WordXmlError, parseWordDocument, type WordDocument } from "./document";
 
 // Editor redesign Phase 7 slice B (R-10, docs/editor-redesign-design.md):
 // read a .docx on the server for item import. A .docx is a zip archive; the
@@ -92,5 +92,11 @@ export function readDocx(bytes: Uint8Array): WordDocument {
   if (!doc) throw new DocxReadError("no word/document.xml: not a Word document");
   const numbering = parts.get("word/numbering.xml");
   const decoder = new TextDecoder();
-  return parseWordDocument(decoder.decode(doc), numbering ? decoder.decode(numbering) : null);
+  try {
+    return parseWordDocument(decoder.decode(doc), numbering ? decoder.decode(numbering) : null);
+  } catch (err) {
+    // Malformed XML is a bad file, not a server fault.
+    if (err instanceof WordXmlError) throw new DocxReadError(`not well-formed XML: ${err.message}`);
+    throw err;
+  }
 }

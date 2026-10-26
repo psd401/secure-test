@@ -628,3 +628,15 @@ unless noted.
   no key in the student view, no row written by the preview or its route,
   and the preview equal to what the import then stores). Flag off: the
   direct import, unchanged. Hand-check rows 804–810.
+- 2026-10-26 — **Phase 7 review findings fixed.** (1) The Word reader's
+  XML tokenizer was one regex that backtracked super-linearly on a '<'
+  with no '>' (60 KB of `<a ` took 26 s on the server's event loop); it is
+  now a single linear pass (`lib/docxImport/document.ts` `tokens`) that
+  throws `WordXmlError` on markup that never closes, which `readDocx`
+  turns into `DocxReadError` (the route's `docx_parse_failed`). (2) Flag
+  on, **Accept all ready** under **One assessment per form** skipped forms
+  2..n, so no sibling draft was made; the skip set is now `acceptSkip`
+  (`lib/pdfImport/triage.ts`: under "split" only already-added questions
+  are skipped), and a form with nothing ready no longer gets an empty
+  draft. Tests: `test/docx-document.test.ts`,
+  `test/pdf-import-triage.test.ts`. Hand-check rows 811–812.

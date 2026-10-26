@@ -8,6 +8,7 @@ import {
   type QuestionAnchor,
 } from "../lib/pdfImport/regions";
 import {
+  acceptSkip,
   changeField,
   convertUnconverted,
   readyToAccept,
@@ -132,6 +133,16 @@ describe("readyToAccept", () => {
   });
   test("a set with a skipped member is not taken in part", () => {
     expect(readyToAccept(["ready", "ready"], [{ item_indexes: [0, 1] }], new Set([1]))).toEqual([]);
+  });
+  // Review fix (2026-10-26): "One assessment per form" hides forms 2..n from
+  // the review but still sends their ready questions to drafts of their own.
+  test("form choice: 'first' skips the hidden forms, 'split' keeps them, both skip added", () => {
+    const statuses = ["ready", "ready", "ready", "ready"] as const; // form 1 = 0,1; form 2 = 2,3
+    const hidden = new Set([2, 3]);
+    const added = new Set([0]);
+    expect(readyToAccept(statuses, [], acceptSkip("first", hidden, added))).toEqual([1]);
+    expect(readyToAccept(statuses, [], acceptSkip("split", hidden, added))).toEqual([1, 2, 3]);
+    expect(readyToAccept(statuses, [], acceptSkip("all", new Set(), added))).toEqual([1, 2, 3]);
   });
 });
 

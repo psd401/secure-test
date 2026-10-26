@@ -7,6 +7,7 @@ import { DocxReadError, readDocx, readZipEntries } from "../lib/docxImport/readD
 import {
   docxGroups,
   formatListNumber,
+  WordXmlError,
   parseWordDocument,
   regionBlockRange,
   type WordParagraph,
@@ -138,6 +139,28 @@ describe("parseWordDocument", () => {
     expect(withList.text).toBe("1. Q");
     const without = readDocx(makeDocx([para("Q", { num: { id: 1 } })], { numbering: null }));
     expect(without.text).toBe("Q");
+  });
+
+  // Review fix (2026-10-26): the tokenizer was a regex that backtracked
+  // super-linearly on a '<' with no '>' (60 KB took 26 s, blocking the
+  // server). Now one linear pass that refuses markup that never closes.
+  test("quoted '>' in an attribute, comments, a processing instruction and CDATA tokenize as before", () => {
+    const doc = parseWordDocument(
+      `<?xml version="1.0"?><!-- a > comment --><w:document><w:body>` +
+        `<w:p w:x="a>b" w:y='c>d'><w:r><w:t xml:space="preserve">One </w:t></w:r><w:r><w:t><![CDATA[<two>]]></w:t></w:r></w:p>` +
+        `</w:body></w:document>`,
+    );
+    expect(doc.text).toBe("One <two>");
+  });
+
+  test("markup that never closes is refused, quickly; readDocx reports it as DocxReadError", () => {
+    for (const bad of ["<w:p ".repeat(100_000), "<!--".repeat(100_000), '<w:p a="'.repeat(50_000), "<?x".repeat(100_000)]) {
+      const t = performance.now();
+      expect(() => parseWordDocument(documentXml([para("Q")]) + bad)).toThrow(WordXmlError);
+      expect(performance.now() - t).toBeLessThan(1000);
+    }
+    const zip = buildZip({ "word/document.xml": documentXml([para("Q")]) + "<w:p" });
+    expect(() => readDocx(zip)).toThrow(DocxReadError);
   });
 });
 
