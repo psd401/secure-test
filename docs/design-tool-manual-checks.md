@@ -1891,3 +1891,28 @@ Every row in this section runs with the R-12 flag ON for the signing-in account 
 | 692 | Click **Switch back to the current editor** | "You are using the current editor." again | NOT RUN |
 | 693 | As an admin, act as a teacher who opted in; open `/dashboard/beta` | Shows the teacher's state, no button, and the line saying it can't be changed while acting as them | NOT RUN |
 | 694 | Signed out, open `/dashboard/beta` | Redirects to `/login?next=/dashboard/beta` | ✅ 2026-10-26 (curl against local :3000: 307 to `/login?next=%2Fdashboard%2Fbeta`) |
+
+### Phase 3 slice B — the WYSIWYG field for multiple choice and short answer (2026-10-26)
+
+`app/dashboard/[id]/RichTextField.tsx` replaces the stem textarea (multiple choice, multiple choice multi-select, short answer) and each choice's input (the two multiple-choice types) when the flag is ON. Every other type keeps the textarea. The field loads and saves the same markup string (`lib/authoring/markupDoc.ts`); round-trip and clean-paste logic are covered headlessly by `test/authoring-editor.test.ts` and `test/authoring-paste.test.ts`. These rows are the browser behaviour none of those tests can reach. Use hand-built content only.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 695 | Flag OFF: open a multiple-choice and a short-answer question | The textarea, B / I, Image…, Math… and the dashed preview strip exactly as before | NOT RUN |
+| 696 | Flag ON: open a multiple-choice question whose stem is `Which is **abiotic**? Solve $x^2 = 9$.` | The field shows **abiotic** in bold and a rendered formula; no `**` or `$` anywhere; no dashed preview strip | NOT RUN |
+| 697 | Same question: open it, change nothing, leave the card | No "Unsaved changes"; after Save question (or reload) the stem is byte-identical (check with Flag OFF) | NOT RUN |
+| 698 | Select a word, press **B** (and ⌘B), then **I** (and ⌘I); Save question; switch the flag OFF | The textarea shows `**word**` / `_word_`; the student preview shows the bold / italic | NOT RUN |
+| 699 | Math… → "x squared minus 4" → Translate → Insert (inline, then display) | A rendered formula appears at the cursor; saved as `$…$` / `$$…$$` | NOT RUN |
+| 700 | Click a formula | The formula outline shows and a "Formula (LaTeX)" panel opens with its TeX and a live preview; edit it → Done updates it; clear it → Remove formula deletes it | NOT RUN |
+| 701 | Image… → pick a picture | The picture shows inline (small); saved as `![name](asset:<uuid>)` | NOT RUN |
+| 702 | Choice field: press Enter; paste two lines of plain text | Enter adds nothing; the two lines join with a space | NOT RUN |
+| 703 | Stem field: press Enter and Shift-Enter | A line break; saved as a newline | NOT RUN |
+| 704 | Paste from Word: a paragraph with bold, italic, underline, a red 14 pt font and a picture | Bold and italic kept; colour, size and underline gone; the note "A picture in the pasted text was left out" | NOT RUN |
+| 705 | Paste from Google Docs: a line with one bold word, one italic word, a link | Only the one word is bold (not the whole paste); italic kept; the link's text kept, the link gone | NOT RUN |
+| 706 | Type `$x^2$` as characters | It stays the five characters you typed; saved as `\$x^2\$`; the student preview shows `$x^2$` as text | NOT RUN |
+| 707 | Type `5**2 and 3**4` | The amber note "Some characters here … will see this differently" and the dashed preview showing the bold students will see | NOT RUN |
+| 708 | Flag OFF, set a stem to `**a****b**` and save; flag ON, open it | Field read-only, the amber "can't show exactly" note and **Show source** revealing `**a****b**`; reload with the flag OFF: the stem is unchanged | NOT RUN |
+| 709 | A locked (published with attempts) assessment | The fields are read-only; no toolbar | NOT RUN |
+| 710 | ⌘Z / ⌘⇧Z in the field | Undo / redo the field's own edits | NOT RUN |
+| 711 | Keyboard + VoiceOver (quit Claude first): Tab into the stem, then a choice | Announced as "Question N, text field" / "Choice A text"; the B / I buttons announce pressed state | NOT RUN |
+| 712 | A fill-in-the-blank, essay or match question with the flag ON | Unchanged textarea editor | NOT RUN |

@@ -57,6 +57,7 @@ import { DEFAULT_GRAPH_BOARD, GraphItemEditor } from "./GraphItemEditor";
 import { ImagePicker } from "./ImagePicker";
 import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
+import { RichTextField } from "./RichTextField";
 import { SourcePicker, type SourceSummary } from "./SourcePicker";
 import { OverridesPanel } from "./OverridesPanel";
 import { WhoGetsWhat } from "./WhoGetsWhat";
@@ -289,7 +290,13 @@ interface Props {
   access: EditorAccess;
   initialItems: ItemView[];
   initialItemSets: ItemSetView[];
+  /** R-12 (docs/editor-redesign-design.md): the staff member opted in to the new editor. */
+  newAuthoring?: boolean;
 }
+
+// Phase 3 slice B (R-4): the item types whose stem (and choices) use the new
+// WYSIWYG field when the R-12 flag is on. Every other type keeps the textarea.
+const RICH_TEXT_TYPES = new Set(["multiple_choice", "multiple_choice_multi", "short_text"]);
 
 type AiProposal = {
   type: ItemType;
@@ -810,7 +817,7 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
   };
 }
 
-export function AssessmentEditor({ assessment, access, initialItems, initialItemSets }: Props) {
+export function AssessmentEditor({ assessment, access, initialItems, initialItemSets, newAuthoring = false }: Props) {
   const isOwner = isOwnerAccess(access);
   const coTeachingBadge = coTeachingBadgeText(access);
   const router = useRouter();
@@ -2876,6 +2883,18 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </div>
                 </div>
 
+                {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? (
+                  <div className="mt-3 block">
+                    <span className="block text-sm font-medium">Question</span>
+                    <RichTextField
+                      id={`stem-${item.id}`}
+                      label={`Question ${idx + 1}`}
+                      value={item.stem}
+                      disabled={isLocked}
+                      onChange={(stem) => updateItem(item.id, (i) => ({ ...i, stem }))}
+                    />
+                  </div>
+                ) : (
                 <label className="mt-3 block">
                   <span className="block text-sm font-medium">Question</span>
                   <textarea
@@ -2927,6 +2946,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </div>
                   <MathPreview text={item.stem} />
                 </label>
+                )}
 
                 <StandardsTagInput
                   value={item.standards}
@@ -3390,6 +3410,22 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                             >
                               {c.id.toUpperCase()}
                             </span>
+                            {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? (
+                              <div className="min-w-0 flex-1 [&_.rt-field]:mt-0">
+                                <RichTextField
+                                  singleLine
+                                  label={`Choice ${c.id.toUpperCase()} text`}
+                                  value={c.text}
+                                  disabled={isLocked}
+                                  onChange={(text) =>
+                                    updateItem(item.id, (i) => ({
+                                      ...i,
+                                      choices: i.choices.map((cc, cci) => (cci === ci ? { ...cc, text } : cc)),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ) : (
                             <input
                               value={c.text}
                               onChange={(e) =>
@@ -3405,6 +3441,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                               aria-label={`Choice ${c.id.toUpperCase()} text`}
                               placeholder={`Choice ${c.id.toUpperCase()}`}
                             />
+                            )}
                             <Button
                               type="button"
                               variant="ghost"
@@ -3425,6 +3462,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                               <X aria-hidden />
                             </Button>
                           </div>
+                          {newAuthoring && RICH_TEXT_TYPES.has(item.type) ? null : (
+                          <>
                           <div className="mt-1 flex flex-wrap items-start gap-2">
                             <ImagePicker
                               onInsert={(md) =>
@@ -3468,6 +3507,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                             />
                           </div>
                           <MathPreview text={c.text} />
+                          </>
+                          )}
                         </div>
                       );
                     })}

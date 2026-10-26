@@ -21,6 +21,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@napi-rs/canvas": "^1.0.9",
         "@secure-test/graphing": "workspace:*",
+        "@secure-test/markup": "workspace:*",
         "@secure-test/renderer": "workspace:*",
         "@secure-test/schema": "workspace:*",
         "@tiptap/core": "^3.32.0",
