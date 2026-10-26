@@ -21,6 +21,7 @@ import {
   MAX_STANDARD_LENGTH,
   normalizeStandards,
 } from "@/lib/standards/tags";
+import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST, boundedRecord } from "@secure-test/schema";
 
 export const ChoiceShape = z.object({
   id: z.string().min(1).max(64),
@@ -66,8 +67,8 @@ const BaseItemFields = {
 
 // Answer keys are OPTIONAL at write time (James, 2026-09-01). The prod
 // sample-import run rejected 35 of 146 extracted candidates solely for a
-// missing key (keyless quizzes: "correct_answer: Required" /
-// "correct_choice_ids: Required"), and the editor was already working
+// missing key (keyless quizzes: zod reported `correct_answer` /
+// `correct_choice_ids` as required), and the editor was already working
 // around the old min(1) rules by seeding placeholder keys. A keyless item
 // is a legitimate draft of its answer key: readiness.ts lists it as
 // "needs a correct answer", the delivery bundle never ships keys, and
@@ -78,7 +79,7 @@ const BaseItemFields = {
 const SingleSelectMCItem = z.object({
   type: z.literal("multiple_choice_single"),
   ...BaseItemFields,
-  choices: z.array(ChoiceShape).min(2),
+  choices: z.array(ChoiceShape).max(MAX_ITEM_LIST).min(2),
   correct_choice_ids: z.array(z.string()).max(1),
   correct_answer: z.null().optional(),
 });
@@ -86,8 +87,8 @@ const SingleSelectMCItem = z.object({
 const MultiSelectMCItem = z.object({
   type: z.literal("multiple_choice_multi"),
   ...BaseItemFields,
-  choices: z.array(ChoiceShape).min(2),
-  correct_choice_ids: z.array(z.string()),
+  choices: z.array(ChoiceShape).max(MAX_ITEM_LIST).min(2),
+  correct_choice_ids: z.array(z.string()).max(MAX_ITEM_LIST),
   correct_answer: z.null().optional(),
 });
 
@@ -145,7 +146,7 @@ const MatchItem = z.object({
   choices: z.array(ChoiceShape).max(0).default([]),
   correct_choice_ids: z.array(z.string()).max(0).default([]),
   correct_answer: z.null().optional(),
-  pairs: z.array(MatchPairShape).min(2),
+  pairs: z.array(MatchPairShape).max(MAX_ITEM_LIST).min(2),
 });
 
 // Slice 48: ordering. The sequence is authored in correct order — that IS
@@ -161,7 +162,7 @@ const OrderItem = z.object({
   choices: z.array(ChoiceShape).max(0).default([]),
   correct_choice_ids: z.array(z.string()).max(0).default([]),
   correct_answer: z.null().optional(),
-  sequence: z.array(SequenceEntryShape).min(2),
+  sequence: z.array(SequenceEntryShape).max(MAX_ITEM_LIST).min(2),
 });
 
 // Slice 49: hotspot. Draft-friendly — the editor creates the item first
@@ -185,7 +186,7 @@ const HotspotItem = z.object({
   correct_answer: z.null().optional(),
   image_asset_id: z.string().uuid().nullable().optional(),
   regions: z.array(HotspotRegionShape).max(50).default([]),
-  correct_region_ids: z.array(z.string().min(1)).default([]),
+  correct_region_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).default([]),
 });
 
 // Slice 50: drawing/upload — authoring only (no response format exists;
@@ -227,9 +228,11 @@ const TableItem = z.object({
   columns: z.array(TableColumnShape).min(1).max(8),
   rows: z.array(TableRowShape).min(1).max(30),
   corner: z.string().max(200).optional(),
-  cell_keys: z
-    .record(z.string().min(1), z.record(z.string().min(1), z.string().min(1).max(500)))
-    .optional(),
+  cell_keys: boundedRecord(
+    z.string().min(1),
+    boundedRecord(z.string().min(1), z.string().min(1).max(500), MAX_ITEM_LIST),
+    MAX_ITEM_LIST,
+  ).optional(),
 });
 
 // FB slice 1 (docs/fill-in-blank-design.md): a sentence with blanks. The
@@ -821,7 +824,7 @@ export const UpdateItemBody = CreateItemBody;
 export type UpdateItemBody = z.infer<typeof UpdateItemBody>;
 
 export const ReorderBody = z.object({
-  ordered_ids: z.array(z.string().uuid()).min(1),
+  ordered_ids: z.array(z.string().uuid()).max(MAX_ASSESSMENT_LIST).min(1),
 });
 export type ReorderBody = z.infer<typeof ReorderBody>;
 

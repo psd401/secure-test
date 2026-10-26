@@ -3,12 +3,13 @@ import { CalculatorModeSchema, CalculatorPresetSchema, StudentLayoutSchema } fro
 import { ANSWERS_RELEASE_MODES, ITEM_TYPES, STUDENT_FEEDBACK_LEVELS } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { SectionAccommodationsSchema } from "@/lib/accommodations/sections";
+import { MAX_ASSESSMENT_LIST, MAX_ITEM_LIST } from "@secure-test/schema";
 
 const AccommodationId = z
   .string()
   .refine(isValidAccommodationId, { message: "unknown_accommodation_id" });
-const AllowedAccommodations = z.array(AccommodationId);
-const ConstructAltering = z.array(AccommodationId);
+const AllowedAccommodations = z.array(AccommodationId).max(MAX_ASSESSMENT_LIST);
+const ConstructAltering = z.array(AccommodationId).max(MAX_ASSESSMENT_LIST);
 // The column also holds "none"; the bundle schema leaves the field out instead.
 const CalculatorModeColumn = z.union([z.literal("none"), CalculatorModeSchema]);
 
@@ -124,8 +125,8 @@ export const ItemBody = z.object({
   position: z.number().int().min(0),
   type: z.enum(ITEM_TYPES),
   stem: z.string().min(1),
-  choices: z.array(ChoiceShape).default([]),
-  correct_choice_ids: z.array(z.string()).default([]),
+  choices: z.array(ChoiceShape).max(MAX_ITEM_LIST).default([]),
+  correct_choice_ids: z.array(z.string()).max(MAX_ITEM_LIST).default([]),
   correct_answer: z.string().nullable().optional(),
 });
 export type ItemBody = z.infer<typeof ItemBody>;

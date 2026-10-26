@@ -15,6 +15,7 @@ import {
   notFoundResponse,
   type AccessLevel,
 } from "@/lib/api/access";
+import { MAX_ASSESSMENT_LIST } from "@secure-test/schema";
 
 // E5 slice 1 (docs/stimulus-design.md): item sets — one stimulus shared by
 // one or more contiguous items. Write shapes, the contiguity rules, and the
@@ -38,7 +39,7 @@ export const StimulusSources = z
 export const CreateItemSetBody = z.object({
   /** The items to group, in any order; they must be contiguous in the
    * assessment order and in no other set. */
-  item_ids: z.array(z.string().uuid()).min(1),
+  item_ids: z.array(z.string().uuid()).max(MAX_ASSESSMENT_LIST).min(1),
   stimulus_text: StimulusText.optional(),
   sources: StimulusSources.optional(),
   layout: ItemSetLayoutSchema.optional(),

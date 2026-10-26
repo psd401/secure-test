@@ -14,6 +14,7 @@ import {
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeSitting } from "@/lib/api/access";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { MAX_ASSESSMENT_LIST } from "@secure-test/schema";
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
@@ -22,7 +23,7 @@ interface RouteContext {
 const Body = z.object({
   ...extendBodyFields,
   /** The Monitor's checked students (2026-09-24). Absent = the whole sitting. */
-  attempt_ids: z.array(z.string().regex(UUID_RE)).min(1).optional(),
+  attempt_ids: z.array(z.string().regex(UUID_RE)).max(MAX_ASSESSMENT_LIST).min(1).optional(),
 });
 
 /**

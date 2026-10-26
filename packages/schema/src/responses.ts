@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GraphResponseSchema } from "./graph.js";
+import { MAX_ITEM_LIST, boundedRecord } from "./limits.js";
 
 // Slice 35: a student's answer to one item, stored in the design-tool's
 // `responses.response` jsonb column and (later) carried on the wire from the
@@ -24,7 +25,7 @@ export const SingleChoiceResponseSchema = z.object({
 
 export const MultiChoiceResponseSchema = z.object({
   type: z.literal("multiple_choice_multi"),
-  choice_ids: z.array(z.string().min(1)).min(1),
+  choice_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Bridge audit B-7 (2026-10-08, docs/server-delivered-renderer-design.md):
@@ -74,20 +75,20 @@ export const EssayResponseSchema = z.object({
 // that left. A fully correct response maps every pair id to itself.
 export const MatchResponseSchema = z.object({
   type: z.literal("match"),
-  matches: z.record(z.string().min(1), z.string().min(1)),
+  matches: boundedRecord(z.string().min(1), z.string().min(1), MAX_ITEM_LIST),
 });
 
 // Phase 4 slice 48: ordering. The student's arrangement as sequence-entry
 // ids, first to last. Fully correct = the item's authored sequence order.
 export const OrderResponseSchema = z.object({
   type: z.literal("order"),
-  ordered_ids: z.array(z.string().min(1)).min(1),
+  ordered_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Phase 4 slice 49: hotspot. The region id(s) the student marked.
 export const HotspotResponseSchema = z.object({
   type: z.literal("hotspot"),
-  region_ids: z.array(z.string().min(1)).min(1),
+  region_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST).min(1),
 });
 
 // Slice 65: drawing/upload. The response is a REFERENCE to an uploaded file,
@@ -113,11 +114,11 @@ export const DrawingUploadResponseSchema = z.object({
 // an essay.
 export const TableResponseSchema = z.object({
   type: z.literal("table"),
-  cells: z
-    .record(
-      z.string().min(1),
-      z.record(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH)),
-    )
+  cells: boundedRecord(
+    z.string().min(1),
+    boundedRecord(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH), MAX_ITEM_LIST),
+    MAX_ITEM_LIST,
+  )
     .refine(
       (cells) => Object.values(cells).some((row) => Object.keys(row).length > 0),
       { message: "a table response needs at least one cell" },
@@ -132,8 +133,7 @@ export const TableResponseSchema = z.object({
 // posted). Text is capped like a table cell: a blank is a word or a phrase.
 export const FillBlankResponseSchema = z.object({
   type: z.literal("fill_blank"),
-  answers: z
-    .record(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH))
+  answers: boundedRecord(z.string().min(1), z.string().max(RESPONSE_CELL_MAX_LENGTH), MAX_ITEM_LIST)
     .refine((answers) => Object.keys(answers).length > 0, {
       message: "a fill-in-the-blank response needs at least one blank",
     }),

@@ -133,7 +133,7 @@ describe("POST /api/ai/generate-item", () => {
   test("401 with no session", async () => {
     asUser(null);
     const res = await postGenerate({
-      assessment_id: "00000000-0000-0000-0000-000000000001",
+      assessment_id: "00000000-0000-4000-8000-000000000001",
       item_type: "multiple_choice_single",
       prompt: "x",
     });
@@ -143,7 +143,7 @@ describe("POST /api/ai/generate-item", () => {
   test("404 when assessment doesn't exist", async () => {
     asUser("teacher-1");
     const res = await postGenerate({
-      assessment_id: "00000000-0000-0000-0000-000000000001",
+      assessment_id: "00000000-0000-4000-8000-000000000001",
       item_type: "multiple_choice_single",
       prompt: "x",
     });
