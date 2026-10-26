@@ -166,6 +166,9 @@ export interface VectorChartSpec {
   /** Import fixes (2026-10-25): fill the bars white — the invisible boxes a
    * Google Docs export paints behind its text. */
   whiteBars?: boolean;
+  /** Write each `inside` line as one text run per word, as Word and Google
+   * Docs exports often do. */
+  wordRuns?: boolean;
 }
 
 export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
@@ -197,7 +200,15 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
     `BT /${face} 12 Tf 1 0 0 1 ${x} ${y} Tm (${esc(s)}) Tj ET`;
   spec.above.forEach((l, i) => parts.push(text("F1", 72, 760 - i * 16, l)));
   parts.push(text("F2", 72, region.y + region.height + 12, spec.caption));
-  spec.inside.forEach((l, i) => parts.push(text("F1", region.x + 10, region.y + region.height - 20 - i * 16, l)));
+  spec.inside.forEach((l, i) => {
+    const y = region.y + region.height - 20 - i * 16;
+    if (!spec.wordRuns) return parts.push(text("F1", region.x + 10, y, l));
+    let x = region.x + 10;
+    for (const word of l.split(" ")) {
+      parts.push(text("F1", x, y, word));
+      x += (word.length + 1) * 6;
+    }
+  });
   spec.below.forEach((l, i) => parts.push(text("F1", 72, region.y - 20 - i * 16, l)));
   const content = parts.join("\n");
   const xobject = spec.transparencyGroup ? "/XObject<</Fm1 7 0 R>>" : "";

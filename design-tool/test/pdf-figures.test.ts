@@ -281,6 +281,18 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     });
   }
 
+  // Re-review on #102: a line written as one run per word keeps its short
+  // words ("the", "in") — the point-label drop must not cut them out.
+  test("a flagged box whose lines are one run per word keeps every word", async () => {
+    const layout = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 400, height: 72 }, inside: [...INSTRUCTIONS], wordRuns: true }),
+    );
+    expect(layout.figures[0]!.text_inside).toBe(true);
+    for (const line of INSTRUCTIONS) expect(layout.textWithMarkers).toContain(line);
+    // Each line appears once (not also as a cut-down copy).
+    expect(layout.textWithMarkers.split("\n").filter((l) => l.includes("Use evidence"))).toHaveLength(1);
+  });
+
   test("a chart with short labels is not flagged, and its labels stay the chart's", async () => {
     const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART }));
     expect(layout.figures[0]!.text_inside).toBeUndefined();

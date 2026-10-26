@@ -294,6 +294,10 @@ const RULE_PT = 2;
 /** Fewer rules than this is a box or an underline, not a grid or table. */
 const MIN_RULES = 8;
 
+/** A text line whose first run starts inside `box`. */
+const lineStartsIn = (l: TextLine, box: Box): boolean =>
+  (l.x ?? 0) >= box[0] && (l.x ?? 0) <= box[2] && l.y >= box[1] && l.y <= box[3];
+
 /** `b` lies within `outer` (1 pt of slack). */
 const insideBox = (b: Box, outer: Box): boolean =>
   b[0] >= outer[0] - 1 && b[2] <= outer[2] + 1 && b[1] >= outer[1] - 1 && b[3] <= outer[3] + 1;
@@ -835,11 +839,20 @@ export async function extractPdfLayout(
     const kept =
       figureBoxes.length === 0
         ? lines
-        : linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter((l) => {
-            const inside = (b: Box) => (l.x ?? 0) >= b[0] && (l.x ?? 0) <= b[2] && l.y >= b[1] && l.y <= b[3];
-            if (!figureBoxes.some(inside)) return true;
-            return textInsideBoxes.some(inside) && (l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS;
-          });
+        : [
+            ...linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter(
+              (l) => !figureBoxes.some((b) => lineStartsIn(l, b)),
+            ),
+            // A `text_inside` figure's prose lines, assembled from EVERY run:
+            // the short-run label drop above would cut short words ("the",
+            // "in") out of a line written as one run per word (re-review on
+            // #102). interleaveMarkers sorts the lines back by height.
+            ...lines.filter(
+              (l) =>
+                textInsideBoxes.some((b) => lineStartsIn(l, b)) &&
+                (l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS,
+            ),
+          ];
     pageTexts.push(interleaveMarkers(kept, pageFigures));
   }
 
