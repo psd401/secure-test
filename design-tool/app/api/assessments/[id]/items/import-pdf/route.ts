@@ -19,6 +19,7 @@ import {
   flagShortenedSources,
   formsReport,
   keyFiguresFromText,
+  normalizePdfCandidate,
   numberingReport,
   proposalScreenText,
   readSourceNumbers,
@@ -27,6 +28,8 @@ import {
   validateProposedSets,
   withoutKeyFigures,
 } from "@/lib/pdfImport/extractCore";
+import { locateCandidates, type PageSize, type QuestionAnchor } from "@/lib/pdfImport/regions";
+import { normalizeProposalMath } from "@/lib/ai/mathNormalize";
 import { PdfExtractRequest, type PdfExtractResult } from "@/lib/pdfImport/types";
 import { runGuarded, type GuardedOutcome } from "@/lib/safeguarding/guard";
 import { requireDraft } from "@/lib/api/requireDraft";
@@ -195,10 +198,16 @@ export async function POST(req: Request, ctx: RouteContext) {
   // extraction writes nothing). Scanned PDFs have no text layer to walk.
   let figures: PdfFigure[] = [];
   let modelText = extracted.text;
+  // Editor redesign Phase 7 slice A (R-8): page sizes and numbered lines,
+  // for placing each proposal on its page in the import review.
+  let pages: PageSize[] = [];
+  let anchors: QuestionAnchor[] = [];
   if (!scanned) {
     try {
       const layout = await extractPdfLayout(bytes);
       figures = layout.figures;
+      pages = layout.pages;
+      anchors = layout.anchors;
       if (layout.textWithMarkers.trim().length > 0) modelText = layout.textWithMarkers;
     } catch (err) {
       // A figure walk that fails must not cost the teacher the import:
@@ -349,6 +358,40 @@ export async function POST(req: Request, ctx: RouteContext) {
   // that, "Form A / Form B" labels in the text layer.
   const forms = formsReport(validSourceNumbers, scanned ? null : modelText);
 
+  // Editor redesign Phase 7 slice A (R-8): what the side-by-side review
+  // needs. Placed over the raw list (document order), then split between
+  // the validated candidates and the refused ones. A scan has no anchors,
+  // so every region is null and the panel says so.
+  const rawRegions = locateCandidates(rawSourceNumbers, anchors, pages);
+  const validRaw = [...rawToValid.entries()].sort((a, b) => a[1] - b[1]).map(([rawIndex]) => rawIndex);
+  const rawType = (i: number): string | null => {
+    const t = (rawCandidates[i] as { type?: unknown } | null)?.type;
+    return typeof t === "string" ? t : null;
+  };
+  // A proposal the item schema refused, as text the teacher can turn into
+  // a question of a type they choose ("can't convert"). The same
+  // normalisation the valid ones get; the whole raw proposal already passed
+  // the output screen above.
+  const unconverted = rejected.map((r) => {
+    const norm = normalizeProposalMath(
+      normalizePdfCandidate(rawCandidates[r.index], { figureCount: figures.length }),
+    ) as { stem?: unknown; choices?: unknown } | null;
+    const choices = Array.isArray(norm?.choices) ? norm.choices : [];
+    return {
+      index: r.index,
+      type: rawType(r.index),
+      stem: typeof norm?.stem === "string" ? norm.stem.slice(0, 5000) : "",
+      choices: choices
+        .slice(0, 26)
+        .map((c) => (typeof c === "string" ? c : (c as { text?: unknown } | null)?.text))
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.slice(0, 1000)),
+      errors: r.errors,
+      source_numbers: rawSourceNumbers[r.index] ?? [],
+      region: rawRegions[r.index] ?? null,
+    };
+  });
+
   return NextResponse.json({
     ok: true,
     page_count: extracted.pageCount,
@@ -379,5 +422,18 @@ export async function POST(req: Request, ctx: RouteContext) {
     rejected_sets: setValidation.rejected,
     // E9: null, or { count, groups (validated indexes per form) | null, source }.
     forms,
+    // Editor redesign Phase 7 slice A (R-8), aligned with `candidates`: the
+    // printed numbers each claims, where it sits on the PDF
+    // (lib/pdfImport/regions.ts; null when not found), and the type the AI
+    // proposed when the import's own rules changed it.
+    source_numbers: validSourceNumbers,
+    regions: validRaw.map((i) => rawRegions[i] ?? null),
+    converted: validRaw.map((i, v) => {
+      const from = rawType(i);
+      return from && from !== candidates[v]!.type ? { from, to: candidates[v]!.type } : null;
+    }),
+    pages,
+    // Aligned with `rejected`.
+    unconverted,
   });
 }

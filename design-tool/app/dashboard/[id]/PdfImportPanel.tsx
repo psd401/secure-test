@@ -1,7 +1,7 @@
 "use client";
 import { needsAnswerKey } from "./readiness";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FilePicker } from "@/components/app/FilePicker";
 import { RenderedText } from "@/components/app/RenderedText";
 import { ChangedFromPdf } from "./ChangedFromPdf";
@@ -10,6 +10,22 @@ import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
 import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
 import type { FillBlankBlank } from "@secure-test/schema";
+import type { ItemType } from "@/db/schema";
+import type { CandidateRegion } from "@/lib/pdfImport/regions";
+import {
+  TRIAGE_LABEL,
+  TRIAGE_ORDER,
+  convertUnconverted,
+  readyToAccept,
+  triageCandidate,
+  triageCounts,
+  unconvertedTargets,
+  type Triage,
+  type TriageField,
+  type TriageStatus,
+  type UnconvertedProposal,
+} from "@/lib/pdfImport/triage";
+import { PdfSourcePane, type SourceRegion } from "./PdfSourcePane";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
 // for scanned/image PDFs, has the model read the pages directly — slice 44
@@ -90,6 +106,14 @@ interface ExtractResult {
   /** PDF-import fixes (2026-10-25): repeated questions (a form printed twice
    * on a page) left out of `candidates`. */
   print_copies_dropped?: number;
+  // Editor redesign Phase 7 slice A (R-8). Aligned with `candidates`; absent
+  // from an older server.
+  source_numbers?: number[][];
+  regions?: (CandidateRegion | null)[];
+  converted?: ({ from: string; to: string } | null)[];
+  pages?: { width: number; height: number }[];
+  /** Aligned with `rejected`: each refused proposal as text. */
+  unconverted?: (UnconvertedProposal & { source_numbers: number[]; region: CandidateRegion | null })[];
 }
 
 // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md): a
@@ -186,9 +210,21 @@ interface Props {
   assessmentName: string;
   disabled: boolean;
   onImported: () => void;
+  /** R-12: the side-by-side, triaged review (Phase 7 slice A). */
+  newAuthoring?: boolean;
 }
 
-export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImported }: Props) {
+/** R-8 triage colours: amber means "look at this", as elsewhere on the card. */
+const TRIAGE_BADGE: Record<TriageStatus, string> = {
+  ready: "bg-success text-success-foreground",
+  needs_key: "bg-warning-foreground/10 text-warning-foreground",
+  check: "bg-warning-foreground/20 text-warning-foreground",
+  cant_convert: "bg-destructive/10 text-destructive",
+};
+/** The ring on a field a "check this" reason is about. */
+const CHECK_RING = "rounded ring-2 ring-warning-foreground/60 ring-offset-1";
+
+export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImported, newAuthoring = false }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,6 +256,32 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
   // Beta feedback 2026-10-08 slice 2: figures the teacher saved to the
   // Images page from the strip (James 5.2: a teacher action, never automatic).
   const [savedFigures, setSavedFigures] = useState<Set<number>>(new Set());
+  // ---- Editor redesign Phase 7 slice A (R-8), flag on only ----
+  // The file the teacher picked, drawn in the source pane (never re-sent).
+  const [file, setFile] = useState<File | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  // Below 1280 px one pane shows at a time (R-11).
+  const [pane, setPane] = useState<"source" | "items">("items");
+  const [filter, setFilter] = useState<TriageStatus | "all">("all");
+  // The card / region pair last selected on either side, and a request for
+  // the source pane to scroll to one.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{ key: string; n: number } | null>(null);
+  // A refused proposal the teacher turned into a question (candidate index →
+  // its `unconverted` index), or left out.
+  const [fromUnconverted, setFromUnconverted] = useState<Map<number, number>>(new Map());
+  const [leftOut, setLeftOut] = useState<Set<number>>(new Set());
+  const [chosenTypes, setChosenTypes] = useState<Map<number, ItemType>>(new Map());
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!reviewOpen) return;
+    reviewHeading.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setReviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviewOpen]);
 
   const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
   const needFigure = sets.filter((s) => s.needs_figure && !addedSets.has(s.id)).length;
@@ -248,6 +310,13 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     setFormChoice("all");
     setCreatedDrafts([]);
     setSavedFigures(new Set());
+    setFile(newAuthoring ? file : null);
+    setFilter("all");
+    setActiveKey(null);
+    setFocusRequest(null);
+    setFromUnconverted(new Map());
+    setLeftOut(new Set());
+    setChosenTypes(new Map());
     try {
       const form = new FormData();
       form.append("file", file);
@@ -264,6 +333,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
         throw new Error(body?.hint ?? body?.error ?? `HTTP ${res.status}`);
       }
       setResult(body);
+      if (newAuthoring) {
+        setReviewOpen(true);
+        setPane("items");
+      }
       // Multi-source stimulus slice 3: `sources` / `layout` always ride the
       // response, but default them so an older cached response cannot crash
       // the card.
@@ -491,7 +564,8 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     return { id: body.assessment.id, name };
   }
 
-  async function addAll() {
+  /** `only` (R-8 "Accept all ready"): add just these candidate indexes. */
+  async function addAll(only?: ReadonlySet<number>) {
     if (!result) return;
     // Review fix (2026-08-14): each add() clears the error banner, so a
     // mid-list failure used to vanish behind later successes. Tally and
@@ -499,14 +573,15 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
     // set's questions land next to each other. E9: "Form 1 only" leaves the
     // hidden groups out; "One assessment per form" sends form 1 here and
     // every other form to a new draft of its own.
-    const visible = result.candidates.map((_, i) => i).filter((i) => !hidden.has(i));
+    const visible = result.candidates.map((_, i) => i).filter((i) => !hidden.has(i) && (!only || only.has(i)));
     let failed = await addRange(visible, assessmentId);
     if (formChoice === "split" && formGroups) {
       setBusy(true);
       try {
         for (let k = 1; k < formGroups.length; k++) {
           const draft = await createSiblingDraft(k + 1);
-          const group = formGroups[k]!;
+          const group = formGroups[k]!.filter((i) => !only || only.has(i));
+          if (group.length === 0) continue;
           failed += await addRange(group, draft.id);
           setCreatedDrafts((prev) => [...prev, { ...draft, count: group.length }]);
         }
@@ -520,6 +595,92 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
       setError(`${failed} item(s) failed to add (see the list — failed items are still addable)`);
     }
   }
+
+  // ---- Editor redesign Phase 7 slice A (R-8): triage ----
+  /** Each candidate's pile (lib/pdfImport/triage.ts). */
+  function triageOf(i: number): Triage {
+    const c = result!.candidates[i]!;
+    const set = sets.find((s) => s.item_indexes.includes(i)) ?? null;
+    return triageCandidate({
+      candidate: c,
+      needsKey: candidateNeedsKey(c),
+      changes: result!.changes?.[i] ?? [],
+      convertedFrom: result!.converted?.[i]?.from ?? null,
+      set,
+      typeChosen: fromUnconverted.has(i),
+    });
+  }
+  const triages = result && newAuthoring ? result.candidates.map((_, i) => triageOf(i)) : [];
+  // A form the teacher chose not to show is not counted or accepted.
+  const shownStatuses = triages.map((t, i) => (hidden.has(i) ? null : t.status));
+  const openUnconverted = (result?.unconverted ?? []).filter(
+    (u) => !leftOut.has(u.index) && ![...fromUnconverted.values()].includes(u.index),
+  );
+  const counts = triageCounts([
+    ...shownStatuses.filter((s): s is TriageStatus => s !== null),
+    ...openUnconverted.map(() => "cant_convert" as const),
+  ]);
+  const readyIndexes = readyToAccept(
+    triages.map((t) => t.status),
+    sets.filter((s) => !addedSets.has(s.id)),
+    new Set([...hidden, ...added]),
+  );
+  function cardKey(i: number): string {
+    return `c${i}`;
+  }
+  function unconvertedKey(index: number): string {
+    return `u${index}`;
+  }
+  /** Card → source: select the pair and scroll the PDF to it. */
+  function showInSource(key: string) {
+    setActiveKey(key);
+    setPane("source");
+    setFocusRequest((prev) => ({ key, n: (prev?.n ?? 0) + 1 }));
+  }
+  /** Source → card: select the pair, scroll the list to the card and focus it. */
+  function showCard(key: string) {
+    setActiveKey(key);
+    setPane("items");
+    setFilter("all");
+    // After the pane switch and filter have rendered.
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`pdf-card-${key}`);
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+      el?.focus({ preventScroll: true });
+    });
+  }
+  /** "Choose a type": the refused proposal becomes a new candidate at the
+   * end of the list, triaged "check this" (the teacher chose its type). */
+  function convertProposal(u: NonNullable<ExtractResult["unconverted"]>[number], type: ItemType) {
+    if (!result) return;
+    const at = result.candidates.length;
+    setResult({
+      ...result,
+      candidates: [...result.candidates, convertUnconverted(u, type) as Candidate],
+      changes: [...(result.changes ?? result.candidates.map(() => [])), []],
+      regions: [...(result.regions ?? result.candidates.map(() => null)), u.region],
+      converted: [...(result.converted ?? result.candidates.map(() => null)), null],
+      source_numbers: [...(result.source_numbers ?? result.candidates.map(() => [])), u.source_numbers],
+    });
+    setFromUnconverted((prev) => new Map(prev).set(at, u.index));
+    if (activeKey === unconvertedKey(u.index)) setActiveKey(cardKey(at));
+  }
+  /** Every region the source pane draws: the candidates, then the refused. */
+  const sourceRegions: SourceRegion[] = result
+    ? [
+        ...result.candidates.flatMap((_, i): SourceRegion[] => {
+          const region = result.regions?.[i];
+          return region && !hidden.has(i)
+            ? [{ key: cardKey(i), label: String(i + 1), name: `Question ${i + 1}`, region }]
+            : [];
+        }),
+        ...openUnconverted.flatMap((u, k): SourceRegion[] =>
+          u.region
+            ? [{ key: unconvertedKey(u.index), label: `✕${k + 1}`, name: `Could not convert ${k + 1}`, region: u.region, unconverted: true }]
+            : [],
+        ),
+      ]
+    : [];
 
   // ---- E5 slice 3: shaping a proposed set before Add ----
   function updateSet(id: string, mut: (s: ProposedSet) => ProposedSet | null) {
@@ -657,7 +818,31 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
             </p>
           ) : null}
 
-          {result ? (
+          {result && !newAuthoring ? renderResult(result) : null}
+          {result && newAuthoring ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground">
+                {result.candidates.length} proposed from {file?.name ?? "the PDF"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                className="rounded-md border border-border px-2 py-1 font-medium"
+              >
+                Open the review
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {result && newAuthoring && reviewOpen ? renderReview(result) : null}
+    </div>
+  );
+
+  /** The proposal list and its notices (the panel's own view, flag off; the
+   * right-hand pane of the review, flag on). */
+  function renderResult(result: ExtractResult) {
+    return (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
@@ -674,9 +859,18 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                     ? ` · ${result.print_copies_dropped} repeated question${result.print_copies_dropped === 1 ? "" : "s"} (a printed copy) left out`
                     : ""}
                 </span>
-                {result.candidates.length > 0 ? (
+                {result.candidates.length > 0 && newAuthoring ? (
+                  // R-8: only the ready pile goes in one click; the rest one by one.
                   <button
-                    onClick={addAll}
+                    onClick={() => addAll(new Set(readyIndexes))}
+                    disabled={disabled || busy || readyIndexes.length === 0}
+                    className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
+                  >
+                    Accept all ready ({readyIndexes.length})
+                  </button>
+                ) : result.candidates.length > 0 ? (
+                  <button
+                    onClick={() => addAll()}
                     disabled={disabled || busy}
                     className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-40"
                   >
@@ -865,7 +1059,7 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   })()}
                 </details>
               ) : null}
-              {result.rejected.length > 0 ? (
+              {newAuthoring ? renderUnconverted(result) : result.rejected.length > 0 ? (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer underline">
                     Why {result.rejected.length} item(s) could not be imported
@@ -886,6 +1080,8 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   const opensSet = set && set.item_indexes[0] === i;
                   if (set && !opensSet) return null; // rendered inside its card
                   const rows = set ? set.item_indexes : [i];
+                  // R-8: the pile filter shows a set when any question in it matches.
+                  if (newAuthoring && filter !== "all" && !rows.some((ri) => triages[ri]?.status === filter)) return null;
                   const setAdded = !!set && addedSets.has(set.id);
                   const above = set
                     ? sets.find((o) => o.item_indexes[o.item_indexes.length - 1] === set.item_indexes[0]! - 1)
@@ -897,7 +1093,14 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   const rowsHtml = rows.map((ri) => renderRow(ri, result.candidates[ri]!));
                   if (!set) return rowsHtml[0];
                   return (
-                    <li key={set.id} className="rounded border border-primary/40 bg-primary/5 p-2">
+                    <li
+                      key={set.id}
+                      className={`rounded border border-primary/40 bg-primary/5 p-2 ${
+                        newAuthoring && rows.some((ri) => triages[ri]?.reasons.some((r) => r.field === "stimulus"))
+                          ? CHECK_RING
+                          : ""
+                      }`}
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1090,7 +1293,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                           disabled={disabled || busy || setAdded}
                           className="shrink-0 rounded-md border border-border px-2 py-1 text-xs disabled:opacity-40"
                         >
-                          {setAdded ? "Added" : `Add ${rows.length === 1 ? "with stimulus" : `${rows.length} with stimulus`}`}
+                          {setAdded
+                            ? newAuthoring ? "Accepted" : "Added"
+                            : `${newAuthoring ? "Accept" : "Add"} ${rows.length === 1 ? "with stimulus" : `${rows.length} with stimulus`}`}
                         </button>
                       </div>
                       <ul className="mt-2 space-y-2 border-l-2 border-primary/30 pl-2">{rowsHtml}</ul>
@@ -1099,23 +1304,266 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                 })}
               </ul>
             </div>
-          ) : null}
+    );
+  }
+
+  /** R-8 "can't convert": each proposal the item schema refused, with its
+   * text, why, and a choice of type — or leave it out. None is dropped
+   * without the teacher seeing it. */
+  function renderUnconverted(result: ExtractResult) {
+    const list = result.unconverted ?? [];
+    if (list.length === 0 || (filter !== "all" && filter !== "cant_convert")) return null;
+    return (
+      <section aria-label="Proposals the import could not convert" className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Can&apos;t convert ({openUnconverted.length})
+        </h3>
+        <ul className="space-y-2">
+          {list.map((u) => {
+            const k = openUnconverted.indexOf(u);
+            const key = unconvertedKey(u.index);
+            const converted = [...fromUnconverted.entries()].find(([, ui]) => ui === u.index)?.[0];
+            if (converted !== undefined) {
+              return (
+                <li key={key} className="rounded border border-dashed border-border p-2 text-[11px] text-muted-foreground">
+                  Turned into question {converted + 1} (below).
+                </li>
+              );
+            }
+            if (leftOut.has(u.index)) {
+              return (
+                <li key={key} className="flex items-center justify-between gap-2 rounded border border-dashed border-border p-2 text-[11px] text-muted-foreground">
+                  <span className="truncate">Left out: {stemSnippet(u.stem, 60) || "(no text)"}</span>
+                  <button
+                    type="button"
+                    onClick={() => setLeftOut((prev) => { const next = new Set(prev); next.delete(u.index); return next; })}
+                    className="underline"
+                  >
+                    Undo
+                  </button>
+                </li>
+              );
+            }
+            const targets = unconvertedTargets(u);
+            const chosen = chosenTypes.get(u.index) ?? targets[0];
+            return (
+              <li
+                key={key}
+                id={`pdf-card-${key}`}
+                tabIndex={-1}
+                aria-label={`Could not convert ${k + 1}`}
+                className={`rounded border border-dashed bg-background p-2 ${
+                  activeKey === key ? "border-primary ring-2 ring-primary/40" : "border-destructive/40"
+                }`}
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="rounded bg-destructive/70 px-1.5 py-0.5 font-semibold text-destructive-foreground">✕{k + 1}</span>
+                  <span className={`rounded px-1.5 py-0.5 font-medium ${TRIAGE_BADGE.cant_convert}`}>
+                    {TRIAGE_LABEL.cant_convert}
+                  </span>
+                  {u.type ? <span className="text-muted-foreground">proposed as {itemTypeName(u.type)}</span> : null}
+                  <button
+                    type="button"
+                    onClick={() => (u.region ? showInSource(key) : undefined)}
+                    disabled={!u.region}
+                    className="underline disabled:no-underline disabled:text-muted-foreground"
+                  >
+                    {u.region ? `Page ${u.region.page}${u.region.how === "order" ? " (by order)" : ""} — show in PDF` : "Not found in the PDF"}
+                  </button>
+                </div>
+                {u.stem ? <RenderedText text={u.stem} className="block text-sm" /> : <p className="text-sm text-muted-foreground">(no question text came back)</p>}
+                {u.choices.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5 text-xs">
+                    {u.choices.map((t, ci) => (
+                      <li key={ci}>
+                        <span className="text-muted-foreground">{String.fromCharCode(65 + ci)}.</span>{" "}
+                        <RenderedText text={t} className="inline" />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="mt-1 text-[11px] text-destructive">Why: {u.errors.join("; ")}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  {targets.length > 0 ? (
+                    <>
+                      <label className="flex items-center gap-1">
+                        Choose a type
+                        <select
+                          value={chosen}
+                          disabled={disabled || busy}
+                          onChange={(e) => setChosenTypes((prev) => new Map(prev).set(u.index, e.target.value as ItemType))}
+                          className="rounded border border-border bg-background px-1 py-0.5 text-xs"
+                        >
+                          {targets.map((t) => (
+                            <option key={t} value={t}>
+                              {itemTypeName(t)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => chosen && convertProposal(u, chosen)}
+                        disabled={disabled || busy || !chosen}
+                        className="rounded-md border border-border px-2 py-0.5 disabled:opacity-40"
+                      >
+                        Make it a question
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Nothing here to convert — write it by hand if you need it.</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setLeftOut((prev) => new Set(prev).add(u.index))}
+                    disabled={disabled || busy}
+                    className="underline"
+                  >
+                    Leave it out
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
+
+  /** R-8 (flag on): the review, full screen — the PDF on the left with a
+   * numbered box per question, the triaged proposals on the right. Below
+   * 1280 px one pane shows at a time. Nothing is written until Accept. */
+  function renderReview(result: ExtractResult) {
+    const scanned = result.ocr_used;
+    const located = (result.regions ?? []).filter((r) => r?.how === "number").length;
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pdf-review-heading"
+        className="fixed inset-0 z-50 flex flex-col bg-background"
+      >
+        <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2">
+          <h2 id="pdf-review-heading" ref={reviewHeading} tabIndex={-1} className="text-sm font-semibold">
+            Review the import{file ? ` — ${file.name}` : ""}
+          </h2>
+          <div role="group" aria-label="Show" className="flex flex-wrap gap-1 text-xs">
+            {(["all", ...TRIAGE_ORDER] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                aria-pressed={filter === f}
+                onClick={() => setFilter(f)}
+                className={`rounded-full border px-2 py-0.5 ${filter === f ? "border-primary bg-primary/10 font-medium" : "border-border"}`}
+              >
+                {f === "all"
+                  ? `All (${TRIAGE_ORDER.reduce((n, t) => n + counts[t], 0)})`
+                  : `${TRIAGE_LABEL[f]} (${counts[f]})`}
+              </button>
+            ))}
+          </div>
+          <span className="flex-1" />
+          <p className="text-[11px] text-muted-foreground">Nothing is added until you accept it.</p>
+          <button
+            type="button"
+            onClick={() => setReviewOpen(false)}
+            className="rounded-md border border-border px-2 py-1 text-xs"
+          >
+            Back to the editor
+          </button>
         </div>
-      ) : null}
-    </div>
-  );
+        <div role="group" aria-label="Pane" className="flex gap-1 border-b border-border px-4 py-1 text-xs xl:hidden">
+          {(["source", "items"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              aria-pressed={pane === p}
+              onClick={() => setPane(p)}
+              className={`rounded px-2 py-0.5 ${pane === p ? "bg-primary/10 font-medium" : ""}`}
+            >
+              {p === "source" ? "Source PDF" : "Proposed questions"}
+            </button>
+          ))}
+        </div>
+        <div className="grid min-h-0 flex-1 xl:grid-cols-2">
+          <div className={`min-h-0 overflow-y-auto border-r border-border p-4 ${pane === "source" ? "" : "hidden xl:block"}`}>
+            {scanned ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                This is a scanned PDF: there is no text to find the questions in, so no boxes are drawn. Compare by
+                order.
+              </p>
+            ) : result.candidates.length > 0 && located < result.candidates.length ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {located} of {result.candidates.length} questions were found on the page by their printed number. The
+                others are shown on the page of the question before them, or not at all.
+              </p>
+            ) : null}
+            {file ? (
+              <PdfSourcePane
+                file={file}
+                regions={sourceRegions}
+                activeKey={activeKey}
+                onSelect={showCard}
+                focusRequest={focusRequest}
+              />
+            ) : null}
+          </div>
+          <div className={`min-h-0 space-y-2 overflow-y-auto p-4 ${pane === "items" ? "" : "hidden xl:block"}`}>
+            {busy ? <p className="text-xs text-muted-foreground" role="status">Working…</p> : null}
+            {error ? (
+              <p role="alert" className="rounded border border-destructive/40 p-2 text-xs text-destructive">
+                {error}
+              </p>
+            ) : null}
+            {renderResult(result)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /** One candidate row — on its own in the list, or inside a set card. */
   function renderRow(i: number, c: Candidate) {
     const inSet = sets.some((s) => s.item_indexes.includes(i));
     const prevInSet = i > 0 && sets.some((s) => s.item_indexes.includes(i - 1));
+    // R-8 (flag on): the card's pile, its place on the PDF, and the fields a
+    // "check this" reason is about.
+    const tri = newAuthoring ? triages[i] : undefined;
+    const ring = (field: TriageField) => (tri?.reasons.some((r) => r.field === field) ? CHECK_RING : "");
+    const ringChoices = new Set(tri?.reasons.flatMap((r) => r.choiceIds ?? []) ?? []);
+    const key = cardKey(i);
+    const region = result?.regions?.[i] ?? null;
+    if (newAuthoring && filter !== "all" && tri?.status !== filter && !inSet) return null;
     return (
                   <li
                     key={i}
-                    className="flex items-start justify-between gap-2 rounded border border-border bg-background p-2"
+                    id={newAuthoring ? `pdf-card-${key}` : undefined}
+                    tabIndex={newAuthoring ? -1 : undefined}
+                    aria-label={newAuthoring ? `Question ${i + 1}` : undefined}
+                    className={`flex items-start justify-between gap-2 rounded border bg-background p-2 ${
+                      newAuthoring && activeKey === key ? "border-primary ring-2 ring-primary/40" : "border-border"
+                    }`}
                   >
                     <div className="min-w-0">
-                      <span className="text-xs text-muted-foreground">
+                      {tri ? (
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                          <span className="rounded bg-primary px-1.5 py-0.5 font-semibold text-primary-foreground">{i + 1}</span>
+                          <span className={`rounded px-1.5 py-0.5 font-medium ${TRIAGE_BADGE[tri.status]}`}>
+                            {TRIAGE_LABEL[tri.status]}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => (region ? showInSource(key) : undefined)}
+                            disabled={!region}
+                            className="underline disabled:no-underline disabled:text-muted-foreground"
+                          >
+                            {region
+                              ? `Page ${region.page}${region.how === "order" ? " (by order)" : ""} — show in PDF`
+                              : "Not found in the PDF"}
+                          </button>
+                        </div>
+                      ) : null}
+                      <span className={`text-xs text-muted-foreground ${ring("type")}`}>
                         {typeLabel(c)}
                         {candidateNeedsKey(c) ? (
                           <span className="ml-2 rounded bg-warning-foreground/10 px-1.5 py-0.5 text-[11px] text-warning-foreground">
@@ -1129,9 +1577,34 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                           the posted stem keeps its [[b1]] markers. */}
                       <RenderedText
                         text={c.type === "fill_blank" ? stemWithGaps(c.stem) : c.stem}
-                        className="block truncate text-sm"
+                        className={tri ? `block text-sm ${ring("stem")}` : "block truncate text-sm"}
                       />
-                      <ChangedFromPdf changes={result?.changes?.[i] ?? []} />
+                      {tri && c.choices && c.choices.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 text-xs">
+                          {c.choices.map((ch, ci) => (
+                            <li key={ch.id} className={ringChoices.has(ch.id) ? CHECK_RING : ""}>
+                              <span className="text-muted-foreground">{String.fromCharCode(65 + ci)}.</span>{" "}
+                              <RenderedText text={ch.text} className="inline" />
+                              {c.correct_choice_ids?.includes(ch.id) ? (
+                                <span className="ml-1 text-[11px] text-muted-foreground">(key)</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {tri && c.columns && ring("columns") ? (
+                        <p className={`mt-1 text-xs ${ring("columns")}`}>
+                          Columns: {c.columns.map((col) => col.label).join(", ")}
+                        </p>
+                      ) : null}
+                      {tri && tri.reasons.length > 0 ? (
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-warning-foreground">
+                          {tri.reasons.map((r, ri) => (
+                            <li key={ri}>{r.text}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {tri ? null : <ChangedFromPdf changes={result?.changes?.[i] ?? []} />}
                       {workTypeOptions(c.type).length > 0 && !added.has(i) ? (
                         <label className="mt-1 block text-xs text-muted-foreground">
                           Add as{" "}
@@ -1161,10 +1634,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                           disabled={disabled || busy || added.has(i)}
                           className="rounded-md border border-border px-2 py-1 text-xs disabled:opacity-40"
                         >
-                          {added.has(i) ? "Added" : "Add"}
+                          {added.has(i) ? (newAuthoring ? "Accepted" : "Added") : newAuthoring ? "Accept" : "Add"}
                         </button>
                       ) : added.has(i) ? (
-                        <span className="text-[11px] text-muted-foreground">Added</span>
+                        <span className="text-[11px] text-muted-foreground">{newAuthoring ? "Accepted" : "Added"}</span>
                       ) : null}
                       {!inSet && !added.has(i) && !prevInSet ? (
                         <button type="button" onClick={() => startSet(i)} disabled={disabled || busy} className="text-[11px] underline">

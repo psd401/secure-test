@@ -6,6 +6,7 @@ import {
   renderPageAsImage,
 } from "unpdf";
 import { encodePng } from "./png";
+import { anchorsFromLines, type PageSize, type QuestionAnchor } from "./regions";
 
 // E5 slice 4 (docs/stimulus-design.md; spike S1 made this the plan): the
 // raster figures of a text-layer PDF, each with its page position, plus the
@@ -70,6 +71,11 @@ export interface PdfLayout {
    * a blank line, with `[FIGURE n]` on its own line at each figure's top. */
   textWithMarkers: string;
   figures: PdfFigure[];
+  /** Editor redesign Phase 7 slice A (R-8): each page's size and its
+   * numbered lines, so the import review can place each proposed question
+   * on the page (lib/pdfImport/regions.ts). */
+  pages: PageSize[];
+  anchors: QuestionAnchor[];
 }
 
 /** Below this many points on either side an image is decoration, not a figure. */
@@ -564,6 +570,8 @@ export async function extractPdfLayout(
   const doc = await getDocumentProxy(bytes.slice());
   const figures: PdfFigure[] = [];
   const pageTexts: string[] = [];
+  const pages: PageSize[] = [];
+  const anchors: QuestionAnchor[] = [];
   let totalBytes = 0;
   let n = 0;
 
@@ -713,6 +721,8 @@ export async function extractPdfLayout(
         return { x, y };
       });
     const lines = linesOf(items, base, styleOf);
+    pages.push({ width: viewport.width, height: viewport.height });
+    anchors.push(...anchorsFromLines(lines, p));
 
     // Slice 5: painted paths close together are one drawing; a drawing big
     // enough and with enough paths in it is a chart.
@@ -857,7 +867,7 @@ export async function extractPdfLayout(
   }
 
   await (renderDoc as RenderDoc | null)?.destroy();
-  return { pageCount: doc.numPages, textWithMarkers: pageTexts.join("\n\n"), figures };
+  return { pageCount: doc.numPages, textWithMarkers: pageTexts.join("\n\n"), figures, pages, anchors };
 }
 
 // --- PDF-import slice 3 (2026-10-25): the pages themselves, for the model ---

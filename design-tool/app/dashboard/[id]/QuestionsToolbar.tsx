@@ -142,6 +142,7 @@ export function QuestionsToolbar(props: QuestionsToolbarProps) {
         assessmentName={assessment.name}
         disabled={isLocked}
         onImported={reloadFromServer}
+        newAuthoring={newAuthoring}
       />
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 empty:hidden">

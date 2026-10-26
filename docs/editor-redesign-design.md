@@ -550,3 +550,29 @@ unless noted.
   written; the Status line and `docs/adr/README.md` say so. The Phase 5
   entries above, which say "still **Proposed**", are dated records and stay
   as written.
+- 2026-10-26 — **Phase 7 slice A built** (R-8, prototype track, flag on
+  only). With the flag on, a PDF import opens a full-screen review: the
+  uploaded PDF on the left, drawn page by page in the browser by the pdf.js
+  build inside `unpdf` (already the server's PDF reader, so no new
+  dependency; the browser's own PDF viewer is the fallback, without
+  boxes), and the proposals on the right. Below 1280 px a toggle shows one
+  pane. Provenance: the model returns no positions, so each proposal is
+  placed by its printed question number (`source_number(s)`) at the line
+  that starts with that number (`lib/pdfImport/regions.ts`, anchors from
+  `extractPdfLayout`). A proposal with no matching number is shown on the
+  page of the one before it ("by order", no box); a scan has no text
+  layer, so nothing is placed and the pane says so. Boxes and cards link
+  both ways. Each proposal is triaged (`lib/pdfImport/triage.ts`): *ready*,
+  *needs a key*, *check this* (the model's text changes, a type the
+  import switched on its own, a stimulus paired by position, a figure not
+  extracted, a shortened source; the field is ringed on the card) or
+  *can't convert* (a proposal the item schema refused, now returned as
+  text: choose a type for it or leave it out). The model has no
+  confidence score, so these are the pipeline's own signals. "Accept all
+  ready" takes the ready pile, with a stimulus set only when all its
+  questions are ready; everything else is accepted one by one. Still
+  propose-only. The route adds `source_numbers`, `regions`, `converted`,
+  `pages` and `unconverted` to its response; with the flag off the panel
+  ignores them and is unchanged. Tests: `test/pdf-import-triage.test.ts`,
+  a review-fields case in `test/pdf-import-route.test.ts`. Hand-check rows
+  784–795.
