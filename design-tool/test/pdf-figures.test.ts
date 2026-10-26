@@ -271,9 +271,28 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     expect(layout.figures).toHaveLength(1);
   });
 
-  // The two-line instructions box the earlier review worried about never
-  // becomes a figure: a bordered box is too few paths to be a drawing, and a
-  // box drawn with 8+ rules is a ruled table whose text stays text.
+  test("a 72 pt chart whose only text is two long labels keeps its picture", async () => {
+    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
+    const layout = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 72 }, inside }),
+    );
+    expect(layout.figures).toHaveLength(1);
+  });
+
+  // Before merging #102: a two-line instructions box decorated with 8+
+  // shapes that are not a grid (here the fixture's bars stand in for icons
+  // or a dotted frame) is mostly text, so it is a panel and its text stays.
+  test("a decorated two-line instructions box is a text panel; its text stays", async () => {
+    const inside = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
+    const layout = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 48 }, inside }),
+    );
+    expect(layout.figures).toEqual([]);
+    for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+  });
+
+  // A plain bordered or lined two-line box never becomes a figure at all:
+  // too few paths to be a drawing.
   test("a bordered two-line instructions box is not a figure; its text stays", async () => {
     const lines = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
     const region = { x: 72, y: 600, width: 468, height: 44 };
@@ -290,9 +309,13 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
     const long = "A sentence of prose that runs well past thirty characters.";
     expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
-    // Two prose lines are a chart's labels, whatever the box's size.
-    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
-    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], [100, 140, 400, 200])).toBe(false);
+    // Two prose lines: a panel only when their text fills TEXT_PANEL_FILL of
+    // the box — a box sized to them is; a chart much bigger than them is not.
+    const wide = (x: number, y: number) => ({ ...line(x, y, long), width: 280, height: 12 });
+    expect(isTextPanel([wide(110, 160), wide(110, 176)], [100, 140, 400, 190])).toBe(true);
+    expect(isTextPanel([wide(110, 150), wide(110, 170)], box)).toBe(false);
+    // Lines without measured extents never fill a box.
+    expect(isTextPanel([line(110, 160, long), line(110, 176, long)], [100, 140, 400, 190])).toBe(false);
     expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
     // Prose beside the box (starting left of it) or below it does not count.
     expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);
