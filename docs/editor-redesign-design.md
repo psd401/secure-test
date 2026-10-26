@@ -531,3 +531,18 @@ unless noted.
   risk 6, is hand-check rows 767–781. Not built: speech-to-text, time-limit
   strip, contrast / zoom / font views; the math read-aloud is a plain
   reading of the TeX, not the client's MathSpeech.
+- 2026-10-26 — **Phase 5 review finding fixed** (prototype track). Every
+  click inside a question in the preview, including clicks that answer it,
+  sent `jump`, and the editor page switched below 1280 px to the Editor
+  pane, so the preview could not be answered there. At 1280 px and wider each
+  answer scrolled the editor, and with Follow my place on that could scroll
+  the preview back. Three changes: (1) the bootstrap sends `jump` only for a
+  click on a question's text (`.stem`) or on the block itself. Controls
+  (form fields, labels, buttons, links, canvas, `summary`, anything
+  contenteditable or with a `role` or `tabindex`) and a click that ends a
+  text selection send nothing. (2) `onShowItem` now says where the request
+  came from: a click in the frame only scrolls the editor, and only a
+  "Question N" link under the hand-in result switches panes. (3) After a
+  jump, Follow my place stays quiet for 1.5 s. Test:
+  `test/preview-shell.test.ts` (the bootstrap with the real renderer).
+  Hand-check row 774 amended, rows 782–783.

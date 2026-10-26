@@ -16,8 +16,9 @@
 //      inserts the renderer, whose text sits in the shell as an inert
 //      `<script type="text/plain">`, as an inline script. The CSP admits it
 //      only if its text hashes to the pinned value.
-//   4. Tags each rendered question block with its position so a click can
-//      name the question (`jump`) and the parent can scroll to one
+//   4. Tags each rendered question block with its position so a click on a
+//      question's text can name it (`jump` — never a click that answers it)
+//      and the parent can scroll to one
 //      (`scroll_to`). When the blocks do not line up one-to-one with the
 //      bundle's items, linking is reported off rather than guessed.
 //   5. Relays read-aloud callbacks from the parent (`speech`) into the
@@ -149,16 +150,44 @@ export const PREVIEW_BOOTSTRAP_JS = `(function () {
     }
   }
 
+  // Click-to-jump names a question only for a click on its TEXT (the .stem)
+  // or on the block itself — never for answering it. A click on or inside a
+  // control (a choice, a blank inside a fill-in stem, a picture's enlarge
+  // button, an order row, the drawing surface…) or one that ends a text
+  // selection (highlighting) sends nothing, so answering never moves the
+  // editor.
+  var CONTROL_TAGS = { INPUT: true, TEXTAREA: true, SELECT: true, OPTION: true, BUTTON: true, LABEL: true,
+    A: true, CANVAS: true, SUMMARY: true };
+  function isControl(el) {
+    if (CONTROL_TAGS[String(el.tagName || '').toUpperCase()] === true) return true;
+    if (el.isContentEditable === true || el.getAttribute('contenteditable') === 'true') return true;
+    if (el.getAttribute('role') !== null || el.getAttribute('tabindex') !== null) return true;
+    return false;
+  }
+  function selecting() {
+    try {
+      var selection = window.getSelection && window.getSelection();
+      return !!selection && selection.isCollapsed === false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   document.addEventListener('click', function (event) {
     if (!linked) return;
     var el = event.target;
+    var inStem = false;
     while (el && el.nodeType === 1) {
       var at = el.getAttribute('data-preview-item');
       if (at !== null) {
+        if (!inStem && el !== event.target) return;
+        if (selecting()) return;
         var id = itemIds[Number(at)];
         if (id) send({ kind: 'jump', item_id: id });
         return;
       }
+      if (isControl(el)) return;
+      if ((' ' + (el.className || '') + ' ').indexOf(' stem ') !== -1) inStem = true;
       el = el.parentNode;
     }
   }, true);

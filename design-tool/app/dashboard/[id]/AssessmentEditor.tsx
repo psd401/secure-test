@@ -799,11 +799,14 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     (stem ?? card).focus({ preventScroll: true });
   }
 
-  /** Phase 5 slice B: a click in the preview shows that question in the
-   * editor — scrolled into view, focus left where it is (the teacher may be
-   * typing an answer in the preview). */
-  function showItemFromPreview(itemId: string) {
-    setNarrowPane("editor");
+  /** Phase 5 slice B: show a question in the editor — scrolled into view,
+   * focus left where it is (the teacher may be answering in the preview). A
+   * click on a question's text in the preview (`frame`) only scrolls: below
+   * 1280 px the editor pane stays hidden until the teacher picks it, so
+   * clicking in the preview never takes it away. A "Question N" link under
+   * the hand-in result (`score`) is an explicit move, so it switches panes. */
+  function showItemFromPreview(itemId: string, from: "frame" | "score") {
+    if (from === "score") setNarrowPane("editor");
     requestAnimationFrame(() =>
       document.getElementById(`question-${itemId}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
     );

@@ -29,6 +29,9 @@ import type { AssessmentView, ItemSetView, ItemView } from "./editorModel";
 const REFRESH_MS = 600;
 /** A frame that has not rendered by then is reported as failed. */
 const START_TIMEOUT_MS = 20_000;
+/** How long Follow my place stays quiet after a click in the preview scrolls
+ * the editor (longer than a smooth scroll plus the 150 ms follow delay). */
+const JUMP_QUIET_MS = 1500;
 
 interface FrameSlot {
   key: number;
@@ -73,8 +76,10 @@ export function InteractivePreview({
   assessment: AssessmentView;
   items: ItemView[];
   itemSets: ItemSetView[];
-  /** Click-to-jump: scroll the editor to this question. */
-  onShowItem: (itemId: string) => void;
+  /** Show this question in the editor. `frame`: a click on its text in the
+   * preview (scroll only — the teacher is still in the preview); `score`: a
+   * "Question N" link under the result (an explicit move to the editor). */
+  onShowItem: (itemId: string, from: "frame" | "score") => void;
   frameClassName?: string;
 }) {
   const [tts, setTts] = useState(false);
@@ -113,6 +118,10 @@ export function InteractivePreview({
   const keyRef = useRef(0);
   const lastPayload = useRef("");
   const anchorRef = useRef<string | null>(null);
+  /** Until this time (ms), Follow my place sends nothing: the editor is
+   * scrolling because of a click in the preview, and following it back would
+   * move the page the teacher just clicked in. */
+  const quietUntil = useRef(0);
   const fetching = useRef(new Set<string>());
 
   // Pictures go in as the bundle's base64 `assets` (the frame has no network).
@@ -283,7 +292,10 @@ export function InteractivePreview({
       );
       switch (message.kind) {
         case "jump":
-          if (bundleItem) onShowRef.current(message.item_id);
+          if (!bundleItem) return;
+          quietUntil.current = Date.now() + JUMP_QUIET_MS;
+          anchorRef.current = message.item_id;
+          onShowRef.current(message.item_id, "frame");
           return;
         case "response":
           if (!bundleItem || bundleItem.type !== message.response.type) return;
@@ -353,7 +365,7 @@ export function InteractivePreview({
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
           const shown = framesRef.current.shown;
-          if (!shown) return;
+          if (!shown || Date.now() < quietUntil.current) return;
           try {
             ports.current.get(shown.key)?.postMessage(scrollToMessage(anchor, true));
           } catch {
@@ -479,7 +491,7 @@ export function InteractivePreview({
           <ul className="space-y-0.5">
             {score.rows.map((row) => (
               <li key={row.itemId}>
-                <button type="button" className="underline-offset-2 hover:underline" onClick={() => onShowItem(row.itemId)}>
+                <button type="button" className="underline-offset-2 hover:underline" onClick={() => onShowItem(row.itemId, "score")}>
                   Question {row.number}
                 </button>
                 {": "}

@@ -328,6 +328,38 @@ describe("the bootstrap, running the student's renderer", () => {
     expect(vm.runInContext("JSON.stringify(__scrolled)", context)).toBe('{"block":"start","behavior":"smooth"}');
   });
 
+  test("answering never names the question: only a click on its text (or the block) sends jump", () => {
+    const { context, port, sent } = bootFrame();
+    port().onmessage({ data: { kind: "load", payload: payloadFor(fixtureItems()) } });
+    const jumps = () => sent().filter((m) => (m as { kind: string }).kind === "jump");
+    vm.runInContext(
+      `(function link(n) { (n.children || []).forEach(function (c) { c.parentNode = n; link(c); }); })(__root);
+       var __q1 = __all('.item', __root)[0];
+       var __q2 = __all('.item', __root)[1];`,
+      context,
+    );
+    // A choice's radio, its label, and the short-answer box: no jump.
+    vm.runInContext("__click({ target: __all('input', __q1)[1] });", context);
+    vm.runInContext("__click({ target: __all('label', __q1)[0] });", context);
+    vm.runInContext("__click({ target: (__all('input', __q2)[0] || __all('textarea', __q2)[0]) });", context);
+    // Inside the answer area but not on a control (the choices' wrapper): no jump.
+    vm.runInContext("__click({ target: __all('label', __q1)[0].parentNode });", context);
+    expect(jumps()).toEqual([]);
+    // The block itself, then its text: jump.
+    vm.runInContext("__click({ target: __q1 });", context);
+    vm.runInContext("__click({ target: __all('.stem', __q2)[0] });", context);
+    expect(jumps()).toEqual([
+      { kind: "jump", item_id: "q1" },
+      { kind: "jump", item_id: "q2" },
+    ]);
+    // A click that ends a text selection in the stem (highlighting): no jump.
+    vm.runInContext(
+      "window.getSelection = function () { return { isCollapsed: false }; }; __click({ target: __all('.stem', __q2)[0] });",
+      context,
+    );
+    expect(jumps()).toHaveLength(2);
+  });
+
   test("speech callbacks reach the renderer's hooks only by name, with whole-number ranges", () => {
     const { context, port } = bootFrame();
     port().onmessage({ data: { kind: "load", payload: payloadFor(fixtureItems()) } });
