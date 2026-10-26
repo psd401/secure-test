@@ -587,10 +587,17 @@ describe("POST items/import-pdf", () => {
     const id = await createAssessment("Blocked");
     const res = await postPdf(
       id,
-      makeTextPdf(["MC: Fine | a:1 | b:2 | *a", "BLOCKME sensitive content"]),
+      // BLOCKME in a stem trips both checks: the input one only records,
+      // so the 422 comes from the output check on the proposed stem.
+      makeTextPdf(["MC: Fine | a:1 | b:2 | *a", "MC: BLOCKME sensitive | a:1 | b:2 | *a"]),
     );
     expect(res.status).toBe(422);
-    expect(((await res.json()) as { error: string }).error).toBe("blocked_by_guardrail");
+    const body = (await res.json()) as { error: string; stage: string; hint?: string };
+    expect(body.error).toBe("blocked_by_guardrail");
+    // 2026-10-25: the input check only records on this surface, so the
+    // block comes from the output check, and the panel gets a plain hint.
+    expect(body.stage).toBe("output");
+    expect(body.hint).toContain("AI safety filter");
     const db = getDb();
     const events = await db
       .select()
@@ -598,6 +605,28 @@ describe("POST items/import-pdf", () => {
       .where(eq(guardrail_events.action, "block"));
     expect(events).toHaveLength(1);
     expect(events[0]!.surface).toBe("pdf-import");
+    expect(events[0]!.stage).toBe("output");
+    // The input hit was recorded, not enforced: the model still ran.
+    const inputEvents = await db
+      .select()
+      .from(guardrail_events)
+      .where(eq(guardrail_events.stage, "input"));
+    expect(inputEvents).toHaveLength(1);
+    expect(inputEvents[0]!.action).toBe("flag");
+  });
+
+  test("BLOCKME only in a choice or an answer → 422 at the output stage", async () => {
+    process.env.GUARDRAIL_PROVIDER = "mock";
+    for (const line of ["MC: Pick one | a:BLOCKME | b:fine | *b", "ST: Name it | BLOCKME"]) {
+      const id = await createAssessment("Blocked option");
+      // GOOD_LINES keeps the page above the text floor, off the scanned
+      // (OCR) branch.
+      const res = await postPdf(id, makeTextPdf([...GOOD_LINES, line]));
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: string; stage: string };
+      expect(body.error).toBe("blocked_by_guardrail");
+      expect(body.stage).toBe("output");
+    }
   });
 
   test("published assessment → 409 (draft-locked)", async () => {

@@ -20,6 +20,7 @@ import {
   formsReport,
   keyFiguresFromText,
   numberingReport,
+  proposalScreenText,
   readSourceNumbers,
   readCandidateChanges,
   validatePdfCandidates,
@@ -233,37 +234,34 @@ export async function POST(req: Request, ctx: RouteContext) {
     // Scanned branch: no pre-model text exists to screen, so the input
     // stage is skipped (ADR 0015); the output stage below still runs.
     ...(scanned ? {} : { inputText: reqBody.data.text }),
+    // 2026-10-25: the guardrail's PROMPT_ATTACK filter (HIGH / BLOCK) reads
+    // ordinary test directions ("Answer all questions. Show your work.") as
+    // injection, so an enforced input check refused real teacher PDFs. The
+    // hit is recorded as "flag"; the output check below still blocks, the
+    // prompt fences the text as data, and the teacher reviews every proposal.
+    inputMode: "record",
     run: () => provider.extract(reqBody.data, auth.session.sub),
-    // E5 slice 3: proposed stimuli are model output too — same screen.
-    outputText: (r) =>
-      [
-        ...r.candidates.map((c) =>
-          c && typeof c === "object" && "stem" in c ? String((c as { stem: unknown }).stem) : "",
-        ),
-        ...(r.proposed_sets ?? []).flatMap((sset) => {
-          if (!sset || typeof sset !== "object") return [""];
-          const obj = sset as { stimulus?: unknown; sources?: unknown };
-          // Multi-source stimulus slice 3: a source's text is model output
-          // the student will read — the same screen as a stimulus.
-          const sourceTexts = Array.isArray(obj.sources)
-            ? obj.sources.map((s) =>
-                s && typeof s === "object" && "text" in s
-                  ? String((s as { text: unknown }).text)
-                  : typeof s === "string"
-                    ? s
-                    : "",
-              )
-            : [];
-          return ["stimulus" in obj ? String(obj.stimulus) : "", ...sourceTexts];
-        }),
-      ].join("\n"),
+    // Every string the model proposed — stems, choices, pairs, blank
+    // options and keys, answers, table labels, stimuli and sources. With
+    // the input check record-only (above), this is the one enforced gate,
+    // so it reads the whole proposal rather than stems alone (PR #108
+    // review).
+    outputText: (r) => proposalScreenText([r.candidates, r.proposed_sets ?? []]),
     });
   } catch (err) {
     return extractionFailure(err);
   }
   if (!outcome.ok) {
     return NextResponse.json(
-      { ok: false, error: "blocked_by_guardrail", stage: outcome.stage },
+      {
+        ok: false,
+        error: "blocked_by_guardrail",
+        stage: outcome.stage,
+        // The panel shows `hint` in place of the code. The input check only
+        // records on this surface, so it is the AI's proposed questions
+        // that were stopped, not the teacher's PDF.
+        hint: "The AI safety filter stopped the questions proposed from this PDF. Add these items by hand, or try importing a smaller part of the document.",
+      },
       { status: 422 },
     );
   }
