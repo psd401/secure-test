@@ -243,15 +243,15 @@ export function isFigureLabel(run: { x: number; y: number; str: string }, boxes:
 
 /** A line at least this long inside a drawing is prose, not a label. */
 const PROSE_LINE_CHARS = 30;
-/** This many prose lines inside a drawing make it a text box, not a figure
- * (two do when nothing else is inside — see isTextPanel). Review on #102:
- * two alone was enough for a chart with two long legend or category labels
- * inside its box to lose its picture; the text panels in the samples hold
- * 5–30 such lines. */
+/** This many prose lines inside a drawing make it a text box, not a figure.
+ * Review on #102: two was enough for a chart with two long legend or
+ * category labels inside its box to lose its picture; the text panels in
+ * the samples hold 5–30 such lines. A shorter instructions box never needs
+ * this rule: a plain border is too few paths to be a drawing at all
+ * (MIN_CLUSTER_PATHS), and a box drawn with 8+ rules is a ruled table, whose
+ * text stays text (isFilledTable). Two rounds of a two-line special case
+ * (prose only; then prose only and short) each lost some small chart. */
 export const TEXT_PANEL_PROSE_LINES = 3;
-/** A box only this tall per line (plus padding) is filled by its text. */
-const PANEL_LINE_PT = 24;
-const PANEL_PAD_PT = 24;
 
 /**
  * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
@@ -263,19 +263,13 @@ const PANEL_PAD_PT = 24;
  */
 export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
   let prose = 0;
-  let total = 0;
   for (const l of lines) {
     const x = l.x ?? 0;
     if (x < box[0] || x > box[2] || l.y < box[1] || l.y > box[3]) continue;
-    total += 1;
     if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
+    if (prose >= TEXT_PANEL_PROSE_LINES) return true;
   }
-  // Re-review on #102: a two-line instructions box is a panel too — when it
-  // holds nothing but prose AND is about as tall as those lines. A chart
-  // whose only text is two long legend or category labels is much taller
-  // than its text (the drawing is most of it), so it keeps its picture.
-  const textHeight = prose * PANEL_LINE_PT + PANEL_PAD_PT;
-  return prose >= TEXT_PANEL_PROSE_LINES || (prose >= 2 && prose === total && box[3] - box[1] <= textHeight);
+  return false;
 }
 
 /** A ruled area: at least this share of its painted paths are thin rules. */

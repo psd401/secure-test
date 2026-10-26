@@ -263,14 +263,26 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     expect(layout.figures[0]!.source).toBe("vector");
   });
 
-  test("a two-line instructions box holding only prose is a text panel; its text stays", async () => {
-    const inside = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
-    // A box about as tall as its two lines (the chart fixture's paths, short).
+  test("a small chart (60 pt) whose only text is two long labels keeps its picture", async () => {
+    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
     const layout = await extractPdfLayout(
-      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 48 }, inside }),
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 60 }, inside }),
     );
-    expect(layout.figures).toEqual([]);
-    for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+    expect(layout.figures).toHaveLength(1);
+  });
+
+  // The two-line instructions box the earlier review worried about never
+  // becomes a figure: a bordered box is too few paths to be a drawing, and a
+  // box drawn with 8+ rules is a ruled table whose text stays text.
+  test("a bordered two-line instructions box is not a figure; its text stays", async () => {
+    const lines = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
+    const region = { x: 72, y: 600, width: 468, height: 44 };
+    const border = await extractPdfLayout(makeRuledGridPdf({ region, rows: 1, cols: 1, cells: [[lines.join(" ")]] }));
+    expect(border.figures).toEqual([]);
+    // A lined box, one ruled row per line: still too few paths.
+    const lined = await extractPdfLayout(makeRuledGridPdf({ region, rows: 2, cols: 1, cells: [[lines[0]!], [lines[1]!]] }));
+    expect(lined.figures).toEqual([]);
+    for (const line of lines) expect(lined.textWithMarkers).toContain(line);
   });
 
   test("isTextPanel counts only long lines inside the box", () => {
@@ -278,13 +290,9 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
     const long = "A sentence of prose that runs well past thirty characters.";
     expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
-    // Two prose lines and nothing else: a panel only when the box is about as
-    // tall as the two lines; a tall box (a chart) is not, nor are two prose
-    // lines among a chart's short labels.
-    const short: Box = [100, 140, 400, 190];
-    expect(isTextPanel([line(110, 160, long), line(110, 176, long)], short)).toBe(true);
+    // Two prose lines are a chart's labels, whatever the box's size.
     expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
-    expect(isTextPanel([line(110, 160, long), line(110, 176, long), line(110, 185, "40")], short)).toBe(false);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], [100, 140, 400, 200])).toBe(false);
     expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
     // Prose beside the box (starting left of it) or below it does not count.
     expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);
