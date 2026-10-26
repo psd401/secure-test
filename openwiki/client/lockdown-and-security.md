@@ -143,5 +143,9 @@ Focused tests: `ResponseSpoolTests` (`testTheSittingClosedErrorCodeMapping`, `te
 | New client event kind | `AttemptEventKind`, server `ATTEMPT_EVENT_KINDS` | `AttemptEventReporterTests`, `attempt-events-api.test.ts` |
 
 Invariants to keep: arm timers before `begin()`; every code path that can call `begin()` ships an exit; a Release build never falls back to a cooperative simulation; handler payloads are validated before spooling. Narrow check: `cd client/SecureTestCore && swift test --filter AssessmentLockdownTests`. The real AAC behaviour cannot be exercised headlessly: changes to `RealLockdownSession` or the web view need a hand-run on an entitled Mac, and `xcodebuild` is only needed when files under `client/SecureTest/` change. Entitlements can be confirmed with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
+ with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
+d with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
+nts -` against `client/expected-entitlements.txt`.
+nd `xcodebuild` is only needed when files under `client/SecureTest/` change. Entitlements can be confirmed with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
 d with `codesign -d --entitlements -` against `client/expected-entitlements.txt`.
 nts -` against `client/expected-entitlements.txt`.
