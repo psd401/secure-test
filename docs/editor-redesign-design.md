@@ -85,6 +85,17 @@ maintainer for the link.
 - **D-7 Google Doc import** joins PDF and Word.
 - **D-8 No record of the original feedback is kept in `docs/`**; it came
   from impromptu conversations.
+- **D-9 Trunk-based delivery behind a flag, not one long branch.** Each
+  slice is a short-lived branch and PR merged to `main` and deployed
+  normally. The new editor and start screen sit behind a flag (R-12)
+  whose default is the current editor, so teachers see nothing until
+  the cutover. Why not build everything on `design/editor-redesign` and
+  merge at the end: `AssessmentEditor.tsx` changes often on `main`, so
+  the final merge would be large and risky; one large PR gets a weaker
+  CI / security / AI review than many small ones; slice 5's page-work
+  freeze cannot stay open for the whole project, and the renderer is
+  signed and deployed from `main`; Phase 1 is useful on its own; and the
+  hotfix route assumes `main` stays close to the live commit.
 
 ## Recommendations (for James to confirm)
 
@@ -153,10 +164,24 @@ maintainer for the link.
 - **R-11 Layout at laptop widths.** Side-by-side at ≥ 1280 px; below
   that, a tab toggle between the two panes. Scroll linking is by
   anchored item, not by percentage, and can be turned off.
+- **R-12 One flag for the new authoring experience (D-9).** Widens R-4's
+  prototype flag to cover the new editor, the side-by-side preview, the
+  import redesign, the start screen and the new formatting controls.
+  Default off; James and pilot teachers opt in. While both editors exist,
+  tests and `docs/design-tool-manual-checks.md` rows cover both, and
+  `public/help.html` keeps describing the current editor (pilot teachers
+  get a short separate note). Work that cannot be flagged:
+  - **Slice 5** reaches every student. It must change no rendered
+    output; Phase 1's fixtures are the evidence.
+  - **New formatting** is authored only from the flagged editor, so no
+    item can carry a list or underline before the floor raise; the
+    floor date is announced ahead (D-4).
 
 ## Phases
 
-Each phase is its own PR or PR series; one commit per slice.
+Each phase is its own PR or PR series, merged to `main` and deployed as
+it lands (D-9); one commit per slice. User-visible work stays behind the
+R-12 flag until Phase 9.
 
 1. **Markup package + fixtures** (R-2). Extract the grammar from
    `renderItemContent.ts`; golden fixtures for every construct including
@@ -183,8 +208,13 @@ Each phase is its own PR or PR series; one commit per slice.
 8. **Start screen** (D-5). Blank-with-example, import, open-a-file,
    templates, AI draft (gated by `allow_llm_authoring` like today).
 
+9. **Cutover and cleanup** (D-9, R-12). Flip the flag's default once the
+   pilot hand-runs pass; update `public/help.html` and the manual checks
+   to the new editor; after a settling period, a final slice deletes the
+   old editor code and the flag.
+
 Phases 3–4 and 7 can run in parallel once 1 is done; 5 needs 2 and 3;
-6 needs 2.
+6 needs 2; 9 needs all the others.
 
 ## The external asks
 
@@ -257,3 +287,5 @@ unless noted.
 ## Progress
 
 - 2026-10-25 — note written; D-1…D-8 decided; mockup drawn; nothing built.
+- 2026-10-25 — D-9 (trunk-based delivery behind a flag) decided; R-12 and
+  Phase 9 (cutover and cleanup) added.
