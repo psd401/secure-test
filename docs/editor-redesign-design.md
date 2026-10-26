@@ -289,3 +289,37 @@ unless noted.
 - 2026-10-25 — note written; D-1…D-8 decided; mockup drawn; nothing built.
 - 2026-10-25 — D-9 (trunk-based delivery behind a flag) decided; R-12 and
   Phase 9 (cutover and cleanup) added.
+- 2026-10-25 — **Phase 1 built** (prototype track, branch
+  `prototype/editor-redesign`; Q1 answered `packages/markup`).
+  `packages/markup`: `parse` / `serialize` / `renderedForm`, exported as
+  TypeScript source like `packages/graphing`; `serialize(parse(s)) === s`
+  for every fixture, every construct's canonical spelling and 5,000 random
+  strings. 55 golden fixtures (`packages/markup/test/fixtures/golden.json`,
+  money rule and the no-escape `**` case included) pass against the server
+  renderer byte for byte and against the client's bridge-mode `renderer.js`
+  in the client harness's DOM shim (`design-tool/test/markup-golden.test.ts`,
+  run from bun, whose engine is JavaScriptCore), and a differential pass
+  over random markup holds both renderers to the parser. No rendered output
+  changed; `renderItemContent.ts` does not consume the package yet.
+  **Findings** — the two renderers agree on every plain stem tried (tens of
+  thousands of random stems), and disagree only when a fill-in-the-blank
+  marker sits inside a formula or a picture's alt text (each pinned in the
+  test):
+  - **ER-F1** marker inside alt text (`![a [[b1]] b](asset:…)`): the server
+    falls back to segment-by-segment rendering, so the picture is literal
+    text with the blank inline; the client makes the picture (its alt
+    carrying the private-use sentinel) and moves the blank after the
+    sentence.
+  - **ER-F2** marker inside a formula (`$[[b1]] **a**$ **b**`): the server
+    re-reads each segment on its own (here `**a**` turns bold); the client
+    keeps the whole stem's math/emphasis reading and only splits the text at
+    the blank (here `**a**` stays literal).
+  - **ER-F3** marker after a backslash in a formula (`$\[[b1]]$`): KaTeX
+    renders `\` + sentinel as a red error with the sentinel once, so the
+    server's fallback check passes and the blank lands inside KaTeX's markup.
+  - Not grammar, and expected: a missing picture's class is `image-missing`
+    on the server and `missing-asset` on the client; the server's `<img>`
+    points at the asset route, the client's is a data URI made enlargeable.
+  The parser follows the server's general rule (ER-F1, ER-F2). The editor
+  should treat a marker inside math or alt text as unrepresentable (Risks:
+  open read-only) rather than reproduce either renderer.
