@@ -4,6 +4,7 @@ import {
   type ContentBlock,
   type ConverseCommandOutput,
   type DocumentFormat,
+  type ImageFormat,
   type Tool,
   type ToolConfiguration,
 } from "@aws-sdk/client-bedrock-runtime";
@@ -48,6 +49,24 @@ export function wrapBedrockError(err: unknown, errPrefix: string): never {
   }
   throw err;
 }
+
+// Claude 5-generation models (Sonnet 5.5 and later) think adaptively and
+// reject a non-default temperature; their depth is set by an effort level,
+// which Converse passes through as a model-specific request field.
+export type ConverseEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+// A Claude decline: the turn stopped with `refusal` (or Bedrock's
+// `content_filtered`), with or without partial text. Typed so a caller can
+// answer the teacher with "the model declined" instead of "try again".
+export class ConverseRefusalError extends Error {
+  readonly stopReason: string;
+  constructor(errPrefix: string, stopReason: string) {
+    super(`${errPrefix}_refused: the model declined (stopReason ${stopReason})`);
+    this.name = "ConverseRefusalError";
+    this.stopReason = stopReason;
+  }
+}
+const REFUSAL_STOP_REASONS = new Set(["refusal", "content_filtered"]);
 
 function inferenceConfig(maxTokens: number, temperature?: number) {
   return {
@@ -156,7 +175,16 @@ export async function converseTextWithMeta(opts: {
   userText: string;
   maxTokens: number;
   temperature?: number;
+  /** Claude 5-generation models only; omit `temperature` alongside it. */
+  effort?: ConverseEffort;
   document?: ConverseDocument;
+  /** PNG images sent after the document and before the text (PDF import
+   * slice 3: the pages, so the model sees the layout). */
+  images?: Uint8Array[];
+  /** Throw ConverseRefusalError on a `refusal` / `content_filtered` stop
+   * instead of returning the text. Opt-in (PDF import only): the essay
+   * scorer and the other surfaces keep reading a refusal's text as before. */
+  throwOnRefusal?: boolean;
   errPrefix: string;
   surface: ConverseSurface;
   ownerSub?: string;
@@ -178,6 +206,9 @@ export async function converseTextWithMeta(opts: {
       },
     });
   }
+  for (const bytes of opts.images ?? []) {
+    content.push({ image: { format: "png" as ImageFormat, source: { bytes } } });
+  }
   content.push({ text: opts.userText });
   const startedAt = performance.now();
   let response: ConverseCommandOutput;
@@ -188,6 +219,9 @@ export async function converseTextWithMeta(opts: {
         system: [{ text: opts.systemText }],
         messages: [{ role: "user", content }],
         inferenceConfig: inferenceConfig(opts.maxTokens, opts.temperature),
+        ...(opts.effort
+          ? { additionalModelRequestFields: { output_config: { effort: opts.effort } } }
+          : {}),
       }),
       opts.timeoutMs ? { abortSignal: AbortSignal.timeout(opts.timeoutMs) } : undefined,
     );
@@ -205,6 +239,10 @@ export async function converseTextWithMeta(opts: {
     usage: response.usage,
     startedAt,
   });
+  if (opts.throwOnRefusal && response.stopReason && REFUSAL_STOP_REASONS.has(response.stopReason)) {
+    throw new ConverseRefusalError(opts.errPrefix, response.stopReason);
+  }
+  // A thinking model puts reasoning blocks before the answer; take the text.
   const text = response.output?.message?.content?.find((b) => b.text)?.text;
   if (!text) {
     throw new Error(`${opts.errPrefix}_returned_no_text`);

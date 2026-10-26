@@ -6,11 +6,25 @@ import {
   DEFAULT_FIGURE_LIMITS,
   MIN_FIGURE_PT,
   extractPdfLayout,
+  FIGURE_LABEL_PAD_PT,
   figureMarker,
   interleaveMarkers,
+  isBesideText,
+  isBlankAnswerArea,
+  isFigureLabel,
+  isFilledTable,
+  PAGE_IMAGE_PIXELS,
+  pageImagesWanted,
+  renderPagesForModel,
 } from "../lib/pdfImport/extractFigures";
 import { PNG_SIGNATURE, encodePng, pngDimensions } from "../lib/pdfImport/png";
-import { makeStyledTextPdf, makeTextAndImagePdf, makeTextPdf } from "./helpers/pdf";
+import {
+  makeMultiPageTextPdf,
+  makeRuledGridPdf,
+  makeStyledTextPdf,
+  makeTextAndImagePdf,
+  makeTextPdf,
+} from "./helpers/pdf";
 
 const LINES = ["1. First question", "2. Second question", "3. Third", "4. Fourth", "5. Fifth", "6. Sixth"];
 // 120×90 pt image, left 100, bottom 560 → top-left-origin bbox [100,142,220,232]:
@@ -59,6 +73,45 @@ describe("interleaveMarkers", () => {
     );
     expect(text.split("\n")).toEqual(["1. a", "[FIGURE 1]", "2. b", "[FIGURE 2]", "3. c"]);
     expect(figureMarker(7)).toBe("[FIGURE 7]");
+  });
+});
+
+// Import fixes slice 1 (2026-10-25): which figures sit beside a question,
+// and which short runs are a drawing's point labels.
+describe("beside figures and point labels", () => {
+  const box: [number, number, number, number] = [360, 480, 430, 540];
+
+  test("a figure with question text to its left at the same height is beside it", () => {
+    expect(isBesideText([{ y: 500, x: 72, text: "3. Lena moved one shape onto another with" }], box)).toBe(true);
+  });
+
+  test("text above or below, a short label at its left edge, or text inside it is not", () => {
+    expect(isBesideText([{ y: 470, x: 72, text: "3. Lena moved one shape onto another with" }], box)).toBe(false);
+    expect(isBesideText([{ y: 550, x: 72, text: "a Name the matching shape." }], box)).toBe(false);
+    expect(isBesideText([{ y: 500, x: 350, text: "R" }], box)).toBe(false);
+    // A long line starting within the label pad is the figure's own text.
+    expect(isBesideText([{ y: 500, x: 355, text: "Population (millions)" }], box)).toBe(false);
+  });
+
+  test("short runs on or near a vector drawing are labels; text and far runs are not", () => {
+    expect(isFigureLabel({ x: 349, y: 478, str: "R" }, [box])).toBe(true);
+    expect(isFigureLabel({ x: box[2] + FIGURE_LABEL_PAD_PT, y: 520, str: "AB" }, [box])).toBe(true);
+    expect(isFigureLabel({ x: box[2] + FIGURE_LABEL_PAD_PT + 1, y: 520, str: "AB" }, [box])).toBe(false);
+    expect(isFigureLabel({ x: 365, y: 500, str: "shapes matched exactly." }, [box])).toBe(false);
+    expect(isFigureLabel({ x: 152, y: 500, str: "No" }, [box])).toBe(false);
+  });
+
+  test("a real PDF: a picture right of lines 2–5 is beside them, marked at its middle", async () => {
+    // bbox [300, 80, 400, 140]; baselines are 72, 88, 104, 120, 136, 152.
+    const layout = await extractPdfLayout(
+      makeTextAndImagePdf(LINES, { x: 300, y: 652, width: 100, height: 60 }),
+    );
+    expect(layout.figures[0]!.beside).toBe(true);
+    const text = layout.textWithMarkers.split("\n");
+    expect(text.indexOf("[FIGURE 1]")).toBe(text.indexOf("3. Third") + 1);
+    // The fixture above sits below its lines, not beside them.
+    const below = await extractPdfLayout(makeTextAndImagePdf(LINES, IMAGE));
+    expect(below.figures[0]!.beside).toBeUndefined();
   });
 });
 
@@ -126,6 +179,8 @@ import {
   type CanvasImport,
   captionAbove,
   clusterPathBoxes,
+  isTextPanel,
+  proseLinesInside,
 } from "../lib/pdfImport/extractFigures";
 import { type VectorChartSpec, makeVectorChartPdf } from "./helpers/pdf";
 
@@ -176,6 +231,98 @@ describe("captionAbove", () => {
     expect(captionAbove([{ y: 10, text: "Rate [%] of x", plain: "Rate [%] of x", bold: true, x: 0 }], 20)).toBe(
       "Rate % of x",
     );
+  });
+});
+
+// Import fixes (2026-10-25): a Google Docs export's white boxes behind its
+// text, and a shaded panel of sentences, were cropped as "figures" — text and
+// the real chart inside them — and shown to students on top of the same text.
+describe("extractPdfLayout: page layout is not a figure", () => {
+  test("white-filled boxes are invisible paper, not a drawing", async () => {
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, whiteBars: true }));
+    expect(layout.figures).toEqual([]);
+    expect(layout.textWithMarkers).not.toContain("[FIGURE");
+  });
+
+  test("a drawn box with three lines of prose inside is a text panel; its text stays", async () => {
+    const inside = [
+      "Read the passage below and answer the questions.",
+      "Use evidence from the text in every answer you give.",
+      "Write in complete sentences and check your spelling.",
+    ];
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
+    expect(layout.figures).toEqual([]);
+    for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+  });
+
+  // Before merging #102 (James, 2026-10-25): exactly two prose lines inside a
+  // drawing — a chart with two long labels, or a decorated instructions box,
+  // at any size or padding — keep the picture (flagged `text_inside`) AND
+  // keep both lines in the text the model reads. Nothing is lost either way.
+  const LABELS = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
+  const INSTRUCTIONS = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
+  const SHORT_INSTRUCTIONS = ["Read the passage, then answer them.", "Cite the text in every answer."];
+  const cases: [string, readonly string[], number][] = [
+    ["a 180 pt chart whose only text is two long labels", LABELS, 180],
+    ["a 72 pt chart whose only text is two long labels", LABELS, 72],
+    ["a 60 pt chart whose only text is two long labels", LABELS, 60],
+    ["a 42 pt chart whose only text is two long labels", LABELS, 42],
+    ["a tight 48 pt decorated two-line instructions box", INSTRUCTIONS, 48],
+    ["a padded 72 pt decorated two-line instructions box", INSTRUCTIONS, 72],
+    ["a decorated box with two shorter prose lines", SHORT_INSTRUCTIONS, 72],
+  ];
+  for (const [name, inside, height] of cases) {
+    test(`${name}: the picture is kept and flagged, and its lines stay in the text`, async () => {
+      const region = height === 180 ? CHART.region : { x: 120, y: 520, width: 360, height };
+      const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, region, inside: [...inside] }));
+      expect(layout.figures).toHaveLength(1);
+      expect(layout.figures[0]!.text_inside).toBe(true);
+      for (const line of inside) expect(layout.textWithMarkers).toContain(line);
+    });
+  }
+
+  // Re-review on #102: a line written as one run per word keeps its short
+  // words ("the", "in") — the point-label drop must not cut them out.
+  test("a flagged box whose lines are one run per word keeps every word", async () => {
+    const layout = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 400, height: 72 }, inside: [...INSTRUCTIONS], wordRuns: true }),
+    );
+    expect(layout.figures[0]!.text_inside).toBe(true);
+    for (const line of INSTRUCTIONS) expect(layout.textWithMarkers).toContain(line);
+    // Each line appears once (not also as a cut-down copy).
+    expect(layout.textWithMarkers.split("\n").filter((l) => l.includes("Use evidence"))).toHaveLength(1);
+  });
+
+  test("a chart with short labels is not flagged, and its labels stay the chart's", async () => {
+    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART }));
+    expect(layout.figures[0]!.text_inside).toBeUndefined();
+    expect(layout.textWithMarkers).not.toContain("\n20\n");
+  });
+
+  // A plain bordered or lined two-line box never becomes a figure at all:
+  // too few paths to be a drawing.
+  test("a bordered two-line instructions box is not a figure; its text stays", async () => {
+    const lines = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
+    const region = { x: 72, y: 600, width: 468, height: 44 };
+    const border = await extractPdfLayout(makeRuledGridPdf({ region, rows: 1, cols: 1, cells: [[lines.join(" ")]] }));
+    expect(border.figures).toEqual([]);
+    // A lined box, one ruled row per line: still too few paths.
+    const lined = await extractPdfLayout(makeRuledGridPdf({ region, rows: 2, cols: 1, cells: [[lines[0]!], [lines[1]!]] }));
+    expect(lined.figures).toEqual([]);
+    for (const line of lines) expect(lined.textWithMarkers).toContain(line);
+  });
+
+  test("isTextPanel counts only long lines inside the box", () => {
+    const box: Box = [100, 100, 400, 300];
+    const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
+    const long = "A sentence of prose that runs well past thirty characters.";
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
+    // Two prose lines are never a panel (they make a `text_inside` figure).
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
+    expect(proseLinesInside([line(110, 150, long), line(110, 170, long), line(110, 190, "10")], box)).toBe(2);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
+    // Prose beside the box (starting left of it) or below it does not count.
+    expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);
   });
 });
 
@@ -353,5 +500,83 @@ describe("E6 emphasis from font runs", () => {
     );
     expect(layout.textWithMarkers).not.toContain("**");
     expect(layout.textWithMarkers).toContain("Everything here is bold");
+  });
+});
+
+// PDF-import slice 3 (2026-10-25): the pages as images for the model.
+
+describe("renderPagesForModel", () => {
+  test("one PNG per page, near the pixel size the model reads", async () => {
+    const pages = await renderPagesForModel(makeMultiPageTextPdf([["1. One"], ["2. Two"]]));
+    expect(pages).toHaveLength(2);
+    for (const png of pages!) {
+      expect([...png.slice(0, 8)]).toEqual([...PNG_SIGNATURE]);
+      const { width, height } = pngDimensions(png);
+      expect(Math.abs(width * height - PAGE_IMAGE_PIXELS) / PAGE_IMAGE_PIXELS).toBeLessThan(0.01);
+    }
+  });
+
+  test("page images are on by default, off with PDF_IMPORT_PAGE_IMAGES=0, never for a scan", () => {
+    expect(pageImagesWanted(false, {})).toBe(true);
+    expect(pageImagesWanted(false, { PDF_IMPORT_PAGE_IMAGES: "1" })).toBe(true);
+    expect(pageImagesWanted(false, { PDF_IMPORT_PAGE_IMAGES: "0" })).toBe(false);
+    expect(pageImagesWanted(true, {})).toBe(false);
+  });
+
+  test("over the page cap, or unreadable, there are no images (text alone) — never a throw", async () => {
+    expect(await renderPagesForModel(makeMultiPageTextPdf([["a"], ["b"], ["c"]]), 2)).toBeNull();
+    expect(await renderPagesForModel(new TextEncoder().encode("not a pdf"))).toBeNull();
+  });
+});
+
+// PDF-import fixes (2026-10-25): a blank graph grid or a table to fill is
+// where the answer goes — flagged, so it is never shown as a stimulus.
+
+describe("blank answer areas", () => {
+  // A 4×3 table of rules: 5 horizontal, 4 vertical, at x 100–400, y 100–300.
+  const rules: Box[] = [
+    ...[100, 150, 200, 250, 300].map((y): Box => [100, y - 0.25, 400, y + 0.25]),
+    ...[100, 200, 300, 400].map((x): Box => [x - 0.25, 100, x + 0.25, 300]),
+  ];
+  const cell = (r: number, c: number) => ({ x: 103 + c * 100, y: 146 + r * 50 });
+
+  test("an empty grid, or a table with only its labels, is an answer area", () => {
+    expect(isBlankAnswerArea(rules, [])).toBe(true);
+    // Header row + first column labelled (5 of 12 cells), the rest empty.
+    expect(isBlankAnswerArea(rules, [cell(0, 0), cell(0, 1), cell(0, 2), cell(1, 0), cell(2, 0)])).toBe(true);
+    // Half filled is not "under half".
+    expect(isBlankAnswerArea(rules, [cell(0, 0), cell(0, 1), cell(0, 2), cell(1, 0), cell(2, 0), cell(3, 0)])).toBe(false);
+  });
+
+  test("a filled table, a drawing, or a single box is not (and only the filled table is a filled table)", () => {
+    const all = [0, 1, 2, 3].flatMap((r) => [0, 1, 2].map((c) => cell(r, c)));
+    expect(isBlankAnswerArea(rules, all)).toBe(false);
+    const diagonal: Box[] = [[100, 100, 200, 200], [150, 120, 300, 260], [210, 100, 330, 240], ...rules.slice(0, 4)];
+    expect(isBlankAnswerArea(diagonal, [])).toBe(false);
+    expect(isBlankAnswerArea(rules.slice(0, 4), [])).toBe(false);
+    expect(isFilledTable(rules, all)).toBe(true);
+    expect(isFilledTable(rules, [])).toBe(false);
+    expect(isFilledTable(diagonal, all)).toBe(false);
+  });
+
+  test("a real PDF: an empty grid is flagged; a filled table is text, not a figure", async () => {
+    const region = { x: 120, y: 300, width: 300, height: 200 };
+    const grid = await extractPdfLayout(makeRuledGridPdf({ region, rows: 10, cols: 10, above: ["7. Graph the means."] }));
+    expect(grid.figures).toHaveLength(1);
+    expect(grid.figures[0]!.answer_area).toBe(true);
+    const filled = await extractPdfLayout(
+      // 4×2: 8 rules, the fewest a drawing may have (MIN_CLUSTER_PATHS).
+      makeRuledGridPdf({
+        region,
+        rows: 4,
+        cols: 2,
+        cells: [["Decade", "Passengers"], ["1950s", "648 million"], ["1960s", "1.7 billion"], ["1970s", "5.4 billion"]],
+      }),
+    );
+    // Review on #102: a filled table is data — no picture, and its cells stay
+    // in the text the model reads.
+    expect(filled.figures).toEqual([]);
+    expect(filled.textWithMarkers).toContain("648 million");
+    expect(filled.textWithMarkers).not.toContain("[FIGURE");
   });
 });

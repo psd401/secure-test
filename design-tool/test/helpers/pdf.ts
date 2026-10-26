@@ -163,6 +163,12 @@ export interface VectorChartSpec {
    * and chart exporters do. pdf.js paints a group on a scratch canvas from
    * the document's own canvas factory, not the one handed to render(). */
   transparencyGroup?: boolean;
+  /** Import fixes (2026-10-25): fill the bars white — the invisible boxes a
+   * Google Docs export paints behind its text. */
+  whiteBars?: boolean;
+  /** Write each `inside` line as one text run per word, as Word and Google
+   * Docs exports often do. */
+  wordRuns?: boolean;
 }
 
 export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
@@ -178,7 +184,7 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
   for (let i = 0; i < spec.bars; i++) {
     const h = region.height * (0.3 + (0.6 * i) / Math.max(1, spec.bars - 1));
     bars.push(
-      `q 0 0 1 rg ${(region.x + i * step + 2).toFixed(2)} ${region.y.toFixed(2)} ${barW.toFixed(2)} ${h.toFixed(2)} re f Q`,
+      `q ${spec.whiteBars ? "1 1 1" : "0 0 1"} rg ${(region.x + i * step + 2).toFixed(2)} ${region.y.toFixed(2)} ${barW.toFixed(2)} ${h.toFixed(2)} re f Q`,
     );
   }
   const form = bars.join("\n");
@@ -194,7 +200,15 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
     `BT /${face} 12 Tf 1 0 0 1 ${x} ${y} Tm (${esc(s)}) Tj ET`;
   spec.above.forEach((l, i) => parts.push(text("F1", 72, 760 - i * 16, l)));
   parts.push(text("F2", 72, region.y + region.height + 12, spec.caption));
-  spec.inside.forEach((l, i) => parts.push(text("F1", region.x + 10, region.y + region.height - 20 - i * 16, l)));
+  spec.inside.forEach((l, i) => {
+    const y = region.y + region.height - 20 - i * 16;
+    if (!spec.wordRuns) return parts.push(text("F1", region.x + 10, y, l));
+    let x = region.x + 10;
+    for (const word of l.split(" ")) {
+      parts.push(text("F1", x, y, word));
+      x += (word.length + 1) * 6;
+    }
+  });
   spec.below.forEach((l, i) => parts.push(text("F1", 72, region.y - 20 - i * 16, l)));
   const content = parts.join("\n");
   const xobject = spec.transparencyGroup ? "/XObject<</Fm1 7 0 R>>" : "";
@@ -244,5 +258,46 @@ export function makeTextAndImagePdf(lines: string[], image: PlacedImage): Uint8A
     `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
     "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
     `<</Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceRGB/BitsPerComponent 8/Length ${pixels.length}>>\nstream\n${pixels}\nendstream`,
+  ]);
+}
+
+/**
+ * PDF-import fixes (2026-10-25): a ruled grid of stroked lines (a blank
+ * graph grid or a table) at `region` (PDF user space, y up), with optional
+ * text written into cells — `cells[r][c]` ("" = empty), rows from the top.
+ */
+export function makeRuledGridPdf(spec: {
+  region: { x: number; y: number; width: number; height: number };
+  rows: number;
+  cols: number;
+  cells?: string[][];
+  above?: string[];
+}): Uint8Array {
+  const { region, rows, cols } = spec;
+  const parts: string[] = [];
+  const cw = region.width / cols;
+  const rh = region.height / rows;
+  for (let r = 0; r <= rows; r++) {
+    const y = region.y + r * rh;
+    parts.push(`q 0 0 0 RG 0.5 w ${region.x} ${y.toFixed(2)} m ${region.x + region.width} ${y.toFixed(2)} l S Q`);
+  }
+  for (let c = 0; c <= cols; c++) {
+    const x = region.x + c * cw;
+    parts.push(`q 0 0 0 RG 0.5 w ${x.toFixed(2)} ${region.y} m ${x.toFixed(2)} ${region.y + region.height} l S Q`);
+  }
+  const text = (x: number, y: number, str: string) => `BT /F1 10 Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm (${esc(str)}) Tj ET`;
+  (spec.above ?? []).forEach((l, i) => parts.push(text(72, 760 - i * 16, l)));
+  (spec.cells ?? []).forEach((row, r) =>
+    row.forEach((cell, c) => {
+      if (cell) parts.push(text(region.x + c * cw + 3, region.y + region.height - (r + 1) * rh + 4, cell));
+    }),
+  );
+  const content = parts.join("\n");
+  return buildPdf([
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>",
+    `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
   ]);
 }

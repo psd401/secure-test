@@ -137,15 +137,18 @@ export class AppService extends Construct {
     // models — both ARNs are required (social-stories' proven policy shape).
     // Region is wildcarded because the us. profile routes cross-region.
     // Models: Sonnet 4.6 (item gen, PDF extract, essay score) + Haiku 4.5
-    // (math translator) — the four BEDROCK_*_MODEL defaults in lib/ai.
+    // (math translator) — the four BEDROCK_*_MODEL defaults in lib/ai — plus
+    // Sonnet 5.5, which PDF import moves to once the comparison holds.
     this.taskRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel"],
         resources: [
           "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
           "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-5-5",
           `arn:aws:bedrock:*:${stack.account}:inference-profile/us.anthropic.claude-sonnet-4-6`,
           `arn:aws:bedrock:*:${stack.account}:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0`,
+          `arn:aws:bedrock:*:${stack.account}:inference-profile/us.anthropic.claude-sonnet-5-5`,
         ],
       }),
     );

@@ -302,6 +302,101 @@ describe("POST items/import-pdf", () => {
     expect(body.proposed_sets[1]).toMatchObject({ figures: [1], item_indexes: [0], source: "adjacency" });
   });
 
+  // Before merging #102: a drawing with two prose lines inside (an
+  // instructions box or a two-label chart) is flagged, kept out of every set,
+  // and its lines stay in what the model read.
+  test("a drawing with two prose lines inside is flagged and in no set", async () => {
+    const id = await createAssessment("Text inside");
+    const res = await postPdf(
+      id,
+      makeVectorChartPdf({
+        region: { x: 120, y: 380, width: 320, height: 72 },
+        bars: 9,
+        caption: "Directions",
+        inside: ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."],
+        above: ["1. 2.", "ES: #1 Explain the main idea."],
+        below: ["ES: #2 Summarize the passage."],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      figures: { n: number; text_inside?: boolean }[];
+      proposed_sets: { figures: number[] }[];
+    };
+    expect(body.figures).toHaveLength(1);
+    expect(body.figures[0]!.text_inside).toBe(true);
+    expect(body.proposed_sets.flatMap((s) => s.figures)).toEqual([]);
+  });
+
+  // PDF-import fixes (2026-10-25): a table whose printed headings are blank is
+  // kept (headings named) and the card says what changed.
+  test("a table with blank headings is kept, renamed and reported", async () => {
+    const id = await createAssessment("Blank headings");
+    const res = await postPdf(id, makeTextPdf(["1.", "TB: #1 Fill in the table. | cols=,,Total | rows=Observed,Expected"]));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string; columns: { label: string }[] }[];
+      rejected: unknown[];
+      changes: { original: string; changed_to: string }[][];
+    };
+    expect(body.rejected).toEqual([]);
+    expect(body.candidates[0]!.columns.map((c) => c.label)).toEqual(["Column 1", "Column 2", "Total"]);
+    expect(body.changes[0]![0]).toMatchObject({ original: "(blank column headings)", changed_to: "Column 1, Column 2" });
+  });
+
+  // PDF-import fixes (2026-10-25): a form printed twice comes back twice; the
+  // copy is dropped and counted.
+  test("a repeated question (a printed copy) is dropped and counted", async () => {
+    const id = await createAssessment("Print copies");
+    const stem = "A train covers 120 km in 1.5 hours. What is its speed in km/h, to one decimal?";
+    const res = await postPdf(id, makeTextPdf(["1. 2. 3.", `ES: #1 ${stem}`, "ES: #2 Another question.", `ES: #3 ${stem}`]));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { candidates: unknown[]; print_copies_dropped: number };
+    expect(body.candidates).toHaveLength(2);
+    expect(body.print_copies_dropped).toBe(1);
+  });
+
+  // PDF-import slice 3: page images are on by default (every other test here
+  // runs with them); switched off, the route still answers the same (the mock
+  // ignores images; the request shape is covered in bedrock-provider.test.ts).
+  test("page images off: the import still answers with the same items", async () => {
+    const id = await createAssessment("Page images");
+    process.env.PDF_IMPORT_PAGE_IMAGES = "0";
+    try {
+      const res = await postPdf(id, makeTextPdf(["1. 2.", "MC: #1 What is 2+2? | a:3 | b:4 | *b", "ES: #2 Discuss."]));
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { candidates: unknown[] };
+      expect(body.candidates).toHaveLength(2);
+    } finally {
+      delete process.env.PDF_IMPORT_PAGE_IMAGES;
+    }
+  });
+
+  // Import fixes slice 2 (2026-10-25): an answer key's sample drawing under
+  // "Responses vary." used to pair with the next question by adjacency —
+  // the answer, shown to students as that question's stimulus.
+  test("a figure under a key cue is the answer key's: flagged and in no set", async () => {
+    const id = await createAssessment("Key figure");
+    // Baselines 720, 704, 688, 672, 656; the image (bottom 640, 45 tall, top
+    // 685 — over MIN_FIGURE_PT) sits between "Responses vary." (688) and
+    // "2. Second" (672).
+    const res = await postPdf(
+      id,
+      makeTextAndImagePdf(
+        ["1. First", "ES: #1 Draw it.", "Responses vary.", "2. Second", "ES: #2 Two"],
+        { x: 100, y: 640, width: 100, height: 45 },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      figures: { n: number; answer_key?: boolean }[];
+      proposed_sets: { figures: number[] }[];
+    };
+    expect(body.figures).toHaveLength(1);
+    expect(body.figures[0]!.answer_key).toBe(true);
+    expect(body.proposed_sets.flatMap((s) => s.figures)).toEqual([]);
+  });
+
   // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md):
   // the AP Seminar shape — one essay prompt plus labelled sources printed
   // after it. The sources ride the response with the card's layout default,

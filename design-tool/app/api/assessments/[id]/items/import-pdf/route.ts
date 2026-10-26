@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { extractPdfText, looksScanned } from "@/lib/pdfImport/extractText";
-import { extractPdfLayout, type PdfFigure } from "@/lib/pdfImport/extractFigures";
+import {
+  extractPdfLayout,
+  pageImagesWanted,
+  renderPagesForModel,
+  type PdfFigure,
+} from "@/lib/pdfImport/extractFigures";
 import { getPdfExtractorProvider } from "@/lib/pdfImport/provider";
 import {
   MAX_OCR_BYTES,
@@ -9,13 +14,17 @@ import {
   PdfExtractError,
   adjacencyFallback,
   countNumberedItems,
+  dropPrintCopies,
+  fillBlankTableHeadings,
   flagShortenedSources,
   formsReport,
+  keyFiguresFromText,
   numberingReport,
   readSourceNumbers,
   readCandidateChanges,
   validatePdfCandidates,
   validateProposedSets,
+  withoutKeyFigures,
 } from "@/lib/pdfImport/extractCore";
 import { PdfExtractRequest, type PdfExtractResult } from "@/lib/pdfImport/types";
 import { runGuarded, type GuardedOutcome } from "@/lib/safeguarding/guard";
@@ -41,6 +50,19 @@ function extractionFailure(err: unknown) {
         hint:
           "This document has more items than one extraction can return. " +
           "Split the PDF into parts of about 6–8 pages and import each part.",
+        detail: err.message,
+      },
+      { status: 422 },
+    );
+  }
+  if (err instanceof PdfExtractError && err.code === "refused") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "pdf_extract_refused",
+        hint:
+          "The AI extractor declined to read this PDF. Trying again will not " +
+          "change that; import the items by CSV or add them by hand.",
         detail: err.message,
       },
       { status: 422 },
@@ -184,10 +206,16 @@ export async function POST(req: Request, ctx: RouteContext) {
     }
   }
 
+  // PDF-import slice 3: the pages as images, so the model sees the layout.
+  // On by default since slice 3c (James, 2026-10-25); PDF_IMPORT_PAGE_IMAGES=0
+  // turns it off. A document over the page cap, or one that will not
+  // render, goes as text alone.
+  const pageImages = pageImagesWanted(scanned) ? await renderPagesForModel(bytes) : null;
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,
     ...(scanned ? { scanned_pdf: bytes, file_name: file.name } : {}),
+    ...(pageImages ? { page_images: pageImages } : {}),
   });
   if (!reqBody.success) {
     return NextResponse.json(
@@ -240,15 +268,24 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
 
+  // PDF-import fixes (2026-10-25): a form printed twice on one page comes
+  // back twice; the repeat is dropped before anything else reads the list.
+  const printCopies = dropPrintCopies(outcome.result.candidates, outcome.result.proposed_sets ?? []);
+  // And a table's blank printed headings get a name (the write schema
+  // refuses an empty label), reported on the card.
+  const rawCandidates = fillBlankTableHeadings(printCopies.candidates);
+
   // E14: figures.length is 0 on every scan, which turns on the
   // `[FIGURE n]` strip — a marker there points at nothing.
   const { candidates, rejected, truncated } = validatePdfCandidates(
-    outcome.result.candidates,
+    rawCandidates,
     { figureCount: figures.length },
   );
   // E8 (2026-09-01): compare the document's own numbering with what came
   // back so a teacher learns which questions to author by hand. Scanned
   // PDFs have no text layer to count.
+  // The list before print copies were dropped: a copy's printed numbers
+  // were found, so they are not "missing".
   const numbering = numberingReport(
     scanned ? null : countNumberedItems(modelText),
     outcome.result.candidates,
@@ -261,23 +298,46 @@ export async function POST(req: Request, ctx: RouteContext) {
   const rejectedIdx = new Set(rejected.map((r) => r.index));
   const rawToValid = new Map<number, number>();
   let valid = 0;
-  for (let i = 0; i < Math.min(outcome.result.candidates.length, candidates.length + rejected.length); i++) {
+  for (let i = 0; i < Math.min(rawCandidates.length, candidates.length + rejected.length); i++) {
     if (!rejectedIdx.has(i)) rawToValid.set(i, valid++);
   }
-  const setValidation = validateProposedSets(outcome.result.proposed_sets ?? [], rawToValid, figures.length);
-  const rawSourceNumbers = readSourceNumbers(outcome.result.candidates);
+  const setValidation = validateProposedSets(printCopies.proposedSets, rawToValid, figures.length);
+  const rawSourceNumbers = readSourceNumbers(rawCandidates);
   const validSourceNumbers = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawSourceNumbers[rawIndex] ?? []);
   // Beta feedback 2026-10-07: per validated candidate, what the model
   // changed from the printed text; the card flags it in blue.
-  const rawChanges = readCandidateChanges(outcome.result.candidates);
+  const rawChanges = readCandidateChanges(rawCandidates);
   const changes = [...rawToValid.entries()]
     .sort((a, b) => a[1] - b[1])
     .map(([rawIndex]) => rawChanges[rawIndex] ?? []);
+  // Import fixes slice 2: the answer key's own drawings (a sample answer
+  // under "Responses vary.") go in no set, so no student sees the answer.
+  // A scan has no text to read the cue from (and no figures).
+  const keyFigures = new Set(scanned ? [] : keyFiguresFromText(modelText));
+  // And blank answer areas (an empty graph grid, a table to fill): where the
+  // answer goes, never a picture above the question. And a drawing with two
+  // prose lines inside (`text_inside`: an instructions box or a chart — the
+  // import cannot tell): its text is already in the questions' text, so it
+  // is not added as a picture unless the teacher chooses to.
+  const neverShown = new Set([
+    ...keyFigures,
+    ...figures.filter((f) => f.answer_area || f.text_inside).map((f) => f.n),
+  ]);
+  const modelSets = withoutKeyFigures(setValidation.sets, neverShown);
   const proposed_sets = [
-    ...setValidation.sets,
-    ...(scanned ? [] : adjacencyFallback(figures.length, modelText, validSourceNumbers, setValidation.sets)),
+    ...modelSets,
+    ...(scanned
+      ? []
+      : adjacencyFallback(
+          figures.length,
+          modelText,
+          validSourceNumbers,
+          modelSets,
+          new Set(figures.filter((f) => f.beside).map((f) => f.n)),
+          neverShown,
+        )),
     // Multi-source stimulus slice 3: the model tends to abbreviate long
     // verbatim text, so compare each returned source with the document's own
     // span under the same heading. The scanned path has no text to compare.
@@ -306,10 +366,14 @@ export async function POST(req: Request, ctx: RouteContext) {
     // Aligned with `candidates`: [] for an item printed as is.
     changes,
     truncated,
+    // Repeated questions (a form printed twice) left out of `candidates`.
+    print_copies_dropped: printCopies.dropped,
     ...numbering,
     // E5 slice 4: every raster figure above MIN_FIGURE_PT, in document order,
     // with its page and (unless omitted for size) a PNG data URL.
-    figures,
+    // Slice 2: `answer_key: true` on the key's own drawings; the panel
+    // labels them and offers no way to put one with a question.
+    figures: figures.map((f) => (keyFigures.has(f.n) ? { ...f, answer_key: true } : f)),
     figure_count: figures.length,
     // E5 slice 3: sets over validated candidate indexes; `source` says
     // whether the model paired them or the adjacency rule did.

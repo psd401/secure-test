@@ -11,6 +11,10 @@ import {
 } from "../lib/pdfImport/extractText";
 import {
   adjacencyFallback,
+  dropPrintCopies,
+  fillBlankTableHeadings,
+  keyFiguresFromText,
+  withoutKeyFigures,
   parsePdfExtraction,
   questionAfterFigure,
   validateProposedSets,
@@ -704,6 +708,47 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
       { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
     ]);
   });
+
+  // Import fixes slice 1 (2026-10-25, a geometry quiz): two triangles printed
+  // to the right of question 4 were paired with question 5 — the next number
+  // below their markers. A figure beside its question takes that question.
+  describe("figures printed beside their question", () => {
+    const quiz = [
+      "**3.** Lena moved one shape onto another with",
+      "two slides and a turn so that the",
+      "[FIGURE 1]",
+      "shapes matched exactly.",
+      "[FIGURE 2]",
+      "**a** Name the matching shape.",
+      "",
+      "**4.** Do these two shapes match?",
+      "Explain how you know.",
+      "[FIGURE 3]",
+      "[FIGURE 4]",
+      "**5.** Read the statements about two shapes.",
+    ].join("\n");
+
+    test("a beside figure takes the question above its marker", () => {
+      expect(questionAfterFigure(quiz, 1, true)).toBe(3);
+      expect(questionAfterFigure(quiz, 2, true)).toBe(3);
+      expect(questionAfterFigure(quiz, 3, true)).toBe(4);
+      // The same marker without `beside` keeps the old rule (next number).
+      expect(questionAfterFigure(quiz, 3)).toBe(5);
+    });
+
+    test("looks back on its own page only, else falls back to the question below", () => {
+      // Page 2 starts with a passage and a figure beside it, then question 4.
+      const paged = "**3.** Q3\n\nA passage about rivers\n[FIGURE 1]\n**4.** Q4";
+      expect(questionAfterFigure(paged, 1, true)).toBe(4);
+    });
+
+    test("both triangles of each pair land in one set on their own question", () => {
+      expect(adjacencyFallback(4, quiz, [[3], [4], [5]], [], new Set([1, 2, 3, 4]))).toEqual([
+        { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
+        { id: "s2", stimulus: "", figures: [3, 4], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+      ]);
+    });
+  });
 });
 
 describe("mockPdfExtractor SET segments (E5 slice 3)", () => {
@@ -1235,5 +1280,125 @@ describe("fill-in-the-blank candidates (FB slice 4)", () => {
       { id: "b2", kind: "text", keys: ["leeward", "lee"] },
     ]);
     expect((v.candidates[1] as { blanks: unknown[] }).blanks).toEqual([{ id: "b1", kind: "text" }]);
+  });
+});
+
+// Import fixes slice 2 (2026-10-25): the answer key's own drawings.
+describe("answer-key figures", () => {
+  test("a marker with a key cue on one of the two lines above it is the key's", () => {
+    const quiz = [
+      "**4.** Do these two shapes match?",
+      "Explain how you know.",
+      "[FIGURE 5]",
+      "_Responses vary._",
+      "• They match because each side has a partner.",
+      "**5.** Draw and label one pair of matching shapes.",
+      "Mark each statement as you use it.",
+      "_Responses vary._",
+      "[FIGURE 7]",
+    ].join("\n");
+    // Figure 5 is above the cue (the question's own triangles), 7 below it.
+    expect(keyFiguresFromText(quiz)).toEqual([7]);
+    expect(keyFiguresFromText("Sample answer:\nthe graph below\n[FIGURE 1]")).toEqual([1]);
+    expect(keyFiguresFromText("Answers will vary.\n[FIGURE 1]\n[FIGURE 2]")).toEqual([1, 2]);
+    expect(keyFiguresFromText("Possible response\n[FIGURE 3]")).toEqual([3]);
+  });
+
+  test("a cue too far above, or on the page before, does not count", () => {
+    expect(keyFiguresFromText("Responses vary.\none\ntwo\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Responses vary.\n\n[FIGURE 1]")).toEqual([]);
+    // Words that only look like a cue.
+    expect(keyFiguresFromText("Temperatures vary by season.\n[FIGURE 1]")).toEqual([]);
+    // Review on #102: a student instruction that contains the cue words is
+    // not a key line — the figure below it is the student's.
+    expect(keyFiguresFromText("3. Explain your reasoning. Answers may vary.\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Use the sample answer format shown below.\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Answers will vary, but label each part.\n[FIGURE 1]")).toEqual([]);
+    // Re-review on #102: a key that prints text after the cue's colon.
+    expect(keyFiguresFromText("Sample answer: 3x + 2 is shown below\n[FIGURE 1]")).toEqual([1]);
+    expect(keyFiguresFromText("Possible response: the graph below\n[FIGURE 2]")).toEqual([2]);
+  });
+
+  test("key figures leave every set; a set left empty is dropped; adjacency skips them", () => {
+    const set = (id: string, figures: number[], stimulus = "", sources: { label: string; text: string }[] = []) => ({
+      id, stimulus, figures, item_indexes: [0], source: "model" as const, sources, layout: "inline" as const,
+    });
+    const out = withoutKeyFigures(
+      [
+        set("s1", [7]),
+        set("s2", [6, 7]),
+        set("s3", [7], "Shared passage"),
+        set("s4", [7], "", [{ label: "Source A", text: "Intro\n[FIGURE 7]\nMore" }]),
+      ],
+      new Set([7]),
+    );
+    expect(out.map((s) => [s.id, s.figures])).toEqual([["s2", [6]], ["s3", []], ["s4", []]]);
+    expect(out[2]!.sources[0]!.text).toBe("Intro\nMore");
+    const text = "1. Q1\nResponses vary.\n[FIGURE 1]\n2. Q2";
+    expect(adjacencyFallback(1, text, [[1], [2]], [])).toHaveLength(1);
+    expect(adjacencyFallback(1, text, [[1], [2]], [], new Set(), new Set([1]))).toEqual([]);
+  });
+});
+
+// PDF-import fixes (2026-10-25): a form printed twice on one page.
+describe("dropPrintCopies", () => {
+  const q = (stem: string, extra: Record<string, unknown> = {}) => ({ type: "essay", stem, ...extra });
+  const long1 = "A train covers 120 km in 1.5 hours. What is its average speed in km/h?";
+  const long2 = "A recipe needs 3 cups of flour for 12 rolls. How much makes 30 rolls?";
+
+  test("a repeat — even renumbered, even with different emphasis — is dropped and sets remap", () => {
+    const raw = [
+      q(long1, { source_number: 1 }),
+      q(long2, { source_number: 2 }),
+      q(long1, { source_number: 3 }),
+      q(`**${long2}**`, { source_number: 4 }),
+      q("A different third question entirely, long enough to compare.", { source_number: 5 }),
+    ];
+    const out = dropPrintCopies(raw, [{ item_indexes: [1, 3] }, { item_indexes: [3] }, { item_indexes: [4] }]);
+    expect(out.dropped).toBe(2);
+    expect(out.candidates).toEqual([raw[0], raw[1], raw[4]]);
+    expect(out.proposedSets).toEqual([{ item_indexes: [1] }, { item_indexes: [2] }]);
+  });
+
+  test("short stems, different types and different choices are not copies", () => {
+    const raw = [
+      q("Explain."),
+      q("Explain."),
+      q(long1),
+      { type: "short_text", stem: long1 },
+      { type: "multiple_choice_single", stem: long2, choices: [{ id: "a", text: "1" }] },
+      { type: "multiple_choice_single", stem: long2, choices: [{ id: "a", text: "2" }] },
+    ];
+    expect(dropPrintCopies(raw, []).dropped).toBe(0);
+  });
+});
+
+// PDF-import fixes (2026-10-25): a table's blank printed headings were
+// copied as "" and the write schema rejected the whole question.
+describe("fillBlankTableHeadings", () => {
+  test("blank, whitespace and null labels become Column N, with one change on the card", () => {
+    const raw = [
+      { type: "table", stem: "Fill it in.", columns: ["", "  ", "Total"], rows: ["Observed"] },
+      { type: "table", stem: "Again.", columns: [{ id: "c1", label: null }, { id: "c2", label: "Total" }], rows: [""] },
+    ];
+    const [a, b] = fillBlankTableHeadings(raw) as { columns: unknown[]; changes: unknown[] }[];
+    expect(a!.columns).toEqual(["Column 1", "Column 2", "Total"]);
+    expect(b!.columns).toEqual([{ id: "c1", label: "Column 1" }, { id: "c2", label: "Total" }]);
+    const changes = readCandidateChanges(fillBlankTableHeadings(raw));
+    expect(changes[0]).toEqual([
+      { original: "(blank column headings)", changed_to: "Column 1, Column 2", reason: "the printed heading is blank — rename it before you add the question" },
+    ]);
+    expect(changes[1]![0]!.original).toBe("(a blank column heading)");
+    // The filled candidate now passes the write schema.
+    expect(validatePdfCandidates(fillBlankTableHeadings(raw)).rejected).toEqual([]);
+    expect(validatePdfCandidates(raw).rejected).toHaveLength(2);
+  });
+
+  test("a table with every heading, and other types, pass through unchanged", () => {
+    const raw = [
+      { type: "table", stem: "S", columns: ["A", "B"], rows: ["x"], changes: [] },
+      { type: "essay", stem: "E" },
+    ];
+    expect(fillBlankTableHeadings(raw)).toEqual(raw);
   });
 });

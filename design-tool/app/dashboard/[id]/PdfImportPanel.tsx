@@ -67,6 +67,16 @@ interface ExtractResult {
     omitted?: string;
     source?: "raster" | "vector";
     caption?: string;
+    /** Import fixes slice 2: the answer key's own drawing (a sample answer).
+     * Labelled and in no proposed set; the teacher can still add it to a
+     * question on purpose with "Use with item…". */
+    answer_key?: boolean;
+    /** PDF-import fixes: a blank answer area (an empty grid or table to fill).
+     * Same handling as `answer_key`. */
+    answer_area?: boolean;
+    /** Two prose lines inside the drawing (an instructions box or a chart):
+     * its text is already in the questions; same handling as `answer_key`. */
+    text_inside?: boolean;
   }[];
   figure_count: number;
   // E5 slice 3: proposed stimulus sets over candidate indexes. `source` says
@@ -77,6 +87,9 @@ interface ExtractResult {
   // E9: several forms in one PDF — `groups` are validated candidate indexes
   // per form (null when only "Form A / Form B" labels were seen).
   forms: { count: number; groups: number[][] | null; source: "numbering" | "labels" } | null;
+  /** PDF-import fixes (2026-10-25): repeated questions (a form printed twice
+   * on a page) left out of `candidates`. */
+  print_copies_dropped?: number;
 }
 
 // Multi-source stimulus slice 3 (docs/multi-source-stimulus-design.md): a
@@ -657,6 +670,9 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                   {result.truncated ? " · list truncated" : ""}
                   {keyless > 0 ? ` · ${keyless} need an answer key` : ""}
                   {result.forms ? ` · ${result.forms.count} forms` : ""}
+                  {result.print_copies_dropped
+                    ? ` · ${result.print_copies_dropped} repeated question${result.print_copies_dropped === 1 ? "" : "s"} (a printed copy) left out`
+                    : ""}
                 </span>
                 {result.candidates.length > 0 ? (
                   <button
@@ -774,7 +790,16 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             <span className="ml-1 rounded bg-primary/10 px-1 py-0.5">chart</span>
                           ) : null}
                         </span>
-                        {(() => {
+                        {f.answer_key || f.answer_area ? (
+                          <span className="mt-0.5 block rounded bg-muted px-1 py-0.5 text-[11px]">
+                            {f.answer_key ? "Answer key drawing" : "Blank answer space"} — not shown to students
+                            unless you add it
+                          </span>
+                        ) : f.text_inside ? (
+                          <span className="mt-0.5 block rounded bg-muted px-1 py-0.5 text-[11px]">
+                            Has text inside — its words are in the questions; add the picture only if it is a chart
+                          </span>
+                        ) : (() => {
                           const use = figureUseLabel(sets, f.n);
                           return use ? (
                             <span className="block text-[11px]">{use}</span>
@@ -784,6 +809,11 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             </span>
                           );
                         })()}
+                        {/* Review on #102: a flagged figure can still be put with a
+                            question here, deliberately — the rules that flag
+                            them can be wrong, and nothing else would bring
+                            one back. The per-set "Add a figure…" leaves them
+                            out. */}
                         {f.data_url && attachable.length > 0 ? (
                           <select
                             value=""
@@ -816,7 +846,11 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                     ))}
                   </ul>
                   {(() => {
-                    const savable = result.figures.filter((f) => f.data_url).map((f) => f.n);
+                    // Slice 2: "Save all" leaves the key's drawings and blank answer areas out; one can
+                    // still be saved on its own, deliberately.
+                    const savable = result.figures
+                      .filter((f) => f.data_url && !f.answer_key && !f.answer_area && !f.text_inside)
+                      .map((f) => f.n);
                     const left = savable.filter((n) => !savedFigures.has(n));
                     return savable.length > 1 ? (
                       <button
@@ -906,7 +940,10 @@ export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImpor
                             </ul>
                           ) : null}
                           {(() => {
-                            const others = result.figures.filter((f) => f.data_url && !set.figures.includes(f.n));
+                            const others = result.figures.filter(
+                              (f) =>
+                                f.data_url && !f.answer_key && !f.answer_area && !f.text_inside && !set.figures.includes(f.n),
+                            );
                             return !setAdded && others.length > 0 ? (
                               <select
                                 value=""

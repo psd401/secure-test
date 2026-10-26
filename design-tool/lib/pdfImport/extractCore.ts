@@ -15,7 +15,9 @@ export const PDF_EXTRACT_MAX_TOKENS = 16000;
 // Typed failure from the extraction pipeline so the route can answer with a
 // structured, teacher-readable error instead of letting the throw escape as
 // an empty-body 500 (which the panel then rendered as a raw TypeError).
-export type PdfExtractErrorCode = "truncated" | "invalid_json" | "not_array";
+// `refused`: the model declined the document (a Claude 5-generation
+// safety decline) — retrying the same PDF will not help.
+export type PdfExtractErrorCode = "truncated" | "invalid_json" | "not_array" | "refused";
 export class PdfExtractError extends Error {
   readonly code: PdfExtractErrorCode;
   constructor(code: PdfExtractErrorCode, message: string) {
@@ -134,6 +136,13 @@ export const PDF_EXTRACT_SYSTEM_PROMPT = [
   // digit-led math with no command (`${3x + 7 = 22}$`); shared rule text.
   MATH_DOLLAR_RULE,
   "Leave correct_answer values as plain text.",
+  // PDF-import slice 3 (2026-10-25): the pages ride along as images on the
+  // text path, for layout only.
+  "Images of the document's pages may come before the text. Use them only",
+  "to see the layout — which figure sits with which question, which answer",
+  "lines are blank and which an answer key has filled in, what a question",
+  "asks the student to draw. Copy every word from the text, never from an",
+  "image.",
   "The text may contain markers like [FIGURE 3] where a figure (a graph,",
   "diagram, table or picture) sits in the document. When one or more",
   "questions depend on a figure, or on a passage or data given before them,",
@@ -1017,15 +1026,33 @@ const LINE_START_NUMBER_RE = /^[ \t]*(\d{1,3})[.)](?=\s)/gm;
  * answer choices come after the figure and before the next number, the
  * figure is inside the question numbered just above it.
  *
+ * Import fixes slice 1 (2026-10-25, a geometry quiz): a figure printed
+ * BESIDE its question (text to its left at the same height) belongs to the
+ * question it sits beside, not the next one. extractPdfLayout places a
+ * beside figure's marker at the figure's middle and reports it in
+ * `beside`; such a figure takes the last question number above its marker
+ * on the same page, and only falls back to the rule above when the page
+ * has none (a figure beside a passage at the top of a page).
+ *
  * null when nothing numbered fits (a figure after the last question, cover
  * art on a title page).
  */
-export function questionAfterFigure(textWithMarkers: string, n: number): number | null {
+export function questionAfterFigure(
+  textWithMarkers: string,
+  n: number,
+  beside = false,
+): number | null {
   const marker = `[FIGURE ${n}]`;
   const marked = withoutEmphasis(textWithMarkers);
   const at = marked.indexOf(marker);
   if (at < 0) return null;
   const before = marked.slice(0, at).replace(/\[FIGURE \d+\]/g, " ");
+  if (beside) {
+    // Pages are joined by a blank line; look back on this page only.
+    const page = before.slice(before.lastIndexOf("\n\n") + 1);
+    const prev = [...page.matchAll(LINE_START_NUMBER_RE)].at(-1);
+    if (prev) return Number(prev[1]);
+  }
   const rest = marked.slice(at + marker.length).replace(/\[FIGURE \d+\]/g, " ");
   const next = new RegExp(QUESTION_NUMBER_RE.source).exec(rest);
   const upToNext = next ? rest.slice(0, next.index) : rest;
@@ -1047,14 +1074,18 @@ export function adjacencyFallback(
   textWithMarkers: string,
   validSourceNumbers: readonly (readonly number[])[],
   existing: readonly ProposedSet[],
+  /** Figure numbers printed beside their question (PdfFigure.beside). */
+  beside: ReadonlySet<number> = new Set(),
+  /** Slice 2: figures never to place (the answer key's own drawings). */
+  exclude: ReadonlySet<number> = new Set(),
 ): ProposedSet[] {
-  const usedFigures = new Set(existing.flatMap((s) => s.figures));
+  const usedFigures = new Set([...existing.flatMap((s) => s.figures), ...exclude]);
   const taken = new Set(existing.flatMap((s) => s.item_indexes));
   const out: ProposedSet[] = [];
   let seq = existing.length;
   for (let n = 1; n <= figureCount; n++) {
     if (usedFigures.has(n)) continue;
-    const q = questionAfterFigure(textWithMarkers, n);
+    const q = questionAfterFigure(textWithMarkers, n, beside.has(n));
     if (q === null) continue;
     const idx = validSourceNumbers.findIndex((nums) => nums.includes(q));
     if (idx < 0) continue;
@@ -1198,5 +1229,162 @@ export function flagShortenedSources(
     if (span == null) return s;
     const returned = comparableLength(s.text.split("\n"));
     return returned < SHORTENED_SOURCE_RATIO * span ? { ...s, shortened: true } : s;
+  });
+}
+
+// --- Import fixes slice 2 (2026-10-25): the answer key's own figures -------
+// An answer key prints a sample drawing under "Responses vary." — the answer
+// to a drawing question. Attached to the question it would be shown to the
+// students as a stimulus. The cue line above the marker marks one. Asking the
+// model as well was tried on the reported quiz and dropped: in one run of two
+// it marked one of question 4's own triangles as the key's, which would have
+// taken it away from the question; the cue rule was right in every run.
+
+/** A line that introduces a key's sample answer: it starts with the cue,
+ * and the cue either ends the line ("Responses vary.") or is followed by a
+ * colon ("Sample answer: 3x + 2 is shown below"). Review on #102: a student
+ * instruction that merely contains the words ("Explain. Answers may vary.")
+ * or carries on after them ("Answers will vary, but label each part.") must
+ * not take a figure the student needs. */
+const KEY_CUE_RE =
+  /^(?:(?:responses?|answers?)\s+(?:will\s+|may\s+)?vary|(?:sample|possible|example|exemplar)\s+(?:student\s+)?(?:responses?|answers?|solutions?))\s*(?::|[.!]?\s*$)/i;
+/** How many text lines above a marker the cue may sit. */
+const KEY_CUE_LINES = 2;
+
+/**
+ * Figure numbers whose marker has a key cue on one of the KEY_CUE_LINES
+ * text lines just above it (other markers skipped). Pure; exported for
+ * tests.
+ */
+export function keyFiguresFromText(textWithMarkers: string): number[] {
+  const lines = withoutEmphasis(textWithMarkers).split("\n");
+  const out: number[] = [];
+  lines.forEach((line, i) => {
+    const m = /^\s*\[FIGURE (\d+)\]\s*$/.exec(line);
+    if (!m) return;
+    const above: string[] = [];
+    for (let j = i - 1; j >= 0 && above.length < KEY_CUE_LINES; j--) {
+      const l = lines[j]!.trim();
+      if (l === "") break; // a page break
+      if (/^\[FIGURE \d+\]$/.test(l)) continue;
+      above.push(l);
+    }
+    if (above.some((l) => KEY_CUE_RE.test(l))) out.push(Number(m[1]));
+  });
+  return out;
+}
+
+/**
+ * Takes key figures out of proposed sets (and their markers out of source
+ * texts); a set left with no figure, no stimulus and no source is dropped.
+ */
+export function withoutKeyFigures(sets: readonly ProposedSet[], key: ReadonlySet<number>): ProposedSet[] {
+  if (key.size === 0) return [...sets];
+  const strip = (text: string) =>
+    text
+      .replace(/^[ \t]*\[FIGURE (\d+)\][ \t]*\n?/gm, (whole, n) => (key.has(Number(n)) ? "" : whole))
+      .replace(/\[FIGURE (\d+)\]/g, (whole, n) => (key.has(Number(n)) ? "" : whole));
+  return sets
+    .map((s) => ({
+      ...s,
+      figures: s.figures.filter((n) => !key.has(n)),
+      sources: s.sources.map((src) => ({ ...src, text: strip(src.text) })),
+    }))
+    .filter((s) => s.figures.length > 0 || s.stimulus.trim() !== "" || s.sources.length > 0);
+}
+
+// --- PDF-import fixes (2026-10-25): print copies --------------------------
+// Teachers print two copies of a form on one page and cut the sheet in half.
+// The model reads the second copy as more questions — the same two again,
+// sometimes renumbered 3) and 4) — which doubled a form's questions or made
+// the copy look like a form of its own (6 forms detected where 4 exist).
+
+/** A stem shorter than this ("Explain.", "Show your work.") can repeat on
+ * purpose; only longer ones are compared. */
+const MIN_COPY_STEM_CHARS = 30;
+
+function copyKey(cand: unknown): string | null {
+  if (!cand || typeof cand !== "object") return null;
+  const { type, stem, choices } = cand as { type?: unknown; stem?: unknown; choices?: unknown };
+  if (typeof stem !== "string") return null;
+  const norm = (s: string) => withoutEmphasis(s).toLowerCase().replace(/[\s$\\{}]+/g, "");
+  const body = norm(stem);
+  if (body.length < MIN_COPY_STEM_CHARS) return null;
+  const opts = Array.isArray(choices)
+    ? choices.map((c) => (c && typeof c === "object" && "text" in c ? norm(String((c as { text: unknown }).text)) : "")).join("|")
+    : "";
+  return `${String(type)}\u0000${body}\u0000${opts}`;
+}
+
+/**
+ * Drops a raw candidate that repeats an earlier one word for word (same
+ * type, stem and choices) and remaps the raw proposed sets' item_indexes
+ * past it. Pure; exported for tests. `dropped` counts the copies removed.
+ */
+export function dropPrintCopies(
+  candidates: readonly unknown[],
+  proposedSets: readonly unknown[],
+): { candidates: unknown[]; proposedSets: unknown[]; dropped: number } {
+  const seen = new Set<string>();
+  const newIndex = new Map<number, number>();
+  const kept: unknown[] = [];
+  candidates.forEach((cand, i) => {
+    const key = copyKey(cand);
+    if (key !== null && seen.has(key)) return;
+    if (key !== null) seen.add(key);
+    newIndex.set(i, kept.length);
+    kept.push(cand);
+  });
+  if (kept.length === candidates.length) return { candidates: [...candidates], proposedSets: [...proposedSets], dropped: 0 };
+  const sets = proposedSets.flatMap((set) => {
+    if (!set || typeof set !== "object") return [set];
+    const idx = (set as { item_indexes?: unknown }).item_indexes;
+    if (!Array.isArray(idx)) return [set];
+    const remapped = idx.flatMap((i) => (typeof i === "number" && newIndex.has(i) ? [newIndex.get(i)!] : []));
+    return remapped.length > 0 ? [{ ...(set as object), item_indexes: remapped }] : [];
+  });
+  return { candidates: kept, proposedSets: sets, dropped: candidates.length - kept.length };
+}
+
+// --- PDF-import fixes (2026-10-25): blank table headings ------------------
+// A printed table to fill can leave header cells blank (the student writes
+// the headings too). The model copies them as "" and the item's write schema
+// refuses an empty column label, so the whole question was rejected — in 3
+// of 6 runs on one exam. A blank heading becomes "Column N", as the
+// pipe-table backstop above already does, and the card says so.
+
+/**
+ * Fills each blank column label of a raw `table` candidate with "Column N"
+ * and records one change for the teacher. Other candidates pass through.
+ * Pure; exported for tests.
+ */
+export function fillBlankTableHeadings(candidates: readonly unknown[]): unknown[] {
+  return candidates.map((cand) => {
+    if (!cand || typeof cand !== "object") return cand;
+    const obj = cand as Record<string, unknown>;
+    if (obj.type !== "table" || !Array.isArray(obj.columns)) return cand;
+    const filled: string[] = [];
+    const columns = obj.columns.map((col, i) => {
+      const label = typeof col === "string" ? col : col && typeof col === "object" ? (col as { label?: unknown }).label : undefined;
+      if (typeof label === "string" && label.trim().length > 0) return col;
+      if (label !== undefined && label !== null && typeof label !== "string") return col;
+      const name = `Column ${i + 1}`;
+      filled.push(name);
+      return typeof col === "string" ? name : { ...(col as object), label: name };
+    });
+    if (filled.length === 0) return cand;
+    const changes = Array.isArray(obj.changes) ? obj.changes : [];
+    return {
+      ...obj,
+      columns,
+      changes: [
+        ...changes,
+        {
+          original: filled.length === 1 ? "(a blank column heading)" : "(blank column headings)",
+          changed_to: filled.join(", "),
+          reason: "the printed heading is blank — rename it before you add the question",
+        },
+      ],
+    };
   });
 }

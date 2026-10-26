@@ -48,6 +48,20 @@ export interface PdfFigure {
    * line within CAPTION_GAP_PT). It stays in the page text as well and is
    * used as the image's alt text. Raster figures have none. */
   caption?: string;
+  /** Import fixes slice 1 (2026-10-25): text starts to the left of the
+   * figure at the same height — it is printed beside its question, so it
+   * belongs to that question (questionAfterFigure), not the next one. */
+  beside?: true;
+  /** PDF-import fixes (2026-10-25): a ruled area with most of its cells
+   * empty — a blank graph grid or a table for the student to fill. It is
+   * where the answer goes, not something to read: never a stimulus. */
+  answer_area?: true;
+  /** Before merging #102 (James, 2026-10-25): two prose lines are printed
+   * inside this drawing — it may be a decorated instructions box or a chart
+   * with two long labels. Its lines stay in the page text (instructions are
+   * never lost) and it is in no proposed set (no picture of text repeats
+   * the text); the panel labels it and the teacher decides. */
+  text_inside?: true;
 }
 
 export interface PdfLayout {
@@ -86,6 +100,11 @@ export const VECTOR_RENDER_SCALE = 2;
 export const VECTOR_CROP_PAD_PT = 4;
 /** A bold line this far above a cluster (points) is its printed title. */
 export const CAPTION_GAP_PT = 24;
+/** Import fixes slice 1: a short run (a vertex or point label: "R", "AB")
+ * this close to a vector figure belongs to the drawing, not the text line
+ * it shares a baseline with. */
+export const FIGURE_LABEL_PAD_PT = 12;
+const MAX_LABEL_CHARS = 4;
 /** Longest caption kept (it becomes an image's alt text). */
 const MAX_CAPTION_CHARS = 200;
 /** Beyond this many painted paths a page is not clustered — the O(n²) merge
@@ -196,6 +215,149 @@ export function captionAbove(lines: readonly TextLine[], top: number, gap: numbe
   return text.length > 0 ? text.slice(0, MAX_CAPTION_CHARS) : undefined;
 }
 
+/** A line shorter than this is a label (an axis title letter, a point
+ * name), not question text, for the beside test. */
+const MIN_BESIDE_LINE_CHARS = 12;
+
+/**
+ * Import fixes slice 1: a figure is beside text when a line of real text at
+ * its height starts to its left, clear of its labels (a question in the left
+ * column, the figure in the right). Exported for tests; pure.
+ */
+export function isBesideText(lines: readonly TextLine[], box: Box): boolean {
+  return lines.some(
+    (l) =>
+      l.y >= box[1] &&
+      l.y <= box[3] &&
+      (l.x ?? 0) < box[0] - FIGURE_LABEL_PAD_PT &&
+      (l.plain ?? l.text).trim().length >= MIN_BESIDE_LINE_CHARS,
+  );
+}
+
+/**
+ * Import fixes slice 1: drop short runs sitting on or just outside a vector
+ * drawing — its point labels — so they stop riding on the question line
+ * beside it (a question line ending in "… R A"). Exported for tests; pure.
+ */
+export function isFigureLabel(run: { x: number; y: number; str: string }, boxes: readonly Box[]): boolean {
+  if (run.str.trim().length > MAX_LABEL_CHARS) return false;
+  const pad = FIGURE_LABEL_PAD_PT;
+  return boxes.some(
+    (b) => run.x >= b[0] - pad && run.x <= b[2] + pad && run.y >= b[1] - pad && run.y <= b[3] + pad,
+  );
+}
+
+/** A line at least this long inside a drawing is prose, not a label. */
+const PROSE_LINE_CHARS = 30;
+/** This many prose lines inside a drawing make it a text box, not a figure.
+ * Review on #102: two was enough for a chart with two long legend or
+ * category labels inside its box to lose its picture; the text panels in
+ * the samples hold 5–30 such lines. A shorter instructions box never needs
+ * this rule: a plain border is too few paths to be a drawing at all
+ * (MIN_CLUSTER_PATHS), and a box drawn with 8+ rules is a ruled table, whose
+ * text stays text (isFilledTable). Exactly two prose lines inside a drawing
+ * are ambiguous — a decorated instructions box or a chart with two long
+ * labels — and every size or fill threshold tried on review lost one or the
+ * other somewhere. So the import does not guess: such a drawing stays a
+ * figure flagged `text_inside`, its prose lines stay in the text the model
+ * reads, and it is not attached to a question unless the teacher does so. */
+export const TEXT_PANEL_PROSE_LINES = 3;
+
+/**
+ * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
+ * a table of sentences is drawn with paths too, and clustered as a "figure"
+ * — its text was cropped into a picture and dropped from what the model
+ * reads. A chart carries short labels; two or more lines of prose inside
+ * the box mean it is page layout, and its text stays text. Exported for
+ * tests; pure.
+ */
+export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
+  return proseLinesInside(lines, box) >= TEXT_PANEL_PROSE_LINES;
+}
+
+/** How many prose lines (PROSE_LINE_CHARS or longer) start inside `box`.
+ * Exported for tests; pure. */
+export function proseLinesInside(lines: readonly TextLine[], box: Box): number {
+  let prose = 0;
+  for (const l of lines) {
+    const x = l.x ?? 0;
+    if (x < box[0] || x > box[2] || l.y < box[1] || l.y > box[3]) continue;
+    if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
+  }
+  return prose;
+}
+
+/** A ruled area: at least this share of its painted paths are thin rules. */
+const RULED_SHARE = 0.8;
+/** A rule is thinner than this on one side (points). */
+const RULE_PT = 2;
+/** Fewer rules than this is a box or an underline, not a grid or table. */
+const MIN_RULES = 8;
+
+/** A text line whose first run starts inside `box`. */
+const lineStartsIn = (l: TextLine, box: Box): boolean =>
+  (l.x ?? 0) >= box[0] && (l.x ?? 0) <= box[2] && l.y >= box[1] && l.y <= box[3];
+
+/** `b` lies within `outer` (1 pt of slack). */
+const insideBox = (b: Box, outer: Box): boolean =>
+  b[0] >= outer[0] - 1 && b[2] <= outer[2] + 1 && b[1] >= outer[1] - 1 && b[3] <= outer[3] + 1;
+
+/** Distinct positions, merged within RULE_PT. */
+function positions(values: number[]): number[] {
+  const out: number[] = [];
+  for (const v of [...values].sort((a, b) => a - b)) {
+    if (out.length === 0 || v - out[out.length - 1]! > RULE_PT) out.push(v);
+  }
+  return out;
+}
+
+/**
+ * PDF-import fixes (2026-10-25): a vector drawing that is a blank answer
+ * area — a graph grid, or a table whose cells the student fills. Measured on
+ * the samples: grids, tables and ruled boxes are 85–100% thin rules, charts
+ * and diagrams 0–27%. Among ruled areas, a filled data table has text in
+ * most of its cells, an answer table in a few (its row and column labels)
+ * and a grid in none; under half filled is an answer area. `paths` are the
+ * drawing's painted path boxes, `runs` the text runs' baseline starts, both
+ * in page space. Exported for tests; pure.
+ */
+export function isBlankAnswerArea(paths: readonly Box[], runs: readonly { x: number; y: number }[]): boolean {
+  const fill = ruledCells(paths, runs);
+  return fill !== null && fill.filled * 2 < fill.cells;
+}
+
+/**
+ * Review on #102: the other half of a ruled area — a table with text in at
+ * least half its cells is data, and its text is the content. As a cropped
+ * picture its text also left what the model reads (lines inside a vector
+ * figure are dropped as chart labels), and a sub-question that leaned on it
+ * was lost. It stays text, not a figure. Exported for tests; pure.
+ */
+export function isFilledTable(paths: readonly Box[], runs: readonly { x: number; y: number }[]): boolean {
+  const fill = ruledCells(paths, runs);
+  return fill !== null && fill.filled * 2 >= fill.cells;
+}
+
+/** A ruled area's cell count and how many hold text; null when the drawing
+ * is not ruled (a chart, a diagram) or has no grid of rules. */
+function ruledCells(
+  paths: readonly Box[],
+  runs: readonly { x: number; y: number }[],
+): { cells: number; filled: number } | null {
+  const thin = paths.filter((b) => b[2] - b[0] < RULE_PT || b[3] - b[1] < RULE_PT);
+  if (thin.length < MIN_RULES || thin.length < paths.length * RULED_SHARE) return null;
+  const rows = positions(thin.filter((b) => b[3] - b[1] < RULE_PT).map((b) => (b[1] + b[3]) / 2));
+  const cols = positions(thin.filter((b) => b[2] - b[0] < RULE_PT).map((b) => (b[0] + b[2]) / 2));
+  if (rows.length < 2 || cols.length < 2) return null;
+  const filled = new Set<string>();
+  for (const r of runs) {
+    const ri = rows.findIndex((y, i) => i + 1 < rows.length && r.y > y && r.y <= rows[i + 1]! + RULE_PT);
+    const ci = cols.findIndex((x, i) => i + 1 < cols.length && r.x >= x - RULE_PT && r.x < cols[i + 1]!);
+    if (ri >= 0 && ci >= 0) filled.add(`${ri}:${ci}`);
+  }
+  return { cells: (rows.length - 1) * (cols.length - 1), filled: filled.size };
+}
+
 export function figureMarker(n: number): string {
   return `[FIGURE ${n}]`;
 }
@@ -294,6 +456,7 @@ function linesOf(
   items: { str: string; transform: number[]; fontName?: string }[],
   base: M,
   styleOf: (fontName: string | undefined) => RunStyle = () => NO_STYLE,
+  drop: (run: { x: number; y: number; str: string }) => boolean = () => false,
 ): TextLine[] {
   const runs = items
     .filter((it) => it.str && it.str.trim().length > 0)
@@ -301,6 +464,7 @@ function linesOf(
       const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
       return { x, y, str: it.str, style: styleOf(it.fontName) };
     })
+    .filter((r) => !drop(r))
     .sort((a, b) => a.y - b.y || a.x - b.x);
   const mark = emphasisMarks(runs);
   const lines: { y: number; parts: { x: number; str: string; style: RunStyle }[] }[] = [];
@@ -393,6 +557,9 @@ export async function extractPdfLayout(
       .map((name) => OPS[name])
       .filter((id): id is number => typeof id === "number"),
   );
+  const FILL_ONLY_OPS = new Set(
+    ["fill", "eoFill"].map((name) => OPS[name]).filter((id): id is number => typeof id === "number"),
+  );
   // pdfjs transfers the buffer it is handed (see extractText.ts) — copy.
   const doc = await getDocumentProxy(bytes.slice());
   const figures: PdfFigure[] = [];
@@ -442,6 +609,13 @@ export async function extractPdfLayout(
     const base = viewport.transform as M;
     const ops = await page.getOperatorList();
     const stack: M[] = [];
+    // Import fixes (2026-10-25): the fill colour, saved and restored with the
+    // CTM. Google Docs exports paint a white rectangle behind each run of
+    // text; on white paper they are invisible, but they clustered into one
+    // page-wide "figure" that was cropped — text, chart and all — and shown
+    // to students on top of the same text and the real chart.
+    const fillStack: string[] = [];
+    let fill = "#000000";
     let ctm: M = base;
     const paints: Paint[] = [];
     // Slice 5: every painted path's page-space box, for clustering below.
@@ -458,8 +632,13 @@ export async function extractPdfLayout(
     for (let i = 0; i < ops.fnArray.length; i++) {
       const fn = ops.fnArray[i];
       const args = ops.argsArray[i] as unknown[];
-      if (fn === OPS.save) stack.push(ctm);
-      else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
+      if (fn === OPS.save) {
+        stack.push(ctm);
+        fillStack.push(fill);
+      } else if (fn === OPS.restore) {
+        ctm = stack.pop() ?? ctm;
+        fill = fillStack.pop() ?? fill;
+      } else if (fn === OPS.setFillRGBColor && typeof args[0] === "string") fill = args[0].toLowerCase();
       else if (fn === OPS.transform) ctm = mul(ctm, args as unknown as M);
       else if (fn === OPS.paintFormXObjectBegin) {
         stack.push(ctm);
@@ -480,6 +659,7 @@ export async function extractPdfLayout(
         // minMax arrives as a typed array, so length is the check, not isArray.
         const paintOp = args[0];
         if (typeof paintOp !== "number" || !PAINT_OPS.has(paintOp)) continue;
+        if (FILL_ONLY_OPS.has(paintOp) && fill === "#ffffff") continue;
         const mm = args[2] as ArrayLike<number> | undefined;
         if (!mm || mm.length !== 4) continue;
         // All four corners, so a rotated CTM still gives the right box.
@@ -525,7 +705,14 @@ export async function extractPdfLayout(
       styleCache.set(key, style);
       return style;
     };
-    const lines = linesOf(content.items as { str: string; transform: number[]; fontName?: string }[], base, styleOf);
+    const items = content.items as { str: string; transform: number[]; fontName?: string }[];
+    const runStarts = items
+      .filter((it) => it.str?.trim())
+      .map((it) => {
+        const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
+        return { x, y };
+      });
+    const lines = linesOf(items, base, styleOf);
 
     // Slice 5: painted paths close together are one drawing; a drawing big
     // enough and with enough paths in it is a chart.
@@ -538,7 +725,9 @@ export async function extractPdfLayout(
           (c) =>
             c.paths >= MIN_CLUSTER_PATHS &&
             c.box[2] - c.box[0] > MIN_FIGURE_PT &&
-            c.box[3] - c.box[1] > MIN_FIGURE_PT,
+            c.box[3] - c.box[1] > MIN_FIGURE_PT &&
+            !isTextPanel(lines, c.box) &&
+            !isFilledTable(pathBoxes.filter((b) => insideBox(b, c.box)), runStarts),
         );
       }
     }
@@ -583,6 +772,8 @@ export async function extractPdfLayout(
     const pageFigures: { n: number; top: number }[] = [];
     /** Vector figures own the text drawn inside them (axis labels, legends). */
     const figureBoxes: Box[] = [];
+    /** …except a `text_inside` figure's prose lines, which stay in the text. */
+    const textInsideBoxes: Box[] = [];
     for (const entry of pending) {
       if (n >= limits.maxFigures) break;
       n += 1;
@@ -610,6 +801,11 @@ export async function extractPdfLayout(
         }
       } else {
         const caption = captionAbove(lines, entry.box[1]);
+        if (isBlankAnswerArea(pathBoxes.filter((b) => insideBox(b, entry.box)), runStarts)) fig.answer_area = true;
+        if (proseLinesInside(lines, entry.box) >= 2) {
+          fig.text_inside = true;
+          textInsideBoxes.push(entry.box);
+        }
         if (caption) fig.caption = caption;
         figureBoxes.push(entry.box);
         const crop = cropFromPage(canvas!, pageImage!, entry.box);
@@ -627,26 +823,88 @@ export async function extractPdfLayout(
         fig.bytes = png.length;
         fig.data_url = `data:image/png;base64,${png.toString("base64")}`;
       }
+      // Slice 1: a figure beside its question is marked at its middle, so
+      // the marker (and the model) reads inside that question.
+      const beside = isBesideText(lines, entry.box);
+      if (beside) fig.beside = true;
       figures.push(fig);
-      pageFigures.push({ n, top: entry.box[1] });
+      pageFigures.push({ n, top: beside ? (entry.box[1] + entry.box[3]) / 2 : entry.box[1] });
     }
 
     // Slice 5: a text line whose baseline sits inside a vector figure is part
     // of the picture (axis values, tick labels, a legend) — it leaves the page
     // text so a source stops carrying chart noise. The caption line is above
     // the cluster and stays.
+    // Import fixes slice 1: and its point labels leave the lines beside it.
     const kept =
       figureBoxes.length === 0
         ? lines
-        : lines.filter(
-            (l) =>
-              !figureBoxes.some(
-                (b) => (l.x ?? 0) >= b[0] && (l.x ?? 0) <= b[2] && l.y >= b[1] && l.y <= b[3],
-              ),
-          );
+        : [
+            ...linesOf(items, base, styleOf, (r) => isFigureLabel(r, figureBoxes)).filter(
+              (l) => !figureBoxes.some((b) => lineStartsIn(l, b)),
+            ),
+            // A `text_inside` figure's prose lines, assembled from EVERY run:
+            // the short-run label drop above would cut short words ("the",
+            // "in") out of a line written as one run per word (re-review on
+            // #102). interleaveMarkers sorts the lines back by height.
+            ...lines.filter(
+              (l) =>
+                textInsideBoxes.some((b) => lineStartsIn(l, b)) &&
+                (l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS,
+            ),
+          ];
     pageTexts.push(interleaveMarkers(kept, pageFigures));
   }
 
   await (renderDoc as RenderDoc | null)?.destroy();
   return { pageCount: doc.numPages, textWithMarkers: pageTexts.join("\n\n"), figures };
+}
+
+// --- PDF-import slice 3 (2026-10-25): the pages themselves, for the model ---
+// On the text path the model read only the page text with figure markers, so
+// it could not see which figure sits beside which question, which answer
+// lines an answer key has already filled in, or that a question is a drawing.
+// The pages ride the extraction call as images; the text stays the source of
+// every word.
+
+/** Pages beyond this send no images at all (the text path runs as before). */
+export const PAGE_IMAGE_MAX_PAGES = 20;
+/** Claude reads an image at about this many pixels; larger is resized down. */
+export const PAGE_IMAGE_PIXELS = 1_150_000;
+
+/** Whether an import sends page images: on unless PDF_IMPORT_PAGE_IMAGES=0
+ * (slice 3c, James 2026-10-25); never for a scan, which sends the PDF. */
+export function pageImagesWanted(scanned: boolean, env: Record<string, string | undefined> = process.env): boolean {
+  return !scanned && env.PDF_IMPORT_PAGE_IMAGES !== "0";
+}
+
+/**
+ * Every page as a PNG near PAGE_IMAGE_PIXELS, or null when the document has
+ * more than `maxPages` pages or a page cannot be rendered — the caller then
+ * extracts from the text alone, as before. Never throws.
+ */
+export async function renderPagesForModel(
+  bytes: Uint8Array,
+  maxPages: number = PAGE_IMAGE_MAX_PAGES,
+): Promise<Uint8Array<ArrayBuffer>[] | null> {
+  const canvasImport = defaultCanvasImport;
+  let doc: Awaited<ReturnType<typeof getDocumentProxy>> | null = null;
+  try {
+    const CanvasFactory = await createIsomorphicCanvasFactory(canvasImport);
+    doc = await getDocumentProxy(bytes.slice(), { CanvasFactory });
+    if (doc.numPages > maxPages) return null;
+    const pages: Uint8Array<ArrayBuffer>[] = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const vp = (await doc.getPage(p)).getViewport({ scale: 1 });
+      const scale = Math.sqrt(PAGE_IMAGE_PIXELS / (vp.width * vp.height));
+      const png = await renderPageAsImage(doc, p, { canvasImport, scale });
+      pages.push(new Uint8Array(png));
+    }
+    return pages;
+  } catch (err) {
+    console.warn("pdf-import: pages could not be rendered for the model", err instanceof Error ? err.message : err);
+    return null;
+  } finally {
+    await doc?.destroy();
+  }
 }
