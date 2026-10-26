@@ -255,8 +255,9 @@ describe("extractPdfLayout: page layout is not a figure", () => {
   });
 
   test("a chart with two long labels inside its box keeps its picture", async () => {
-    // A chart's box also carries short tick or value labels.
-    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)", "40", "20"];
+    // Only the two long labels inside the box — no ticks or values (a pie
+    // chart, a legend-only bar chart). The drawing is most of the box.
+    const inside = ["Households with broadband access (%)", "Households with a mobile plan only (%)"];
     const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
     expect(layout.figures).toHaveLength(1);
     expect(layout.figures[0]!.source).toBe("vector");
@@ -264,7 +265,10 @@ describe("extractPdfLayout: page layout is not a figure", () => {
 
   test("a two-line instructions box holding only prose is a text panel; its text stays", async () => {
     const inside = ["Read the passage below and answer the questions.", "Use evidence from the text in every answer."];
-    const layout = await extractPdfLayout(makeVectorChartPdf({ ...CHART, inside }));
+    // A box about as tall as its two lines (the chart fixture's paths, short).
+    const layout = await extractPdfLayout(
+      makeVectorChartPdf({ ...CHART, region: { x: 120, y: 520, width: 360, height: 48 }, inside }),
+    );
     expect(layout.figures).toEqual([]);
     for (const line of inside) expect(layout.textWithMarkers).toContain(line);
   });
@@ -274,10 +278,13 @@ describe("extractPdfLayout: page layout is not a figure", () => {
     const line = (x: number, y: number, plain: string) => ({ x, y, text: plain, plain });
     const long = "A sentence of prose that runs well past thirty characters.";
     expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, long)], box)).toBe(true);
-    // Two prose lines and nothing else: a panel. Two prose lines among a
-    // chart's short labels: not.
-    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(true);
-    expect(isTextPanel([line(110, 150, long), line(110, 170, long), line(110, 190, "40")], box)).toBe(false);
+    // Two prose lines and nothing else: a panel only when the box is about as
+    // tall as the two lines; a tall box (a chart) is not, nor are two prose
+    // lines among a chart's short labels.
+    const short: Box = [100, 140, 400, 190];
+    expect(isTextPanel([line(110, 160, long), line(110, 176, long)], short)).toBe(true);
+    expect(isTextPanel([line(110, 150, long), line(110, 170, long)], box)).toBe(false);
+    expect(isTextPanel([line(110, 160, long), line(110, 176, long), line(110, 185, "40")], short)).toBe(false);
     expect(isTextPanel([line(110, 150, long), line(110, 170, "10"), line(110, 190, "Axis title")], box)).toBe(false);
     // Prose beside the box (starting left of it) or below it does not count.
     expect(isTextPanel([line(72, 150, long), line(110, 320, long)], box)).toBe(false);

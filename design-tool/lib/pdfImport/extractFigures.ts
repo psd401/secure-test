@@ -249,6 +249,9 @@ const PROSE_LINE_CHARS = 30;
  * inside its box to lose its picture; the text panels in the samples hold
  * 5–30 such lines. */
 export const TEXT_PANEL_PROSE_LINES = 3;
+/** A box only this tall per line (plus padding) is filled by its text. */
+const PANEL_LINE_PT = 24;
+const PANEL_PAD_PT = 24;
 
 /**
  * Import fixes (2026-10-25): a shaded box, a bordered instructions panel or
@@ -268,9 +271,11 @@ export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
     if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
   }
   // Re-review on #102: a two-line instructions box is a panel too — when it
-  // holds nothing but prose. A chart carries short tick or value labels, so
-  // two long legend lines alone do not make it one.
-  return prose >= TEXT_PANEL_PROSE_LINES || (prose >= 2 && prose === total);
+  // holds nothing but prose AND is about as tall as those lines. A chart
+  // whose only text is two long legend or category labels is much taller
+  // than its text (the drawing is most of it), so it keeps its picture.
+  const textHeight = prose * PANEL_LINE_PT + PANEL_PAD_PT;
+  return prose >= TEXT_PANEL_PROSE_LINES || (prose >= 2 && prose === total && box[3] - box[1] <= textHeight);
 }
 
 /** A ruled area: at least this share of its painted paths are thin rules. */
