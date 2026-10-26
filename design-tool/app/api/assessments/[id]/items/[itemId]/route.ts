@@ -10,6 +10,7 @@ import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, notFoundResponse, type AccessIntent } from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { captureItemSnapshot } from "@/lib/authoring/itemHistory";
 
 interface RouteContext {
   params: Promise<{ id: string; itemId: string }>;
@@ -109,21 +110,29 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (rubricGuard) return rubricGuard;
 
   const db = getDb();
-  const [updated] = await db
-    .update(items)
-    .set({
-      stem: body.stem,
-      choices: body.choices,
-      correct_choice_ids: body.correct_choice_ids,
-      correct_answer: body.correct_answer ?? null,
-      config: itemConfigForWrite(body, owned.item.config),
-      // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
-      // older caller must not wipe them); an array replaces them.
-      ...(body.standards !== undefined ? { standards: body.standards } : {}),
-      updated_at: new Date(),
-    })
-    .where(eq(items.id, itemId))
-    .returning();
+  // R-5 (docs/editor-redesign-design.md): the write and the history copy of
+  // the content it replaces land together. `?restore=1` (the new editor's
+  // History → Restore) always copies, so a restore can itself be undone.
+  const restore = new URL(req.url).searchParams.get("restore") === "1";
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(items)
+      .set({
+        stem: body.stem,
+        choices: body.choices,
+        correct_choice_ids: body.correct_choice_ids,
+        correct_answer: body.correct_answer ?? null,
+        config: itemConfigForWrite(body, owned.item.config),
+        // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
+        // older caller must not wipe them); an array replaces them.
+        ...(body.standards !== undefined ? { standards: body.standards } : {}),
+        updated_at: new Date(),
+      })
+      .where(eq(items.id, itemId))
+      .returning();
+    await captureItemSnapshot(tx, owned.item, row!, { force: restore });
+    return row;
+  });
   await db
     .update(assessments)
     .set({ updated_at: new Date() })

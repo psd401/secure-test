@@ -364,3 +364,27 @@ unless noted.
   lives in `lib/authoring/richTextTypes.ts`, typed as `ItemType` so a
   misspelt name fails typecheck, and `test/authoring-editor.test.ts` pins its
   membership against `ITEM_TYPES`. Hand-check row 713.
+- 2026-10-26 — **Phase 4 slice A: autosave and version history** (prototype
+  track, R-5; Q2 answered: a new table). With the R-12 flag on, each question
+  card saves itself a second after its last edit through the existing item
+  PATCH (`itemPatchBody` in `AssessmentEditor.tsx`, now shared by Save
+  question, autosave and restore); one per-card debounce on the existing
+  `createAutosave` (`lib/authoring/itemAutosave.ts`), so cards never wait on
+  each other, a failed save is not retried in a loop, and an edit undone
+  before the timer fires is never written. One indicator above the list (All
+  changes saved / Saving… / "Some changes didn't save" with links and Try
+  again); no Save question button. **History**: the item PATCH now copies the
+  content it replaces into `item_snapshots` (migration 0065, additive) —
+  coalesced to one copy per item every two minutes, newest 50 kept, deleted
+  with the item, teacher plane only (ADR 0016) — for every editor, so history
+  exists when the flag's default flips; `GET …/items/[itemId]/history`
+  (`edit` access) lists them, and a restore is an ordinary PATCH with
+  `?restore=1`, which always keeps the version it replaces. **Before
+  publishing**: the readiness checks as a list of links (`beforePublishing`
+  in `readiness.ts`, no five-entry cut-off) that scroll to the question and
+  focus its text; gaps never block a draft. Tests:
+  `test/item-autosave.test.ts` (debounce, indicator, capture rule, list) and
+  `test/item-history-api.test.ts` (capture, coalescing, cap, cascade, restore
+  round-trip for three types, publish lock, route access). Browser behaviour
+  is hand-check rows 714–726. Not built: autosave for stimulus sets and
+  assessment settings (they keep their own Save buttons).

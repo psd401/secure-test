@@ -204,7 +204,12 @@ export interface ReadinessSet {
  * named by the label the teacher gave it.
  */
 export function stimulusGaps(items: ReadinessItem[], sets: ReadinessSet[]): string[] {
-  const gaps: string[] = [];
+  return stimulusGapEntries(items, sets).map((g) => g.label);
+}
+
+/** `stimulusGaps`, each with the index of the question its set opens. */
+function stimulusGapEntries(items: ReadinessItem[], sets: ReadinessSet[]): { label: string; first: number }[] {
+  const gaps: { label: string; first: number }[] = [];
   for (const set of sets) {
     const first = items.findIndex((it) => it.item_set_id === set.id);
     if (first < 0) continue;
@@ -212,15 +217,15 @@ export function stimulusGaps(items: ReadinessItem[], sets: ReadinessSet[]): stri
     if (set.source) {
       // E12 (decision D-2): a draft source warns, never blocks.
       if (set.source.assessment_status !== "published") {
-        gaps.push(`Stimulus for question ${first + 1} pulls from "${set.source.assessment_name}", which is not published`);
+        gaps.push({ first, label: `Stimulus for question ${first + 1} pulls from "${set.source.assessment_name}", which is not published` });
       }
       continue;
     }
     if (blank(set.stimulus_text) && sources.length === 0) {
-      gaps.push(`Stimulus for question ${first + 1} is empty`);
+      gaps.push({ first, label: `Stimulus for question ${first + 1} is empty` });
     }
     for (const src of sources) {
-      if (blank(src.text)) gaps.push(`Source "${src.label}" for question ${first + 1} is empty`);
+      if (blank(src.text)) gaps.push({ first, label: `Source "${src.label}" for question ${first + 1} is empty` });
     }
   }
   return gaps;
@@ -249,4 +254,33 @@ export function readinessChecks(items: ReadinessItem[], sets: ReadinessSet[] = [
   }
   for (const label of stimulusGaps(items, sets)) checks.push({ label, ok: false });
   return checks;
+}
+
+/** R-5 (docs/editor-redesign-design.md): one entry of the new editor's
+ * "Before publishing" list. `itemId` is the question the entry jumps to. */
+export interface BeforePublishingEntry {
+  itemId: string;
+  label: string;
+}
+
+/**
+ * R-5: the readiness checks as the new editor's "Before publishing" list —
+ * every gap (no "…and n more" cut-off, since each entry is a link), each
+ * naming the question to jump to; a stimulus gap jumps to the first question
+ * of its set. An empty list means nothing to fix. Gaps never block: a keyless
+ * or unfinished question is still a legal draft.
+ */
+export function beforePublishing(
+  items: (ReadinessItem & { id: string })[],
+  sets: ReadinessSet[] = [],
+): BeforePublishingEntry[] {
+  const entries: BeforePublishingEntry[] = [];
+  items.forEach((it, i) => {
+    const gaps = questionGaps(it);
+    if (gaps.length > 0) entries.push({ itemId: it.id, label: `Question ${i + 1} ${gaps.join(", ")}` });
+  });
+  for (const g of stimulusGapEntries(items, sets)) {
+    entries.push({ itemId: items[g.first]!.id, label: g.label });
+  }
+  return entries;
 }

@@ -33,7 +33,10 @@ import { PublishDialog } from "@/components/app/PublishDialog";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
 import { PRODUCT_NAME } from "@/lib/brand";
-import { questionGaps, readinessChecks } from "./readiness";
+import { beforePublishing, questionGaps, readinessChecks } from "./readiness";
+import { BeforePublishingList } from "./BeforePublishingList";
+import { AutosaveIndicator } from "./AutosaveIndicator";
+import { ItemHistoryDialog, type ItemVersion } from "./ItemHistoryDialog";
 import { ShareDialog } from "@/components/app/ShareDialog";
 import type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
 import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
@@ -71,6 +74,7 @@ import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
+import { autosaveSummary, createItemAutosaver, type ItemAutosaver } from "@/lib/authoring/itemAutosave";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
 import {
   VISIBLE_ACCOMMODATION_CATALOG,
@@ -308,7 +312,7 @@ type AiProposal = {
 const TYPE_LABEL = ITEM_TYPE_LABEL;
 
 /** What the items routes return: the DB row, with the type-specific fields in `config`. */
-interface ItemRow {
+export interface ItemRow {
   id: string;
   position: number;
   item_set_id?: string | null;
@@ -352,7 +356,7 @@ interface ItemRow {
 
 // Same flattening as app/dashboard/[id]/page.tsx, so a row the API hands
 // back can join the list without a round trip through the server component.
-function rowToView(r: ItemRow): ItemView {
+export function rowToView(r: ItemRow): ItemView {
   return {
     id: r.id,
     position: r.position,
@@ -510,6 +514,18 @@ function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean 
     }
     return JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null);
   });
+}
+
+/** A published card's edit the publish lock admits: `persistedFp` is the
+ * card's saved fingerprint, which omits position / item_set_id — put the
+ * current ones back so only the card's own fields compare. */
+function keyOnlyEdit(persistedFp: string | undefined, item: ItemView): boolean {
+  return answerKeyOnlyChange(
+    persistedFp
+      ? ({ ...(JSON.parse(persistedFp) as Omit<ItemView, "position" | "item_set_id">), position: item.position, item_set_id: item.item_set_id } as ItemView)
+      : null,
+    item,
+  );
 }
 
 function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
@@ -812,6 +828,99 @@ function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
     scoring_method: null,
     standards: [],
   };
+}
+
+/**
+ * The item PATCH body for a card (UpdateItemBody is a discriminated union, so
+ * `type` and `stem` are always sent). Shared by Save question, the new
+ * editor's autosave and History → Restore (R-5), so all three write through
+ * one path.
+ */
+export function itemPatchBody(item: ItemView): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    type: item.type,
+    stem: item.stem,
+    choices: item.choices,
+    correct_choice_ids: item.correct_choice_ids,
+    correct_answer: item.correct_answer,
+    // Graphing calculator (D-7): sent both ways so unticking clears it.
+    no_calculator: item.no_calculator === true,
+    // Graphing calculator D-8: null removes it, so send it both ways.
+    graph: item.graph ?? null,
+  };
+  if (item.type === "essay") {
+    // Omit when unset: the essay body schema treats these as optional
+    // number/string, so null/empty would fail validation.
+    if (item.max_word_count != null) body.max_word_count = item.max_word_count;
+    if (item.placeholder) body.placeholder = item.placeholder;
+    // RT slice 1 (D-1): only when on — absence is off.
+    if (item.rich_text) body.rich_text = true;
+    // U-22: only when on — absence is off.
+    if (item.show_word_count) body.show_word_count = true;
+    if (item.rubric) body.rubric = item.rubric;
+    // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
+    // ways. The server detaches an omitted rubric_id whenever the rubric
+    // changed; sending null when the teacher has edited by hand (the view
+    // cleared it below) and the id when one was applied keeps the stored
+    // config equal to what this editor is showing either way.
+    body.rubric_id = item.rubric_id;
+  }
+  if (item.type === "match") {
+    body.pairs = item.pairs ?? [];
+  }
+  if (item.type === "order") {
+    body.sequence = item.sequence ?? [];
+  }
+  if (item.type === "hotspot") {
+    body.image_asset_id = item.image_asset_id;
+    body.regions = item.regions ?? [];
+    body.correct_region_ids = item.correct_region_ids ?? [];
+  }
+  if (item.type === "short_text") {
+    // Numeric equivalence (2026-09-15): send it only when ON — the schema
+    // takes an optional boolean and absence IS the default.
+    if (item.exact_form) body.exact_form = true;
+  }
+  if (item.type === "table") {
+    body.columns = item.columns ?? [];
+    body.rows = item.rows ?? [];
+    // Omit when unset: optional strings / records, null would fail.
+    if (item.corner) body.corner = item.corner;
+    if (item.cell_keys) body.cell_keys = item.cell_keys;
+  }
+  if (item.type === "fill_blank") {
+    // FB slice 2: stem order, keys only when set (blank accepted answers
+    // dropped) — what slice 1's compactBlanks stores anyway.
+    body.blanks = blanksForSave(item.stem, item.blanks ?? []);
+  }
+  if (item.type === "graph") {
+    // Graphing calculator D-9: null clears the key.
+    body.board = item.board ?? DEFAULT_GRAPH_BOARD;
+    body.key = item.graph_key ?? null;
+  }
+  if (item.type === "drawing_upload") {
+    body.prompt_asset_id = item.prompt_asset_id;
+    // A half-filled pair saves as "no canvas" (the inline hint tells the
+    // teacher); a partial object would 400 on the server's 100-4000 rule.
+    // A background rides INSIDE canvas, and width/height stay required, so
+    // a background chosen with no complete size saves the 800 × 600 default
+    // explicitly rather than `{ background }` alone (Blank omits the field).
+    const width = item.canvas?.width ?? null;
+    const height = item.canvas?.height ?? null;
+    const background = item.canvas?.background ?? null;
+    body.canvas =
+      width != null && height != null
+        ? { width, height, ...(background ? { background } : {}) }
+        : background
+          ? { width: 800, height: 600, background }
+          : null;
+  }
+  // Review fix (2026-08-14): PATCH omission now PRESERVES the stored
+  // method server-side, so "Type default" must clear via explicit null.
+  body.scoring_method = item.scoring_method;
+  // BG slice 2: always sent whole — an empty list clears the tags.
+  body.standards = item.standards;
+  return body;
 }
 
 export function AssessmentEditor({ assessment, access, initialItems, initialItemSets, newAuthoring = false }: Props) {
@@ -1373,91 +1482,9 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     }
   }
 
-  async function persistItem(item: ItemView) {
+  async function persistItem(item: ItemView, opts: { restore?: boolean } = {}): Promise<boolean> {
     setError(null);
-    const body: Record<string, unknown> = {
-      type: item.type,
-      stem: item.stem,
-      choices: item.choices,
-      correct_choice_ids: item.correct_choice_ids,
-      correct_answer: item.correct_answer,
-      // Graphing calculator (D-7): sent both ways so unticking clears it.
-      no_calculator: item.no_calculator === true,
-      // Graphing calculator D-8: null removes it, so send it both ways.
-      graph: item.graph ?? null,
-    };
-    if (item.type === "essay") {
-      // Omit when unset: the essay body schema treats these as optional
-      // number/string, so null/empty would fail validation.
-      if (item.max_word_count != null) body.max_word_count = item.max_word_count;
-      if (item.placeholder) body.placeholder = item.placeholder;
-      // RT slice 1 (D-1): only when on — absence is off.
-      if (item.rich_text) body.rich_text = true;
-      // U-22: only when on — absence is off.
-      if (item.show_word_count) body.show_word_count = true;
-      if (item.rubric) body.rubric = item.rubric;
-      // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
-      // ways. The server detaches an omitted rubric_id whenever the rubric
-      // changed; sending null when the teacher has edited by hand (the view
-      // cleared it below) and the id when one was applied keeps the stored
-      // config equal to what this editor is showing either way.
-      body.rubric_id = item.rubric_id;
-    }
-    if (item.type === "match") {
-      body.pairs = item.pairs ?? [];
-    }
-    if (item.type === "order") {
-      body.sequence = item.sequence ?? [];
-    }
-    if (item.type === "hotspot") {
-      body.image_asset_id = item.image_asset_id;
-      body.regions = item.regions ?? [];
-      body.correct_region_ids = item.correct_region_ids ?? [];
-    }
-    if (item.type === "short_text") {
-      // Numeric equivalence (2026-09-15): send it only when ON — the schema
-      // takes an optional boolean and absence IS the default.
-      if (item.exact_form) body.exact_form = true;
-    }
-    if (item.type === "table") {
-      body.columns = item.columns ?? [];
-      body.rows = item.rows ?? [];
-      // Omit when unset: optional strings / records, null would fail.
-      if (item.corner) body.corner = item.corner;
-      if (item.cell_keys) body.cell_keys = item.cell_keys;
-    }
-    if (item.type === "fill_blank") {
-      // FB slice 2: stem order, keys only when set (blank accepted answers
-      // dropped) — what slice 1's compactBlanks stores anyway.
-      body.blanks = blanksForSave(item.stem, item.blanks ?? []);
-    }
-    if (item.type === "graph") {
-      // Graphing calculator D-9: null clears the key.
-      body.board = item.board ?? DEFAULT_GRAPH_BOARD;
-      body.key = item.graph_key ?? null;
-    }
-    if (item.type === "drawing_upload") {
-      body.prompt_asset_id = item.prompt_asset_id;
-      // A half-filled pair saves as "no canvas" (the inline hint tells the
-      // teacher); a partial object would 400 on the server's 100-4000 rule.
-      // A background rides INSIDE canvas, and width/height stay required, so
-      // a background chosen with no complete size saves the 800 × 600 default
-      // explicitly rather than `{ background }` alone (Blank omits the field).
-      const width = item.canvas?.width ?? null;
-      const height = item.canvas?.height ?? null;
-      const background = item.canvas?.background ?? null;
-      body.canvas =
-        width != null && height != null
-          ? { width, height, ...(background ? { background } : {}) }
-          : background
-            ? { width: 800, height: 600, background }
-            : null;
-    }
-    // Review fix (2026-08-14): PATCH omission now PRESERVES the stored
-    // method server-side, so "Type default" must clear via explicit null.
-    body.scoring_method = item.scoring_method;
-    // BG slice 2: always sent whole — an empty list clears the tags.
-    body.standards = item.standards;
+    const body = itemPatchBody(item);
     // E11 (docs/rescore-after-key-change-design.md, D-4): a key fixed on a
     // Published test points to Rescore on Results once it is saved.
     const persistedBefore = persisted[item.id];
@@ -1470,7 +1497,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     setItemError(item.id, null);
     setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saving" } }));
     try {
-      await call(`${apiBase}/items/${item.id}`, {
+      // R-5: a History restore asks the server to keep the version it replaces.
+      await call(`${apiBase}/items/${item.id}${opts.restore ? "?restore=1" : ""}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -1480,6 +1508,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setPersisted((prev) => ({ ...prev, [item.id]: fingerprint(item) }));
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saved", at: new Date() } }));
       if (keyChanged) setKeyFixed((prev) => ({ ...prev, [item.id]: true }));
+      return true;
     } catch (e) {
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "idle" } }));
       // FB slice 2: name the blank problem slice 1's write boundary found
@@ -1492,7 +1521,75 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         item.id,
         blankIssues.length > 0 ? `${describe(e)} ${blankIssues.join("; ")}.` : describe(e),
       );
+      return false;
     }
+  }
+
+  // R-5 (docs/editor-redesign-design.md), new editor only: each card saves
+  // itself a second after its last edit, through persistItem — the same
+  // PATCH as Save question. While published only an answer-key-only edit
+  // saves (the server's publish lock); anything else waits for Unpublish and
+  // the indicator says so. The refs keep the autosaver, created once, calling
+  // this render's persistItem and reading this render's saved snapshots.
+  const persistItemRef = useRef(persistItem);
+  persistItemRef.current = persistItem;
+  const persistedRef = useRef(persisted);
+  persistedRef.current = persisted;
+  const autosaverRef = useRef<ItemAutosaver<ItemView> | null>(null);
+  if (newAuthoring && autosaverRef.current === null) {
+    autosaverRef.current = createItemAutosaver<ItemView>({
+      save: async (_id, item) => {
+        // Saved meanwhile by another path (an accepted suggestion, a restore).
+        if (persistedRef.current[item.id] === fingerprint(item)) return;
+        await persistItemRef.current(item);
+      },
+    });
+  }
+  const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
+  useEffect(() => {
+    autosaverRef.current?.sync(
+      items.map((item) => {
+        const fp = fingerprint(item);
+        return { id: item.id, fingerprint: fp, value: item, pending: persisted[item.id] !== fp && canAutosave(item) };
+      }),
+    );
+  });
+  // Leaving the editor sends whatever is still waiting on its timer.
+  useEffect(() => () => void autosaverRef.current?.flushAll(), []);
+
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+
+  /** R-5: the "Before publishing" and indicator links — scroll to the card and
+   * put the cursor in its question text (or on the card). */
+  function jumpToItem(itemId: string) {
+    const card = document.getElementById(`question-${itemId}`);
+    if (!card) return;
+    card.scrollIntoView({ block: "center", behavior: "smooth" });
+    const stem = document.getElementById(`stem-${itemId}`);
+    (stem ?? card).focus({ preventScroll: true });
+  }
+
+  function retryFailedSaves() {
+    for (const item of items) {
+      if (itemErrors[item.id] && persisted[item.id] !== fingerprint(item)) {
+        void autosaverRef.current?.retry(item.id, item);
+      }
+    }
+  }
+
+  /** R-5: History → Restore. Anything still waiting to autosave is sent
+   * first, so the server's copy of "the version this replaces" is current;
+   * then the version is saved through the ordinary PATCH (`restore`). */
+  async function restoreVersion(current: ItemView, version: ItemVersion): Promise<boolean> {
+    await autosaverRef.current?.flush(current.id);
+    autosaverRef.current?.cancel(current.id);
+    const next: ItemView = {
+      ...rowToView(version.item),
+      position: current.position,
+      item_set_id: current.item_set_id ?? null,
+    };
+    updateItem(current.id, () => next);
+    return persistItem(next, { restore: true });
   }
 
   function onSuggested(outcome: SuggestOutcome) {
@@ -1527,6 +1624,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   async function confirmDelete() {
     const target = pendingDelete;
     if (!target) return;
+    autosaverRef.current?.cancel(target.id);
     setDeleting(true);
     setItemError(target.id, null);
     try {
@@ -2507,6 +2605,28 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </div>
         ) : null}
 
+        {newAuthoring && items.length > 0 ? (
+          <div className="mb-4 space-y-3">
+            <AutosaveIndicator
+              summary={autosaveSummary(
+                items.map((i) => ({
+                  id: i.id,
+                  dirty: persisted[i.id] !== fingerprint(i),
+                  saving: itemSave[i.id]?.kind === "saving",
+                  failed: !!itemErrors[i.id],
+                  blocked: !canAutosave(i),
+                })),
+              )}
+              questionNumber={(id) => items.findIndex((i) => i.id === id) + 1}
+              onJump={jumpToItem}
+              onRetry={retryFailedSaves}
+            />
+            {!isLocked ? (
+              <BeforePublishingList entries={beforePublishing(items, itemSets)} onJump={jumpToItem} />
+            ) : null}
+          </div>
+        ) : null}
+
         {items.length === 0 ? (
           <EmptyState
             icon={<ListPlus />}
@@ -2518,17 +2638,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             {items.map((item, idx) => {
               const gaps = questionGaps(item);
               const dirty = persisted[item.id] !== fingerprint(item);
-              const keyOnlyDirty =
-                dirty &&
-                isLocked &&
-                answerKeyOnlyChange(
-                  // The fingerprint omits position / item_set_id; put the
-                  // current ones back so only the card's own fields compare.
-                  persisted[item.id]
-                    ? ({ ...(JSON.parse(persisted[item.id]!) as Omit<ItemView, "position" | "item_set_id">), position: item.position, item_set_id: item.item_set_id } as ItemView)
-                    : null,
-                  item,
-                );
+              const keyOnlyDirty = dirty && isLocked && keyOnlyEdit(persisted[item.id], item);
               const save = itemSave[item.id] ?? { kind: "idle" as const };
               const itemError = itemErrors[item.id];
               // E5 slice 1: the stimulus card opens the block above its first
@@ -2785,6 +2895,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                 </li>
               ) : null}
               <li
+                id={newAuthoring ? `question-${item.id}` : undefined}
+                tabIndex={newAuthoring ? -1 : undefined}
                 className={
                   set
                     ? "ml-4 rounded-lg border border-l-4 border-l-primary/40 bg-card p-4"
@@ -2801,7 +2913,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         Incomplete
                       </Badge>
                     ) : null}
-                    {dirty ? <Badge variant="outline">Unsaved changes</Badge> : null}
+                    {/* R-5: the new editor saves on its own; the list's indicator says so. */}
+                    {dirty && !newAuthoring ? <Badge variant="outline">Unsaved changes</Badge> : null}
                   </div>
                   <div className="flex items-center gap-1">
                     {set ? (
@@ -3585,6 +3698,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </Alert>
                 ) : null}
 
+                {newAuthoring ? (
+                  // R-5: no Save question — the card autosaves.
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setHistoryFor(item.id)}>
+                      History
+                    </Button>
+                    <StatusLine state={save} />
+                  </div>
+                ) : (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button
                     type="button"
@@ -3597,6 +3719,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </Button>
                   <StatusLine state={save} />
                 </div>
+                )}
                 {keyFixed[item.id] && !dirty ? (
                   <p role="status" className="mt-2 text-sm text-muted-foreground">
                     {KEY_FIXED_POINTER}{" "}
@@ -3651,6 +3774,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       </Tabs>
 
       <ShareDialog assessmentId={assessment.id} open={shareOpen} onOpenChange={setShareOpen} />
+
+      {(() => {
+        const historyItem = historyFor ? items.find((i) => i.id === historyFor) : undefined;
+        return newAuthoring && historyItem ? (
+          <ItemHistoryDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setHistoryFor(null);
+            }}
+            assessmentId={assessment.id}
+            itemId={historyItem.id}
+            questionNumber={items.indexOf(historyItem) + 1}
+            locked={isLocked}
+            onRestore={(v) => restoreVersion(historyItem, v)}
+          />
+        ) : null;
+      })()}
 
       <PublishDialog
         open={publishOpen !== null}
