@@ -441,3 +441,24 @@ unless noted.
   text stay plain inputs (they take markup, as today, but not the new field);
   reordering whole matching rows (the lefts' display order); a blank chip
   shows "blank", not its number.
+- 2026-10-26 — **Phase 4 slice D: `AssessmentEditor.tsx` split** (prototype
+  track, no behaviour change). Moved byte-for-byte (only re-indented) out of
+  the 4,181-line file: the view types and pure helpers to `editorModel.ts`
+  (`ItemView`, `ItemRow`, `rowToView`, `fingerprint`, `defaultItemFor`,
+  `itemPatchBody`, the scoring tables, tab ids); the Settings tab
+  (`SettingsTab.tsx`) and the Allowed tab (`AccommodationsTab.tsx`); the top
+  of the Questions tab — heading, preview, import panels, add / AI toolbar,
+  AI proposal (`QuestionsToolbar.tsx`); the stimulus card
+  (`StimulusSetCard.tsx`); and a card's per-type editor, choices included
+  (`ItemTypeFields.tsx`). Each component takes the editor's own values and
+  handlers as props of the same names; all state stays in
+  `AssessmentEditor.tsx` (now 2,047 lines), which re-exports the moved
+  helpers so existing imports keep working. Checked: a script compared every
+  moved line with the original (identical apart from indentation, plus
+  `export` on the model's declarations), and a throwaway server render of the
+  editor before and after (draft / published × flag off / on × all five tabs,
+  one question of every type and a stimulus set) produced the same HTML once
+  React's generated `useId` values were masked. Typecheck and the full suite
+  pass. Not split: the question card's header, stem field, scoring select and
+  save row, and the stimulus-set / autosave / outline handlers, which still
+  live in the editor. Hand-check rows 761–762.
