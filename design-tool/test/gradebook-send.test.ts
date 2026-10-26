@@ -72,6 +72,10 @@ mock.module("../lib/auth/session", () => ({
 }));
 
 const logLines: string[] = [];
+// The log text with every uuid blanked: a random assessment/attempt uuid can
+// hold "1001" by chance (CI, PR #102), and a uuid is never a student number.
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const logTextWithoutUuids = () => logLines.join("\n").replace(UUID_RE, "<uuid>");
 let restoreSink: ((line: string) => void) | null = null;
 
 beforeAll(async () => {
@@ -427,7 +431,7 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(pref).toMatchObject({ staff_sub: OWNER, section_ps_id: "5001", target: "powerschool", category_id: "602" });
 
     // No student number in any log line.
-    expect(logLines.join("\n")).not.toContain("1001");
+    expect(logTextWithoutUuids()).not.toContain("1001");
   });
 
   test("re-send: unchanged skipped, newly scored sent, changed updated in place; name ignored", async () => {
@@ -521,8 +525,8 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(await getDb().select().from(gradebook_section_prefs)).toEqual([]);
     const errorLine = logLines.map((l) => JSON.parse(l)).find((l) => l.event === "gradebook_push_failed");
     expect(errorLine).toMatchObject({ level: "error", stage: "scores", status: 409 });
-    expect(logLines.join("\n")).not.toContain("81001");
-    expect(logLines.join("\n")).not.toContain("1001");
+    expect(logTextWithoutUuids()).not.toContain("81001");
+    expect(logTextWithoutUuids()).not.toContain("1001");
   });
 
   test("a create failure leaves no claim behind and surfaces a 409 body", async () => {
