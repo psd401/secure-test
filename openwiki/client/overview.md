@@ -98,6 +98,8 @@ Typed text is saved while the student types, not only on blur (v1.3.4, `docs/cli
 
 Withdrawing an answer is a page action, not a server call of its own. The **Clear answer** button that `choiceList` renders on single- and multiple-choice items is disabled until a box is checked. Pressing it unchecks the item and posts `withdraw` through the bridge; clearing every box of a multiple-choice item does the same. The host turns that into a nil-payload spool row, so the server sees the same `DELETE` as any other withdrawal (see [durability](#durability-the-spool)). Plain `essay` answers use the `.essay` rule in `itemStyles`, which gives the box about ten lines of height and lets the student drag it taller.
 
+Keyboard reach is set in page code, not in the host. With macOS Keyboard navigation off (the fleet default), WebKit's Tab stops only at text fields, so `reachByKeyboard` in `AssessmentPage.swift` gives every button, select and checkbox an explicit `tabindex="0"`, including the controls added after the first build through the same observer. Roving groups keep their own 0 / -1 stops (the math keypad, the drawing toolbar, source tabs), and single-choice radios get theirs in `choiceList`. This was the fix for findings HS-1 and ME-1 (the 2026-09-23 district-Mac sitting). Check it with a real Tab walk on a Mac with Keyboard navigation off, not only in Debug.
+
 ## Vendored and generated resources
 
 Three scripts in `client/scripts/` produce files that the Swift package ships. The package never runs Bun, so every output is checked in:
