@@ -1313,6 +1313,10 @@ describe("answer-key figures", () => {
     // not a key line — the figure below it is the student's.
     expect(keyFiguresFromText("3. Explain your reasoning. Answers may vary.\n[FIGURE 1]")).toEqual([]);
     expect(keyFiguresFromText("Use the sample answer format shown below.\n[FIGURE 1]")).toEqual([]);
+    expect(keyFiguresFromText("Answers will vary, but label each part.\n[FIGURE 1]")).toEqual([]);
+    // Re-review on #102: a key that prints text after the cue's colon.
+    expect(keyFiguresFromText("Sample answer: 3x + 2 is shown below\n[FIGURE 1]")).toEqual([1]);
+    expect(keyFiguresFromText("Possible response: the graph below\n[FIGURE 2]")).toEqual([2]);
   });
 
   test("key figures leave every set; a set left empty is dropped; adjacency skips them", () => {

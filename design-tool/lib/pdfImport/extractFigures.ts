@@ -243,10 +243,11 @@ export function isFigureLabel(run: { x: number; y: number; str: string }, boxes:
 
 /** A line at least this long inside a drawing is prose, not a label. */
 const PROSE_LINE_CHARS = 30;
-/** This many prose lines inside a drawing make it a text box, not a figure.
- * Review on #102: two was enough for a chart with two long legend or
- * category labels inside its box to lose its picture; the text panels in
- * the samples hold 5–30 such lines. */
+/** This many prose lines inside a drawing make it a text box, not a figure
+ * (two do when nothing else is inside — see isTextPanel). Review on #102:
+ * two alone was enough for a chart with two long legend or category labels
+ * inside its box to lose its picture; the text panels in the samples hold
+ * 5–30 such lines. */
 export const TEXT_PANEL_PROSE_LINES = 3;
 
 /**
@@ -259,13 +260,17 @@ export const TEXT_PANEL_PROSE_LINES = 3;
  */
 export function isTextPanel(lines: readonly TextLine[], box: Box): boolean {
   let prose = 0;
+  let total = 0;
   for (const l of lines) {
     const x = l.x ?? 0;
     if (x < box[0] || x > box[2] || l.y < box[1] || l.y > box[3]) continue;
+    total += 1;
     if ((l.plain ?? l.text).trim().length >= PROSE_LINE_CHARS) prose += 1;
-    if (prose >= TEXT_PANEL_PROSE_LINES) return true;
   }
-  return false;
+  // Re-review on #102: a two-line instructions box is a panel too — when it
+  // holds nothing but prose. A chart carries short tick or value labels, so
+  // two long legend lines alone do not make it one.
+  return prose >= TEXT_PANEL_PROSE_LINES || (prose >= 2 && prose === total);
 }
 
 /** A ruled area: at least this share of its painted paths are thin rules. */
