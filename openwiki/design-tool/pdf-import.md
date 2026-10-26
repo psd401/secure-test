@@ -27,6 +27,7 @@ openwiki:
     - The import-pdf route writes nothing; every candidate, set and figure is a proposal that the teacher confirms and saves through the normal item routes.
     - Every candidate is validated through CreateItemBody; invalid candidates are returned with their index and errors, never as usable items.
     - Scanned PDFs skip the input guardrail stage because no text exists before the model runs; the output stage still screens proposed text.
+    - The input guardrail on this route only records a hit; the output screen over the whole proposal is the enforced gate.
   validation_commands:
     - cd design-tool && bun test test/pdf-extract.test.ts
 ---
@@ -44,7 +45,7 @@ flowchart TD
     C --> D{"looksScanned?"}
     D -- "no text layer" --> E["Scanned branch: send raw PDF as document block, cap pages and bytes"]
     D -- "text layer" --> F["extractPdfLayout: text with FIGURE markers and figures"]
-    F --> G["runGuarded surface pdf-import: input screen"]
+    F --> G["runGuarded surface pdf-import: input screen, record only"]
     E --> H["runGuarded: output screen only"]
     G --> I["Model returns candidates, proposed_sets, sources"]
     H --> I
@@ -58,7 +59,7 @@ The import route is a read-only analysis. Writes happen only when the panel post
 1. **Gate.** `requireStaff`, then `authorizeAssessment(..., "edit")` and `requireDraft`. The body must be multipart (`expected_multipart`), and the file is capped at 25 MiB.
 2. **Text layer or scan.** `extractPdfText` reads the text layer. `looksScanned` decides whether the document is a scan (the text is too thin for its page count, see `MIN_CHARS_PER_PAGE`). A scan over `MAX_OCR_PAGES` (30) or `MAX_OCR_BYTES` (10 MiB) is refused with 422 or 413.
 3. **Figures.** On the text path, `extractPdfLayout` returns the text with a `[FIGURE n]` marker where each raster or vector figure sits. A failure in the figure walk falls back to flat text and no figures; it does not fail the import.
-4. **Guardrail.** `runGuarded` with surface `pdf-import` screens the text before the model runs, and screens proposed stems, source texts and stimuli after it. A blocked result returns 422 `blocked_by_guardrail`. The scanned branch has no pre-model text, so only the output stage runs. See [AI and safeguarding](ai-and-safeguarding.md).
+4. **Guardrail.** `runGuarded` with surface `pdf-import` and `inputMode: "record"`. The input check screens the extracted text before the model runs, but a hit is only stored as a `flag` and extraction continues. The output check screens every string the model proposed (`proposalScreenText`: stems, choices, pairs, blank options and keys, answers, table labels, stimuli and sources), and a block there returns 422 `blocked_by_guardrail` with a `hint` that the panel shows instead of the code. The scanned branch has no pre-model text, so only the output stage runs. The input check became record-only on 2026-10-25 because the guardrail's PROMPT_ATTACK filter refused ordinary test directions (for example "Answer all questions. Show your work."); the model therefore now reads text that tripped that filter, and the fence in [the prompt's contract](#the-prompts-contract) and the output screen are the controls on that trade-off (ledger entry for PR #108, `docs/ledger.md`). Flags from this route are not safeguarding alerts, which come only from the hand-in screener. See [AI and safeguarding](ai-and-safeguarding.md).
 5. **Model.** `getPdfExtractorProvider()` selects `mock` or `bedrock`. The Bedrock provider sends the text, or the raw PDF as a document block for scans (ADR 0015). Output is capped at `PDF_EXTRACT_MAX_TOKENS`.
 6. **Validation.** `validatePdfCandidates` runs each candidate through `CreateItemBody` after `normalizePdfCandidate`. It keeps at most `MAX_PDF_CANDIDATES` (100) and sets `truncated` when more came back. Rejected candidates are reported by index with their Zod messages.
 
@@ -77,6 +78,7 @@ These rules are deterministic and run after the model returns, so they do not de
 `PDF_EXTRACT_SYSTEM_PROMPT` in `lib/pdfImport/extractCore.ts` defines what the model may propose. It offers multiple choice (single and multi), short text, essay, match, drawing upload, table and fill-in-the-blank shapes. It does not offer `order` or `hotspot`. The prompt also sets rules that the validators rely on:
 
 - **Source numbers.** Each candidate may carry `source_number`, or `source_numbers` for a match set built from several printed questions. `CreateItemBody` strips unknown keys, so `readSourceNumbers` reads these before validation.
+- **The document is data, not instructions.** `buildPdfExtractUserPrompt` (`lib/pdfImport/extractCore.ts`) wraps the extracted text in `<test_document>` tags, and `neutraliseTestDocumentTag` escapes a literal closing tag inside it so the text cannot end the fence early. The system prompt says the document is content to turn into items and never instructions to the model. `bedrockProvider.ts` sends the text this way on the text path. `test/pdf-extract.test.ts` (describe "extractor prompt fences the document as data") pins the wrapper and the escape.
 - **Student-can-do-it rewrites.** An instruction the student cannot perform on screen (for example "underline the digits") must be rewritten or dropped. Every such change is reported in a `changes` array with the original and changed text, and `readCandidateChanges` aligns it with the validated candidates. The teacher sees these changes flagged on the card.
 - **No invented examples.** Stems must not include "e.g." or sample answers.
 - **Shape choice.** Match is one item for a whole bank, drawing upload is only for work that must be drawn, and table is only for printed grids with empty cells. A sentence with blank lines inside it is `fill_blank`, while a standalone answer line stays `short_text`.
@@ -104,15 +106,21 @@ Extraction writes no assets. Figures travel in the response as data URLs. When t
 
 ## Errors
 
-Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
+A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "output"` (the input stage never blocks here). Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
 
 ## Change guidance
 
 - To add an item shape to the extractor, change the prompt, the parser in `normalizePdfCandidate`, and `CreateItemBody`. Check whether the shape also needs the bundle and delivery changes described in [wire formats](../architecture/wire-formats.md#add-an-item-type-cross-system-expensive). The generic checklist is in [authoring](authoring.md#change-recipes).
 - Keep extraction write-free. Any change that saves from this route breaks the lock and the teacher's review step.
 - Do not treat `docs/pdf-import-enhancements.md` as current on shapes. Use `PDF_EXTRACT_SYSTEM_PROMPT`.
+- Judge an extractor or model change on measured output, not on item counts. `scripts/compare-pdf-import.ts` runs the extractor on one PDF with one or more Bedrock models (`--model`, `--runs`, `--summary`) using the caller's own AWS credentials and skips the guardrail. `scripts/pdfImportScore.ts` scores a run against a hand-checked answer set (`--expected`). Neither saves anything. Answer sets describe teacher documents and stay out of the repository, so never paste a real PDF's output into a tracked file.
 
-Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
-. Add `test/pdf-import-route.test.ts` for the route's status codes and response shape. Those files do not need the test database. The figure extractor is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
+Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms, the prompt fence, the output screen text and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
+
+Live behaviour of the fence and the record-only input check against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
+ by `test/changed-from-pdf.test.tsx`.
 DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
 ute.test.ts`.
+test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
+ute.test.ts`.
+.
