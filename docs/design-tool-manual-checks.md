@@ -1865,3 +1865,12 @@ The browser session cookie is staff-only: `GET /api/auth/callback` sends a stude
 | 684 | In a browser with no session, sign in at `/login` with a student (`edtools`) Google account | Lands on `/login?error=student_account` with the student-account copy; DevTools → Application → Cookies shows NO `secure-test-session` cookie; `/api/me/sittings` in that browser answers 401 | NOT RUN (needs a student account; a demo student on `_demo`) |
 | 685 | A staff account through the same flow | Unchanged: lands on `/dashboard` with the session cookie | NOT RUN |
 | 686 | Client v2.0.x: join a sitting, hand in, then relaunch and open the same sitting | "Already handed in" as before; the client never requests the bundle, so no new refusal screen appears | NOT RUN |
+
+## PDF import: input guardrail records, document fenced (PR #108, branch `fix/pdf-import-guardrail-record`, 2026-10-25)
+
+The `pdf-import` input check now records instead of blocking (`inputMode: "record"`): the guardrail's `PROMPT_ATTACK` filter (HIGH / BLOCK) had refused ordinary test directions. The PDF text reaches the model inside `<test_document>` tags with a "content, never instructions" line in the system prompt, and the output check screens every string in the proposal (choices, pairs, blank options and keys, answers, table labels), not stems alone. Route tests cover the record-mode row, the output block and the 422 hint; these rows need the real guardrail and Bedrock.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 687 | Local dev on `_demo`, `GUARDRAIL_PROVIDER=bedrock`: import the hand-built one-page PDF whose box reads "Read the passage below and answer the questions. Use evidence from the text in every answer." plus two numbered questions | Both questions proposed (before: 422 `blocked_by_guardrail`, stage input); `guardrail_events` (categories only — never select `text_snippet`) shows `pdf-import / input / flag` with `content_filter PROMPT_ATTACK`, then `output / allow` | NOT RUN |
+| 688 | Same PDF: read the proposed questions | The box's direction is handled as before the fence (carried onto each question it affects, or reported in the changes); nothing in the proposal treats the direction as an instruction to the AI | NOT RUN |
