@@ -31,7 +31,7 @@ openwiki:
 `packages/graphing/package.json` exports four entry points. Each has a different consumer, and mixing them up is a common source of breakage:
 
 - `./server` (`src/server.ts`): no DOM and no MathLive. The design tool imports it in API routes (`lib/api/items.ts`, `studentAttempt.ts`, `reviewActions.ts`, `lib/scoring/auto.ts`) and in preview and reporting (`lib/preview/renderHtml.ts`, `lib/reporting/answerView.ts`). It exports the SVG renderers, the alt-text describer, `analyze`, and the answer engine (`canonical`, `parseSnap`, `scoreGraph`, `graphPoints`, `graphMaxPoints`, `GRAPH_TOOLS`).
-- `./ui` (`src/ui/index.ts`): the browser editors and players. `GraphItemEditor.tsx` and `GraphStimulusEditor.tsx` load it with a dynamic import.
+- `./ui` (`src/ui/index.ts`): the browser editors and players. `GraphItemEditor.tsx` and `GraphStimulusEditor.tsx` load it with a dynamic import. Its modules (the calculator panel, keypad, expression list, stimulus graph, answer board) are described in [calculator and graph UI modules](calculator-ui.md).
 - `./mathlive` (`src/mathlive.ts`): the MathLive math-field bridge, also dynamically imported by the editors.
 - `.` (`src/index.ts`): a small root barrel.
 

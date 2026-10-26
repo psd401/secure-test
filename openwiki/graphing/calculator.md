@@ -63,7 +63,7 @@ sequenceDiagram
 
 ## Client
 
-- `AssessmentPageCalculator.swift` is the glue. When the bundle names a calculator it adds a Calculator button, and the first open calls `__secureTestGraphing()` and mounts the panel. Without the field the page is unchanged: no button, no style, no call.
+- `AssessmentPageCalculator.swift` is the glue. When the bundle names a calculator it adds a Calculator button, and the first open calls `__secureTestGraphing()` and mounts the panel. Without the field the page is unchanged: no button, no style, no call. The panel's own modules (keypad, expression list, sliders, exponent hint) are described in [calculator and graph UI modules](calculator-ui.md).
 - The calculator engine is `graphingScript` in `GeneratedGraphing.swift`. It is generated from `packages/graphing/src/page.ts` by `scripts/build-page.ts`. Do not edit the generated file. `GraphingScriptTests` pins its shape.
 - Page-level calls are spliced into `AssessmentPage.rendererScript`, so the served renderer carries the same code ([signed renderer delivery](../client/signed-renderer.md)).
 
