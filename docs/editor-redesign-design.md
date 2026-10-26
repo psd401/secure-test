@@ -419,3 +419,25 @@ unless noted.
   rows 727–746. Not built: within-set reordering from the rail, match / order
   key reordering by drag (they keep their own controls), and splitting
   `AssessmentEditor.tsx`.
+- 2026-10-26 — **Phase 4 slice C: every item type in the new editor**
+  (prototype track, R-7). With the R-12 flag on, every item type's question
+  text is the new field (`RICH_TEXT_TYPES` is now all of `ITEM_TYPES`); each
+  type's own panel (rubric, pairs, steps, hotspots, reference image, table,
+  blanks, graph) is the existing sub-editor, reused unchanged. **Fill in the
+  blank**: the field takes the item's blank ids so markers load as chips, and
+  has **Insert blank**, which follows the current editor's `insertBlankAt`
+  rule on the document (`lib/authoring/blankInsert.ts`: selection replaced,
+  its text the first accepted answer, a space where the chip would touch a
+  word, at the end when the field isn't focused); `docToMarkup` counts a chip
+  in the document as a blank even before the item's list catches up. Blanks
+  follow the stem's order as in the textarea. **Matching key**: re-pair by
+  dragging a right onto another row or by Swap → Swap with this; both swap
+  the two rows' rights only (`swapMatchRights`, `lib/authoring/keyOrder.ts`),
+  announced in a live region. **Ordering key**: steps drag by a handle as
+  well as Move up / Move down, announced. Tests:
+  `test/authoring-fill-blank-field.test.ts` (parity with `insertBlankAt`,
+  chip load / save), `test/authoring-key-order.test.ts`. Browser behaviour is
+  hand-check rows 747–760. Not built: pair, step, table-cell and blank-answer
+  text stay plain inputs (they take markup, as today, but not the new field);
+  reordering whole matching rows (the lefts' display order); a blank chip
+  shows "blank", not its number.

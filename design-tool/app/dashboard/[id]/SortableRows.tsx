@@ -13,6 +13,7 @@ import {
 import {
   SortableContext,
   sortableKeyboardCoordinates,
+  rectSwappingStrategy,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -38,6 +39,7 @@ export function SortableRows({
   onMove,
   describe,
   disabled = false,
+  swap = false,
   children,
 }: {
   ids: string[];
@@ -45,6 +47,8 @@ export function SortableRows({
   /** "Question 3", "Choice B": what the drag announcements call a row. */
   describe: (id: string) => string;
   disabled?: boolean;
+  /** A drop swaps the two rows (matching rights) instead of moving one between the others. */
+  swap?: boolean;
   children: (id: string, index: number, drag: DragBits) => ReactNode;
 }) {
   const sensors = useSensors(
@@ -83,7 +87,7 @@ export function SortableRows({
         },
       }}
     >
-      <SortableContext items={ids} strategy={verticalListSortingStrategy} disabled={disabled}>
+      <SortableContext items={ids} strategy={swap ? rectSwappingStrategy : verticalListSortingStrategy} disabled={disabled}>
         {ids.map((id, index) => (
           <SortableRow key={id} id={id} index={index} disabled={disabled}>
             {children}

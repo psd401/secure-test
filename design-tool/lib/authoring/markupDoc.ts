@@ -99,6 +99,15 @@ export function markupToDoc(markup: string, options: ParseOptions = {}): LoadedM
  */
 export function docToMarkup(doc: JSONContent, options: ParseOptions = {}): SavedMarkup {
   const nodes = docToNodes(doc);
+  // Phase 4 slice C: a blank chip in the document is a blank, even before the
+  // item's blank list has caught up with an "Insert blank" in the same event.
+  if (Array.isArray(options.blanks)) {
+    const ids = new Set<string>(options.blanks);
+    for (const n of doc.content?.[0]?.content ?? []) {
+      if (n.type === MARKUP_NODE.blank && n.attrs?.id) ids.add(String(n.attrs.id));
+    }
+    options = { ...options, blanks: [...ids] };
+  }
   const want = JSON.stringify(renderedForm(nodes));
   for (const candidate of [nodes, escapeDollars(nodes)]) {
     const markup = serialize(candidate);

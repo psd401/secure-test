@@ -1951,3 +1951,17 @@ Every row in this section runs with the R-12 flag ON for the signing-in account 
 | 744 | Multiple choice in the new field: drag choice C's handle to the top; then use a choice's up / down arrows | The choices reorder, letters follow position (the moved one is now A), the ticked answer stays with its text; it autosaves; the preview matches | NOT RUN |
 | 745 | Keyboard + VoiceOver: a choice's **Move choice C up** | "Choice C moved. It is now choice B of 4." announced | NOT RUN |
 | 746 | Flag OFF, same assessment | The current editor: type select + **Add question** at the top (seeded "New question" text), no outline, no "+", no type select on cards, choices lettered by id with no handles or arrows; Move up / down on cards still work | NOT RUN |
+| 747 | Flag ON: add an Essay, Matching, Ordering, Hotspot, Drawing / upload, Table, Fill in the blank and Graph question | Each card's question text is the new field (no `**` or `$` shown, B / I / Image… / Math… under it); each type's own panel below (rubric, pairs, steps, hotspots, reference image, table, blanks, graph) is the one the current editor shows | NOT RUN |
+| 748 | An existing question of each type in 747 whose text has bold, a formula and a picture | It opens showing them formatted, and opening it does not mark it changed or autosave | NOT RUN |
+| 749 | Fill in the blank, new field: put the cursor between two words and press **Insert blank** | A blank chip appears at the cursor with a space each side as needed; a new "Blank" entry appears in the blanks panel in sentence order; it autosaves; the preview shows the blank where the chip is | NOT RUN |
+| 750 | Fill in the blank: select a word and press **Insert blank** | The word is replaced by a chip and becomes that blank's first accepted answer | NOT RUN |
+| 751 | Fill in the blank: click outside the field, then **Insert blank** | The chip goes at the end of the sentence | NOT RUN |
+| 752 | Fill in the blank: delete a chip with Backspace, then use the blanks panel's restore for it | The panel marks the blank as not in the sentence; restoring puts the chip back at the end; Undo (⌘Z) after a delete also brings the chip back | NOT RUN |
+| 753 | Fill in the blank with 20 blanks | **Insert blank** is disabled with "A question allows at most 20 blanks" | NOT RUN |
+| 754 | Fill in the blank whose stored text has a blank inside a formula | The field opens read-only with the amber note and **Show source** | NOT RUN |
+| 755 | Matching: press **Swap** on row 1's right, then **Swap with this** on row 3 | Rows 1 and 3 trade rights; row 2 is unchanged; lefts stay in place; it autosaves; the preview shows the new pairs | NOT RUN |
+| 756 | Matching: drag row 3's right handle onto row 1 | Same result as 755 (a swap, not a shift) | NOT RUN |
+| 757 | Keyboard + VoiceOver, Matching: Swap then Swap with this | "France now matches Paris. Italy now matches Rome."-style announcement; **Swap** pressed again on the picked row cancels | NOT RUN |
+| 758 | Ordering: drag step 3's handle to the top; then **Move step 1 down** | Steps reorder, numbers follow position, it autosaves; the preview's key order follows; VoiceOver hears "Step 3 moved. It is now step 1 of 4." | NOT RUN |
+| 759 | Published assessment, flag ON: Matching / Ordering / Fill in the blank | Handles, Swap, arrows and Insert blank are disabled, as the current editor's controls are | NOT RUN |
+| 760 | Flag OFF, same questions | The current editor: textarea with Insert blank under it, Matching rows with no Swap or handles, Ordering with ↑ / ↓ only | NOT RUN |

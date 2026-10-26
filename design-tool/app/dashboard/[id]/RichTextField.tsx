@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { Fragment, Slice } from "@tiptap/pm/model";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { parse } from "@secure-test/markup";
 import { useAssessmentId } from "@/components/app/AssessmentIdContext";
 import { docToMarkup, markupToDoc, MARKUP_MARK, MARKUP_NODE } from "@/lib/authoring/markupDoc";
+import { insertBlankTr, selectedBlankKey } from "@/lib/authoring/blankInsert";
 import { markupExtensions, renderTex } from "@/lib/authoring/markupExtensions";
 import {
   cleanForeignSlice,
@@ -33,6 +34,13 @@ interface Props {
   id?: string;
   /** R-6 (UX3-1): shown while the field is empty; never saved. */
   placeholder?: string;
+  /**
+   * Fill-in-the-blank stems only (Phase 4 slice C): the item's blank ids, so
+   * their `[[id]]` markers load as blank chips, and "Insert blank". `onInsert`
+   * records the new blank (with `key`, the selected text, as its first
+   * accepted answer) and returns its id; the field then puts the chip in.
+   */
+  blanks?: { ids: readonly string[]; canInsert: boolean; limitTitle?: string; onInsert: (key: string) => string };
 }
 
 const btn = "rounded border border-border px-2 py-0.5 text-xs hover:bg-accent disabled:opacity-40 aria-pressed:bg-accent";
@@ -47,13 +55,17 @@ const btn = "rounded border border-border px-2 py-0.5 text-xs hover:bg-accent di
  * Text it cannot hold exactly opens read-only with "Show source" (Risks:
  * round-trip loss); opening an item never rewrites it.
  */
-export function RichTextField({ value, onChange, label, disabled = false, singleLine = false, id, placeholder }: Props) {
+export function RichTextField({ value, onChange, label, disabled = false, singleLine = false, id, placeholder, blanks }: Props) {
   const assessmentId = useAssessmentId();
   const lastEmitted = useRef(value);
   const pastedSliceHtml = useRef<string | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const [loaded, setLoaded] = useState(() => markupToDoc(value));
+  // The blank ids as a parse option ({} for every other field). A ref, so the
+  // editor's callbacks always read the item's current list.
+  const blankOpts = useRef<{ blanks?: string[] }>({});
+  blankOpts.current = blanks ? { blanks: [...blanks.ids] } : {};
+  const [loaded, setLoaded] = useState(() => markupToDoc(value, blankOpts.current));
   const [exact, setExact] = useState(true);
   const [droppedImages, setDroppedImages] = useState(0);
   const [showSource, setShowSource] = useState(false);
@@ -110,7 +122,7 @@ export function RichTextField({ value, onChange, label, disabled = false, single
       },
     },
     onUpdate({ editor: ed }) {
-      const saved = docToMarkup(ed.getJSON());
+      const saved = docToMarkup(ed.getJSON(), blankOpts.current);
       setExact(saved.exact);
       if (saved.markup !== lastEmitted.current) {
         lastEmitted.current = saved.markup;
@@ -140,7 +152,7 @@ export function RichTextField({ value, onChange, label, disabled = false, single
   useEffect(() => {
     if (value === lastEmitted.current) return;
     lastEmitted.current = value;
-    const next = markupToDoc(value);
+    const next = markupToDoc(value, blankOpts.current);
     setLoaded(next);
     setExact(true);
     if (editor && !editor.isDestroyed) editor.commands.setContent(next.doc, { emitUpdate: false });
@@ -165,6 +177,17 @@ export function RichTextField({ value, onChange, label, disabled = false, single
       .focus()
       .insertContent({ type: MARKUP_NODE.image, attrs: { alt: node.alt, id: node.id, scheme: node.scheme ?? null } })
       .run();
+  }
+
+  function insertBlank() {
+    if (!editor || !blanks?.canInsert) return;
+    // Not focused: at the end of the sentence, as the current editor does.
+    if (!editor.isFocused) {
+      editor.view.dispatch(editor.state.tr.setSelection(TextSelection.atEnd(editor.state.doc)));
+    }
+    const id = blanks.onInsert(selectedBlankKey(editor.state));
+    editor.view.dispatch(insertBlankTr(editor.state, id));
+    editor.commands.focus();
   }
 
   function saveMath() {
@@ -239,6 +262,18 @@ export function RichTextField({ value, onChange, label, disabled = false, single
           </button>
           <ImagePicker onInsert={insertImage} />
           <MathTranslator onInsert={insertMath} />
+          {blanks ? (
+            <button
+              type="button"
+              className={btn}
+              disabled={!blanks.canInsert}
+              title={blanks.canInsert ? "Add a blank at the cursor" : blanks.limitTitle}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={insertBlank}
+            >
+              Insert blank
+            </button>
+          ) : null}
         </div>
       ) : null}
 

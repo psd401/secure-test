@@ -110,6 +110,8 @@ import {
   blanksWithoutKeys,
   fillBlankIssueMessages,
   hasKeyedBlank,
+  MAX_BLANKS,
+  nextBlankId,
   orderBlanksByStem,
 } from "@/lib/items/fillBlankEditor";
 import { createAutosave } from "@/lib/autosave";
@@ -3199,7 +3201,31 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       placeholder="Type the question"
                       value={item.stem}
                       disabled={isLocked}
-                      onChange={(stem) => updateItem(item.id, (i) => ({ ...i, stem }))}
+                      onChange={(stem) =>
+                        updateItem(item.id, (i) => ({
+                          ...i,
+                          stem,
+                          // As the textarea does: blanks follow the stem's order.
+                          blanks: i.type === "fill_blank" ? orderBlanksByStem(stem, i.blanks ?? []) : i.blanks,
+                        }))
+                      }
+                      blanks={
+                        item.type === "fill_blank"
+                          ? {
+                              ids: (item.blanks ?? []).map((b) => b.id),
+                              canInsert: !isLocked && (item.blanks ?? []).length < MAX_BLANKS,
+                              limitTitle: `A question allows at most ${MAX_BLANKS} blanks`,
+                              onInsert: (key) => {
+                                const blankId = nextBlankId(item.stem, item.blanks ?? []);
+                                const blank: FillBlankBlank = key
+                                  ? { id: blankId, kind: "text", keys: [key] }
+                                  : { id: blankId, kind: "text" };
+                                updateItem(item.id, (i) => ({ ...i, blanks: [...(i.blanks ?? []), blank] }));
+                                return blankId;
+                              },
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 ) : (
@@ -3305,6 +3331,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         updateItem(item.id, (i) => ({ ...i, pairs }))
                       }
                       disabled={isLocked}
+                      repairable={newAuthoring}
                     />
                   </div>
                 ) : item.type === "order" ? (
@@ -3315,6 +3342,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         updateItem(item.id, (i) => ({ ...i, sequence }))
                       }
                       disabled={isLocked}
+                      draggable={newAuthoring}
                     />
                   </div>
                 ) : item.type === "drawing_upload" ? (
