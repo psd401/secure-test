@@ -893,7 +893,7 @@ describe("order items (slice 48)", () => {
 
 // Slice 49: hotspot items — draft create, configured round-trip, integrity.
 describe("hotspot items (slice 49)", () => {
-  const IMAGE_ID = "33333333-3333-3333-3333-333333333333";
+  const IMAGE_ID = "33333333-3333-4333-8333-333333333333";
   const REGIONS = [
     { id: "r1", x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
     { id: "r2", x: 0.5, y: 0.5, w: 0.3, h: 0.3 },
@@ -975,7 +975,7 @@ describe("drawing_upload items (slice 50)", () => {
     const patched = await patchItem(aid, item.id, {
       type: "drawing_upload",
       stem: "Draw the water cycle",
-      prompt_asset_id: "99999999-9999-9999-9999-999999999999",
+      prompt_asset_id: "99999999-9999-4999-8999-999999999999",
       canvas: { width: 1024, height: 768 },
     });
     expect(patched.status).toBe(200);
@@ -983,7 +983,7 @@ describe("drawing_upload items (slice 50)", () => {
     const d = bundle.items.find((i) => i.type === "drawing_upload");
     expect(d).toBeDefined();
     if (d && d.type === "drawing_upload") {
-      expect(d.prompt_asset_id).toBe("99999999-9999-9999-9999-999999999999");
+      expect(d.prompt_asset_id).toBe("99999999-9999-4999-8999-999999999999");
       expect(d.canvas).toEqual({ width: 1024, height: 768 });
     }
   });
