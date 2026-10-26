@@ -21,7 +21,7 @@ import { normalizeStandards } from "@/lib/standards/tags";
 // scoring_method on any type); import is the chokepoint. Keep the method
 // only when it's valid for the type AND, for ai/hybrid, a rubric actually
 // came with the item — otherwise drop it and let the type default apply.
-function clampScoringMethod(
+export function clampScoringMethod(
   type: ItemType,
   method: ScoringMethod | undefined,
   hasRubric: boolean,
@@ -208,6 +208,120 @@ export async function importBundleForOwner(
     }
   }
 
+  const plan = planImport(bundle, remap);
+  if (plan.error) return plan.error;
+  const { allowedValid, caValid, importable } = plan;
+
+  let sourcesDropped = 0;
+  const result = await db.transaction(async (tx) => {
+    const name = await importName(tx, owner_sub, bundle.title);
+    const [row] = await tx
+      .insert(assessments)
+      .values({
+        owner_sub,
+        owner_email: owner_email ?? null,
+        name,
+        description: "",
+        allowed_accommodations: allowedValid,
+        construct_altering: caValid,
+        // Client paging: an older bundle has no field and reads as scroll.
+        student_layout: bundle.student_layout ?? "scroll",
+        // Instant feedback: absent reads as the defaults. The release stamp is
+        // not in the bundle, so the copy starts unreleased.
+        student_feedback: bundle.student_feedback ?? "off",
+        answers_release: bundle.answers_release ?? "on_release",
+        // Passage highlighting: absent reads as off.
+        allow_highlighting: bundle.allow_highlighting ?? false,
+        // Graphing calculator: absent reads as none.
+        calculator_mode: bundle.calculator?.mode ?? "none",
+        calculator_preset: bundle.calculator?.preset ?? "full",
+      })
+      .returning();
+    // E5 slice 1: the new item ids come back by position (position = index
+    // in `importable`), so a bundle set's item_ids can be remapped below.
+    const insertedIds = new Map<number, string>();
+    if (plan.rows.length > 0) {
+      const inserted = await tx
+        .insert(items)
+        .values(plan.rows.map((r) => ({ ...r, assessment_id: row!.id })))
+        .returning({ id: items.id, position: items.position });
+      for (const r of inserted) insertedIds.set(r.position, r.id);
+    }
+    // E5 slice 1: recreate the sets on the copy. Bundle item ids → the
+    // index in `importable` → the new row id. An item the type-skip above
+    // dropped just leaves its set; the survivors stay contiguous because
+    // removing an element from a run keeps the rest a run. Stimulus asset
+    // refs remap like stem refs.
+    if (bundle.item_sets && bundle.item_sets.length > 0) {
+      const indexOf = new Map(importable.map((it, idx) => [it.id, idx] as const));
+      for (const set of bundle.item_sets) {
+        const newIds = set.item_ids
+          .map((id) => indexOf.get(id))
+          .filter((idx): idx is number => idx !== undefined)
+          .map((idx) => insertedIds.get(idx))
+          .filter((id): id is string => id !== undefined);
+        if (newIds.length === 0) continue;
+        // E12 slice 1: keep a set's source link only when THIS owner owns
+        // the source assessment and the question is still an allowed type
+        // (a copy under another owner, or a stale export, drops it and
+        // says so in `sources_dropped`).
+        let sourceItemId: string | null = null;
+        if (set.source) {
+          sourceItemId = await keptSourceItemId(tx, set.source, owner_sub);
+          if (!sourceItemId) sourcesDropped += 1;
+        }
+        const [setRow] = await tx
+          .insert(item_sets)
+          .values({
+            assessment_id: row!.id,
+            stimulus_text: rewriteAssetRefs(set.stimulus, remap),
+            // Multi-source stimulus slice 2: each source's text remaps its
+            // asset refs exactly as the introduction does, so a figure inside
+            // Source C points at the copy's own asset row.
+            sources: set.sources.map((src) => ({
+              label: src.label,
+              text: rewriteAssetRefs(src.text, remap),
+            })),
+            layout: set.layout,
+            source_item_id: sourceItemId,
+          })
+          .returning({ id: item_sets.id });
+        await tx
+          .update(items)
+          .set({ item_set_id: setRow!.id })
+          .where(inArray(items.id, newIds));
+      }
+    }
+    return row!.id;
+  });
+
+  return {
+    assessment_id: result,
+    item_count: importable.length,
+    assets_imported: importedAssetCount,
+    sources_dropped: sourcesDropped,
+    assets_reused: reusedAssetCount,
+    accommodations_imported: allowedValid.length,
+    accommodations_dropped: plan.accommodationsDropped,
+    construct_altering_imported: caValid.length,
+    construct_altering_dropped: plan.caDropped,
+    items_skipped_unknown_type: plan.skippedUnknownType,
+    scoring_methods_dropped: plan.scoringMethodsDropped,
+  };
+}
+
+type Db = ReturnType<typeof getDb>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Everything the import decides before it writes (editor redesign Phase 7
+ * slice C, R-9): the clamped accommodations, the type skip, the graph check,
+ * and every item row as it will be stored (minus `assessment_id`). Pure — no
+ * DB, no storage — so the JSON-import preview (lib/api/importPreview.ts)
+ * computes the SAME plan the import then writes, and its counts cannot drift
+ * from the import's. Moved unchanged out of importBundleForOwner.
+ */
+export function planImport(bundle: ItemBundle, remap: Map<string, string>) {
   // Slice 21: validate + clamp accommodations before the insert.
   // - Unknown IDs are dropped (caller surfaces the count); we stay
   //   lenient on inbound to keep round-trips resilient across catalog
@@ -266,326 +380,272 @@ export async function importBundleForOwner(
   // stored as given, a bad snap or off-board key object would refuse every
   // student save or make full credit impossible. Refuse the bundle, naming
   // the item, in the page's `schema_invalid:<path>:<message>` form.
+  let graphError: ImportBundleError | undefined;
   for (const [n, it] of bundle.items.entries()) {
     if (it.type !== "graph") continue;
     const issues = graphIssues(it.board, it.key);
     if (issues.length > 0) {
       const first = issues[0]!;
-      return {
+      graphError = {
         error: `schema_invalid:items.${n}.${first.path.join(".")}:question ${n + 1} (graph): ${first.message}`,
         detail: { item_id: it.id, issues },
       };
+      break;
     }
   }
 
-  let sourcesDropped = 0;
-  const result = await db.transaction(async (tx) => {
-    const existing = await tx
-      .select({ name: assessments.name })
-      .from(assessments)
-      .where(eq(assessments.owner_sub, owner_sub));
-    const name = uniqueImportName(
-      existing.map((r) => r.name),
-      bundle.title || "Imported assessment",
-    ).slice(0, 200);
-    const [row] = await tx
-      .insert(assessments)
-      .values({
-        owner_sub,
-        owner_email: owner_email ?? null,
-        name,
-        description: "",
-        allowed_accommodations: allowedValid,
-        construct_altering: caValid,
-        // Client paging: an older bundle has no field and reads as scroll.
-        student_layout: bundle.student_layout ?? "scroll",
-        // Instant feedback: absent reads as the defaults. The release stamp is
-        // not in the bundle, so the copy starts unreleased.
-        student_feedback: bundle.student_feedback ?? "off",
-        answers_release: bundle.answers_release ?? "on_release",
-        // Passage highlighting: absent reads as off.
-        allow_highlighting: bundle.allow_highlighting ?? false,
-        // Graphing calculator: absent reads as none.
-        calculator_mode: bundle.calculator?.mode ?? "none",
-        calculator_preset: bundle.calculator?.preset ?? "full",
-      })
-      .returning();
-    // E5 slice 1: the new item ids come back by position (position = index
-    // in `importable`), so a bundle set's item_ids can be remapped below.
-    const insertedIds = new Map<number, string>();
-    if (importable.length > 0) {
-      const inserted = await tx.insert(items).values(
-        withNoCalculator(importable, importable.map((it, idx) => {
-          const stem = rewriteAssetRefs(it.stem, remap);
-          const base = {
-            assessment_id: row!.id,
-            position: idx,
-            stem,
-            // Empty by default; the essay branch overrides (slice 32). Set on
-            // every row so the multi-row insert has a uniform column shape.
-            config: {} as ItemConfig,
-            // BG slice 2: tags as the bundle carries them (the wire schema
-            // already capped them); a code this catalog lacks stays as text.
-            standards: normalizeStandards(it.standards ?? []),
-          };
-          if (it.type === "multiple_choice_single") {
-            return {
-              ...base,
-              type: it.type,
-              choices: it.choices.map((c) => ({
-                ...c,
-                text: rewriteAssetRefs(c.text, remap),
-              })),
-              correct_choice_ids: it.correct_choice_id ? [it.correct_choice_id] : [],
-              correct_answer: null,
-              config: clampAndCount(it.type, it.scoring_method, false),
-            };
-          }
-          if (it.type === "multiple_choice_multi") {
-            return {
-              ...base,
-              type: it.type,
-              choices: it.choices.map((c) => ({
-                ...c,
-                text: rewriteAssetRefs(c.text, remap),
-              })),
-              correct_choice_ids: it.correct_choice_ids,
-              correct_answer: null,
-              config: clampAndCount(it.type, it.scoring_method, false),
-            };
-          }
-          if (it.type === "essay") {
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                ...(it.max_word_count != null
-                  ? { max_word_count: it.max_word_count }
-                  : {}),
-                ...(it.placeholder ? { placeholder: it.placeholder } : {}),
-                // RT slice 1 (D-1): stored only when on.
-                ...(it.rich_text ? { rich_text: true } : {}),
-                ...(it.show_word_count ? { show_word_count: true } : {}),
-                ...(it.rubric ? { rubric: it.rubric } : {}),
-                ...clampAndCount(it.type, it.scoring_method, it.rubric != null),
-              },
-            };
-          }
-          if (it.type === "short_text") {
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: it.correct_answer ?? null,
-              config: {
-                // Numeric equivalence (2026-09-15): kept only when ON, the
-                // same convention the export writes it with.
-                ...(it.exact_form ? { exact_form: true as const } : {}),
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "match") {
-            // Slice 47: pairs are plain strings v1 — no asset-ref rewrite.
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                pairs: it.pairs,
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "order") {
-            // Slice 48: sequence entries are plain strings v1.
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                sequence: it.sequence,
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "drawing_upload") {
-            // Slice 50: authoring-only; the reference image remaps like the
-            // hotspot image. Non-uuid refs are dropped (see
-            // importableConfigAssetId).
-            const promptId = importableConfigAssetId(it.prompt_asset_id, remap);
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                ...(promptId ? { prompt_asset_id: promptId } : {}),
-                ...(it.canvas ? { canvas: it.canvas } : {}),
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "hotspot") {
-            // Slice 49: the image asset was re-uploaded above (it rides the
-            // bundle's assets map) — point config at the importer's copy.
-            // An unbundled uuid ref keeps the old id and renders as a
-            // missing image, same as stem refs; non-uuid refs are dropped
-            // (see importableConfigAssetId).
-            const imageId = importableConfigAssetId(it.image_asset_id, remap);
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                ...(imageId ? { image_asset_id: imageId } : {}),
-                regions: it.regions,
-                correct_region_ids: it.correct_region_ids,
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "table") {
-            // E3 slice 1: labels are plain strings v1 (KaTeX / emphasis, no
-            // asset refs) — no rewrite, same posture as match pairs. Keys
-            // ride the teacher bundle and are kept; a keyless table imports
-            // as the legal draft it is.
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                columns: it.columns,
-                rows: it.rows,
-                ...(it.corner ? { corner: it.corner } : {}),
-                ...(it.cell_keys ? { cell_keys: it.cell_keys } : {}),
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "fill_blank") {
-            // FB slice 1 (docs/fill-in-blank-design.md): option text is plain
-            // v1 (KaTeX / emphasis, no asset refs) — no rewrite, the table
-            // posture. Keys ride the teacher bundle and are kept, normalized
-            // to the stored form (a key only when set) so a keyless blank has
-            // one representation. Marker ↔ blank pairing is NOT re-checked
-            // here — the wire layer is permissive like match / table, and the
-            // renderers treat an unpaired marker as plain text.
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                blanks: compactBlanks(it.blanks),
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          if (it.type === "graph") {
-            // Graphing calculator D-9: board and key as the bundle has them.
-            return {
-              ...base,
-              type: it.type,
-              choices: [],
-              correct_choice_ids: [],
-              correct_answer: null,
-              config: {
-                graph_board: it.board,
-                ...(it.key ? { graph_key: it.key } : {}),
-                ...clampAndCount(it.type, it.scoring_method, false),
-              },
-            };
-          }
-          // Slice 46: when the wire schema grows a type, this fails
-          // typecheck until an explicit branch above handles it — no more
-          // silent import-as-short_text.
-          return assertNever(it, "importBundle: unhandled item type");
-        })),
-      ).returning({ id: items.id, position: items.position });
-      for (const r of inserted) insertedIds.set(r.position, r.id);
-    }
-    // E5 slice 1: recreate the sets on the copy. Bundle item ids → the
-    // index in `importable` → the new row id. An item the type-skip above
-    // dropped just leaves its set; the survivors stay contiguous because
-    // removing an element from a run keeps the rest a run. Stimulus asset
-    // refs remap like stem refs.
-    if (bundle.item_sets && bundle.item_sets.length > 0) {
-      const indexOf = new Map(importable.map((it, idx) => [it.id, idx] as const));
-      for (const set of bundle.item_sets) {
-        const newIds = set.item_ids
-          .map((id) => indexOf.get(id))
-          .filter((idx): idx is number => idx !== undefined)
-          .map((idx) => insertedIds.get(idx))
-          .filter((id): id is string => id !== undefined);
-        if (newIds.length === 0) continue;
-        // E12 slice 1: keep a set's source link only when THIS owner owns
-        // the source assessment and the question is still an allowed type
-        // (a copy under another owner, or a stale export, drops it and
-        // says so in `sources_dropped`).
-        let sourceItemId: string | null = null;
-        if (set.source) {
-          const [src] = await tx
-            .select({ id: items.id, type: items.type, owner_sub: assessments.owner_sub })
-            .from(items)
-            .innerJoin(assessments, eq(assessments.id, items.assessment_id))
-            .where(and(eq(items.id, set.source.item_id), eq(items.assessment_id, set.source.assessment_id)))
-            .limit(1);
-          if (src && src.owner_sub === owner_sub && SOURCE_ITEM_TYPES.has(src.type)) sourceItemId = src.id;
-          else sourcesDropped += 1;
-        }
-        const [setRow] = await tx
-          .insert(item_sets)
-          .values({
-            assessment_id: row!.id,
-            stimulus_text: rewriteAssetRefs(set.stimulus, remap),
-            // Multi-source stimulus slice 2: each source's text remaps its
-            // asset refs exactly as the introduction does, so a figure inside
-            // Source C points at the copy's own asset row.
-            sources: set.sources.map((src) => ({
-              label: src.label,
-              text: rewriteAssetRefs(src.text, remap),
-            })),
-            layout: set.layout,
-            source_item_id: sourceItemId,
-          })
-          .returning({ id: item_sets.id });
-        await tx
-          .update(items)
-          .set({ item_set_id: setRow!.id })
-          .where(inArray(items.id, newIds));
-      }
-    }
-    return row!.id;
-  });
-
+  const rows = withNoCalculator(importable, importable.map((it, idx) => importItemValues(it, idx, remap, clampAndCount)));
   return {
-    assessment_id: result,
-    item_count: importable.length,
-    assets_imported: importedAssetCount,
-    sources_dropped: sourcesDropped,
-    assets_reused: reusedAssetCount,
-    accommodations_imported: allowedValid.length,
-    accommodations_dropped: accommodationsDropped,
-    construct_altering_imported: caValid.length,
-    construct_altering_dropped: caDropped,
-    items_skipped_unknown_type: skippedUnknownType,
-    scoring_methods_dropped: scoringMethodsDropped,
+    error: graphError,
+    allowedValid,
+    caValid,
+    accommodationsDropped,
+    caDropped,
+    importable,
+    skippedUnknownType,
+    rows,
+    // Read after `rows`: the clamp counts as the rows are built.
+    scoringMethodsDropped,
   };
+}
+
+export type ImportPlan = ReturnType<typeof planImport>;
+
+/** One bundle item as the row the import inserts (without `assessment_id`). */
+function importItemValues(
+  it: ItemBundle["items"][number],
+  idx: number,
+  remap: Map<string, string>,
+  clampAndCount: (type: ItemType, method: ScoringMethod | undefined, hasRubric: boolean) => ItemConfig,
+) {
+  const stem = rewriteAssetRefs(it.stem, remap);
+  const base = {
+    position: idx,
+    stem,
+    // Empty by default; the essay branch overrides (slice 32). Set on
+    // every row so the multi-row insert has a uniform column shape.
+    config: {} as ItemConfig,
+    // BG slice 2: tags as the bundle carries them (the wire schema
+    // already capped them); a code this catalog lacks stays as text.
+    standards: normalizeStandards(it.standards ?? []),
+  };
+  if (it.type === "multiple_choice_single") {
+    return {
+      ...base,
+      type: it.type,
+      choices: it.choices.map((c) => ({
+        ...c,
+        text: rewriteAssetRefs(c.text, remap),
+      })),
+      correct_choice_ids: it.correct_choice_id ? [it.correct_choice_id] : [],
+      correct_answer: null,
+      config: clampAndCount(it.type, it.scoring_method, false),
+    };
+  }
+  if (it.type === "multiple_choice_multi") {
+    return {
+      ...base,
+      type: it.type,
+      choices: it.choices.map((c) => ({
+        ...c,
+        text: rewriteAssetRefs(c.text, remap),
+      })),
+      correct_choice_ids: it.correct_choice_ids,
+      correct_answer: null,
+      config: clampAndCount(it.type, it.scoring_method, false),
+    };
+  }
+  if (it.type === "essay") {
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        ...(it.max_word_count != null
+          ? { max_word_count: it.max_word_count }
+          : {}),
+        ...(it.placeholder ? { placeholder: it.placeholder } : {}),
+        // RT slice 1 (D-1): stored only when on.
+        ...(it.rich_text ? { rich_text: true } : {}),
+        ...(it.show_word_count ? { show_word_count: true } : {}),
+        ...(it.rubric ? { rubric: it.rubric } : {}),
+        ...clampAndCount(it.type, it.scoring_method, it.rubric != null),
+      },
+    };
+  }
+  if (it.type === "short_text") {
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: it.correct_answer ?? null,
+      config: {
+        // Numeric equivalence (2026-09-15): kept only when ON, the
+        // same convention the export writes it with.
+        ...(it.exact_form ? { exact_form: true as const } : {}),
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "match") {
+    // Slice 47: pairs are plain strings v1 — no asset-ref rewrite.
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        pairs: it.pairs,
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "order") {
+    // Slice 48: sequence entries are plain strings v1.
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        sequence: it.sequence,
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "drawing_upload") {
+    // Slice 50: authoring-only; the reference image remaps like the
+    // hotspot image. Non-uuid refs are dropped (see
+    // importableConfigAssetId).
+    const promptId = importableConfigAssetId(it.prompt_asset_id, remap);
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        ...(promptId ? { prompt_asset_id: promptId } : {}),
+        ...(it.canvas ? { canvas: it.canvas } : {}),
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "hotspot") {
+    // Slice 49: the image asset was re-uploaded above (it rides the
+    // bundle's assets map) — point config at the importer's copy.
+    // An unbundled uuid ref keeps the old id and renders as a
+    // missing image, same as stem refs; non-uuid refs are dropped
+    // (see importableConfigAssetId).
+    const imageId = importableConfigAssetId(it.image_asset_id, remap);
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        ...(imageId ? { image_asset_id: imageId } : {}),
+        regions: it.regions,
+        correct_region_ids: it.correct_region_ids,
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "table") {
+    // E3 slice 1: labels are plain strings v1 (KaTeX / emphasis, no
+    // asset refs) — no rewrite, same posture as match pairs. Keys
+    // ride the teacher bundle and are kept; a keyless table imports
+    // as the legal draft it is.
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        columns: it.columns,
+        rows: it.rows,
+        ...(it.corner ? { corner: it.corner } : {}),
+        ...(it.cell_keys ? { cell_keys: it.cell_keys } : {}),
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "fill_blank") {
+    // FB slice 1 (docs/fill-in-blank-design.md): option text is plain
+    // v1 (KaTeX / emphasis, no asset refs) — no rewrite, the table
+    // posture. Keys ride the teacher bundle and are kept, normalized
+    // to the stored form (a key only when set) so a keyless blank has
+    // one representation. Marker ↔ blank pairing is NOT re-checked
+    // here — the wire layer is permissive like match / table, and the
+    // renderers treat an unpaired marker as plain text.
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        blanks: compactBlanks(it.blanks),
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  if (it.type === "graph") {
+    // Graphing calculator D-9: board and key as the bundle has them.
+    return {
+      ...base,
+      type: it.type,
+      choices: [],
+      correct_choice_ids: [],
+      correct_answer: null,
+      config: {
+        graph_board: it.board,
+        ...(it.key ? { graph_key: it.key } : {}),
+        ...clampAndCount(it.type, it.scoring_method, false),
+      },
+    };
+  }
+  // Slice 46: when the wire schema grows a type, this fails
+  // typecheck until an explicit branch above handles it — no more
+  // silent import-as-short_text.
+  return assertNever(it, "importBundle: unhandled item type");
+}
+
+/** The copy's name: the first free one among title, "title (copy)", … for this owner. */
+export async function importName(q: Db | Tx, owner_sub: string, title: string): Promise<string> {
+  const existing = await q
+    .select({ name: assessments.name })
+    .from(assessments)
+    .where(eq(assessments.owner_sub, owner_sub));
+  return uniqueImportName(
+    existing.map((r) => r.name),
+    title || "Imported assessment",
+  ).slice(0, 200);
+}
+
+/**
+ * E12 slice 1: keep a set's source link only when THIS owner owns the source
+ * assessment and the question is still an allowed type; null means dropped.
+ */
+export async function keptSourceItemId(
+  q: Db | Tx,
+  source: { item_id: string; assessment_id: string },
+  owner_sub: string,
+): Promise<string | null> {
+  const [src] = await q
+    .select({ id: items.id, type: items.type, owner_sub: assessments.owner_sub })
+    .from(items)
+    .innerJoin(assessments, eq(assessments.id, items.assessment_id))
+    .where(and(eq(items.id, source.item_id), eq(items.assessment_id, source.assessment_id)))
+    .limit(1);
+  return src && src.owner_sub === owner_sub && SOURCE_ITEM_TYPES.has(src.type) ? src.id : null;
 }
 
 export function isImportBundleError(

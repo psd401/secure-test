@@ -10,6 +10,9 @@ import {
   isImportBundleError,
 } from "@/lib/api/importBundle";
 import { importErrorCopy } from "@/lib/ui/errorCopy";
+import { getDb } from "@/db/client";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
+import { ImportPreviewFlow } from "./ImportPreviewFlow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FilePicker } from "@/components/app/FilePicker";
@@ -78,8 +81,12 @@ interface ImportPageProps {
 export default async function ImportPage({ searchParams }: ImportPageProps) {
   const { error } = await searchParams;
   const copy = error ? importErrorCopy(error) : null;
+  // Editor redesign Phase 7 slice C (R-9): flagged staff see what the file
+  // will create before Create; everyone else gets today's direct import.
+  const session = await readStaffSessionFromCookies();
+  const newAuthoring = session ? await isNewAuthoringEnabled(getDb(), session) : false;
   return (
-    <main className="mx-auto max-w-xl px-6 py-12">
+    <main className={`mx-auto px-6 py-12 ${newAuthoring ? "max-w-screen-2xl" : "max-w-xl"}`}>
       <PageHeader
         crumbs={[{ label: "Assessments", href: "/dashboard" }]}
         title="Import assessment file"
@@ -97,18 +104,22 @@ export default async function ImportPage({ searchParams }: ImportPageProps) {
         </Alert>
       ) : null}
 
-      <form action={importAssessment} encType="multipart/form-data" className="mt-8 space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="file">Assessment file (.json)</Label>
-          <FilePicker id="file" name="file" accept="application/json,.json" label="Choose the .json file…" required />
-        </div>
-        <div className="flex items-center gap-3">
-          <SubmitButton pendingLabel="Importing…">Import</SubmitButton>
-          <Button asChild variant="ghost">
-            <Link href="/dashboard">Cancel</Link>
-          </Button>
-        </div>
-      </form>
+      {newAuthoring ? (
+        <ImportPreviewFlow action={importAssessment} />
+      ) : (
+        <form action={importAssessment} encType="multipart/form-data" className="mt-8 space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="file">Assessment file (.json)</Label>
+            <FilePicker id="file" name="file" accept="application/json,.json" label="Choose the .json file…" required />
+          </div>
+          <div className="flex items-center gap-3">
+            <SubmitButton pendingLabel="Importing…">Import</SubmitButton>
+            <Button asChild variant="ghost">
+              <Link href="/dashboard">Cancel</Link>
+            </Button>
+          </div>
+        </form>
+      )}
     </main>
   );
 }

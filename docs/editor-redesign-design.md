@@ -608,3 +608,23 @@ unless noted.
   every PDF hint is unchanged. Tests: `test/docx-document.test.ts`,
   `test/docx-import-route.test.ts` (hand-built `.docx` fixtures,
   `test/helpers/docx.ts`; mock provider). Hand-check rows 796–803.
+- 2026-10-26 — **Phase 7 slice C built** (R-9, D-6, prototype track, flag
+  on only). Choosing a `.json` on **Import assessment file** now shows what
+  the import will create before anything is written: the new name (the
+  import's own `title (copy)` rule), questions by type, passages, pictures,
+  layout, calculator, accommodations, a warnings list (unknown types left
+  out, scoring settings the import clamps, accommodations off the catalog,
+  E12 source links dropped, pictures the file lacks, questions with no key)
+  and the questions in the student's own renderer (Phase 5's sandboxed
+  frame, Follow my place hidden, pictures sent in from the file). **Create
+  assessment** submits the same file to the same server action as before.
+  To keep the preview from drifting from the import, the import's pre-write
+  work moved unchanged into a pure `planImport` (accommodation clamp, type
+  skip, graph check, every row as stored) plus `importName` and
+  `keptSourceItemId`, and the request body reading into
+  `lib/api/importBody.ts`; the import and the new read-only route
+  `POST /api/assessments/import/preview` (404 with the flag off) both use
+  them. Tests: `test/import-preview.test.ts` (counts, warnings, refusals,
+  no key in the student view, no row written by the preview or its route,
+  and the preview equal to what the import then stores). Flag off: the
+  direct import, unchanged. Hand-check rows 804–810.
