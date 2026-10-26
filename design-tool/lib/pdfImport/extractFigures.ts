@@ -250,7 +250,12 @@ const PROSE_LINE_CHARS = 30;
  * this rule: a plain border is too few paths to be a drawing at all
  * (MIN_CLUSTER_PATHS), and a box drawn with 8+ rules is a ruled table, whose
  * text stays text (isFilledTable). Two rounds of a two-line special case
- * (prose only; then prose only and short) each lost some small chart. */
+ * (prose only; then prose only and short) each lost some small chart.
+ * Known limitation (recorded in docs/ledger.md, 2026-10-25): a
+ * two-line instructions box decorated with 8+ other painted shapes (icons,
+ * a dotted frame, a strip) that are not a ruled grid is still cropped as a
+ * figure, and its two lines leave the text the model reads. No sample has
+ * one; a signal that separates it from a two-label chart was not found. */
 export const TEXT_PANEL_PROSE_LINES = 3;
 
 /**
