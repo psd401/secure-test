@@ -34,6 +34,9 @@ import { SessionCode } from "@/components/app/SessionCode";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { openAlertCountsByAssessment } from "@/lib/safeguarding/alertQueries";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
+import { startTemplates } from "@/lib/authoring/templates";
+import { StartScreen } from "./new/StartScreen";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessments" };
@@ -186,6 +189,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // Share notifications (docs/share-notifications-design.md): a co-teach grant
   // the teacher has not opened yet carries "New" on its row.
   const unseenGrants = await unseenAssessmentGrantIds(db, session.email);
+  // Editor redesign Phase 8 (D-5): with the R-12 flag on, a teacher with no
+  // assessments yet gets the start screen in place of the empty state.
+  const startScreenHere =
+    rows.length === 0 && !showArchived && !showAll && (await isNewAuthoringEnabled(db, session));
   const openCodeFor = new Map<string, string>();
   for (const s of openSessions) {
     if (!openCodeFor.has(s.assessment_id)) openCodeFor.set(s.assessment_id, s.code);
@@ -284,7 +291,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      {rows.length === 0 ? (
+      {startScreenHere ? (
+        <StartScreen templates={startTemplates()} />
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={<FilePlus2 />}
           title={showArchived ? "No archived assessments." : "No assessments yet"}

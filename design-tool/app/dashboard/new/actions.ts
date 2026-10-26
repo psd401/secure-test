@@ -2,10 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { assessments } from "@/db/schema";
+import { assessments, items } from "@/db/schema";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { CreateAssessmentBody } from "@/lib/api/assessments";
+import { importBundleForOwner, isImportBundleError } from "@/lib/api/importBundle";
 import { normalizeEmail } from "@/lib/roster/queries";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
+import {
+  aiDraftAllowed,
+  exampleQuestionRows,
+  parseStartChoice,
+  startRedirect,
+} from "@/lib/authoring/startScreen";
+import { templateById, templateBundle } from "@/lib/authoring/templates";
 
 import type { CreateAssessmentState } from "./state";
 
@@ -63,21 +72,68 @@ export async function createAssessment(
       }
     }
   }
+  // Editor redesign Phase 8 (D-5): the start screen posts this same form with
+  // a hidden `start`. It counts only with the R-12 flag on; today's form has
+  // no such field, so its path below is unchanged.
+  const db = getDb();
+  let start = parseStartChoice(formData.get("start"));
+  if (start && !(await isNewAuthoringEnabled(db, session))) start = null;
+  const allowLlm = aiDraftAllowed(start, formData);
+  if (start === "ai" && !allowLlm) {
+    fieldErrors.allow_llm_authoring = "Tick “Allow AI help when writing questions” to draft with AI.";
+  }
+
   if (Object.keys(fieldErrors).length > 0 || !parsed.success) {
     return { fieldErrors, values };
   }
 
-  const [created] = await getDb()
-    .insert(assessments)
-    .values({
-      owner_sub: session.sub,
-      // Finding OE-1: the key roster suggestions and teacher-scope grants
-      // resolve through, as the API create path writes it.
-      owner_email: normalizeEmail(session.email),
-      name: parsed.data.name,
-      description: parsed.data.description,
-      time_limit_seconds: parsed.data.time_limit_seconds ?? null,
-    })
-    .returning({ id: assessments.id });
-  redirect(`/dashboard/${created!.id}`);
+  const withExample = start === "blank" && formData.get("with_example") === "on";
+  const createdId = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(assessments)
+      .values({
+        owner_sub: session.sub,
+        // Finding OE-1: the key roster suggestions and teacher-scope grants
+        // resolve through, as the API create path writes it.
+        owner_email: normalizeEmail(session.email),
+        name: parsed.data.name,
+        description: parsed.data.description,
+        time_limit_seconds: parsed.data.time_limit_seconds ?? null,
+        // Phase 8: set only by the teacher's own tick on the AI draft.
+        ...(allowLlm ? { allow_llm_authoring: true } : {}),
+      })
+      .returning({ id: assessments.id });
+    if (withExample) {
+      await tx.insert(items).values(exampleQuestionRows().map((r) => ({ ...r, assessment_id: created!.id })));
+    }
+    return created!.id;
+  });
+  redirect(startRedirect(createdId, start));
+}
+
+/**
+ * Editor redesign Phase 8 (D-5, Q3): "Use this template". The template is a
+ * checked-in ItemBundle (lib/authoring/templates.ts) and goes through the
+ * .json import's own path, so the new draft is exactly what importing that
+ * file would make. R-12 flag on only; otherwise back to the plain form.
+ */
+export async function createFromTemplate(formData: FormData): Promise<void> {
+  const session = await readStaffSessionFromCookies();
+  if (!session) {
+    redirect("/login?next=/dashboard/new");
+  }
+  const db = getDb();
+  const template = templateById(String(formData.get("template") ?? ""));
+  if (!template || !(await isNewAuthoringEnabled(db, session))) {
+    redirect("/dashboard/new");
+  }
+  const imported = await importBundleForOwner(
+    templateBundle(template),
+    session.sub,
+    normalizeEmail(session.email),
+  );
+  if (isImportBundleError(imported)) {
+    redirect(`/dashboard/new?error=${encodeURIComponent(imported.error)}`);
+  }
+  redirect(`/dashboard/${imported.assessment_id}`);
 }

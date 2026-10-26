@@ -640,6 +640,28 @@ unless noted.
   are skipped), and a form with nothing ready no longer gets an empty
   draft. Tests: `test/docx-document.test.ts`,
   `test/pdf-import-triage.test.ts`. Hand-check rows 811–812.
+- 2026-10-26 — **Phase 8: the start screen** (prototype track, D-5; Q3
+  answered: district-curated). With the R-12 flag on, **New assessment**
+  (and an empty Assessments list) shows `app/dashboard/new/StartScreen.tsx`:
+  **Blank** (optionally with one example question, built by the import's own
+  `planImport` from `EXAMPLE_QUESTION_BUNDLE`), **Import from PDF or Word**
+  (a named draft whose editor opens with the Phase 7 import panel, via
+  `?start=import`), **Draft with AI**, **Templates** and **Open a file** (the
+  Phase 7 JSON preview at `/dashboard/import`). The three named choices post
+  today's New assessment form with a hidden `start`, which the action reads
+  only with the flag on. **AI draft gate** is today's: `allow_llm_authoring`,
+  off by default, set only by the teacher ticking the Settings tab's own
+  "Allow AI help when writing questions" checkbox, shown unticked on the
+  form; without the tick the action refuses and creates nothing, and the
+  editor opens the Generate questions dialog (`?start=ai`) only while the
+  assessment allows AI help (`editorStartAction`); the generate route's 403
+  is unchanged. **Templates** (`lib/authoring/templates.ts`): three
+  hand-built ItemBundles (exit ticket; reading check with a written-for-this
+  passage; vocabulary and sequence), created through `importBundleForOwner`
+  like a .json file. Tests: `test/start-screen.test.ts` (each template
+  parses, creates, saves back through the item PATCH validator and has no
+  Before-publishing gap; the start choices; the AI gate with the flag on and
+  off). Hand-check rows 813–825. Flag off: today's home and form.
 - 2026-10-27 — **Decision: item import is not gated on `allow_llm_authoring`**
   (James, resolving the open question in the Phase 7 slice B entry above).
   PDF and Word item import stay ungated, as PDF import always has been.

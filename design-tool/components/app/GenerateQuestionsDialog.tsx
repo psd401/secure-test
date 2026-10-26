@@ -67,6 +67,7 @@ export function GenerateQuestionsDialog({
   usedStandards,
   disabled,
   canOpen = true,
+  defaultOpen = false,
   onAdded,
 }: {
   assessmentId: string;
@@ -79,11 +80,13 @@ export function GenerateQuestionsDialog({
    * tab still shows "Added N of M, then stopped" and the unadded cards.
    */
   canOpen?: boolean;
+  /** Editor redesign Phase 8 (D-5): open on first render, for a draft started as "Draft with AI". */
+  defaultOpen?: boolean;
   /** Called after any Add so the editor's question list refreshes. */
   onAdded: () => void | Promise<void>;
 }) {
   const uid = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [values, setValues] = useState<BatchFormValues>(emptyBatchForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
