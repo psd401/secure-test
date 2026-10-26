@@ -615,6 +615,20 @@ describe("POST items/import-pdf", () => {
     expect(inputEvents[0]!.action).toBe("flag");
   });
 
+  test("BLOCKME only in a choice or an answer → 422 at the output stage", async () => {
+    process.env.GUARDRAIL_PROVIDER = "mock";
+    for (const line of ["MC: Pick one | a:BLOCKME | b:fine | *b", "ST: Name it | BLOCKME"]) {
+      const id = await createAssessment("Blocked option");
+      // GOOD_LINES keeps the page above the text floor, off the scanned
+      // (OCR) branch.
+      const res = await postPdf(id, makeTextPdf([...GOOD_LINES, line]));
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { error: string; stage: string };
+      expect(body.error).toBe("blocked_by_guardrail");
+      expect(body.stage).toBe("output");
+    }
+  });
+
   test("published assessment → 409 (draft-locked)", async () => {
     const id = await createAssessment("Locked");
     const { PATCH } = await import("../app/api/assessments/[id]/route");

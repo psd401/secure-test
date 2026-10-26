@@ -205,6 +205,20 @@ export function buildPdfExtractUserPrompt(text: string): string {
   return ["<test_document>", neutraliseTestDocumentTag(text), "</test_document>"].join("\n");
 }
 
+// The text the output guardrail screens: every string leaf of the model's
+// proposal, one per line. A walk rather than a field list, so a shape
+// added to the prompt later is screened without a change here.
+export function proposalScreenText(value: unknown): string {
+  const out: string[] = [];
+  const walk = (v: unknown): void => {
+    if (typeof v === "string") out.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  walk(value);
+  return out.join("\n");
+}
+
 // A literal closing tag in the PDF text would end the fence early and let
 // the rest read as if it came from outside it — `</test_document` →
 // `<\/test_document`, case-insensitively; nothing else in the text changes.

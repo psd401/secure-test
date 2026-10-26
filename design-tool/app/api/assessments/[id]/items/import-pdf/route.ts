@@ -20,6 +20,7 @@ import {
   formsReport,
   keyFiguresFromText,
   numberingReport,
+  proposalScreenText,
   readSourceNumbers,
   readCandidateChanges,
   validatePdfCandidates,
@@ -240,29 +241,12 @@ export async function POST(req: Request, ctx: RouteContext) {
     // prompt fences the text as data, and the teacher reviews every proposal.
     inputMode: "record",
     run: () => provider.extract(reqBody.data, auth.session.sub),
-    // E5 slice 3: proposed stimuli are model output too — same screen.
-    outputText: (r) =>
-      [
-        ...r.candidates.map((c) =>
-          c && typeof c === "object" && "stem" in c ? String((c as { stem: unknown }).stem) : "",
-        ),
-        ...(r.proposed_sets ?? []).flatMap((sset) => {
-          if (!sset || typeof sset !== "object") return [""];
-          const obj = sset as { stimulus?: unknown; sources?: unknown };
-          // Multi-source stimulus slice 3: a source's text is model output
-          // the student will read — the same screen as a stimulus.
-          const sourceTexts = Array.isArray(obj.sources)
-            ? obj.sources.map((s) =>
-                s && typeof s === "object" && "text" in s
-                  ? String((s as { text: unknown }).text)
-                  : typeof s === "string"
-                    ? s
-                    : "",
-              )
-            : [];
-          return ["stimulus" in obj ? String(obj.stimulus) : "", ...sourceTexts];
-        }),
-      ].join("\n"),
+    // Every string the model proposed — stems, choices, pairs, blank
+    // options and keys, answers, table labels, stimuli and sources. With
+    // the input check record-only (above), this is the one enforced gate,
+    // so it reads the whole proposal rather than stems alone (PR #108
+    // review).
+    outputText: (r) => proposalScreenText([r.candidates, r.proposed_sets ?? []]),
     });
   } catch (err) {
     return extractionFailure(err);
