@@ -51,6 +51,7 @@ secure-test is one school district's in-house secure assessment stack (MIT licen
 3. **Ownership is a ladder, and refusals are always 404.** Teacher routes call `authorizeAssessment / authorizeSitting / authorizeAttempt` in `lib/api/access.ts`; a student route calls `loadOwnAttempt`.
 4. **The client page is a no-origin, fetch-blocked document.** Data leaves only through named `WKScriptMessage` handlers; the page's renderer is served by the design tool when the bundle names one, and the shell verifies it before lockdown; a Debug build may fall back to the copy compiled into the app (ADR 0018, which set up this served path, is still *Proposed* in the repository). See [client lockdown](../client/lockdown-and-security.md).
 5. **Identity data is district-sourced.** Roster rows are a nightly warehouse mirror (`roster_*` tables), accommodations come from TIDE exports; neither is edited in-app. See [accommodations and roster](../design-tool/accommodations-and-roster.md).
+6. **Request size is bounded before parsing.** Every API route reads its JSON through `readJsonBody` with a named per-route ceiling, and every list in a request schema carries a bound. See [request size ceilings](input-limits.md).
 
 ## End-to-end lifecycle
 

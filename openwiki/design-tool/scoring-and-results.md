@@ -148,7 +148,7 @@ Caption: one batch request per student; each essay is claimed before the model c
 
 ## Hybrid and unreviewed AI scores
 
-The `hybrid` method lets a confident AI score become `final` without a teacher. The reasoning behind these rules is in `docs/hybrid-scoring-transparency-design.md`. `aiScoreResponse` in `lib/scoring/aiScoreResponse.ts` makes that decision against `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85, one global value in `lib/ai/essayScorer/scoreCore.ts`) and the injection check.
+The `hybrid` method lets a confident AI score become `final` without a teacher. The reasoning behind these rules is in `docs/hybrid-scoring-transparency-design.md`. `aiScoreResponse` in `lib/scoring/aiScoreResponse.ts` makes that decision against `HYBRID_AUTO_FINALIZE_CONFIDENCE` (0.85, one global value in `lib/ai/essayScorer/scoreCore.ts`), the injection check, and `screenedForScoring` (`lib/safeguarding/screening/screen.ts`). The last one is the SEC-05 rule from the 2026-10-24 security audit: a screen that failed leaves no alert, so "never screened" must not look like "screened clean". An unscreened answer on a screened item therefore lands as a proposal, and the attempt-wide `score-ai` run skips such an answer for the run and counts it as `screening_failed`, leaving the retry to the next run. Practice attempts and item types the screener does not read are not affected.
 
 ```mermaid
 flowchart TD
@@ -158,7 +158,9 @@ flowchart TD
     C -->|"no"| P
     C -->|"yes"| D{"hasInjectionAlert on the answer?"}
     D -->|"yes"| P
-    D -->|"no"| F["final row, reviewed_by_sub null"]
+    D -->|"no"| S{"answer screened, screenedForScoring?"}
+    S -->|"no"| P
+    S -->|"yes"| F["final row, reviewed_by_sub null"]
     P --> I["teacher approves: new final row with reviewer"]
     F --> J["teacher approves: reviewed_by_sub set in place"]
 ```

@@ -62,6 +62,16 @@ The import route is a read-only analysis. Writes happen only when the panel post
 5. **Model.** `getPdfExtractorProvider()` selects `mock` or `bedrock`. The Bedrock provider sends the text, or the raw PDF as a document block for scans (ADR 0015). Output is capped at `PDF_EXTRACT_MAX_TOKENS`.
 6. **Validation.** `validatePdfCandidates` runs each candidate through `CreateItemBody` after `normalizePdfCandidate`. It keeps at most `MAX_PDF_CANDIDATES` (100) and sets `truncated` when more came back. Rejected candidates are reported by index with their Zod messages.
 
+## Figure, answer-key and copy rules
+
+These rules are deterministic and run after the model returns, so they do not depend on the prompt. They were added in the 2026-10-25 import-fixes slices and are pinned by `pdf-extract.test.ts` and `pdf-figures.test.ts`.
+
+- **A figure printed beside its question goes with that question.** `questionAfterFigure` in `lib/pdfImport/extractCore.ts` decides which question a figure belongs to, using its position on the page, rather than attaching it to the next question.
+- **Answer-key figures never reach students.** `keyFiguresFromText` marks a figure whose marker sits under a key cue such as "Responses vary." or "Sample answer:". The cue must be the whole line, so a student instruction that only contains the words is not a key. A flagged figure is `answer_key: true`, lies in no proposed set, and the panel labels it "Answer key drawing — not shown to students". The model is not asked to make this call, because one run of the model flagged a question's own figure.
+- **Blank answer areas are not stimuli.** A ruled drawing whose cells are under half filled with text, such as an empty graph grid or a table to fill, is `answer_area: true` (`isBlankAnswerArea` in `extractFigures.ts`) and is never proposed as a stimulus. The panel labels it "Blank answer space — not shown to students".
+- **A drawing with exactly two prose lines inside is kept, flagged `text_inside`.** Its lines stay in the text the model reads, and the panel offers a way to add it as a figure.
+- **A question printed twice is dropped.** `dropPrintCopies` removes a raw candidate that repeats an earlier one word for word (stem of at least 30 characters, same type and choices), so a sheet printed as two copies does not double its questions. The remaining proposed sets' `item_indexes` are remapped past the removed copies.
+
 ## The prompt's contract
 
 `PDF_EXTRACT_SYSTEM_PROMPT` in `lib/pdfImport/extractCore.ts` defines what the model may propose. It offers multiple choice (single and multi), short text, essay, match, drawing upload, table and fill-in-the-blank shapes. It does not offer `order` or `hotspot`. The prompt also sets rules that the validators rely on:
