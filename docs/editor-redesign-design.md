@@ -640,3 +640,12 @@ unless noted.
   are skipped), and a form with nothing ready no longer gets an empty
   draft. Tests: `test/docx-document.test.ts`,
   `test/pdf-import-triage.test.ts`. Hand-check rows 811–812.
+- 2026-10-27 — **Decision: item import is not gated on `allow_llm_authoring`**
+  (James, resolving the open question in the Phase 7 slice B entry above).
+  PDF and Word item import stay ungated, as PDF import always has been.
+  The setting is the teacher's per-assessment choice of AI help writing
+  questions (ADR 0011: generating an item wholesale is "AI authoring");
+  import converts the teacher's own document, like the Math… translator,
+  which is not gated either. Cost and privacy are handled elsewhere
+  (ADR 0007 questions 7.3 and 7.5, the guardrail surfaces), not by this
+  setting. The slice B entry is a dated record and stays as written.
