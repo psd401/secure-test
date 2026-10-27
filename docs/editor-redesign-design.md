@@ -323,3 +323,44 @@ unless noted.
   The parser follows the server's general rule (ER-F1, ER-F2). The editor
   should treat a marker inside math or alt text as unrepresentable (Risks:
   open read-only) rather than reproduce either renderer.
+- 2026-10-26 — **Phase 3 slice A: the R-12 flag** (prototype track). One
+  per-staff row in a new `staff_preferences` table (`new_authoring`, default
+  false; migration 0064, additive), read only through
+  `isNewAuthoringEnabled(db, session)` in `design-tool/lib/authoring/flag.ts`
+  so Phase 9's cutover is one constant (`NEW_AUTHORING_DEFAULT`). Opt-in and
+  opt-out at `/dashboard/beta` (linked from nowhere while the default is off)
+  through `GET` / `POST /api/me/preferences`; an act-as session reads the
+  teacher's choice but cannot change it (403). Tiptap and dnd-kit added as
+  design-tool dependencies for the slices that follow; nothing imports them
+  yet. With the flag off nothing a teacher sees has changed.
+- 2026-10-26 — **Phase 3 slice B: the WYSIWYG field** (prototype track, R-4).
+  `app/dashboard/[id]/RichTextField.tsx` (Tiptap MIT core, no StarterKit or
+  paid extensions) replaces the stem textarea of multiple choice (single and
+  multi-select) and short answer, and each choice's input, when the R-12 flag
+  is on; every other type and the flag-off editor are unchanged. Schema
+  (`lib/authoring/markupExtensions.ts`): one paragraph of text with `strong` /
+  `em` marks, `hardBreak` (newline), and atoms `escapedDollar` (`\$`),
+  `blank`, `math` (KaTeX node view; click to edit its TeX; insert through the
+  existing Math… translator) and `image` (assessment-scoped asset URL; insert
+  through the existing Image… picker). MathLive is not wired in. No input
+  rules: typed `**` or `$` stay characters. `lib/authoring/markupDoc.ts` maps
+  markup ↔ document; saving tries the plain string, then one with typed `$`
+  escaped, and flags anything else (typed `**`, mid-word italic) with a
+  student preview rather than hiding it. **Round-trip gate**
+  (`test/authoring-editor.test.ts`): all 55 golden fixtures load into the
+  schema (`getSchema(...).nodeFromJSON`) and save back byte for byte; 3,000
+  random strings, read with and without blanks, each either round-trip or
+  are refused. Refused, so opened
+  read-only with **Show source**: two bolds with nothing between
+  (`**a****b**`, ProseMirror merges them) and a blank marker inside math or
+  alt text (ER-F1–F3). **Clean paste** (`lib/authoring/pasteSanitize.ts`,
+  `test/authoring-paste.test.ts`): Word and Google Docs HTML (hand-built
+  fixtures) keep text, bold, italic and line breaks only; the Docs
+  `font-weight:normal` wrapper is not bold; pictures are dropped and counted.
+  Browser behaviour is hand-check rows 695–712.
+- 2026-10-26 — **Phase 3 review fix.** The new field's type list named
+  `multiple_choice`, which is not an item type, so single-answer multiple
+  choice (the default type) kept the textarea with the flag on. The list now
+  lives in `lib/authoring/richTextTypes.ts`, typed as `ItemType` so a
+  misspelt name fails typecheck, and `test/authoring-editor.test.ts` pins its
+  membership against `ITEM_TYPES`. Hand-check row 713.

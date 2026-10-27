@@ -233,3 +233,41 @@
     accent-color: var(--primary);
   }
 }
+
+/* R-4 new editor (app/dashboard/[id]/RichTextField.tsx, R-12 flag ON only):
+   the atoms a WYSIWYG field shows in place of markup. */
+.rt-field .ProseMirror {
+  white-space: pre-wrap;
+}
+.rt-field .rt-math {
+  cursor: pointer;
+  border-radius: 0.25rem;
+  padding: 0 0.125rem;
+}
+.rt-field .rt-math:hover {
+  background: var(--accent);
+}
+.rt-field .rt-math-display {
+  display: block;
+  text-align: center;
+}
+.rt-field .rt-image img {
+  display: inline-block;
+  max-height: 6rem;
+  vertical-align: middle;
+}
+.rt-field .rt-image-missing {
+  color: #b91c1c;
+}
+.rt-field .rt-blank {
+  display: inline-block;
+  min-width: 4rem;
+  border-bottom: 2px solid currentColor;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.rt-field .ProseMirror-selectednode {
+  outline: 2px solid var(--ring);
+  border-radius: 0.25rem;
+}

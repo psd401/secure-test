@@ -12,6 +12,7 @@ import { authorizeAssessment, pageAssessment } from "@/lib/api/access";
 import { healAssessmentOwnerEmail, markAssessmentGrantSeen } from "@/lib/api/grants";
 import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
   // D-1 (docs/archive-and-delete-design.md): the Settings-tab delete action
   // needs this to decide whether to offer "Delete draft" or "N attempts —
   // archive instead" without a round trip to the DELETE route first.
+  // R-12 (docs/editor-redesign-design.md): the new editor, for staff who opted in.
+  const newAuthoring = await isNewAuthoringEnabled(db, session);
   const [attemptCountRow] = await db
     .select({ n: count() })
     .from(attempts)
@@ -79,6 +82,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
     <main className="mx-auto max-w-4xl px-6 py-10">
       <AssessmentIdProvider id={assessment.id}>
         <AssessmentEditor
+          newAuthoring={newAuthoring}
           initialItemSets={itemSetRows.map((s) => ({
             id: s.id,
             stimulus_text: s.stimulus_text,
