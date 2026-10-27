@@ -65,6 +65,12 @@ jobs:
       - name: Renderer — build + test
         working-directory: packages/renderer
         run: bun run build && bun test
+      # Editor redesign Phase 1 (R-2): the markup grammar's parse / serialize
+      # round trip and golden fixtures. The design tool's suite below runs the
+      # same fixtures against both renderers (test/markup-golden.test.ts).
+      - name: Markup — typecheck + test
+        working-directory: packages/markup
+        run: bun run typecheck && bun test
       - name: Graphing — typecheck + test
         working-directory: packages/graphing
         run: bun run typecheck && bun test
