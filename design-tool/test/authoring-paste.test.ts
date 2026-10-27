@@ -144,6 +144,11 @@ describe("edge cases", () => {
   test("an empty or tag-only paste is nothing", () => {
     expect(sanitizePastedHtml("<p><o:p></o:p></p><br>").runs).toEqual([]);
   });
+
+  test("a script or comment re-formed by stripping is stripped too (CodeQL js/incomplete-multi-character-sanitization)", () => {
+    expect(sanitizePastedHtml("a<scr<script></script>ipt>secret()</script>b").runs).toEqual([{ text: "ab", bold: false, italic: false }]);
+    expect(sanitizePastedHtml("a<!<!-- x -->-- hidden -->b").runs).toEqual([{ text: "ab", bold: false, italic: false }]);
+  });
 });
 
 // A paste carrying ProseMirror's slice marker (review of #119): only this

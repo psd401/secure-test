@@ -87,7 +87,15 @@ interface Open {
 }
 
 export function sanitizePastedHtml(html: string): SanitizedPaste {
-  const cleaned = html.replace(COMMENT, "").replace(CONDITIONAL, "").replace(DROP_WHOLE, "");
+  // Until nothing changes: one pass can re-form what it removed
+  // (`<scr<script></script>ipt>`), and that element's body would then be
+  // kept as text. The output is rebuilt from escaped text, so this is about
+  // hidden content showing up, not markup getting through.
+  let cleaned = html;
+  for (let prev = ""; prev !== cleaned; ) {
+    prev = cleaned;
+    cleaned = cleaned.replace(COMMENT, "").replace(CONDITIONAL, "").replace(DROP_WHOLE, "");
+  }
   const stack: Open[] = [];
   const lines: { text: string; bold: boolean; italic: boolean }[][] = [[]];
   let droppedImages = 0;
