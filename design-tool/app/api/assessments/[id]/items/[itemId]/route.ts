@@ -133,6 +133,11 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   // History → Restore) always copies, so a restore can itself be undone.
   const restore = new URL(req.url).searchParams.get("restore") === "1";
   const updated = await db.transaction(async (tx) => {
+    // The content this write replaces, read under a row lock: two saves at
+    // once (two open tabs) would otherwise share one "before", and the
+    // history would miss the first save's version.
+    const [before] = await tx.select().from(items).where(eq(items.id, itemId)).for("update");
+    if (!before) return null;
     const [row] = await tx
       .update(items)
       .set({
@@ -151,9 +156,12 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       })
       .where(eq(items.id, itemId))
       .returning();
-    await captureItemSnapshot(tx, owned.item, row!, { force: restore });
+    if (!row) return null;
+    await captureItemSnapshot(tx, before, row, { force: restore });
     return row;
   });
+  // Deleted between the access check and the write.
+  if (!updated) return notFoundResponse();
   await db
     .update(assessments)
     .set({ updated_at: new Date() })
