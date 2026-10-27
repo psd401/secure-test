@@ -51,7 +51,7 @@ The teacher dashboard is the staff-facing Next.js UI under `design-tool/app/dash
 | Route | Page source | What it is for |
 |---|---|---|
 | `/dashboard` | `app/dashboard/page.tsx` (`DashboardPage`) | Assessment list, "Open now" sittings strip, shares offered to you, and the admin "All teachers" view. |
-| `/dashboard/new`, `/dashboard/import`, `/dashboard/uploads` | `app/dashboard/new/`, `import/page.tsx`, `uploads/page.tsx` | Create an assessment, import an exported assessment file, and manage uploaded images. |
+| `/dashboard/new`, `/dashboard/import`, `/dashboard/uploads` | `app/dashboard/new/`, `import/page.tsx`, `uploads/page.tsx` | Create an assessment, import an exported assessment file, and manage uploaded images. With the R-12 flag on, `/dashboard/new` (and the empty `/dashboard`) shows the start screen: see [the start screen](new-authoring-editor.md#the-start-screen). |
 | `/dashboard/[id]` | `app/dashboard/[id]/page.tsx` (`AssessmentEditorPage`) | Editor for one assessment, with the tabs listed below. |
 | `/dashboard/[id]/monitor/[sittingId]` | `monitor/[sittingId]/page.tsx` (`MonitorPage`) | Live proctoring view for one sitting. |
 | `/dashboard/[id]/results` | `results/page.tsx`, `results/[attemptId]/page.tsx`, `results/print/page.tsx`, `results/work/page.tsx` | Results matrix, one student's attempt, the printable report, and the work packet. |

@@ -1,7 +1,7 @@
 ---
 type: Feature Reference
 title: Authoring editor beta (R-12 flag, rich-text fields, autosave and history)
-description: The opt-in beta of the redesigned item editor in the design tool. Covers the per-staff new_authoring flag, the rich-text field for every item type's stem and text inputs, the markup round-trip gate, clean paste, question autosave, per-question version history, the outline rail, insert and in-place type change, and what is not built yet.
+description: The opt-in beta of the redesigned item editor in the design tool. Covers the per-staff new_authoring flag, the start screen with its blank, import, AI and district-template choices, the rich-text field for every item type's stem and text inputs, the markup round-trip gate, clean paste, question autosave, per-question version history, the outline rail, insert and in-place type change, and what is not built yet.
 tags: [authoring, editor, feature-flag, rich-text, markup, autosave, beta]
 openwiki:
   roles: [domain, workflow]
@@ -27,7 +27,7 @@ openwiki:
     - design-tool/app/dashboard/[id]/AssessmentEditor.tsx
     - design-tool/app/dashboard/[id]/editorModel.ts
     - design-tool/db/schema.ts
-  symbols: [NEW_AUTHORING_DEFAULT, isNewAuthoringEnabled, setNewAuthoring, RICH_TEXT_TYPES, usesRichTextField, markupToDoc, docToMarkup, sanitizePastedHtml, createItemAutosaver, ITEM_AUTOSAVE_DELAY_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_KEEP, listItemSnapshots, slashOpensInsertMenu, swapMatchRights, staff_preferences, item_snapshots, buildImportPreview, previewImportBundle, planImport]
+  symbols: [NEW_AUTHORING_DEFAULT, isNewAuthoringEnabled, setNewAuthoring, RICH_TEXT_TYPES, usesRichTextField, markupToDoc, docToMarkup, sanitizePastedHtml, createItemAutosaver, ITEM_AUTOSAVE_DELAY_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_KEEP, listItemSnapshots, captureItemSnapshot, slashOpensInsertMenu, swapMatchRights, staff_preferences, item_snapshots, buildImportPreview, previewImportBundle, planImport]
   test_paths:
     - design-tool/test/import-preview.test.ts
     - design-tool/test/new-authoring-flag.test.ts
@@ -47,8 +47,11 @@ openwiki:
     - Markup the field cannot save back byte for byte opens read-only with Show source; opening an item never rewrites it.
     - Every item PATCH copies the content it replaces into item_snapshots, at most once per item every two minutes, keeping the newest 50.
     - A type change is refused with 409 type_change_has_responses once any response exists.
+    - The start screen appears only with the flag on; without it, createAssessment ignores the start field and the plain New assessment form is unchanged.
+    - Every template is a checked-in ItemBundle that enters through the import path, so a draft from a template is what importing that bundle would create.
   validation_commands:
     - cd design-tool && bun test test/authoring-editor.test.ts test/authoring-paste.test.ts test/authoring-outline.test.ts
+    - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/start-screen.test.ts
     - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/new-authoring-flag.test.ts test/item-history-api.test.ts
 ---
 
@@ -79,6 +82,41 @@ The row lives in `staff_preferences` (`design-tool/db/schema.ts`, migration `006
 Two routes change the flag. The `/dashboard/beta` page (`app/dashboard/beta/page.tsx`) shows the current choice and posts a plain form to `/api/me/preferences`, so it works without JavaScript. `app/api/me/preferences/route.ts` answers `GET` with `{ new_authoring }` and accepts `POST` as JSON or as a form field `new_authoring=on|off`, which redirects 303 back to the beta page. `setNewAuthoring` refuses an act-as session with `impersonating` (403), because a teacher's tool choice must not change under them while an admin is acting as them (impersonation is described in [auth and access](auth-and-access.md)). The beta page is linked from nowhere in the app while the default is off.
 
 The item editor's page (`app/dashboard/[id]/page.tsx`) reads the flag on the server and passes `newAuthoring` into `AssessmentEditor`. The editor switches to `RichTextField` only when `newAuthoring && usesRichTextField(item.type)`. The item PATCH route reads the same flag before it accepts an empty stem or a type change (see [saving and history](#saving-history-and-the-item-patch)).
+
+## The start screen
+
+Editor redesign Phase 8 (D-5) replaces the empty New assessment form with a start screen for staff whose flag is on. `app/dashboard/new/page.tsx` checks `isNewAuthoringEnabled` and renders `StartScreen`; everyone else still gets the plain form. `/dashboard` shows the same screen in place of its empty assessment list when a flagged teacher has no assessments and is not viewing archived or all-teacher lists (`startScreenHere` in `app/dashboard/page.tsx`).
+
+The screen has three parts:
+
+- **Start a new assessment.** Three radio choices, `blank`, `import` and `ai` (`START_CHOICES` in `lib/authoring/startScreen.ts`). Each submits the ordinary `createAssessment` action in `app/dashboard/new/actions.ts` with a hidden `start` field, so it makes a named draft under the same rules. `blank` may also insert one example question (`exampleQuestionRows` in `lib/authoring/exampleQuestion.ts`). `ai` requires the "Allow AI help when writing questions" box on the form. Without it the action returns a field error and creates nothing. This is the same `allow_llm_authoring` gate as the Settings tab.
+- **Templates.** `ASSESSMENT_TEMPLATES` in `lib/authoring/templates.ts` is a checked-in, district-curated list of `ItemBundle`s: an exit ticket, a reading check with a passage, and vocabulary and sequence practice. `createFromTemplate` in `actions.ts` looks the id up with `templateById` and passes the bundle to `importBundleForOwner`, so the new draft is what importing that file would create. It then redirects to the draft.
+- **Open a file.** A link to `/dashboard/import`, the import preview described below.
+
+After creation, `startRedirect` sends `import` and `ai` drafts to `/dashboard/[id]?start=…`. `editorStartAction` in `lib/authoring/startScreen.ts` reads that parameter once, on first load in `AssessmentEditor.tsx`, and opens the PDF or Word import panel or the AI generation dialog. It does nothing when the flag is off, when the assessment is published, or for `ai` when `allow_llm_authoring` is off.
+
+```mermaid
+flowchart TD
+  S["Start screen (flag on)"] --> B["blank: draft, optional example question"]
+  S --> I["import: draft, then ?start=import"]
+  S --> A["ai: needs the allow-AI tick, then ?start=ai"]
+  S --> T["template: createFromTemplate, importBundleForOwner"]
+  S --> F["Open a file: /dashboard/import preview"]
+  I --> E["editor opens the import panel"]
+  A --> E2["editor opens the AI generation dialog"]
+```
+
+Caption: the start screen's routes. Every draft is an ordinary assessment; the choice changes only what it starts with and where the editor opens.
+
+`startScreen.ts` has no database imports because the client editor imports it. The row builder for the example question lives in `exampleQuestion.ts`, which is server-only. The example question's stem is `EXAMPLE_QUESTION_STEM`, and `readiness.ts` lists it with the other seed texts, so a teacher who publishes it unchanged gets the placeholder warning.
+
+Focused tests: `design-tool/test/start-screen.test.ts`. The `templates (pure)` suite checks that each template parses with `ItemBundleSchema`, has no pictures or source links, and that an example question left unchanged shows on the Before publishing list. `start choices (pure)` covers `parseStartChoice` and the AI gate. The `createFromTemplate (DB)` suite (one test per template) creates each template through the flag-on action, then checks the stored rows, that every question saves unchanged through the item PATCH body schema, and that the Before publishing list is empty. `createAssessment with a start choice (DB)` covers the three choices and the flag-off case. The DB suites need the test database.
+
+Change navigation for the start screen:
+
+- Adding a template: append an entry to `ASSESSMENT_TEMPLATES`. Write its content for this repository only, with no real student, school or teacher material. Keep it within what the import accepts, because templates use the same bundle rules.
+- Adding or renaming a start choice: change `START_CHOICES` and `startRedirect` together, and keep `CHOICES` and `START_SUBMIT` in `StartScreen.tsx`, `aiDraftAllowed` and `editorStartAction` in step with them. Do not add a second creation path next to `createAssessment`.
+- Scope boundary: the start screen does not change the import or the plain form. Templates and the file route go through the import; `createAssessment` is unchanged when the flag is off.
 
 ## Question cards: autosave, outline and insert
 
@@ -205,4 +243,35 @@ Browser behaviour of the field, the autosave indicator, the rail and the menus i
 - Schema changes to `staff_preferences` or `item_snapshots` follow the migration workflow in [data model](data-model.md#migrations).
 - Scope boundary: the `/dashboard/beta` page and `/api/me/preferences` are deliberately unlinked while the default is off. Do not add navigation to them as part of an unrelated change.
 - Scope boundary: `AssessmentEditor.tsx` still owns all state. Its Settings and Allowed tabs (`SettingsTab.tsx`, `AccommodationsTab.tsx`), the Questions toolbar (`QuestionsToolbar.tsx`), stimulus sets (`StimulusSetCard.tsx`) and a card's per-type editor (`ItemTypeFields.tsx`) were split out in Phase 4 slice D, with shared model helpers in `editorModel.ts`. The question card's header, stem field, scoring select and save row, and the stimulus-set, autosave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
+ change a card's chrome there and keep the new helpers in `lib/authoring/`.
+he new helpers in `lib/authoring/`.
+ change a card's chrome there and keep the new helpers in `lib/authoring/`.
+ existing markup shape. Export, preview, scoring and delivery read the same strings with the flag on or off.
+- Markup that does not round-trip opens read-only. Opening an item never rewrites it.
+- A held card schedules no autosave. Only the restore or type-change PATCH writes that content.
+- A history copy is coalesced to one per item per two minutes, and the newest 50 are kept.
+- A type change is refused once any response exists, and only in a draft with the flag on.
+
+## Focused tests
+
+- `design-tool/test/authoring-editor.test.ts`: the round-trip gate over the 55 golden markup fixtures and 3,000 random strings (`round-trip gate`), the read-only cases (`unrepresentable constructs open read-only`), the typed-text cases (`saving what a teacher typed`), and the rule for which types use the field (`which item types use the new field`). It does not need the database.
+- `design-tool/test/authoring-paste.test.ts`: Word and Google Docs fixtures, the clean HTML handed to the editor, and ProseMirror's slice marker. It does not need the database.
+- `design-tool/test/new-authoring-flag.test.ts`: `isNewAuthoringEnabled` (default, opt-in, opt-out) and `/api/me/preferences` (JSON and form bodies, the act-as refusal). This file needs the test database (`DATABASE_URL` must contain `secure_test_design_tool_test`).
+- `design-tool/test/item-autosave.test.ts`: the per-card debounce, the indicator states, the capture rule and the item list.
+- `design-tool/test/item-history-api.test.ts`: capture and coalescing, the 50-version cap, cascade delete, restore round trip for three types, the publish lock and route access. It needs the test database.
+- `design-tool/test/item-insert-type-change-api.test.ts`: the new-item and type-change routes, including the 409 `type_change_has_responses` guard. It needs the test database.
+- `design-tool/test/authoring-outline.test.ts`, `authoring-type-change.test.ts`, `authoring-key-order.test.ts`, `authoring-fill-blank-field.test.ts`: the pure outline, type-change and key-order rules, and the fill-in-the-blank field's parity with `insertBlankAt`.
+
+Browser behaviour of the field, the autosave indicator, the rail and the menus is not covered by these tests. The hand-check rows for each slice are in the progress notes of `docs/editor-redesign-design.md`.
+
+## Change navigation
+
+- Changing which types use the field: edit `RICH_TEXT_TYPES` in `lib/authoring/richTextTypes.ts` and check `authoring-editor.test.ts`. The list is typed as `ItemType`, and a test pins it against `ITEM_TYPES` ([authoring](authoring.md#concepts)).
+- Changing the stored grammar (a new mark or node): the change starts in `packages/markup` ([markup grammar](../architecture/markup-grammar.md)) and `lib/authoring/markupExtensions.ts`, which must have exactly one node or mark per AST construct. Run `cd packages/markup && bun test` and the golden tests in `design-tool/test/markup-golden.test.ts`.
+- Changing save or history behaviour: start at `lib/authoring/itemAutosave.ts` and `lib/authoring/itemHistory.ts`, then the item PATCH route. Run `item-history-api.test.ts` with the test database.
+- Adding a flag-controlled surface: read the flag through `isNewAuthoringEnabled`, pass it from a server component the way `app/dashboard/[id]/page.tsx` does, and do not add a second reader.
+- Schema changes to `staff_preferences` or `item_snapshots` follow the migration workflow in [data model](data-model.md#migrations).
+- Scope boundary: the `/dashboard/beta` page and `/api/me/preferences` are deliberately unlinked while the default is off. Do not add navigation to them as part of an unrelated change.
+- Scope boundary: `AssessmentEditor.tsx` still owns all state. Its Settings and Allowed tabs (`SettingsTab.tsx`, `AccommodationsTab.tsx`), the Questions toolbar (`QuestionsToolbar.tsx`), stimulus sets (`StimulusSetCard.tsx`) and a card's per-type editor (`ItemTypeFields.tsx`) were split out in Phase 4 slice D, with shared model helpers in `editorModel.ts`. The question card's header, stem field, scoring select and save row, and the stimulus-set, autosave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
 ave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
+ change a card's chrome there and keep the new helpers in `lib/authoring/`.
