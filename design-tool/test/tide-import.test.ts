@@ -14,6 +14,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { students, student_accommodations } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { buildTideXlsxBuffer, type TideFixtureRow } from "./fixtures/build-tide-fixture";
 import { tideValueForCode } from "../lib/accommodations/tideCatalog";
@@ -33,6 +34,7 @@ let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   // Slice 58: requireSession now reads an Authorization bearer header as
   // well as the cookie, so the mocked module has to provide headers().
   headers: async () => new Headers(),

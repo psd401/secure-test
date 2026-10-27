@@ -21,6 +21,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { access_grants, assessments } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const OWNER = { sub: "grant-api-owner", email: "lead@psd401.net" };
@@ -31,6 +32,7 @@ const CO_EMAIL = "coteacher@psd401.net";
 let current: { sub: string; email: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

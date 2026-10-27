@@ -19,6 +19,7 @@ import {
   type TestSessionRow,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { PRACTICE_ROW_NAME, attendanceForSitting } from "../lib/api/sittingAttendance";
 import {
@@ -47,6 +48,7 @@ const COLLEAGUE = "practice-sitting-colleague";
 let principal: TestPrincipal | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

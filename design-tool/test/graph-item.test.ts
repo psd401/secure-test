@@ -8,6 +8,7 @@ import { DeliveryBundleSchema, ItemBundleSchema, type ItemResponse } from "@secu
 import { closeDb, getDb } from "../db/client";
 import { assessments, items, type ItemRow } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { buildExportBundle } from "../lib/api/exportBundle";
 import { importBundleForOwner, isImportBundleError } from "../lib/api/importBundle";
@@ -24,6 +25,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

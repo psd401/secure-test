@@ -6,6 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { makeTestKey, writeSignedRenderer, type WrittenRenderer } from "./helpers/renderer";
 
@@ -13,6 +14,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

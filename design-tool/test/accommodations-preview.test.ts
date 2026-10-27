@@ -9,6 +9,7 @@ import {
   students,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { studentsInTeachersSections } from "../lib/roster/queries";
 import { OTHER_STUDENT, OTHER_TEACHER_EMAIL, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
@@ -19,6 +20,7 @@ const OTHER_TEACHER = "preview-other-teacher";
 let principal: { sub: string; role: string; email?: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

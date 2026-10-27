@@ -12,6 +12,7 @@ import {
   mock,
   test,
 } from "bun:test";
+import * as s3Mod from "@aws-sdk/client-s3";
 
 interface SendLog {
   kind: string;
@@ -75,6 +76,7 @@ class FakeS3Client {
 }
 
 mock.module("@aws-sdk/client-s3", () => ({
+  ...s3Mod,
   S3Client: FakeS3Client,
   PutObjectCommand: FakePutObjectCommand,
   GetObjectCommand: FakeGetObjectCommand,

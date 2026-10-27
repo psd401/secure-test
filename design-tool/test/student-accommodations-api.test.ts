@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { student_accommodations } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -26,6 +27,7 @@ let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   // Slice 58: requireSession now reads an Authorization bearer header as
   // well as the cookie, so the mocked module has to provide headers().
   headers: async () => new Headers(),

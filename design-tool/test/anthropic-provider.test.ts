@@ -12,6 +12,7 @@ import {
   mock,
   test,
 } from "bun:test";
+import * as anthropicMod from "@anthropic-ai/sdk";
 
 // Mock surface: a settable `nextResponse` plus a constructor that
 // exposes the same `.messages.create` shape the SDK does.
@@ -78,6 +79,7 @@ const FakeAnthropicCtor = FakeAnthropic as unknown as {
 FakeAnthropicCtor.APIError = FakeAPIError;
 
 mock.module("@anthropic-ai/sdk", () => ({
+  ...anthropicMod,
   default: FakeAnthropicCtor,
   APIError: FakeAPIError,
 }));

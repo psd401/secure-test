@@ -18,6 +18,7 @@ import {
   students,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { GONE_STUDENT } from "../lib/insights/reportView";
 import { CLASS_INSIGHTS_PROMPT_VERSION } from "../lib/insights/reportPrompt";
@@ -30,6 +31,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = staffPrincipal(OWNER);
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

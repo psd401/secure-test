@@ -27,6 +27,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { authorizeSend } from "../lib/gradebook/authorizeSend";
 import { loadSectionCandidates } from "../lib/gradebook/mapping";
@@ -60,6 +61,7 @@ type Principal = (SessionPayload & { role: string }) | null;
 let principal: Principal = staffPrincipal(OWNER);
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

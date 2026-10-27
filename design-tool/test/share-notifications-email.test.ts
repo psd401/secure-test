@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { mockEmailProvider, resetMockEmails, sentEmails } from "../lib/email/mockProvider";
 import { buildShareEmail, sendShareEmail } from "../lib/email/shareNotifications";
@@ -17,6 +18,7 @@ const PEER = "peer@psd401.net";
 let current: { sub: string; email: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (current && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

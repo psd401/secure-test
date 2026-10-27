@@ -6,6 +6,7 @@ import { desc, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { feedback } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink } from "../lib/log";
 import { mockNotifyProvider, notifications, resetMockNotifications } from "../lib/notify/mockProvider";
@@ -30,6 +31,7 @@ let principal: Principal = null;
 let userAgent: string | null = "TestAgent/1.0";
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () =>
     new Headers(userAgent ? { "user-agent": userAgent } : {}),
   cookies: async () => ({

@@ -22,6 +22,7 @@ import {
   students,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { injectionAlertFor } from "../lib/safeguarding/alerts";
 import {
@@ -58,6 +59,7 @@ type Principal = { sub: string; role: string; email?: string; actor_sub?: string
 let principal: Principal = staffPrincipal(OWNER);
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

@@ -16,11 +16,13 @@ import { describe, expect, mock, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 let mockSession: { sub: string; role: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

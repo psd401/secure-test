@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessment_shares, assessments, items } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -20,6 +21,7 @@ let mockSub: string | null = null;
 let mockEmail: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

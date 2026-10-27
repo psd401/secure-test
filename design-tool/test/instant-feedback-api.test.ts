@@ -15,6 +15,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { buildResults } from "../lib/scoring/results";
 import { duplicateAssessment } from "../lib/api/duplicateAssessment";
@@ -36,6 +37,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>
