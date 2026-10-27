@@ -27,10 +27,12 @@ export interface SanitizedPaste {
 }
 
 const DROP_WHOLE = /<(style|script|head|title|xml|template|noscript)\b[\s\S]*?<\/\1\s*>/gi;
-const COMMENT = /<!--[\s\S]*?-->/g;
-// Word's downlevel-revealed conditionals `<![if …]>` / `<![endif]>`.
-const CONDITIONAL = /<!\[[^\]]*\]>/g;
-const TOKEN = /<(\/?)([a-zA-Z][\w:.-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)|</g;
+// The tokenizer skips comments the way a browser reads them, left to right:
+// `<!--` up to `-->` (or the end), and any other `<!…>` (Word's downlevel
+// conditionals `<![if …]>` / `<![endif]>`, doctypes) up to the first `>`.
+// Skipping them while scanning, not stripping them first, means a removal
+// can never re-form one (CodeQL js/incomplete-multi-character-sanitization).
+const TOKEN = /<!--[\s\S]*?(?:-->|$)|<![^>]*>?|<(\/?)([a-zA-Z][\w:.-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)|</g;
 
 const VOID = new Set(["br", "img", "hr", "meta", "link", "input", "col", "area", "wbr", "base", "source", "v:imagedata"]);
 const BLOCK = new Set([
@@ -94,7 +96,7 @@ export function sanitizePastedHtml(html: string): SanitizedPaste {
   let cleaned = html;
   for (let prev = ""; prev !== cleaned; ) {
     prev = cleaned;
-    cleaned = cleaned.replace(COMMENT, "").replace(CONDITIONAL, "").replace(DROP_WHOLE, "");
+    cleaned = cleaned.replace(DROP_WHOLE, "");
   }
   const stack: Open[] = [];
   const lines: { text: string; bold: boolean; italic: boolean }[][] = [[]];
@@ -125,6 +127,7 @@ export function sanitizePastedHtml(html: string): SanitizedPaste {
   TOKEN.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = TOKEN.exec(cleaned)) !== null) {
+    if (m[0].startsWith("<!")) continue;
     if (m[4] !== undefined) {
       addText(m[4]);
       continue;

@@ -145,9 +145,18 @@ describe("edge cases", () => {
     expect(sanitizePastedHtml("<p><o:p></o:p></p><br>").runs).toEqual([]);
   });
 
-  test("a script or comment re-formed by stripping is stripped too (CodeQL js/incomplete-multi-character-sanitization)", () => {
+  // CodeQL js/incomplete-multi-character-sanitization: a removal must not
+  // re-form a script, and a comment is read the way a browser reads it.
+  test("a script re-formed by stripping is stripped too", () => {
     expect(sanitizePastedHtml("a<scr<script></script>ipt>secret()</script>b").runs).toEqual([{ text: "ab", bold: false, italic: false }]);
-    expect(sanitizePastedHtml("a<!<!-- x -->-- hidden -->b").runs).toEqual([{ text: "ab", bold: false, italic: false }]);
+  });
+
+  test("comments are skipped as a browser reads them, an unterminated one to the end", () => {
+    const text = (html: string) => sanitizePastedHtml(html).runs.map((r) => ("text" in r ? r.text : "\n")).join("");
+    expect(text("a<!-- hidden -->b")).toBe("ab");
+    expect(text("a<!-- hidden")).toBe("a");
+    expect(text("a<!<!-- x -->-- shown -->b")).toBe("a-- shown -->b");
+    expect(text("a<![if !supportLists]>1.<![endif]>b")).toBe("a1.b");
   });
 });
 
