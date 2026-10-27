@@ -58,7 +58,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 - **Scoring method**: `auto | ai | human | hybrid`. Absent means the type default via `effectiveScoringMethod` (MC and short text auto, essay human; a keyless table or fill-in-the-blank item is hand-scored until its first key). See [scoring](scoring-and-results.md#who-writes-a-score).
 - **Content syntax** (stems, choices, stimuli): KaTeX `$…$` / `$$…$$` plus `![alt](asset:<uuid>)` image refs, rendered server-side by `lib/items/renderItemContent.ts` (`lib/math/renderLatex.ts` for math, K-12 macros from `@secure-test/schema` `K12_MACROS`). The same markup grammar also has a standalone parser and serializer in `@secure-test/markup`, which tests hold to the server renderer; see [markup grammar](../architecture/markup-grammar.md). Unresolved refs render as an inline red placeholder. Every reader that finds these references uses one scanner; see [asset references in content](storage-and-assets.md#asset-references-in-content).
 - **Choice ids**: a new multiple-choice option gets the next free single letter (`a`, `b`, … then `aa`, `ab`) from `nextChoiceId` in `lib/items/choiceIds.ts`, which the editor calls in `app/dashboard/[id]/AssessmentEditor.tsx`. It skips ids already in use, so teacher-edited ids such as `red` do not block it. Test: `test/choice-ids.test.ts`.
-- **Authoring editor (beta)**: behind the per-staff R-12 flag, the stems of multiple-choice and short-answer items and each choice's text use a rich-text field that stores the same markup string. The field, its flag and its round-trip rules are in [authoring editor beta](new-authoring-editor.md). This page still describes the current textarea editor.
+- **Authoring editor (beta)**: behind the per-staff R-12 flag, the stems of multiple-choice and short-answer items and each choice's text use a rich-text field that stores the same markup string. The field, its flag, autosave, per-question history, outline rail and in-place type change are in [authoring editor beta](new-authoring-editor.md). This page describes the flag-off editor and the shared item routes that both editors call.
 
 ## Draft/published lock
 
@@ -66,7 +66,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 
 ## Reordering questions
 
-`POST /api/assessments/[id]/items/reorder` (`app/api/assessments/[id]/items/reorder/route.ts`) takes a `ReorderBody` (`lib/api/items.ts`), an `ordered_ids` list. It needs `edit` access and a draft (`requireDraft`). The route rejects a list whose length differs from the assessment's item count (`ordered_ids_length_mismatch`) or that names an unknown item (`ordered_ids_contains_unknown`). It also refuses any order that would split an item set (`reorder_would_split_set`, 400), using `splitSetInOrder` in `lib/api/itemSets.ts`, so a shared stimulus always stays one block. The set-side rules are in [stimulus and item sets](stimulus-and-item-sets.md#routes-and-what-they-enforce). Focused tests: `items-api.test.ts` and `item-sets-api.test.ts`, both of which need the test database.
+`POST /api/assessments/[id]/items/reorder` (`app/api/assessments/[id]/items/reorder/route.ts`) takes a `ReorderBody` (`lib/api/items.ts`), an `ordered_ids` list. It needs `edit` access and a draft (`requireDraft`). The route rejects a list whose length differs from the assessment's item count (`ordered_ids_length_mismatch`) or that names an unknown item (`ordered_ids_contains_unknown`). It also refuses any order that would split an item set (`reorder_would_split_set`, 400), using `splitSetInOrder` in `lib/api/itemSets.ts`, so a shared stimulus always stays one block. The set-side rules are in [stimulus and item sets](stimulus-and-item-sets.md#routes-and-what-they-enforce). Focused tests: `items-api.test.ts` and `item-sets-api.test.ts`, both of which need the test database. With the R-12 flag on, the outline rail's drag and Move up / Move down save through this same route ([authoring editor beta](new-authoring-editor.md#question-cards-autosave-outline-and-insert)).
 
 ## Publish readiness checklist
 
@@ -122,3 +122,4 @@ Invariant: a library edit never changes a rubric already copied into an item, an
 - **Change the publish lock**: edit `requireDraft.ts`; tests in `items-api.test.ts` and `answer-key-only-patch.test.ts`.
 
 Scope boundaries: do not hand-edit `lib/preview/katexCss.ts`/`katex.min.css.ts` (vendored by `bun run vendor:katex-css`) or `lib/standards/catalog.json` (generated).
+lib/standards/catalog.json` (generated).
