@@ -42,7 +42,7 @@ AI shows up in many places in the design tool, but always behind the same shape:
 |---|---|---|---|
 | Item generation (single and batch) | `getProvider()` in `lib/ai/provider.ts` | `AI_PROVIDER` (`mock`; `bedrock`, `anthropic`) | Claude Sonnet 4.6 on Bedrock per ADR 0007. Route `app/api/ai/generate-item(s)`, gated by `assessment.allow_llm_authoring`. The batch flow (up to ten proposals, per-element validation) is in [batch AI item generation](batch-item-generation.md). |
 | Math notation translator | `lib/ai/mathTranslator/provider.ts` | `MATH_TRANSLATOR_PROVIDER` (`mock`) | Claude Haiku 4.5. Server action `app/actions/translateMath.ts`. Always on, since it is a notation converter, not authoring. ADR 0011. |
-| PDF import extractor | `lib/pdfImport/provider.ts` | `PDF_EXTRACTOR_PROVIDER` (`mock`) | Scanned PDFs go to Bedrock document blocks (ADR 0015). See [authoring](authoring.md#getting-content-in-and-out). |
+| PDF import extractor | `lib/pdfImport/provider.ts` | `PDF_EXTRACTOR_PROVIDER` (`mock`) | Scanned PDFs go to Bedrock document blocks (ADR 0015). Not gated by `assessment.allow_llm_authoring` (decision of 2026-10-27; Word import follows it). See [PDF import](pdf-import.md#pipeline) and [authoring](authoring.md#getting-content-in-and-out). |
 | Essay scorer | `lib/ai/essayScorer/provider.ts` | `ESSAY_SCORER_PROVIDER` (`mock`) | Used by `lib/scoring/aiScoreResponse.ts`. See [scoring](scoring-and-results.md). |
 | Rubric extractor | `lib/ai/rubricExtractor/provider.ts` | `RUBRIC_EXTRACTOR_PROVIDER` (`mock`) | Rubric upload to structured rubric. |
 | Guardrail | `lib/safeguarding/provider.ts` | `GUARDRAIL_PROVIDER` (`off`; `mock`, `bedrock`) | `null` when off: callers run the AI call directly and write no telemetry. |

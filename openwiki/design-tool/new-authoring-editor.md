@@ -27,8 +27,9 @@ openwiki:
     - design-tool/app/dashboard/[id]/AssessmentEditor.tsx
     - design-tool/app/dashboard/[id]/editorModel.ts
     - design-tool/db/schema.ts
-  symbols: [NEW_AUTHORING_DEFAULT, isNewAuthoringEnabled, setNewAuthoring, RICH_TEXT_TYPES, usesRichTextField, markupToDoc, docToMarkup, sanitizePastedHtml, createItemAutosaver, ITEM_AUTOSAVE_DELAY_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_KEEP, listItemSnapshots, slashOpensInsertMenu, swapMatchRights, staff_preferences, item_snapshots]
+  symbols: [NEW_AUTHORING_DEFAULT, isNewAuthoringEnabled, setNewAuthoring, RICH_TEXT_TYPES, usesRichTextField, markupToDoc, docToMarkup, sanitizePastedHtml, createItemAutosaver, ITEM_AUTOSAVE_DELAY_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_KEEP, listItemSnapshots, slashOpensInsertMenu, swapMatchRights, staff_preferences, item_snapshots, buildImportPreview, previewImportBundle, planImport]
   test_paths:
+    - design-tool/test/import-preview.test.ts
     - design-tool/test/new-authoring-flag.test.ts
     - design-tool/test/authoring-editor.test.ts
     - design-tool/test/authoring-paste.test.ts
@@ -144,6 +145,35 @@ Fill-in-the-blank items add **Insert blank** to the field. `lib/authoring/blankI
 
 `transformPastedHTML` in `RichTextField.tsx` sends HTML through `sanitizePastedHtml` (`lib/authoring/pasteSanitize.ts`). The output keeps text, bold, italic and line breaks. Google Docs' `font-weight:normal` wrapper is not bold, and pictures are dropped and counted so the field can say so. Pasting ProseMirror's own slice (a copy from another field) is kept only when it came from this tab, through `rememberCopied`.
 
+## Import preview (JSON assessment files)
+
+Editor redesign Phase 7 slice C (R-9) shows what a `.json` assessment import will create before anything is written. With the flag on, `app/dashboard/import/page.tsx` renders `ImportPreviewFlow` in place of the plain file form. Choosing a file posts it to `POST /api/assessments/import/preview`, which answers 404 with the flag off. The page then shows the name the copy will get, counts by type, sets, pictures, layout, calculator, highlighting and accommodation counts, warning codes, and the questions in the student's own renderer ([interactive preview](interactive-preview.md)). Create then submits the same file to the same import action the flag-off page uses, so the import itself is unchanged.
+
+```mermaid
+sequenceDiagram
+  participant Page as ImportPreviewFlow
+  participant Route as import/preview route
+  participant Prev as previewImportBundle
+  participant Plan as planImport (importBundle.ts)
+  Page->>Route: POST file (multipart)
+  Route->>Route: requireStaff, isNewAuthoringEnabled
+  Route->>Prev: readImportBundle (same caps as the import)
+  Prev->>Plan: plan with an empty remap
+  Prev->>Prev: importName and keptSourceItemId reads only
+  Prev-->>Route: ImportPreview (no insert, no storage)
+  Route-->>Page: preview JSON, no-store
+  Page->>Page: Create submits the file to the existing import action
+```
+
+Caption: the preview is read-only. It shares `planImport` with the import, so the counts and stored rows match what the import then writes.
+
+- `buildImportPreview` (`lib/api/importPreview.ts`) is pure. It derives counts, warning codes (`unknown_types`, `scoring_dropped`, `accommodations_dropped`, `sources_dropped`, `missing_pictures`, `no_answer_key`, `no_items`) and the questions as they will be stored, with preview-only ids. `previewImportBundle` adds the two database facts it needs: the copy's free name and whether an E12 source link can be kept.
+- The preview response carries the file's answer keys back to the teacher who sent the file, since they are in the file already. The student view in the page strips them through the delivery projection before any content reaches the sandboxed frame ([ADR 0019](../../docs/adr/0019-scripted-preview-sandbox.md)).
+- The request body reading (same caps and refusals as the import) lives in `lib/api/importBody.ts`, shared by the preview and the import.
+- Scope boundary: the preview is a second reader of `planImport`. Change the import's rules there, then check the preview's warnings and counts still match. Do not add a second copy of the rules.
+
+Focused checks: `design-tool/test/import-preview.test.ts` covers counts, warnings, refusals, the absence of keys in the student view, that neither the preview nor its route writes a row, and that the preview equals what the import then stores. It needs the test database.
+
 ## Invariants
 
 - The flag defaults to off. Turning it on or off changes only the editor's rendering, not the stored items. The history copy is made by every editor, so it does not depend on the flag.
@@ -175,3 +205,4 @@ Browser behaviour of the field, the autosave indicator, the rail and the menus i
 - Schema changes to `staff_preferences` or `item_snapshots` follow the migration workflow in [data model](data-model.md#migrations).
 - Scope boundary: the `/dashboard/beta` page and `/api/me/preferences` are deliberately unlinked while the default is off. Do not add navigation to them as part of an unrelated change.
 - Scope boundary: `AssessmentEditor.tsx` still owns all state. Its Settings and Allowed tabs (`SettingsTab.tsx`, `AccommodationsTab.tsx`), the Questions toolbar (`QuestionsToolbar.tsx`), stimulus sets (`StimulusSetCard.tsx`) and a card's per-type editor (`ItemTypeFields.tsx`) were split out in Phase 4 slice D, with shared model helpers in `editorModel.ts`. The question card's header, stem field, scoring select and save row, and the stimulus-set, autosave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
+ave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
