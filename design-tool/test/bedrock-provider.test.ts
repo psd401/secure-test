@@ -15,6 +15,7 @@ import {
   mock,
   test,
 } from "bun:test";
+import * as bedrockRuntimeMod from "@aws-sdk/client-bedrock-runtime";
 import { setLogSink } from "../lib/log";
 
 // D-7 (docs/rubric-upload-design.md, slice 6): captures every structured log
@@ -116,6 +117,7 @@ class FakeBedrockRuntimeClient {
 }
 
 mock.module("@aws-sdk/client-bedrock-runtime", () => ({
+  ...bedrockRuntimeMod,
   BedrockRuntimeClient: FakeBedrockRuntimeClient,
   ConverseCommand: FakeConverseCommand,
   ApplyGuardrailCommand: FakeApplyGuardrailCommand,

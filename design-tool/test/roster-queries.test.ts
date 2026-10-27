@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { student_accommodations, students } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import {
   sectionsCurrentlyTaughtBy,
@@ -32,6 +33,7 @@ const expectTestDb = () => {
 let principal: TestPrincipal | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

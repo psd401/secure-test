@@ -3,6 +3,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { closeDb } from "../db/client";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink, type LogSink } from "../lib/log";
 import { emailRef, logResolutionFailure } from "../lib/api/resolutionLog";
@@ -21,6 +22,7 @@ process.env.DESIGN_TOOL_SESSION_SECRET ??= "resolution-log-test-secret";
 let principal: { sub: string; role: string; email?: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { loadExtract, replaceFile } from "./fixtures/roster/load";
 import { importSnapshot } from "../lib/roster/importSnapshot";
@@ -39,6 +40,7 @@ const ADMIN = { sub: "sugg-admin", email: "sysadmin@psd401.net" };
 let current: { sub: string; email: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

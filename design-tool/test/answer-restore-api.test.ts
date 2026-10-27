@@ -16,6 +16,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { listSupersededScores } from "../lib/scoring/supersededScores";
 import { causeLine } from "../lib/scoring/changeScoreDialog";
@@ -36,6 +37,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = staffPrincipal(OWNER);
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

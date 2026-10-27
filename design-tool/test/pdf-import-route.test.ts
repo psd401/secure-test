@@ -7,6 +7,7 @@ import { closeDb, getDb } from "../db/client";
 import { guardrail_events, items } from "../db/schema";
 import { MAX_OCR_BYTES, MAX_OCR_PAGES } from "../lib/pdfImport/extractCore";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 import { makeEmptyPagesPdf, makeTextAndImagePdf, makeTextPdf, makeVectorChartPdf } from "./helpers/pdf";
@@ -22,6 +23,7 @@ let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   // Slice 58: requireSession now reads an Authorization bearer header as
   // well as the cookie, so the mocked module has to provide headers().
   headers: async () => new Headers(),

@@ -8,6 +8,7 @@ import { closeDb, getDb } from "../db/client";
 import { assessments, guardrail_events, items } from "../db/schema";
 import { CreateItemBody } from "../lib/api/items";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -22,6 +23,7 @@ let originalSessionSecret: string | undefined;
 let mockSession: { sub: string; role: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSession && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

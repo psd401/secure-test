@@ -6,6 +6,7 @@ import { desc, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { client_error_events } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink } from "../lib/log";
 import {
@@ -28,6 +29,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

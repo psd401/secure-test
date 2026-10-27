@@ -11,6 +11,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { assessments, attempts, item_snapshots, items, responses, students } from "../db/schema";
 import { closeDb, getDb } from "../db/client";
 import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setNewAuthoring } from "../lib/authoring/flag";
 
@@ -25,6 +26,7 @@ let originalSessionSecret: string | undefined;
 let mockSub: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

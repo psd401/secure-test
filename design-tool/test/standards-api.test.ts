@@ -5,6 +5,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { chipLabel, normalizeStandards, schemeLabel, shortText, tagScheme } from "../lib/standards/tags";
 import { lookupTags, resolveBareCode, searchStandards } from "../lib/standards/search";
@@ -12,6 +13,7 @@ import { lookupTags, resolveBareCode, searchStandards } from "../lib/standards/s
 let mockSession: { sub: string; role: string } | null = { sub: "t", role: "staff" };
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSession && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

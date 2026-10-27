@@ -17,6 +17,7 @@ import {
   type AssessmentRow,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { resolveEffectiveAccommodations } from "../lib/accommodations/effective";
 import {
@@ -42,6 +43,7 @@ const STRANGER = "coteach-stranger";
 let principal: { sub: string; role: string; email?: string } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

@@ -101,6 +101,7 @@ async function callDelete(id: string, cookie?: string) {
 // simple, we mock readSessionFromCookies by stuffing the cookie into a
 // global override before each call.
 import { mock } from "bun:test";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 let mockSub: string | null = null;
@@ -109,6 +110,7 @@ let mockSub: string | null = null;
 let mockEmail: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   // Slice 58: requireSession now reads an Authorization bearer header as
   // well as the cookie, so the mocked module has to provide headers().
   headers: async () => new Headers(),

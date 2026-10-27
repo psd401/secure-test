@@ -30,6 +30,7 @@ import {
   verifySessionJWT,
   type SessionPayload,
 } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { authorizeAssessment } from "../lib/api/access";
 
@@ -40,6 +41,7 @@ const OTHER = { sub: "imp-other", email: "other@psd401.net" };
 let current: Partial<SessionPayload> | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers({ "x-request-id": "req-imp-1" }),
   cookies: async () => ({
     get: (name: string) =>

@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments, guardrail_events } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { recordGuardrailEvent } from "../lib/safeguarding/telemetry";
 
@@ -22,6 +23,7 @@ let originalGuardrail: string | undefined;
 let mockSub: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   // Slice 58: requireSession now reads an Authorization bearer header as
   // well as the cookie, so the mocked module has to provide headers().
   headers: async () => new Headers(),

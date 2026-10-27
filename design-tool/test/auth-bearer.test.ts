@@ -15,6 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 import { SignJWT } from "jose";
 import { closeDb } from "../db/client";
 import { SESSION_COOKIE_NAME, mintSessionJWT } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const SECRET = "bearer-test-secret-do-not-use";
@@ -24,6 +25,7 @@ let mockHeaders = new Headers();
 let mockCookie: string | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => mockHeaders,
   cookies: async () => ({
     get: (name: string) =>

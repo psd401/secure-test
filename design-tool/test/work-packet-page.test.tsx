@@ -21,6 +21,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { sectionLabel } from "../lib/roster/teacherRoster";
 import { BIOLOGY_STUDENT, OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
@@ -43,6 +44,7 @@ const OTHER_TEACHER = "work-packet-other-teacher";
 let principal: { sub: string; role: string; email?: string | null } | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

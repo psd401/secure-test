@@ -16,6 +16,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments, attempts, items, responses, scores, students } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { buildResults, resultsToCsv } from "../lib/scoring/results";
 import { summarizeCohort } from "../lib/reporting/printSummary";
@@ -35,6 +36,7 @@ const OWNER = "superseded-teacher";
 let mockSub: string | null = OWNER;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

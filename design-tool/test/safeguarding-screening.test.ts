@@ -20,6 +20,7 @@ import {
 import { resetMockEmails, sentEmails } from "../lib/email/mockProvider";
 import { buildSafeguardingEmail } from "../lib/email/safeguardingNotifications";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { mockScreener } from "../lib/safeguarding/screening/mockProvider";
 import {
@@ -64,6 +65,7 @@ let mockSub: string | null = null;
 let originalSessionSecret: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

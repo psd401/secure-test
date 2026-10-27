@@ -19,6 +19,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 const expectTestDb = () => {
@@ -32,6 +33,7 @@ let mockSession: { sub: string; role: string } | null = null;
 let originalSessionSecret: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

@@ -39,6 +39,7 @@ import {
   type TestSessionRow,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { sectionLabel, loadOverlay } from "../lib/roster/teacherRoster";
 import { buildResults, resultsToCsv } from "../lib/scoring/results";
@@ -66,6 +67,7 @@ const OWNER = "practice-invisibility-owner";
 let principal: TestPrincipal | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

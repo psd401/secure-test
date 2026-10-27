@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import {
   NEW_AUTHORING_DEFAULT,
@@ -23,6 +24,7 @@ const expectTestDb = () => {
 let principal: TestPrincipal | null = null;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) =>

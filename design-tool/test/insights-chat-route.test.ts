@@ -20,6 +20,7 @@ import {
   students,
 } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { mockProvider } from "../lib/ai/mockProvider";
 import { MAX_THREAD_TURNS, type ClassInsightsChatInput } from "../lib/insights/chat";
@@ -37,6 +38,7 @@ type Principal = { sub: string; role: string; email?: string } | null;
 let principal: Principal = staffPrincipal(OWNER);
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (principal && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),
