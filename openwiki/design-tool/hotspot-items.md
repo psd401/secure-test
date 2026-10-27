@@ -90,7 +90,7 @@ sequenceDiagram
 
 ## Delivery and the student's answer
 
-`buildDeliveryBundle` emits `regions` and `image_asset_id` for a hotspot and drops `correct_region_ids`. The client's `HotspotItem` (`DeliveryItem.swift`) decodes them, and the page's `hotspotField` (`AssessmentPage.swift`) draws the image with one button per region. Each button has an accessible label "Region N" and an `aria-pressed` state. Keyboard users reach one stop per region (the HS-1 rule tested in `RendererKeyboardReachTests`).
+The delivery projection (`mapItemForDelivery` in `lib/api/deliveryItem.ts`, reached through `buildDeliveryBundle`) emits `regions` and `image_asset_id` for a hotspot and drops `correct_region_ids`. The client's `HotspotItem` (`DeliveryItem.swift`) decodes them, and the page's `hotspotField` (`AssessmentPage.swift`) draws the image with one button per region. Each button has an accessible label "Region N" and an `aria-pressed` state. Keyboard users reach one stop per region (the HS-1 rule tested in `RendererKeyboardReachTests`).
 
 The page posts `{type: 'hotspot', region_ids}` through the answer channel on every toggle. Saved answers are restored without posting, and only ids that still exist as regions count (`RendererPrefillTests`). A hotspot with no image, or with no regions, shows "This item is missing its image and cannot be answered" instead of an empty surface (`RendererHotspotTests`).
 

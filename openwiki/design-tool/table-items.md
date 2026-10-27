@@ -93,7 +93,7 @@ Tables are student-facing, so editing a published table is refused by `requireDr
 
 1. Change the shape in `packages/schema/src/items.ts` and `responses.ts`, then run `cd packages/schema && bun run build` so the design tool sees the new `dist`.
 2. Update the write boundary in `design-tool/lib/api/items.ts` (`TableColumnShape`, `TableRowShape`, `validateTable`, `compactCellKeys`, and the config builder).
-3. Update `buildDeliveryBundle`, `scoring/auto.ts`, `TableEditor.tsx`, and the Swift `TableItem`, `ItemResponse` and `tableField` together.
+3. Update the table case in `lib/api/deliveryItem.ts`, `scoring/auto.ts`, `TableEditor.tsx`, and the Swift `TableItem`, `ItemResponse` and `tableField` together.
 4. If a bundle's shape changes, regenerate the Swift fixture with `design-tool/scripts/generate-delivery-fixture.ts` before running the Swift decode tests (see [testing](../testing/testing-and-validation.md)).
 
 Scope boundaries: do not put `cell_keys` in the delivery bundle, and do not add speech support for tables without updating the v1 exclusion test. A wire-shape change escalates to the [wire formats](../architecture/wire-formats.md) page and needs the Swift decoder tests.
@@ -103,3 +103,4 @@ Scope boundaries: do not put `cell_keys` in the delivery bundle, and do not add 
 - Server: `cd design-tool && bun test test/scoring-auto.test.ts` (suites "scoreResponse: table (E3)" and "tableMaxPoints (E3)"), `test/items-api.test.ts` ("items: table (E3)"), and `test/answer-key-only-patch.test.ts`.
 - Client: `cd client/SecureTestCore && swift test --filter RendererTableTests` and `--filter ItemResponseTableTests`.
 - Each suite is independent, so run only the ones that match the layer you changed.
+nged.

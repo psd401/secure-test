@@ -104,7 +104,7 @@ Text-to-speech reads the order item in its current on-screen order (`RendererTex
 |---|---|---|
 | Authoring rules, minimum length, editor | `lib/api/items.ts`, `SequenceEditor.tsx`, `readiness.ts` | `items-api`, `item-readiness`, `item-integrity` |
 | Scoring rule | `lib/scoring/auto.ts` (order branch) | `scoring-auto` (order cases with `ordered_ids`) |
-| Shuffle, sealed ids, unseal on write | `buildDeliveryBundle.ts`, `studentAttempt.ts` | `delivery-api` (order cases), `attempt-ingest-api` |
+| Shuffle, sealed ids, unseal on write | `deliveryItem.ts`, `studentAttempt.ts` | `delivery-api` (order cases), `attempt-ingest-api` |
 | Client rendering, Move buttons, drag | `AssessmentPage.swift` (`orderField`, `order-row`, `order-move`) | `RendererOrderTests`, `RendererOrderDragTests` |
 | Client prefill of saved order | `AssessmentPage.swift` (`orderField`) | `RendererPrefillTests` (order entries case) |
 
@@ -115,3 +115,4 @@ Validation: `cd design-tool && bun test test/scoring-auto.test.ts` needs no data
 - Partial credit for order is not implemented. Adding it means changing the scoring branch, the `max_points` value that results and any reporting code that assumes 0 or 1 points.
 - Do not hand-edit `packages/schema/dist`. Re-run the schema build after changing `packages/schema/src/items.ts`, `delivery.ts` or `responses.ts`, because the design tool consumes the built package.
 - The per-attempt id scheme is shared with match items. Changes to `opaqueId` affect both, so check [wire formats](../architecture/wire-formats.md) before editing it.
+-formats.md) before editing it.
