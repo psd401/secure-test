@@ -22,6 +22,10 @@ COPY packages/renderer/package.json packages/renderer/package.json
 # Graphing calculator (row DC): a workspace member, so the frozen install
 # refuses without its manifest even before the design tool imports it.
 COPY packages/graphing/package.json packages/graphing/package.json
+# Editor redesign PR 1 (#118): packages/markup is a workspace member that the
+# design tool imports as @secure-test/markup; without its manifest here the
+# frozen install refuses ("Workspace dependency not found").
+COPY packages/markup/package.json packages/markup/package.json
 COPY design-tool/package.json design-tool/package.json
 RUN bun install --frozen-lockfile
 
