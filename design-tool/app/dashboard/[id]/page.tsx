@@ -79,7 +79,9 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
     .where(eq(attempts.assessment_id, id));
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    // Phase 5 slice B (R-11): the new editor needs the width for the
+    // side-by-side preview (≥ 1280 px); the current editor is unchanged.
+    <main className={newAuthoring ? "mx-auto max-w-screen-2xl px-6 py-10" : "mx-auto max-w-4xl px-6 py-10"}>
       <AssessmentIdProvider id={assessment.id}>
         <AssessmentEditor
           newAuthoring={newAuthoring}

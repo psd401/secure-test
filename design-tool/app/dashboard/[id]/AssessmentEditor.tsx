@@ -115,6 +115,7 @@ import { AccommodationsTab } from "./AccommodationsTab";
 import { QuestionsToolbar } from "./QuestionsToolbar";
 import { StimulusSetCard } from "./StimulusSetCard";
 import { ItemTypeFields } from "./ItemTypeFields";
+import { InteractivePreview } from "./InteractivePreview";
 
 // Phase 4 slice D: the moved helpers stay importable from here (tests and
 // ItemHistoryDialog import them from this file).
@@ -182,7 +183,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // E12 slice 4: which set's source picker is open.
   const [sourcePickerFor, setSourcePickerFor] = useState<string | null>(null);
   const [publishBusy, setPublishBusy] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  // Phase 5 slice B (R-11): the new editor opens with its side-by-side
+  // preview showing; the current editor's stacked preview starts hidden.
+  const [previewOpen, setPreviewOpen] = useState(newAuthoring);
+  // Below 1280 px the new editor shows one pane at a time.
+  const [narrowPane, setNarrowPane] = useState<"editor" | "preview">("editor");
   // D-1 (docs/archive-and-delete-design.md): Settings-tab "Delete draft".
   const [deleteDraftOpen, setDeleteDraftOpen] = useState(false);
   const [deletingDraft, setDeletingDraft] = useState(false);
@@ -792,6 +797,19 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     card.scrollIntoView({ block: "center", behavior: "smooth" });
     const stem = document.getElementById(`stem-${itemId}`);
     (stem ?? card).focus({ preventScroll: true });
+  }
+
+  /** Phase 5 slice B: show a question in the editor — scrolled into view,
+   * focus left where it is (the teacher may be answering in the preview). A
+   * click on a question's text in the preview (`frame`) only scrolls: below
+   * 1280 px the editor pane stays hidden until the teacher picks it, so
+   * clicking in the preview never takes it away. A "Question N" link under
+   * the hand-in result (`score`) is an explicit move, so it switches panes. */
+  function showItemFromPreview(itemId: string, from: "frame" | "score") {
+    if (from === "score") setNarrowPane("editor");
+    requestAnimationFrame(() =>
+      document.getElementById(`question-${itemId}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
   }
 
   function retryFailedSaves() {
@@ -1446,6 +1464,31 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </div>
         ) : null}
 
+        {/* Phase 5 slice B (R-11): editor | student preview at ≥ 1280 px;
+            below that, a toggle between the two panes. */}
+        {newAuthoring && previewOpen ? (
+          <div role="tablist" aria-label="Show" className="flex gap-1 xl:hidden">
+            {(["editor", "preview"] as const).map((pane) => (
+              <Button
+                key={pane}
+                type="button"
+                role="tab"
+                size="sm"
+                variant={narrowPane === pane ? "default" : "outline"}
+                aria-selected={narrowPane === pane}
+                aria-controls={pane === "editor" ? "editor-panel" : "preview-panel"}
+                onClick={() => setNarrowPane(pane)}
+              >
+                {pane === "editor" ? "Editor" : "Student preview"}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        <div className={newAuthoring && previewOpen ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(26rem,42%)]" : undefined}>
+        <div
+          id={newAuthoring && previewOpen ? "editor-panel" : undefined}
+          className={newAuthoring && previewOpen && narrowPane === "preview" ? "hidden xl:block" : undefined}
+        >
         {/* R-6 / R-7: the new editor puts the outline rail beside the list. */}
         <div className={newAuthoring && items.length > 0 ? "grid items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]" : undefined}>
         {newAuthoring && items.length > 0 ? (
@@ -1922,6 +1965,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </ol>
         )}
         </div>
+        </div>
+        </div>
+        {newAuthoring && previewOpen ? (
+          <aside
+            id="preview-panel"
+            aria-label="Student preview"
+            className={`xl:sticky xl:top-4 ${narrowPane === "editor" ? "hidden xl:block" : ""}`}
+          >
+            <InteractivePreview
+              assessment={assessment}
+              items={items}
+              itemSets={itemSets}
+              onShowItem={showItemFromPreview}
+              frameClassName="h-[70vh] xl:h-[calc(100vh-12rem)]"
+            />
+          </aside>
+        ) : null}
         </div>
 
         <NextStepCard

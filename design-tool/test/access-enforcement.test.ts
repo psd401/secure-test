@@ -103,6 +103,12 @@ const NO_OWNED_ROW = new Map<string, string>([
   [join("feedback"), "writes a feedback row of the caller's own"],
   // Editor redesign R-12: the caller's own new-authoring opt-in, keyed by sub.
   [join("me", "preferences"), "reads/writes the caller's own preference row"],
+  // Editor redesign Phase 5 slice B (ADR 0019): the interactive preview's
+  // frame document — the same bytes for every assessment; content arrives
+  // from the editor page by postMessage, never through this route.
+  // Its only gate is staff + the caller's R-12 flag (404 otherwise), pinned by
+  // the GET tests in test/preview-shell.test.ts.
+  [join("preview", "shell"), "fixed frame document: no item content, no owned row"],
   [
     join("assessments"),
     "LIST + CREATE: the WHERE clause is the scope, widened in access slice 2",

@@ -476,3 +476,77 @@ unless noted.
   `preventDefault` without stopping it. The card's check is now
   `slashOpensInsertMenu` + `TEXT_ENTRY_SELECTOR` in `lib/authoring/outline.ts`
   (skips `math-field` and any key already handled). Hand-check rows 763–766.
+- 2026-10-26 — **Phase 5 slice A: the preview ADR** (prototype track, R-3).
+  `docs/adr/0019-scripted-preview-sandbox.md`, **Proposed** (R-3 accepted;
+  the ADR text not yet reviewed; Accepted needed before Phase 9's cutover).
+  Revises ADR 0006 for the scripted preview only — `/preview/[id]` keeps
+  0006. Posture: a fixed shell route (no content, no key) in an iframe with
+  `sandbox="allow-scripts"` only (opaque origin) and `allow=""`; CSP
+  `default-src 'none'`, three hash-pinned scripts (bootstrap, KaTeX,
+  renderer — R-3's "renderer only" widened, none content-dependent), hashes
+  computed from the served bytes, `connect-src 'none'`, `data:` images and
+  fonts, `frame-ancestors 'self'`; content over a `MessageChannel` after a
+  `ready` handshake checked by `event.source`, parsed by
+  `DeliveryBundleSchema` before posting; a stub `messageHandlers` bridge
+  whose `submit` is scored in the parent against the editor's key, result
+  shown outside the frame. Seven residual risks recorded; slice B owes a
+  test that no key value reaches the posted payload, and the browser rows.
+  Nothing built; no hand-check rows (no UI).
+- 2026-10-26 — **Phase 5 slice B: the interactive side-by-side preview**
+  (prototype track, D-2, R-3, R-11; ADR 0019 still **Proposed**, its "As
+  built" section records where this goes past §1–§5). With the R-12 flag on,
+  the Questions tab is editor | student preview at ≥ 1280 px (page width
+  widened for the flag only) and an Editor / Student preview toggle below.
+  The preview is `/preview/shell` (staff + flag only, else 404) in an iframe
+  with `sandbox="allow-scripts"` only and `allow=""`: a fixed document with
+  KaTeX, the student's `renderer.js` / `renderer.css` (the current signed
+  renderer, else `packages/renderer/dist`) and a bootstrap
+  (`lib/preview/interactive/bootstrap.ts`), the three pinned by SHA-256
+  hashes computed from the served bytes (`shell.ts`); CSP `default-src
+  'none'`, `connect-src 'none'`, `data:` fonts and images, `frame-ancestors
+  'self'`, `sandbox allow-scripts`. Content goes in over the frame's
+  MessageChannel after a `ready` accepted only from our iframe
+  (`protocol.ts`): a bundle built in the editor page from unsaved state by
+  the student's own per-item projection — moved unchanged from
+  `buildDeliveryBundle.ts` to `lib/api/deliveryItem.ts` — with sealed match /
+  order ids minted per editor session and parsed by `DeliveryBundleSchema`
+  (`bundle.ts`); a draft the schema refuses is listed, not fatal. Live
+  refresh is debounced (600 ms); the new frame loads hidden and replaces the
+  old once rendered, and answers so far ride as `saved_responses`. The stub
+  bridge keeps answers in memory; **Finish and hand in** is scored in the
+  editor page with `scoreResponse` (`lib/scoring/auto.ts`) against the
+  editor's key (`score.ts`), shown under the preview. Scroll linking follows
+  the editor's top question (can be turned off); a click in the preview
+  scrolls the editor to it. Views: **Read aloud** (TTS scope on; the parent
+  speaks with an on-device voice and relays word highlights — ADR 0019's
+  `tts` row amended), **One question per page** (paged layout). Shell inputs
+  copied from the client with drift tests: `PageShell.baseStyles`
+  (`pageShell.generated.ts`, `scripts/vendor-page-shell.ts`) and
+  `katex.min.js` (`lib/preview/katex.min.js.ts`,
+  `scripts/vendor-katex-js.mjs`). Tests: `test/preview-interactive.test.ts`
+  (key boundary for a keyed fixture of every type, protocol validation,
+  sealing, scoring, speech ranges) and `test/preview-shell.test.ts` (CSP /
+  hashes, drift, the bootstrap running the real renderer in the client
+  harness's DOM shim, route gating). Browser behaviour, including ADR 0019
+  risk 6, is hand-check rows 767–781. Not built: speech-to-text, time-limit
+  strip, contrast / zoom / font views; the math read-aloud is a plain
+  reading of the TeX, not the client's MathSpeech.
+- 2026-10-26 — **Phase 5 review finding fixed** (prototype track). Every
+  click inside a question in the preview, including clicks that answer it,
+  sent `jump`, and the editor page switched below 1280 px to the Editor
+  pane, so the preview could not be answered there. At 1280 px and wider each
+  answer scrolled the editor, and with Follow my place on that could scroll
+  the preview back. Three changes: (1) the bootstrap sends `jump` only for a
+  click on a question's text (`.stem`) or on the block itself. Controls
+  (form fields, labels, buttons, links, canvas, `summary`, anything
+  contenteditable or with a `role` or `tabindex`) and a click that ends a
+  text selection send nothing. (2) `onShowItem` now says where the request
+  came from: a click in the frame only scrolls the editor, and only a
+  "Question N" link under the hand-in result switches panes. (3) After a
+  jump, Follow my place stays quiet for 1.5 s. Test:
+  `test/preview-shell.test.ts` (the bootstrap with the real renderer).
+  Hand-check row 774 amended, rows 782–783.
+- 2026-10-26 — **ADR 0019 Accepted** (landing PR 4). James accepted it as
+  written; the Status line and `docs/adr/README.md` say so. The Phase 5
+  entries above, which say "still **Proposed**", are dated records and stay
+  as written.

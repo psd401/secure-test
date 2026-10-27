@@ -105,7 +105,9 @@ export function QuestionsToolbar(props: QuestionsToolbarProps) {
         </Button>
       </div>
 
-      {previewOpen ? (
+      {/* Phase 5 slice B: with the R-12 flag on, the button opens the
+          interactive side-by-side preview instead (AssessmentEditor). */}
+      {previewOpen && !newAuthoring ? (
         <div id="preview-panel" className="space-y-2 rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">
             This is what students see. Refreshes after you save.
