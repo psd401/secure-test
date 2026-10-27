@@ -10,6 +10,7 @@ import { closeDb, getDb } from "../db/client";
 import { guardrail_events, items } from "../db/schema";
 import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import { setNewAuthoring } from "../lib/authoring/flag";
 import { MAX_UPLOAD_BYTES } from "../lib/ai/documentUpload";
 import { regionBlockRange, type WordBlock } from "../lib/docxImport/document";
@@ -27,6 +28,7 @@ let mockSub: string | null = null;
 let originalSessionSecret: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),

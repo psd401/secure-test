@@ -9,6 +9,7 @@ import { closeDb, getDb } from "../db/client";
 import { assessments, items } from "../db/schema";
 import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
 import * as sessionMod from "../lib/auth/session";
+import * as headersMod from "next/headers";
 import { setNewAuthoring } from "../lib/authoring/flag";
 import { importBundleForOwner, isImportBundleError, planImport } from "../lib/api/importBundle";
 import { buildImportPreview, previewImportBundle } from "../lib/api/importPreview";
@@ -27,6 +28,7 @@ let mockSub: string | null = null;
 let originalSessionSecret: string | undefined;
 
 mock.module("next/headers", () => ({
+  ...headersMod,
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (name: string) => (mockSub && name === SESSION_COOKIE_NAME ? { value: "x" } : undefined),
