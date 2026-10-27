@@ -90,7 +90,7 @@ Teachers author in `/dashboard/*` (pages under `design-tool/app/dashboard/`), wh
 
 ## Preview and print
 
-`GET /preview/[id]` (`app/preview`, `lib/preview/renderHtml.ts`) renders a static, no-JS HTML view with CSP `default-src 'none'`, embedded in the editor as a sandboxed iframe (ADR 0006). It shows the Tier-1 accommodation toolbar chips as visual demo only. `?print=1` renders the paper variant for browser print / Save-as-PDF (ADR 0013, no server-side PDF). KaTeX CSS is inlined from `lib/preview/katexCss.ts`.
+`GET /preview/[id]` (`app/preview`, `lib/preview/renderHtml.ts`) renders a static, no-JS HTML view with CSP `default-src 'none'`, embedded in the editor as a sandboxed iframe (ADR 0006). It shows the Tier-1 accommodation toolbar chips as visual demo only. `?print=1` renders the paper variant for browser print / Save-as-PDF (ADR 0013, no server-side PDF). KaTeX CSS is inlined from `lib/preview/katexCss.ts`. With the R-12 beta flag on, the editor shows the answerable [interactive preview](interactive-preview.md) instead, which runs the student renderer; this static view remains for every editor with the flag off.
 
 ## Rich-text essays
 

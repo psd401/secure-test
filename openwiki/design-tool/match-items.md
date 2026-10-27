@@ -90,7 +90,7 @@ Caption: the answer path for a match item. A refused write stores nothing; a par
 | Change | Start at | Focused tests |
 |---|---|---|
 | Pair validation, limits, readiness | `lib/api/items.ts` (`MatchPairShape`, `validateUniqueIds`), `lib/api/itemIntegrity.ts`, `readiness.ts` | `items-api.test.ts` (describe "match items (slice 47)"), `item-integrity.test.ts`, `item-readiness.test.ts` |
-| Delivery split or sealed ids | `lib/api/buildDeliveryBundle.ts` (match case), `lib/api/opaqueIds.ts` | `delivery-api.test.ts` ("match splits pairs into independent lefts and rights", "a saved match answer is sealed back into the ids this bundle shows"), `opaque-ids.test.ts` |
+| Delivery split or sealed ids | `lib/api/deliveryItem.ts` (match case), `lib/api/opaqueIds.ts` | `delivery-api.test.ts` ("match splits pairs into independent lefts and rights", "a saved match answer is sealed back into the ids this bundle shows"), `opaque-ids.test.ts` |
 | Response ingest | `lib/api/studentAttempt.ts` (`unsealResponseIds`) | `attempt-ingest-api.test.ts` ("a match answer in sealed ids is stored as authoring ids") |
 | Scoring rule | `lib/scoring/auto.ts` (match branch of `scoreResponse`) | `scoring-auto.test.ts` ("match fully correct", "match one swap → all-or-nothing 0", "match missing a mapping → 0", "match extra unknown key → 0", "match without pairs (no key) → unscorable") |
 | Client dropdowns | `client/SecureTestCore/Sources/SecureTestCore/AssessmentPage.swift` (`matchField`) | `RendererMatchTests` (client) |
@@ -98,3 +98,4 @@ Caption: the answer path for a match item. A refused write stores nothing; a par
 Extension note: a new pair field would cross the schema (`MatchPairSchema`, `MatchItemSchema`, `DeliveryMatchItemSchema`), the design-tool write boundary, the bundle builder, the export and import, the preview, and the client page. Check each consumer, because a field that reaches only the editor is silently dropped from the student bundle.
 
 Validation: the focused check is `cd design-tool && bun test test/scoring-auto.test.ts`. DB-backed write and bundle tests need `DATABASE_URL` pointed at the `_test` database, as in [testing](../testing/testing-and-validation.md). The client check is `cd client/SecureTestCore && swift test --filter RendererMatchTests`. A wire-shape change also needs `cd packages/schema && bun run build && bun test`, because consumers read `packages/schema/dist`. Do not edit `dist` by hand.
+, because consumers read `packages/schema/dist`. Do not edit `dist` by hand.
