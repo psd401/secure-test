@@ -29,6 +29,7 @@ import { exampleQuestionRows } from "../lib/authoring/exampleQuestion";
 import { UpdateItemBody } from "../lib/api/items";
 import { itemPatchBody, rowToView } from "../app/dashboard/[id]/editorModel";
 import { beforePublishing } from "../app/dashboard/[id]/readiness";
+import * as navigationMod from "next/navigation";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -50,7 +51,10 @@ class Redirected extends Error {
     super(`redirect ${url}`);
   }
 }
+// mock.module is process-wide in bun: keep the rest of next/navigation for
+// the test files that run after this one (#124, #125).
 mock.module("next/navigation", () => ({
+  ...navigationMod,
   redirect: (url: string) => {
     throw new Redirected(url);
   },
