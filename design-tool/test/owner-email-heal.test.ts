@@ -7,6 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { assessments } from "../db/schema";
 import * as sessionMod from "../lib/auth/session";
+import * as navigationMod from "next/navigation";
 import { healAssessmentOwnerEmail } from "../lib/api/grants";
 
 const expectTestDb = () => {
@@ -28,7 +29,10 @@ class Redirected extends Error {
     super(`redirect ${url}`);
   }
 }
+// mock.module is process-wide in bun: keep the rest of next/navigation (useRouter,
+// usePathname, notFound...) for the test files that run after this one.
 mock.module("next/navigation", () => ({
+  ...navigationMod,
   redirect: (url: string) => {
     throw new Redirected(url);
   },
