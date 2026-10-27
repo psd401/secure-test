@@ -117,13 +117,23 @@ function markerInFormulaOrAlt(markup: string): boolean {
   const joined = markup.replace(/\[\[([A-Za-z0-9_-]{1,40})\]\]/g, (whole, id: string) => {
     if (seen.has(id)) return whole;
     seen.add(id);
-    return "";
+    return "\uE000";
   });
   if (seen.size === 0) return false;
   return parse(joined).some(
-    (n) => (n.type === "math" && n.tex.includes("")) || (n.type === "image" && n.alt.includes("")),
+    (n) => (n.type === "math" && n.tex.includes("\uE000")) || (n.type === "image" && n.alt.includes("\uE000")),
   );
 }
+
+// The filter must leave out only that class: a blank stem with a formula or a
+// picture elsewhere stays in the random pass.
+test("the random pass leaves out only a marker inside a formula or alt text", () => {
+  expect(markerInFormulaOrAlt("$x [[b1]]$")).toBe(true);
+  expect(markerInFormulaOrAlt("![a [[b1]]](asset:11111111-1111-1111-1111-111111111111)")).toBe(true);
+  expect(markerInFormulaOrAlt("$x$ [[b1]]")).toBe(false);
+  expect(markerInFormulaOrAlt("![p](asset:11111111-1111-1111-1111-111111111111) [[b1]]")).toBe(false);
+  expect(markerInFormulaOrAlt("$x$")).toBe(false);
+});
 
 // Random markup: each renderer against the parser. A mismatch is printed with
 // the input, so a new disagreement is a reproducible fixture away.
@@ -167,7 +177,7 @@ describe("findings — a blank marker inside a formula or an alt text", () => {
     expect(parser).toEqual(["![a ", { blank: "b1" }, ` b](asset:${A}) end`]);
     expect(renderOnServer(markup, true)).toBe(serverHtml(parser));
     const [client] = renderStemsInClient([{ markup, blanks: true }], golden.resolves);
-    expect(client!.dom).toEqual([{ img: { alt: "a  b", id: A } }, " end"]);
+    expect(client!.dom).toEqual([{ img: { alt: "a \uE000 b", id: A } }, " end"]);
     expect(client!.unplaced).toBe(1);
   });
 

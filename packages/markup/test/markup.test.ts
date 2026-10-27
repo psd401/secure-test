@@ -71,7 +71,7 @@ describe("canonical forms", () => {
   });
 
   test("a stem that already holds U+E000 still round-trips", () => {
-    const s = "a [[b1]] **c**";
+    const s = "a\uE000 [[b1]] **c**";
     expect(serialize(parse(s, { blanks: true }))).toBe(s);
   });
 
