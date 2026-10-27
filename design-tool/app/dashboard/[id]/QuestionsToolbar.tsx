@@ -30,6 +30,8 @@ export interface QuestionsToolbarProps {
   isLocked: boolean;
   isPending: boolean;
   newAuthoring: boolean;
+  /** Phase 8: open the PDF / Word import panel or the AI dialog on first render. */
+  startWith: "import" | "ai" | null;
   previewOpen: boolean;
   setPreviewOpen: Dispatch<SetStateAction<boolean>>;
   reloadFromServer: () => Promise<void>;
@@ -64,6 +66,7 @@ export function QuestionsToolbar(props: QuestionsToolbarProps) {
     isLocked,
     isPending,
     newAuthoring,
+    startWith,
     previewOpen,
     setPreviewOpen,
     reloadFromServer,
@@ -143,6 +146,7 @@ export function QuestionsToolbar(props: QuestionsToolbarProps) {
         disabled={isLocked}
         onImported={reloadFromServer}
         newAuthoring={newAuthoring}
+        initialOpen={startWith === "import"}
       />
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 empty:hidden">
@@ -189,6 +193,7 @@ export function QuestionsToolbar(props: QuestionsToolbarProps) {
             assessmentId={assessment.id}
             usedStandards={usedStandards}
             canOpen={!isLocked}
+            defaultOpen={startWith === "ai"}
             onAdded={reloadFromServer}
           />
         ) : null}

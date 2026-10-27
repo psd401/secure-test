@@ -45,6 +45,7 @@ import { OverridesPanel } from "./OverridesPanel";
 import { SittingsPanel } from "./SittingsPanel";
 import type { ItemType } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
+import { editorStartAction } from "@/lib/authoring/startScreen";
 import {
   blockMoveAnnouncement,
   choiceMoveAnnouncement,
@@ -317,6 +318,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // status instead: inputs unlock only once the draft save actually lands and
   // router.refresh() brings back the new row.
   const isLocked = assessment.status === "published";
+  // Editor redesign Phase 8 (D-5): a draft made from the start screen opens
+  // with its import panel or the AI dialog open (`?start=`), read once.
+  const [startWith] = useState(() =>
+    editorStartAction(searchParams.get("start"), {
+      newAuthoring,
+      allowLlm: assessment.allow_llm_authoring,
+      locked: isLocked,
+    }),
+  );
   // BG slice 2: every tag used on this assessment, offered first in each
   // question's picker so one test stays consistent.
   const usedStandards = useMemo(() => normalizeStandards(items.flatMap((i) => i.standards)), [items]);
@@ -1416,6 +1426,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           isLocked={isLocked}
           isPending={isPending}
           newAuthoring={newAuthoring}
+          startWith={startWith}
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
           reloadFromServer={reloadFromServer}

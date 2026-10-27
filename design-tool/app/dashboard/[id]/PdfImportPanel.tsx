@@ -222,6 +222,8 @@ interface Props {
   onImported: () => void;
   /** R-12: the side-by-side, triaged review (Phase 7 slice A). */
   newAuthoring?: boolean;
+  /** Phase 8 (D-5): open on first render, for a draft started as "Import from PDF or Word". */
+  initialOpen?: boolean;
 }
 
 /** R-8 triage colours: amber means "look at this", as elsewhere on the card. */
@@ -234,8 +236,15 @@ const TRIAGE_BADGE: Record<TriageStatus, string> = {
 /** The ring on a field a "check this" reason is about. */
 const CHECK_RING = "rounded ring-2 ring-warning-foreground/60 ring-offset-1";
 
-export function PdfImportPanel({ assessmentId, assessmentName, disabled, onImported, newAuthoring = false }: Props) {
-  const [open, setOpen] = useState(false);
+export function PdfImportPanel({
+  assessmentId,
+  assessmentName,
+  disabled,
+  onImported,
+  newAuthoring = false,
+  initialOpen = false,
+}: Props) {
+  const [open, setOpen] = useState(initialOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractResult | null>(null);

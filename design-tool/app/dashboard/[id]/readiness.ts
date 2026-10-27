@@ -1,4 +1,5 @@
 import type { ItemType } from "@/db/schema";
+import { EXAMPLE_QUESTION_STEM } from "@/lib/authoring/startScreen";
 import { fillBlankMarkerIds, type FillBlankBlank } from "@secure-test/schema";
 import {
   FILL_BLANK_SEED_STEM,
@@ -68,6 +69,8 @@ export const SEED_TEXT = new Set([
   "First step",
   "Second step",
   FILL_BLANK_SEED_STEM,
+  // Phase 8's example question: a teacher who keeps it would publish it.
+  EXAMPLE_QUESTION_STEM,
 ]);
 
 function placeholder(s: string | null | undefined): boolean {
