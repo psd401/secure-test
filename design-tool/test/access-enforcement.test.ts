@@ -106,6 +106,8 @@ const NO_OWNED_ROW = new Map<string, string>([
   // Editor redesign Phase 5 slice B (ADR 0019): the interactive preview's
   // frame document — the same bytes for every assessment; content arrives
   // from the editor page by postMessage, never through this route.
+  // Its only gate is staff + the caller's R-12 flag (404 otherwise), pinned by
+  // the GET tests in test/preview-shell.test.ts.
   [join("preview", "shell"), "fixed frame document: no item content, no owned row"],
   [
     join("assessments"),

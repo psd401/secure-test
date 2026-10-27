@@ -158,16 +158,26 @@ export function InteractivePreview({
   useEffect(() => {
     const timer = setTimeout(
       () => {
-        const { bundle, skipped } = buildPreviewBundle({
-          assessment,
-          items,
-          sets: itemSets,
-          layout: paged ? "paged" : "scroll",
-          tts,
-          assets,
-          saved: answersRef.current,
-          sealer: sealerRef.current!,
-        });
+        let built: ReturnType<typeof buildPreviewBundle>;
+        try {
+          built = buildPreviewBundle({
+            assessment,
+            items,
+            sets: itemSets,
+            layout: paged ? "paged" : "scroll",
+            tts,
+            assets,
+            saved: answersRef.current,
+            sealer: sealerRef.current!,
+          });
+        } catch (err) {
+          // A bundle the schema refuses even without stimuli is a bug, not a
+          // draft state: say so instead of leaving a stale preview.
+          console.error("student preview bundle", err);
+          setFailed(true);
+          return;
+        }
+        const { bundle, skipped } = built;
         const payload: PreviewPayload = {
           bundle,
           offline: true,

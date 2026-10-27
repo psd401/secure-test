@@ -1476,6 +1476,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                 size="sm"
                 variant={narrowPane === pane ? "default" : "outline"}
                 aria-selected={narrowPane === pane}
+                aria-controls={pane === "editor" ? "editor-panel" : "preview-panel"}
                 onClick={() => setNarrowPane(pane)}
               >
                 {pane === "editor" ? "Editor" : "Student preview"}
@@ -1484,7 +1485,10 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           </div>
         ) : null}
         <div className={newAuthoring && previewOpen ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(26rem,42%)]" : undefined}>
-        <div className={newAuthoring && previewOpen && narrowPane === "preview" ? "hidden xl:block" : undefined}>
+        <div
+          id={newAuthoring && previewOpen ? "editor-panel" : undefined}
+          className={newAuthoring && previewOpen && narrowPane === "preview" ? "hidden xl:block" : undefined}
+        >
         {/* R-6 / R-7: the new editor puts the outline rail beside the list. */}
         <div className={newAuthoring && items.length > 0 ? "grid items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]" : undefined}>
         {newAuthoring && items.length > 0 ? (

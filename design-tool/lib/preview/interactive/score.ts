@@ -63,7 +63,7 @@ function emptyResponse(type: ItemView["type"]): ItemResponse | null {
     case "fill_blank":
       return { type, answers: {} };
     case "graph":
-      return { type, objects: [] } as ItemResponse;
+      return { type, objects: [] };
     default:
       return null;
   }
