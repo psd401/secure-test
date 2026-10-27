@@ -546,3 +546,7 @@ unless noted.
   jump, Follow my place stays quiet for 1.5 s. Test:
   `test/preview-shell.test.ts` (the bootstrap with the real renderer).
   Hand-check row 774 amended, rows 782–783.
+- 2026-10-26 — **ADR 0019 Accepted** (landing PR 4). James accepted it as
+  written; the Status line and `docs/adr/README.md` say so. The Phase 5
+  entries above, which say "still **Proposed**", are dated records and stay
+  as written.

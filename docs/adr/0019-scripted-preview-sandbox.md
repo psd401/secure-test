@@ -1,6 +1,6 @@
 # 0019. Run the student renderer in the editor preview inside an opaque-origin, hash-pinned sandbox
 
-- **Status**: Proposed — prototype behind R-12 only; acceptance before cutover. James accepted the posture as R-3 of `docs/editor-redesign-design.md` (2026-10-25); he has not reviewed this ADR's text. The scripted preview may be built behind the R-12 flag while this is Proposed; Phase 9 (cutover) needs it Accepted.
+- **Status**: Accepted (2026-10-26) — James accepted this ADR as written when the editor-redesign PRs were split (tweaks expected along the way). The scripted preview ships behind the R-12 flag; Phase 9 (cutover) may rely on it. Accepted earlier as the R-3 posture of `docs/editor-redesign-design.md` (2026-10-25).
 - **Date**: 2026-10-26
 - **Revises**: [ADR 0006](0006-preview-iframe-sandbox.md), for the interactive preview only. ADR 0006 still governs `/preview/[id]` (the static preview, the print variant and every flag-off editor).
 
