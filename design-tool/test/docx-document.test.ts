@@ -35,6 +35,23 @@ describe("readZipEntries", () => {
     );
   });
 
+  // Review of #127: every directory record of a wanted name used to be
+  // inflated, so one small file could repeat a 40 MiB stream thousands of
+  // times. buildZip takes a map, so the duplicate is made by renaming the
+  // second entry's bytes (same length) to the first's.
+  test("a name listed twice in the directory is refused, not inflated twice", () => {
+    const zip = buildZip({ "word/document.xml": "<a/>", "word/documenX.xml": "<b/>" });
+    const from = new TextEncoder().encode("word/documenX.xml");
+    const to = new TextEncoder().encode("word/document.xml");
+    for (let i = 0; i + from.length <= zip.length; i++) {
+      if (from.every((b, j) => zip[i + j] === b)) zip.set(to, i);
+    }
+    expect(() => readZipEntries(zip, ["word/document.xml"])).toThrow(/duplicate zip entry word\/document\.xml/);
+    expect(() => readDocx(zip)).toThrow(DocxReadError);
+    // An unwanted name may repeat: it is never read.
+    expect(readZipEntries(zip, ["other.xml"]).size).toBe(0);
+  });
+
   test("a zip with no word/document.xml is not a Word document", () => {
     expect(() => readDocx(buildZip({ "hello.txt": "hi" }))).toThrow(/not a Word document/);
   });

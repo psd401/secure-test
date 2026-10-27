@@ -58,6 +58,11 @@ export function readZipEntries(
     const name = decoder.decode(bytes.subarray(p + 46, p + 46 + nameLen));
     p += 46 + nameLen + extraLen + commentLen;
     if (!want.has(name)) continue;
+    // Word and Google Docs never write a name twice. Refusing a repeat keeps
+    // the inflate work to one pass per wanted part (a small file could
+    // otherwise list one deflate stream thousands of times), and leaves no
+    // question of which copy is the document.
+    if (out.has(name)) throw new DocxReadError(`duplicate zip entry ${name}`);
     if (flags & 1) throw new DocxReadError("the document is password-protected");
     if (compressed === 0xffffffff || size === 0xffffffff || local === 0xffffffff) {
       throw new DocxReadError("ZIP64 archives are not supported");
