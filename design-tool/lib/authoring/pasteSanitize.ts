@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
+import { Fragment, Slice, type Schema } from "@tiptap/pm/model";
 import { MARKUP_MARK, MARKUP_NODE } from "./markupDoc";
 
 // R-4 clean paste (docs/editor-redesign-design.md): HTML pasted or dropped
@@ -227,4 +228,42 @@ export function plainTextToContent(text: string, singleLine = false): JSONConten
     if (line) out.push({ type: MARKUP_NODE.text, text: line });
   });
   return out;
+}
+
+// ---------- ProseMirror's own slices ----------
+
+// A copy out of one of these fields carries ProseMirror's slice marker
+// (`data-pm-slice`) and is parsed through the schema as is, so a formula,
+// picture or blank survives a copy from the question to a choice. The
+// marker proves nothing about where a paste came from, though: any page
+// can put it on the clipboard, and the schema would then turn its
+// `<img data-asset-id>` and `<span data-math>` into real nodes. So a
+// marked paste keeps its parse only when it is the slice this tab last
+// copied out of a field; anything else is cleaned like other HTML. Compared
+// as JSON because every field builds its own schema, and Slice.eq compares
+// node types by identity.
+
+let ownCopy: string | null = null;
+
+/** Record a slice copied (or cut) out of a field; returns it unchanged. */
+export function rememberCopied(slice: Slice): Slice {
+  ownCopy = JSON.stringify(slice.toJSON());
+  return slice;
+}
+
+/**
+ * What a marked paste becomes once ProseMirror has parsed it: null keeps the
+ * parse (it is this tab's own copy); otherwise the clipboard HTML cleaned
+ * like a paste from Word.
+ */
+export function cleanForeignSlice(
+  slice: Slice,
+  html: string,
+  schema: Schema,
+  singleLine: boolean,
+): { slice: Slice; droppedImages: number } | null {
+  if (ownCopy !== null && JSON.stringify(slice.toJSON()) === ownCopy) return null;
+  const out = sanitizePastedHtml(html);
+  const runs = singleLine ? joinLines(out.runs) : out.runs;
+  return { slice: new Slice(Fragment.fromJSON(schema, runsToContent(runs)), 0, 0), droppedImages: out.droppedImages };
 }

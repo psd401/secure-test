@@ -10,9 +10,12 @@ import { describe, expect, test } from "bun:test";
 import { getSchema } from "@tiptap/core";
 import { docToMarkup } from "@/lib/authoring/markupDoc";
 import { markupExtensions } from "@/lib/authoring/markupExtensions";
+import { Fragment, Slice } from "@tiptap/pm/model";
 import {
+  cleanForeignSlice,
   joinLines,
   plainTextToContent,
+  rememberCopied,
   runsToContent,
   runsToHtml,
   sanitizePastedHtml,
@@ -140,5 +143,35 @@ describe("edge cases", () => {
 
   test("an empty or tag-only paste is nothing", () => {
     expect(sanitizePastedHtml("<p><o:p></o:p></p><br>").runs).toEqual([]);
+  });
+});
+
+// A paste carrying ProseMirror's slice marker (review of #119): only this
+// tab's own copy out of a field keeps its parse; any other page's marked
+// HTML is cleaned, so its pictures and formulas do not become nodes.
+describe("ProseMirror's slice marker", () => {
+  const ASSET = "11111111-1111-1111-1111-111111111111";
+  const sliceOf = (s: typeof schema, content: object[]) => new Slice(Fragment.fromJSON(s, content), 0, 0);
+  const rich = [
+    { type: "text", text: "Solve " },
+    { type: "math", attrs: { tex: "x^2", display: false } },
+    { type: "image", attrs: { alt: "p", id: ASSET, scheme: null } },
+    { type: "blank", attrs: { id: "b1" } },
+  ];
+  const FOREIGN = `<p data-pm-slice="0 0 []">Solve <span data-math data-tex="x^2"></span><img data-asset-id="${ASSET}" alt="p"></p>`;
+
+  test("this tab's own copy keeps its formula, picture and blank, even into another field's schema", () => {
+    rememberCopied(sliceOf(schema, rich));
+    const other = getSchema(markupExtensions({ singleLine: true }));
+    expect(cleanForeignSlice(sliceOf(other, rich), FOREIGN, other, true)).toBeNull();
+  });
+
+  test("a marked paste that is not the last copy is cleaned: text kept, picture counted, formula and picture dropped", () => {
+    rememberCopied(sliceOf(schema, [{ type: "text", text: "something else" }]));
+    const cleaned = cleanForeignSlice(sliceOf(schema, rich), FOREIGN, schema, false);
+    expect(cleaned).not.toBeNull();
+    const types = (cleaned!.slice.content.toJSON() as { type: string }[]).map((n) => n.type);
+    expect(types).toEqual(["text"]);
+    expect(cleaned!.droppedImages).toBe(1);
   });
 });

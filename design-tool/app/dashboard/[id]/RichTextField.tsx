@@ -8,7 +8,14 @@ import { parse } from "@secure-test/markup";
 import { useAssessmentId } from "@/components/app/AssessmentIdContext";
 import { docToMarkup, markupToDoc, MARKUP_MARK, MARKUP_NODE } from "@/lib/authoring/markupDoc";
 import { markupExtensions, renderTex } from "@/lib/authoring/markupExtensions";
-import { joinLines, plainTextToContent, runsToHtml, sanitizePastedHtml } from "@/lib/authoring/pasteSanitize";
+import {
+  cleanForeignSlice,
+  joinLines,
+  plainTextToContent,
+  rememberCopied,
+  runsToHtml,
+  sanitizePastedHtml,
+} from "@/lib/authoring/pasteSanitize";
 import { ImagePicker } from "./ImagePicker";
 import { MathPreview } from "./MathPreview";
 import { MathTranslator } from "./MathTranslator";
@@ -41,6 +48,7 @@ const btn = "rounded border border-border px-2 py-0.5 text-xs hover:bg-accent di
 export function RichTextField({ value, onChange, label, disabled = false, singleLine = false, id }: Props) {
   const assessmentId = useAssessmentId();
   const lastEmitted = useRef(value);
+  const pastedSliceHtml = useRef<string | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const [loaded, setLoaded] = useState(() => markupToDoc(value));
@@ -71,13 +79,28 @@ export function RichTextField({ value, onChange, label, disabled = false, single
           "min-h-[2.25rem] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       },
       // Clean paste (Word / Google Docs): only text, bold, italic, breaks.
-      // A copy from another field of this editor carries ProseMirror's own
-      // slice marker and is parsed through the schema as is.
+      // HTML with ProseMirror's own slice marker is parsed through the
+      // schema, then kept only if it is this tab's own copy out of a field
+      // (transformPasted; lib/authoring/pasteSanitize.ts says why).
+      transformCopied: (slice) => rememberCopied(slice),
       transformPastedHTML(html) {
-        if (html.includes("data-pm-slice")) return html;
+        pastedSliceHtml.current = null;
+        if (html.includes("data-pm-slice")) {
+          pastedSliceHtml.current = html;
+          return html;
+        }
         const out = sanitizePastedHtml(html);
         setDroppedImages(out.droppedImages);
         return runsToHtml(singleLine ? joinLines(out.runs) : out.runs);
+      },
+      transformPasted(slice, view) {
+        const html = pastedSliceHtml.current;
+        pastedSliceHtml.current = null;
+        if (html === null) return slice;
+        const cleaned = cleanForeignSlice(slice, html, view.state.schema, singleLine);
+        if (cleaned === null) return slice;
+        setDroppedImages(cleaned.droppedImages);
+        return cleaned.slice;
       },
       clipboardTextParser(text, _context, _plain, view) {
         return new Slice(Fragment.fromJSON(view.state.schema, plainTextToContent(text, singleLine)), 0, 0);
