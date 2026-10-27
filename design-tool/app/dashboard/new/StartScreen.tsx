@@ -46,7 +46,14 @@ const CHOICES: { id: StartChoice; title: string; hint: string; icon: typeof File
  * PDF / Word import, AI draft), the district templates, and "Open a file"
  * (a .json export, through the Phase 7 preview at /dashboard/import).
  */
-export function StartScreen({ templates }: { templates: StartTemplate[] }) {
+export function StartScreen({
+  templates,
+  showCancel = true,
+}: {
+  templates: StartTemplate[];
+  /** False on /dashboard itself, where Cancel (a link to /dashboard) would go nowhere. */
+  showCancel?: boolean;
+}) {
   const [choice, setChoice] = useState<StartChoice>("blank");
 
   return (
@@ -86,7 +93,7 @@ export function StartScreen({ templates }: { templates: StartTemplate[] }) {
         </fieldset>
         <div className="rounded-lg border bg-card p-5">
           {/* Keyed on the choice so each starts with its own empty form state. */}
-          <NewAssessmentForm key={choice} start={choice} />
+          <NewAssessmentForm key={choice} start={choice} showCancel={showCancel} />
         </div>
       </section>
 

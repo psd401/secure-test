@@ -11,6 +11,13 @@
  * Templates and "Open a file" are not here: a template has its own action
  * (it goes through the import), and a .json file goes to /dashboard/import.
  */
+/** The example question's stem (EXAMPLE_QUESTION_BUNDLE). Here, in a module with
+ * no imports, so the editor's readiness list can treat it as placeholder text
+ * without pulling the templates (and the database schema) into the browser. */
+export const EXAMPLE_QUESTION_STEM =
+  "Example question: which planet is closest to the Sun? " +
+  "(Change this text to write your own question, or delete it.)";
+
 export const START_CHOICES = ["blank", "import", "ai"] as const;
 export type StartChoice = (typeof START_CHOICES)[number];
 

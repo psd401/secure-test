@@ -152,6 +152,28 @@ describe("templates (pure)", () => {
     expect(rows[0]!.stem).toStartWith("Example question:");
     expect(rows[0]!.correct_choice_ids).toEqual(["a"]);
   });
+
+  // Review of #129: a teacher who keeps the example would publish it, so
+  // Before publishing names it like any other seed text.
+  test("the example question left as is shows on the Before publishing list", () => {
+    const [row] = exampleQuestionRows();
+    const item = {
+      id: "q1",
+      type: row!.type,
+      stem: row!.stem,
+      choices: row!.choices as { id: string; text: string }[],
+      correct_choice_ids: row!.correct_choice_ids as string[],
+      correct_answer: null,
+      pairs: null,
+      sequence: null,
+      image_asset_id: null,
+      correct_region_ids: null,
+    };
+    expect(beforePublishing([item]).map((e) => e.label)).toEqual([
+      expect.stringContaining("still has the placeholder text"),
+    ]);
+    expect(beforePublishing([{ ...item, stem: "Which planet is closest to the Sun?" }])).toEqual([]);
+  });
 });
 
 describe("start choices (pure)", () => {

@@ -292,7 +292,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       ) : null}
 
       {startScreenHere ? (
-        <StartScreen templates={startTemplates()} />
+        <StartScreen templates={startTemplates()} showCancel={false} />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={<FilePlus2 />}

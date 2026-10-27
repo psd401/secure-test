@@ -30,7 +30,7 @@ const START_SUBMIT: Record<StartChoice, { label: string; pending: string }> = {
  * `start` is set only by the start screen (R-12 flag on, editor redesign
  * Phase 8). Without it this is today's New assessment form, unchanged.
  */
-export function NewAssessmentForm({ start }: { start?: StartChoice } = {}) {
+export function NewAssessmentForm({ start, showCancel = true }: { start?: StartChoice; showCancel?: boolean } = {}) {
   const [state, formAction, pending] = useActionState(createAssessment, EMPTY_STATE);
   const e = state.fieldErrors;
 
@@ -136,9 +136,11 @@ export function NewAssessmentForm({ start }: { start?: StartChoice } = {}) {
               ? "Creating…"
               : "Create"}
         </Button>
-        <Button asChild variant="ghost">
-          <Link href="/dashboard">Cancel</Link>
-        </Button>
+        {showCancel ? (
+          <Button asChild variant="ghost">
+            <Link href="/dashboard">Cancel</Link>
+          </Button>
+        ) : null}
       </div>
     </form>
   );

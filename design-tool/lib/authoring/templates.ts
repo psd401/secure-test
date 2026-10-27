@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { ItemBundleSchema, type ItemBundle } from "@secure-test/schema";
 import { ITEM_TYPES, type ItemType } from "@/db/schema";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
+import { EXAMPLE_QUESTION_STEM } from "./startScreen";
 
 /**
  * Editor redesign Phase 8 (D-5; Q3 answered: district-curated). The start
@@ -194,9 +195,7 @@ export const EXAMPLE_QUESTION_BUNDLE: ItemBundleInput = {
     {
       id: "example",
       type: "multiple_choice_single",
-      stem:
-        "Example question: which planet is closest to the Sun? " +
-        "(Change this text to write your own question, or delete it.)",
+      stem: EXAMPLE_QUESTION_STEM,
       choices: [
         { id: "a", text: "Mercury" },
         { id: "b", text: "Venus" },
