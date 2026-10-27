@@ -550,3 +550,102 @@ unless noted.
   written; the Status line and `docs/adr/README.md` say so. The Phase 5
   entries above, which say "still **Proposed**", are dated records and stay
   as written.
+- 2026-10-26 — **Phase 7 slice A built** (R-8, prototype track, flag on
+  only). With the flag on, a PDF import opens a full-screen review: the
+  uploaded PDF on the left, drawn page by page in the browser by the pdf.js
+  build inside `unpdf` (already the server's PDF reader, so no new
+  dependency; the browser's own PDF viewer is the fallback, without
+  boxes), and the proposals on the right. Below 1280 px a toggle shows one
+  pane. Provenance: the model returns no positions, so each proposal is
+  placed by its printed question number (`source_number(s)`) at the line
+  that starts with that number (`lib/pdfImport/regions.ts`, anchors from
+  `extractPdfLayout`). A proposal with no matching number is shown on the
+  page of the one before it ("by order", no box); a scan has no text
+  layer, so nothing is placed and the pane says so. Boxes and cards link
+  both ways. Each proposal is triaged (`lib/pdfImport/triage.ts`): *ready*,
+  *needs a key*, *check this* (the model's text changes, a type the
+  import switched on its own, a stimulus paired by position, a figure not
+  extracted, a shortened source; the field is ringed on the card) or
+  *can't convert* (a proposal the item schema refused, now returned as
+  text: choose a type for it or leave it out). The model has no
+  confidence score, so these are the pipeline's own signals. "Accept all
+  ready" takes the ready pile, with a stimulus set only when all its
+  questions are ready; everything else is accepted one by one. Still
+  propose-only. The route adds `source_numbers`, `regions`, `converted`,
+  `pages` and `unconverted` to its response; with the flag off the panel
+  ignores them and is unchanged. Tests: `test/pdf-import-triage.test.ts`,
+  a review-fields case in `test/pdf-import-route.test.ts`. Hand-check rows
+  784–795.
+- 2026-10-26 — **Phase 7 slice B built** (R-10 Word only, prototype track,
+  flag on only; no Drive picker). With the flag on, the import panel takes
+  a `.docx` as well as a PDF, through the same route
+  (`/api/assessments/[id]/items/import-pdf`) and the same review. The file
+  type and the 5 MiB cap come from `lib/ai/documentUpload.ts` (the rubric
+  and batch-generation document path). **Deviation, for James's review:**
+  the model does not receive the file as a Converse document block. The
+  server reads the `.docx` itself (`lib/docxImport/`: a minimal zip reader
+  on `node:zlib` with a per-part inflate cap, and a WordprocessingML reader;
+  no new dependency) and sends its text on the existing text path, because
+  (1) Word's automatic list numbers live in `numbering.xml`, not in the
+  text, and the review places proposals by those numbers, so the model and
+  the review must read the same numbers; (2) the guardrail's input stage
+  can then screen the text (record-only, as for PDFs), which the
+  document-block path skips; (3) the mock provider exercises the real
+  path. The left pane is a simple rendering of the document's text and
+  structure from that reader (headings, list numbers, bold / italic,
+  tables, a placeholder per picture), drawn as React elements from data,
+  never HTML; a numbered outline surrounds the paragraphs each proposal
+  covers (`locateCandidates` over a one-block-per-unit pseudo-page,
+  `regionBlockRange`, `docxGroups`). Not imported: pictures (counted and
+  said), text boxes, tracked deletions, field codes, footnotes, headers and
+  footers, and numbering that comes from a paragraph style. A question
+  numbered inside a table cell is not placed. The drop-zone tip reads
+  "From Google Docs: File → Download → Microsoft Word (.docx)". Gating: the
+  PDF item import has never been gated on `allow_llm_authoring` (only the
+  generate / suggest surfaces are); Word import follows the PDF import,
+  so it is not gated either — open question for James. Flag off, a `.docx`
+  still goes to the PDF reader and is refused (`pdf_parse_failed`), and
+  every PDF hint is unchanged. Tests: `test/docx-document.test.ts`,
+  `test/docx-import-route.test.ts` (hand-built `.docx` fixtures,
+  `test/helpers/docx.ts`; mock provider). Hand-check rows 796–803.
+- 2026-10-26 — **Phase 7 slice C built** (R-9, D-6, prototype track, flag
+  on only). Choosing a `.json` on **Import assessment file** now shows what
+  the import will create before anything is written: the new name (the
+  import's own `title (copy)` rule), questions by type, passages, pictures,
+  layout, calculator, accommodations, a warnings list (unknown types left
+  out, scoring settings the import clamps, accommodations off the catalog,
+  E12 source links dropped, pictures the file lacks, questions with no key)
+  and the questions in the student's own renderer (Phase 5's sandboxed
+  frame, Follow my place hidden, pictures sent in from the file). **Create
+  assessment** submits the same file to the same server action as before.
+  To keep the preview from drifting from the import, the import's pre-write
+  work moved unchanged into a pure `planImport` (accommodation clamp, type
+  skip, graph check, every row as stored) plus `importName` and
+  `keptSourceItemId`, and the request body reading into
+  `lib/api/importBody.ts`; the import and the new read-only route
+  `POST /api/assessments/import/preview` (404 with the flag off) both use
+  them. Tests: `test/import-preview.test.ts` (counts, warnings, refusals,
+  no key in the student view, no row written by the preview or its route,
+  and the preview equal to what the import then stores). Flag off: the
+  direct import, unchanged. Hand-check rows 804–810.
+- 2026-10-26 — **Phase 7 review findings fixed.** (1) The Word reader's
+  XML tokenizer was one regex that backtracked super-linearly on a '<'
+  with no '>' (60 KB of `<a ` took 26 s on the server's event loop); it is
+  now a single linear pass (`lib/docxImport/document.ts` `tokens`) that
+  throws `WordXmlError` on markup that never closes, which `readDocx`
+  turns into `DocxReadError` (the route's `docx_parse_failed`). (2) Flag
+  on, **Accept all ready** under **One assessment per form** skipped forms
+  2..n, so no sibling draft was made; the skip set is now `acceptSkip`
+  (`lib/pdfImport/triage.ts`: under "split" only already-added questions
+  are skipped), and a form with nothing ready no longer gets an empty
+  draft. Tests: `test/docx-document.test.ts`,
+  `test/pdf-import-triage.test.ts`. Hand-check rows 811–812.
+- 2026-10-27 — **Decision: item import is not gated on `allow_llm_authoring`**
+  (James, resolving the open question in the Phase 7 slice B entry above).
+  PDF and Word item import stay ungated, as PDF import always has been.
+  The setting is the teacher's per-assessment choice of AI help writing
+  questions (ADR 0011: generating an item wholesale is "AI authoring");
+  import converts the teacher's own document, like the Math… translator,
+  which is not gated either. Cost and privacy are handled elsewhere
+  (ADR 0007 questions 7.3 and 7.5, the guardrail surfaces), not by this
+  setting. The slice B entry is a dated record and stays as written.

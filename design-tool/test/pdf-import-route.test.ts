@@ -823,3 +823,49 @@ describe("POST items/import-pdf: fill-in-the-blank candidates (FB slice 4)", () 
     expect(blanks[1]!.options?.find((o) => o.id === blanks[1]!.correct_option_id)?.text).toBe("leeward");
   });
 });
+
+// Editor redesign Phase 7 slice A (R-8): the fields the side-by-side,
+// triaged review reads. Additive — the flag-off panel ignores them.
+describe("POST items/import-pdf: review fields (R-8)", () => {
+  test("regions, source numbers, converted types and refused proposals as text", async () => {
+    const id = await createAssessment("Review fields");
+    const res = await postPdf(
+      id,
+      makeTextPdf([
+        "1. ES: #1 Explain how plants use light, in your own words please.",
+        "2. ST: #2 The capital of Washington is ____ on the map. | Olympia",
+        "3. MC: #3 One-choice question padded past the threshold | a:only option | *a",
+      ]),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      candidates: { type: string }[];
+      source_numbers: number[][];
+      regions: ({ page: number; top: number | null; how: string } | null)[];
+      converted: ({ from: string; to: string } | null)[];
+      pages: { width: number; height: number }[];
+      unconverted: { index: number; type: string; stem: string; choices: string[]; errors: string[]; region: { page: number } | null }[];
+    };
+    expect(body.candidates).toHaveLength(2);
+    expect(body.source_numbers).toEqual([[1], [2]]);
+    expect(body.pages).toEqual([{ width: 612, height: 792 }]);
+    expect(body.regions.map((r) => r && [r.page, r.how])).toEqual([
+      [1, "number"],
+      [1, "number"],
+    ]);
+    expect(body.regions[0]!.top).toBeGreaterThan(0);
+    expect(body.converted[0]).toBeNull();
+    expect(body.converted[1]).toEqual({ from: "short_text", to: body.candidates[1]!.type });
+    expect(body.candidates[1]!.type).toBe("fill_blank");
+    expect(body.unconverted).toHaveLength(1);
+    expect(body.unconverted[0]).toMatchObject({
+      type: "multiple_choice_single",
+      choices: ["only option"],
+      region: { page: 1 },
+    });
+    expect(body.unconverted[0]!.stem).toContain("One-choice question");
+    expect(body.unconverted[0]!.errors.length).toBeGreaterThan(0);
+    // Extraction still writes nothing.
+    expect(await getDb().select().from(items).where(eq(items.assessment_id, id))).toHaveLength(0);
+  });
+});

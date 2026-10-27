@@ -72,20 +72,31 @@ export function InteractivePreview({
   itemSets,
   onShowItem,
   frameClassName,
+  pictures,
 }: {
-  assessment: AssessmentView;
+  assessment: Pick<
+    AssessmentView,
+    "id" | "name" | "calculator_mode" | "calculator_preset" | "allow_highlighting" | "student_layout"
+  >;
   items: ItemView[];
   itemSets: ItemSetView[];
   /** Show this question in the editor. `frame`: a click on its text in the
    * preview (scroll only — the teacher is still in the preview); `score`: a
-   * "Question N" link under the result (an explicit move to the editor). */
-  onShowItem: (itemId: string, from: "frame" | "score") => void;
+   * "Question N" link under the result (an explicit move to the editor).
+   * Absent (Phase 7 slice C, the JSON-import preview: there is no editor),
+   * Follow my place is off and hidden, and the result's rows are plain text. */
+  onShowItem?: (itemId: string, from: "frame" | "score") => void;
   frameClassName?: string;
+  /** Phase 7 slice C: the pictures as base64, already in hand (the import
+   * file carries them); nothing is fetched. Absent, they are fetched from the
+   * assessment's own asset route. */
+  pictures?: Record<string, BundleAsset>;
 }) {
   const [tts, setTts] = useState(false);
   const [paged, setPaged] = useState(assessment.student_layout === "paged");
-  const [linkScroll, setLinkScroll] = useState(true);
-  const [assets, setAssets] = useState<Record<string, BundleAsset>>({});
+  const [linkScroll, setLinkScroll] = useState(!!onShowItem);
+  const [fetchedAssets, setAssets] = useState<Record<string, BundleAsset>>({});
+  const assets = pictures ?? fetchedAssets;
   const [frames, setFrames] = useState<{ shown: FrameSlot | null; next: FrameSlot | null }>({
     shown: null,
     next: null,
@@ -125,7 +136,7 @@ export function InteractivePreview({
   const fetching = useRef(new Set<string>());
 
   // Pictures go in as the bundle's base64 `assets` (the frame has no network).
-  const wantedAssets = previewAssetIds(items, itemSets).join(",");
+  const wantedAssets = pictures ? "" : previewAssetIds(items, itemSets).join(",");
   useEffect(() => {
     for (const id of wantedAssets ? wantedAssets.split(",") : []) {
       if (fetching.current.has(id)) continue;
@@ -305,7 +316,7 @@ export function InteractivePreview({
           if (!bundleItem) return;
           quietUntil.current = Date.now() + JUMP_QUIET_MS;
           anchorRef.current = message.item_id;
-          onShowRef.current(message.item_id, "frame");
+          onShowRef.current?.(message.item_id, "frame");
           return;
         case "response":
           if (!bundleItem || bundleItem.type !== message.response.type) return;
@@ -418,10 +429,12 @@ export function InteractivePreview({
           <input type="checkbox" checked={paged} onChange={(e) => setPaged(e.target.checked)} />
           One question per page
         </label>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={linkScroll} onChange={(e) => setLinkScroll(e.target.checked)} />
-          Follow my place
-        </label>
+        {onShowItem ? (
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={linkScroll} onChange={(e) => setLinkScroll(e.target.checked)} />
+            Follow my place
+          </label>
+        ) : null}
         <Button type="button" variant="outline" size="sm" onClick={resetAnswers} disabled={answered === 0 && !score}>
           <RotateCcw className="size-4" aria-hidden />
           Clear my answers
@@ -501,9 +514,13 @@ export function InteractivePreview({
           <ul className="space-y-0.5">
             {score.rows.map((row) => (
               <li key={row.itemId}>
-                <button type="button" className="underline-offset-2 hover:underline" onClick={() => onShowItem(row.itemId, "score")}>
-                  Question {row.number}
-                </button>
+                {onShowItem ? (
+                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => onShowItem(row.itemId, "score")}>
+                    Question {row.number}
+                  </button>
+                ) : (
+                  `Question ${row.number}`
+                )}
                 {": "}
                 {OUTCOME_LABEL[row.outcome]}
                 {row.max !== null && row.outcome !== "unanswered" ? ` (${row.points} / ${row.max})` : ""}

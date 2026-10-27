@@ -125,6 +125,12 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("assessments", "import"),
     "CREATE: a bundle becomes a NEW assessment owned by the caller",
   ],
+  // Editor redesign Phase 7 slice C (R-9): the import's preview — reads the
+  // caller's own assessment names and source links, writes nothing.
+  [
+    join("assessments", "import", "preview"),
+    "PREVIEW of an import: creates nothing; reads only the caller's own rows",
+  ],
   [join("shares"), "offers addressed to the caller's own email"],
   [
     join("shares", "[shareId]", "accept"),

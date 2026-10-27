@@ -1,82 +1,21 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { ItemBundleSchema } from "@secure-test/schema";
 import { getDb } from "@/db/client";
 import { assessments } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
+import { readImportBundle } from "@/lib/api/importBody";
 import { normalizeEmail } from "@/lib/roster/queries";
 import {
   importBundleForOwner,
   isImportBundleError,
 } from "@/lib/api/importBundle";
 
-// Bumped from 1 MB to 50 MB in slice 15 so bundles carrying multiple
-// large images (slice-10 cap is 5 MB per image; 10 images ≈ 50 MB
-// base64) round-trip without rejection.
-const MAX_BODY_BYTES = 50 * 1024 * 1024;
-
 export async function POST(req: Request) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
 
-  const contentType = req.headers.get("content-type") ?? "";
-
-  let rawJson: string;
-  try {
-    if (contentType.includes("multipart/form-data")) {
-      const form = await req.formData();
-      const file = form.get("file");
-      if (!(file instanceof File)) {
-        return NextResponse.json(
-          { ok: false, error: "missing_file" },
-          { status: 400 },
-        );
-      }
-      if (file.size > MAX_BODY_BYTES) {
-        return NextResponse.json(
-          { ok: false, error: "file_too_large", limit: MAX_BODY_BYTES },
-          { status: 413 },
-        );
-      }
-      rawJson = await file.text();
-    } else {
-      const ab = await req.arrayBuffer();
-      if (ab.byteLength > MAX_BODY_BYTES) {
-        return NextResponse.json(
-          { ok: false, error: "body_too_large", limit: MAX_BODY_BYTES },
-          { status: 413 },
-        );
-      }
-      rawJson = new TextDecoder().decode(ab);
-    }
-  } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: "read_failed" },
-      { status: 400 },
-    );
-  }
-
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(rawJson);
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "invalid_json" },
-      { status: 400 },
-    );
-  }
-
-  const bundleResult = ItemBundleSchema.safeParse(parsedJson);
-  if (!bundleResult.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "schema_invalid",
-        detail: bundleResult.error.issues.slice(0, 5),
-      },
-      { status: 400 },
-    );
-  }
+  const read = await readImportBundle(req);
+  if (!read.ok) return read.response;
 
   // `asset_*` codes are storage/DB failures on OUR side → 5xx. These two are
   // the caller handing us an unacceptable bundle, so they stay 4xx despite the
@@ -89,7 +28,7 @@ export async function POST(req: Request) {
   // Access slice 2: the new row carries the importer's email so a
   // `teacher`-scoped grant resolves for it (migration 0038).
   const result = await importBundleForOwner(
-    bundleResult.data,
+    read.bundle,
     auth.session.sub,
     normalizeEmail(auth.session.email),
   );
