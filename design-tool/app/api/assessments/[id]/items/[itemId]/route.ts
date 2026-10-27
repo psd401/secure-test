@@ -4,12 +4,14 @@ import { getDb } from "@/db/client";
 import { assessments, item_sets, items, responses } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { isAnswerKeyOnlyPatch, requireDraftStatus } from "@/lib/api/requireDraft";
-import { UpdateItemBody, itemConfigForWrite } from "@/lib/api/items";
+import { itemConfigForWrite, parseItemBody, wantsEmptyStem } from "@/lib/api/items";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, notFoundResponse, type AccessIntent } from "@/lib/api/access";
 import type { SessionPayload } from "@/lib/auth/session";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { captureItemSnapshot } from "@/lib/authoring/itemHistory";
 
 interface RouteContext {
   params: Promise<{ id: string; itemId: string }>;
@@ -67,8 +69,12 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   let body;
   const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
   if (!bodyRead.ok) return bodyRead.response;
+  // R-12: the new editor allows an empty stem and an in-place type change (R-6).
+  let newAuthoring: boolean | null = null;
+  const flagOn = async () => (newAuthoring ??= await isNewAuthoringEnabled(getDb(), auth.session));
   try {
-    body = UpdateItemBody.parse(bodyRead.parse());
+    const raw = bodyRead.parse();
+    body = parseItemBody(raw, { allowEmptyStem: wantsEmptyStem(raw) && (await flagOn()) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(
@@ -78,11 +84,24 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
   const owned = await loadItemInAssessment(id, itemId, auth.session, "write");
   if (!owned.ok) return owned.response;
-  if (body.type !== owned.item.type) {
+  const typeChanged = body.type !== owned.item.type;
+  if (typeChanged && !(await flagOn())) {
     return NextResponse.json(
       { ok: false, error: "type_change_not_supported" },
       { status: 400 },
     );
+  }
+  // R-6: a type change is a draft-only edit (the publish lock below refuses
+  // it, since it is never key-only), and is refused once students have
+  // answered the question — their answers are in the old type's shape.
+  if (typeChanged && owned.parentStatus === "draft") {
+    const [answered] = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(responses)
+      .where(eq(responses.item_id, itemId));
+    if ((answered?.n ?? 0) > 0) {
+      return NextResponse.json({ ok: false, error: "type_change_has_responses" }, { status: 409 });
+    }
   }
   // Publish lock (slice 19) with one door: answer-key-only edits
   // (2026-09-01, see isAnswerKeyOnlyPatch). Everything else still 409s.
@@ -109,21 +128,40 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   if (rubricGuard) return rubricGuard;
 
   const db = getDb();
-  const [updated] = await db
-    .update(items)
-    .set({
-      stem: body.stem,
-      choices: body.choices,
-      correct_choice_ids: body.correct_choice_ids,
-      correct_answer: body.correct_answer ?? null,
-      config: itemConfigForWrite(body, owned.item.config),
-      // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
-      // older caller must not wipe them); an array replaces them.
-      ...(body.standards !== undefined ? { standards: body.standards } : {}),
-      updated_at: new Date(),
-    })
-    .where(eq(items.id, itemId))
-    .returning();
+  // R-5 (docs/editor-redesign-design.md): the write and the history copy of
+  // the content it replaces land together. `?restore=1` (the new editor's
+  // History → Restore) always copies, so a restore can itself be undone.
+  const restore = new URL(req.url).searchParams.get("restore") === "1";
+  const updated = await db.transaction(async (tx) => {
+    // The content this write replaces, read under a row lock: two saves at
+    // once (two open tabs) would otherwise share one "before", and the
+    // history would miss the first save's version.
+    const [before] = await tx.select().from(items).where(eq(items.id, itemId)).for("update");
+    if (!before) return null;
+    const [row] = await tx
+      .update(items)
+      .set({
+        type: body.type,
+        stem: body.stem,
+        choices: body.choices,
+        correct_choice_ids: body.correct_choice_ids,
+        correct_answer: body.correct_answer ?? null,
+        // A type change starts the config afresh: nothing the old type stored
+        // (a scoring method it allowed, a rubric's provenance) carries over.
+        config: itemConfigForWrite(body, typeChanged ? undefined : (owned.item.config ?? undefined)),
+        // BG slice 2: omitted = keep the stored tags (a key-only PATCH from an
+        // older caller must not wipe them); an array replaces them.
+        ...(body.standards !== undefined ? { standards: body.standards } : {}),
+        updated_at: new Date(),
+      })
+      .where(eq(items.id, itemId))
+      .returning();
+    if (!row) return null;
+    await captureItemSnapshot(tx, before, row, { force: restore });
+    return row;
+  });
+  // Deleted between the access check and the write.
+  if (!updated) return notFoundResponse();
   await db
     .update(assessments)
     .set({ updated_at: new Date() })

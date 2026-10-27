@@ -2309,3 +2309,45 @@ export const staff_preferences = pgTable("staff_preferences", {
 });
 
 export type StaffPreferencesRow = typeof staff_preferences.$inferSelect;
+
+// --- Item version history (docs/editor-redesign-design.md, R-5, Q2) --------
+//
+// The new editor autosaves, so there is no Save click to undo to. Before an
+// item PATCH overwrites a row, the content it replaces is copied here —
+// coalesced to one copy every few minutes per item (lib/authoring/itemHistory.ts)
+// so an autosave every second does not write a row every second. A restore
+// is an ordinary PATCH of the copy's content, which captures the version it
+// replaces in turn, so a restore can itself be undone. Teacher plane only:
+// the content carries the answer key and nothing on the delivery path reads
+// this table (ADR 0016). Deleting the item deletes its history.
+export interface ItemSnapshotContent {
+  type: string;
+  stem: string;
+  choices: unknown;
+  correct_choice_ids: unknown;
+  correct_answer: string | null;
+  config: ItemConfig;
+  standards: string[];
+}
+
+export const item_snapshots = pgTable(
+  "item_snapshots",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    item_id: uuid("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    content: jsonb("content").$type<ItemSnapshotContent>().notNull(),
+    // When this content was saved: the item's `updated_at` before the write
+    // that replaced it.
+    saved_at: timestamp("saved_at", { withTimezone: true }).notNull(),
+    captured_at: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    itemCapturedIdx: index("item_snapshots_item_captured_idx").on(t.item_id, t.captured_at),
+  }),
+);
+
+export type ItemSnapshotRow = typeof item_snapshots.$inferSelect;

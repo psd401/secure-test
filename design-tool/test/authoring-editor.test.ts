@@ -159,9 +159,9 @@ describe("which item types use the new field (R-12 on)", () => {
   test("every listed type is a real item type", () => {
     for (const t of RICH_TEXT_TYPES) expect(ITEM_TYPES as readonly string[]).toContain(t);
   });
-  test("single-answer MC, multi-select MC and short answer use it; nothing else does", () => {
+  test("every item type uses it (Phase 4 slice C); a misspelt type does not", () => {
     const on = ITEM_TYPES.filter((t) => usesRichTextField(t));
-    expect(on).toEqual(["multiple_choice_single", "multiple_choice_multi", "short_text"]);
+    expect(on).toEqual([...ITEM_TYPES]);
     expect(usesRichTextField("multiple_choice")).toBe(false);
   });
 });

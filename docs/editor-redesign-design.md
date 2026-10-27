@@ -364,3 +364,115 @@ unless noted.
   lives in `lib/authoring/richTextTypes.ts`, typed as `ItemType` so a
   misspelt name fails typecheck, and `test/authoring-editor.test.ts` pins its
   membership against `ITEM_TYPES`. Hand-check row 713.
+- 2026-10-26 — **Phase 4 slice A: autosave and version history** (prototype
+  track, R-5; Q2 answered: a new table). With the R-12 flag on, each question
+  card saves itself a second after its last edit through the existing item
+  PATCH (`itemPatchBody` in `AssessmentEditor.tsx`, now shared by Save
+  question, autosave and restore); one per-card debounce on the existing
+  `createAutosave` (`lib/authoring/itemAutosave.ts`), so cards never wait on
+  each other, a failed save is not retried in a loop, and an edit undone
+  before the timer fires is never written. One indicator above the list (All
+  changes saved / Saving… / "Some changes didn't save" with links and Try
+  again); no Save question button. **History**: the item PATCH now copies the
+  content it replaces into `item_snapshots` (migration 0065, additive) —
+  coalesced to one copy per item every two minutes, newest 50 kept, deleted
+  with the item, teacher plane only (ADR 0016) — for every editor, so history
+  exists when the flag's default flips; `GET …/items/[itemId]/history`
+  (`edit` access) lists them, and a restore is an ordinary PATCH with
+  `?restore=1`, which always keeps the version it replaces. **Before
+  publishing**: the readiness checks as a list of links (`beforePublishing`
+  in `readiness.ts`, no five-entry cut-off) that scroll to the question and
+  focus its text; gaps never block a draft. Tests:
+  `test/item-autosave.test.ts` (debounce, indicator, capture rule, list) and
+  `test/item-history-api.test.ts` (capture, coalescing, cap, cascade, restore
+  round-trip for three types, publish lock, route access). Browser behaviour
+  is hand-check rows 714–726. Not built: autosave for stimulus sets and
+  assessment settings (they keep their own Save buttons).
+- 2026-10-26 — **Phase 4 slice B: outline, insertion, type change** (prototype
+  track, R-6, R-7). With the R-12 flag on: an **outline rail** beside the
+  question list (`OutlineRail.tsx`), one row per block — a lone question or a
+  stimulus set, which move whole so no order can split a set — reordered by
+  drag (@dnd-kit, pointer and keyboard) or by selecting a row and Move up /
+  Move down (WCAG 2.2 SC 2.5.7), both announced in a live region and saved
+  through the existing reorder route (refusals put the order back). A **"+"**
+  before every block and **Add question** at the end open the add menu
+  (`InsertQuestionMenu.tsx`): six types first, the rest under More types,
+  type-to-filter; "/" on a card outside a text field opens it after that
+  block. The new question is created through the existing items POST and
+  moved into place with the reorder route (UX3-4), and starts **empty** with
+  placeholders (UX3-1) — the item routes accept an empty stem only for
+  flagged staff (`parseItemBody` in `lib/api/items.ts`); matching, ordering,
+  table and fill-in-the-blank keep their starter text because the write
+  boundary requires it. **In-place type change** (`TypeChangeControl.tsx`,
+  `lib/authoring/typeChange.ts`): stem always kept; choices kept between the
+  two multiple-choice types and mapped to / from ordering steps; a warning
+  names what goes (an answer key first) before the change; matching, table
+  and fill-in-the-blank are not offered as targets. The item PATCH accepts a
+  type change only for flagged staff, only in draft and not once students have
+  answered (`type_change_has_responses`, 409); the config starts afresh, and
+  the editor saves it with `?restore=1` so History can restore across types.
+  **Choice reorder** (multiple choice in the new field): drag handle plus
+  Move up / Move down, letters by position as the preview shows them. Pure
+  logic in `lib/authoring/outline.ts` and `insertTypes.ts`; tests
+  `test/authoring-outline.test.ts`, `test/authoring-type-change.test.ts`,
+  `test/item-insert-type-change-api.test.ts`. Browser behaviour is hand-check
+  rows 727–746. Not built: within-set reordering from the rail, match / order
+  key reordering by drag (they keep their own controls), and splitting
+  `AssessmentEditor.tsx`.
+- 2026-10-26 — **Phase 4 slice C: every item type in the new editor**
+  (prototype track, R-7). With the R-12 flag on, every item type's question
+  text is the new field (`RICH_TEXT_TYPES` is now all of `ITEM_TYPES`); each
+  type's own panel (rubric, pairs, steps, hotspots, reference image, table,
+  blanks, graph) is the existing sub-editor, reused unchanged. **Fill in the
+  blank**: the field takes the item's blank ids so markers load as chips, and
+  has **Insert blank**, which follows the current editor's `insertBlankAt`
+  rule on the document (`lib/authoring/blankInsert.ts`: selection replaced,
+  its text the first accepted answer, a space where the chip would touch a
+  word, at the end when the field isn't focused); `docToMarkup` counts a chip
+  in the document as a blank even before the item's list catches up. Blanks
+  follow the stem's order as in the textarea. **Matching key**: re-pair by
+  dragging a right onto another row or by Swap → Swap with this; both swap
+  the two rows' rights only (`swapMatchRights`, `lib/authoring/keyOrder.ts`),
+  announced in a live region. **Ordering key**: steps drag by a handle as
+  well as Move up / Move down, announced. Tests:
+  `test/authoring-fill-blank-field.test.ts` (parity with `insertBlankAt`,
+  chip load / save), `test/authoring-key-order.test.ts`. Browser behaviour is
+  hand-check rows 747–760. Not built: pair, step, table-cell and blank-answer
+  text stay plain inputs (they take markup, as today, but not the new field);
+  reordering whole matching rows (the lefts' display order); a blank chip
+  shows "blank", not its number.
+- 2026-10-26 — **Phase 4 slice D: `AssessmentEditor.tsx` split** (prototype
+  track, no behaviour change). Moved byte-for-byte (only re-indented) out of
+  the 4,181-line file: the view types and pure helpers to `editorModel.ts`
+  (`ItemView`, `ItemRow`, `rowToView`, `fingerprint`, `defaultItemFor`,
+  `itemPatchBody`, the scoring tables, tab ids); the Settings tab
+  (`SettingsTab.tsx`) and the Allowed tab (`AccommodationsTab.tsx`); the top
+  of the Questions tab — heading, preview, import panels, add / AI toolbar,
+  AI proposal (`QuestionsToolbar.tsx`); the stimulus card
+  (`StimulusSetCard.tsx`); and a card's per-type editor, choices included
+  (`ItemTypeFields.tsx`). Each component takes the editor's own values and
+  handlers as props of the same names; all state stays in
+  `AssessmentEditor.tsx` (now 2,047 lines), which re-exports the moved
+  helpers so existing imports keep working. Checked: a script compared every
+  moved line with the original (identical apart from indentation, plus
+  `export` on the model's declarations), and a throwaway server render of the
+  editor before and after (draft / published × flag off / on × all five tabs,
+  one question of every type and a stimulus set) produced the same HTML once
+  React's generated `useId` values were masked. Typecheck and the full suite
+  pass. Not split: the question card's header, stem field, scoring select and
+  save row, and the stimulus-set / autosave / outline handlers, which still
+  live in the editor. Hand-check rows 761–762.
+- 2026-10-26 — **Phase 4 review findings fixed** (prototype track). (1) A
+  History restore that failed left the old version on the card and let an
+  ordinary autosave (no `restore`, so inside the 2-minute window no copy
+  kept) write it over the current content. The autosaver now has
+  `hold(id)` / `release(id)` (`lib/authoring/itemAutosave.ts`): a held card
+  schedules nothing, so the restore's own PATCH is the only write, and a
+  refused restore puts the current content back on the card as
+  `changeType` already did (which now holds the card too, for the same
+  race). (2) "/" typed in a MathLive `<math-field>` (graph expressions, the
+  graph item's board) also opened the add menu: the event reaches the card
+  with the `<math-field>` host as its target and MathLive calls
+  `preventDefault` without stopping it. The card's check is now
+  `slashOpensInsertMenu` + `TEXT_ENTRY_SELECTOR` in `lib/authoring/outline.ts`
+  (skips `math-field` and any key already handled). Hand-check rows 763–766.

@@ -1,10 +1,9 @@
 "use client";
 
-import { assessmentAssetUrl } from "@/lib/assets/assessmentAssetUrl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, ListPlus, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ListPlus, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -18,9 +17,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { InstantFeedbackSettings } from "@/components/app/InstantFeedbackSettings";
-import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/app/EmptyState";
 import { ApiError, itemErrorCopy } from "@/lib/ui/errorCopy";
@@ -28,263 +24,102 @@ import { plural } from "@/lib/ui/format";
 import { defaultLayoutAfterAddingSource } from "@/lib/itemSetLayout";
 import { NextStepCard } from "@/components/app/NextStepCard";
 import { PageHeader } from "@/components/app/PageHeader";
-import { PreviewFrame } from "@/components/app/PreviewFrame";
 import { PublishDialog } from "@/components/app/PublishDialog";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
-import { PRODUCT_NAME } from "@/lib/brand";
-import { questionGaps, readinessChecks } from "./readiness";
+import { beforePublishing, questionGaps, readinessChecks } from "./readiness";
+import { BeforePublishingList } from "./BeforePublishingList";
+import { AutosaveIndicator } from "./AutosaveIndicator";
+import { ItemHistoryDialog, type ItemVersion } from "./ItemHistoryDialog";
 import { ShareDialog } from "@/components/app/ShareDialog";
-import type { AccessLevel, AccessVia } from "@/lib/api/accessLevels";
-import { DuplicateAssessmentButton } from "../DuplicateAssessmentButton";
-import type {
-  FillBlankBlank,
-  HotspotRegion,
-  MatchPair,
-  Rubric,
-  ScoringMethod,
-  SequenceEntry,
-  TableCellKeys,
-  TableColumn,
-  TableRow,
-  StimulusGraph,
-  GraphBoard,
-  GraphKey,
-} from "@secure-test/schema";
+import type { FillBlankBlank, ScoringMethod } from "@secure-test/schema";
 import { MathPreview } from "./MathPreview";
 import { GraphStimulusEditor } from "./GraphStimulusEditor";
-import { DEFAULT_GRAPH_BOARD, GraphItemEditor } from "./GraphItemEditor";
+import { DEFAULT_GRAPH_BOARD } from "./GraphItemEditor";
 import { ImagePicker } from "./ImagePicker";
 import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
 import { RichTextField } from "./RichTextField";
-import { SourcePicker, type SourceSummary } from "./SourcePicker";
+import type { SourceSummary } from "./SourcePicker";
 import { OverridesPanel } from "./OverridesPanel";
-import { WhoGetsWhat } from "./WhoGetsWhat";
-import { PeriodSettings } from "./PeriodSettings";
-import type { SectionAccommodations } from "@/lib/accommodations/sections";
-import { ImportItemsPanel } from "./ImportItemsPanel";
 import { SittingsPanel } from "./SittingsPanel";
-import { PdfImportPanel } from "./PdfImportPanel";
-import { RubricEditor } from "./RubricEditor";
-import { nextChoiceId } from "@/lib/items/choiceIds";
-import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import type { ItemType } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
-import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
+import {
+  blockMoveAnnouncement,
+  choiceMoveAnnouncement,
+  insertAt,
+  insertionSlots,
+  moveBlockTo,
+  moveInList,
+  outlineBlocks,
+  slashOpensInsertMenu,
+  slotAfter,
+  splitsSet,
+  TEXT_ENTRY_SELECTOR,
+} from "@/lib/authoring/outline";
+import { newItemSeed } from "@/lib/authoring/insertTypes";
+import { changeItemType, typeChangeTargets } from "@/lib/authoring/typeChange";
+import { OutlineRail } from "./OutlineRail";
+import { InsertQuestionMenu } from "./InsertQuestionMenu";
+import { TypeChangeControl } from "./TypeChangeControl";
+import { autosaveSummary, createItemAutosaver, type ItemAutosaver } from "@/lib/authoring/itemAutosave";
 import {
   VISIBLE_ACCOMMODATION_CATALOG,
   type AccommodationCatalogEntry,
   type OspiTier,
 } from "@/lib/accommodations/catalog";
-import { MatchPairsEditor } from "./MatchPairsEditor";
-import { SequenceEditor } from "./SequenceEditor";
-import { HotspotEditor } from "./HotspotEditor";
-import { TableEditor } from "./TableEditor";
-import { FillBlankEditor, InsertBlankButton } from "./FillBlankEditor";
+import { InsertBlankButton } from "./FillBlankEditor";
 import {
   FILL_BLANK_SEED_STEM,
-  blanksForSave,
-  blanksWithoutKeys,
   fillBlankIssueMessages,
-  hasKeyedBlank,
+  MAX_BLANKS,
+  nextBlankId,
   orderBlanksByStem,
 } from "@/lib/items/fillBlankEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
-import { GenerateQuestionsDialog } from "@/components/app/GenerateQuestionsDialog";
-import { SuggestStandardsDialog, type SuggestOutcome } from "@/components/app/SuggestStandardsDialog";
+import type { SuggestOutcome } from "@/components/app/SuggestStandardsDialog";
 import { StandardSuggestionChips } from "@/components/app/StandardSuggestionChips";
-import { removeSuggestion, suggestionCount, type SuggestEntry, type SuggestionMap } from "@/lib/ai/suggestForm";
+import { removeSuggestion, type SuggestEntry, type SuggestionMap } from "@/lib/ai/suggestForm";
 import { addTag, normalizeStandards } from "@/lib/standards/tags";
 import { KEY_FIXED_POINTER, answerKeyChanged } from "@/lib/scoring/rescoreDialog";
+import {
+  EDITOR_TABS,
+  type EditorTab,
+  TAB_LABEL,
+  parseTab,
+  type ItemView,
+  type AssessmentView,
+  type StimulusSourceView,
+  type ItemSetView,
+  type EditorAccess,
+  isOwnerAccess,
+  coTeachingBadgeText,
+  type AiProposal,
+  TYPE_LABEL,
+  type ItemRow,
+  rowToView,
+  fingerprint,
+  snapshotAll,
+  SCORING_LABEL,
+  HYBRID_HINT,
+  SCORING_OPTIONS,
+  defaultScoringMethod,
+  keyOnlyEdit,
+  defaultItemFor,
+  itemPatchBody,
+} from "./editorModel";
+import { SettingsTab } from "./SettingsTab";
+import { AccommodationsTab } from "./AccommodationsTab";
+import { QuestionsToolbar } from "./QuestionsToolbar";
+import { StimulusSetCard } from "./StimulusSetCard";
+import { ItemTypeFields } from "./ItemTypeFields";
 
-// UX pass 1, slice 4 (decision 3.1): the tab lives in ?tab= so reload, Back
-// and deep links land on the same panel. Param values are stable; the labels
-// are the teacher's words (proposal §2.2).
-const EDITOR_TABS = ["questions", "settings", "accommodations", "students", "sessions"] as const;
-type EditorTab = (typeof EDITOR_TABS)[number];
-const TAB_LABEL: Record<EditorTab, string> = {
-  questions: "Questions",
-  settings: "Settings",
-  // U-16: the teacher's words for what each tab decides — the old
-  // "Accommodations" read as "for all students". `?tab=` values unchanged.
-  accommodations: "Allowed on this test",
-  students: "Exceptions for this test",
-  sessions: "Test sessions",
-};
-function parseTab(raw: string | null): EditorTab {
-  return (EDITOR_TABS as readonly string[]).includes(raw ?? "")
-    ? (raw as EditorTab)
-    : "questions";
-}
-
-interface Choice {
-  id: string;
-  text: string;
-}
-
-interface ItemView {
-  id: string;
-  position: number;
-  // E5 slice 1: the stimulus set this question belongs to, if any.
-  item_set_id?: string | null;
-  type: ItemType;
-  stem: string;
-  choices: Choice[];
-  correct_choice_ids: string[];
-  correct_answer: string | null;
-  // Essay-only authoring metadata (slice 32); null for every other type.
-  max_word_count: number | null;
-  placeholder: string | null;
-  // RT slice 1 (docs/rich-text-essay-design.md, D-1): essay only — true lets
-  // students format their answer; null = off (the stored absence). Optional
-  // so the per-type draft factories need not name it.
-  rich_text?: boolean | null;
-  // U-22: essay only — true shows the student a running word count with no
-  // maximum; null = off. Optional like rich_text.
-  show_word_count?: boolean | null;
-  // Essay-only rubric (slice 33); null when unset / for other types.
-  rubric: Rubric | null;
-  // Rubric library slice 3 (D-4): which saved rubric the copy above came
-  // from, when it came from one. Cleared the moment the teacher edits the
-  // rubric by hand (the detach rule, mirrored from the server so the UI's
-  // state matches what a save would store).
-  rubric_id: string | null;
-  // Match-only pair list (slice 47); null for every other type.
-  pairs: MatchPair[] | null;
-  // Order-only sequence (slice 48); null for every other type.
-  sequence: SequenceEntry[] | null;
-  // Hotspot-only (slice 49); null / empty for every other type.
-  image_asset_id: string | null;
-  regions: HotspotRegion[] | null;
-  correct_region_ids: string[] | null;
-  // Drawing/upload-only (slice 50, authoring-only). Canvas dims are
-  // independently nullable in the editor so typing in one field never
-  // mutates the other; persistItem sends the pair only when complete.
-  // `background` (docs/drawing-background-design.md): null/absent = blank.
-  prompt_asset_id: string | null;
-  canvas: {
-    width: number | null;
-    height: number | null;
-    background?: "grid" | "axes" | null;
-  } | null;
-  // Table-only (E3 slice 2): the grid and the per-cell expected answers;
-  // null for every other type. cell_keys is the answer key.
-  columns: TableColumn[] | null;
-  rows: TableRow[] | null;
-  corner: string | null;
-  cell_keys: TableCellKeys | null;
-  // Fill-in-the-blank only (FB slice 2): one entry per `[[id]]` marker in
-  // the stem, kept in STEM order (docs/fill-in-blank-design.md §Progress —
-  // "Blank n" is the array position everywhere a teacher reads it). A
-  // dropdown's correct_option_id and a typed blank's keys are the key.
-  blanks: FillBlankBlank[] | null;
-  // Short-text only (numeric equivalence, 2026-09-15): true = compare the
-  // answer's exact form, false/null = equivalent numeric forms score.
-  exact_form: boolean | null;
-  // Slice 36: null = type default (MC/short_text/match auto, essay human).
-  scoring_method: ScoringMethod | null;
-  // BG slice 2: standards tags (`scheme:code` or the teacher's own text);
-  // every type, [] when none.
-  standards: string[];
-  // Graphing calculator (D-7): hide the test's calculator on this question's
-  // page; null = off. Optional so the per-type draft factories need not name it.
-  no_calculator?: boolean | null;
-  // Graphing calculator D-8: a teacher-authored graph shown with the
-  // question; null = none. Optional like no_calculator.
-  graph?: StimulusGraph | null;
-  // Graphing calculator D-9, graph items only: the board, and the key (an
-  // answer key — it saves through the publish lock like other keys).
-  board?: GraphBoard | null;
-  graph_key?: GraphKey | null;
-}
-
-interface AssessmentView {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  allow_llm_authoring: boolean;
-  time_limit_seconds: number | null;
-  /** Client paging (docs/client-paging-design.md): scroll | paged. */
-  student_layout: "scroll" | "paged";
-  /** Instant feedback (docs/instant-feedback-design.md): off | score | right_wrong | answers. */
-  student_feedback: FeedbackLevelSetting;
-  answers_release: AnswersReleaseSetting;
-  /** ISO instant the teacher released the key, or null. */
-  answers_released_at: string | null;
-  /** Passage highlighting (docs/passage-highlighting-design.md). */
-  allow_highlighting: boolean;
-  /** Graphing calculator (docs/graphing-calculator-design.md D-7). */
-  calculator_mode: "none" | "four_function" | "scientific" | "graphing";
-  calculator_preset: "full" | "state_wa";
-  allowed_accommodations: string[];
-  construct_altering: string[];
-  /** U-18: per class period (lib/accommodations/sections.ts). */
-  section_accommodations: SectionAccommodations;
-  /** teacher | school | district — a period may only narrow above teacher. */
-  assigned_scope: string;
-  /** D-1 (docs/archive-and-delete-design.md): governs the Settings-tab Delete draft action. */
-  attempt_count: number;
-  /** D-2 / D-3: null = live. ISO string, or null. */
-  archived_at: string | null;
-}
-
-// E5 slice 1: a stimulus (passage / figure / data) shared by the contiguous
-// questions whose item_set_id names it. Rendered once, above the first of
-// them; the set has no position of its own.
-// Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md): the
-// ordered labelled sources under the introduction. Edited whole and PATCHed
-// whole — a source has no id of its own (D-1).
-interface StimulusSourceView {
-  label: string;
-  text: string;
-}
-
-interface ItemSetView {
-  id: string;
-  stimulus_text: string;
-  sources: StimulusSourceView[];
-  layout: "inline" | "own_page" | "side_by_side";
-  /** E12: the source question this stimulus pulls each student's answer from. */
-  source?: {
-    item_id: string;
-    stem: string;
-    assessment_id: string;
-    assessment_name: string;
-    assessment_status: string;
-  } | null;
-}
-
-/**
- * Access slice 3 (docs/access-model-design.md, D-4 (b)): what the caller may
- * do here. `via === "owner"` gates Share and the Settings tab's Duplicate /
- * Archive / Delete draft — all `own`-level routes (an admin also resolves to
- * `own`, via `"admin"`, but D-6 keeps admin WRITES to the admin surface, so
- * the gate is the narrower `via`, not `level`). `via === "grant"` is a
- * co-teacher — the editor shows "Co-teaching (owner: …)" instead.
- */
-interface EditorAccess {
-  level: AccessLevel;
-  via: AccessVia;
-  owner_email: string | null;
-}
-
-/** Pure: does this access carry the owner-only actions (Share, Duplicate,
- * Archive, Delete draft)? Exported so the gate is testable without a DOM. */
-export function isOwnerAccess(access: Pick<EditorAccess, "via">): boolean {
-  return access.via === "owner";
-}
-
-/** Pure: the header's co-teaching reminder, or null when there is none to
- * show — an owner's or an admin's own view carries no such badge. */
-export function coTeachingBadgeText(
-  access: Pick<EditorAccess, "via" | "owner_email">,
-): string | null {
-  if (access.via !== "grant") return null;
-  return access.owner_email ? `Co-teaching (owner: ${access.owner_email})` : "Co-teaching";
-}
+// Phase 4 slice D: the moved helpers stay importable from here (tests and
+// ItemHistoryDialog import them from this file).
+export { coTeachingBadgeText, defaultItemFor, HYBRID_HINT, isOwnerAccess, itemPatchBody, rowToView, SCORING_LABEL };
+export type { ItemRow };
 
 interface Props {
   assessment: AssessmentView;
@@ -295,524 +130,6 @@ interface Props {
   newAuthoring?: boolean;
 }
 
-type AiProposal = {
-  type: ItemType;
-  stem: string;
-  choices: Choice[];
-  correct_choice_ids: string[];
-  correct_answer: string | null;
-};
-
-// UX pass 1 (proposal §2.2): plain nouns. "(authoring only)" is stale since
-// the client ships drawing (finding 10.10).
-const TYPE_LABEL = ITEM_TYPE_LABEL;
-
-/** What the items routes return: the DB row, with the type-specific fields in `config`. */
-interface ItemRow {
-  id: string;
-  position: number;
-  item_set_id?: string | null;
-  type: string;
-  stem: string;
-  choices: unknown;
-  correct_choice_ids: unknown;
-  correct_answer: string | null;
-  config: {
-    max_word_count?: number | null;
-    placeholder?: string | null;
-    rich_text?: boolean | null;
-    show_word_count?: boolean | null;
-    no_calculator?: boolean | null;
-    graph?: StimulusGraph | null;
-    graph_board?: GraphBoard | null;
-    graph_key?: GraphKey | null;
-    rubric?: Rubric | null;
-    rubric_id?: string | null;
-    pairs?: MatchPair[] | null;
-    sequence?: SequenceEntry[] | null;
-    image_asset_id?: string | null;
-    regions?: HotspotRegion[] | null;
-    correct_region_ids?: string[] | null;
-    prompt_asset_id?: string | null;
-    canvas?: {
-      width: number | null;
-      height: number | null;
-      background?: "grid" | "axes" | null;
-    } | null;
-    columns?: TableColumn[] | null;
-    rows?: TableRow[] | null;
-    corner?: string | null;
-    cell_keys?: TableCellKeys | null;
-    blanks?: FillBlankBlank[] | null;
-    exact_form?: boolean | null;
-    scoring_method?: ScoringMethod | null;
-  } | null;
-  standards?: string[] | null;
-}
-
-// Same flattening as app/dashboard/[id]/page.tsx, so a row the API hands
-// back can join the list without a round trip through the server component.
-function rowToView(r: ItemRow): ItemView {
-  return {
-    id: r.id,
-    position: r.position,
-    item_set_id: r.item_set_id ?? null,
-    type: r.type as ItemType,
-    stem: r.stem,
-    choices: (r.choices ?? []) as Choice[],
-    correct_choice_ids: (r.correct_choice_ids ?? []) as string[],
-    correct_answer: r.correct_answer,
-    max_word_count: r.config?.max_word_count ?? null,
-    placeholder: r.config?.placeholder ?? null,
-    rich_text: r.config?.rich_text ? true : null,
-    show_word_count: r.config?.show_word_count ? true : null,
-    no_calculator: r.config?.no_calculator ? true : null,
-    graph: r.config?.graph ?? null,
-    board: r.config?.graph_board ?? null,
-    graph_key: r.config?.graph_key ?? null,
-    rubric: r.config?.rubric ?? null,
-    rubric_id: r.config?.rubric_id ?? null,
-    pairs: r.config?.pairs ?? null,
-    sequence: r.config?.sequence ?? null,
-    image_asset_id: r.config?.image_asset_id ?? null,
-    regions: r.config?.regions ?? null,
-    correct_region_ids: r.config?.correct_region_ids ?? null,
-    prompt_asset_id: r.config?.prompt_asset_id ?? null,
-    canvas: r.config?.canvas ?? null,
-    columns: r.config?.columns ?? null,
-    rows: r.config?.rows ?? null,
-    corner: r.config?.corner ?? null,
-    cell_keys: r.config?.cell_keys ?? null,
-    // Stem order on the way in, so "Blank n" in the form is Blank n everywhere.
-    blanks: r.config?.blanks ? orderBlanksByStem(r.stem, r.config.blanks) : null,
-    exact_form: r.config?.exact_form ?? null,
-    scoring_method: r.config?.scoring_method ?? null,
-    standards: r.standards ?? [],
-  };
-}
-
-/**
- * What "Unsaved changes" compares: the card's own fields. `position` and
- * `item_set_id` are changed only by calls that have already succeeded
- * (Move, Add stimulus above, Join, Detach) and are never edited in the
- * card, so they must not read as an unsaved edit — before this (rows
- * 23–29 hand-run, 2026-09-02) every question touched by a Join showed the
- * badge and the page raised "Leave site?" with nothing to save.
- */
-function fingerprint(item: ItemView): string {
-  const { position: _position, item_set_id: _set, ...own } = item;
-  return JSON.stringify(own);
-}
-
-function snapshotAll(list: ItemView[]): Record<string, string> {
-  return Object.fromEntries(list.map((i) => [i.id, fingerprint(i)]));
-}
-
-// Explicit allowlist (slice 48 — a filter would silently include every new
-// type). Essay is authored manually only — it is just a writing prompt.
-// Match/order are structural and the AI providers' prompts/tools don't
-// know them. Must stay identical to AI_GENERABLE_ITEM_TYPES in
-// lib/ai/types.ts, which is the enforcing authority (E18 closed the gap where
-// the server still accepted essay and returned a wrong-type item).
-const AI_GENERABLE_TYPES: readonly ItemType[] = [
-  "multiple_choice_single",
-  "multiple_choice_multi",
-  "short_text",
-];
-
-// Slice 36: scoring-method picker. Mirrors ALLOWED_SCORING_METHODS /
-// DEFAULT_SCORING_METHOD in lib/api/items.ts (the server-side authority).
-export const SCORING_LABEL: Record<ScoringMethod, string> = {
-  auto: "Auto (machine-scored)",
-  ai: "AI (proposes a score, teacher approves)",
-  human: "Human (teacher scores)",
-  // Hybrid transparency (docs/hybrid-scoring-transparency-design.md, HC-1,
-  // decision 4.2): the old "AI + human review" promised a review that a
-  // confident score skips. The hint below the select says the rest.
-  hybrid: "Hybrid (AI finalizes confident scores)",
-};
-
-export const HYBRID_HINT =
-  "AI scores it is confident about count at once. You can still change any score.";
-
-const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
-  multiple_choice_single: ["auto", "human"],
-  multiple_choice_multi: ["auto", "human"],
-  short_text: ["auto", "human"],
-  essay: ["human", "ai", "hybrid"],
-  match: ["auto", "human"],
-  order: ["auto", "human"],
-  hotspot: ["auto", "human"],
-  drawing_upload: ["human"],
-  table: ["auto", "human"],
-  fill_blank: ["auto", "human"],
-  graph: ["auto", "human"],
-};
-
-const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
-  multiple_choice_single: "auto",
-  multiple_choice_multi: "auto",
-  short_text: "auto",
-  essay: "human",
-  match: "auto",
-  order: "auto",
-  hotspot: "auto",
-  drawing_upload: "human",
-  table: "auto",
-  fill_blank: "auto",
-  graph: "auto",
-};
-
-// E3-F1: a table's unset default depends on whether it has a key yet — the
-// same rule as lib/api/items.ts effectiveScoringMethod, kept in sync so the
-// "Default —" label matches what scoring will actually do.
-function hasCellKeys(cellKeys: TableCellKeys | null): boolean {
-  return !!cellKeys && Object.values(cellKeys).some((row) => Object.keys(row).length > 0);
-}
-function defaultScoringMethod(item: ItemView): ScoringMethod {
-  if (item.type === "table") return hasCellKeys(item.cell_keys) ? "auto" : "human";
-  // FB slice 2: the same E3-F1 rule for fill_blank (lib/api/items.ts
-  // effectiveScoringMethod — no keyed blank → human).
-  if (item.type === "fill_blank") return hasKeyedBlank(item.blanks) ? "auto" : "human";
-  // Graphing calculator D-9: no key → hand-scored (lib/api/items.ts).
-  if (item.type === "graph") return item.graph_key ? "auto" : "human";
-  return SCORING_DEFAULT[item.type];
-}
-
-const OSPI_TIER_LABEL: Record<OspiTier, string> = {
-  universal: "Universal Tools (available to all students)",
-  designated: "Designated Supports (educator-decided)",
-  accommodation: "Accommodations (IEP / 504-documented)",
-};
-
-const OSPI_TIER_ORDER: OspiTier[] = ["universal", "designated", "accommodation"];
-
-// 2026-09-01: while published, the item PATCH route admits edits that touch
-// nothing but the answer key. Mirror that here so "Save question" lights up
-// for exactly those edits (the server is still the authority).
-// BG slice 2 (14.1): standards tags save through the same door — the server's
-// isAnswerKeyOnlyPatch admits them while published.
-const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards", "graph_key"]);
-function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean {
-  if (!before) return false;
-  const b = before as unknown as Record<string, unknown>;
-  const a = after as unknown as Record<string, unknown>;
-  return Object.keys(a).every((k) => {
-    if (ANSWER_KEY_FIELDS.has(k)) return true;
-    // FB slice 2: a fill_blank's key lives inside each blank — compare the
-    // blanks with correct_option_id / keys removed, as the server's
-    // isAnswerKeyOnlyPatch (lib/api/requireDraft.ts) does.
-    if (k === "blanks") {
-      return (
-        JSON.stringify(blanksWithoutKeys(after.blanks)) ===
-        JSON.stringify(blanksWithoutKeys(before.blanks))
-      );
-    }
-    return JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null);
-  });
-}
-
-function defaultItemFor(type: ItemType): Omit<ItemView, "id" | "position"> {
-  if (type === "essay") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "short_text") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: "",
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "match") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: [
-        { id: "p1", left: "", right: "" },
-        { id: "p2", left: "", right: "" },
-      ],
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "order") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: [
-        { id: "s1", label: "" },
-        { id: "s2", label: "" },
-      ],
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "hotspot") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: [],
-      correct_region_ids: [],
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "drawing_upload") {
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "fill_blank") {
-    // FB slice 2: one typed blank to start; Add seeds the sentence that
-    // carries its marker (FILL_BLANK_SEED_STEM, flagged by readiness).
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: [{ id: "b1", kind: "text" }],
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  if (type === "graph") {
-    // Graphing calculator D-9: the default grid, no key yet; no choices.
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: null,
-      rows: null,
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-      board: DEFAULT_GRAPH_BOARD,
-      graph_key: null,
-    };
-  }
-  if (type === "table") {
-    // E3 slice 2: a 2 × 2 grid to start; the teacher renames and resizes it.
-    return {
-      type,
-      stem: "",
-      choices: [],
-      correct_choice_ids: [],
-      correct_answer: null,
-      max_word_count: null,
-      placeholder: null,
-      rubric: null,
-      rubric_id: null,
-      pairs: null,
-      sequence: null,
-      image_asset_id: null,
-      regions: null,
-      correct_region_ids: null,
-      prompt_asset_id: null,
-      canvas: null,
-      columns: [
-        { id: "c1", label: "" },
-        { id: "c2", label: "" },
-      ],
-      rows: [
-        { id: "r1", label: "" },
-        { id: "r2", label: "" },
-      ],
-      corner: null,
-      cell_keys: null,
-      blanks: null,
-      exact_form: null,
-      scoring_method: null,
-      standards: [],
-    };
-  }
-  return {
-    type,
-    stem: "",
-    choices: [
-      { id: "a", text: "" },
-      { id: "b", text: "" },
-    ],
-    correct_choice_ids: [],
-    correct_answer: null,
-    max_word_count: null,
-    placeholder: null,
-    rubric: null,
-    rubric_id: null,
-    pairs: null,
-    sequence: null,
-    image_asset_id: null,
-    regions: null,
-    correct_region_ids: null,
-    prompt_asset_id: null,
-    canvas: null,
-    columns: null,
-    rows: null,
-    corner: null,
-    cell_keys: null,
-    blanks: null,
-    exact_form: null,
-    scoring_method: null,
-    standards: [],
-  };
-}
 
 export function AssessmentEditor({ assessment, access, initialItems, initialItemSets, newAuthoring = false }: Props) {
   const isOwner = isOwnerAccess(access);
@@ -913,6 +230,21 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     if (!id) return;
     focusItemId.current = null;
     const el = document.getElementById(`stem-${id}`);
+    if (newAuthoring) {
+      // R-6: the new card is empty (nothing to select). The rich-text field
+      // mounts its editable element a frame or two after the card, so wait
+      // for it briefly.
+      let tries = 0;
+      const land = () => {
+        const target = document.getElementById(`stem-${id}`);
+        if (target) {
+          target.scrollIntoView({ block: "center", behavior: "smooth" });
+          target.focus({ preventScroll: true });
+        } else if (tries++ < 20) requestAnimationFrame(land);
+      };
+      land();
+      return;
+    }
     if (el instanceof HTMLTextAreaElement) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       el.focus();
@@ -1373,91 +705,9 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     }
   }
 
-  async function persistItem(item: ItemView) {
+  async function persistItem(item: ItemView, opts: { restore?: boolean } = {}): Promise<boolean> {
     setError(null);
-    const body: Record<string, unknown> = {
-      type: item.type,
-      stem: item.stem,
-      choices: item.choices,
-      correct_choice_ids: item.correct_choice_ids,
-      correct_answer: item.correct_answer,
-      // Graphing calculator (D-7): sent both ways so unticking clears it.
-      no_calculator: item.no_calculator === true,
-      // Graphing calculator D-8: null removes it, so send it both ways.
-      graph: item.graph ?? null,
-    };
-    if (item.type === "essay") {
-      // Omit when unset: the essay body schema treats these as optional
-      // number/string, so null/empty would fail validation.
-      if (item.max_word_count != null) body.max_word_count = item.max_word_count;
-      if (item.placeholder) body.placeholder = item.placeholder;
-      // RT slice 1 (D-1): only when on — absence is off.
-      if (item.rich_text) body.rich_text = true;
-      // U-22: only when on — absence is off.
-      if (item.show_word_count) body.show_word_count = true;
-      if (item.rubric) body.rubric = item.rubric;
-      // Rubric library slice 3 (D-4): send the provenance EXPLICITLY both
-      // ways. The server detaches an omitted rubric_id whenever the rubric
-      // changed; sending null when the teacher has edited by hand (the view
-      // cleared it below) and the id when one was applied keeps the stored
-      // config equal to what this editor is showing either way.
-      body.rubric_id = item.rubric_id;
-    }
-    if (item.type === "match") {
-      body.pairs = item.pairs ?? [];
-    }
-    if (item.type === "order") {
-      body.sequence = item.sequence ?? [];
-    }
-    if (item.type === "hotspot") {
-      body.image_asset_id = item.image_asset_id;
-      body.regions = item.regions ?? [];
-      body.correct_region_ids = item.correct_region_ids ?? [];
-    }
-    if (item.type === "short_text") {
-      // Numeric equivalence (2026-09-15): send it only when ON — the schema
-      // takes an optional boolean and absence IS the default.
-      if (item.exact_form) body.exact_form = true;
-    }
-    if (item.type === "table") {
-      body.columns = item.columns ?? [];
-      body.rows = item.rows ?? [];
-      // Omit when unset: optional strings / records, null would fail.
-      if (item.corner) body.corner = item.corner;
-      if (item.cell_keys) body.cell_keys = item.cell_keys;
-    }
-    if (item.type === "fill_blank") {
-      // FB slice 2: stem order, keys only when set (blank accepted answers
-      // dropped) — what slice 1's compactBlanks stores anyway.
-      body.blanks = blanksForSave(item.stem, item.blanks ?? []);
-    }
-    if (item.type === "graph") {
-      // Graphing calculator D-9: null clears the key.
-      body.board = item.board ?? DEFAULT_GRAPH_BOARD;
-      body.key = item.graph_key ?? null;
-    }
-    if (item.type === "drawing_upload") {
-      body.prompt_asset_id = item.prompt_asset_id;
-      // A half-filled pair saves as "no canvas" (the inline hint tells the
-      // teacher); a partial object would 400 on the server's 100-4000 rule.
-      // A background rides INSIDE canvas, and width/height stay required, so
-      // a background chosen with no complete size saves the 800 × 600 default
-      // explicitly rather than `{ background }` alone (Blank omits the field).
-      const width = item.canvas?.width ?? null;
-      const height = item.canvas?.height ?? null;
-      const background = item.canvas?.background ?? null;
-      body.canvas =
-        width != null && height != null
-          ? { width, height, ...(background ? { background } : {}) }
-          : background
-            ? { width: 800, height: 600, background }
-            : null;
-    }
-    // Review fix (2026-08-14): PATCH omission now PRESERVES the stored
-    // method server-side, so "Type default" must clear via explicit null.
-    body.scoring_method = item.scoring_method;
-    // BG slice 2: always sent whole — an empty list clears the tags.
-    body.standards = item.standards;
+    const body = itemPatchBody(item);
     // E11 (docs/rescore-after-key-change-design.md, D-4): a key fixed on a
     // Published test points to Rescore on Results once it is saved.
     const persistedBefore = persisted[item.id];
@@ -1470,7 +720,8 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     setItemError(item.id, null);
     setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saving" } }));
     try {
-      await call(`${apiBase}/items/${item.id}`, {
+      // R-5: a History restore asks the server to keep the version it replaces.
+      await call(`${apiBase}/items/${item.id}${opts.restore ? "?restore=1" : ""}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -1480,6 +731,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setPersisted((prev) => ({ ...prev, [item.id]: fingerprint(item) }));
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "saved", at: new Date() } }));
       if (keyChanged) setKeyFixed((prev) => ({ ...prev, [item.id]: true }));
+      return true;
     } catch (e) {
       setItemSave((prev) => ({ ...prev, [item.id]: { kind: "idle" } }));
       // FB slice 2: name the blank problem slice 1's write boundary found
@@ -1492,7 +744,84 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         item.id,
         blankIssues.length > 0 ? `${describe(e)} ${blankIssues.join("; ")}.` : describe(e),
       );
+      return false;
     }
+  }
+
+  // R-5 (docs/editor-redesign-design.md), new editor only: each card saves
+  // itself a second after its last edit, through persistItem — the same
+  // PATCH as Save question. While published only an answer-key-only edit
+  // saves (the server's publish lock); anything else waits for Unpublish and
+  // the indicator says so. The refs keep the autosaver, created once, calling
+  // this render's persistItem and reading this render's saved snapshots.
+  const persistItemRef = useRef(persistItem);
+  persistItemRef.current = persistItem;
+  const persistedRef = useRef(persisted);
+  persistedRef.current = persisted;
+  const autosaverRef = useRef<ItemAutosaver<ItemView> | null>(null);
+  if (newAuthoring && autosaverRef.current === null) {
+    autosaverRef.current = createItemAutosaver<ItemView>({
+      save: async (_id, item) => {
+        // Saved meanwhile by another path (an accepted suggestion, a restore).
+        if (persistedRef.current[item.id] === fingerprint(item)) return;
+        await persistItemRef.current(item);
+      },
+    });
+  }
+  const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
+  // R-6: where the new editor's "+" insertion points sit (list indexes).
+  const slotSet = new Set(newAuthoring ? insertionSlots(items) : []);
+  useEffect(() => {
+    autosaverRef.current?.sync(
+      items.map((item) => {
+        const fp = fingerprint(item);
+        return { id: item.id, fingerprint: fp, value: item, pending: persisted[item.id] !== fp && canAutosave(item) };
+      }),
+    );
+  });
+  // Leaving the editor sends whatever is still waiting on its timer.
+  useEffect(() => () => void autosaverRef.current?.flushAll(), []);
+
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+
+  /** R-5: the "Before publishing" and indicator links — scroll to the card and
+   * put the cursor in its question text (or on the card). */
+  function jumpToItem(itemId: string) {
+    const card = document.getElementById(`question-${itemId}`);
+    if (!card) return;
+    card.scrollIntoView({ block: "center", behavior: "smooth" });
+    const stem = document.getElementById(`stem-${itemId}`);
+    (stem ?? card).focus({ preventScroll: true });
+  }
+
+  function retryFailedSaves() {
+    for (const item of items) {
+      if (itemErrors[item.id] && persisted[item.id] !== fingerprint(item)) {
+        void autosaverRef.current?.retry(item.id, item);
+      }
+    }
+  }
+
+  /** R-5: History → Restore. Anything still waiting to autosave is sent
+   * first, so the server's copy of "the version this replaces" is current;
+   * then the version is saved through the ordinary PATCH (`restore`). The
+   * card is held out of autosave meanwhile, and a refused restore puts the
+   * current content back (as changeType does) — otherwise an ordinary
+   * autosave, without `restore`, could write the old version over the
+   * current one with no copy kept of it. */
+  async function restoreVersion(current: ItemView, version: ItemVersion): Promise<boolean> {
+    await autosaverRef.current?.flush(current.id);
+    autosaverRef.current?.hold(current.id);
+    const next: ItemView = {
+      ...rowToView(version.item),
+      position: current.position,
+      item_set_id: current.item_set_id ?? null,
+    };
+    updateItem(current.id, () => next);
+    const ok = await persistItem(next, { restore: true });
+    autosaverRef.current?.release(current.id);
+    if (!ok) updateItem(current.id, () => current);
+    return ok;
   }
 
   function onSuggested(outcome: SuggestOutcome) {
@@ -1527,6 +856,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   async function confirmDelete() {
     const target = pendingDelete;
     if (!target) return;
+    autosaverRef.current?.cancel(target.id);
     setDeleting(true);
     setItemError(target.id, null);
     try {
@@ -1579,6 +909,95 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       setItems(items);
       setError(describe(e));
     }
+  }
+
+  // ---- R-6 / R-7 (docs/editor-redesign-design.md, Phase 4 slice B), new editor only ----
+  // Which "+" slot's menu is open (a list index; see insertionSlots).
+  const [insertSlot, setInsertSlot] = useState<number | null>(null);
+  const [outlineMessage, setOutlineMessage] = useState("");
+  const [choiceMessage, setChoiceMessage] = useState("");
+
+  /** Save a new order through the existing reorder route; put the old one back if it is refused. */
+  async function saveOrder(next: ItemView[], movedId: string) {
+    setError(null);
+    const before = items;
+    setItems(next);
+    setOutlineMessage(blockMoveAnnouncement(before, next, movedId));
+    try {
+      await call(`${apiBase}/items/reorder`, jsonInit("POST", { ordered_ids: next.map((i) => i.id) }));
+    } catch (e) {
+      setItems(before);
+      setOutlineMessage("The order could not be saved, so it is back as it was.");
+      setError(describe(e));
+    }
+  }
+
+  /** The outline rail: drag (from → to) or Move up / Move down on the selected block. */
+  function moveOutlineBlock(from: number, to: number) {
+    const blocks = outlineBlocks(items);
+    const moved = blocks[from]?.items[0];
+    const next = moveBlockTo(items, from, to);
+    if (!moved || !next || splitsSet(next)) return;
+    void saveOrder(next, moved.id);
+  }
+
+  /** "+" / "/" menu: a new, EMPTY question of `type` at list index `index` (UX3-1, UX3-4). */
+  async function insertItem(type: ItemType, index: number) {
+    setError(null);
+    setAdding(true);
+    try {
+      const draft: ItemView = { ...defaultItemFor(type), ...newItemSeed(type), id: "", position: 0 } as ItemView;
+      const res = await call(`${apiBase}/items`, jsonInit("POST", itemPatchBody(draft)));
+      const created = rowToView(((await res.json()) as { item: ItemRow }).item);
+      // The route appends; the reorder route then puts it where the "+" was.
+      const order = insertAt(items.map((i) => i.id), created.id, index);
+      setItems((prev) => insertAt(prev, created, index));
+      setPersisted((prev) => ({ ...prev, [created.id]: fingerprint(created) }));
+      focusItemId.current = created.id;
+      if (index < items.length) {
+        try {
+          await call(`${apiBase}/items/reorder`, jsonInit("POST", { ordered_ids: order }));
+        } catch (e) {
+          // It exists, at the end: show it where the server has it.
+          setItems((prev) => [...prev.filter((i) => i.id !== created.id), created]);
+          setError(describe(e));
+        }
+      }
+    } catch (e) {
+      setError(describe(e));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  /**
+   * In-place type change (R-6). Saved at once rather than on the autosave
+   * timer, with `restore` so the server always keeps the version it replaces
+   * — the warning tells the teacher History can bring it back.
+   */
+  async function changeType(item: ItemView, target: ItemType) {
+    const { item: next } = changeItemType(item, target, defaultItemFor(target), (t) => SCORING_OPTIONS[t]);
+    await autosaverRef.current?.flush(item.id);
+    // Held, as in restoreVersion: no ordinary autosave of `next` races this PATCH.
+    autosaverRef.current?.hold(item.id);
+    updateItem(item.id, () => next);
+    const ok = await persistItem(next, { restore: true });
+    autosaverRef.current?.release(item.id);
+    if (ok) {
+      setOutlineMessage(`Question ${items.findIndex((i) => i.id === item.id) + 1} is now ${TYPE_LABEL[target]}.`);
+    } else {
+      // Refused (e.g. students have answered it): keep the question as it was;
+      // persistItem has put the reason on the card.
+      updateItem(item.id, () => item);
+    }
+  }
+
+  /** Choice reorder (R-7): drag or Move up / Move down. Ids (and so the key) stay with their text. */
+  function moveChoice(itemId: string, from: number, to: number) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || to < 0 || to >= item.choices.length || from === to) return;
+    updateItem(itemId, (i) => ({ ...i, choices: moveInList(i.choices, from, to) }));
+    setChoiceMessage(choiceMoveAnnouncement(from, to, item.choices.length));
   }
 
   function updateItem(itemId: string, mut: (item: ItemView) => ItemView) {
@@ -1919,616 +1338,158 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         </TabsList>
 
       <TabsContent value="settings" className="mt-6">
-      <section className="max-w-xl space-y-4">
-        <label className="block">
-          <span className="block text-sm font-medium">Name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={isLocked}
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm disabled:opacity-60"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-sm font-medium">Description</span>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={isLocked}
-            rows={2}
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm disabled:opacity-60"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-sm font-medium">Time limit (minutes)</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={timeLimitMinutes}
-            onChange={(e) => setTimeLimitMinutes(e.target.value)}
-            disabled={isLocked}
-            placeholder="(none)"
-            className="mt-1 w-32 rounded-md border border-border bg-transparent px-3 py-2 text-sm disabled:opacity-60"
-          />
-          <span className="ml-2 text-xs text-muted-foreground">
-            Leave blank for untimed
-          </span>
-        </label>
-        <label className="block">
-          <span className="block text-sm font-medium">How students move through the test</span>
-          <NativeSelect
-            size="sm"
-            value={studentLayout}
-            onChange={(e) => setStudentLayout(e.target.value as "scroll" | "paged")}
-            disabled={isLocked}
-            className="mt-1"
-          >
-            <NativeSelectOption value="scroll">One scrolling page</NativeSelectOption>
-            <NativeSelectOption value="paged">One question at a time</NativeSelectOption>
-          </NativeSelect>
-          <span className="block text-xs text-muted-foreground">
-            One question at a time gives each question its own page with Previous / Next; a
-            stimulus set to &ldquo;On its own page&rdquo; becomes a passage page. The print view is
-            unaffected.
-          </span>
-        </label>
-        {/* Graphing calculator (docs/graphing-calculator-design.md D-7):
-            every student gets it; part of what the test measures, so it is
-            saved with the settings above and locked once Published. */}
-        <label className="block">
-          <span className="block text-sm font-medium">Calculator</span>
-          <NativeSelect
-            size="sm"
-            value={calculatorMode}
-            onChange={(e) => setCalculatorMode(e.target.value as AssessmentView["calculator_mode"])}
-            disabled={isLocked}
-            className="mt-1"
-          >
-            <NativeSelectOption value="none">No calculator</NativeSelectOption>
-            <NativeSelectOption value="four_function">Four-function</NativeSelectOption>
-            <NativeSelectOption value="scientific">Scientific</NativeSelectOption>
-            <NativeSelectOption value="graphing">Graphing</NativeSelectOption>
-          </NativeSelect>
-          <span className="block text-xs text-muted-foreground">
-            Every student gets this calculator during the test. Needs {PRODUCT_NAME} 2.0 or later;
-            an older version is asked to update before the test opens.
-          </span>
-        </label>
-        {calculatorMode !== "none" ? (
-          <label className="block">
-            <span className="block text-sm font-medium">Calculator setup</span>
-            <NativeSelect
-              size="sm"
-              value={calculatorPreset}
-              onChange={(e) => setCalculatorPreset(e.target.value as AssessmentView["calculator_preset"])}
-              disabled={isLocked}
-              className="mt-1"
-            >
-              <NativeSelectOption value="full">Everything on</NativeSelectOption>
-              <NativeSelectOption value="state_wa">Like the Washington state test</NativeSelectOption>
-            </NativeSelect>
-            <span className="block text-xs text-muted-foreground">
-              &ldquo;Like the Washington state test&rdquo; starts in degrees and turns off what the
-              state test&rsquo;s calculator leaves out.
-            </span>
-          </label>
-        ) : null}
-        {calculatorMode !== "none" &&
-        studentLayout === "scroll" &&
-        items.some((i) => i.no_calculator === true) ? (
-          <p className="text-xs text-amber-800" role="note">
-            Some questions are marked &ldquo;No calculator on this question&rdquo;. That only takes effect
-            when students see one question at a time.
-          </p>
-        ) : null}
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            checked={allowLlm}
-            onChange={(e) => setAllowLlm(e.target.checked)}
-            disabled={isLocked}
-            className="mt-1"
-          />
-          <span className="text-sm">
-            Allow AI help when writing questions
-            <span className="block text-xs text-muted-foreground">
-              Adds a Generate with AI button on the Questions tab.
-            </span>
-          </span>
-        </label>
-
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            onClick={() => saveMetadata()}
-            disabled={isPending || isLocked || settingsSave.kind === "saving"}
-          >
-            Save settings
-          </Button>
-          <StatusLine state={settingsSave} />
-        </div>
-
-        {/* Passage highlighting (docs/passage-highlighting-design.md): NOT
-            gated by isLocked — it saves itself, and the server lets it
-            through the publish lock alongside the feedback settings. */}
-        <div className="border-t border-border pt-4">
-          <label className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              checked={allowHighlighting}
-              onChange={(e) => void saveHighlighting(e.target.checked)}
-              disabled={highlightSave.kind === "saving"}
-              className="mt-1"
-            />
-            <span className="text-sm">
-              Let students highlight passages
-              <span className="block text-xs text-muted-foreground">
-                Students can mark text in passages and sources. Highlights are not saved and are
-                not shown to you. Needs {PRODUCT_NAME} 2.0 or later.
-              </span>
-            </span>
-          </label>
-          <div className="mt-2 flex items-center gap-3">
-            <StatusLine state={highlightSave} />
-          </div>
-        </div>
-
-        {/* Instant feedback (docs/instant-feedback-design.md): NOT gated by
-            isLocked — it saves itself, at once, and the server lets exactly
-            these two settings through the publish lock. */}
-        <InstantFeedbackSettings
-          assessmentId={assessment.id}
-          initialLevel={assessment.student_feedback}
-          initialRelease={assessment.answers_release}
-          initialReleasedAt={assessment.answers_released_at}
-          onSaved={refresh}
-        />
-
-        {/* Access slice 3: Duplicate, Archive and Delete draft are all
-            `own`-level routes (docs/access-model-design.md) — a co-teacher's
-            `edit` grant does not reach them, so the three blocks below are
-            the owner's alone. Publish / Unpublish stays unconditional above:
-            that PATCH is `edit`, which a co-teacher does have. */}
-        {isOwner ? (
-          <>
-            {/* Duplicate (2026-09-16): beside the backup download in spirit — the
-                other "take a copy of this" action — but in the Settings tab's
-                bordered-block pattern. NOT gated by isLocked or by archived_at:
-                the copy is a fresh Draft, so nothing the publish lock protects is
-                touched. */}
-            <div className="border-t border-border pt-4">
-              <DuplicateAssessmentButton id={assessment.id} size="default" align="start" />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Makes a Draft copy named “{assessment.name} (copy)” with the same questions,
-                sources, accommodations and settings. Results and test sessions are not copied.
-              </p>
-            </div>
-
-            {/* D-2 / D-3: NOT gated by isLocked — archiving a Published
-                assessment is allowed, since it changes no content the publish
-                lock protects. */}
-            <div className="border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void toggleArchive()}
-                disabled={archiveBusy}
-              >
-                {archiveBusy ? (archivedAt ? "Unarchiving…" : "Archiving…") : archivedAt ? "Unarchive" : "Archive"}
-              </Button>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Archived assessments leave the list; sessions, attempts and results are kept.
-              </p>
-              {archiveError ? (
-                <p role="alert" className="mt-1 text-xs text-destructive">
-                  {archiveError}
-                </p>
-              ) : null}
-            </div>
-
-            {/* D-1 (docs/archive-and-delete-design.md): a draft with attempts on it
-                can't be deleted here either — the confirm dialog reads that back
-                from the DELETE route, this disables the button up front so the
-                teacher isn't invited to try. */}
-            <div className="border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  setDeleteDraftError(null);
-                  setDeleteDraftOpen(true);
-                }}
-                disabled={isLocked || assessment.attempt_count > 0}
-              >
-                Delete draft
-              </Button>
-              {isLocked ? (
-                <p className="mt-1 text-xs text-muted-foreground">Unpublish to delete.</p>
-              ) : assessment.attempt_count > 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {plural(assessment.attempt_count, "attempt")} — archive instead.
-                </p>
-              ) : null}
-            </div>
-          </>
-        ) : null}
-      </section>
+      <SettingsTab
+        assessment={assessment}
+        items={items}
+        name={name}
+        setName={setName}
+        description={description}
+        setDescription={setDescription}
+        timeLimitMinutes={timeLimitMinutes}
+        setTimeLimitMinutes={setTimeLimitMinutes}
+        allowLlm={allowLlm}
+        setAllowLlm={setAllowLlm}
+        studentLayout={studentLayout}
+        setStudentLayout={setStudentLayout}
+        calculatorMode={calculatorMode}
+        setCalculatorMode={setCalculatorMode}
+        calculatorPreset={calculatorPreset}
+        setCalculatorPreset={setCalculatorPreset}
+        settingsSave={settingsSave}
+        saveMetadata={saveMetadata}
+        allowHighlighting={allowHighlighting}
+        highlightSave={highlightSave}
+        saveHighlighting={saveHighlighting}
+        isLocked={isLocked}
+        isOwner={isOwner}
+        isPending={isPending}
+        refresh={refresh}
+        archivedAt={archivedAt}
+        archiveBusy={archiveBusy}
+        archiveError={archiveError}
+        toggleArchive={toggleArchive}
+        setDeleteDraftOpen={setDeleteDraftOpen}
+        setDeleteDraftError={setDeleteDraftError}
+      />
       </TabsContent>
 
       <TabsContent value="accommodations" className="mt-6">
-      <section className="space-y-4">
-        <fieldset
-          disabled={isLocked}
-          className="block space-y-4 disabled:opacity-60"
-        >
-          <legend className="text-sm font-medium">
-            Allowed accommodations{" "}
-            <span className="font-normal text-muted-foreground">
-              ({allowedAccommodations.size} selected)
-            </span>
-          </legend>
-          <p className="text-xs text-muted-foreground">
-            Which tools students may use on this test. Ticking a tool gives it
-            to no one by itself: a student gets it when it is on their Students
-            page record, which carries over to every test, or when you add it
-            on &ldquo;Exceptions for this test&rdquo;. Tick &ldquo;Changes what
-            is measured&rdquo; when a tool alters the skill being tested (for
-            example, text-to-speech on a reading test) so results can be
-            reported separately.
-          </p>
-          {OSPI_TIER_ORDER.map((ospiTier) => {
-            const entries = accommodationsByOspi.get(ospiTier) ?? [];
-            if (entries.length === 0) return null;
-            return (
-              <div key={ospiTier} className="space-y-1.5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {OSPI_TIER_LABEL[ospiTier]}
-                </div>
-                <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-                  {entries.map((entry) => {
-                    const checked = allowedAccommodations.has(entry.id);
-                    const ca = constructAltering.has(entry.id);
-                    return (
-                      <div
-                        key={entry.id}
-                        className="flex items-start gap-2 text-sm"
-                      >
-                        <label
-                          className="flex flex-1 items-start gap-2"
-                          title={entry.notes ?? undefined}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleAccommodation(entry.id)}
-                            className="mt-1"
-                          />
-                          <span className="flex-1">{entry.label}</span>
-                        </label>
-                        {checked ? (
-                          <label
-                            className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"
-                            title="This tool changes the skill being measured on this assessment (for example, text-to-speech on a reading test). Results can be reported separately."
-                          >
-                            <input
-                              type="checkbox"
-                              checked={ca}
-                              onChange={() =>
-                                toggleConstructAltering(entry.id)
-                              }
-                              className="mt-0.5"
-                            />
-                            <span>Changes what is measured</span>
-                          </label>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </fieldset>
-
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            Changes save automatically.
-          </span>
-          <StatusLine state={accomSave} />
-        </div>
-
-        <PeriodSettings
-          assessmentId={assessment.id}
-          testAllowed={assessment.allowed_accommodations}
-          initial={assessment.section_accommodations}
-          assignedScope={assessment.assigned_scope}
-          isLocked={isLocked}
-          selected={selectedPeriod}
-          onSelect={setSelectedPeriod}
-          onSaved={refresh}
-        />
-
-        <WhoGetsWhat
-          assessmentId={assessment.id}
-          section={selectedPeriod}
-          savedKey={`${[...assessment.allowed_accommodations].sort().join(",")}|${[...assessment.construct_altering].sort().join(",")}|${JSON.stringify(assessment.section_accommodations)}`}
-        />
-      </section>
+      <AccommodationsTab
+        assessment={assessment}
+        isLocked={isLocked}
+        refresh={refresh}
+        accommodationsByOspi={accommodationsByOspi}
+        allowedAccommodations={allowedAccommodations}
+        toggleAccommodation={toggleAccommodation}
+        constructAltering={constructAltering}
+        toggleConstructAltering={toggleConstructAltering}
+        accomSave={accomSave}
+        selectedPeriod={selectedPeriod}
+        setSelectedPeriod={setSelectedPeriod}
+      />
       </TabsContent>
 
       <TabsContent value="questions" className="mt-6">
       <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xl font-semibold">Questions ({items.length})</h2>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setPreviewOpen((v) => !v)}
-            aria-expanded={previewOpen}
-            aria-controls="preview-panel"
-          >
-            {previewOpen ? "Hide preview" : "Show preview"}
-          </Button>
-        </div>
-
-        {previewOpen ? (
-          <div id="preview-panel" className="space-y-2 rounded-lg border bg-card p-4">
-            <p className="text-sm text-muted-foreground">
-              This is what students see. Refreshes after you save.
-            </p>
-            {/* Re-key on the item list + the SAVED allowed_accommodations so
-                the iframe re-fetches once a change has actually landed
-                (cleanup #7: keying on the unsaved local Set made the preview
-                flicker and show the OLD toolbar). Sorted so the key is
-                order-stable. */}
-            <PreviewFrame
-              src={`/preview/${assessment.id}`}
-              title="Student view"
-              refreshKey={
-                items.map((i) => `${i.id}${i.item_set_id ? `@${i.item_set_id}` : ""}`).join("|") +
-                "::" +
-                Object.keys(persistedSets).sort().map((k) => persistedSets[k]).join("|") +
-                "::" +
-                [...assessment.allowed_accommodations].sort().join(",")
-              }
-            />
-          </div>
-        ) : null}
-
-        <ImportItemsPanel
-          assessmentId={assessment.id}
-          disabled={isLocked}
-          onImported={reloadFromServer}
+        <QuestionsToolbar
+          assessment={assessment}
+          items={items}
+          persistedSets={persistedSets}
+          isLocked={isLocked}
+          isPending={isPending}
+          newAuthoring={newAuthoring}
+          previewOpen={previewOpen}
+          setPreviewOpen={setPreviewOpen}
+          reloadFromServer={reloadFromServer}
+          addType={addType}
+          setAddType={setAddType}
+          adding={adding}
+          addItem={addItem}
+          usedStandards={usedStandards}
+          suggestions={suggestions}
+          onSuggested={onSuggested}
+          suggestionNote={suggestionNote}
+          setSuggestionNote={setSuggestionNote}
+          aiPanelOpen={aiPanelOpen}
+          setAiPanelOpen={setAiPanelOpen}
+          aiPrompt={aiPrompt}
+          setAiPrompt={setAiPrompt}
+          aiType={aiType}
+          setAiType={setAiType}
+          aiBusy={aiBusy}
+          generateWithAi={generateWithAi}
+          proposal={proposal}
+          updateProposal={updateProposal}
+          saveProposal={saveProposal}
+          discardProposal={discardProposal}
         />
 
-        <PdfImportPanel
-          assessmentId={assessment.id}
-          assessmentName={assessment.name}
-          disabled={isLocked}
-          onImported={reloadFromServer}
-        />
-
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3">
-          <label htmlFor="add-type" className="text-sm font-medium">
-            Add a question
-          </label>
-          <NativeSelect
-            id="add-type"
-            size="sm"
-            value={addType}
-            onChange={(e) => setAddType(e.target.value as ItemType)}
-            disabled={isLocked}
-          >
-            {(Object.keys(TYPE_LABEL) as ItemType[])
-              .map((t) => (
-                <NativeSelectOption key={t} value={t}>
-                  {TYPE_LABEL[t]}
-                </NativeSelectOption>
-              ))}
-          </NativeSelect>
-          <Button type="button" size="sm" onClick={addItem} disabled={isPending || isLocked || adding}>
-            <Plus aria-hidden />
-            {adding ? "Adding…" : "Add question"}
-          </Button>
-          {assessment.allow_llm_authoring && !isLocked ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setAiPanelOpen((v) => !v)}
-              aria-expanded={aiPanelOpen}
-            >
-              {aiPanelOpen ? "Close AI panel" : "Generate with AI"}
-            </Button>
-          ) : null}
-          {assessment.allow_llm_authoring ? (
-            <GenerateQuestionsDialog
-              assessmentId={assessment.id}
-              usedStandards={usedStandards}
-              canOpen={!isLocked}
-              onAdded={reloadFromServer}
+        {newAuthoring && items.length > 0 ? (
+          <div className="mb-4 space-y-3">
+            <AutosaveIndicator
+              summary={autosaveSummary(
+                items.map((i) => ({
+                  id: i.id,
+                  dirty: persisted[i.id] !== fingerprint(i),
+                  saving: itemSave[i.id]?.kind === "saving",
+                  failed: !!itemErrors[i.id],
+                  blocked: !canAutosave(i),
+                })),
+              )}
+              questionNumber={(id) => items.findIndex((i) => i.id === id) + 1}
+              onJump={jumpToItem}
+              onRetry={retryFailedSaves}
             />
-          ) : null}
-          {/* BG slice 5: NOT gated by isLocked — tags stay editable while Published (14.1). */}
-          {assessment.allow_llm_authoring ? (
-            <SuggestStandardsDialog
-              assessmentId={assessment.id}
-              disabled={items.length === 0}
-              onSuggested={onSuggested}
-            />
-          ) : null}
-        </div>
-        {suggestionNote ? (
-          <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            {suggestionNote}
-            {suggestionCount(suggestions) > 0 ? ` ${suggestionCount(suggestions)} suggestion${suggestionCount(suggestions) === 1 ? "" : "s"} left.` : ""}
-            <Button type="button" variant="ghost" size="sm" onClick={() => setSuggestionNote(null)}>
-              Hide
-            </Button>
-          </p>
-        ) : null}
-
-        {assessment.allow_llm_authoring && aiPanelOpen && !isLocked ? (
-          <div className="rounded-md border border-border bg-muted p-4 space-y-3">
-            <div className="text-sm font-semibold">Generate a question with AI</div>
-            <label className="block text-sm">
-              Question type
-              <select
-                value={aiType}
-                onChange={(e) => setAiType(e.target.value as ItemType)}
-                className="ml-2 rounded-md border border-border bg-transparent px-2 py-1"
-              >
-                {AI_GENERABLE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="block text-sm font-medium">Prompt</span>
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                rows={3}
-                placeholder="e.g. A 5th-grade word problem about decimal place value using a real-world shopping scenario."
-                className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-              />
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={generateWithAi}
-                disabled={aiBusy || aiPrompt.trim().length === 0}
-                className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-              >
-                {aiBusy ? "Generating…" : "Generate"}
-              </button>
-            </div>
-
-            {proposal ? (
-              <div className="rounded-md border border-border bg-background p-3 space-y-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Proposed · {TYPE_LABEL[proposal.type]}
-                </div>
-                <label className="block">
-                  <span className="block text-sm font-medium">Question</span>
-                  <textarea
-                    value={proposal.stem}
-                    onChange={(e) =>
-                      updateProposal((p) => ({ ...p, stem: e.target.value }))
-                    }
-                    rows={2}
-                    className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                  />
-                  <MathPreview text={proposal.stem} />
-                </label>
-                {proposal.type === "short_text" ? (
-                  <label className="block">
-                    <span className="block text-sm font-medium">
-                      Correct answer
-                    </span>
-                    <input
-                      value={proposal.correct_answer ?? ""}
-                      onChange={(e) =>
-                        updateProposal((p) => ({
-                          ...p,
-                          correct_answer: e.target.value,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                    />
-                    <MathPreview text={proposal.correct_answer ?? ""} />
-                  </label>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">Choices</div>
-                    {proposal.choices.map((c, ci) => {
-                      const isMulti = proposal.type === "multiple_choice_multi";
-                      const checked = proposal.correct_choice_ids.includes(c.id);
-                      return (
-                        <div key={c.id} className="flex items-start gap-2">
-                          <input
-                            type={isMulti ? "checkbox" : "radio"}
-                            name="ai-correct"
-                            className="mt-2"
-                            checked={checked}
-                            onChange={() =>
-                              updateProposal((p) => ({
-                                ...p,
-                                correct_choice_ids: isMulti
-                                  ? checked
-                                    ? p.correct_choice_ids.filter((x) => x !== c.id)
-                                    : [...p.correct_choice_ids, c.id]
-                                  : [c.id],
-                              }))
-                            }
-                          />
-                          <div className="flex-1">
-                            <input
-                              value={c.text}
-                              onChange={(e) =>
-                                updateProposal((p) => ({
-                                  ...p,
-                                  choices: p.choices.map((cc, cci) =>
-                                    cci === ci
-                                      ? { ...cc, text: e.target.value }
-                                      : cc,
-                                  ),
-                                }))
-                              }
-                              className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                            />
-                            <MathPreview text={c.text} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    onClick={saveProposal}
-                    disabled={isPending || isLocked}
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                  >
-                    Add this question
-                  </button>
-                  <button
-                    onClick={discardProposal}
-                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
-                  >
-                    Discard
-                  </button>
-                </div>
-              </div>
+            {!isLocked ? (
+              <BeforePublishingList entries={beforePublishing(items, itemSets)} onJump={jumpToItem} />
             ) : null}
           </div>
         ) : null}
 
+        {/* R-6 / R-7: the new editor puts the outline rail beside the list. */}
+        <div className={newAuthoring && items.length > 0 ? "grid items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]" : undefined}>
+        {newAuthoring && items.length > 0 ? (
+          <OutlineRail
+            items={items}
+            disabled={isPending || isLocked || adding}
+            locked={isLocked}
+            onMoveBlock={moveOutlineBlock}
+            onShow={(id) => document.getElementById(`question-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })}
+            announcement={outlineMessage}
+          />
+        ) : null}
+        <div className="min-w-0">
         {items.length === 0 ? (
+          newAuthoring ? (
+            <div className="space-y-3">
+              <EmptyState
+                icon={<ListPlus />}
+                title="No questions yet"
+                description="Add one below, or import them from a CSV or PDF."
+              />
+              <InsertQuestionMenu
+                prominent
+                open={insertSlot === 0}
+                onOpenChange={(open) => setInsertSlot(open ? 0 : null)}
+                onInsert={(type) => insertItem(type, 0)}
+                disabled={isLocked}
+                busy={adding}
+                label="Add a question"
+              />
+            </div>
+          ) : (
           <EmptyState
             icon={<ListPlus />}
             title="No questions yet"
             description="Add a question above, or import them from a CSV or PDF."
           />
+          )
         ) : (
           <ol className="space-y-4">
             {items.map((item, idx) => {
               const gaps = questionGaps(item);
               const dirty = persisted[item.id] !== fingerprint(item);
-              const keyOnlyDirty =
-                dirty &&
-                isLocked &&
-                answerKeyOnlyChange(
-                  // The fingerprint omits position / item_set_id; put the
-                  // current ones back so only the card's own fields compare.
-                  persisted[item.id]
-                    ? ({ ...(JSON.parse(persisted[item.id]!) as Omit<ItemView, "position" | "item_set_id">), position: item.position, item_set_id: item.item_set_id } as ItemView)
-                    : null,
-                  item,
-                );
+              const keyOnlyDirty = dirty && isLocked && keyOnlyEdit(persisted[item.id], item);
               const save = itemSave[item.id] ?? { kind: "idle" as const };
               const itemError = itemErrors[item.id];
               // E5 slice 1: the stimulus card opens the block above its first
@@ -2544,247 +1505,66 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               const setState = set ? (setSave[set.id] ?? { kind: "idle" as const }) : null;
               return (
               <Fragment key={item.id}>
-              {opensSet && set && bounds ? (
-                <li
-                  className="rounded-lg border border-primary/40 bg-primary/5 p-4"
-                  aria-label={`Stimulus for questions ${bounds.first + 1} to ${bounds.last + 1}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Stimulus ·{" "}
-                        {bounds.first === bounds.last
-                          ? `Question ${bounds.first + 1}`
-                          : `Questions ${bounds.first + 1}–${bounds.last + 1}`}
-                      </span>
-                      {/* Multi-source stimulus slice 2: an empty introduction
-                          is fine once the reading lives in the sources. */}
-                      {set.stimulus_text.trim().length === 0 && set.sources.length === 0 ? (
-                        <Badge variant="warning">Empty</Badge>
-                      ) : null}
-                      {setDirty ? <Badge variant="outline">Unsaved changes</Badge> : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <NativeSelect
-                        size="sm"
-                        aria-label="Where the stimulus appears"
-                        value={set.layout}
-                        disabled={isLocked}
-                        onChange={(e) =>
-                          updateSet(set.id, (sv) => ({
-                            ...sv,
-                            layout: e.target.value as ItemSetView["layout"],
-                          }))
-                        }
-                      >
-                        <NativeSelectOption value="inline">Shown above its questions</NativeSelectOption>
-                        <NativeSelectOption value="own_page">On its own page</NativeSelectOption>
-                        {/* Multi-source stimulus slice 2 (D-2): the teacher picks it. */}
-                        <NativeSelectOption value="side_by_side">Side by side (sources beside the question)</NativeSelectOption>
-                      </NativeSelect>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => saveStimulus(set.id)}
-                        disabled={isLocked || !setDirty || setState?.kind === "saving"}
-                      >
-                        {setState?.kind === "saving" ? "Saving…" : "Save stimulus"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => removeStimulus(set.id)}
-                        disabled={isPending || isLocked}
-                        aria-label="Remove this stimulus (the questions stay)"
-                        title="Remove this stimulus (the questions stay)"
-                      >
-                        <X aria-hidden />
-                      </Button>
-                    </div>
-                  </div>
-                  <label className="mt-3 block">
-                    <span className="block text-sm font-medium">
-                      Passage, figure, or data these questions share
-                    </span>
-                    <textarea
-                      id={`stimulus-${set.id}`}
-                      value={set.stimulus_text}
-                      disabled={isLocked}
-                      onChange={(e) =>
-                        updateSet(set.id, (sv) => ({ ...sv, stimulus_text: e.target.value }))
-                      }
-                      rows={4}
-                      placeholder="Paste or write the passage; add an image or math below."
-                      className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                    />
-                  </label>
-                  {!isLocked ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <ImagePicker
-                        onInsert={(md) =>
-                          updateSet(set.id, (sv) => ({
-                            ...sv,
-                            stimulus_text: sv.stimulus_text ? `${sv.stimulus_text} ${md}` : md,
-                          }))
-                        }
-                      />
-                      <EmphasisButtons apply={(next) => updateSet(set.id, (sv) => ({ ...sv, stimulus_text: next(sv.stimulus_text) }))} />
-                      <MathTranslator
-                        onInsert={(wrapped) =>
-                          updateSet(set.id, (sv) => ({
-                            ...sv,
-                            stimulus_text: sv.stimulus_text
-                              ? `${sv.stimulus_text} ${wrapped}`
-                              : wrapped,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : null}
-                  <MathPreview text={set.stimulus_text} />
-                  {/* Multi-source stimulus slice 2: the labelled sources under
-                      the introduction — a poem, an article, a chart excerpt.
-                      Each row is the same content editor the introduction
-                      uses, so KaTeX, images and emphasis behave identically. */}
-                  <div className="mt-4 border-t border-border pt-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Sources
-                      </span>
-                      {!isLocked ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => addSource(set.id)}>
-                          <ListPlus aria-hidden />
-                          Add a source
-                        </Button>
-                      ) : null}
-                    </div>
-                    {set.sources.length === 0 ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Add a source for each labelled passage, article, or chart these questions draw on.
-                      </p>
-                    ) : (
-                      <ol className="mt-2 space-y-3">
-                        {set.sources.map((src, si) => (
-                          <li key={si} className="rounded-md border border-border bg-background p-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <input
-                                type="text"
-                                aria-label="Source label"
-                                value={src.label}
-                                disabled={isLocked}
-                                maxLength={80}
-                                onChange={(e) =>
-                                  updateSource(set.id, si, (s) => ({ ...s, label: e.target.value }))
-                                }
-                                className="w-48 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                              />
-                              {src.text.trim().length === 0 ? <Badge variant="warning">Empty</Badge> : null}
-                              <span className="ml-auto flex items-center gap-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => moveSource(set.id, si, -1)}
-                                  disabled={isLocked || si === 0}
-                                  aria-label={`Move ${src.label || "source"} up`}
-                                >
-                                  <ArrowUp aria-hidden />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => moveSource(set.id, si, 1)}
-                                  disabled={isLocked || si === set.sources.length - 1}
-                                  aria-label={`Move ${src.label || "source"} down`}
-                                >
-                                  <ArrowDown aria-hidden />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => removeSource(set.id, si)}
-                                  disabled={isLocked}
-                                  aria-label={`Remove ${src.label || "source"}`}
-                                >
-                                  <X aria-hidden />
-                                </Button>
-                              </span>
-                            </div>
-                            <textarea
-                              value={src.text}
-                              disabled={isLocked}
-                              aria-label={`Text of ${src.label || "source"}`}
-                              onChange={(e) =>
-                                updateSource(set.id, si, (s) => ({ ...s, text: e.target.value }))
-                              }
-                              rows={5}
-                              placeholder="Paste the source exactly as it is printed; line breaks are kept."
-                              className="mt-2 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                            />
-                            {!isLocked ? (
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <ImagePicker
-                                  onInsert={(md) =>
-                                    updateSource(set.id, si, (s) => ({
-                                      ...s,
-                                      text: s.text ? `${s.text} ${md}` : md,
-                                    }))
-                                  }
-                                />
-                                <EmphasisButtons
-                                  apply={(next) =>
-                                    updateSource(set.id, si, (s) => ({ ...s, text: next(s.text) }))
-                                  }
-                                />
-                                <MathTranslator
-                                  onInsert={(wrapped) =>
-                                    updateSource(set.id, si, (s) => ({
-                                      ...s,
-                                      text: s.text ? `${s.text} ${wrapped}` : wrapped,
-                                    }))
-                                  }
-                                />
-                              </div>
-                            ) : null}
-                            <MathPreview text={src.text} />
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </div>
-                  {set.source ? (
-                    <div className="mt-2 rounded border border-primary/40 bg-primary/5 p-2 text-xs">
-                      <span className="font-medium">Each student sees their own answer</span> to &ldquo;{set.source.stem.slice(0, 120)}&rdquo; from{" "}
-                      <span className="font-medium">{set.source.assessment_name}</span>
-                      {set.source.assessment_status !== "published" ? " (still a draft)" : ""}, under the text above.
-                      A student with no answer yet writes it in place.
-                      {!isLocked ? (
-                        <button type="button" className="ml-2 underline" onClick={() => void setSource(set.id, null).catch((e) => setError(describe(e)))}>
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : sourcePickerFor === set.id ? (
-                    <SourcePicker
-                      assessmentId={assessment.id}
-                      disabled={isLocked}
-                      onPicked={(src) => setSource(set.id, src)}
-                      onCancel={() => setSourcePickerFor(null)}
-                    />
-                  ) : !isLocked ? (
-                    <button type="button" className="mt-2 text-xs underline" onClick={() => setSourcePickerFor(set.id)}>
-                      Start with each student&apos;s own earlier answer…
-                    </button>
-                  ) : null}
-                  {setState ? <StatusLine state={setState} className="mt-2" /> : null}
+              {/* R-6: a "+" before every block (never inside a set). */}
+              {newAuthoring && slotSet.has(idx) ? (
+                <li>
+                  <InsertQuestionMenu
+                    open={insertSlot === idx}
+                    onOpenChange={(open) => setInsertSlot(open ? idx : null)}
+                    onInsert={(type) => insertItem(type, idx)}
+                    disabled={isLocked}
+                    busy={adding}
+                    label={`Add a question before question ${idx + 1}`}
+                  />
                 </li>
               ) : null}
+              {opensSet && set && bounds ? (
+                <StimulusSetCard
+                  assessment={assessment}
+                  set={set}
+                  bounds={bounds}
+                  setDirty={setDirty}
+                  setState={setState}
+                  isLocked={isLocked}
+                  isPending={isPending}
+                  updateSet={updateSet}
+                  saveStimulus={saveStimulus}
+                  removeStimulus={removeStimulus}
+                  addSource={addSource}
+                  updateSource={updateSource}
+                  moveSource={moveSource}
+                  removeSource={removeSource}
+                  sourcePickerFor={sourcePickerFor}
+                  setSourcePickerFor={setSourcePickerFor}
+                  setSource={setSource}
+                  setError={setError}
+                  describe={describe}
+                />
+              ) : null}
               <li
+                id={newAuthoring ? `question-${item.id}` : undefined}
+                tabIndex={newAuthoring ? -1 : undefined}
+                onKeyDown={
+                  newAuthoring && !isLocked
+                    ? (e) => {
+                        // R-6: "/" on a card, outside a text field, opens the
+                        // add menu just after this question (or its stimulus group).
+                        if (
+                          !slashOpensInsertMenu({
+                            key: e.key,
+                            metaKey: e.metaKey,
+                            ctrlKey: e.ctrlKey,
+                            altKey: e.altKey,
+                            defaultPrevented: e.defaultPrevented,
+                            inTextField: (e.target as HTMLElement).closest(TEXT_ENTRY_SELECTOR) !== null,
+                          })
+                        )
+                          return;
+                        e.preventDefault();
+                        setInsertSlot(slotAfter(items, item.id));
+                      }
+                    : undefined
+                }
                 className={
                   set
                     ? "ml-4 rounded-lg border border-l-4 border-l-primary/40 bg-card p-4"
@@ -2801,9 +1581,22 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         Incomplete
                       </Badge>
                     ) : null}
-                    {dirty ? <Badge variant="outline">Unsaved changes</Badge> : null}
+                    {/* R-5: the new editor saves on its own; the list's indicator says so. */}
+                    {dirty && !newAuthoring ? <Badge variant="outline">Unsaved changes</Badge> : null}
                   </div>
                   <div className="flex items-center gap-1">
+                    {newAuthoring ? (
+                      <TypeChangeControl
+                        itemLabel={`question ${idx + 1}`}
+                        type={item.type}
+                        targets={typeChangeTargets(item, Object.keys(TYPE_LABEL) as ItemType[])}
+                        disabled={isPending || isLocked || save.kind === "saving"}
+                        preview={(target) =>
+                          changeItemType(item, target, defaultItemFor(target), (t) => SCORING_OPTIONS[t])
+                        }
+                        onChange={(target) => void changeType(item, target)}
+                      />
+                    ) : null}
                     {set ? (
                       <Button
                         type="button"
@@ -2886,9 +1679,34 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     <RichTextField
                       id={`stem-${item.id}`}
                       label={`Question ${idx + 1}`}
+                      placeholder="Type the question"
                       value={item.stem}
                       disabled={isLocked}
-                      onChange={(stem) => updateItem(item.id, (i) => ({ ...i, stem }))}
+                      onChange={(stem) =>
+                        updateItem(item.id, (i) => ({
+                          ...i,
+                          stem,
+                          // As the textarea does: blanks follow the stem's order.
+                          blanks: i.type === "fill_blank" ? orderBlanksByStem(stem, i.blanks ?? []) : i.blanks,
+                        }))
+                      }
+                      blanks={
+                        item.type === "fill_blank"
+                          ? {
+                              ids: (item.blanks ?? []).map((b) => b.id),
+                              canInsert: !isLocked && (item.blanks ?? []).length < MAX_BLANKS,
+                              limitTitle: `A question allows at most ${MAX_BLANKS} blanks`,
+                              onInsert: (key) => {
+                                const blankId = nextBlankId(item.stem, item.blanks ?? []);
+                                const blank: FillBlankBlank = key
+                                  ? { id: blankId, kind: "text", keys: [key] }
+                                  : { id: blankId, kind: "text" };
+                                updateItem(item.id, (i) => ({ ...i, blanks: [...(i.blanks ?? []), blank] }));
+                                return blankId;
+                              },
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 ) : (
@@ -2911,6 +1729,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                       }))
                     }
                     rows={2}
+                    placeholder={newAuthoring ? "Type the question" : undefined}
                     className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                   />
                   <div className="mt-1 flex flex-wrap items-start gap-2">
@@ -2985,550 +1804,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   onDismiss={(tag) => dismissSuggestion(item.id, tag)}
                 />
 
-                {item.type === "match" ? (
-                  <div className="mt-3">
-                    <MatchPairsEditor
-                      pairs={item.pairs ?? []}
-                      onChange={(pairs) =>
-                        updateItem(item.id, (i) => ({ ...i, pairs }))
-                      }
-                      disabled={isLocked}
-                    />
-                  </div>
-                ) : item.type === "order" ? (
-                  <div className="mt-3">
-                    <SequenceEditor
-                      sequence={item.sequence ?? []}
-                      onChange={(sequence) =>
-                        updateItem(item.id, (i) => ({ ...i, sequence }))
-                      }
-                      disabled={isLocked}
-                    />
-                  </div>
-                ) : item.type === "drawing_upload" ? (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Students draw or upload their answer in the test app.
-                    </p>
-                    <div>
-                      <span className="block text-sm font-medium">
-                        Reference image{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </span>
-                      <ImagePicker
-                        onInsert={(md) => {
-                          const m = md.match(ASSET_REF_ONE_RE);
-                          if (m)
-                            updateItem(item.id, (i) => ({
-                              ...i,
-                              prompt_asset_id: m[1]!.toLowerCase(),
-                            }));
-                        }}
-                      />
-                      {item.prompt_asset_id ? (
-                        <div className="mt-2 space-y-1">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={assessmentAssetUrl(assessment.id, item.prompt_asset_id)}
-                            alt="Reference"
-                            className="max-h-48 rounded border border-border"
-                          />
-                          <button
-                            onClick={() =>
-                              updateItem(item.id, (i) => ({
-                                ...i,
-                                prompt_asset_id: null,
-                              }))
-                            }
-                            disabled={isLocked}
-                            className="rounded-md border border-border px-2 py-1 text-xs disabled:opacity-40"
-                          >
-                            Remove reference image
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <label className="block">
-                      <span className="block text-sm font-medium">
-                        Canvas size{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional, px)
-                        </span>
-                      </span>
-                      <div className="mt-1 flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={100}
-                          max={4000}
-                          placeholder="width"
-                          value={item.canvas?.width ?? ""}
-                          disabled={isLocked}
-                          onChange={(e) =>
-                            updateItem(item.id, (i) => {
-                              const n = Number(e.target.value);
-                              const width =
-                                e.target.value === "" || Number.isNaN(n)
-                                  ? null
-                                  : Math.floor(n);
-                              const height = i.canvas?.height ?? null;
-                              const background = i.canvas?.background ?? null;
-                              return {
-                                ...i,
-                                canvas:
-                                  width == null && height == null && background == null
-                                    ? null
-                                    : { width, height, background },
-                              };
-                            })
-                          }
-                          className="w-28 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                        />
-                        <span aria-hidden>×</span>
-                        <input
-                          type="number"
-                          min={100}
-                          max={4000}
-                          placeholder="height"
-                          value={item.canvas?.height ?? ""}
-                          disabled={isLocked}
-                          onChange={(e) =>
-                            updateItem(item.id, (i) => {
-                              const n = Number(e.target.value);
-                              const height =
-                                e.target.value === "" || Number.isNaN(n)
-                                  ? null
-                                  : Math.floor(n);
-                              const width = i.canvas?.width ?? null;
-                              const background = i.canvas?.background ?? null;
-                              return {
-                                ...i,
-                                canvas:
-                                  width == null && height == null && background == null
-                                    ? null
-                                    : { width, height, background },
-                              };
-                            })
-                          }
-                          className="w-28 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                        />
-                      </div>
-                      {item.canvas &&
-                      (item.canvas.width == null) !== (item.canvas.height == null) ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Set both width and height (100–4000), or leave both
-                          empty — a half-filled pair saves as no canvas.
-                        </p>
-                      ) : null}
-                    </label>
-                    {/* docs/drawing-background-design.md (D-1/D-2): the paper
-                        the client paints under the student's strokes. Blank
-                        clears the field; picking a background with no size
-                        saves the 800 × 600 default (persistItem). */}
-                    <label className="block">
-                      <span className="block text-sm font-medium">
-                        Background{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </span>
-                      <select
-                        value={item.canvas?.background ?? ""}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => {
-                            const background =
-                              e.target.value === ""
-                                ? null
-                                : (e.target.value as "grid" | "axes");
-                            const width = i.canvas?.width ?? null;
-                            const height = i.canvas?.height ?? null;
-                            return {
-                              ...i,
-                              canvas:
-                                width == null && height == null && background == null
-                                  ? null
-                                  : { width, height, background },
-                            };
-                          })
-                        }
-                        disabled={isLocked}
-                        className="mt-1 w-full max-w-md rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                      >
-                        <option value="">Blank</option>
-                        <option value="grid">Grid</option>
-                        <option value="axes">Grid with axes</option>
-                      </select>
-                    </label>
-                  </div>
-                ) : item.type === "hotspot" ? (
-                  <div className="mt-3">
-                    <HotspotEditor
-                      imageAssetId={item.image_asset_id}
-                      regions={item.regions ?? []}
-                      correctRegionIds={item.correct_region_ids ?? []}
-                      onChange={(patch) =>
-                        updateItem(item.id, (i) => ({ ...i, ...patch }))
-                      }
-                      disabled={isLocked}
-                    />
-                  </div>
-                ) : item.type === "table" ? (
-                  <div className="mt-3">
-                    <TableEditor
-                      columns={item.columns ?? []}
-                      rows={item.rows ?? []}
-                      corner={item.corner}
-                      cellKeys={item.cell_keys}
-                      onChange={(patch) =>
-                        updateItem(item.id, (i) => ({ ...i, ...patch }))
-                      }
-                      disabled={isLocked}
-                    />
-                  </div>
-                ) : item.type === "graph" ? (
-                  <div className="mt-3">
-                    <GraphItemEditor
-                      board={item.board ?? DEFAULT_GRAPH_BOARD}
-                      graphKey={item.graph_key ?? null}
-                      onChange={(patch) => updateItem(item.id, (i) => ({ ...i, ...patch }))}
-                      disabled={isLocked}
-                    />
-                  </div>
-                ) : item.type === "fill_blank" ? (
-                  <div className="mt-3">
-                    <FillBlankEditor
-                      itemId={item.id}
-                      stem={item.stem}
-                      blanks={item.blanks ?? []}
-                      onChange={(patch) =>
-                        updateItem(item.id, (i) => ({ ...i, ...patch }))
-                      }
-                      disabled={isLocked}
-                      handScored={item.scoring_method === "human"}
-                    />
-                  </div>
-                ) : item.type === "short_text" ? (
-                  <div className="mt-3 space-y-2">
-                    <label className="block">
-                      <span className="block text-sm font-medium">
-                        Correct answer
-                      </span>
-                      <input
-                        value={item.correct_answer ?? ""}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            correct_answer: e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                      />
-                      <MathPreview text={item.correct_answer ?? ""} />
-                      {/* Numeric equivalence (2026-09-15): say what the
-                          default does, so the checkbox below reads as the
-                          exception it is. */}
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        Equivalent numbers count: 1/2, 0.5 and 50/100 all
-                        match. Check this for tasks like &ldquo;in lowest
-                        terms&rdquo;.
-                      </span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={item.exact_form === true}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            exact_form: e.target.checked,
-                          }))
-                        }
-                        disabled={isLocked}
-                      />
-                      <span>Answer form matters (exact match only)</span>
-                    </label>
-                  </div>
-                ) : item.type === "essay" ? (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Students write a long-form response. Attach an optional
-                      scoring rubric below — stored now, used by AI/human
-                      scoring in a later phase.
-                    </p>
-                    <label className="block">
-                      <span className="block text-sm font-medium">
-                        Max word count{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={item.max_word_count ?? ""}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            max_word_count:
-                              e.target.value === ""
-                                ? null
-                                : Math.max(
-                                    1,
-                                    Math.floor(Number(e.target.value)),
-                                  ),
-                          }))
-                        }
-                        className="mt-1 w-40 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                      />
-                    </label>
-                    {/* U-22 (decisions 2.1 / 2.2): a per-essay switch, off by
-                        default. A maximum always shows its count, so with one
-                        set the box reads ticked and cannot be changed. */}
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={
-                          item.max_word_count != null || item.show_word_count === true
-                        }
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            show_word_count: e.target.checked ? true : null,
-                          }))
-                        }
-                        disabled={isLocked || item.max_word_count != null}
-                      />
-                      <span>
-                        Show students a word count
-                        {item.max_word_count != null ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            (always on with a maximum)
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                    {/* RT slice 1 (docs/rich-text-essay-design.md): D-1 a
-                        per-essay switch, off by default; D-2 / D-4 / D-9 the
-                        formatting it allows. Student-facing, so locked
-                        while Published like the other essay fields. */}
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={item.rich_text === true}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            rich_text: e.target.checked ? true : null,
-                          }))
-                        }
-                        disabled={isLocked}
-                      />
-                      <span>
-                        Let students format their answer (bold, italic,
-                        underline, lists, first-line indent)
-                      </span>
-                    </label>
-                    <label className="block">
-                      <span className="block text-sm font-medium">
-                        Placeholder{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </span>
-                      <input
-                        value={item.placeholder ?? ""}
-                        maxLength={200}
-                        onChange={(e) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            placeholder:
-                              e.target.value === "" ? null : e.target.value,
-                          }))
-                        }
-                        className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                      />
-                    </label>
-                    <div>
-                      <span className="block text-sm font-medium">
-                        Scoring rubric{" "}
-                        <span className="font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </span>
-                      <RubricEditor
-                        value={item.rubric}
-                        onChange={(rubric, meta) =>
-                          updateItem(item.id, (i) => ({
-                            ...i,
-                            rubric,
-                            // Applying a saved rubric attaches it; every
-                            // hand edit arrives without meta and detaches.
-                            rubric_id: meta?.rubric_id ?? null,
-                          }))
-                        }
-                        disabled={isLocked}
-                        assessmentId={assessment.id}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    <div className="text-sm font-medium">Choices</div>
-                    {item.choices.map((c, ci) => {
-                      const isMulti = item.type === "multiple_choice_multi";
-                      const checked = item.correct_choice_ids.includes(c.id);
-                      return (
-                        <div key={c.id}>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type={isMulti ? "checkbox" : "radio"}
-                              name={`correct-${item.id}`}
-                              checked={checked}
-                              aria-label={`Mark choice ${c.id.toUpperCase()} as correct`}
-                              title="Correct answer"
-                              onChange={() =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  correct_choice_ids: isMulti
-                                    ? checked
-                                      ? i.correct_choice_ids.filter((x) => x !== c.id)
-                                      : [...i.correct_choice_ids, c.id]
-                                    : [c.id],
-                                }))
-                              }
-                            />
-                            {/* The id is auto-assigned (nextChoiceId) and only ever
-                                shown as a letter; it used to be an editable field (A-16). */}
-                            <span
-                              className="w-5 text-center font-mono text-xs text-muted-foreground"
-                              aria-hidden
-                            >
-                              {c.id.toUpperCase()}
-                            </span>
-                            {newAuthoring && usesRichTextField(item.type) ? (
-                              <div className="min-w-0 flex-1 [&_.rt-field]:mt-0">
-                                <RichTextField
-                                  singleLine
-                                  label={`Choice ${c.id.toUpperCase()} text`}
-                                  value={c.text}
-                                  disabled={isLocked}
-                                  onChange={(text) =>
-                                    updateItem(item.id, (i) => ({
-                                      ...i,
-                                      choices: i.choices.map((cc, cci) => (cci === ci ? { ...cc, text } : cc)),
-                                    }))
-                                  }
-                                />
-                              </div>
-                            ) : (
-                            <input
-                              value={c.text}
-                              onChange={(e) =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  choices: i.choices.map((cc, cci) =>
-                                    cci === ci ? { ...cc, text: e.target.value } : cc,
-                                  ),
-                                }))
-                              }
-                              disabled={isLocked}
-                              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-                              aria-label={`Choice ${c.id.toUpperCase()} text`}
-                              placeholder={`Choice ${c.id.toUpperCase()}`}
-                            />
-                            )}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  choices: i.choices.filter((_, cci) => cci !== ci),
-                                  correct_choice_ids: i.correct_choice_ids.filter(
-                                    (x) => x !== c.id,
-                                  ),
-                                }))
-                              }
-                              disabled={item.choices.length <= 2 || isLocked}
-                              aria-label={`Remove choice ${c.id.toUpperCase()}`}
-                              title={item.choices.length <= 2 ? "Need at least 2 choices" : "Remove choice"}
-                            >
-                              <X aria-hidden />
-                            </Button>
-                          </div>
-                          {newAuthoring && usesRichTextField(item.type) ? null : (
-                          <>
-                          <div className="mt-1 flex flex-wrap items-start gap-2">
-                            <ImagePicker
-                              onInsert={(md) =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  choices: i.choices.map((cc, cci) =>
-                                    cci === ci
-                                      ? {
-                                          ...cc,
-                                          text: cc.text ? `${cc.text} ${md}` : md,
-                                        }
-                                      : cc,
-                                  ),
-                                }))
-                              }
-                            />
-                            <EmphasisButtons
-                              apply={(next) =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  choices: i.choices.map((cc, cci) => (cci === ci ? { ...cc, text: next(cc.text) } : cc)),
-                                }))
-                              }
-                            />
-                            <MathTranslator
-                              onInsert={(wrapped) =>
-                                updateItem(item.id, (i) => ({
-                                  ...i,
-                                  choices: i.choices.map((cc, cci) =>
-                                    cci === ci
-                                      ? {
-                                          ...cc,
-                                          text: cc.text
-                                            ? `${cc.text} ${wrapped}`
-                                            : wrapped,
-                                        }
-                                      : cc,
-                                  ),
-                                }))
-                              }
-                            />
-                          </div>
-                          <MathPreview text={c.text} />
-                          </>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isLocked}
-                      onClick={() =>
-                        updateItem(item.id, (i) => ({
-                          ...i,
-                          choices: [
-                            ...i.choices,
-                            { id: nextChoiceId(i.choices), text: "" },
-                          ],
-                        }))
-                      }
-                    >
-                      <Plus aria-hidden />
-                      Add choice
-                    </Button>
-                  </div>
-                )}
+                <ItemTypeFields
+                  assessment={assessment}
+                  item={item}
+                  isLocked={isLocked}
+                  newAuthoring={newAuthoring}
+                  updateItem={updateItem}
+                  choiceMessage={choiceMessage}
+                  moveChoice={moveChoice}
+                />
 
                 <label className="mt-3 block">
                   <span className="block text-sm font-medium">
@@ -3585,6 +1869,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </Alert>
                 ) : null}
 
+                {newAuthoring ? (
+                  // R-5: no Save question — the card autosaves.
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setHistoryFor(item.id)}>
+                      History
+                    </Button>
+                    <StatusLine state={save} />
+                  </div>
+                ) : (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button
                     type="button"
@@ -3597,6 +1890,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   </Button>
                   <StatusLine state={save} />
                 </div>
+                )}
                 {keyFixed[item.id] && !dirty ? (
                   <p role="status" className="mt-2 text-sm text-muted-foreground">
                     {KEY_FIXED_POINTER}{" "}
@@ -3612,8 +1906,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               </Fragment>
               );
             })}
+            {newAuthoring ? (
+              <li>
+                <InsertQuestionMenu
+                  prominent
+                  open={insertSlot === items.length}
+                  onOpenChange={(open) => setInsertSlot(open ? items.length : null)}
+                  onInsert={(type) => insertItem(type, items.length)}
+                  disabled={isLocked}
+                  busy={adding}
+                  label="Add a question at the end"
+                />
+              </li>
+            ) : null}
           </ol>
         )}
+        </div>
+        </div>
 
         <NextStepCard
           status={assessment.status}
@@ -3651,6 +1960,23 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       </Tabs>
 
       <ShareDialog assessmentId={assessment.id} open={shareOpen} onOpenChange={setShareOpen} />
+
+      {(() => {
+        const historyItem = historyFor ? items.find((i) => i.id === historyFor) : undefined;
+        return newAuthoring && historyItem ? (
+          <ItemHistoryDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setHistoryFor(null);
+            }}
+            assessmentId={assessment.id}
+            itemId={historyItem.id}
+            questionNumber={items.indexOf(historyItem) + 1}
+            locked={isLocked}
+            onRestore={(v) => restoreVersion(historyItem, v)}
+          />
+        ) : null;
+      })()}
 
       <PublishDialog
         open={publishOpen !== null}

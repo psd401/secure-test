@@ -4,7 +4,8 @@ import { getDb } from "@/db/client";
 import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
-import { CreateItemBody, itemConfigForWrite } from "@/lib/api/items";
+import { itemConfigForWrite, parseItemBody, wantsEmptyStem } from "@/lib/api/items";
+import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment } from "@/lib/api/access";
@@ -46,7 +47,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
   if (!bodyRead.ok) return bodyRead.response;
   try {
-    body = CreateItemBody.parse(bodyRead.parse());
+    const raw = bodyRead.parse();
+    // R-6: the new editor's questions start empty (parseItemBody).
+    const allowEmptyStem = wantsEmptyStem(raw) && (await isNewAuthoringEnabled(getDb(), auth.session));
+    body = parseItemBody(raw, { allowEmptyStem });
   } catch (err) {
     const message = err instanceof Error ? err.message : "invalid_body";
     return NextResponse.json(
