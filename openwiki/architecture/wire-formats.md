@@ -28,7 +28,7 @@ openwiki:
 
 | Module | Contents |
 | --- | --- |
-| `items.ts` | Authoring/teacher shapes: ten item schemas, `ItemSchema` (discriminated union on `type`, defaults a missing `type` to `multiple_choice_single` for PoC-B fixtures), `RubricSchema`, item sets (`ItemSetSchema`, `TeacherItemSetSchema`, `itemSetIssues`), enums (`StudentLayoutSchema`, `StudentFeedbackSchema`, `AnswersReleaseSchema`, `ScoringMethodSchema`), and **`ItemBundleSchema`**. |
+| `items.ts` | Authoring/teacher shapes: eleven item schemas (including the `graph` type), `ItemSchema` (discriminated union on `type`, defaults a missing `type` to `multiple_choice_single` for PoC-B fixtures), `RubricSchema`, item sets (`ItemSetSchema`, `TeacherItemSetSchema`, `itemSetIssues`), enums (`StudentLayoutSchema`, `StudentFeedbackSchema`, `AnswersReleaseSchema`, `ScoringMethodSchema`), and **`ItemBundleSchema`**. |
 | `delivery.ts` | Student shapes: `Delivery*ItemSchema` per type, `DeliveryItemSchema`, **`DeliveryBundleSchema`**. |
 | `responses.ts` | What a student may PUT: `ItemResponseSchema` (discriminated union), length caps (`ESSAY_TEXT_MAX_LENGTH`, `SHORT_TEXT_MAX_LENGTH`, `RESPONSE_CELL_MAX_LENGTH`, `ESSAY_HTML_MAX_LENGTH`). |
 | `macros.ts` | `K12_MACROS` — KaTeX macros (`\degree`, `\percent`, `\plusminus`, `\half`, `\third`, `\quarter`). |

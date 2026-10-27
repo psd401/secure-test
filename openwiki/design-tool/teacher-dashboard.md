@@ -107,7 +107,7 @@ Row actions (`DuplicateAssessmentButton`, `ArchiveAssessmentButton`, `DeleteDraf
 
 ## Assessment editor (`/dashboard/[id]`)
 
-`AssessmentEditor` is one large client component. Its tabs are fixed in `EDITOR_TABS`, and the active tab is kept in `?tab=`, so reload and deep links land on the same panel. `parseTab` falls back to Questions for an unknown value.
+`AssessmentEditor` is one large client component. With the per-staff R-12 flag on, its Questions tab autosaves each question card, shows an outline rail and an insert menu, and offers a per-question History dialog; see [authoring editor beta](new-authoring-editor.md). Its tabs are fixed in `EDITOR_TABS`, and the active tab is kept in `?tab=`, so reload and deep links land on the same panel. `parseTab` falls back to Questions for an unknown value.
 
 | Tab (`?tab=`) | Teacher label | Owns |
 |---|---|---|
