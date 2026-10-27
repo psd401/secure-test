@@ -38,6 +38,7 @@ Three independent test stacks exist. Run only the one that owns the change; the 
 |---|---|---|---|
 | Design tool | `bun test` (`design-tool/bunfig.toml` sets `root = "test"`) | `design-tool/test/*.test.ts` and `*.test.tsx` | Postgres for API and scoring suites |
 | Shared schema | `bun test` | `packages/schema/test/` (`delivery`, `items`, `macros`, `responses`, `scoring-method`) | `bun run build` only for consumers |
+| Markup grammar | `bun test` (and `bun run typecheck`) | `packages/markup/test/` (`markup.test.ts`, golden fixtures, fuzz helper) | nothing; the design tool's `test/markup-golden.test.ts` holds the server and client renderers to the same fixtures ([markup grammar](../architecture/markup-grammar.md)) |
 | macOS client | `swift test` | `client/SecureTestCore/Tests/SecureTestCoreTests/` | macOS toolchain, no Xcode UI or window server |
 
 The `bunfig.toml` root matters: without it `bun test` also sweeps CDK image-asset staging copies under `infra/cdk.out`, which double-run and fail.
@@ -94,10 +95,13 @@ One Swift fixture is not hand-written. `Fixtures/delivery-bundle.json` under `cl
 | One design-tool route suite | `cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/<name>.test.ts` | add `--bail` to stop at the first failure |
 | Types | `cd design-tool && bun run typecheck` | resolves `@secure-test/schema` through `dist/` |
 | Schema | `cd packages/schema && bun run build && bun test` | rebuild before consumer checks |
+| Markup grammar | `cd packages/markup && bun test` | narrow; add `bun run typecheck` for type edits. Renderer agreement is checked by `cd design-tool && bun test test/markup-golden.test.ts` |
 | Swift class | `cd client/SecureTestCore && swift test --filter <TestClass>` | |
 | Regenerate the shared delivery fixture | `cd design-tool` then `bun scripts/generate-delivery-fixture.ts` (with `DATABASE_URL` and `DESIGN_TOOL_DELIVERY_SECRET`) | conditional: only after a bundle shape change; see [shared delivery-bundle fixture](#shared-delivery-bundle-fixture) |
 | App target compile | `cd client && xcodebuild -project SecureTest.xcodeproj -scheme SecureTest -destination 'platform=macOS' build` | conditional: only for edits under `client/SecureTest/` or the project file |
 | Full design-tool suite | `cd design-tool && DATABASE_URL=... bun test` | conditional: shared helpers, auth, schema or migration changes |
 | `next build`, CDK synth | see [deployment and observability](../operations/deployment-and-observability.md) | conditional: only for build, Dockerfile or infra edits |
 
-CI in `.github/workflows/ci.yml` runs on every push to `main`, on every push to a `hotfix/**` branch, and on every pull request. It builds and tests `packages/schema` and `packages/renderer`, typechecks and tests the design tool against a Postgres service, and runs `bun db/migrate.ts` first. It does not run the Swift packages (the workflow header says `swift test` needs a macOS runner). A green `ci` run on `main` is also the signing gate for renderer manifests ([signed renderer delivery](../client/signed-renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
+CI in `.github/workflows/ci.yml` runs on every push to `main`, on every push to a `hotfix/**` branch, and on every pull request. It builds and tests `packages/schema` and `packages/renderer`, typechecks and tests `packages/markup` and `packages/graphing`, typechecks and tests the design tool against a Postgres service, and runs `bun db/migrate.ts` first. It does not run the Swift packages (the workflow header says `swift test` needs a macOS runner). A green `ci` run on `main` is also the signing gate for renderer manifests ([signed renderer delivery](../client/signed-renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
+renderer.md)). The automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
+ automated review (`claude-review.yml`) and this wiki's update job (`openwiki-update.yml`) are not test gates.
