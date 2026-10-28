@@ -122,7 +122,7 @@ describe("every API route reads JSON through readJsonBody", () => {
       expect(tier, `${rel} reads with ${calls[0]}`).toBeDefined();
       seen[rel] = tier!;
     }
-    expect(Object.keys(seen).length).toBe(46);
+    expect(Object.keys(seen).length).toBe(47);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

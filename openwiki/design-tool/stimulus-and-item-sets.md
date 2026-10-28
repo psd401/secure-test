@@ -66,6 +66,7 @@ An **item set** is one stimulus (a passage, figure caption, data table, or sever
 | Delete a set | `DELETE /api/assessments/[id]/item-sets/[setId]` | draft lock; items are freed, not deleted |
 | Attach an adjacent item | `POST .../item-sets/[setId]/items` | Only the question just before or after the block may join (`item_not_adjacent`, 409); an item already in a set gets `item_already_in_set` (409) |
 | Detach an item | `DELETE .../item-sets/[setId]/items/[itemId]` | Only an end of the block may leave (`would_split_set`, 409). Detaching the last item deletes the set. |
+| Split a page group | `POST .../item-sets/[setId]/split` | `{ item_id }`; page groups only (`not_a_page_group`, 409), not at the first question (`already_first`, 409). In one transaction the questions from `item_id` on leave: two or more form a new empty inline set, one is freed; a head of one is freed and the set deleted. |
 
 Reordering is in [authoring](authoring.md); this page owns the set-specific refusal through `splitSetInOrder`.
 
@@ -85,6 +86,15 @@ On the student client, `side_by_side` shows the sources on the left and the ques
 - Readiness treats an empty stimulus as a gap only when there are no sources. Each empty source is its own gap, named by its label (`stimulusGaps` in `app/dashboard/[id]/readiness.ts`).
 - Both bundles carry sources and layout. Export and import keep them, and duplication copies them (`duplicate-assessment.test.ts`).
 - PDF and Word import proposals carry sources with `side_by_side` and sets without sources with `own_page` (`proposedSetLayout` in `lib/pdfImport/setLayout.ts`; `inline` before 2026-10-28). That is the proposal's own rule, separate from the editor default. See [PDF import](pdf-import.md).
+
+## Page groups
+
+Added 2026-10-28 for the teacher's "page break" request (Route B: no schema change). A **page group** is an item set with no stimulus text, no sources and no source link over two or more questions (`isPageGroup` in `lib/authoring/pageGroup.ts`). It is inferred, not stored: a stimulus stretched over two questions before its text is written reads as a group until it has text (accepted 2026-10-28), and a set of one with nothing in it is still an empty stimulus.
+
+- The student renderer (`isPageGroup` in `AssessmentPage.swift`) hides any block with no text, sources or outline area, lays the set out inline whatever its saved layout, and marks members `in-group` rather than `in-set`. The questions share one page.
+- Readiness skips page groups; the static preview and print draw no box for them.
+- The editor (new editor only for the controls) shows a group as a "Same page" bar with **Add stimulus text** and **Separate pages**. Per question: **Same page as question above / below**, **Start a new page here** (the split route), **Add to the stimulus above / below**, **Remove from stimulus**. The outline rail captions a group "Same page".
+- The PDF import review has the same controls over proposed sets (`lib/pdfImport/groupEdit.ts`), and a group posts as `inline`.
 
 ## E12 source-backed sets
 

@@ -1,5 +1,6 @@
 import type { ItemType } from "@/db/schema";
 import { EXAMPLE_QUESTION_STEM } from "@/lib/authoring/startScreen";
+import { isPageGroup } from "@/lib/authoring/pageGroup";
 import { fillBlankMarkerIds, type FillBlankBlank } from "@secure-test/schema";
 import {
   FILL_BLANK_SEED_STEM,
@@ -253,6 +254,10 @@ function stimulusGapEntries(items: ReadinessItem[], sets: ReadinessSet[]): { lab
       }
       continue;
     }
+    // 2026-10-28: an empty set over two or more questions is a page group,
+    // not a stimulus waiting for its text.
+    const members = items.filter((it) => it.item_set_id === set.id).length;
+    if (isPageGroup(set, members)) continue;
     if (blank(set.stimulus_text) && sources.length === 0) {
       gaps.push({ first, label: `Stimulus for question ${first + 1} is empty` });
     }

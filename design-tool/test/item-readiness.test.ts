@@ -101,12 +101,19 @@ describe("stimulusGaps (E5 slice 1)", () => {
     pairs: null, sequence: null, image_asset_id: null, correct_region_ids: null, item_set_id,
   });
   test("names the first question of each empty-stimulus set; filled sets are fine", () => {
-    const items = [essay("A", null), essay("B", "s1"), essay("C", "s1"), essay("D", "s2")];
+    const items = [essay("A", null), essay("B", "s1"), essay("C", "s2"), essay("D", "s2")];
     expect(stimulusGaps(items, [{ id: "s1", stimulus_text: "  " }, { id: "s2", stimulus_text: "Figure 1" }]))
       .toEqual(["Stimulus for question 2 is empty"]);
     const checks = readinessChecks(items, [{ id: "s1", stimulus_text: "" }]);
     expect(checks.at(-1)).toEqual({ label: "Stimulus for question 2 is empty", ok: false });
     expect(readinessChecks(items).every((c) => c.ok)).toBe(true);
+  });
+
+  // 2026-10-28: an empty set over two or more questions is a page group.
+  test("an empty set over two questions is a page group, not a gap", () => {
+    const items = [essay("A", null), essay("B", "g"), essay("C", "g")];
+    expect(stimulusGaps(items, [{ id: "g", stimulus_text: " ", sources: [] }])).toEqual([]);
+    expect(readinessChecks(items, [{ id: "g", stimulus_text: "" }]).every((c) => c.ok)).toBe(true);
   });
 });
 

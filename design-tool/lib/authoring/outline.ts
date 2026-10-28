@@ -148,7 +148,7 @@ export function blockMoveAnnouncement<T extends Positioned>(
   const now = outlineBlocks(after).find((b) => b.items.some((i) => i.id === movedId));
   if (!was || !now) return "";
   const size = was.items.length;
-  const label = size === 1 ? `Question ${was.start + 1}` : `Questions ${was.start + 1} to ${was.start + size} (one stimulus)`;
+  const label = size === 1 ? `Question ${was.start + 1}` : `Questions ${was.start + 1} to ${was.start + size} (kept together)`;
   if (was.start === now.start) return `${label} did not move.`;
   const verb = size === 1 ? "is" : "are";
   return `${label} moved. ${size === 1 ? "It" : "They"} ${verb} now ${questionRange(now.start, size)} of ${after.length}.`;

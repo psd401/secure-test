@@ -22,6 +22,7 @@ import {
   setChoiceText,
   toggleKey,
 } from "@/lib/pdfImport/cardEdit";
+import { isProposedPageGroup, prependToSet, splitProposedGroup } from "@/lib/pdfImport/groupEdit";
 import { RichTextField } from "./RichTextField";
 import { MathPreview } from "./MathPreview";
 import {
@@ -559,7 +560,13 @@ export function PdfImportPanel({
       const res = await fetch(`/api/assessments/${targetId}/item-sets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ item_ids: postedIds, stimulus_text, sources, layout: set.layout }),
+        // A page group is one page whatever the card's layout says.
+        body: JSON.stringify({
+          item_ids: postedIds,
+          stimulus_text,
+          sources,
+          layout: isProposedPageGroup(set) ? "inline" : set.layout,
+        }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { hint?: string; error?: string } | null;
@@ -794,6 +801,35 @@ export function PdfImportPanel({
               }
             : s,
         ),
+    );
+  }
+  // ---- 2026-10-28: page groups (questions kept on one page) ----
+  /** "Same page as question above": into the set ending above, or a new
+   * group of the two loose questions. */
+  function keepWithPrevious(index: number) {
+    const above = sets.find((s) => s.item_indexes[s.item_indexes.length - 1] === index - 1);
+    if (above) return extendDown(above.id);
+    setSets((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}-${index}`,
+        stimulus: "",
+        figures: [],
+        item_indexes: [index - 1, index],
+        source: "model",
+        sources: [],
+        layout: "inline",
+      },
+    ]);
+  }
+  /** "… below": the loose question just above a set joins it. */
+  function joinSetBelow(index: number) {
+    setSets((prev) => prev.map((s) => prependToSet(s, index)));
+  }
+  /** "Start a new page here" inside a page group. */
+  function startNewPage(setId: string, index: number) {
+    setSets((prev) =>
+      prev.flatMap((s) => (s.id === setId ? splitProposedGroup(s, index, `local-${Date.now()}-${index}`) : [s])),
     );
   }
   function discardFigure(id: string, n: number) {
@@ -1190,7 +1226,7 @@ export function PdfImportPanel({
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Stimulus · {itemRangeLabel(set.item_indexes)}
+                            {isProposedPageGroup(set) ? "Same page" : "Stimulus"} · {itemRangeLabel(set.item_indexes)}
                             {set.source === "adjacency" ? " · paired by position, please check" : ""}
                             {set.needs_figure ? " · figure not extracted" : ""}
                           </span>
@@ -1341,6 +1377,7 @@ export function PdfImportPanel({
                               This set came back with more than 12 sources; the list was cut at 12.
                             </p>
                           ) : null}
+                          {isProposedPageGroup(set) ? null : (
                           <label className="mt-1 block text-[11px] text-muted-foreground">
                             Layout{" "}
                             <select
@@ -1358,6 +1395,7 @@ export function PdfImportPanel({
                               ))}
                             </select>
                           </label>
+                          )}
                           <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
                             <button type="button" onClick={() => splitLast(set.id)} disabled={disabled || busy || setAdded} className="underline">
                               {set.item_indexes.length > 1 ? "Split off the last question" : "Drop this stimulus"}
@@ -1381,7 +1419,13 @@ export function PdfImportPanel({
                         >
                           {setAdded
                             ? newAuthoring ? "Accepted" : "Added"
-                            : `${newAuthoring ? "Accept" : "Add"} ${rows.length === 1 ? "with stimulus" : `${rows.length} with stimulus`}`}
+                            : `${newAuthoring ? "Accept" : "Add"} ${
+                                isProposedPageGroup(set)
+                                  ? `${rows.length} on one page`
+                                  : rows.length === 1
+                                    ? "with stimulus"
+                                    : `${rows.length} with stimulus`
+                              }`}
                         </button>
                       </div>
                       <ul className="mt-2 space-y-2 border-l-2 border-primary/30 pl-2">{rowsHtml}</ul>
@@ -1624,7 +1668,12 @@ export function PdfImportPanel({
     const c = edits.get(i) ?? proposed;
     const isEditing = newAuthoring && editing.has(i) && !added.has(i);
     const keyKind = editableKey(c.type);
-    const inSet = sets.some((s) => s.item_indexes.includes(i));
+    const mySet = sets.find((s) => s.item_indexes.includes(i)) ?? null;
+    const inSet = !!mySet;
+    // 2026-10-28 (flag on): page-group and stimulus controls on the card.
+    const aboveSet = sets.find((s) => s.item_indexes[s.item_indexes.length - 1] === i - 1) ?? null;
+    const belowSet = sets.find((s) => s.item_indexes[0] === i + 1) ?? null;
+    const aboveFree = i > 0 && !hidden.has(i - 1) && !added.has(i - 1) && (!aboveSet || !addedSets.has(aboveSet.id));
     const prevInSet = i > 0 && sets.some((s) => s.item_indexes.includes(i - 1));
     // R-8 (flag on): the card's pile, its place on the PDF, and the fields a
     // "check this" reason is about.
@@ -1841,6 +1890,21 @@ export function PdfImportPanel({
                           className="text-[11px] underline"
                         >
                           {isEditing ? "Done editing" : "Edit"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && !inSet && !added.has(i) && aboveFree ? (
+                        <button type="button" onClick={() => keepWithPrevious(i)} disabled={disabled || busy} className="text-[11px] underline">
+                          {aboveSet && !isProposedPageGroup(aboveSet) ? "Add to the stimulus above" : "Same page as question above"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && !inSet && !added.has(i) && belowSet && !addedSets.has(belowSet.id) ? (
+                        <button type="button" onClick={() => joinSetBelow(i)} disabled={disabled || busy} className="text-[11px] underline">
+                          {isProposedPageGroup(belowSet) ? "Same page as question below" : "Add to the stimulus below"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && mySet && isProposedPageGroup(mySet) && mySet.item_indexes[0] !== i && !addedSets.has(mySet.id) && !added.has(i) ? (
+                        <button type="button" onClick={() => startNewPage(mySet.id, i)} disabled={disabled || busy} className="text-[11px] underline">
+                          Start a new page here
                         </button>
                       ) : null}
                       {!inSet && !added.has(i) && !prevInSet ? (

@@ -322,7 +322,7 @@ describe("beforePublishing", () => {
 
   test("a stimulus gap jumps to the first question of its set", () => {
     const entries = beforePublishing(
-      [item("q1"), item("q2", { item_set_id: "s1" }), item("q3", { item_set_id: "s1" })],
+      [item("q1"), item("q2", { item_set_id: "s1" }), item("q3")],
       [{ id: "s1", stimulus_text: "  " }],
     );
     expect(entries).toEqual([{ itemId: "q2", label: "Stimulus for question 2 is empty" }]);

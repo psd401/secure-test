@@ -1,6 +1,7 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
+import { isPageGroup } from "@/lib/authoring/pageGroup";
 import { ArrowDown, ArrowUp, ListPlus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,9 @@ export interface StimulusSetCardProps {
 }
 
 export function StimulusSetCard(props: StimulusSetCardProps) {
+  // 2026-10-28: a page group shows as a slim "Same page" bar until the
+  // teacher chooses to write a stimulus for it.
+  const [writing, setWriting] = useState(false);
   const {
     assessment,
     set,
@@ -60,6 +64,33 @@ export function StimulusSetCard(props: StimulusSetCardProps) {
     setError,
     describe,
   } = props;
+  if (!writing && !setDirty && isPageGroup(set, bounds.last - bounds.first + 1)) {
+    return (
+      <li
+        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-primary/40 px-4 py-2"
+        aria-label={`Questions ${bounds.first + 1} to ${bounds.last + 1} share one page`}
+      >
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Same page · Questions {bounds.first + 1}–{bounds.last + 1}
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setWriting(true)} disabled={isLocked}>
+            Add stimulus text
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => removeStimulus(set.id)}
+            disabled={isPending || isLocked}
+            title="Give each of these questions its own page again"
+          >
+            Separate pages
+          </Button>
+        </div>
+      </li>
+    );
+  }
   return (
     <li
       className="rounded-lg border border-primary/40 bg-primary/5 p-4"
