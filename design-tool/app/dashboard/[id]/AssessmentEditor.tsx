@@ -62,6 +62,7 @@ import {
 } from "@/lib/authoring/outline";
 import { newItemSeed } from "@/lib/authoring/insertTypes";
 import { changeItemType, typeChangeTargets } from "@/lib/authoring/typeChange";
+import { withScoringMethod } from "@/lib/authoring/shortAnswerAi";
 import { OutlineRail } from "./OutlineRail";
 import { InsertQuestionMenu } from "./InsertQuestionMenu";
 import { TypeChangeControl } from "./TypeChangeControl";
@@ -1893,13 +1894,13 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   <select
                     value={item.scoring_method ?? ""}
                     onChange={(e) =>
-                      updateItem(item.id, (i) => ({
-                        ...i,
-                        scoring_method:
-                          e.target.value === ""
-                            ? null
-                            : (e.target.value as ScoringMethod),
-                      }))
+                      updateItem(item.id, (i) =>
+                        // AI short answer: AI brings a key, other methods drop it.
+                        withScoringMethod(
+                          i,
+                          e.target.value === "" ? null : (e.target.value as ScoringMethod),
+                        ),
+                      )
                     }
                     disabled={isLocked}
                     className="mt-1 w-full max-w-md rounded-md border border-border bg-transparent px-3 py-2 text-sm"
@@ -1912,7 +1913,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         key={m}
                         value={m}
                         disabled={
-                          (m === "ai" || m === "hybrid") && !item.rubric
+                          (m === "ai" || m === "hybrid") && !item.rubric && item.type !== "short_text"
                         }
                       >
                         {SCORING_LABEL[m]}
