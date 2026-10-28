@@ -547,8 +547,9 @@ function cropFromPage(
 
 /**
  * Beta report (2026-10-27): draw an oversize figure smaller until its PNG is
- * at most `maxBytes`. Each try scales the original by the square root of the
- * byte overshoot (bytes track pixel count), with a 10% margin. Returns null
+ * at most `maxBytes`. Each try shrinks the last try's size by the square root
+ * of its byte overshoot (bytes track pixel count), with a 10% margin, and
+ * redraws the original at that size. Returns null
  * when the canvas throws, the long side would drop below
  * MIN_SHRUNK_FIGURE_PX, or four tries do not get under the cap.
  */
@@ -615,9 +616,10 @@ export async function extractPdfLayout(
   let n = 0;
 
   // Slice 5: the canvas is loaded once, lazily, and only for a page that has
-  // a cluster (or, since 2026-10-27, for a figure that must be shrunk). A failure here (a missing native binary in some runtime) drops
-  // vector figures and nothing else — the raster walk and the text still come
-  // back, because a figure must never cost the teacher the import.
+  // a cluster or (since 2026-10-27) a figure that must be shrunk. A failure
+  // here (a missing native binary in some runtime) drops vector figures and
+  // the shrink, nothing else — the raster walk and the text still come back,
+  // because a figure must never cost the teacher the import.
   const canvasImport = limits.canvasImport ?? defaultCanvasImport;
   let canvas: CanvasModule | null = null;
   let canvasFailed = false;
@@ -628,7 +630,7 @@ export async function extractPdfLayout(
     } catch (err) {
       canvasFailed = true;
       console.warn(
-        "pdf-import: vector figures unavailable (@napi-rs/canvas did not load)",
+        "pdf-import: vector figures and figure shrinking unavailable (@napi-rs/canvas did not load)",
         err instanceof Error ? err.message : err,
       );
     }
