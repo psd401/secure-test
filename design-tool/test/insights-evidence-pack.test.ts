@@ -232,7 +232,8 @@ describe("buildEvidencePackFromData", () => {
       ],
     };
     const { pack } = buildEvidencePackFromData(input);
-    expect(pack.assessment.items[1]!.key).toBe("Full credit (1): Oxygen, or O2.");
+    // No "(points)" in the key: the chat may quote it, and points are figures.
+    expect(pack.assessment.items[1]!.key).toBe("Full credit: Oxygen, or O2.");
     // The top answers stay, and the rubric's level distribution is added.
     const a = pack.item_analytics.find((x) => x.label === "Q2")!;
     expect(a.answers?.[0]?.answer).toBe("Oxygen");

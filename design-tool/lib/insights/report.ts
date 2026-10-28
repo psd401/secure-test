@@ -163,8 +163,46 @@ export function allowedStrings(pack: Pick<EvidencePack, "assessment" | "tags" | 
   return [...out].filter((s) => s.trim().length > 0 && /[A-Za-z]/.test(s));
 }
 
+/** A number as written in text: digits joined by "." "," "/" or ":". */
+const NUMBER_TOKEN = /\d+(?:[.,/:]\d+)*/g;
+
+/** "1,000" and "1000" are one number; other punctuation is kept. */
+function normalizeNumber(token: string): string {
+  return token.replace(/,(?=\d{3}\b)/g, "");
+}
+
+/**
+ * 2026-10-27 (beta hand-check row 841): the numbers the pack's own question
+ * text, keys, choices and answers contain. A reply may quote one — "births
+ * per 1000 people" is the subject, not an invented statistic — but only one
+ * with two or more digits, so a lone digit ("level 3", "3 students") still
+ * counts as invented.
+ */
+export function contentNumbers(pack: Pick<EvidencePack, "assessment" | "item_analytics">): Set<string> {
+  const texts: string[] = [];
+  for (const item of pack.assessment.items) {
+    texts.push(item.stem, item.key ?? "");
+    for (const c of item.choices ?? []) texts.push(c.text);
+    for (const b of item.blanks ?? []) texts.push(...(b.options ?? []), ...(b.keys ?? []));
+  }
+  for (const a of pack.item_analytics) {
+    for (const x of a.answers ?? []) texts.push(x.answer);
+    for (const b of a.blank_answers ?? []) for (const x of b.answers) texts.push(x.answer);
+  }
+  const out = new Set<string>();
+  for (const t of texts) {
+    for (const token of t.match(NUMBER_TOKEN) ?? []) {
+      const n = normalizeNumber(token);
+      if (n.replace(/\D/g, "").length >= 2) out.add(n);
+    }
+  }
+  return out;
+}
+
 interface FillContext {
   figures: Record<string, number>;
+  /** Numbers the reply may quote from the pack's content (contentNumbers). */
+  content: Set<string>;
   itemLabels: Set<string>;
   students: Set<string>;
   /** Stored tag and its code → the stored tag. */
@@ -190,6 +228,7 @@ function fillContext(pack: ClassInsightsPackInput): FillContext {
   const parts = ["\\{[^{}]*\\}", ...allowed, "\\b[QS]\\d+\\b"];
   return {
     figures: pack.figures,
+    content: contentNumbers(pack),
     itemLabels: new Set(pack.assessment.items.map((i) => i.label)),
     students: new Set(pack.students.map((s) => s.id)),
     tagOf,
@@ -282,8 +321,10 @@ function fillClaim(raw: unknown, ctx: FillContext, schema = ClaimSchema): Filled
   residue += claim.text.slice(last);
   if (!ok) return null;
   // A stray brace (`{unclosed`, `{{x}}`) or a digit outside every allowed
-  // token is an invented number.
-  if (/[{}\d]/.test(residue)) return null;
+  // token is an invented number — unless it is one the content quotes.
+  if (/[{}]/.test(residue)) return null;
+  const quotedOut = residue.replace(NUMBER_TOKEN, (n) => (ctx.content.has(normalizeNumber(n)) ? "" : n));
+  if (/\d/.test(quotedOut)) return null;
 
   for (const label of claim.citations?.items ?? []) {
     if (!ctx.itemLabels.has(label)) return null;

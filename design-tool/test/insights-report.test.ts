@@ -185,6 +185,49 @@ describe("fillReport", () => {
     expect(report.strengths[0]!.citations.tags).toEqual(["wa2026:M.7.R.RP.2"]);
   });
 
+  // 2026-10-27 (beta hand-check row 841): a reply about a question whose
+  // subject IS a number ("births per 1000 people") was always refused. A
+  // number the pack's question text, key or answers already contain is
+  // quoted content, not an invented statistic — but only with two or more
+  // digits, so a lone digit ("level 3", "3 students") still drops.
+  test("content numbers: a number from the question, key or answers may be quoted", () => {
+    const { forModel } = built();
+    const { report, dropped } = fillReport(
+      reply({
+        growth: [
+          { text: "S2 wrote 6/8 where the key is 3/4.", citations: { students: ["S2"], items: ["Q2"] } },
+          { text: "Q1 asks for a ratio equivalent to 2:3, such as 4:6.", citations: { items: ["Q1"] } },
+          { text: "S2 reached level 3.", citations: { students: ["S2"] } },
+          { text: "12 students missed Q2.", citations: { items: ["Q2"] } },
+          { text: "S2 wrote 6/9.", citations: { students: ["S2"] } },
+        ],
+      }),
+      forModel,
+    );
+    expect(report.growth.map((c) => plainText(c.text))).toEqual([
+      "S2 wrote 6/8 where the key is 3/4.",
+      "Q1 asks for a ratio equivalent to 2:3, such as 4:6.",
+    ]);
+    expect(dropped).toBe(3);
+  });
+
+  test("content numbers: thousands separators do not matter", () => {
+    const { forModel } = built();
+    const pack = {
+      ...forModel,
+      assessment: {
+        ...forModel.assessment,
+        items: forModel.assessment.items.map((i) => (i.label === "Q2" ? { ...i, key: "births per 1000 people" } : i)),
+      },
+    };
+    const { report, dropped } = fillReport(
+      reply({ growth: [{ text: "Most left out the per-1,000 rate on Q2.", citations: { items: ["Q2"] } }] }),
+      pack,
+    );
+    expect(dropped).toBe(0);
+    expect(plainText(report.growth[0]!.text)).toBe("Most left out the per-1,000 rate on Q2.");
+  });
+
   test("a digit-only level label does not open the digit rule", () => {
     const pack = { ...built().forModel };
     pack.item_analytics = pack.item_analytics.map((a) =>

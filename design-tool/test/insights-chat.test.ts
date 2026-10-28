@@ -247,6 +247,10 @@ describe("the reply's fill", () => {
     const { forModel } = packFixture();
     const opts = { maxText: MAX_REPLY_CHARS };
     expect(fillSingleClaim({ text: "Seven of them: 7." }, forModel, opts)).toBeNull();
+    // 2026-10-27: a two-digit-plus number the question already contains is
+    // quoted content; a lone digit is still an invented number.
+    const quoted = forModel.assessment.items.flatMap((i) => (i.stem.match(/\d{2,}|\d+[/:]\d+/g) ?? []))[0];
+    if (quoted) expect(fillSingleClaim({ text: `The question asks about ${quoted}.` }, forModel, opts)).not.toBeNull();
     expect(fillSingleClaim({ text: "S44 did well." }, forModel, opts)).toBeNull();
     expect(fillSingleClaim({ text: "See {item.Q9.mean}." }, forModel, opts)).toBeNull();
     expect(fillSingleClaim({ text: "a".repeat(MAX_REPLY_CHARS + 1) }, forModel, opts)).toBeNull();
