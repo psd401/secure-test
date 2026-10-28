@@ -10,15 +10,17 @@ import {
 } from "@/db/schema";
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
+import { AI_SCORED_TYPES } from "@/lib/scoring/aiBatch";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAttempt } from "@/lib/api/access";
 import { injectionAlertFor } from "@/lib/safeguarding/alerts";
 import { screenResponse } from "@/lib/safeguarding/screening/screen";
 
-// Is this item one the AI scorer targets at all? (essay + ai/hybrid)
+// Is this item one the AI scorer targets at all? (essay or short answer +
+// ai/hybrid; keep in step with isAiBatchItem)
 function isAiEligible(item: ItemRow): boolean {
-  if (item.type !== "essay") return false;
+  if (!AI_SCORED_TYPES.has(item.type)) return false;
   const method = effectiveScoringMethod(item.type as ItemType, item.config);
   return method === "ai" || method === "hybrid";
 }

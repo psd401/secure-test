@@ -1091,5 +1091,25 @@ describe("bedrockEssayScorer: one retry on an unreadable or rubric-mismatched re
     await expect(score()).rejects.toThrow("(after 2 attempts)");
     expect(callLog.length).toBe(2);
   });
-});
 
+  test("AI short answer (2026-10-27): kind picks the system prompt and the user-prompt header", async () => {
+    const { bedrockEssayScorer } = await import("../lib/ai/essayScorer/bedrockProvider");
+    const { ESSAY_SCORE_SYSTEM_PROMPT, SHORT_ANSWER_SCORE_SYSTEM_PROMPT } = await import(
+      "../lib/ai/essayScorer/scoreCore"
+    );
+    const sent = () => JSON.stringify(callLog.at(-1));
+    setResponses({ ...textResponse(good), stopReason: "end_turn" });
+    await bedrockEssayScorer.scoreEssay({
+      stem: "Define birth rate.",
+      response_text: "Births per 1000.",
+      rubric,
+      kind: "short_answer",
+    });
+    expect(sent()).toContain(SHORT_ANSWER_SCORE_SYSTEM_PROMPT.slice(0, 60));
+    expect(sent()).toContain("SHORT-ANSWER QUESTION:");
+    setResponses({ ...textResponse(good), stopReason: "end_turn" });
+    await score();
+    expect(sent()).toContain(ESSAY_SCORE_SYSTEM_PROMPT.slice(0, 60));
+    expect(sent()).toContain("ESSAY PROMPT:");
+  });
+});

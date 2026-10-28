@@ -286,3 +286,104 @@ describe("bundle round-trip + import clamping", () => {
     expect(rows[3]?.config.scoring_method).toBe("ai");
   });
 });
+
+// AI short answer (James, 2026-10-27: D1 rubric only while AI scored, D2
+// holistic with partial credit, D3 always exported).
+describe("AI short answer", () => {
+  const KEY = {
+    style: "holistic" as const,
+    criteria: [
+      {
+        id: "sa",
+        name: "Answer",
+        levels: [
+          { id: "sa0", label: "No credit", points: 0 },
+          { id: "sa1", label: "Partial credit", points: 1, descriptor: "Names births." },
+          { id: "sa2", label: "Full credit", points: 2, descriptor: "Births per 1000 people." },
+        ],
+      },
+    ],
+  };
+  const SHORT = { type: "short_text", stem: "Define birth rate." };
+
+  async function storedConfig(id: string) {
+    const [row] = await getDb().select().from(items).where(eq(items.assessment_id, id));
+    return row!.config;
+  }
+
+  test("hybrid with a holistic key is stored with its rubric", async () => {
+    const id = await createAssessment("A");
+    const res = await postItem(id, { ...SHORT, scoring_method: "hybrid", rubric: KEY });
+    expect(res.status).toBe(201);
+    expect(await storedConfig(id)).toEqual({ scoring_method: "hybrid", rubric: KEY });
+  });
+
+  test.each([
+    ["a rubric with auto", { ...SHORT, scoring_method: "auto", rubric: KEY }],
+    ["a rubric with human", { ...SHORT, scoring_method: "human", rubric: KEY }],
+    ["an analytic rubric", { ...SHORT, scoring_method: "ai", rubric: { ...KEY, style: "analytic" } }],
+    [
+      "a scoring level with no text",
+      {
+        ...SHORT,
+        scoring_method: "ai",
+        rubric: {
+          ...KEY,
+          criteria: [{ ...KEY.criteria[0], levels: [KEY.criteria[0]!.levels[0], { id: "x", label: "Full", points: 1 }] }],
+        },
+      },
+    ],
+    [
+      "a 0-point rubric",
+      {
+        ...SHORT,
+        scoring_method: "ai",
+        rubric: { ...KEY, criteria: [{ ...KEY.criteria[0], levels: [{ id: "a", label: "A", points: 0 }, { id: "b", label: "B", points: 0 }] }] },
+      },
+    ],
+  ])("rejects %s with 400", async (_label, body) => {
+    const id = await createAssessment("A");
+    expect((await postItem(id, body)).status).toBe(400);
+  });
+
+  test("a rubric sent with no method is not stored (the default is auto)", async () => {
+    const id = await createAssessment("A");
+    expect((await postItem(id, { ...SHORT, correct_answer: "x", rubric: KEY })).status).toBe(201);
+    expect(await storedConfig(id)).toEqual({});
+  });
+
+  test("export always carries the key; import round-trips it", async () => {
+    const id = await createAssessment("A");
+    await postItem(id, { ...SHORT, scoring_method: "ai", rubric: KEY });
+    // The student-safe default export too (D3), not only include_hidden_rubrics.
+    const { GET } = await import("../app/api/assessments/[id]/export/route");
+    const plain = await (
+      await GET(new Request(`http://localhost/api/assessments/${id}/export`), { params: Promise.resolve({ id }) })
+    ).json();
+    expect(plain.items[0]).toMatchObject({ type: "short_text", scoring_method: "ai", rubric: KEY });
+    const res = await postImport({ ...plain, title: "Copy" });
+    expect(res.status).toBe(201);
+    const { assessment } = (await res.json()) as { assessment: { id: string } };
+    expect(await storedConfig(assessment.id)).toEqual({ scoring_method: "ai", rubric: KEY });
+  });
+
+  test("import drops a key it cannot use, and the method with it", async () => {
+    const res = await postImport({
+      test_id: "sa-clamp",
+      title: "Clamp",
+      items: [
+        { type: "short_text", id: "a", stem: "A", scoring_method: "hybrid", rubric: { ...KEY, style: "analytic" } },
+        { type: "short_text", id: "b", stem: "B", scoring_method: "auto", correct_answer: "x", rubric: KEY },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { assessment: { id: string }; scoring_methods_dropped: number };
+    expect(body.scoring_methods_dropped).toBe(1);
+    const rows = await getDb()
+      .select()
+      .from(items)
+      .where(eq(items.assessment_id, body.assessment.id))
+      .orderBy(asc(items.position));
+    expect(rows.map((r) => r.config)).toEqual([{}, { scoring_method: "auto" }]);
+  });
+});

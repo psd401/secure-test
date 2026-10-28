@@ -25,6 +25,7 @@ import type {
   ScoreEssayResult,
 } from "@/lib/ai/essayScorer/types";
 import { effectiveScoringMethod } from "@/lib/api/items";
+import { AI_SCORED_TYPES } from "@/lib/scoring/aiBatch";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { hasInjectionAlert } from "@/lib/safeguarding/alerts";
 import { screenedForScoring } from "@/lib/safeguarding/screening/screen";
@@ -105,7 +106,7 @@ export async function runEssayScorer(opts: {
   const { item, response, ownerSub } = opts;
   const allowed = opts.allowedMethods ?? (["ai", "hybrid"] as const);
   const method = effectiveScoringMethod(item.type as ItemType, item.config);
-  if (item.type !== "essay" || !allowed.includes(method)) {
+  if (!AI_SCORED_TYPES.has(item.type) || !allowed.includes(method)) {
     return { kind: "not_ai", method };
   }
   const rubric = item.config.rubric;
@@ -121,7 +122,12 @@ export async function runEssayScorer(opts: {
   // `<target>.meets` ids for a single-point rubric.
   const view = scoringView(rubric);
   const parsed = ItemResponseSchema.safeParse(response.response);
-  if (!parsed.success || parsed.data.type !== "essay" || !parsed.data.text.trim()) {
+  if (
+    !parsed.success ||
+    (parsed.data.type !== "essay" && parsed.data.type !== "short_text") ||
+    parsed.data.type !== item.type ||
+    !parsed.data.text.trim()
+  ) {
     return { kind: "unscorable", reason: "empty_response" };
   }
   const responseText = parsed.data.text;
@@ -142,6 +148,7 @@ export async function runEssayScorer(opts: {
             stem: item.stem,
             response_text: responseText,
             rubric,
+            kind: item.type === "short_text" ? "short_answer" : "essay",
           },
           ownerSub,
         ),

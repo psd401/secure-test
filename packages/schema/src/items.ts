@@ -83,22 +83,6 @@ export const MultiSelectMCItemSchema = z.object({
   correct_choice_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST),
 });
 
-// Numeric equivalence (James, 2026-09-15; docs/math-entry-design.md
-// §Follow-ups "Numeric equivalence"): a short-text answer that parses as a
-// number is compared to a numeric key BY VALUE, so `1/2`, `0.5` and `50/100`
-// all score. `exact_form` opts one item out — the teacher's answer form is
-// the point ("in lowest terms", "as a decimal to two places"), so the old
-// exact folded comparison is used instead. Absent = false = equivalence on,
-// which keeps every bundle written before this byte-stable. Rides the
-// TEACHER bundle only: it is a property of the answer key, and ADR 0016 keeps
-// the delivery bundle free of anything key-shaped.
-export const ShortTextItemSchema = z.object({
-  type: z.literal("short_text"),
-  ...baseItem,
-  correct_answer: z.string().min(1).optional(),
-  exact_form: z.boolean().optional(),
-});
-
 // Slice 33: rubric block on essay items. Authoring + storage only — Phase 3
 // AI/human scoring consumes it later (design-tool-plan.md:107,119). One
 // unified structure serves all three styles as cardinality variants:
@@ -164,6 +148,26 @@ export const RubricSchema = z
       }
     });
   });
+
+// Numeric equivalence (James, 2026-09-15; docs/math-entry-design.md
+// §Follow-ups "Numeric equivalence"): a short-text answer that parses as a
+// number is compared to a numeric key BY VALUE, so `1/2`, `0.5` and `50/100`
+// all score. `exact_form` opts one item out — the teacher's answer form is
+// the point ("in lowest terms", "as a decimal to two places"), so the old
+// exact folded comparison is used instead. Absent = false = equivalence on,
+// which keeps every bundle written before this byte-stable. Rides the
+// TEACHER bundle only: it is a property of the answer key, and ADR 0016 keeps
+// the delivery bundle free of anything key-shaped.
+export const ShortTextItemSchema = z.object({
+  type: z.literal("short_text"),
+  ...baseItem,
+  correct_answer: z.string().min(1).optional(),
+  exact_form: z.boolean().optional(),
+  // AI short answer (2026-10-27): the AI scorer's key for an ai / hybrid
+  // short answer — what earns each score. Teacher bundle only, like
+  // correct_answer; the design tool's import keeps it only when holistic.
+  rubric: RubricSchema.optional(),
+});
 
 // Slice 32: long-text / essay item. Authoring only — there is no scoring
 // yet (Phase 3). `max_word_count` and `placeholder` are authoring metadata

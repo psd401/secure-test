@@ -32,7 +32,7 @@ import {
 // What is omitted relative to ItemSchema:
 //   multiple_choice_single  correct_choice_id
 //   multiple_choice_multi   correct_choice_ids
-//   short_text              correct_answer
+//   short_text              correct_answer, rubric (the AI key, 2026-10-27)
 //   hotspot                 correct_region_ids  (regions stay — needed to render)
 //   essay                   rubric only when student_visibility.during_test
 //   match / order           see the shape change below

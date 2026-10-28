@@ -72,7 +72,7 @@ export function hasAnswerKey(item: TypeChangeItem): boolean {
     case "multiple_choice_multi":
       return item.correct_choice_ids.length > 0;
     case "short_text":
-      return (item.correct_answer ?? "").trim() !== "";
+      return (item.correct_answer ?? "").trim() !== "" || item.rubric != null;
     case "order":
       // The sequence is authored in the correct order: it IS the key.
       return (item.sequence ?? []).length > 0;
@@ -163,6 +163,7 @@ export function changeItemType<T extends TypeChangeItem>(
       lost.push(KEY_PHRASE[item.type]);
     }
     if (item.type === "essay" && item.rubric) lost.push("the scoring rubric");
+    if (item.type === "short_text" && item.rubric) lost.push("what earns credit (the AI scoring key)");
     if (item.type === "hotspot" && (item.image_asset_id || (item.regions ?? []).length > 0)) {
       lost.push("the picture and its regions");
     }
@@ -172,7 +173,10 @@ export function changeItemType<T extends TypeChangeItem>(
     if (item.type === "graph") lost.push("the graph's grid");
   }
 
-  if (item.scoring_method && !scoringAllowed(target).includes(item.scoring_method)) {
+  const aiWithoutKey = (item.scoring_method === "ai" || item.scoring_method === "hybrid") && !next.rubric;
+  if (item.scoring_method && (!scoringAllowed(target).includes(item.scoring_method) || aiWithoutKey)) {
+    // AI short answer: an essay scored with AI becomes a short answer with
+    // no key (the rubric does not carry over), so its AI method goes too.
     next.scoring_method = null;
     lost.push("the scoring method you picked (it goes back to the default)");
   } else {

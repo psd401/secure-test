@@ -215,6 +215,30 @@ describe("buildEvidencePackFromData", () => {
     expect(pack.assessment.items[1]!.key).toBe("oxygen");
   });
 
+  test("AI short answer (2026-10-27): its key is what earns credit, and its levels are counted", () => {
+    const input = baseInput();
+    const st = input.assessment.items.find((i) => i.id === "item-st")!;
+    st.rubric = {
+      style: "holistic",
+      criteria: [
+        {
+          id: "sa",
+          name: "Answer",
+          levels: [
+            { id: "sa0", label: "No credit", points: 0 },
+            { id: "sa1", label: "Full credit", points: 1, descriptor: "Oxygen, or O2." },
+          ],
+        },
+      ],
+    };
+    const { pack } = buildEvidencePackFromData(input);
+    expect(pack.assessment.items[1]!.key).toBe("Full credit (1): Oxygen, or O2.");
+    // The top answers stay, and the rubric's level distribution is added.
+    const a = pack.item_analytics.find((x) => x.label === "Q2")!;
+    expect(a.answers?.[0]?.answer).toBe("Oxygen");
+    expect(a.criteria?.[0]?.criterion).toBe("Answer");
+  });
+
   test("short-text clusters keep the top 8 by count", () => {
     const input = baseInput();
     for (let i = 0; i < 10; i++) {

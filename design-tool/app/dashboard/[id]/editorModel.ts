@@ -74,7 +74,8 @@ export interface ItemView {
   // U-22: essay only — true shows the student a running word count with no
   // maximum; null = off. Optional like rich_text.
   show_word_count?: boolean | null;
-  // Essay-only rubric (slice 33); null when unset / for other types.
+  // Essay rubric (slice 33), or an AI short answer's key (2026-10-27); null
+  // when unset / for other types.
   rubric: Rubric | null;
   // Rubric library slice 3 (D-4): which saved rubric the copy above came
   // from, when it came from one. Cleared the moment the teacher edits the
@@ -359,7 +360,9 @@ export const HYBRID_HINT =
 export const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   multiple_choice_single: ["auto", "human"],
   multiple_choice_multi: ["auto", "human"],
-  short_text: ["auto", "human"],
+  // AI short answer (2026-10-27): ai / hybrid are offered in the new
+  // editor; the old one shows them only on an item already AI scored.
+  short_text: ["auto", "human", "ai", "hybrid"],
   essay: ["human", "ai", "hybrid"],
   match: ["auto", "human"],
   order: ["auto", "human"],
@@ -369,6 +372,18 @@ export const SCORING_OPTIONS: Record<ItemType, readonly ScoringMethod[]> = {
   fill_blank: ["auto", "human"],
   graph: ["auto", "human"],
 };
+
+/** AI short answer (2026-10-27): the authoring UI is the new editor's, so
+ * the old editor offers ai / hybrid on a short answer only when the item
+ * already uses one (a beta co-teacher set it up) — it then shows the truth. */
+export function scoringOptionShown(
+  item: Pick<ItemView, "type" | "scoring_method">,
+  method: ScoringMethod,
+  newAuthoring: boolean,
+): boolean {
+  if (item.type !== "short_text" || (method !== "ai" && method !== "hybrid")) return true;
+  return newAuthoring || item.scoring_method === "ai" || item.scoring_method === "hybrid";
+}
 
 export const SCORING_DEFAULT: Record<ItemType, ScoringMethod> = {
   multiple_choice_single: "auto",
@@ -797,6 +812,10 @@ export function itemPatchBody(item: ItemView): Record<string, unknown> {
     // Numeric equivalence (2026-09-15): send it only when ON — the schema
     // takes an optional boolean and absence IS the default.
     if (item.exact_form) body.exact_form = true;
+    // AI short answer (2026-10-27): the AI scorer's key. Sent by both
+    // editors, so a Save in the old editor keeps an AI short answer a beta
+    // co-teacher set up (without it the server drops the AI method).
+    if (item.rubric) body.rubric = item.rubric;
   }
   if (item.type === "table") {
     body.columns = item.columns ?? [];

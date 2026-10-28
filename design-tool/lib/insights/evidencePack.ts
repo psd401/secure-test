@@ -102,7 +102,8 @@ export interface PackItem {
   tags: Array<{ tag: string; code: string; text: string | null }>;
   /** MC only: choices lettered A, B, … in stored order, the key marked. */
   choices?: Array<{ label: string; text: string; is_key: boolean }>;
-  /** short_text only. */
+  /** short_text only: the correct answer, or for an AI-scored one what earns
+   * each score ("Full credit (2): …; Partial credit (1): …"). */
   key?: string;
   /**
    * FB slice 3, fill_blank only: each blank in stem order ("Blank n", as the
@@ -375,7 +376,15 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
         is_key: key.has(c.id),
       }));
     }
-    if (item.type === "short_text" && item.correct_answer) out.key = item.correct_answer;
+    // AI short answer (2026-10-27): an AI-scored short answer's key is what
+    // earns each score (its rubric; a short answer has one only while AI
+    // scored), not a correct_answer it may have kept from before.
+    if (item.type === "short_text" && item.rubric) {
+      const credit = (item.rubric.criteria[0]?.levels ?? []).filter((l) => l.points > 0 && l.descriptor?.trim());
+      if (credit.length > 0) {
+        out.key = credit.map((l) => `${l.label} (${l.points}): ${shortText(l.descriptor!, STEM_MAX)}`).join("; ");
+      }
+    } else if (item.type === "short_text" && item.correct_answer) out.key = item.correct_answer;
     return out;
   });
 

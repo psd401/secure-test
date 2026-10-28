@@ -42,19 +42,19 @@ describe("ScoreEssaysWithAiControl", () => {
     );
     expect(html).toContain('disabled=""');
     expect(html).toContain("Choose a section first.");
-    expect(html).toContain("Score essays with AI (1)");
+    expect(html).toContain("Score written answers with AI (1)");
   });
 
   test("disabled at zero in a section", () => {
     expect(scoreEssaysDisabledReason(0, true)).toBe(
-      "No essays in this section are waiting for an AI score.",
+      "No written answers in this section are waiting for an AI score.",
     );
     expect(scoreEssaysDisabledReason(2, true)).toBeUndefined();
   });
 
   test("the dialog copy names essays, students and the section", () => {
     expect(scoreEssaysDialogCopy(1, 1, "P2 English")).toStartWith(
-      "Score 1 essay from 1 student in P2 English with AI?",
+      "Score 1 written answer from 1 student in P2 English with AI?",
     );
     expect(scoreEssaysDialogCopy(5, 4, "P3")).toContain("Keep this page open");
   });
@@ -106,13 +106,13 @@ describe("tally and summary", () => {
         refused_students: 0,
       }),
     ).toEqual([
-      "24 essays scored — 18 waiting for your review in the scoring queue, 6 finalized by AI (Hybrid).",
+      "24 written answers scored — 18 waiting for your review in the scoring queue, 6 finalized by AI (Hybrid).",
       "2 held back: they look like they try to instruct the AI. Read them in the scoring queue.",
       "1 not scored: the safety check didn't answer, so it was skipped. Run Score with AI again later.",
       "2 were already being scored from another press — check the scoring queue in a minute.",
       "1 stopped by the AI safety filter — score it by hand.",
       "1 couldn't be scored (the AI service didn't answer). Press the button again to retry.",
-      "1 student's essays couldn't be sent. Press the button again to retry.",
+      "1 student's answers couldn't be sent. Press the button again to retry.",
       "3 have no rubric or are empty.",
     ]);
   });
@@ -121,7 +121,7 @@ describe("tally and summary", () => {
     expect(
       scoreEssaysSummary({ ...EMPTY_TALLY, scored_proposed: 1, withheld: 1 }),
     ).toEqual([
-      "1 essay scored — 1 waiting for your review in the scoring queue.",
+      "1 written answer scored — 1 waiting for your review in the scoring queue.",
       "1 held back: it looks like it tries to instruct the AI. Read it in the scoring queue.",
     ]);
   });
@@ -140,7 +140,7 @@ describe("tally and summary", () => {
     expect(t.failed_students).toBe(1);
     expect(scoreEssaysSummary({ ...EMPTY_TALLY, refused_students: 2 })).toEqual(
       [
-        "2 students' essays couldn't be scored from this page. Reload it and check you can still edit this test.",
+        "2 students' answers couldn't be scored from this page. Reload it and check you can still edit this test.",
       ],
     );
   });

@@ -352,7 +352,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           />
           <span className="text-xs text-muted-foreground">
             {sectionLabel === null
-              ? "Choose a section to score its handed-in essays with AI."
+              ? "Choose a section to score its handed-in written answers with AI."
               : "Handed-in essays in this section that have no score yet."}
           </span>
         </div>

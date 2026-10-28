@@ -3,7 +3,7 @@ import { converseTextWithMeta } from "../bedrockConverse";
 import {
   ESSAY_SCORER_PROMPT_VERSION,
   ESSAY_SCORE_MAX_TOKENS,
-  ESSAY_SCORE_SYSTEM_PROMPT,
+  scoreSystemPrompt,
   buildEssayScoreUserPrompt,
   describeReplyShape,
   parseScoreResult,
@@ -71,7 +71,7 @@ export const bedrockEssayScorer: EssayScorerProvider = {
     for (let attempt = 1; ; attempt++) {
       const { text, stopReason } = await converseTextWithMeta({
         modelId: process.env.BEDROCK_ESSAY_SCORE_MODEL ?? DEFAULT_MODEL,
-        systemText: ESSAY_SCORE_SYSTEM_PROMPT,
+        systemText: scoreSystemPrompt(req.kind),
         userText: buildEssayScoreUserPrompt({ ...req, rubric }),
         maxTokens: ESSAY_SCORE_MAX_TOKENS,
         temperature: 0,

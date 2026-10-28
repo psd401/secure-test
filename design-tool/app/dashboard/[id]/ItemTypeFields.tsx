@@ -10,6 +10,8 @@ import { MathTranslator } from "./MathTranslator";
 import { EmphasisButtons } from "./EmphasisButtons";
 import { RichTextField } from "./RichTextField";
 import { RubricEditor } from "./RubricEditor";
+import { ShortAnswerAiKey } from "./ShortAnswerAiKey";
+import { shortAnswerMax, withScoringMethod } from "@/lib/authoring/shortAnswerAi";
 import { nextChoiceId } from "@/lib/items/choiceIds";
 import { ASSET_REF_ONE_RE } from "@/lib/items/extractAssetRefs";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
@@ -273,8 +275,29 @@ export function ItemTypeFields(props: ItemTypeFieldsProps) {
             handScored={item.scoring_method === "human"}
           />
         </div>
+      ) : item.type === "short_text" && isAiShortAnswer(item) ? (
+        // AI short answer (2026-10-27): the AI's key replaces the correct
+        // answer, which is kept (unused) for switching back to auto.
+        <div className="mt-3 space-y-3">
+          {newAuthoring ? (
+            <>
+              <AiShortAnswerSwitch item={item} isLocked={isLocked} updateItem={updateItem} />
+              <ShortAnswerAiKey
+                rubric={item.rubric!}
+                onChange={(rubric) => updateItem(item.id, (i) => ({ ...i, rubric }))}
+                disabled={isLocked}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Scored with AI against what earns credit ({shortAnswerMax(item.rubric!)} points). Edit it in the new
+              editor.
+            </p>
+          )}
+        </div>
       ) : item.type === "short_text" ? (
         <div className="mt-3 space-y-2">
+          {newAuthoring ? <AiShortAnswerSwitch item={item} isLocked={isLocked} updateItem={updateItem} /> : null}
           <label className="block">
             <span className="block text-sm font-medium">
               Correct answer
@@ -653,5 +676,35 @@ export function ItemTypeFields(props: ItemTypeFieldsProps) {
         </div>
       )}
     </>
+  );
+}
+
+/** AI short answer: scored with AI and carrying its key. */
+function isAiShortAnswer(item: ItemView): boolean {
+  return (item.scoring_method === "ai" || item.scoring_method === "hybrid") && item.rubric != null;
+}
+
+/** New editor only: turn AI scoring on (Hybrid, the default — James
+ * 2026-10-27) or off (back to the type default, auto). */
+function AiShortAnswerSwitch({
+  item,
+  isLocked,
+  updateItem,
+}: {
+  item: ItemView;
+  isLocked: boolean;
+  updateItem: ItemTypeFieldsProps["updateItem"];
+}) {
+  const on = isAiShortAnswer(item);
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => updateItem(item.id, (i) => withScoringMethod(i, e.target.checked ? "hybrid" : null))}
+        disabled={isLocked}
+      />
+      <span>Score with AI — describe what earns credit instead of one exact answer</span>
+    </label>
   );
 }
