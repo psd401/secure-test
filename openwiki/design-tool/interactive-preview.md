@@ -31,7 +31,7 @@ openwiki:
 
 # Interactive student preview
 
-The interactive preview is the right-hand panel of the [authoring editor beta](new-authoring-editor.md). It shows the question list as a student would see it, runs the same `renderer.js` a student's client runs, and lets a teacher answer and see the score without starting a sitting. It is part of the R-12 flag: with the flag off, the editor keeps the static preview at `/preview/[id]` described in [assessment authoring](authoring.md#preview-and-print) (ADR 0006).
+The interactive preview is the right-hand panel of the [authoring editor](new-authoring-editor.md). It shows the question list as a student would see it, runs the same `renderer.js` a student's client runs, and lets a teacher answer and see the score without starting a sitting. It is part of the R-12 flag: with the flag off, the editor keeps the static preview at `/preview/[id]` described in [assessment authoring](authoring.md#preview-and-print) (ADR 0006).
 
 The posture is recorded in [ADR 0019](../../docs/adr/0019-scripted-preview-sandbox.md), which revises ADR 0006 for this preview only. This page describes what the source does. The ADR's residual-risk list is the reference for review.
 
@@ -104,6 +104,7 @@ The ADR's handler table is the review record. Wiring any other handler is a chan
 
 ## Related pages
 
-- The editor that hosts the panel, the flag and the autosave it shares with the rest of the beta: [authoring editor beta](new-authoring-editor.md).
+- The editor that hosts the panel, the flag and the autosave it shares with the rest of the editor: [authoring editor](new-authoring-editor.md).
 - The student renderer and its signed delivery: [signed renderer delivery](../client/signed-renderer.md) and [client overview](../client/overview.md).
 - The scoring rules `scorePreview` reuses: [scoring and results](scoring-and-results.md).
+.
