@@ -115,7 +115,9 @@ export function docToMarkup(doc: JSONContent, options: ParseOptions = {}): Saved
       return { markup, exact: true };
     }
   }
-  return { markup: serialize(nodes), exact: false };
+  // Neither shows exactly (a typed `**`, say): still escape typed dollars, so a
+  // `$x^2$` typed beside it stays text instead of becoming a formula (F-2).
+  return { markup: serialize(escapeDollars(nodes)), exact: false };
 }
 
 // ---------- markup -> document ----------
