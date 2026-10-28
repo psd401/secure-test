@@ -258,6 +258,36 @@ export function isFigureLabel(run: { x: number; y: number; str: string }, boxes:
   );
 }
 
+/** A text run with its glyph extent in page points (top-left origin). */
+export interface LabelRun {
+  x: number;
+  /** Baseline. */
+  y: number;
+  str: string;
+  w: number;
+  h: number;
+}
+
+/**
+ * Import fixes (2026-10-28): the box a vector figure is cropped to, grown to
+ * take in the point labels `isFigureLabel` gives it. Those labels leave the
+ * page text, so a vertex letter 5–12 pt outside a triangle's strokes — past
+ * the crop's VECTOR_CROP_PAD_PT margin — was cut from the picture and lost
+ * altogether. `fig.bbox` stays the drawing's own box. Exported for tests; pure.
+ */
+export function cropBoxWithLabels(box: Box, runs: readonly LabelRun[]): Box {
+  let [x0, y0, x1, y1] = box;
+  for (const r of runs) {
+    if (!isFigureLabel(r, [box])) continue;
+    x0 = Math.min(x0, r.x);
+    x1 = Math.max(x1, r.x + r.w);
+    y0 = Math.min(y0, r.y - r.h);
+    // A descender (a "y" or "g") dips about a quarter of the height below.
+    y1 = Math.max(y1, r.y + r.h * 0.25);
+  }
+  return [x0, y0, x1, y1];
+}
+
 /** A line at least this long inside a drawing is prose, not a label. */
 const PROSE_LINE_CHARS = 30;
 /** This many prose lines inside a drawing make it a text box, not a figure.
@@ -754,12 +784,26 @@ export async function extractPdfLayout(
       styleCache.set(key, style);
       return style;
     };
-    const items = content.items as { str: string; transform: number[]; fontName?: string }[];
+    const items = content.items as {
+      str: string;
+      transform: number[];
+      fontName?: string;
+      width?: number;
+      height?: number;
+    }[];
     const runStarts = items
       .filter((it) => it.str?.trim())
       .map((it) => {
         const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
         return { x, y };
+      });
+    // pdf.js measures a run in user space; the viewport may scale it.
+    const k = Math.hypot(base[0], base[1]);
+    const labelRuns: LabelRun[] = items
+      .filter((it) => it.str?.trim())
+      .map((it) => {
+        const [x, y] = apply(base, it.transform[4] ?? 0, it.transform[5] ?? 0);
+        return { x, y, str: it.str, w: (it.width ?? 0) * k, h: (it.height ?? 0) * k };
       });
     const lines = linesOf(items, base, styleOf);
     pages.push({ width: viewport.width, height: viewport.height });
@@ -859,7 +903,7 @@ export async function extractPdfLayout(
         }
         if (caption) fig.caption = caption;
         figureBoxes.push(entry.box);
-        const crop = cropFromPage(canvas!, pageImage!, entry.box);
+        const crop = cropFromPage(canvas!, pageImage!, cropBoxWithLabels(entry.box, labelRuns));
         if (crop) {
           png = crop.png;
           fig.width_px = crop.width;
