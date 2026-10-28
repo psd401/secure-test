@@ -178,7 +178,7 @@ function normalizeNumber(token: string): string {
  * with two or more digits, so a lone digit ("level 3", "3 students") still
  * counts as invented.
  */
-export function contentNumbers(pack: Pick<EvidencePack, "assessment" | "item_analytics">): Set<string> {
+function contentNumbers(pack: Pick<EvidencePack, "assessment" | "item_analytics">): Set<string> {
   const texts: string[] = [];
   for (const item of pack.assessment.items) {
     texts.push(item.stem, item.key ?? "");

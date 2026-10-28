@@ -249,8 +249,18 @@ describe("the reply's fill", () => {
     expect(fillSingleClaim({ text: "Seven of them: 7." }, forModel, opts)).toBeNull();
     // 2026-10-27: a two-digit-plus number the question already contains is
     // quoted content; a lone digit is still an invented number.
-    const quoted = forModel.assessment.items.flatMap((i) => (i.stem.match(/\d{2,}|\d+[/:]\d+/g) ?? []))[0];
-    if (quoted) expect(fillSingleClaim({ text: `The question asks about ${quoted}.` }, forModel, opts)).not.toBeNull();
+    // (PR #139 review: this fixture's stems carry no number, so give one a
+    // ratio rather than guard the assertion.)
+    const withRatio = {
+      ...forModel,
+      assessment: {
+        ...forModel.assessment,
+        items: forModel.assessment.items.map((i, n) => (n === 0 ? { ...i, stem: "Which ratio equals 2:3?" } : i)),
+      },
+    };
+    expect(fillSingleClaim({ text: "The question asks about 2:3." }, withRatio, opts)).not.toBeNull();
+    expect(fillSingleClaim({ text: "The question asks about 2:5." }, withRatio, opts)).toBeNull();
+    expect(fillSingleClaim({ text: "The question asks about 2:3." }, forModel, opts)).toBeNull();
     expect(fillSingleClaim({ text: "S44 did well." }, forModel, opts)).toBeNull();
     expect(fillSingleClaim({ text: "See {item.Q9.mean}." }, forModel, opts)).toBeNull();
     expect(fillSingleClaim({ text: "a".repeat(MAX_REPLY_CHARS + 1) }, forModel, opts)).toBeNull();
