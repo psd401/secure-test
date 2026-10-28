@@ -6,6 +6,8 @@ import {
   DEFAULT_FIGURE_LIMITS,
   MIN_FIGURE_PT,
   MIN_SHRUNK_FIGURE_PX,
+  VECTOR_CROP_PAD_PT,
+  cropBoxWithLabels,
   extractPdfLayout,
   FIGURE_LABEL_PAD_PT,
   figureMarker,
@@ -100,6 +102,45 @@ describe("beside figures and point labels", () => {
     expect(isFigureLabel({ x: box[2] + FIGURE_LABEL_PAD_PT + 1, y: 520, str: "AB" }, [box])).toBe(false);
     expect(isFigureLabel({ x: 365, y: 500, str: "shapes matched exactly." }, [box])).toBe(false);
     expect(isFigureLabel({ x: 152, y: 500, str: "No" }, [box])).toBe(false);
+  });
+
+  // 2026-10-28 (beta report, geometry quiz): a vertex letter the figure
+  // claims as its label is inside the picture, not cut off at the crop edge.
+  test("the crop box grows to take in the drawing's labels and nothing else", () => {
+    const run = (x: number, y: number, str: string) => ({ x, y, str, w: 8, h: 12 });
+    // "R" 9 pt right of the box, baseline below its bottom edge; "Q" above-left.
+    expect(cropBoxWithLabels(box, [run(439, 548, "R"), run(350, 476, "Q")])).toEqual([350, 464, 447, 551]);
+    // A long run and a far label are not the drawing's, so the box is unchanged.
+    expect(cropBoxWithLabels(box, [run(365, 500, "shapes matched exactly."), run(500, 500, "S")])).toEqual(box);
+  });
+
+  test("a real PDF: a vertex label past the crop margin is inside the picture", async () => {
+    // Top-left page space: the drawing is [120, 212, 420, 392]. "R" sits 8 pt
+    // right of it and "P" has its baseline 9 pt below it — both past
+    // VECTOR_CROP_PAD_PT, both within FIGURE_LABEL_PAD_PT.
+    const spec: VectorChartSpec = {
+      ...CHART,
+      inside: [],
+      labels: [
+        { x: 428, y: 500, s: "R" },
+        { x: 120, y: 391, s: "P" },
+      ],
+    };
+    const layout = await extractPdfLayout(makeVectorChartPdf(spec));
+    expect(layout.figures).toHaveLength(1);
+    const f = layout.figures[0]!;
+    // The drawing's own box is unchanged; only the crop grows.
+    [120, 212, 420, 392].forEach((want, i) => expect(Math.abs(f.bbox[i]! - want)).toBeLessThanOrEqual(2));
+    const plainWidth = (420 + VECTOR_CROP_PAD_PT) * 2 - (120 - VECTOR_CROP_PAD_PT) * 2;
+    const plainHeight = (392 + VECTOR_CROP_PAD_PT) * 2 - (212 - VECTOR_CROP_PAD_PT) * 2;
+    // "R" (Helvetica 12, about 8.7 pt wide) ends near x 436.7, so the right
+    // edge reaches past it; "P"'s baseline at y 401 pushes the bottom down.
+    expect(f.width_px).toBeGreaterThanOrEqual(Math.round((436.6 + VECTOR_CROP_PAD_PT) * 2) - (120 - VECTOR_CROP_PAD_PT) * 2);
+    expect(f.width_px).toBeGreaterThan(plainWidth);
+    expect(f.height_px).toBeGreaterThanOrEqual((401 + VECTOR_CROP_PAD_PT) * 2 - (212 - VECTOR_CROP_PAD_PT) * 2);
+    expect(f.height_px).toBeGreaterThan(plainHeight);
+    // The labels still leave the page text: they are the picture's now.
+    expect(layout.textWithMarkers).not.toMatch(/^R$|^P$| R$| P$/m);
   });
 
   test("a real PDF: a picture right of lines 2–5 is beside them, marked at its middle", async () => {

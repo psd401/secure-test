@@ -196,6 +196,10 @@ const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
     { symbol: "loadItemSetForSession", module: "lib/api/itemSets.ts" },
   ],
   [
+    join("assessments", "[id]", "item-sets", "[setId]", "split"),
+    { symbol: "loadItemSetForSession", module: "lib/api/itemSets.ts" },
+  ],
+  [
     join("responses", "[responseId]", "score"),
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
   ],

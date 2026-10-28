@@ -60,7 +60,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       {
         ok: false,
         error: "item_not_adjacent",
-        hint: "Only the question just before or just after this stimulus's group can join it. Reorder first.",
+        hint: "Only the question just before or just after this group can join it. Reorder first.",
       },
       { status: 409 },
     );

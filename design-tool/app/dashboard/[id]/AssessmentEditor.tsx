@@ -45,6 +45,7 @@ import { OverridesPanel } from "./OverridesPanel";
 import { SittingsPanel } from "./SittingsPanel";
 import type { ItemType } from "@/db/schema";
 import { usesRichTextField } from "@/lib/authoring/richTextTypes";
+import { isPageGroup } from "@/lib/authoring/pageGroup";
 import { editorStartAction } from "@/lib/authoring/startScreen";
 import {
   blockMoveAnnouncement,
@@ -1121,6 +1122,14 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     });
   }
 
+  // 2026-10-28: the sets that are page groups (`isPageGroup`), as saved
+  // members count them.
+  const pageGroupIds = new Set(
+    itemSets
+      .filter((s) => isPageGroup(s, items.filter((i) => i.item_set_id === s.id).length))
+      .map((s) => s.id),
+  );
+
   /** First and last list index of a set's block, or null if it has no questions here. */
   function setBounds(setId: string): { first: number; last: number } | null {
     const idxs = items.map((it, i) => (it.item_set_id === setId ? i : -1)).filter((i) => i >= 0);
@@ -1157,6 +1166,67 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     try {
       await call(`${apiBase}/item-sets/${setId}/items`, jsonInit("POST", { item_id: itemId }));
       updateItem(itemId, (i) => ({ ...i, item_set_id: setId }));
+    } catch (e) {
+      setItemError(itemId, describe(e));
+    }
+  }
+
+  /** A set the server just made, added locally as saved. */
+  function addSetLocally(view: ItemSetView) {
+    setItemSets((prev) => [...prev, view]);
+    setPersistedSets((prev) => ({ ...prev, [view.id]: JSON.stringify(view) }));
+  }
+
+  /** 2026-10-28: "Same page as question above" for two loose questions —
+   * an empty inline set over both, which is a page group (`isPageGroup`). */
+  async function keepWithPrevious(itemId: string) {
+    const idx = items.findIndex((i) => i.id === itemId);
+    const prev = idx > 0 ? items[idx - 1]! : null;
+    if (!prev) return;
+    if (prev.item_set_id) return joinStimulusAbove(itemId);
+    setError(null);
+    try {
+      const res = await call(`${apiBase}/item-sets`, jsonInit("POST", { item_ids: [prev.id, itemId], layout: "inline" }));
+      const body = (await res.json()) as { item_set: ItemSetView };
+      addSetLocally({ id: body.item_set.id, stimulus_text: "", sources: [], layout: "inline" });
+      for (const id of [prev.id, itemId]) updateItem(id, (i) => ({ ...i, item_set_id: body.item_set.id }));
+    } catch (e) {
+      setItemError(itemId, describe(e));
+    }
+  }
+
+  /** 2026-10-28: "Add to the stimulus below" / "Same page as question
+   * below" — the server lets the question just before a block join it. */
+  async function joinSetBelow(itemId: string) {
+    const idx = items.findIndex((i) => i.id === itemId);
+    const setId = items[idx + 1]?.item_set_id ?? null;
+    if (!setId) return;
+    setError(null);
+    try {
+      await call(`${apiBase}/item-sets/${setId}/items`, jsonInit("POST", { item_id: itemId }));
+      updateItem(itemId, (i) => ({ ...i, item_set_id: setId }));
+    } catch (e) {
+      setItemError(itemId, describe(e));
+    }
+  }
+
+  /** 2026-10-28: "Start a new page here" inside a page group (one atomic
+   * split on the server; a half of one question comes out of any group). */
+  async function startNewPage(itemId: string) {
+    const setId = items.find((i) => i.id === itemId)?.item_set_id;
+    if (!setId) return;
+    const block = items.filter((i) => i.item_set_id === setId).map((i) => i.id);
+    const at = block.indexOf(itemId);
+    setError(null);
+    try {
+      const res = await call(`${apiBase}/item-sets/${setId}/split`, jsonInit("POST", { item_id: itemId }));
+      const body = (await res.json()) as { head_set_id: string | null; tail_set_id: string | null };
+      if (body.tail_set_id) addSetLocally({ id: body.tail_set_id, stimulus_text: "", sources: [], layout: "inline" });
+      for (const id of block.slice(at)) updateItem(id, (i) => ({ ...i, item_set_id: body.tail_set_id }));
+      if (!body.head_set_id) {
+        for (const id of block.slice(0, at)) updateItem(id, (i) => ({ ...i, item_set_id: null }));
+        dropSetLocally(setId);
+      }
     } catch (e) {
       setItemError(itemId, describe(e));
     }
@@ -1538,6 +1608,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             onMoveBlock={moveOutlineBlock}
             onShow={(id) => document.getElementById(`question-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })}
             announcement={outlineMessage}
+            pageGroupIds={pageGroupIds}
           />
         ) : null}
         <div className="min-w-0">
@@ -1583,6 +1654,10 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               const opensSet = !!set && !!bounds && bounds.first === idx;
               const isBlockEnd = !!bounds && (idx === bounds.first || idx === bounds.last);
               const prevSetId = idx > 0 ? (items[idx - 1]!.item_set_id ?? null) : null;
+              // 2026-10-28: page groups and the set that opens just below.
+              const inGroup = !!set && pageGroupIds.has(set.id);
+              const nextSetId = items[idx + 1]?.item_set_id ?? null;
+              const nextOpensSet = !!nextSetId && setBounds(nextSetId)?.first === idx + 1;
               const setDirty = !!set && persistedSets[set.id] !== JSON.stringify(set);
               const setState = set ? (setSave[set.id] ?? { kind: "idle" as const }) : null;
               return (
@@ -1679,7 +1754,87 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                         onChange={(target) => void changeType(item, target)}
                       />
                     ) : null}
-                    {set ? (
+                    {newAuthoring ? (
+                      // 2026-10-28: page breaks (page groups) and clearer
+                      // stimulus wording, new editor only.
+                      set ? (
+                        inGroup ? (
+                          idx !== bounds?.first ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => startNewPage(item.id)}
+                              disabled={isPending || isLocked}
+                              title="Put this question and the ones after it in this group on a new page"
+                            >
+                              Start a new page here
+                            </Button>
+                          ) : null
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => detachFromStimulus(item.id)}
+                            disabled={isPending || isLocked || !isBlockEnd}
+                            title={
+                              isBlockEnd
+                                ? "Take this question out of the stimulus"
+                                : "Only the first or last question can leave a stimulus — move it first"
+                            }
+                          >
+                            Remove from stimulus
+                          </Button>
+                        )
+                      ) : (
+                        <>
+                          {idx > 0 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => (prevSetId ? joinStimulusAbove(item.id) : keepWithPrevious(item.id))}
+                              disabled={isPending || isLocked}
+                              title={
+                                prevSetId && !pageGroupIds.has(prevSetId)
+                                  ? "This question also uses the stimulus above"
+                                  : "Students see this question on the same page as the one above"
+                              }
+                            >
+                              {prevSetId && !pageGroupIds.has(prevSetId) ? "Add to the stimulus above" : "Same page as question above"}
+                            </Button>
+                          ) : null}
+                          {nextOpensSet && nextSetId ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => joinSetBelow(item.id)}
+                              disabled={isPending || isLocked}
+                              title={
+                                pageGroupIds.has(nextSetId)
+                                  ? "Students see this question on the same page as the ones below"
+                                  : "This question also uses the stimulus below"
+                              }
+                            >
+                              {pageGroupIds.has(nextSetId) ? "Same page as question below" : "Add to the stimulus below"}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => addStimulus(item.id)}
+                            disabled={isPending || isLocked}
+                            title="Add a passage, figure, or data that this question (and neighbours you add) refers to"
+                          >
+                            <ListPlus aria-hidden />
+                            Add stimulus above
+                          </Button>
+                        </>
+                      )
+                    ) : set ? (
                       <Button
                         type="button"
                         variant="ghost"

@@ -72,6 +72,11 @@ export interface TriageInput {
   } | null;
   /** The proposal could not be converted and the teacher chose this type. */
   typeChosen?: boolean;
+  /** 2026-10-28: fields the teacher edited on the card (`editedFields` in
+   * cardEdit.ts). A reason on one of them is answered and dropped; reasons on
+   * other fields stay. `candidate` stays the import's own proposal, so a
+   * change is still placed against the text the model returned. */
+  reviewed?: ReadonlySet<TriageField>;
 }
 
 
@@ -144,8 +149,9 @@ export function triageCandidate(input: TriageInput): Triage {
       });
     }
   }
-  const status: TriageStatus = reasons.length > 0 ? "check" : needsKey ? "needs_key" : "ready";
-  return { status, needsKey, reasons };
+  const open = input.reviewed ? reasons.filter((r) => !input.reviewed!.has(r.field)) : reasons;
+  const status: TriageStatus = open.length > 0 ? "check" : needsKey ? "needs_key" : "ready";
+  return { status, needsKey, reasons: open };
 }
 
 export const TRIAGE_LABEL: Record<TriageStatus, string> = {

@@ -91,7 +91,7 @@ describe("moving blocks", () => {
     expect(blockMoveAnnouncement(LIST, next, "q5")).toBe("Question 5 moved. It is now question 2 of 7.");
     const set = moveBlockTo(LIST, 1, 0)!;
     expect(blockMoveAnnouncement(LIST, set, "q2")).toBe(
-      "Questions 2 to 4 (one stimulus) moved. They are now questions 1 to 3 of 7.",
+      "Questions 2 to 4 (kept together) moved. They are now questions 1 to 3 of 7.",
     );
     expect(blockMoveAnnouncement(LIST, LIST, "q1")).toBe("Question 1 did not move.");
   });

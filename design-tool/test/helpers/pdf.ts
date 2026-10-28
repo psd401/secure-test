@@ -169,6 +169,9 @@ export interface VectorChartSpec {
   /** Write each `inside` line as one text run per word, as Word and Google
    * Docs exports often do. */
   wordRuns?: boolean;
+  /** Import fixes (2026-10-28): short runs at given PDF user-space baselines,
+   * such as a triangle's vertex letters just outside its strokes. */
+  labels?: { x: number; y: number; s: string }[];
 }
 
 export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
@@ -210,6 +213,7 @@ export function makeVectorChartPdf(spec: VectorChartSpec): Uint8Array {
     }
   });
   spec.below.forEach((l, i) => parts.push(text("F1", 72, region.y - 20 - i * 16, l)));
+  (spec.labels ?? []).forEach((l) => parts.push(text("F1", l.x, l.y, l.s)));
   const content = parts.join("\n");
   const xobject = spec.transparencyGroup ? "/XObject<</Fm1 7 0 R>>" : "";
   return buildPdf([

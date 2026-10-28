@@ -76,7 +76,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         ok: false,
         error: "reorder_would_split_set",
         item_set_id: split,
-        hint: "Questions that share a stimulus move together. Detach one first to move it on its own.",
+        hint: "Questions that share a stimulus or a page move together. Take one out first to move it on its own.",
       },
       { status: 400 },
     );

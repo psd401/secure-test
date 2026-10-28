@@ -137,6 +137,17 @@ async function detach(id: string, setId: string, itemId: string) {
   );
 }
 
+async function split(id: string, setId: string, itemId: string) {
+  const { POST } = await import("../app/api/assessments/[id]/item-sets/[setId]/split/route");
+  return POST(
+    new Request(`http://localhost/api/assessments/${id}/item-sets/${setId}/split`, {
+      method: "POST",
+      ...json({ item_id: itemId }),
+    }),
+    { params: Promise.resolve({ id, setId }) },
+  );
+}
+
 async function reorder(id: string, ordered_ids: string[]) {
   const { POST } = await import("../app/api/assessments/[id]/items/reorder/route");
   return POST(
@@ -291,6 +302,70 @@ describe("item sets — attach / detach / delete", () => {
 
 // Multi-source stimulus slice 2 (docs/multi-source-stimulus-design.md):
 // `sources` is an ordered {label, text} list on the set, written whole.
+// Page groups (2026-10-28): "Start a new page here" splits a group atomically.
+describe("item sets — split a page group", () => {
+  const group = async (id: string, ids: string[]) =>
+    ((await (await createSet(id, { item_ids: ids })).json()) as { item_set: { id: string } }).item_set.id;
+  const setOf = async (id: string) => (await listItems(id)).items.map((i) => i.item_set_id);
+
+  test("in the middle: both halves of two or more stay groups", async () => {
+    const id = await createAssessment();
+    const q: string[] = [];
+    for (const stem of ["Q1", "Q2", "Q3", "Q4"]) q.push(await addShortText(id, stem));
+    const g = await group(id, q);
+    const res = await split(id, g, q[2]!);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { head_set_id: string | null; tail_set_id: string | null };
+    expect(body.head_set_id).toBe(g);
+    expect(body.tail_set_id).not.toBeNull();
+    expect(await setOf(id)).toEqual([g, g, body.tail_set_id, body.tail_set_id]);
+    const tail = (await listItems(id)).item_sets.find((s) => s.id === body.tail_set_id)!;
+    expect(tail.stimulus_text).toBe("");
+    expect(tail.layout).toBe("inline");
+  });
+
+  test("a half of one question is freed; a head of one deletes the group", async () => {
+    const { id, q } = await seed();
+    const g = await group(id, [q[0]!, q[1]!, q[2]!]);
+    // At the last question: the tail of one is freed, the head stays a group.
+    let body = (await (await split(id, g, q[2]!)).json()) as { head_set_id: string | null; tail_set_id: string | null };
+    expect(body).toEqual({ ok: true, head_set_id: g, tail_set_id: null } as never);
+    expect(await setOf(id)).toEqual([g, g, null, null]);
+    // At the second of two: both halves are one question, so nothing is left.
+    body = (await (await split(id, g, q[1]!)).json()) as { head_set_id: string | null; tail_set_id: string | null };
+    expect(body.head_set_id).toBeNull();
+    expect(body.tail_set_id).toBeNull();
+    expect(await setOf(id)).toEqual([null, null, null, null]);
+    expect(await getDb().select().from(item_sets).where(eq(item_sets.id, g))).toHaveLength(0);
+  });
+
+  // PR #146 review: two splits of one group at once leave no empty set row.
+  test("concurrent splits of one group leave every set with members", async () => {
+    const { id, q } = await seed();
+    const g = await group(id, q);
+    const [a, b] = await Promise.all([split(id, g, q[2]!), split(id, g, q[3]!)]);
+    expect([a.status, b.status].sort()).toContain(200);
+    const list = await listItems(id);
+    const used = new Set(list.items.map((i) => i.item_set_id).filter(Boolean));
+    expect(list.item_sets.every((s) => used.has(s.id))).toBe(true);
+  });
+
+  test("refuses a stimulus, the first question, a stranger and a published assessment", async () => {
+    const { id, q } = await seed();
+    const stim = await group(id, [q[0]!, q[1]!]);
+    expect((await patchSet(id, stim, { stimulus_text: "Read." })).status).toBe(200);
+    const notGroup = await split(id, stim, q[1]!);
+    expect(notGroup.status).toBe(409);
+    expect(((await notGroup.json()) as { error: string }).error).toBe("not_a_page_group");
+    const g = await group(id, [q[2]!, q[3]!]);
+    expect(((await (await split(id, g, q[2]!)).json()) as { error: string }).error).toBe("already_first");
+    expect((await split(id, g, q[0]!)).status).toBe(404);
+    await setStatus(id, "published");
+    expect((await split(id, g, q[3]!)).status).toBe(409);
+    expect(await setOf(id)).toEqual([stim, stim, g, g]);
+  });
+});
+
 describe("item sets — sources (multi-source stimulus slice 2)", () => {
   const twoSources = [
     { label: "Source A", text: "Two roads diverged\nin a yellow wood" },

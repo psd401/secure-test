@@ -39,6 +39,7 @@ export function OutlineRail<T extends RailItem>({
   onMoveBlock,
   onShow,
   announcement,
+  pageGroupIds,
 }: {
   items: T[];
   disabled: boolean;
@@ -49,6 +50,8 @@ export function OutlineRail<T extends RailItem>({
   /** Scroll the list to this question (the rail keeps focus). */
   onShow: (itemId: string) => void;
   announcement: string;
+  /** 2026-10-28: sets that are page groups (`isPageGroup`), captioned "Same page". */
+  pageGroupIds?: ReadonlySet<string>;
 }) {
   const blocks = outlineBlocks(items);
   const [selected, setSelected] = useState<string | null>(null);
@@ -122,7 +125,9 @@ export function OutlineRail<T extends RailItem>({
                   }}
                 >
                   {block.setId ? (
-                    <span className="block text-xs font-medium text-muted-foreground">Stimulus</span>
+                    <span className="block text-xs font-medium text-muted-foreground">
+                      {pageGroupIds?.has(block.setId) ? "Same page" : "Stimulus"}
+                    </span>
                   ) : null}
                   {block.items.map((it, i) => (
                     <span key={it.id} className="block truncate">

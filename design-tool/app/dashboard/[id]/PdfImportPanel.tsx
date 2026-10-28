@@ -12,6 +12,20 @@ import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
 import type { FillBlankBlank } from "@secure-test/schema";
 import type { ItemType } from "@/db/schema";
 import type { CandidateRegion } from "@/lib/pdfImport/regions";
+import { proposedSetLayout } from "@/lib/pdfImport/setLayout";
+import {
+  addChoice,
+  editableKey,
+  editedFields,
+  editsChoices,
+  removeChoice,
+  setChoiceText,
+  setStem,
+  toggleKey,
+} from "@/lib/pdfImport/cardEdit";
+import { isProposedPageGroup, prependToSet, splitProposedGroup } from "@/lib/pdfImport/groupEdit";
+import { RichTextField } from "./RichTextField";
+import { MathPreview } from "./MathPreview";
 import {
   TRIAGE_LABEL,
   TRIAGE_ORDER,
@@ -291,6 +305,12 @@ export function PdfImportPanel({
   const [fromUnconverted, setFromUnconverted] = useState<Map<number, number>>(new Map());
   const [leftOut, setLeftOut] = useState<Set<number>>(new Set());
   const [chosenTypes, setChosenTypes] = useState<Map<number, ItemType>>(new Map());
+  // Beta report 2026-10-28 (flag on only): the teacher's edits to a card,
+  // over `result.candidates` (which stays the import's own proposal, so
+  // triage still reads what the model returned). Accept posts the edited
+  // question. `editing` is which cards have their Edit toggle open.
+  const [edits, setEdits] = useState<Map<number, Candidate>>(new Map());
+  const [editing, setEditing] = useState<Set<number>>(new Set());
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!reviewOpen) return;
@@ -302,7 +322,23 @@ export function PdfImportPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [reviewOpen]);
 
-  const keyless = result ? result.candidates.filter((c) => candidateNeedsKey(c)).length : 0;
+  /** The question as Accept will post it: the teacher's edit, else the proposal. */
+  function candidateAt(i: number): Candidate {
+    return edits.get(i) ?? result!.candidates[i]!;
+  }
+  function updateCandidate(i: number, mut: (c: Candidate) => Candidate) {
+    setEdits((prev) => new Map(prev).set(i, mut(prev.get(i) ?? result!.candidates[i]!)));
+  }
+  function toggleEditing(i: number) {
+    setEditing((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }
+
+  const keyless = result ? result.candidates.filter((_, i) => candidateNeedsKey(candidateAt(i))).length : 0;
   // R-10: a Word result is only ever returned with the flag on, so with it
   // off every string below still says "PDF".
   const isWord = result?.source_kind === "docx";
@@ -340,6 +376,8 @@ export function PdfImportPanel({
     setFromUnconverted(new Map());
     setLeftOut(new Set());
     setChosenTypes(new Map());
+    setEdits(new Map());
+    setEditing(new Set());
     try {
       const form = new FormData();
       form.append("file", file);
@@ -374,7 +412,7 @@ export function PdfImportPanel({
             ...s,
             sources,
             figures: [...new Set([...s.figures, ...inSources])],
-            layout: s.layout ?? "inline",
+            layout: s.layout ?? proposedSetLayout(sources.length > 0),
           };
         }),
       );
@@ -489,7 +527,7 @@ export function PdfImportPanel({
       }
       for (const i of set.item_indexes) {
         if (added.has(i)) continue;
-        const id = await postItem(i, result.candidates[i]!, targetId);
+        const id = await postItem(i, candidateAt(i), targetId);
         if (id) postedIds.push(id);
       }
       if (postedIds.length === 0) throw new Error("nothing to group — those questions were already added");
@@ -523,7 +561,13 @@ export function PdfImportPanel({
       const res = await fetch(`/api/assessments/${targetId}/item-sets`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ item_ids: postedIds, stimulus_text, sources, layout: set.layout }),
+        // A page group is one page whatever the card's layout says.
+        body: JSON.stringify({
+          item_ids: postedIds,
+          stimulus_text,
+          sources,
+          layout: isProposedPageGroup(set) ? "inline" : set.layout,
+        }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { hint?: string; error?: string } | null;
@@ -558,10 +602,10 @@ export function PdfImportPanel({
       }
       if (sets.some((s) => s.item_indexes.includes(i))) continue; // inside a set handled above
       if (targetId === assessmentId) {
-        if (!(await add(i, result.candidates[i]!))) failed += 1;
+        if (!(await add(i, candidateAt(i)))) failed += 1;
       } else {
         try {
-          await postItem(i, result.candidates[i]!, targetId);
+          await postItem(i, candidateAt(i), targetId);
         } catch (e) {
           setError((e as Error).message);
           failed += 1;
@@ -626,9 +670,11 @@ export function PdfImportPanel({
   function triageOf(i: number): Triage {
     const c = result!.candidates[i]!;
     const set = sets.find((s) => s.item_indexes.includes(i)) ?? null;
+    const cur = candidateAt(i);
     return triageCandidate({
       candidate: c,
-      needsKey: candidateNeedsKey(c),
+      needsKey: candidateNeedsKey(cur),
+      reviewed: editedFields(c, cur),
       changes: result!.changes?.[i] ?? [],
       convertedFrom: result!.converted?.[i]?.from ?? null,
       set,
@@ -758,6 +804,35 @@ export function PdfImportPanel({
         ),
     );
   }
+  // ---- 2026-10-28: page groups (questions kept on one page) ----
+  /** "Same page as question above": into the set ending above, or a new
+   * group of the two loose questions. */
+  function keepWithPrevious(index: number) {
+    const above = sets.find((s) => s.item_indexes[s.item_indexes.length - 1] === index - 1);
+    if (above) return extendDown(above.id);
+    setSets((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}-${index}`,
+        stimulus: "",
+        figures: [],
+        item_indexes: [index - 1, index],
+        source: "model",
+        sources: [],
+        layout: "inline",
+      },
+    ]);
+  }
+  /** "… below": the loose question just above a set joins it. */
+  function joinSetBelow(index: number) {
+    setSets((prev) => prependToSet(prev, index));
+  }
+  /** "Start a new page here" inside a page group. */
+  function startNewPage(setId: string, index: number) {
+    setSets((prev) =>
+      prev.flatMap((s) => (s.id === setId ? splitProposedGroup(s, index, `local-${Date.now()}-${index}`) : [s])),
+    );
+  }
   function discardFigure(id: string, n: number) {
     updateSet(id, (s) => ({ ...s, figures: s.figures.filter((f) => f !== n) }));
   }
@@ -772,7 +847,7 @@ export function PdfImportPanel({
         item_indexes: [i],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: proposedSetLayout(false),
       })),
     );
   }
@@ -788,7 +863,7 @@ export function PdfImportPanel({
         item_indexes: [index],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: proposedSetLayout(false),
       },
     ]);
   }
@@ -1152,7 +1227,7 @@ export function PdfImportPanel({
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Stimulus · {itemRangeLabel(set.item_indexes)}
+                            {isProposedPageGroup(set) ? "Same page" : "Stimulus"} · {itemRangeLabel(set.item_indexes)}
                             {set.source === "adjacency" ? " · paired by position, please check" : ""}
                             {set.needs_figure ? " · figure not extracted" : ""}
                           </span>
@@ -1303,6 +1378,7 @@ export function PdfImportPanel({
                               This set came back with more than 12 sources; the list was cut at 12.
                             </p>
                           ) : null}
+                          {isProposedPageGroup(set) ? null : (
                           <label className="mt-1 block text-[11px] text-muted-foreground">
                             Layout{" "}
                             <select
@@ -1320,6 +1396,7 @@ export function PdfImportPanel({
                               ))}
                             </select>
                           </label>
+                          )}
                           <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
                             <button type="button" onClick={() => splitLast(set.id)} disabled={disabled || busy || setAdded} className="underline">
                               {set.item_indexes.length > 1 ? "Split off the last question" : "Drop this stimulus"}
@@ -1343,7 +1420,13 @@ export function PdfImportPanel({
                         >
                           {setAdded
                             ? newAuthoring ? "Accepted" : "Added"
-                            : `${newAuthoring ? "Accept" : "Add"} ${rows.length === 1 ? "with stimulus" : `${rows.length} with stimulus`}`}
+                            : `${newAuthoring ? "Accept" : "Add"} ${
+                                isProposedPageGroup(set)
+                                  ? `${rows.length} on one page`
+                                  : rows.length === 1
+                                    ? "with stimulus"
+                                    : `${rows.length} with stimulus`
+                              }`}
                         </button>
                       </div>
                       <ul className="mt-2 space-y-2 border-l-2 border-primary/30 pl-2">{rowsHtml}</ul>
@@ -1581,8 +1664,17 @@ export function PdfImportPanel({
   }
 
   /** One candidate row — on its own in the list, or inside a set card. */
-  function renderRow(i: number, c: Candidate) {
-    const inSet = sets.some((s) => s.item_indexes.includes(i));
+  function renderRow(i: number, proposed: Candidate) {
+    // 2026-10-28: the card shows (and Accept posts) the teacher's edit.
+    const c = edits.get(i) ?? proposed;
+    const isEditing = newAuthoring && editing.has(i) && !added.has(i);
+    const keyKind = editableKey(c.type);
+    const mySet = sets.find((s) => s.item_indexes.includes(i)) ?? null;
+    const inSet = !!mySet;
+    // 2026-10-28 (flag on): page-group and stimulus controls on the card.
+    const aboveSet = sets.find((s) => s.item_indexes[s.item_indexes.length - 1] === i - 1) ?? null;
+    const belowSet = sets.find((s) => s.item_indexes[0] === i + 1) ?? null;
+    const aboveFree = i > 0 && !hidden.has(i - 1) && !added.has(i - 1) && (!aboveSet || !addedSets.has(aboveSet.id));
     const prevInSet = i > 0 && sets.some((s) => s.item_indexes.includes(i - 1));
     // R-8 (flag on): the card's pile, its place on the PDF, and the fields a
     // "check this" reason is about.
@@ -1602,7 +1694,7 @@ export function PdfImportPanel({
                       newAuthoring && activeKey === key ? "border-primary ring-2 ring-primary/40" : "border-border"
                     }`}
                   >
-                    <div className="min-w-0">
+                    <div className={isEditing ? "min-w-0 flex-1" : "min-w-0"}>
                       {tri ? (
                         <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                           <span className="rounded bg-primary px-1.5 py-0.5 font-semibold text-primary-foreground">{i + 1}</span>
@@ -1631,11 +1723,98 @@ export function PdfImportPanel({
                           as a broken import, so the card renders math like the editor. */}
                       {/* FB slice 4: a marker reads as a gap on the card;
                           the posted stem keeps its [[b1]] markers. */}
-                      <RenderedText
-                        text={c.type === "fill_blank" ? stemWithGaps(c.stem) : c.stem}
-                        className={tri ? `block text-sm ${ring("stem")}` : "block truncate text-sm"}
-                      />
-                      {tri && c.choices && c.choices.length > 0 ? (
+                      {isEditing ? (
+                        <div className={`mt-1 ${ring("stem")}`}>
+                          <RichTextField
+                            id={`pdf-stem-${key}`}
+                            label={`Question ${i + 1}`}
+                            placeholder="Type the question"
+                            value={c.stem}
+                            disabled={disabled || busy}
+                            onChange={(stem) => updateCandidate(i, (x) => setStem(x, stem))}
+                            blanks={
+                              c.type === "fill_blank"
+                                ? {
+                                    ids: (c.blanks ?? []).map((b) => b.id),
+                                    canInsert: false,
+                                    limitTitle: "Add blanks in the editor after Accept",
+                                    onInsert: () => "",
+                                  }
+                                : undefined
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <RenderedText
+                          text={c.type === "fill_blank" ? stemWithGaps(c.stem) : c.stem}
+                          className={tri ? `block text-sm ${ring("stem")}` : "block truncate text-sm"}
+                        />
+                      )}
+                      {isEditing && editsChoices(c.type) ? (
+                        <fieldset className="mt-2 space-y-1">
+                          <legend className="text-xs font-medium">
+                            Choices — mark the {keyKind === "multi" ? "correct answers" : "correct answer"}
+                          </legend>
+                          {(c.choices ?? []).map((ch, ci) => (
+                            <div key={ch.id} className={`flex items-start gap-1.5 ${ringChoices.has(ch.id) ? CHECK_RING : ""}`}>
+                              <input
+                                type={keyKind === "multi" ? "checkbox" : "radio"}
+                                name={`pdf-key-${key}`}
+                                aria-label={`Choice ${String.fromCharCode(65 + ci)} is correct`}
+                                checked={c.correct_choice_ids?.includes(ch.id) ?? false}
+                                disabled={disabled || busy}
+                                onChange={() => updateCandidate(i, (x) => toggleKey(x, ch.id))}
+                                className="mt-2"
+                              />
+                              <span className="mt-1.5 text-xs text-muted-foreground">{String.fromCharCode(65 + ci)}.</span>
+                              <div className="min-w-0 flex-1">
+                                <RichTextField
+                                  singleLine
+                                  label={`Choice ${String.fromCharCode(65 + ci)} text`}
+                                  value={ch.text}
+                                  disabled={disabled || busy}
+                                  onChange={(text) => updateCandidate(i, (x) => setChoiceText(x, ch.id, text))}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => updateCandidate(i, (x) => removeChoice(x, ch.id))}
+                                disabled={disabled || busy || (c.choices ?? []).length <= 2}
+                                title={(c.choices ?? []).length <= 2 ? "A question needs at least two choices" : undefined}
+                                className="mt-1 text-[11px] underline disabled:no-underline disabled:opacity-40"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => updateCandidate(i, addChoice)}
+                            disabled={disabled || busy}
+                            className="text-[11px] underline"
+                          >
+                            Add a choice
+                          </button>
+                        </fieldset>
+                      ) : null}
+                      {isEditing && keyKind === "answer" ? (
+                        <label className="mt-2 block text-xs">
+                          <span className="font-medium">Correct answer</span>
+                          <input
+                            value={c.correct_answer ?? ""}
+                            disabled={disabled || busy}
+                            onChange={(e) => updateCandidate(i, (x) => ({ ...x, correct_answer: e.target.value }))}
+                            className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                          />
+                          <MathPreview text={c.correct_answer ?? ""} />
+                        </label>
+                      ) : null}
+                      {isEditing && keyKind === null ? (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Edit this question&apos;s answer key in the editor after Accept.
+                        </p>
+                      ) : null}
+                      {tri && !isEditing && c.choices && c.choices.length > 0 ? (
                         <ul className="mt-1 space-y-0.5 text-xs">
                           {c.choices.map((ch, ci) => (
                             <li key={ch.id} className={ringChoices.has(ch.id) ? CHECK_RING : ""}>
@@ -1694,6 +1873,33 @@ export function PdfImportPanel({
                         </button>
                       ) : added.has(i) ? (
                         <span className="text-[11px] text-muted-foreground">{newAuthoring ? "Accepted" : "Added"}</span>
+                      ) : null}
+                      {newAuthoring && !added.has(i) ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleEditing(i)}
+                          disabled={disabled || busy}
+                          aria-expanded={isEditing}
+                          aria-controls={`pdf-card-${key}`}
+                          className="text-[11px] underline"
+                        >
+                          {isEditing ? "Done editing" : "Edit"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && !inSet && !added.has(i) && aboveFree ? (
+                        <button type="button" onClick={() => keepWithPrevious(i)} disabled={disabled || busy} className="text-[11px] underline">
+                          {aboveSet && !isProposedPageGroup(aboveSet) ? "Add to the stimulus above" : "Same page as question above"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && !inSet && !added.has(i) && belowSet && !addedSets.has(belowSet.id) ? (
+                        <button type="button" onClick={() => joinSetBelow(i)} disabled={disabled || busy} className="text-[11px] underline">
+                          {isProposedPageGroup(belowSet) ? "Same page as question below" : "Add to the stimulus below"}
+                        </button>
+                      ) : null}
+                      {newAuthoring && mySet && isProposedPageGroup(mySet) && mySet.item_indexes[0] !== i && !addedSets.has(mySet.id) && !added.has(i) ? (
+                        <button type="button" onClick={() => startNewPage(mySet.id, i)} disabled={disabled || busy} className="text-[11px] underline">
+                          Start a new page here
+                        </button>
                       ) : null}
                       {!inSet && !added.has(i) && !prevInSet ? (
                         <button type="button" onClick={() => startSet(i)} disabled={disabled || busy} className="text-[11px] underline">
