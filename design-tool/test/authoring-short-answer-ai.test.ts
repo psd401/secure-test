@@ -52,8 +52,9 @@ describe("shortAnswerAi", () => {
   });
 
   test("withScoringMethod: AI seeds a key from the correct answer, other methods drop it", () => {
-    const item = { type: "short_text", scoring_method: null, rubric: null, correct_answer: "x" } as const;
-    const on = withScoringMethod({ ...item }, "hybrid");
+    type Card = Parameters<typeof withScoringMethod>[0];
+    const item: Card = { type: "short_text", scoring_method: null, rubric: null, correct_answer: "x" };
+    const on = withScoringMethod(item, "hybrid");
     expect(on.scoring_method).toBe("hybrid");
     expect(creditLevels(on.rubric!)[0]!.descriptor).toBe("x");
     // Switching between AI methods keeps the key the teacher wrote.
@@ -61,7 +62,7 @@ describe("shortAnswerAi", () => {
     expect(withScoringMethod(on, "auto")).toMatchObject({ scoring_method: "auto", rubric: null, correct_answer: "x" });
     expect(withScoringMethod(on, null).rubric).toBeNull();
     // Other types: only the method changes.
-    const essay = { type: "essay", scoring_method: null, rubric: on.rubric, correct_answer: null };
+    const essay: Card = { type: "essay", scoring_method: null, rubric: on.rubric, correct_answer: null };
     expect(withScoringMethod(essay, "human").rubric).toBe(on.rubric);
   });
 });

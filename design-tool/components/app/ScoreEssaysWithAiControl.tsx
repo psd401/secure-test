@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 export const CONCURRENCY = 3;
 
 function essays(n: number): string {
-  return `${n} essay${n === 1 ? "" : "s"}`;
+  return `${n} written answer${n === 1 ? "" : "s"}`;
 }
 
 function students(n: number): string {
@@ -35,7 +35,7 @@ function students(n: number): string {
 
 /** The button's label: the essays a press will send. Pure, for the tests. */
 export function scoreEssaysLabel(n: number): string {
-  return `Score essays with AI (${n})`;
+  return `Score written answers with AI (${n})`;
 }
 
 /** Why the button is disabled, or undefined when it is not (D-2). */
@@ -44,7 +44,7 @@ export function scoreEssaysDisabledReason(
   sectionChosen: boolean,
 ): string | undefined {
   if (!sectionChosen) return "Choose a section first.";
-  if (n === 0) return "No essays in this section are waiting for an AI score.";
+  if (n === 0) return "No written answers in this section are waiting for an AI score.";
   return undefined;
 }
 
@@ -56,9 +56,9 @@ export function scoreEssaysDialogCopy(
 ): string {
   return (
     `Score ${essays(n)} from ${students(studentCount)} in ${sectionLabel} with AI? ` +
-    "Each essay gets an AI proposal for you to review in the scoring queue; " +
+    "Each answer gets an AI proposal for you to review in the scoring queue; " +
     "on a Hybrid question a confident score counts without review. " +
-    "Essays already scored are skipped. Keep this page open until it finishes."
+    "Answers already scored are skipped. Keep this page open until it finishes."
   );
 }
 
@@ -177,13 +177,13 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
   }
   if (t.failed_students > 0) {
     lines.push(
-      `${t.failed_students} ${t.failed_students === 1 ? "student's" : "students'"} essays ` +
+      `${t.failed_students} ${t.failed_students === 1 ? "student's" : "students'"} answers ` +
         "couldn't be sent. Press the button again to retry.",
     );
   }
   if (t.refused_students > 0) {
     lines.push(
-      `${t.refused_students} ${t.refused_students === 1 ? "student's" : "students'"} essays ` +
+      `${t.refused_students} ${t.refused_students === 1 ? "student's" : "students'"} answers ` +
         "couldn't be scored from this page. Reload it and check you can still edit this test.",
     );
   }
@@ -249,7 +249,7 @@ async function scoreOne(
 }
 
 /**
- * "Score essays with AI (n)" on the Results page. `attemptIds` = the shown
+ * "Score written answers with AI (n)" on the Results page. `attemptIds` = the shown
  * section's handed-in attempts with at least one essay waiting; `essayCount`
  * = n, the sum over them.
  */
@@ -315,7 +315,7 @@ export function ScoreEssaysWithAiControl({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {summary ? "AI scoring finished" : "Score essays with AI?"}
+            {summary ? "AI scoring finished" : "Score written answers with AI?"}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div>

@@ -499,7 +499,7 @@ describe("the results matrix", () => {
   test("Score essays with AI shows only for an AI essay, disabled without a section", async () => {
     const scene = await seedScene();
     const human = await renderResults(scene.assessment.id);
-    expect(human).not.toContain("Score essays with AI");
+    expect(human).not.toContain("Score written answers with AI");
 
     const db = getDb();
     const [essay] = await db
@@ -513,16 +513,16 @@ describe("the results matrix", () => {
       .where(eq(items.id, essay!.id));
 
     const all = await renderResults(scene.assessment.id);
-    expect(all).toContain("Score essays with AI (");
+    expect(all).toContain("Score written answers with AI (");
     expect(all).toContain('title="Choose a section first."');
-    expect(all).toContain("Choose a section to score its handed-in essays with AI.");
+    expect(all).toContain("Choose a section to score its handed-in written answers with AI.");
 
     const results = await buildResults(scene.assessment.id);
     const section = results.rows.find(
       (r) => r.attempt_id === scene.aliceAttempt.id,
     )!.student.section!;
     const one = await renderResults(scene.assessment.id, section);
-    expect(one).toContain("Score essays with AI (");
+    expect(one).toContain("Score written answers with AI (");
     expect(one).not.toContain('title="Choose a section first."');
     expect(one).toContain("Handed-in essays in this section that have no score yet.");
   });

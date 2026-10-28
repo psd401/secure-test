@@ -96,7 +96,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           // check blocks on this surface (inputMode "record"), so it is the
           // AI's own feedback text that was stopped.
           detail:
-            "The AI safety filter stopped the feedback written for this essay. Score it by hand with the rubric.",
+            "The AI safety filter stopped the feedback written for this answer. Score it by hand with the rubric.",
         },
         { status: 422 },
       );
@@ -113,7 +113,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           ok: false,
           error: "scoring_in_progress",
           detail:
-            "This essay is already being scored. Refresh in a moment to see the proposal.",
+            "This answer is already being scored. Refresh in a moment to see the proposal.",
         },
         { status: 409 },
       );

@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   offersAiScoring,
   ScoreWithAiRow,
+  ShortAnswerCredit,
 } from "../app/dashboard/[id]/scoring/ScoringQueue";
 
 function entry(
@@ -66,5 +67,31 @@ describe("ScoreWithAiRow", () => {
       <ScoreWithAiRow busy={true} onClick={() => {}} />,
     );
     expect(html).toContain('disabled=""');
+  });
+});
+
+describe("ShortAnswerCredit (AI short answer, 2026-10-27)", () => {
+  const rubric = {
+    style: "holistic" as const,
+    criteria: [
+      {
+        id: "sa",
+        name: "Answer",
+        levels: [
+          { id: "a", label: "No credit", points: 0 },
+          { id: "b", label: "Partial credit", points: 1, descriptor: "Names births." },
+          { id: "c", label: "Full credit", points: 2, descriptor: "Births per 1000 people." },
+        ],
+      },
+    ],
+  };
+  test("a short answer's card lists what earns each score", () => {
+    const html = renderToStaticMarkup(<ShortAnswerCredit type="short_text" rubric={rubric} />);
+    expect(html).toContain("Partial credit (1):");
+    expect(html).toContain("Births per 1000 people.");
+    expect(html).not.toContain("No credit");
+  });
+  test("an essay's card does not (its descriptors stay tooltips)", () => {
+    expect(renderToStaticMarkup(<ShortAnswerCredit type="essay" rubric={rubric} />)).toBe("");
   });
 });
