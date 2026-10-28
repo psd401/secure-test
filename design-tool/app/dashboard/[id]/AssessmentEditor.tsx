@@ -1577,7 +1577,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
               </a>
             </p>
           </div>
-        ) : null}
+        ) : (
+          // The same way back with no questions yet, and the way forward
+          // from the previous editor (row 858's gap).
+          <p className="mb-4 text-xs text-muted-foreground">
+            <a href="/dashboard/beta" className="underline">
+              {newAuthoring ? "Switch to the previous editor" : "Use the new editor"}
+            </a>
+          </p>
+        )}
 
         {/* Phase 5 slice B (R-11): editor | student preview at ≥ 1280 px;
             below that, a toggle between the two panes. */}
