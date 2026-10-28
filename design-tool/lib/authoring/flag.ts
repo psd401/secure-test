@@ -12,11 +12,13 @@ type Db = ReturnType<typeof getDb>;
  * redesign, start screen) asks THIS function, so Phase 9's cutover is a
  * change to `NEW_AUTHORING_DEFAULT` and nothing else.
  *
- * Off unless the staff member has opted in. A missing row is the default.
- * An act-as session reads the TARGET teacher's choice (D-8: the admin sees
- * what the teacher sees).
+ * A missing row is the default. Phase 9 cutover (2026-10-28, James): the
+ * default is ON; a teacher who chose the previous editor (a row with `false`)
+ * keeps that choice, and `/dashboard/beta` is the way back during the
+ * settling period. An act-as session reads the TARGET teacher's choice (D-8:
+ * the admin sees what the teacher sees).
  */
-export const NEW_AUTHORING_DEFAULT = false;
+export const NEW_AUTHORING_DEFAULT = true;
 
 export async function isNewAuthoringEnabled(
   db: Db,

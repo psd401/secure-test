@@ -1570,6 +1570,12 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             {!isLocked ? (
               <BeforePublishingList entries={beforePublishing(items, itemSets)} onJump={jumpToItem} />
             ) : null}
+            {/* Phase 9 cutover: the way back during the settling period. */}
+            <p className="text-xs text-muted-foreground">
+              <a href="/dashboard/beta" className="underline">
+                Switch to the previous editor
+              </a>
+            </p>
           </div>
         ) : null}
 

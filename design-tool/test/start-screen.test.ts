@@ -78,6 +78,10 @@ afterAll(async () => {
 async function flagOn() {
   await setNewAuthoring(getDb(), TEACHER as never, true);
 }
+// Phase 9 cutover: the new editor is the default, so the previous editor is now an explicit choice.
+async function flagOff() {
+  await setNewAuthoring(getDb(), TEACHER as never, false);
+}
 
 /** Run a server action and return where it redirected (or its returned state). */
 async function run<T>(fn: () => Promise<T>): Promise<{ redirect: string } | { state: T }> {
@@ -256,6 +260,7 @@ describe("createFromTemplate (DB)", () => {
   });
 
   test("flag off, or an unknown template: back to /dashboard/new, nothing created", async () => {
+    await flagOff();
     const { createFromTemplate } = await actions();
     expect(await run(() => createFromTemplate(form({ template: "exit-ticket" })))).toEqual({
       redirect: "/dashboard/new",
@@ -278,6 +283,7 @@ describe("createFromTemplate (DB)", () => {
 
 describe("createAssessment with a start choice (DB)", () => {
   test("flag off: start, the example and the AI tick are all ignored (today's form)", async () => {
+    await flagOff();
     const { createAssessment } = await actions();
     const out = await run(() =>
       createAssessment(

@@ -6,6 +6,8 @@ import { asc, eq, sql } from "drizzle-orm";
 import { ItemBundleSchema } from "@secure-test/schema";
 import { items } from "../db/schema";
 import { effectiveScoringMethod } from "../lib/api/items";
+import { setNewAuthoring } from "../lib/authoring/flag";
+import type { SessionPayload } from "../lib/auth/session";
 import { closeDb, getDb } from "../db/client";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
@@ -240,6 +242,8 @@ describe("items PATCH", () => {
 
   test("rejects type change", async () => {
     asUser("teacher-1");
+    // Phase 9 cutover: the new editor is the default, so the previous editor is now an explicit choice.
+    await setNewAuthoring(getDb(), { sub: "teacher-1", role: "staff" } as SessionPayload, false);
     const aid = await createAssessment("x");
     const created = await createItem(aid, SAMPLE_MC);
     const itemId = ((await created.json()) as { item: { id: string } }).item.id;
