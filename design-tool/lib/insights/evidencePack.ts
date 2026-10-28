@@ -103,7 +103,7 @@ export interface PackItem {
   /** MC only: choices lettered A, B, … in stored order, the key marked. */
   choices?: Array<{ label: string; text: string; is_key: boolean }>;
   /** short_text only: the correct answer, or for an AI-scored one what earns
-   * each score ("Full credit (2): …; Partial credit (1): …"). */
+   * each score ("Full credit: …; Partial credit: …"). */
   key?: string;
   /**
    * FB slice 3, fill_blank only: each blank in stem order ("Blank n", as the
@@ -382,7 +382,9 @@ export function buildEvidencePackFromData(input: EvidencePackInput): EvidencePac
     if (item.type === "short_text" && item.rubric) {
       const credit = (item.rubric.criteria[0]?.levels ?? []).filter((l) => l.points > 0 && l.descriptor?.trim());
       if (credit.length > 0) {
-        out.key = credit.map((l) => `${l.label} (${l.points}): ${shortText(l.descriptor!, STEM_MAX)}`).join("; ");
+        // No "(points)": the chat may quote the key, and a level's points
+        // reach the model as figures.
+        out.key = credit.map((l) => `${l.label}: ${shortText(l.descriptor!, STEM_MAX)}`).join("; ");
       }
     } else if (item.type === "short_text" && item.correct_answer) out.key = item.correct_answer;
     return out;
