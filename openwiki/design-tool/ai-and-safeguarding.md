@@ -45,7 +45,7 @@ AI shows up in many places in the design tool, but always behind the same shape:
 | PDF import extractor | `lib/pdfImport/provider.ts` | `PDF_EXTRACTOR_PROVIDER` (`mock`) | Scanned PDFs go to Bedrock document blocks (ADR 0015). Not gated by `assessment.allow_llm_authoring` (decision of 2026-10-27; Word import follows it). See [PDF import](pdf-import.md#pipeline) and [authoring](authoring.md#getting-content-in-and-out). |
 | Essay scorer | `lib/ai/essayScorer/provider.ts` | `ESSAY_SCORER_PROVIDER` (`mock`) | Used by `lib/scoring/aiScoreResponse.ts`. See [scoring](scoring-and-results.md). |
 | Rubric extractor | `lib/ai/rubricExtractor/provider.ts` | `RUBRIC_EXTRACTOR_PROVIDER` (`mock`) | Rubric upload to structured rubric. |
-| Guardrail | `lib/safeguarding/provider.ts` | `GUARDRAIL_PROVIDER` (`off`; `mock`, `bedrock`) | `null` when off: callers run the AI call directly and write no telemetry. |
+| Guardrail | `lib/safeguarding/provider.ts` | `GUARDRAIL_PROVIDER` (`off`; `mock`, `bedrock`) | `null` when off: callers run the AI call directly and write no telemetry. `bedrock` is `bedrockGuardrail` in `lib/safeguarding/bedrockGuardrail.ts`, which calls the standalone Bedrock `ApplyGuardrail` API so the same check covers every AI provider; `mock` is `mockGuardrail` in `lib/safeguarding/mockProvider.ts`. |
 | Hand-in screener | `lib/safeguarding/screening/provider.ts` | `SAFEGUARDING_SCREENER_PROVIDER` (`off`; `mock`, `bedrock`) | Off means the hand-in does no extra work. |
 | Email, notify | `lib/email/provider.ts`, `lib/notify/provider.ts` | `EMAIL_PROVIDER`, `NOTIFY_PROVIDER` (`mock`) | SES and SNS in production. |
 
