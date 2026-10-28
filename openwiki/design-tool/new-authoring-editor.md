@@ -1,8 +1,8 @@
 ---
 type: Feature Reference
-title: Authoring editor beta (R-12 flag, rich-text fields, autosave and history)
-description: The opt-in beta of the redesigned item editor in the design tool. Covers the per-staff new_authoring flag, the start screen with its blank, import, AI and district-template choices, the rich-text field for every item type's stem and text inputs, the markup round-trip gate, clean paste, question autosave, per-question version history, the outline rail, insert and in-place type change, and what is not built yet.
-tags: [authoring, editor, feature-flag, rich-text, markup, autosave, beta]
+title: Authoring editor (R-12 flag, rich-text fields, autosave and history)
+description: The redesigned item editor in the design tool, the default since the 2026-10-28 Phase 9 cutover, with a per-staff new_authoring flag that switches back to the previous editor. Covers the flag, the start screen with its blank, import, AI and district-template choices, the rich-text field for every item type's stem and text inputs, the markup round-trip gate, clean paste, question autosave, per-question version history, the outline rail, insert and in-place type change, and what is not built yet.
+tags: [authoring, editor, feature-flag, rich-text, markup, autosave, cutover]
 openwiki:
   roles: [domain, workflow]
   change_kinds: [feature-flag, ui-editor, persistence, lifecycle]
@@ -41,7 +41,7 @@ openwiki:
     - design-tool/test/authoring-key-order.test.ts
     - design-tool/test/authoring-fill-blank-field.test.ts
   invariants:
-    - The new editor is off unless the staff member opts in; a missing staff_preferences row reads as the default.
+    - The new editor is on unless the staff member chose the previous editor; a missing staff_preferences row reads as the default (on since 2026-10-28).
     - An act-as (impersonated) session reads the target teacher's choice but cannot change it.
     - The field stores the same markup string the item already stores; the item's stem and choice text shape does not change.
     - Markup the field cannot save back byte for byte opens read-only with Show source; opening an item never rewrites it.
@@ -55,7 +55,7 @@ openwiki:
     - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/new-authoring-flag.test.ts test/item-history-api.test.ts
 ---
 
-# Authoring editor beta
+# Authoring editor
 
 The item editor in `design-tool/app/dashboard/[id]/AssessmentEditor.tsx` has a redesigned variant that is ON by default since the Phase 9 cutover (2026-10-28); a teacher can switch to the previous editor during the settling period. It is the part of the [editor redesign](../../docs/editor-redesign-design.md) that exists in source (the design notes call it the prototype track), and it is gated by one flag, **R-12**. The redesign's goal is a WYSIWYG field that never shows formatting markers, while the stored format stays the markup string. This page covers what the source does today. The [assessment authoring](authoring.md) page describes the flag-off editor and the item lifecycle.
 
@@ -72,7 +72,7 @@ Built, and reachable only when the flag is on:
 - The editor-choice page at `/dashboard/beta` ("Choose your editor"), linked from the editor as **Switch to the previous editor**.
 - A side-by-side student preview beside the Questions tab (at 1280 px and wider), running the student's own renderer in a sandboxed frame. It is documented in [interactive preview](interactive-preview.md).
 
-Not built, and described elsewhere as proposals: the MathLive keypad, the preview's speech-to-text, time-limit, contrast and zoom views, the import redesign, the start screen, and deleting the previous editor and the flag (Phase 9's final slice, after the settling period). The client renderer does not consume `packages/markup` yet (see [markup grammar](../architecture/markup-grammar.md)). Also not built inside the new editor: autosave for stimulus sets and assessment settings (they keep their own Save buttons), reordering within a stimulus set from the outline rail, reordering whole matching rows, pair, step, table-cell and blank-answer text (these stay plain inputs that take markup), and a blank chip showing its number rather than "blank". Do not describe any of these as existing behaviour.
+Not built, and described elsewhere as proposals: the MathLive keypad, the preview's speech-to-text, time-limit, contrast and zoom views, the Google Drive picker for Word import, and deleting the previous editor and the flag (Phase 9's final slice, after the settling period). The client renderer does not consume `packages/markup` yet (see [markup grammar](../architecture/markup-grammar.md)). Also not built inside the new editor: autosave for stimulus sets and assessment settings (they keep their own Save buttons), reordering within a stimulus set from the outline rail, reordering whole matching rows, pair, step, table-cell and blank-answer text (these stay plain inputs that take markup), and a blank chip showing its number rather than "blank". Do not describe any of these as existing behaviour.
 
 ## The flag
 
@@ -276,3 +276,4 @@ Browser behaviour of the field, the autosave indicator, the rail and the menus i
 - Scope boundary: `AssessmentEditor.tsx` still owns all state. Its Settings and Allowed tabs (`SettingsTab.tsx`, `AccommodationsTab.tsx`), the Questions toolbar (`QuestionsToolbar.tsx`), stimulus sets (`StimulusSetCard.tsx`) and a card's per-type editor (`ItemTypeFields.tsx`) were split out in Phase 4 slice D, with shared model helpers in `editorModel.ts`. The question card's header, stem field, scoring select and save row, and the stimulus-set, autosave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
 ave and outline handlers, still live in the editor, so change a card's chrome there and keep the new helpers in `lib/authoring/`.
  change a card's chrome there and keep the new helpers in `lib/authoring/`.
+keep the new helpers in `lib/authoring/`.
