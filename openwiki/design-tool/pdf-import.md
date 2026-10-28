@@ -20,7 +20,7 @@ openwiki:
     - design-tool/lib/docxImport/document.ts
     - design-tool/app/dashboard/[id]/PdfImportPanel.tsx
     - design-tool/app/dashboard/[id]/DocxSourcePane.tsx
-  symbols: [PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, countNumberedItems, numberingReport, readSourceNumbers, readCandidateChanges, detectForms, formsReport, validateProposedSets, adjacencyFallback, flagShortenedSources, extractPdfText, looksScanned, extractPdfLayout, pageImagesWanted, renderPagesForModel, runGuarded, pdfExtractSampling, dropPrintCopies, readDocx, parseWordDocument, docxGroups, triageCandidate, acceptSkip, readyToAccept]
+  symbols: [PDF_EXTRACT_SYSTEM_PROMPT, validatePdfCandidates, countNumberedItems, numberingReport, readSourceNumbers, readCandidateChanges, detectForms, formsReport, validateProposedSets, adjacencyFallback, flagShortenedSources, extractPdfText, looksScanned, extractPdfLayout, shrinkToFit, pageImagesWanted, renderPagesForModel, runGuarded, pdfExtractSampling, dropPrintCopies, readDocx, parseWordDocument, docxGroups, triageCandidate, acceptSkip, readyToAccept]
   test_paths:
     - design-tool/test/pdf-extract.test.ts
     - design-tool/test/pdf-import-route.test.ts
@@ -130,7 +130,7 @@ The success response (`ok: true`) carries these fields alongside `candidates` an
 | `numbered_items`, `extracted_count`, `missing_numbers`, `shortfall` | `numberingReport`, `countNumberedItems` | Compares the printed question numbering with what came back. With source numbers the missing list is exact; without them only the count is compared. Scanned PDFs have no text layer to count. |
 | `changes` | `readCandidateChanges` | Per validated candidate, the model's rewrites. `[]` means printed as is. |
 | `proposed_sets`, `rejected_sets` | `validateProposedSets`, `adjacencyFallback` | Stimulus sets the model proposed (remapped to validated candidate indexes), plus sets the adjacency rule places for figures the model did not attach. `source` says whether the model or the rule paired them. |
-| `figures`, `figure_count` | `extractPdfLayout` | Each raster figure above `MIN_FIGURE_PT` with its page and, unless omitted for size, a PNG data URL. Figure limits are `MAX_FIGURES`, `MAX_FIGURE_BYTES` and `MAX_FIGURES_TOTAL_BYTES`. |
+| `figures`, `figure_count` | `extractPdfLayout` | Each raster figure above `MIN_FIGURE_PT` with its page and, unless omitted for size, a PNG data URL. Figure limits are `MAX_FIGURES`, `MAX_FIGURE_BYTES` and `MAX_FIGURES_TOTAL_BYTES`. An oversize PNG is first redrawn smaller by `shrinkToFit` (2026-10-27) until it fits, giving up below `MIN_SHRUNK_FIGURE_PX` (320 px on the long side) or after four tries; only then is it omitted as `too_large`. |
 | `forms` | `formsReport`, `detectForms` | Several forms in one document, detected when numbering restarts at 1 into at least two groups of two or more questions each, or from "Form A / Form B" labels. The teacher confirms the grouping in the panel. |
 | `ocr_used`, `page_count`, `extracted_chars` | route | Which branch ran and how much text was read. |
 
@@ -154,59 +154,3 @@ A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "outp
 Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms, the prompt fence, the output screen text and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
 
 Live behaviour of the fence and the record-only input check against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
- by `test/changed-from-pdf.test.tsx`.
-DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-.
-k against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
- by `test/changed-from-pdf.test.tsx`.
-DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-.
-ets the adjacency rule places for figures the model did not attach. `source` says whether the model or the rule paired them. |
-| `figures`, `figure_count` | `extractPdfLayout` | Each raster figure above `MIN_FIGURE_PT` with its page and, unless omitted for size, a PNG data URL. Figure limits are `MAX_FIGURES`, `MAX_FIGURE_BYTES` and `MAX_FIGURES_TOTAL_BYTES`. |
-| `forms` | `formsReport`, `detectForms` | Several forms in one document, detected when numbering restarts at 1 into at least two groups of two or more questions each, or from "Form A / Form B" labels. The teacher confirms the grouping in the panel. |
-| `ocr_used`, `page_count`, `extracted_chars` | route | Which branch ran and how much text was read. |
-
-Proposed sources are bounded: at most `MAX_PROPOSED_SOURCES` (12) per set, `MAX_SOURCE_TEXT_CHARS` (20,000) per source, and `flagShortenedSources` marks any source shorter than `SHORTENED_SOURCE_RATIO` (0.85) of the document's own span under the same heading.
-
-## Figures and stimulus sets
-
-Extraction writes no assets. Figures travel in the response as data URLs. When the teacher adds a proposed set, `PdfImportPanel.tsx` creates the item-set through `POST /api/assessments/[id]/item-sets`, and the figure bytes are attached then. Shared stimuli and their delivery rules are in [stimulus and item sets](stimulus-and-item-sets.md).
-
-## Errors
-
-A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "output"` (the input stage never blocks here). Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), `pdf_extract_refused` (the model declined the document; retrying will not change that, so import by CSV or by hand), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
-
-## Change guidance
-
-- To add an item shape to the extractor, change the prompt, the parser in `normalizePdfCandidate`, and `CreateItemBody`. Check whether the shape also needs the bundle and delivery changes described in [wire formats](../architecture/wire-formats.md#add-an-item-type-cross-system-expensive). The generic checklist is in [authoring](authoring.md#change-recipes).
-- Keep extraction write-free. Any change that saves from this route breaks the lock and the teacher's review step.
-- Do not treat `docs/pdf-import-enhancements.md` as current on shapes. Use `PDF_EXTRACT_SYSTEM_PROMPT`.
-- Judge an extractor or model change on measured output, not on item counts. `scripts/compare-pdf-import.ts` runs the extractor on one PDF with one or more Bedrock models (`--model`, `--runs`, `--summary`) using the caller's own AWS credentials and skips the guardrail. `scripts/pdfImportScore.ts` scores a run against a hand-checked answer set (`--expected`). Neither saves anything. Answer sets describe teacher documents and stay out of the repository, so never paste a real PDF's output into a tracked file.
-
-Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms, the prompt fence, the output screen text and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
-
-Live behaviour of the fence and the record-only input check against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
- by `test/changed-from-pdf.test.tsx`.
-DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-.
-k against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
- by `test/changed-from-pdf.test.tsx`.
-DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-.
-
-ute.test.ts`.
-test/pdf-import-route.test.ts`. The figure extractor is covered by `test/pdf-figures.test.ts`.
-ute.test.ts`.
-.

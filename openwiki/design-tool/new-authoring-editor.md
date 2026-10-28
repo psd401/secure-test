@@ -68,6 +68,7 @@ Built, and reachable only when the flag is on:
 - Clean paste from Word and Google Docs (text, bold, italic and line breaks only; pictures are dropped and counted).
 - Question autosave with one status indicator, and no per-question Save button.
 - Per-question version history with restore, the outline rail, the "+" and "/" insert menu, in-place type change, choice and ordering-step reordering by drag or buttons, and a before-publishing list.
+- The AI short answer key (`ShortAnswerAiKey.tsx`, 2026-10-27): on a short answer, "Score with AI" sets the item to Hybrid, and the teacher writes what earns each level and its points (`lib/authoring/shortAnswerAi.ts`). Level names follow the points, so the stored rubric always reads No credit, Partial credit, Full credit. The rule it writes to is in [authoring](authoring.md#concepts).
 - The opt-in page at `/dashboard/beta`.
 - A side-by-side student preview beside the Questions tab (at 1280 px and wider), running the student's own renderer in a sandboxed frame. It is documented in [interactive preview](interactive-preview.md).
 
