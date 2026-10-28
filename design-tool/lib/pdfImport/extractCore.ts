@@ -1,4 +1,5 @@
 import { CreateItemBody } from "@/lib/api/items";
+import { type ProposedSetLayout, proposedSetLayout } from "./setLayout";
 import { MATH_DOLLAR_RULE } from "@/lib/ai/mathPromptRule";
 import { normalizeProposalMath } from "@/lib/ai/mathNormalize";
 import { normalizeFillBlankProposal } from "@/lib/ai/fillBlankNormalize";
@@ -841,7 +842,7 @@ export interface ProposedSource {
 }
 
 /** The three `item_sets.layout` values (slice 2 widened the CHECK). */
-export type ProposedSetLayout = "inline" | "own_page" | "side_by_side";
+export type { ProposedSetLayout } from "./setLayout";
 
 /** Label 1–80 chars, text ≤ 20 000 (the stimulus bound), 12 sources —
  * the same bounds as `StimulusSources` in lib/api/itemSets.ts, so a set the
@@ -1020,7 +1021,7 @@ export function validateProposedSets(
       source: "model",
       sources,
       // D-2: the default the card offers; the teacher can change it before Add.
-      layout: sources.length > 0 ? "side_by_side" : "inline",
+      layout: proposedSetLayout(sources.length > 0),
       ...(sourcesTruncated ? { sources_truncated: true } : {}),
       ...(needsFigure ? { needs_figure: true } : {}),
     });
@@ -1136,7 +1137,7 @@ export function adjacencyFallback(
       item_indexes: [idx],
       source: "adjacency",
       sources: [],
-      layout: "inline",
+      layout: proposedSetLayout(false),
     });
   }
   return out;

@@ -581,7 +581,7 @@ describe("validateProposedSets (E5 slice 3)", () => {
     );
     expect(rejected).toEqual([]);
     expect(sets).toEqual([
-      { id: "s1", stimulus: "Passage", figures: [1], item_indexes: [1, 2], source: "model", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "Passage", figures: [1], item_indexes: [1, 2], source: "model", sources: [], layout: "own_page" },
     ]);
   });
 
@@ -620,7 +620,7 @@ describe("validateProposedSets (E5 slice 3)", () => {
       { index: 4, reason: "empty" },
     ]);
     expect(sets).toEqual([
-      { id: "s1", stimulus: "kept", figures: [], item_indexes: [2], source: "model", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "kept", figures: [], item_indexes: [2], source: "model", sources: [], layout: "own_page" },
     ]);
   });
 
@@ -637,7 +637,7 @@ describe("validateProposedSets (E5 slice 3)", () => {
       0,
     );
     expect(sets).toEqual([
-      { id: "s1", stimulus: "Use the graph.", figures: [], item_indexes: [0, 1], source: "model", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "Use the graph.", figures: [], item_indexes: [0, 1], source: "model", sources: [], layout: "own_page" },
     ]);
     expect(rejected).toEqual([{ index: 1, reason: "empty" }]);
     // With figures present the stimulus is left alone (text-path prompt rule).
@@ -659,7 +659,7 @@ describe("validateProposedSets (E5 slice 3)", () => {
     );
     expect(rejected).toEqual([{ index: 2, reason: "empty" }]);
     expect(sets).toEqual([
-      { id: "s1", stimulus: "", figures: [], item_indexes: [0], source: "model", sources: [], layout: "inline", needs_figure: true },
+      { id: "s1", stimulus: "", figures: [], item_indexes: [0], source: "model", sources: [], layout: "own_page", needs_figure: true },
       {
         id: "s2",
         stimulus: "Table 1: pH 7.2, 7.5, 7.9",
@@ -667,13 +667,13 @@ describe("validateProposedSets (E5 slice 3)", () => {
         item_indexes: [1],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: "own_page",
         needs_figure: true,
       },
     ]);
     const withFigure = validateProposedSets([{ stimulus: "", figures: [1], item_indexes: [0], needs_figure: true }], rawToValid, 1);
     expect(withFigure.sets).toEqual([
-      { id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [0], source: "model", sources: [], layout: "own_page" },
     ]);
   });
 });
@@ -693,7 +693,7 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
     const sourceNumbers = [[1], [2], [3]];
     const fromModel = adjacencyFallback(3, text, sourceNumbers, []);
     expect(fromModel).toEqual([
-      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "own_page" },
     ]);
     // The model already used figure 1 on question 2 → nothing to add.
     const existing = [
@@ -737,14 +737,14 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
     // A figure inside the last question, with choices after and nothing numbered below.
     expect(questionAfterFigure("**16. TITLE**\n[FIGURE 1]\nWhich?\n(A) a", 1)).toBe(16);
     expect(adjacencyFallback(1, titled, [[7], [8], [9]], [])).toEqual([
-      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "", figures: [1], item_indexes: [1], source: "adjacency", sources: [], layout: "own_page" },
     ]);
   });
 
   test("two unplaced figures above the same question share one set", () => {
     const stacked = "[FIGURE 1]\n[FIGURE 2]\n1. Q1";
     expect(adjacencyFallback(2, stacked, [[1]], [])).toEqual([
-      { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
+      { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "own_page" },
     ]);
   });
 
@@ -783,8 +783,8 @@ describe("questionAfterFigure + adjacencyFallback (E5 slice 3)", () => {
 
     test("both triangles of each pair land in one set on their own question", () => {
       expect(adjacencyFallback(4, quiz, [[3], [4], [5]], [], new Set([1, 2, 3, 4]))).toEqual([
-        { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "inline" },
-        { id: "s2", stimulus: "", figures: [3, 4], item_indexes: [1], source: "adjacency", sources: [], layout: "inline" },
+        { id: "s1", stimulus: "", figures: [1, 2], item_indexes: [0], source: "adjacency", sources: [], layout: "own_page" },
+        { id: "s2", stimulus: "", figures: [3, 4], item_indexes: [1], source: "adjacency", sources: [], layout: "own_page" },
       ]);
     });
   });
@@ -867,10 +867,10 @@ describe("proposed sources (multi-source stimulus slice 3)", () => {
     expect(sets[0]!.layout).toBe("side_by_side");
   });
 
-  test("no sources → sources [] and layout inline; a scan strips a figure marker from a source", () => {
+  test("no sources → sources [] and layout own_page; a scan strips a figure marker from a source", () => {
     const plain = validateProposedSets([{ stimulus: "Passage", item_indexes: [0] }], rawToValid, 0);
     expect(plain.sets[0]!.sources).toEqual([]);
-    expect(plain.sets[0]!.layout).toBe("inline");
+    expect(plain.sets[0]!.layout).toBe("own_page");
     const scanned = validateProposedSets(
       [{ stimulus: "s", item_indexes: [0], sources: [{ label: "Source A", text: "The chart. [FIGURE 1]" }] }],
       rawToValid,
@@ -1001,7 +1001,7 @@ describe("mockPdfExtractor sources= segment (multi-source stimulus slice 3)", ()
     ]);
     const { sets } = validateProposedSets(proposed_sets!, new Map([[0, 0], [1, 1]]), 0);
     expect(sets[0]!.layout).toBe("side_by_side");
-    expect(sets[1]!.layout).toBe("inline");
+    expect(sets[1]!.layout).toBe("own_page");
   });
 });
 

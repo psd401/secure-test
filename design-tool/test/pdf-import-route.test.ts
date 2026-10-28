@@ -534,7 +534,7 @@ describe("POST items/import-pdf", () => {
         item_indexes: [0],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: "own_page",
         needs_figure: true,
       },
     ]);

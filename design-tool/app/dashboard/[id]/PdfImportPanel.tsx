@@ -12,6 +12,7 @@ import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
 import type { FillBlankBlank } from "@secure-test/schema";
 import type { ItemType } from "@/db/schema";
 import type { CandidateRegion } from "@/lib/pdfImport/regions";
+import { proposedSetLayout } from "@/lib/pdfImport/setLayout";
 import {
   TRIAGE_LABEL,
   TRIAGE_ORDER,
@@ -374,7 +375,7 @@ export function PdfImportPanel({
             ...s,
             sources,
             figures: [...new Set([...s.figures, ...inSources])],
-            layout: s.layout ?? "inline",
+            layout: s.layout ?? proposedSetLayout(sources.length > 0),
           };
         }),
       );
@@ -772,7 +773,7 @@ export function PdfImportPanel({
         item_indexes: [i],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: proposedSetLayout(false),
       })),
     );
   }
@@ -788,7 +789,7 @@ export function PdfImportPanel({
         item_indexes: [index],
         source: "model",
         sources: [],
-        layout: "inline",
+        layout: proposedSetLayout(false),
       },
     ]);
   }

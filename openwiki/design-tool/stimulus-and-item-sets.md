@@ -84,7 +84,7 @@ On the student client, `side_by_side` shows the sources on the left and the ques
 - Teacher preview renders the introduction, then one labelled section per source, in order (`preview-render.test.ts`).
 - Readiness treats an empty stimulus as a gap only when there are no sources. Each empty source is its own gap, named by its label (`stimulusGaps` in `app/dashboard/[id]/readiness.ts`).
 - Both bundles carry sources and layout. Export and import keep them, and duplication copies them (`duplicate-assessment.test.ts`).
-- PDF import proposals carry sources with `side_by_side` and sets without sources with `inline`. That is the proposal's own rule, separate from the editor default. See [PDF import](pdf-import.md).
+- PDF and Word import proposals carry sources with `side_by_side` and sets without sources with `own_page` (`proposedSetLayout` in `lib/pdfImport/setLayout.ts`; `inline` before 2026-10-28). That is the proposal's own rule, separate from the editor default. See [PDF import](pdf-import.md).
 
 ## E12 source-backed sets
 
