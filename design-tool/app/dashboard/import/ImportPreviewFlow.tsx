@@ -15,6 +15,7 @@ import { importErrorCopy } from "@/lib/ui/errorCopy";
 import { picturesFromFile, previewErrorCode } from "@/lib/preview/importFile";
 import { InteractivePreview } from "../[id]/InteractivePreview";
 import { rowToView, type ItemSetView } from "../[id]/editorModel";
+import { useImportAction } from "./useImportAction";
 
 const CALCULATOR_LABEL: Record<ImportPreview["calculator_mode"], string> = {
   none: "No calculator",
@@ -34,10 +35,11 @@ type State =
  * the file shows what the import WILL create — the name, counts by type,
  * settings, warnings, and the questions in the student's own renderer
  * (Phase 5's sandboxed preview) — and nothing is written until Create. Create
- * submits the same file to the same server action the flag-off page uses, so
- * the import itself is unchanged.
+ * posts the same file to the import route through the same action as the
+ * flag-off form (useImportAction), so the import itself is unchanged.
  */
-export function ImportPreviewFlow({ action }: { action: (formData: FormData) => Promise<void> }) {
+export function ImportPreviewFlow() {
+  const action = useImportAction();
   const [state, setState] = useState<State>({ kind: "idle" });
   const request = useRef(0);
 
@@ -95,7 +97,7 @@ export function ImportPreviewFlow({ action }: { action: (formData: FormData) => 
   return (
     <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
       <div className="space-y-6">
-        <form action={action} encType="multipart/form-data" className="space-y-5">
+        <form action={action} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="file">Assessment file (.json)</Label>
             <FilePicker

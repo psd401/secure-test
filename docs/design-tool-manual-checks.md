@@ -2057,3 +2057,5 @@ Findings (proposals; nothing changed yet):
 | 830 | F-2: in a question's text type `5**2 and $x^2$` | Saved as `5**2 and \$x^2\$` (the amber note still shows for the `**`); the preview shows `$x^2$` as text | NOT RUN (unit test only) |
 | 831 | F-3: change a question's type, change it back, open **History** | Each version's heading names its type ("Oct 27, 5:24 PM · Multiple select") | ✅ 2026-10-27 local |
 | 832 | F-6: **Generate questions** with an objective, real Bedrock, a few times | No drafted question refers to a diagram, picture, chart, table, map or figure | partial 2026-10-27: one run of 5 questions, none did |
+| 833 | Import body cap (2026-10-27): with the beta editor OFF, **Import assessment file** a backup between 1 and 10 MB (one with a large picture) | The new draft opens with its picture; no "This page couldn't load" | NOT RUN (unit test only) |
+| 834 | Same, with the beta editor ON: choose the file, check the preview, **Create assessment** | Preview shows, then the new draft opens; a bad file still shows its message on the import page | NOT RUN (unit test only) |
