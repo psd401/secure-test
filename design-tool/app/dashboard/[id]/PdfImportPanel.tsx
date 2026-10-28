@@ -8,7 +8,7 @@ import { ChangedFromPdf } from "./ChangedFromPdf";
 import { attachFigure, figureFileName, figureUseLabel, itemRangeLabel, stemSnippet } from "./pdfFigures";
 import type { CandidateChange } from "@/lib/pdfImport/extractCore";
 import { itemTypeName } from "@/lib/items/typeLabel";
-import { hasKeyedBlank, orderBlanksByStem, stemWithGaps } from "@/lib/items/fillBlankEditor";
+import { hasKeyedBlank, stemWithGaps } from "@/lib/items/fillBlankEditor";
 import type { FillBlankBlank } from "@secure-test/schema";
 import type { ItemType } from "@/db/schema";
 import type { CandidateRegion } from "@/lib/pdfImport/regions";
@@ -20,6 +20,7 @@ import {
   editsChoices,
   removeChoice,
   setChoiceText,
+  setStem,
   toggleKey,
 } from "@/lib/pdfImport/cardEdit";
 import { isProposedPageGroup, prependToSet, splitProposedGroup } from "@/lib/pdfImport/groupEdit";
@@ -824,7 +825,7 @@ export function PdfImportPanel({
   }
   /** "… below": the loose question just above a set joins it. */
   function joinSetBelow(index: number) {
-    setSets((prev) => prev.map((s) => prependToSet(s, index)));
+    setSets((prev) => prependToSet(prev, index));
   }
   /** "Start a new page here" inside a page group. */
   function startNewPage(setId: string, index: number) {
@@ -1730,14 +1731,7 @@ export function PdfImportPanel({
                             placeholder="Type the question"
                             value={c.stem}
                             disabled={disabled || busy}
-                            onChange={(stem) =>
-                              updateCandidate(i, (x) => ({
-                                ...x,
-                                stem,
-                                // As the editor does: blanks follow the stem's order.
-                                ...(x.type === "fill_blank" ? { blanks: orderBlanksByStem(stem, x.blanks ?? []) } : {}),
-                              }))
-                            }
+                            onChange={(stem) => updateCandidate(i, (x) => setStem(x, stem))}
                             blanks={
                               c.type === "fill_blank"
                                 ? {

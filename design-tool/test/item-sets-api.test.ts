@@ -339,6 +339,17 @@ describe("item sets — split a page group", () => {
     expect(await getDb().select().from(item_sets).where(eq(item_sets.id, g))).toHaveLength(0);
   });
 
+  // PR #146 review: two splits of one group at once leave no empty set row.
+  test("concurrent splits of one group leave every set with members", async () => {
+    const { id, q } = await seed();
+    const g = await group(id, q);
+    const [a, b] = await Promise.all([split(id, g, q[2]!), split(id, g, q[3]!)]);
+    expect([a.status, b.status].sort()).toContain(200);
+    const list = await listItems(id);
+    const used = new Set(list.items.map((i) => i.item_set_id).filter(Boolean));
+    expect(list.item_sets.every((s) => used.has(s.id))).toBe(true);
+  });
+
   test("refuses a stimulus, the first question, a stranger and a published assessment", async () => {
     const { id, q } = await seed();
     const stim = await group(id, [q[0]!, q[1]!]);

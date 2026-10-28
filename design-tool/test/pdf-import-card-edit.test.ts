@@ -11,6 +11,7 @@ import {
   editsChoices,
   removeChoice,
   setChoiceText,
+  setStem,
   toggleKey,
 } from "../lib/pdfImport/cardEdit";
 import { triageCandidate } from "../lib/pdfImport/triage";
@@ -65,6 +66,33 @@ describe("choice and key edits", () => {
   test("an edited card still goes through the item schema on Accept", () => {
     const edited = toggleKey(setChoiceText({ ...MC, stem: "Which angle is **acute**?" }, "a", "$45^\\circ$"), "a");
     expect(CreateItemBody.safeParse(edited).success).toBe(true);
+  });
+});
+
+// PR #146 review: deleting a blank chip on the card must not make Accept fail.
+describe("setStem", () => {
+  const fb = {
+    type: "fill_blank",
+    stem: "Area = [[b1]] and perimeter = [[b2]].",
+    blanks: [
+      { id: "b1", kind: "text" as const, keys: ["12"] },
+      { id: "b2", kind: "text" as const, keys: ["14"] },
+    ],
+  };
+
+  test("a deleted chip drops its blank; the rest follow the stem's order", () => {
+    expect(setStem(fb, "Perimeter = [[b2]].").blanks!.map((b) => b.id)).toEqual(["b2"]);
+    expect(setStem(fb, "[[b2]] then [[b1]]").blanks!.map((b) => b.id)).toEqual(["b2", "b1"]);
+  });
+
+  test("the edited card passes the item schema; keeping the orphan would not", () => {
+    expect(CreateItemBody.safeParse(fb).success).toBe(true);
+    expect(CreateItemBody.safeParse(setStem(fb, "Perimeter = [[b2]].")).success).toBe(true);
+    expect(CreateItemBody.safeParse({ ...fb, stem: "Perimeter = [[b2]]." }).success).toBe(false);
+  });
+
+  test("other types only change the stem", () => {
+    expect(setStem(MC, "New?")).toEqual({ ...MC, stem: "New?" });
   });
 });
 

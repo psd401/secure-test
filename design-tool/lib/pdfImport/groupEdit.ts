@@ -14,10 +14,18 @@ export interface GroupableSet {
   item_indexes: number[];
   sources: readonly unknown[];
   needs_figure?: boolean;
+  /** Who paired the set ("model" / "adjacency") — not an E12 source link. */
+  source?: string;
 }
 
 export function isProposedPageGroup(set: GroupableSet): boolean {
-  return set.figures.length === 0 && !set.needs_figure && isPageGroup(set, set.item_indexes.length);
+  // Only the text and sources: a proposed set's `source` says who paired it
+  // ("model" / "adjacency"), not an E12 source link, so it is not passed on.
+  return (
+    set.figures.length === 0 &&
+    !set.needs_figure &&
+    isPageGroup({ stimulus: set.stimulus, sources: set.sources }, set.item_indexes.length)
+  );
 }
 
 /**
@@ -37,7 +45,9 @@ export function splitProposedGroup<S extends GroupableSet>(set: S, index: number
   return out;
 }
 
-/** The loose question just above a set joins it ("… below"). */
-export function prependToSet<S extends GroupableSet>(set: S, index: number): S {
-  return set.item_indexes[0] === index + 1 ? { ...set, item_indexes: [index, ...set.item_indexes] } : set;
+/** The loose question just above a set joins it ("… below"). Nothing
+ * changes when `index` is already in a set or no set opens just below it. */
+export function prependToSet<S extends GroupableSet>(sets: readonly S[], index: number): S[] {
+  if (sets.some((s) => s.item_indexes.includes(index))) return [...sets];
+  return sets.map((s) => (s.item_indexes[0] === index + 1 ? { ...s, item_indexes: [index, ...s.item_indexes] } : s));
 }

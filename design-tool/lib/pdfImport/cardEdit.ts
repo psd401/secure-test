@@ -7,7 +7,9 @@
 // what is valid. Match pairs, blank answers and table keys stay in the
 // editor. Pure — the panel holds the state and renders.
 
+import { fillBlankMarkerIds } from "@secure-test/schema";
 import { nextChoiceId } from "@/lib/items/choiceIds";
+import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
 import type { TriageField } from "./triage";
 
 export interface EditableCandidate {
@@ -30,6 +32,19 @@ export function editableKey(type: string): "single" | "multi" | "answer" | null 
 export function editsChoices(type: string): boolean {
   const k = editableKey(type);
   return k === "single" || k === "multi";
+}
+
+/**
+ * A new stem from the card's field. On fill in the blank, the blanks follow
+ * the stem's order and a blank whose `[[id]]` chip the teacher deleted is
+ * dropped with it (PR #146 review): the item route refuses a blank with no
+ * marker, and the card has no "put it back" panel as the editor does, so
+ * keeping it would only make Accept fail.
+ */
+export function setStem<C extends EditableCandidate & { blanks?: { id: string }[] }>(c: C, stem: string): C {
+  if (c.type !== "fill_blank") return { ...c, stem };
+  const present = new Set(fillBlankMarkerIds(stem));
+  return { ...c, stem, blanks: orderBlanksByStem(stem, c.blanks ?? []).filter((b) => present.has(b.id)) };
 }
 
 export function setChoiceText<C extends EditableCandidate>(c: C, id: string, text: string): C {
