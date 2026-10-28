@@ -614,7 +614,6 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
     }, 0);
     return (
       <div className="mt-2 space-y-2">
-        <ShortAnswerCredit type={entry.item.type} rubric={rubric} />
         {rubric.criteria.map((c) => (
           <div key={c.id}>
             <span className="text-xs font-medium">{c.name}</span>
@@ -821,6 +820,13 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
           </blockquote>
         )}
 
+        {/* Hand-check row 838: on every short-answer card, finalized by AI or
+            not — under Hybrid most never reach the level picker. */}
+        {entry.item.rubric ? (
+          <div className="mt-2">
+            <ShortAnswerCredit type={entry.item.type} rubric={entry.item.rubric} />
+          </div>
+        ) : null}
         {entry.final ? (
           finalBlock(entry, entry.final)
         ) : entry.proposed ? (
@@ -1016,12 +1022,14 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
 
 /**
  * AI short answer (2026-10-27): a short answer's key is short, so the queue
- * shows what earns each score in full rather than only as each level's
- * tooltip. Nothing for any other type.
+ * shows what earns each score in full, on every card, lowest score first,
+ * rather than only as each level's tooltip. Nothing for any other type.
  */
 export function ShortAnswerCredit({ type, rubric }: { type: string; rubric: Rubric }) {
   if (type !== "short_text") return null;
-  const credit = (rubric.criteria[0]?.levels ?? []).filter((l) => l.points > 0 && l.descriptor?.trim());
+  const credit = (rubric.criteria[0]?.levels ?? [])
+    .filter((l) => l.points > 0 && l.descriptor?.trim())
+    .sort((a, b) => a.points - b.points);
   if (credit.length === 0) return null;
   return (
     <ul className="space-y-0.5 text-xs text-muted-foreground" aria-label="What earns credit">

@@ -94,4 +94,9 @@ describe("ShortAnswerCredit (AI short answer, 2026-10-27)", () => {
   test("an essay's card does not (its descriptors stay tooltips)", () => {
     expect(renderToStaticMarkup(<ShortAnswerCredit type="essay" rubric={rubric} />)).toBe("");
   });
+  test("levels read lowest to highest whatever order they were stored in (row 838)", () => {
+    const stored = { ...rubric, criteria: [{ ...rubric.criteria[0]!, levels: [...rubric.criteria[0]!.levels].reverse() }] };
+    const html = renderToStaticMarkup(<ShortAnswerCredit type="short_text" rubric={stored} />);
+    expect(html.indexOf("Partial credit")).toBeLessThan(html.indexOf("Full credit"));
+  });
 });

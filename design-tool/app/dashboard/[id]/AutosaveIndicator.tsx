@@ -34,12 +34,24 @@ export function AutosaveIndicator({
       ) : summary.kind === "waiting" ? (
         <>
           <CircleAlert className="size-4 text-warning-foreground" aria-hidden />
-          <span className="text-warning-foreground">Not saved yet — put back or remove the deleted blank in</span>
-          {summary.itemIds.map((id) => (
-            <button key={id} type="button" className="text-warning-foreground underline" onClick={() => onJump(id)}>
-              Question {questionNumber(id)}
-            </button>
-          ))}
+          {/* Hand-check row 836: each reason with its own questions. */}
+          {(
+            [
+              ["put back or remove the deleted blank in", summary.itemIds.filter((id) => !summary.creditIds?.includes(id))],
+              ["finish what earns credit in", summary.creditIds ?? []],
+            ] as const
+          )
+            .filter(([, ids]) => ids.length > 0)
+            .map(([what, ids]) => (
+              <span key={what} className="flex flex-wrap items-center gap-2">
+                <span className="text-warning-foreground">Not saved yet — {what}</span>
+                {ids.map((id) => (
+                  <button key={id} type="button" className="text-warning-foreground underline" onClick={() => onJump(id)}>
+                    Question {questionNumber(id)}
+                  </button>
+                ))}
+              </span>
+            ))}
         </>
       ) : (
         <>

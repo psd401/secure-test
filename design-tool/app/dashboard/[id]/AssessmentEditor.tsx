@@ -62,7 +62,7 @@ import {
 } from "@/lib/authoring/outline";
 import { newItemSeed } from "@/lib/authoring/insertTypes";
 import { changeItemType, typeChangeTargets } from "@/lib/authoring/typeChange";
-import { withScoringMethod } from "@/lib/authoring/shortAnswerAi";
+import { keyUnfinished, withScoringMethod } from "@/lib/authoring/shortAnswerAi";
 import { OutlineRail } from "./OutlineRail";
 import { InsertQuestionMenu } from "./InsertQuestionMenu";
 import { TypeChangeControl } from "./TypeChangeControl";
@@ -790,8 +790,20 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
   // F-5: a blank whose marker was deleted would be refused; the card waits
   // until the teacher puts it back or removes it (the leave-page warning holds).
-  const waitsOnBlank = (item: ItemView) =>
-    item.type === "fill_blank" && unplacedBlankIds(item.stem, item.blanks ?? []).length > 0;
+  // Hand-check row 836: so does an AI short answer whose key has a level that
+  // earns points but says nothing yet.
+  const waitReason = (item: ItemView): "blank" | "credit" | false => {
+    if (item.type === "fill_blank" && unplacedBlankIds(item.stem, item.blanks ?? []).length > 0) return "blank";
+    if (
+      item.type === "short_text" &&
+      (item.scoring_method === "ai" || item.scoring_method === "hybrid") &&
+      item.rubric &&
+      keyUnfinished(item.rubric)
+    ) {
+      return "credit";
+    }
+    return false;
+  };
   // R-6: where the new editor's "+" insertion points sit (list indexes).
   const slotSet = new Set(newAuthoring ? insertionSlots(items) : []);
   useEffect(() => {
@@ -802,7 +814,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           id: item.id,
           fingerprint: fp,
           value: item,
-          pending: persisted[item.id] !== fp && canAutosave(item) && !waitsOnBlank(item),
+          pending: persisted[item.id] !== fp && canAutosave(item) && !waitReason(item),
         };
       }),
     );
@@ -1478,7 +1490,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   saving: itemSave[i.id]?.kind === "saving",
                   failed: !!itemErrors[i.id],
                   blocked: !canAutosave(i),
-                  waiting: waitsOnBlank(i),
+                  waiting: waitReason(i),
                 })),
               )}
               questionNumber={(id) => items.findIndex((i) => i.id === id) + 1}
