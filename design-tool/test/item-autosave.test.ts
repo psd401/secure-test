@@ -185,7 +185,9 @@ describe("createItemAutosaver (debounce per card)", () => {
 });
 
 describe("autosaveSummary", () => {
-  const card = (over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean }>) => ({
+  const card = (
+    over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean; waiting: boolean }>,
+  ) => ({
     id: "q1",
     dirty: false,
     saving: false,
@@ -211,6 +213,15 @@ describe("autosaveSummary", () => {
   });
   test("a published card's edit the lock refuses is blocked, not saving", () => {
     expect(autosaveSummary([card({ dirty: true, blocked: true })])).toEqual({ kind: "blocked", itemIds: ["q1"] });
+  });
+  // F-5 (2026-10-27): a fill-in-the-blank card with a deleted blank is held,
+  // not failed — it reads "waiting", below an error or the publish lock.
+  test("a card held on a deleted blank is waiting, not saving or failed", () => {
+    expect(autosaveSummary([card({ dirty: true, waiting: true })])).toEqual({ kind: "waiting", itemIds: ["q1"] });
+    expect(autosaveSummary([card({ waiting: true })])).toEqual({ kind: "saved" });
+    expect(
+      autosaveSummary([card({ dirty: true, waiting: true }), card({ id: "q2", dirty: true, failed: true })]),
+    ).toEqual({ kind: "error", itemIds: ["q2"] });
   });
 });
 

@@ -77,6 +77,7 @@ import {
   MAX_BLANKS,
   nextBlankId,
   orderBlanksByStem,
+  unplacedBlankIds,
 } from "@/lib/items/fillBlankEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
@@ -784,13 +785,22 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     });
   }
   const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
+  // F-5: a blank whose marker was deleted would be refused; the card waits
+  // until the teacher puts it back or removes it (the leave-page warning holds).
+  const waitsOnBlank = (item: ItemView) =>
+    item.type === "fill_blank" && unplacedBlankIds(item.stem, item.blanks ?? []).length > 0;
   // R-6: where the new editor's "+" insertion points sit (list indexes).
   const slotSet = new Set(newAuthoring ? insertionSlots(items) : []);
   useEffect(() => {
     autosaverRef.current?.sync(
       items.map((item) => {
         const fp = fingerprint(item);
-        return { id: item.id, fingerprint: fp, value: item, pending: persisted[item.id] !== fp && canAutosave(item) };
+        return {
+          id: item.id,
+          fingerprint: fp,
+          value: item,
+          pending: persisted[item.id] !== fp && canAutosave(item) && !waitsOnBlank(item),
+        };
       }),
     );
   });
@@ -1463,6 +1473,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   saving: itemSave[i.id]?.kind === "saving",
                   failed: !!itemErrors[i.id],
                   blocked: !canAutosave(i),
+                  waiting: waitsOnBlank(i),
                 })),
               )}
               questionNumber={(id) => items.findIndex((i) => i.id === id) + 1}

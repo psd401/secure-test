@@ -31,6 +31,16 @@ export function AutosaveIndicator({
           <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
           <span className="text-muted-foreground">Saving…</span>
         </>
+      ) : summary.kind === "waiting" ? (
+        <>
+          <CircleAlert className="size-4 text-warning-foreground" aria-hidden />
+          <span className="text-warning-foreground">Not saved yet — put back or remove the deleted blank in</span>
+          {summary.itemIds.map((id) => (
+            <button key={id} type="button" className="text-warning-foreground underline" onClick={() => onJump(id)}>
+              Question {questionNumber(id)}
+            </button>
+          ))}
+        </>
       ) : (
         <>
           <CircleAlert className="size-4 text-destructive" aria-hidden />
