@@ -86,6 +86,11 @@ export const MAX_FIGURE_BYTES = 2 * 1024 * 1024;
 export const MAX_FIGURES_TOTAL_BYTES = 12 * 1024 * 1024;
 /** Hard cap on figures per document. */
 export const MAX_FIGURES = 60;
+/** A figure over MAX_FIGURE_BYTES is drawn smaller until it fits (a photo or
+ * a scanned map, stored by `encodePng` with no row filter, easily passes
+ * 2 MiB), but never below this many pixels on its long side — smaller than
+ * that it is no use to a student, so it is omitted as before. */
+export const MIN_SHRUNK_FIGURE_PX = 320;
 
 // --- Multi-source stimulus slice 5: vector figures (charts drawn as paths) ---
 // The pilot's charts are path drawings, not image XObjects, so the raster
@@ -540,6 +545,41 @@ function cropFromPage(
   }
 }
 
+/**
+ * Beta report (2026-10-27): draw an oversize figure smaller until its PNG is
+ * at most `maxBytes`. Each try shrinks the last try's size by the square root
+ * of its byte overshoot (bytes track pixel count), with a 10% margin, and
+ * redraws the original at that size. Returns null
+ * when the canvas throws, the long side would drop below
+ * MIN_SHRUNK_FIGURE_PX, or four tries do not get under the cap.
+ */
+async function shrinkToFit(
+  canvas: CanvasModule,
+  png: Buffer,
+  width: number,
+  height: number,
+  maxBytes: number,
+): Promise<{ png: Buffer; width: number; height: number } | null> {
+  try {
+    const image = await canvas.loadImage(png);
+    let out = png;
+    let w = width;
+    let h = height;
+    for (let i = 0; i < 4 && out.length > maxBytes; i++) {
+      const f = 0.9 * Math.min(1, Math.sqrt(maxBytes / out.length));
+      w = Math.round(w * f);
+      h = Math.round(h * f);
+      if (Math.max(w, h) < MIN_SHRUNK_FIGURE_PX) return null;
+      const cv = canvas.createCanvas(w, h);
+      cv.getContext("2d").drawImage(image, 0, 0, w, h);
+      out = cv.toBuffer("image/png");
+    }
+    return out.length <= maxBytes ? { png: out, width: w, height: h } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function extractPdfLayout(
   bytes: Uint8Array,
   limits: FigureLimits = DEFAULT_FIGURE_LIMITS,
@@ -576,9 +616,10 @@ export async function extractPdfLayout(
   let n = 0;
 
   // Slice 5: the canvas is loaded once, lazily, and only for a page that has
-  // a cluster. A failure here (a missing native binary in some runtime) drops
-  // vector figures and nothing else — the raster walk and the text still come
-  // back, because a figure must never cost the teacher the import.
+  // a cluster or (since 2026-10-27) a figure that must be shrunk. A failure
+  // here (a missing native binary in some runtime) drops vector figures and
+  // the shrink, nothing else — the raster walk and the text still come back,
+  // because a figure must never cost the teacher the import.
   const canvasImport = limits.canvasImport ?? defaultCanvasImport;
   let canvas: CanvasModule | null = null;
   let canvasFailed = false;
@@ -589,7 +630,7 @@ export async function extractPdfLayout(
     } catch (err) {
       canvasFailed = true;
       console.warn(
-        "pdf-import: vector figures unavailable (@napi-rs/canvas did not load)",
+        "pdf-import: vector figures and figure shrinking unavailable (@napi-rs/canvas did not load)",
         err instanceof Error ? err.message : err,
       );
     }
@@ -823,6 +864,15 @@ export async function extractPdfLayout(
           png = crop.png;
           fig.width_px = crop.width;
           fig.height_px = crop.height;
+        }
+      }
+      if (png && png.length > limits.maxFigureBytes) {
+        const cv = await loadCanvas();
+        const small = cv ? await shrinkToFit(cv, png, fig.width_px, fig.height_px, limits.maxFigureBytes) : null;
+        if (small) {
+          png = small.png;
+          fig.width_px = small.width;
+          fig.height_px = small.height;
         }
       }
       if (!png) fig.omitted = "no_pixels";

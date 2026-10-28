@@ -5,6 +5,7 @@ import { inflateSync } from "node:zlib";
 import {
   DEFAULT_FIGURE_LIMITS,
   MIN_FIGURE_PT,
+  MIN_SHRUNK_FIGURE_PX,
   extractPdfLayout,
   FIGURE_LABEL_PAD_PT,
   figureMarker,
@@ -429,6 +430,46 @@ describe("extractPdfLayout: vector figures", () => {
     expect(raster.figures).toHaveLength(1);
     expect(raster.figures[0]).toMatchObject({ source: "raster", width_px: 2 });
     expect(raster.textWithMarkers).toContain("[FIGURE 1]");
+  });
+
+  test("beta report 2026-10-27: an oversize raster figure is drawn smaller until it fits", async () => {
+    // 600×600 of printable-ASCII noise: barely compressible, so its PNG is
+    // far over a 400 KB cap; one shrink step lands it near 360 px wide.
+    let seed = 7;
+    const data = Array.from({ length: 600 * 600 * 3 }, () => {
+      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+      return String.fromCharCode(33 + (seed >> 16) % 94);
+    }).join("");
+    const pdf = makeTextAndImagePdf(LINES, IMAGE, { width: 600, height: 600, data });
+    const cap = 400_000;
+    const full = await extractPdfLayout(pdf);
+    expect(full.figures[0]!.bytes).toBeGreaterThan(cap);
+    const layout = await extractPdfLayout(pdf, { ...DEFAULT_FIGURE_LIMITS, maxFigureBytes: cap });
+    const f = layout.figures[0]!;
+    expect(f.omitted).toBeUndefined();
+    expect(f.bytes).toBeLessThanOrEqual(cap);
+    expect(f.width_px).toBeLessThan(600);
+    expect(f.width_px).toBeGreaterThanOrEqual(MIN_SHRUNK_FIGURE_PX);
+    const png = Buffer.from(f.data_url!.slice("data:image/png;base64,".length), "base64");
+    expect(pngDimensions(png)).toEqual({ width: f.width_px, height: f.height_px });
+  });
+
+  test("beta report 2026-10-27: a figure that cannot shrink enough, or has no canvas, is still omitted", async () => {
+    let seed = 11;
+    const data = Array.from({ length: 600 * 600 * 3 }, () => {
+      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+      return String.fromCharCode(33 + (seed >> 16) % 94);
+    }).join("");
+    const pdf = makeTextAndImagePdf(LINES, IMAGE, { width: 600, height: 600, data });
+    // Fitting 1 KB would need far fewer than MIN_SHRUNK_FIGURE_PX pixels a side.
+    const floor = await extractPdfLayout(pdf, { ...DEFAULT_FIGURE_LIMITS, maxFigureBytes: 1_000 });
+    expect(floor.figures[0]).toMatchObject({ data_url: null, bytes: 0, omitted: "too_large", width_px: 600 });
+    const noCanvas = await extractPdfLayout(pdf, {
+      ...DEFAULT_FIGURE_LIMITS,
+      maxFigureBytes: 400_000,
+      canvasImport: () => Promise.reject(new Error("no native binary")),
+    });
+    expect(noCanvas.figures[0]).toMatchObject({ data_url: null, bytes: 0, omitted: "too_large", width_px: 600 });
   });
 
   test("the byte limits apply to a vector figure too", async () => {
