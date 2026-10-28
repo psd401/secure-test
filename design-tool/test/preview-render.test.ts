@@ -772,6 +772,18 @@ describe("item sets in the preview (E5 slice 1)", () => {
     expect(html).toContain(".stimulus-own_page, .stimulus-side_by_side { break-before: page;");
   });
 
+  // Page groups (2026-10-28): an empty set over two or more questions is
+  // questions kept on one page, not a stimulus to write.
+  test("an empty set over two questions draws no stimulus box, whatever its layout", () => {
+    const html = renderAssessmentHtml(assessment, items, new Map(), {
+      itemSets: [{ id: "g", stimulus: " ", layout: "own_page", item_ids: ["i1", "i2"] }],
+    });
+    expect(html).not.toContain('<section class="stimulus');
+    expect(html).not.toContain("no stimulus text yet");
+    expect(html).toContain("<strong>1.</strong>");
+    expect(html).toContain("<strong>2.</strong>");
+  });
+
   // Multi-source stimulus slice 1 (2026-09-09): authored line breaks survive in
   // stems and stimulus bodies (a poem stayed a poem only in the PDF before).
   test("stem and stimulus bodies keep authored line breaks (white-space: pre-line)", () => {

@@ -17,6 +17,7 @@
 // supplies an owner-scoped asset map; unresolved refs render as inline
 // red placeholders. Math + images are interleaved in one pass.
 
+import { isPageGroup } from "@/lib/authoring/pageGroup";
 import {
   FILL_BLANK_MARKER_RE,
   type FillBlankBlank,
@@ -644,6 +645,8 @@ function renderStimulus(
   resolved: Map<string, ResolvedAsset>,
   speech: SpeechPreview = NO_SPEECH,
 ): string {
+  // 2026-10-28: a page group draws nothing; its questions simply follow.
+  if (isPageGroup(set, lastIndex - firstIndex + 1)) return "";
   const range =
     firstIndex === lastIndex
       ? `Question ${firstIndex + 1}`

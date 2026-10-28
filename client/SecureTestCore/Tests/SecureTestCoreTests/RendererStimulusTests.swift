@@ -74,6 +74,58 @@ final class RendererStimulusTests: XCTestCase {
         XCTAssertEqual(try h.int("__count('.item')"), 10)
     }
 
+    // MARK: - Page groups (2026-10-28)
+
+    /// A set with no text, sources or outline over the fixture's first two
+    /// items, saved with `layout`, in the scroll or the paged build.
+    private func groupHarness(layout: String, paged: Bool = false) throws -> RendererHarness {
+        let data = Data(try RendererHarness.fixtureJSON().utf8)
+        let ids = try DeliveryBundle.decode(from: data).items.prefix(2).map(\.id)
+        var json = try RendererHarness.fixtureJSON(
+            replacingItemSets: #"[{"id":"g","stimulus":"  ","layout":"LAYOUT","sources":[],"item_ids":["A","B"]}]"#
+                .replacingOccurrences(of: "LAYOUT", with: layout)
+                .replacingOccurrences(of: "\"A\"", with: "\"\(ids[0])\"")
+                .replacingOccurrences(of: "\"B\"", with: "\"\(ids[1])\""))
+        if paged {
+            let range = try XCTUnwrap(json.range(of: "\"test_id\":"))
+            json.replaceSubrange(range, with: "\"layout\": \"paged\", \"test_id\":")
+        }
+        return try RendererHarness(bundleJSON: json)
+    }
+
+    func testAPageGroupDrawsNoStimulusBoxAndDoesNotIndentItsQuestions() throws {
+        let h = try groupHarness(layout: "inline")
+        XCTAssertEqual(try h.int("__count('.stimulus')"), 1)
+        XCTAssertEqual(try h.string("__first('.stimulus').className"), "stimulus stimulus-group")
+        XCTAssertEqual(try h.bool("__first('.stimulus').hidden"), true)
+        XCTAssertEqual(try h.int("__count('.stimulus-label')"), 0)
+        XCTAssertEqual(try h.int("__count('.stimulus-body')"), 0)
+        XCTAssertEqual(try h.int("__count('.in-set')"), 0)
+        XCTAssertEqual(try h.int("__count('.in-group')"), 2)
+        XCTAssertEqual(try h.int("__count('.item')"), 10)
+    }
+
+    func testAPagedPageGroupIsOnePageEvenWhenSavedOwnPage() throws {
+        for layout in ["inline", "own_page", "side_by_side"] {
+            let h = try groupHarness(layout: layout, paged: true)
+            // 10 items, two of them sharing a page, plus the review page.
+            XCTAssertEqual(try h.int("__count('.page')"), 10, layout)
+            let page = "__all('.page')[0]"
+            XCTAssertEqual(try h.string("\(page).getAttribute('data-kind')"), "questions", layout)
+            XCTAssertEqual(try h.string("__first('.page-label', \(page)).textContent"), "Questions 1\u{2013}2 of 10", layout)
+            XCTAssertEqual(try h.int("__count('.item', \(page))"), 2, layout)
+            XCTAssertEqual(try h.int("__count('.passage-ref')"), 0, layout)
+            XCTAssertEqual(try h.int("__count('.side-by-side')"), 0, layout)
+        }
+    }
+
+    func testASetWithTextIsStillAStimulus() throws {
+        let h = try harness(itemSets: #"[{"id":"s","stimulus":"Read.","layout":"inline","item_ids":["FIRST"]}]"#
+            .replacingOccurrences(of: "FIRST", with: try firstItemId()))
+        XCTAssertEqual(try h.string("__first('.stimulus').className"), "stimulus stimulus-inline")
+        XCTAssertEqual(try h.int("__count('.in-set')"), 1)
+    }
+
     private func firstItemId() throws -> String {
         let data = Data(try RendererHarness.fixtureJSON().utf8)
         let bundle = try DeliveryBundle.decode(from: data)

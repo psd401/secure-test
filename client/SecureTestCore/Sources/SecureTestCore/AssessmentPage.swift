@@ -533,6 +533,7 @@ public enum AssessmentPage {
     .order-hint { margin: 0 0 6px; font-size: 0.8125rem; color: var(--ink-soft); }
     .order-status { margin: 4px 0 0; font-size: 0.75rem; color: var(--ink-soft); }
     .item.in-set { margin-left: 16px; padding-left: 12px; border-left: 3px solid var(--panel-line); }
+    .stimulus.stimulus-group { display: none; }
     /* E3 slice 3: the table the student fills in — one text field per body cell. */
     .fill-table-wrap { overflow-x: auto; margin: 8px 0; }
     .fill-table { border-collapse: collapse; font: inherit; }
@@ -6330,8 +6331,24 @@ public enum AssessmentPage {
         return pane;
       }
 
+      // Page groups (2026-10-28, James): a set with no stimulus text, no
+      // sources and no outline area is questions the teacher keeps on one
+      // page. It renders as an inline set whose block is present (callers
+      // place it) but empty and hidden, and its members are not marked as a
+      // stimulus's — there is nothing for them to hang under.
+      function isPageGroup(set) {
+        return !(typeof set.stimulus === 'string' && set.stimulus.trim()) &&
+          (set.sources || []).length === 0 &&
+          !(typeof set.inline_item_id === 'string' && set.inline_item_id);
+      }
+
       function stimulusBlock(set) {
         var block = document.createElement('section');
+        if (isPageGroup(set)) {
+          block.className = 'stimulus stimulus-group';
+          block.hidden = true;
+          return block;
+        }
         block.className = 'stimulus stimulus-' + (set.layout === 'own_page' ? 'own_page' : 'inline');
         var label = document.createElement('p');
         label.className = 'stimulus-label';
@@ -6398,7 +6415,8 @@ public enum AssessmentPage {
 
       function itemBlock(item) {
         var wrap = document.createElement('div');
-        wrap.className = setOfItem[item.id] ? 'item in-set' : 'item';
+        var inSet = setOfItem[item.id];
+        wrap.className = inSet ? (isPageGroup(inSet) ? 'item in-group' : 'item in-set') : 'item';
         var stem = document.createElement('p');
         stem.className = 'stem';
         // FB slice 5: a fill-in-the-blank stem IS the answer — its blanks sit
@@ -6468,6 +6486,8 @@ public enum AssessmentPage {
         // own_page below the threshold — one place, so the passage page, the
         // disclosure and the member routing all agree.
         function layoutOf(set) {
+          // A page group is one page whatever layout it was saved with.
+          if (isPageGroup(set)) return 'inline';
           if (set.layout === 'side_by_side') return WIDE ? 'side_by_side' : 'own_page';
           return set.layout === 'own_page' ? 'own_page' : 'inline';
         }
