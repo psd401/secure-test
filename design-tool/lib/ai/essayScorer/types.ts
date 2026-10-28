@@ -14,12 +14,20 @@ import { RubricSchema } from "@secure-test/schema";
 // 'final' only at/above the confidence threshold (scoreCore.ts) — the
 // hybrid definition confirmed 2026-07-09.
 
+// AI short answer (2026-10-27): a short-answer question is scored by the
+// same provider against its holistic rubric (the teacher's levels of what
+// earns credit), with its own system prompt — the essay prompt lowers
+// confidence for very short work, which every short answer is.
+export const ScoreKind = z.enum(["essay", "short_answer"]);
+export type ScoreKind = z.infer<typeof ScoreKind>;
+
 export const ScoreEssayRequest = z.object({
   stem: z.string().min(1).max(10000),
   response_text: z.string().min(1).max(100000),
   rubric: RubricSchema,
+  kind: ScoreKind.default("essay"),
 });
-export type ScoreEssayRequest = z.infer<typeof ScoreEssayRequest>;
+export type ScoreEssayRequest = z.input<typeof ScoreEssayRequest>;
 
 export const CriterionScore = z.object({
   criterion_id: z.string().min(1),
