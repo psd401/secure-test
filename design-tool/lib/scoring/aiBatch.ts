@@ -19,9 +19,15 @@ type Db = ReturnType<typeof getDb>;
 // authority: it skips the same rows and also withholds answers that its own
 // lazy screening flags at press time.
 
-/** An essay the AI scorer takes: ai / hybrid, with a rubric to score against. */
+/** AI short answer (2026-10-27): the item types the AI scorer reads. Shared
+ * with aiScoreResponse and the score-ai route's isAiEligible, so the (n)
+ * and the route agree. */
+export const AI_SCORED_TYPES: ReadonlySet<string> = new Set(["essay", "short_text"]);
+
+/** An essay or short answer the AI scorer takes: ai / hybrid, with a rubric
+ * to score against. */
 export function isAiBatchItem(item: Pick<ItemRow, "type" | "config">): boolean {
-  if (item.type !== "essay") return false;
+  if (!AI_SCORED_TYPES.has(item.type)) return false;
   const method = effectiveScoringMethod(item.type as ItemType, item.config);
   return (
     (method === "ai" || method === "hybrid") && Boolean(item.config?.rubric)
@@ -66,7 +72,7 @@ export async function aiBatchCounts(
       and(
         inArray(responses.attempt_id, attemptIds),
         inArray(responses.item_id, itemIds),
-        sql`${responses.response}->>'type' = 'essay'`,
+        sql`${responses.response}->>'type' in ('essay', 'short_text')`,
         sql`${responses.response}->>'text' ~ '[^[:space:]]'`,
       ),
     );

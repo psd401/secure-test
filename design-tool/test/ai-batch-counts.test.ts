@@ -188,6 +188,25 @@ describe("aiBatchCounts", () => {
     });
   });
 
+  test("AI short answer (2026-10-27): a short answer with a rubric is counted like an essay", async () => {
+    const { db, assessment, s1 } = await seed();
+    const [short] = await db
+      .insert(items)
+      .values({
+        assessment_id: assessment.id,
+        position: 3,
+        type: "short_text",
+        stem: "Short",
+        config: { rubric: RUBRIC, scoring_method: "hybrid" },
+      })
+      .returning();
+    await db
+      .insert(responses)
+      .values({ attempt_id: s1.id, item_id: short!.id, response: { type: "short_text" as const, text: "ans" } });
+    const out = await aiBatchCounts(db, assessment.id, [s1.id]);
+    expect(out.counts.get(s1.id)).toBe(3);
+  });
+
   test("only the attempts asked about", async () => {
     const { db, assessment, s1 } = await seed();
     const out = await aiBatchCounts(db, assessment.id, [s1.id]);
@@ -229,6 +248,14 @@ describe("isAiBatchItem", () => {
     );
     expect(
       isAiBatchItem({ type: "short_text", config: { scoring_method: "ai" } }),
+    ).toBe(false);
+    // AI short answer (2026-10-27): a short answer with a rubric counts too.
+    expect(
+      isAiBatchItem({ type: "short_text", config: { rubric: RUBRIC, scoring_method: "hybrid" } }),
+    ).toBe(true);
+    expect(isAiBatchItem({ type: "short_text", config: {} })).toBe(false);
+    expect(
+      isAiBatchItem({ type: "multiple_choice_single", config: { rubric: RUBRIC, scoring_method: "ai" } }),
     ).toBe(false);
   });
 });

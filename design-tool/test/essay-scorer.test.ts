@@ -553,6 +553,90 @@ describe("POST /api/attempts/:id/score-ai", () => {
     expect(body.scored_final).toBe(1);
   });
 
+  test("AI short answer (2026-10-27): a hybrid short answer is scored against its holistic rubric", async () => {
+    const { db, assessment, attempt } = await seedAiScenario();
+    const shortRubric: Rubric = {
+      style: "holistic",
+      criteria: [
+        {
+          id: "sa",
+          name: "Answer",
+          levels: [
+            { id: "sa0", label: "No credit", points: 0 },
+            { id: "sa1", label: "Partial credit", points: 1, descriptor: "Names births." },
+            { id: "sa2", label: "Full credit", points: 2, descriptor: "Births per 1000 people." },
+          ],
+        },
+      ],
+    };
+    const [short, keyed] = await db
+      .insert(items)
+      .values([
+        {
+          assessment_id: assessment.id,
+          position: 3,
+          type: "short_text",
+          stem: "Define birth rate.",
+          config: { rubric: shortRubric, scoring_method: "hybrid" },
+        },
+        // An auto short answer is never the AI scorer's.
+        { assessment_id: assessment.id, position: 4, type: "short_text", stem: "Auto", correct_answer: "x" },
+      ])
+      .returning();
+    await db.insert(responses).values([
+      { attempt_id: attempt.id, item_id: short!.id, response: { type: "short_text" as const, text: "births per 1000" } },
+      { attempt_id: attempt.id, item_id: keyed!.id, response: { type: "short_text" as const, text: "x" } },
+    ]);
+    const body = (await (await postScoreAi(attempt.id)).json()) as Record<string, unknown>;
+    expect(body.scored_final).toBe(2);
+    expect(body.skipped_not_ai).toBe(2);
+    const [row] = await db
+      .select()
+      .from(scores)
+      .innerJoin(responses, eq(scores.response_id, responses.id))
+      .where(eq(responses.item_id, short!.id));
+    // The mock picks the middle level of three.
+    expect(row!.scores).toMatchObject({ method: "ai", status: "final", points: 1, max_points: 2 });
+  });
+
+  test("AI short answer: the scorer is asked with kind short_answer; an essay answer on a short-answer item is unscorable", async () => {
+    const { runEssayScorer } = await import("../lib/scoring/aiScoreResponse");
+    const { db, assessment, attempt } = await seedAiScenario();
+    const [short] = await db
+      .insert(items)
+      .values({
+        assessment_id: assessment.id,
+        position: 3,
+        type: "short_text",
+        stem: "Define migration.",
+        config: { rubric: RUBRIC, scoring_method: "ai" },
+      })
+      .returning();
+    const [resp] = await db
+      .insert(responses)
+      .values({ attempt_id: attempt.id, item_id: short!.id, response: { type: "short_text" as const, text: "Moving." } })
+      .returning();
+    const kinds: unknown[] = [];
+    const spy = {
+      id: "spy",
+      promptVersion: mockEssayScorer.promptVersion,
+      scoreEssay: (req: Parameters<typeof mockEssayScorer.scoreEssay>[0], owner?: string) => {
+        kinds.push(req.kind);
+        return mockEssayScorer.scoreEssay(req, owner);
+      },
+    };
+    const ok = await runEssayScorer({ item: short!, response: resp!, ownerSub: OWNER, provider: spy });
+    expect(ok.kind).toBe("ok");
+    expect(kinds).toEqual(["short_answer"]);
+    const mismatched = await runEssayScorer({
+      item: short!,
+      response: { ...resp!, response: { type: "essay", text: "Moving." } },
+      ownerSub: OWNER,
+      provider: spy,
+    });
+    expect(mismatched).toEqual({ kind: "unscorable", reason: "empty_response" });
+  });
+
   test("404 for another teacher's attempt", async () => {
     const { attempt } = await seedAiScenario();
     mockSub = "someone-else";
