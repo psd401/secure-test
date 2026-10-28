@@ -218,6 +218,7 @@
             <li>Assessments a colleague shared with you sit under <b class="ui">Shared with you</b> until you press <b class="ui">Add to my assessments</b>.</li>
             <li>Your class lists come from PowerSchool and refresh every morning; you never type a roster.</li>
           </ol>
+          <p class="note">Questions open in the new editor. Prefer the one you used before? <b class="ui">Switch to the previous editor</b>, near the top of any assessment, takes you there, and you can switch back any time. Your assessments are the same in both.</p>
           <p class="note">Anything odd? <b class="ui">Send feedback</b>, top right of every page, reaches the project team with the page you were on.</p>
         </div>
         <figure class="shot" data-src="/help/home.png" data-alt="The Assessments home page with a list of assessments">
@@ -228,25 +229,29 @@
 
     <section class="topic" id="build" data-title="Build an assessment">
       <header><span class="n" aria-hidden="true">2</span><h2>Build an assessment</h2></header>
-      <p class="lead">Start blank, add questions of any type, and check it the way a student will see it.</p>
+      <p class="lead">Start blank, from a document, or from an AI draft; add questions of any type, and see them the way a student will as you work.</p>
       <div class="topic-body">
         <div>
           <ol class="steps">
-            <li>On the home page press <b class="ui">New assessment</b> and give it a name.</li>
-            <li>Press <b class="ui">Add question</b> and choose a type: multiple choice (one or several answers), short answer, essay, fill in the blank (dropdown or typed blanks inside a sentence), matching, ordering, hotspot on a picture, drawing, or a table.</li>
-            <li>Write the question and its answer key. Math goes between dollar signs, for example <code>$\frac{1}{2}$</code>, and shows as you type.</li>
+            <li>On the home page press <b class="ui">New assessment</b>, give it a name, and choose how to start: <b class="ui">Blank</b>, <b class="ui">Import from PDF or Word</b>, or <b class="ui">Draft with AI</b>.</li>
+            <li>Press <b class="ui">Add question</b>, or <b class="ui">Add a question here</b> between two questions, and choose a type: multiple choice (one or several answers), short answer, essay, fill in the blank (dropdown or typed blanks inside a sentence), matching, ordering, hotspot on a picture, drawing, or a table. Start typing to find a type.</li>
+            <li>Write the question and its answer key. Bold and italics work right in the text. For math press <b class="ui">Math…</b>, type it in words or as LaTeX, for example <code>\frac{1}{2}</code>, and insert it; click a formula later to change it.</li>
+            <li>Type <code>/</code> on a question (outside its text) to add a question after it.</li>
+            <li>There is no save button: changes save as you type, and <b class="ui">All changes saved</b> shows at the top when they have. <b class="ui">History</b> on a question shows its earlier versions and can restore one.</li>
+            <li>Drag a question by its handle in the <b class="ui">Outline</b> to move it, or select it and use the arrow keys.</li>
             <li>On an essay, tick <b class="ui">Let students format their answer</b> for bold, italic, underline, bulleted and numbered lists and a first-line indent. Students on SecureTest 1.6.0 or later can use it; every student also gets undo and redo (Cmd-Z, Shift-Cmd-Z) in written answers.</li>
             <li>On an essay, tick <b class="ui">Show students a word count</b> to show a running count under the answer box without setting a maximum. A <b class="ui">Max word count</b> always shows its count. Students need SecureTest 1.6.3 or later to see it.</li>
             <li>Upload pictures on the <b class="ui">Images</b> page (link at the top of the home page), then add them to a question.</li>
-            <li>Press <b class="ui">Show preview</b> to see exactly what a student will see, without the lockdown.</li>
+            <li>The <b class="ui">Student preview</b> beside your questions shows exactly what a student will see, without the lockdown, and updates as you type. <b class="ui">Hide preview</b> gives the editor the full width.</li>
+            <li><b class="ui">Before publishing</b>, under the save status, lists anything a student couldn't answer yet, such as a question with no answer key.</li>
           </ol>
         </div>
         <div class="shots">
-          <figure class="shot" data-src="/help/build-add-question.gif" data-alt="Adding a short-answer question in the editor">
+          <figure class="shot" data-src="/help/build-add-question.gif" data-alt="Adding a short-answer question: Add question, choose Short answer, type the question and answer, and the preview updates">
             <figcaption>Adding a question.</figcaption>
           </figure>
-          <figure class="shot" data-src="/help/build-preview.png" data-alt="The student preview of an assessment">
-            <figcaption>Show preview: the student's view.</figcaption>
+          <figure class="shot" data-src="/help/build-preview.png" data-alt="The editor with the outline and a question on the left and the live student preview on the right">
+            <figcaption>The student preview, beside the editor.</figcaption>
           </figure>
         </div>
       </div>
@@ -258,16 +263,18 @@
       <div class="topic-body">
         <div>
           <ol class="steps">
-            <li>Inside an assessment press <b class="ui">Import items from PDF</b> and choose the file. Scanned pages work too.</li>
-            <li>The tool proposes questions, answer keys and reading passages, including fill-in-the-blank questions. Nothing is added until you accept it. <b class="ui">Generate questions</b> can propose fill in the blank too.</li>
-            <li>Check each proposal, fix what it got wrong, and add the ones you want.</li>
+            <li>Inside an assessment press <b class="ui">Import items from PDF or Word</b> and choose the file. Scanned pages work too. (A new assessment can start this way: <b class="ui">Import from PDF or Word</b>.)</li>
+            <li>The tool proposes questions, answer keys and reading passages, including fill-in-the-blank questions, with your document beside them. Nothing is added until you accept it.</li>
+            <li>Press <b class="ui">Edit</b> on a proposal to fix its question, choices or answer key before you accept it: add or remove a choice, or pick the right answer. Other answer keys you fix in the editor after accepting.</li>
+            <li>Press <b class="ui">Accept</b> on each one you want, or <b class="ui">Accept all ready</b> for every proposal with nothing to check.</li>
+            <li>Each question gets its own page for students. To keep questions on one page, press <b class="ui">Same page as question above</b>; <b class="ui">Start a new page here</b> splits them again. Questions that share a reading passage stay together.</li>
             <li>Maps, charts and pictures show under <b class="ui">figures found in the PDF</b>. One marked <b class="ui">Not used</b> isn't on a question yet: choose <b class="ui">Use with item…</b> to show it above that question, or <b class="ui">Save to Images</b> to add it later with the question's <b class="ui">Image…</b> button.</li>
             <li>A colleague's exported test? Use <b class="ui">Import assessment file</b> on the home page.</li>
           </ol>
           <div class="tip"><strong>Looks wrong but isn't:</strong> a source marked "Looks shorter than the document — check it" means the tool thinks it missed text. Compare it with the paper before adding.</div>
         </div>
-        <figure class="shot" data-src="/help/import-pdf.png" data-alt="Two charts found in a PDF: one used with item 1 on a stimulus card, one marked Not used with Use with item and Save to Images under it">
-          <figcaption>Figures found in a PDF: one already on a question, one not used yet.</figcaption>
+        <figure class="shot" data-src="/help/import-pdf.png" data-alt="Reviewing an imported PDF: the document on the left, proposed questions on the right, one open for editing with its choices and the correct answer marked">
+          <figcaption>Reviewing an import: fix a question with Edit before you accept it.</figcaption>
         </figure>
       </div>
     </section>
@@ -282,6 +289,7 @@
             <li>Choose its layout. <b class="ui">Side by side</b> puts the sources beside the question and is the default whenever there are sources.</li>
             <li>In <b class="ui">Settings</b>, set <b class="ui">How students move through the test</b> to <b class="ui">One question at a time</b>. Side by side needs it.</li>
             <li>Students can switch between <b class="ui">Beside</b> and <b class="ui">Above</b> themselves, and click a chart to enlarge it.</li>
+            <li>To give a passage another question, press <b class="ui">Add to the stimulus above</b> (or <b class="ui">below</b>) on the question next to it. <b class="ui">Remove from stimulus</b> works on its first or last question. A stimulus's questions always sit together.</li>
           </ol>
           <div class="tip"><strong>Looks wrong but isn't:</strong> sources above the question instead of beside it usually means the test is set to one scrolling page, or the student's window is narrow.</div>
           <h3 class="sub">Let students highlight passages</h3>
@@ -668,7 +676,7 @@
         <dt>A student deleted their essay by accident.</dt>
         <dd>Open the student from <b class="ui">Results</b>, find <b class="ui">Earlier versions</b> under the essay, and press <b class="ui">Restore this version</b> on the last full one. If the session is still open, close it first. See <a href="#results">Results and printing</a>.</dd>
         <dt>I fixed an answer key, but the students' scores didn't change.</dt>
-        <dd>Scores are set when each student hands in. Open <b class="ui">Results</b> and press <b class="ui">Rescore with current key</b>. If it is greyed out, the fix may not be saved — press <b class="ui">Save question</b> on that question first. See <a href="#score">Score and give feedback</a>.</dd>
+        <dd>Scores are set when each student hands in. Open <b class="ui">Results</b> and press <b class="ui">Rescore with current key</b>. If it is greyed out, the fix may not be saved yet: wait for <b class="ui">All changes saved</b> at the top first. See <a href="#score">Score and give feedback</a>.</dd>
         <dt>I adjusted time, but students still can't get back in.</dt>
         <dd>The session has ended, and Adjust time doesn't reopen it. Press <b class="ui">Continue in a new session</b> on that session (Test sessions tab or its Monitor) and share the new code; students can also find the test under <b class="ui">Your tests</b>. If you set a deadline that has passed, also choose <b class="ui">No time limit</b> or a later time.</dd>
         <dt>A student keeps getting "Time is up." when they press Resume.</dt>
