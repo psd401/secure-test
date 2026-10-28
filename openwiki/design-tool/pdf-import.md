@@ -141,6 +141,8 @@ Proposed sources are bounded: at most `MAX_PROPOSED_SOURCES` (12) per set, `MAX_
 
 Extraction writes no assets. Figures travel in the response as data URLs. When the teacher adds a proposed set, `PdfImportPanel.tsx` creates the item-set through `POST /api/assessments/[id]/item-sets`, and the figure bytes are attached then. Shared stimuli and their delivery rules are in [stimulus and item sets](stimulus-and-item-sets.md).
 
+A vector figure (a drawing made of paths, not an image) is cropped from the page render to its own box, and `cropBoxWithLabels` (`lib/pdfImport/extractFigures.ts`, 2026-10-28) grows that box to take in the point labels the figure claims (`isFigureLabel`). Those labels leave the page text, so before this rule a vertex letter a few points outside the strokes was cut from the picture. `fig.bbox` stays the drawing's own box, and the crop is the only place the labels are added. Covered by `pdf-figures.test.ts`.
+
 ## Errors
 
 A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "output"` (the input stage never blocks here). Typed extractor failures map to 422 with a teacher-facing hint: `pdf_extract_truncated` (split the PDF), `pdf_extract_refused` (the model declined the document; retrying will not change that, so import by CSV or by hand), and `pdf_extract_invalid_output` (try again, then split or use CSV). Any other provider failure is `pdf_extract_failed` (502). Each body includes a `detail` field for staff.
