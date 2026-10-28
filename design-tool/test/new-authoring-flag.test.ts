@@ -83,7 +83,10 @@ describe("isNewAuthoringEnabled", () => {
   test("defaults on, with no row written", async () => {
     expect(NEW_AUTHORING_DEFAULT).toBe(true);
     expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(true);
-    const rows = await getDb().execute(sql`select count(*)::int as n from staff_preferences`);
+    // Scoped to this teacher: other test files may leave their own rows.
+    const rows = await getDb().execute(
+      sql`select count(*)::int as n from staff_preferences where staff_sub = ${TEACHER.sub}`,
+    );
     expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);
   });
 
