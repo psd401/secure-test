@@ -54,6 +54,9 @@ export async function importFileDestination(
     return back("read_failed");
   }
   if (res.status === 401) return "/login?next=/dashboard/import";
+  // A body cap anywhere on the way (the route's own, or one in front of it
+  // that answers without the route's JSON) is still "too large".
+  if (res.status === 413) return back("file_too_large");
   const json = (await res.json().catch(() => null)) as { assessment?: { id?: unknown } } | null;
   const id = json?.assessment?.id;
   if (res.ok && typeof id === "string") return `/dashboard/${id}`;

@@ -52,8 +52,14 @@ describe("importFileDestination", () => {
     expect(await importFileDestination(form(), schema.fetchImpl)).toBe(
       `/dashboard/import?error=${encodeURIComponent("schema_invalid:items.0:bad")}`,
     );
-    expect(await importFileDestination(form(), stub(500, "not json").fetchImpl)).toBe(
+    const raw = (status: number, body: string) =>
+      (async () => new Response(body, { status })) as unknown as typeof fetch;
+    expect(await importFileDestination(form(), raw(500, "<html>error</html>"))).toBe(
       "/dashboard/import?error=import_failed",
+    );
+    // A 413 from in front of the route (not its JSON) is still too large.
+    expect(await importFileDestination(form(), raw(413, "<html>Payload Too Large</html>"))).toBe(
+      "/dashboard/import?error=file_too_large",
     );
   });
 
