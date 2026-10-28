@@ -108,6 +108,7 @@ import {
   SCORING_LABEL,
   HYBRID_HINT,
   SCORING_OPTIONS,
+  scoringOptionShown,
   defaultScoringMethod,
   keyOnlyEdit,
   defaultItemFor,
@@ -1906,7 +1907,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     <option value="">
                       Default — {SCORING_LABEL[defaultScoringMethod(item)]}
                     </option>
-                    {SCORING_OPTIONS[item.type].map((m) => (
+                    {SCORING_OPTIONS[item.type].filter((m) => scoringOptionShown(item, m, newAuthoring)).map((m) => (
                       <option
                         key={m}
                         value={m}

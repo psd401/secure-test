@@ -8,6 +8,7 @@ import {
   StimulusGraphSchema,
   DrawingCanvasSchema,
   RubricSchema,
+  type Rubric,
   ScoringMethodSchema,
   fillBlankMarkerIds,
   isKeyedBlank,
@@ -101,6 +102,11 @@ const ShortTextItem = z.object({
   // Numeric equivalence (2026-09-15): the per-item opt-out. Absent = false
   // = equivalent numeric forms score; true = exact form only.
   exact_form: z.boolean().optional(),
+  // AI short answer (2026-10-27): the AI scorer's key — a holistic rubric
+  // whose levels say what earns each score (partial credit allowed). Only
+  // with scoring_method ai / hybrid (validateShortAnswerRubric); never in
+  // the delivery bundle (ADR 0016). No rubric_id: the library is essay's.
+  rubric: RubricSchema.optional(),
 });
 
 // Slice 32: essay. No choices, no correct answer (authoring only). The two
@@ -297,7 +303,8 @@ const GraphItem = z.object({
 
 // Slice 36: which scoring methods each type may declare, and the default
 // when unset. auto needs a machine-checkable key (choices / correct_answer),
-// which essay lacks; ai/hybrid need a rubric, which only essay carries.
+// which essay lacks; ai/hybrid need a rubric, which essay and (since AI short
+// answer, 2026-10-27) short answer carry.
 export const DEFAULT_SCORING_METHOD: Record<ItemType, ScoringMethod> = {
   multiple_choice_single: "auto",
   multiple_choice_multi: "auto",
@@ -318,7 +325,7 @@ export const ALLOWED_SCORING_METHODS: Record<
 > = {
   multiple_choice_single: ["auto", "human"],
   multiple_choice_multi: ["auto", "human"],
-  short_text: ["auto", "human"],
+  short_text: ["auto", "human", "ai", "hybrid"],
   essay: ["human", "ai", "hybrid"],
   match: ["auto", "human"],
   order: ["auto", "human"],
@@ -383,6 +390,53 @@ const validateScoring = (
       message: `scoring_method "${method}" requires a rubric`,
     });
   }
+};
+
+// AI short answer (2026-10-27; James: D1, D2 with partial credit). A short
+// answer's rubric exists only while it is AI scored — with auto or human it
+// would make itemMaxPoints (rubric first) disagree with the 1 point auto
+// scoring writes — and it is holistic: one scale whose levels each say what
+// earns their points, so every level above 0 needs that text.
+/** Whether a rubric is one a short answer may carry (the rules below, as a
+ * yes/no for import, which drops what fails rather than refusing the file). */
+export function isShortAnswerRubric(rubric: Rubric): boolean {
+  const levels = rubric.criteria[0]?.levels ?? [];
+  return (
+    rubric.style === "holistic" &&
+    levels.some((l) => l.points > 0) &&
+    levels.every((l) => l.points <= 0 || Boolean(l.descriptor?.trim()))
+  );
+}
+
+const validateShortAnswerRubric = (
+  body: { type: ItemType; scoring_method?: ScoringMethod | null; rubric?: Rubric },
+  ctx: z.RefinementCtx,
+) => {
+  if (body.type !== "short_text" || !body.rubric) return;
+  if (body.scoring_method && body.scoring_method !== "ai" && body.scoring_method !== "hybrid") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["rubric"],
+      message: "a short answer carries a rubric only when scored with AI (ai or hybrid)",
+    });
+  }
+  if (body.rubric.style !== "holistic") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["rubric", "style"],
+      message: "a short answer's rubric must be holistic",
+    });
+    return;
+  }
+  body.rubric.criteria[0]?.levels.forEach((level, i) => {
+    if (level.points > 0 && !level.descriptor?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rubric", "criteria", 0, "levels", i, "descriptor"],
+        message: `level "${level.label}" needs what earns its points`,
+      });
+    }
+  });
 };
 
 // Slices 47/48: entry ids must be unique — the response formats key on them.
@@ -621,7 +675,7 @@ const validateRubricMax = (
   body: { type: ItemType; rubric?: { criteria: { levels: { points: number }[] }[] } },
   ctx: z.RefinementCtx,
 ) => {
-  if (body.type !== "essay" || !body.rubric) return;
+  if ((body.type !== "essay" && body.type !== "short_text") || !body.rubric) return;
   const max = body.rubric.criteria.reduce(
     (sum, c) => sum + Math.max(...c.levels.map((l) => l.points)),
     0,
@@ -656,7 +710,8 @@ export const CreateItemBody = z
   .superRefine(validateTable)
   .superRefine(validateFillBlank)
   .superRefine(validateGraph)
-  .superRefine(validateRubricMax);
+  .superRefine(validateRubricMax)
+  .superRefine(validateShortAnswerRubric);
 export type CreateItemBody = z.infer<typeof CreateItemBody>;
 
 /**
@@ -709,6 +764,13 @@ export function itemConfigForWrite(
     // Stored only when ON — absence is the default, like every other
     // optional config key, so existing rows and exports stay byte-stable.
     if (body.exact_form) config.exact_form = true;
+    // AI short answer (D1): the rubric is kept only while the method is
+    // ai / hybrid. A PATCH that leaves the method AI but sends no rubric
+    // drops the method too (back to auto), so a stored AI short answer
+    // always has the rubric it is scored against.
+    const ai = config.scoring_method === "ai" || config.scoring_method === "hybrid";
+    if (ai && body.rubric) config.rubric = body.rubric;
+    else if (ai) delete config.scoring_method;
     return config;
   }
   if (body.type === "match") {

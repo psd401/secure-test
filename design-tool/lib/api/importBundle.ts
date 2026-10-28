@@ -11,7 +11,7 @@ import {
   type ItemType, item_sets } from "@/db/schema";
 import { isValidAccommodationId } from "@/lib/accommodations/catalog";
 import { assertNever } from "@/lib/assertNever";
-import { ALLOWED_SCORING_METHODS, compactBlanks, graphIssues } from "@/lib/api/items";
+import { ALLOWED_SCORING_METHODS, compactBlanks, graphIssues, isShortAnswerRubric } from "@/lib/api/items";
 import { SOURCE_ITEM_TYPES } from "@/lib/api/itemSets";
 import { isAllowedImageMime } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
@@ -476,6 +476,12 @@ function importItemValues(
     };
   }
   if (it.type === "short_text") {
+    const shortAnswerScoring = (item: typeof it) => {
+      const usable = item.rubric != null && isShortAnswerRubric(item.rubric);
+      const clamped = clampAndCount(item.type, item.scoring_method, usable);
+      const ai = clamped.scoring_method === "ai" || clamped.scoring_method === "hybrid";
+      return ai && item.rubric ? { ...clamped, rubric: item.rubric } : clamped;
+    };
     return {
       ...base,
       type: it.type,
@@ -486,7 +492,10 @@ function importItemValues(
         // Numeric equivalence (2026-09-15): kept only when ON, the
         // same convention the export writes it with.
         ...(it.exact_form ? { exact_form: true as const } : {}),
-        ...clampAndCount(it.type, it.scoring_method, false),
+        // AI short answer (2026-10-27): the rubric comes in only when it is
+        // a short-answer rubric AND the method that needs it survives the
+        // clamp; otherwise both drop and the method counts as dropped.
+        ...shortAnswerScoring(it),
       },
     };
   }

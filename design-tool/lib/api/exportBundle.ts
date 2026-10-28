@@ -154,6 +154,10 @@ export async function buildExportBundle(
           // Numeric equivalence (2026-09-15): emitted only when ON, so a
           // bundle exported from an item that never touched it is unchanged.
           ...(row.config?.exact_form ? { exact_form: true } : {}),
+          // AI short answer (D3): always exported, like correct_answer — the
+          // essay rule that hides a rubric by default would make a plain
+          // export import without its AI scoring.
+          ...(row.config?.rubric ? { rubric: row.config.rubric } : {}),
           ...scoring,
         };
       case "match":

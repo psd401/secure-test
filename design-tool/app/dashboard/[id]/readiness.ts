@@ -29,6 +29,25 @@ export interface ReadinessItem {
   blanks?: FillBlankBlank[] | null;
   /** Graphing calculator D-9: the grid; a key is optional (no key = hand-scored). */
   board?: { tools: string[] } | null;
+  /** AI short answer (2026-10-27): an ai / hybrid short answer is keyed by
+   * its rubric, not by correct_answer. */
+  scoring_method?: string | null;
+  rubric?: unknown;
+}
+
+type AiKeyed = { scoring_method?: string | null; rubric?: unknown; config?: { scoring_method?: string; rubric?: unknown } | null };
+type AiKey = { criteria?: { levels?: { points: number; descriptor?: string }[] }[] };
+
+/** The AI scorer's key when this short answer is AI scored, else null. */
+function aiShortAnswerKey(item: AiKeyed): AiKey | null {
+  const method = item.scoring_method ?? item.config?.scoring_method;
+  if (method !== "ai" && method !== "hybrid") return null;
+  return ((item.rubric ?? item.config?.rubric) as AiKey | null | undefined) ?? {};
+}
+
+/** A key with no level that says what earns points is no key. */
+function blankAiKey(rubric: AiKey): boolean {
+  return !(rubric.criteria?.[0]?.levels ?? []).some((l) => l.points > 0 && !blank(l.descriptor));
 }
 
 export interface ReadinessCheck {
@@ -82,17 +101,21 @@ function placeholder(s: string | null | undefined): boolean {
  * saved, imported, and even published (2026-09-01): scoring skips them
  * until the key is filled, which is allowed after publish too.
  */
-export function needsAnswerKey(item: {
-  type: string;
-  correct_choice_ids?: string[] | null;
-  correct_answer?: string | null;
-}): boolean {
+export function needsAnswerKey(
+  item: {
+    type: string;
+    correct_choice_ids?: string[] | null;
+    correct_answer?: string | null;
+  } & AiKeyed,
+): boolean {
   switch (item.type) {
     case "multiple_choice_single":
     case "multiple_choice_multi":
       return (item.correct_choice_ids ?? []).length === 0;
-    case "short_text":
-      return blank(item.correct_answer);
+    case "short_text": {
+      const aiKey = aiShortAnswerKey(item);
+      return aiKey ? blankAiKey(aiKey) : blank(item.correct_answer);
+    }
     default:
       return false;
   }
@@ -116,10 +139,14 @@ export function questionGaps(item: ReadinessItem): string[] {
       else if (item.choices.some((c) => placeholder(c.text))) gaps.push("still has placeholder choices");
       if (item.correct_choice_ids.length === 0) gaps.push("needs a correct answer");
       break;
-    case "short_text":
-      if (blank(item.correct_answer)) gaps.push("needs a correct answer");
+    case "short_text": {
+      const aiKey = aiShortAnswerKey(item);
+      if (aiKey) {
+        if (blankAiKey(aiKey)) gaps.push("needs what earns credit");
+      } else if (blank(item.correct_answer)) gaps.push("needs a correct answer");
       else if (placeholder(item.correct_answer)) gaps.push("still has the placeholder answer");
       break;
+    }
     case "match":
       if (!item.pairs || item.pairs.length < 2) gaps.push("needs at least 2 pairs");
       else if (item.pairs.some((p) => blank(p.left) || blank(p.right))) gaps.push("has an empty pair");
