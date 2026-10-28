@@ -45,9 +45,11 @@ function aiShortAnswerKey(item: AiKeyed): AiKey | null {
   return ((item.rubric ?? item.config?.rubric) as AiKey | null | undefined) ?? {};
 }
 
-/** A key with no level that says what earns points is no key. */
+/** A key is unfinished when no level earns points or any level that does
+ * has no text — the write boundary's rule (validateShortAnswerRubric). */
 function blankAiKey(rubric: AiKey): boolean {
-  return !(rubric.criteria?.[0]?.levels ?? []).some((l) => l.points > 0 && !blank(l.descriptor));
+  const credit = (rubric.criteria?.[0]?.levels ?? []).filter((l) => l.points > 0);
+  return credit.length === 0 || credit.some((l) => blank(l.descriptor));
 }
 
 export interface ReadinessCheck {

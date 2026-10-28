@@ -83,7 +83,6 @@ export const MultiSelectMCItemSchema = z.object({
   correct_choice_ids: z.array(z.string().min(1)).max(MAX_ITEM_LIST),
 });
 
-
 // Slice 33: rubric block on essay items. Authoring + storage only — Phase 3
 // AI/human scoring consumes it later (design-tool-plan.md:107,119). One
 // unified structure serves all three styles as cardinality variants:
@@ -150,12 +149,6 @@ export const RubricSchema = z
     });
   });
 
-// Slice 32: long-text / essay item. Authoring only — there is no scoring
-// yet (Phase 3). `max_word_count` and `placeholder` are authoring metadata
-// the live student client enforces/renders; the design-tool preview is
-// no-script (ADR 0009) so it can't demo a live word cap. Both optional and
-// emitted only when set, keeping older bundles byte-stable. Slice 33 adds an
-// optional `rubric` (see RubricSchema).
 // Numeric equivalence (James, 2026-09-15; docs/math-entry-design.md
 // §Follow-ups "Numeric equivalence"): a short-text answer that parses as a
 // number is compared to a numeric key BY VALUE, so `1/2`, `0.5` and `50/100`
@@ -176,6 +169,12 @@ export const ShortTextItemSchema = z.object({
   rubric: RubricSchema.optional(),
 });
 
+// Slice 32: long-text / essay item. Authoring only — there is no scoring
+// yet (Phase 3). `max_word_count` and `placeholder` are authoring metadata
+// the live student client enforces/renders; the design-tool preview is
+// no-script (ADR 0009) so it can't demo a live word cap. Both optional and
+// emitted only when set, keeping older bundles byte-stable. Slice 33 adds an
+// optional `rubric` (see RubricSchema).
 export const EssayItemSchema = z.object({
   type: z.literal("essay"),
   ...baseItem,

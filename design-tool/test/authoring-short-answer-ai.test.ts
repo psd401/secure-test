@@ -36,6 +36,12 @@ describe("shortAnswerAi", () => {
     expect(r.criteria[0]!.levels.map((l) => l.id)).toEqual(["sa-0", "sa-1", "sa-2"]);
   });
 
+  test("PR #137 review: partial credit on the seeded 1-point key raises full credit to 2", () => {
+    const r = addPartialLevel(seedShortAnswerRubric("full"));
+    expect(labels(r)).toEqual(["No credit:0", "Full credit:2", "Partial credit:1"]);
+    expect(shortAnswerMax(r)).toBe(2);
+  });
+
   test("raising partial above full swaps the names, not the rows", () => {
     let r = addPartialLevel(updateLevel(seedShortAnswerRubric("a"), "sa-1", { points: 2 }));
     r = updateLevel(r, "sa-2", { points: 3 });

@@ -76,6 +76,13 @@ describe("readiness", () => {
       criteria: [{ ...KEY.criteria[0]!, levels: [{ id: "a", label: "No credit", points: 0 }, { id: "b", label: "Full", points: 1, descriptor: " " }] }],
     };
     expect(questionGaps({ ...item, rubric: blankKey })).toEqual(["needs what earns credit"]);
+    // PR #137 review: one empty partial level is enough to flag it, as the
+    // write boundary refuses it.
+    const halfDone = {
+      ...KEY,
+      criteria: [{ ...KEY.criteria[0]!, levels: [...KEY.criteria[0]!.levels.slice(0, 2), { id: "x", label: "Partial credit", points: 1, descriptor: "" }] }],
+    };
+    expect(questionGaps({ ...item, rubric: halfDone })).toEqual(["needs what earns credit"]);
     expect(questionGaps({ ...item, scoring_method: null, rubric: null })).toEqual(["needs a correct answer"]);
   });
 });
