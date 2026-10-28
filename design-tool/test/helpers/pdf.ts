@@ -241,7 +241,13 @@ export interface PlacedImage {
  * drawn at `image`. Pixel bytes are the ASCII "ABCDEFGHIJKL" so a test can
  * recognise them after decoding. Lines are laid out as in makeTextPdf.
  */
-export function makeTextAndImagePdf(lines: string[], image: PlacedImage): Uint8Array {
+export function makeTextAndImagePdf(
+  lines: string[],
+  image: PlacedImage,
+  /** The image XObject's own pixels (raw RGB, one char per byte, printable
+   * ASCII only); the default is a 2×2 of "ABCDEFGHIJKL". */
+  pixels: { width: number; height: number; data: string } = { width: 2, height: 2, data: "ABCDEFGHIJKL" },
+): Uint8Array {
   let text = "BT /F1 12 Tf 72 720 Td";
   lines.forEach((line, i) => {
     if (i > 0) text += " 0 -16 Td";
@@ -250,14 +256,13 @@ export function makeTextAndImagePdf(lines: string[], image: PlacedImage): Uint8A
   text += " ET";
   const draw = `q ${image.width} 0 0 ${image.height} ${image.x} ${image.y} cm /Im1 Do Q`;
   const content = `${text}\n${draw}`;
-  const pixels = "ABCDEFGHIJKL";
   return buildPdf([
     "<</Type/Catalog/Pages 2 0 R>>",
     "<</Type/Pages/Kids[3 0 R]/Count 1>>",
     "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R>>/XObject<</Im1 6 0 R>>>>/Contents 4 0 R>>",
     `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
     "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
-    `<</Type/XObject/Subtype/Image/Width 2/Height 2/ColorSpace/DeviceRGB/BitsPerComponent 8/Length ${pixels.length}>>\nstream\n${pixels}\nendstream`,
+    `<</Type/XObject/Subtype/Image/Width ${pixels.width}/Height ${pixels.height}/ColorSpace/DeviceRGB/BitsPerComponent 8/Length ${pixels.data.length}>>\nstream\n${pixels.data}\nendstream`,
   ]);
 }
 
