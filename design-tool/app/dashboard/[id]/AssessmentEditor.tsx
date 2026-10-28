@@ -48,6 +48,7 @@ import { usesRichTextField } from "@/lib/authoring/richTextTypes";
 import { editorStartAction } from "@/lib/authoring/startScreen";
 import {
   blockMoveAnnouncement,
+  choiceMessageFor,
   choiceMoveAnnouncement,
   insertAt,
   insertionSlots,
@@ -953,7 +954,9 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // Which "+" slot's menu is open (a list index; see insertionSlots).
   const [insertSlot, setInsertSlot] = useState<number | null>(null);
   const [outlineMessage, setOutlineMessage] = useState("");
-  const [choiceMessage, setChoiceMessage] = useState("");
+  // F-4: the move is announced in the moved question's card only; every
+  // card has its own live region, so one shared message was read once per card.
+  const [choiceMessage, setChoiceMessage] = useState<{ itemId: string; text: string } | null>(null);
 
   /** Save a new order through the existing reorder route; put the old one back if it is refused. */
   async function saveOrder(next: ItemView[], movedId: string) {
@@ -1035,7 +1038,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     const item = items.find((i) => i.id === itemId);
     if (!item || to < 0 || to >= item.choices.length || from === to) return;
     updateItem(itemId, (i) => ({ ...i, choices: moveInList(i.choices, from, to) }));
-    setChoiceMessage(choiceMoveAnnouncement(from, to, item.choices.length));
+    setChoiceMessage({ itemId, text: choiceMoveAnnouncement(from, to, item.choices.length) });
   }
 
   function updateItem(itemId: string, mut: (item: ItemView) => ItemView) {
@@ -1875,7 +1878,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   isLocked={isLocked}
                   newAuthoring={newAuthoring}
                   updateItem={updateItem}
-                  choiceMessage={choiceMessage}
+                  choiceMessage={choiceMessageFor(choiceMessage, item.id)}
                   moveChoice={moveChoice}
                 />
 

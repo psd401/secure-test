@@ -7,6 +7,7 @@ import { splitSetInOrder } from "../lib/api/itemSets";
 import {
   blockMoveAnnouncement,
   choiceLetter,
+  choiceMessageFor,
   choiceMoveAnnouncement,
   insertAt,
   insertionSlots,
@@ -158,5 +159,14 @@ describe("choices", () => {
   test("letters follow position, as the preview letters them", () => {
     expect([0, 1, 25, 26, 27, 51, 52].map(choiceLetter)).toEqual(["A", "B", "Z", "AA", "AB", "AZ", "BA"]);
     expect(choiceMoveAnnouncement(2, 0, 4)).toBe("Choice C moved. It is now choice A of 4.");
+  });
+
+  // F-4 (2026-10-27): every card has a live region; only the moved one speaks.
+  test("a choice move is announced in its own question's card only", () => {
+    const last = { itemId: "q1", text: "Choice B moved. It is now choice C of 4." };
+    const cards = ["q1", "q2", "q3"].map((id) => choiceMessageFor(last, id));
+    expect(cards.filter(Boolean)).toEqual([last.text]);
+    expect(cards[0]).toBe(last.text);
+    expect(choiceMessageFor(null, "q1")).toBe("");
   });
 });
