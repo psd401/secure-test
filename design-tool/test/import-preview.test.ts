@@ -319,6 +319,8 @@ describe("POST /api/assessments/import/preview", () => {
   });
 
   test("is 404 with the R-12 flag off", async () => {
+    // Phase 9 cutover: the new editor is the default, so the previous editor is now an explicit choice.
+    await setNewAuthoring(getDb(), { sub: OWNER, role: "staff" } as SessionPayload, false);
     expect((await postPreview(JSON.stringify(bundle()))).status).toBe(404);
   });
 

@@ -709,3 +709,18 @@ unless noted.
   714 to 826. Still open: the AI-draft card always shows; stimulus text is
   a markup textarea; hand-check rows 689–826 apart from the walk-through;
   Phase 9 (cutover) is not started.
+- 2026-10-28 — **Phase 9 cutover, slices 1–2** (branch `feat/editor-cutover`).
+  Decisions (James): the new editor becomes the default; a teacher who chose
+  the previous editor keeps that choice; a visible way back during a
+  two-week settling period (may change with teacher input), then the final
+  slice deletes the previous editor and the flag; Safari and Firefox rows
+  may run after the flip (a Chrome district); the AI-draft card and the
+  markup stimulus textarea are fixed after the flip; deploy after 15:30
+  with a note to beta teachers. Slice 1: the pre-cutover hand-check rows
+  that can run locally were run 2026-10-28 (results in
+  `docs/design-tool-manual-checks.md`). Slice 2: `NEW_AUTHORING_DEFAULT =
+  true`; `/dashboard/beta` is "Choose your editor", linked from the new
+  editor as **Switch to the previous editor**; tests that exercise the
+  previous editor now set that choice explicitly instead of relying on the
+  default. Still open: VoiceOver rows (James), Safari / Firefox rows,
+  `public/help.html` and the roadmap page (slice 3).

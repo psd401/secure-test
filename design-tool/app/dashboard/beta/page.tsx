@@ -7,14 +7,14 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { isImpersonating } from "@/lib/auth/admin";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 
-export const metadata: Metadata = { title: "New editor (beta)" };
+export const metadata: Metadata = { title: "Choose your editor" };
 
 /**
- * R-12 (docs/editor-redesign-design.md): where a pilot teacher opts in to the
- * new authoring experience, and back out. Deliberately linked from nowhere in
- * the app while the flag defaults off, so a teacher who has not been sent the
- * address sees nothing new (D-9). A plain form POST: it works without
- * JavaScript and is the way back to the current editor.
+ * R-12 (docs/editor-redesign-design.md): where a teacher picks the question
+ * editor. Phase 9 cutover (2026-10-28): the new editor is the default, and
+ * this page — linked from the editor — is the way back to the previous one
+ * during the settling period. A plain form POST: it works without
+ * JavaScript.
  */
 export default async function NewEditorBetaPage() {
   const session = await readStaffSessionFromCookies();
@@ -26,14 +26,14 @@ export default async function NewEditorBetaPage() {
     <main className="mx-auto max-w-xl space-y-6 px-6 py-12">
       <PageHeader
         crumbs={[{ label: "Assessments", href: "/dashboard" }]}
-        title="New editor (beta)"
-        description="Try the redesigned question editor. You can switch back at any time; your assessments are not changed by switching."
+        title="Choose your editor"
+        description="The redesigned question editor is now the default. You can switch to the previous editor and back at any time; your assessments are not changed by switching."
       />
       <p className="text-sm" role="status">
         {on ? (
-          <>The new editor is <strong>on</strong> for your account.</>
+          <>You are using the <strong>new</strong> editor.</>
         ) : (
-          <>You are using the <strong>current</strong> editor.</>
+          <>You are using the <strong>previous</strong> editor.</>
         )}
       </p>
       {actingAs ? (
@@ -44,7 +44,7 @@ export default async function NewEditorBetaPage() {
         <form action="/api/me/preferences" method="post">
           <input type="hidden" name="new_authoring" value={on ? "off" : "on"} />
           <Button type="submit" variant={on ? "outline" : "default"}>
-            {on ? "Switch back to the current editor" : "Try the new editor (beta)"}
+            {on ? "Switch to the previous editor" : "Use the new editor"}
           </Button>
         </form>
       )}

@@ -161,6 +161,8 @@ describe("POST items/import-pdf with a Word document (R-10)", () => {
   });
 
   test("flag off: a .docx is refused exactly as before (the PDF reader)", async () => {
+    // Phase 9 cutover: the new editor is the default, so the previous editor is now an explicit choice.
+    await setNewAuthoring(getDb(), { sub: OWNER, role: "staff" } as SessionPayload, false);
     const id = await createAssessment("Flag off");
     const res = await postDocx(id, makeDocx(QUESTIONS));
     expect(res.status).toBe(400);

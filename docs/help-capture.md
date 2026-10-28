@@ -65,7 +65,15 @@ the help page shows. Files are in `design-tool/scripts/help-capture/content/`.
   the file from `bun scripts/help-capture/make-pdf.ts <out.pdf>` (local dev
   runs the mock extractor, which reads its markers) → **Add all**. The PDF
   carries two charts (2026-10-08): one on question 1, one Not used — the
-  `import-pdf` still is taken BEFORE Add all.
+  `import-pdf` still is taken BEFORE Add all. Since the Phase 9 cutover
+  (2026-10-28) it is the full-screen review with question 2's **Edit** open,
+  cropped above the mock's marker text on the document side.
+- **New editor pictures** (2026-10-28): `build-preview` is the Photosynthesis
+  Quiz scrolled to the outline + preview; `build-add-question` is a fresh
+  draft (Add question → Short answer → question → answer → All changes
+  saved). Chrome's `screenshot` with `save_to_disk` now returns a 1:1 JPEG
+  of the viewport, so stills no longer need the one-frame recorder export:
+  crop, scale to 1100 px and palette with `still.sh`'s filter.
 - **Students taking the test** (Monitor, scoring queue, results): with the
   session open on the Monitor,
   `bun --env-file=.env.local scripts/help-capture/sim-students.ts <CODE> scripts/help-capture/content/monitor-plan.json`

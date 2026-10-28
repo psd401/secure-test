@@ -79,10 +79,14 @@ function formPost(value: string) {
 }
 
 describe("isNewAuthoringEnabled", () => {
-  test("defaults off, with no row written", async () => {
-    expect(NEW_AUTHORING_DEFAULT).toBe(false);
-    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(false);
-    const rows = await getDb().execute(sql`select count(*)::int as n from staff_preferences`);
+  // Phase 9 cutover (2026-10-28): on for a teacher who never chose.
+  test("defaults on, with no row written", async () => {
+    expect(NEW_AUTHORING_DEFAULT).toBe(true);
+    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(true);
+    // Scoped to this teacher: other test files may leave their own rows.
+    const rows = await getDb().execute(
+      sql`select count(*)::int as n from staff_preferences where staff_sub = ${TEACHER.sub}`,
+    );
     expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);
   });
 
@@ -91,13 +95,13 @@ describe("isNewAuthoringEnabled", () => {
     expect(await isNewAuthoringEnabled(getDb(), { sub: "" })).toBe(false);
   });
 
-  test("opt-in is per staff member and reversible", async () => {
-    expect(await setNewAuthoring(getDb(), TEACHER, true)).toEqual({ ok: true, enabled: true });
-    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(true);
-    expect(await isNewAuthoringEnabled(getDb(), OTHER)).toBe(false);
-
+  test("the choice is per staff member and reversible; an opt-out survives the new default", async () => {
     expect(await setNewAuthoring(getDb(), TEACHER, false)).toEqual({ ok: true, enabled: false });
     expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(false);
+    expect(await isNewAuthoringEnabled(getDb(), OTHER)).toBe(true);
+
+    expect(await setNewAuthoring(getDb(), TEACHER, true)).toEqual({ ok: true, enabled: true });
+    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(true);
   });
 
   test("an act-as session reads the target's choice but cannot change it", async () => {
@@ -122,15 +126,15 @@ describe("/api/me/preferences", () => {
     expect((await POST(jsonPost({ new_authoring: true }))).status).toBe(403);
   });
 
-  test("GET reports off, JSON POST turns it on, GET then reports on", async () => {
+  test("GET reports on (the default), JSON POST turns it off, GET then reports off", async () => {
     principal = TEACHER;
     const { GET, POST } = await route();
-    expect(await (await GET()).json()).toEqual({ new_authoring: false });
-
-    const res = await POST(jsonPost({ new_authoring: true }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, new_authoring: true });
     expect(await (await GET()).json()).toEqual({ new_authoring: true });
+
+    const res = await POST(jsonPost({ new_authoring: false }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, new_authoring: false });
+    expect(await (await GET()).json()).toEqual({ new_authoring: false });
   });
 
   test("form POST flips it and redirects 303 to the beta page", async () => {
@@ -163,7 +167,8 @@ describe("/api/me/preferences", () => {
         )
       ).status,
     ).toBe(400);
-    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(false);
+    // Nothing written: still the default (on since the Phase 9 cutover).
+    expect(await isNewAuthoringEnabled(getDb(), TEACHER)).toBe(true);
   });
 
   test("403 while acting as a teacher, and the teacher's choice stands", async () => {
@@ -172,6 +177,6 @@ describe("/api/me/preferences", () => {
     const res = await POST(jsonPost({ new_authoring: true }));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ ok: false, error: "impersonating" });
-    expect(await (await GET()).json()).toEqual({ new_authoring: false });
+    expect(await (await GET()).json()).toEqual({ new_authoring: true });
   });
 });

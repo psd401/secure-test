@@ -436,6 +436,8 @@ describe("GET /preview/shell", () => {
   });
 
   test("404 for staff without the R-12 flag — the current editor never loads it", async () => {
+    // Phase 9 cutover: the new editor is the default, so the previous editor is now an explicit choice.
+    await setNewAuthoring(getDb(), TEACHER, false);
     principal = TEACHER;
     expect((await get()).status).toBe(404);
   });

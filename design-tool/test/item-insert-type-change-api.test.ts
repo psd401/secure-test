@@ -62,7 +62,8 @@ afterAll(async () => {
 
 async function asTeacher(sub: string, newAuthoring: boolean) {
   mockSub = sub;
-  if (newAuthoring) await setNewAuthoring(getDb(), { sub, role: "staff" } as SessionPayload, true);
+  // Phase 9 cutover: set either way, since a missing row now means the new editor.
+  await setNewAuthoring(getDb(), { sub, role: "staff" } as SessionPayload, newAuthoring);
 }
 
 async function createAssessment(): Promise<string> {
