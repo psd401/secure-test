@@ -137,6 +137,14 @@ describe("saving what a teacher typed", () => {
     expect(docToMarkup(p(text("5**2 and 3**4")))).toEqual({ markup: "5**2 and 3**4", exact: false });
   });
 
+  // F-2 (2026-10-27): the dollars were saved bare when the field also held `**`.
+  test("typed dollars stay escaped even when the field can't be shown exactly", () => {
+    expect(docToMarkup(p(text("Three $x^2$ and 5**2 and 3**4")))).toEqual({
+      markup: "Three \\$x^2\\$ and 5**2 and 3**4",
+      exact: false,
+    });
+  });
+
   test("italic in the middle of a word has no spelling: flagged", () => {
     expect(docToMarkup(p(text("un"), text("happy", "em"))).exact).toBe(false);
   });

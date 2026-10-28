@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 import { autosaveSummary, createItemAutosaver } from "../lib/authoring/itemAutosave";
 import { SNAPSHOT_INTERVAL_MS, shouldCapture } from "../lib/authoring/itemHistory";
 import { beforePublishing, type ReadinessItem } from "../app/dashboard/[id]/readiness";
-import { versionExcerpt } from "../app/dashboard/[id]/ItemHistoryDialog";
+import { versionExcerpt, versionHeading } from "../app/dashboard/[id]/ItemHistoryDialog";
 import type { ItemSnapshotContent } from "../db/schema";
 
 /** setTimeout / clearTimeout that only fire on tick() (as test/autosave.test.ts). */
@@ -185,7 +185,9 @@ describe("createItemAutosaver (debounce per card)", () => {
 });
 
 describe("autosaveSummary", () => {
-  const card = (over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean }>) => ({
+  const card = (
+    over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean; waiting: boolean }>,
+  ) => ({
     id: "q1",
     dirty: false,
     saving: false,
@@ -211,6 +213,15 @@ describe("autosaveSummary", () => {
   });
   test("a published card's edit the lock refuses is blocked, not saving", () => {
     expect(autosaveSummary([card({ dirty: true, blocked: true })])).toEqual({ kind: "blocked", itemIds: ["q1"] });
+  });
+  // F-5 (2026-10-27): a fill-in-the-blank card with a deleted blank is held,
+  // not failed — it reads "waiting", below an error or the publish lock.
+  test("a card held on a deleted blank is waiting, not saving or failed", () => {
+    expect(autosaveSummary([card({ dirty: true, waiting: true })])).toEqual({ kind: "waiting", itemIds: ["q1"] });
+    expect(autosaveSummary([card({ waiting: true })])).toEqual({ kind: "saved" });
+    expect(
+      autosaveSummary([card({ dirty: true, waiting: true }), card({ id: "q2", dirty: true, failed: true })]),
+    ).toEqual({ kind: "error", itemIds: ["q2"] });
   });
 });
 
@@ -302,5 +313,17 @@ describe("versionExcerpt", () => {
     expect(versionExcerpt("a\n\n  b")).toBe("a b");
     expect(versionExcerpt("x".repeat(130), 120)).toBe(`${"x".repeat(120)}…`);
     expect(versionExcerpt("   ")).toBe("(no question text)");
+  });
+});
+
+// F-3 (2026-10-27): versions either side of a type change looked identical.
+describe("versionHeading", () => {
+  test("names the version's question type after its time", () => {
+    const at = "2026-10-27T17:24:00Z";
+    const multi = versionHeading({ saved_at: at, item: { type: "multiple_choice_multi" } });
+    const single = versionHeading({ saved_at: at, item: { type: "multiple_choice_single" } });
+    expect(multi).toEndWith(" · Multiple select");
+    expect(single).toEndWith(" · Multiple choice");
+    expect(multi).not.toBe(single);
   });
 });

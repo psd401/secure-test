@@ -48,6 +48,7 @@ import { usesRichTextField } from "@/lib/authoring/richTextTypes";
 import { editorStartAction } from "@/lib/authoring/startScreen";
 import {
   blockMoveAnnouncement,
+  choiceMessageFor,
   choiceMoveAnnouncement,
   insertAt,
   insertionSlots,
@@ -77,6 +78,7 @@ import {
   MAX_BLANKS,
   nextBlankId,
   orderBlanksByStem,
+  unplacedBlankIds,
 } from "@/lib/items/fillBlankEditor";
 import { createAutosave } from "@/lib/autosave";
 import { StandardsTagInput } from "@/components/app/StandardsTagInput";
@@ -784,13 +786,22 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     });
   }
   const canAutosave = (item: ItemView) => !isLocked || keyOnlyEdit(persisted[item.id], item);
+  // F-5: a blank whose marker was deleted would be refused; the card waits
+  // until the teacher puts it back or removes it (the leave-page warning holds).
+  const waitsOnBlank = (item: ItemView) =>
+    item.type === "fill_blank" && unplacedBlankIds(item.stem, item.blanks ?? []).length > 0;
   // R-6: where the new editor's "+" insertion points sit (list indexes).
   const slotSet = new Set(newAuthoring ? insertionSlots(items) : []);
   useEffect(() => {
     autosaverRef.current?.sync(
       items.map((item) => {
         const fp = fingerprint(item);
-        return { id: item.id, fingerprint: fp, value: item, pending: persisted[item.id] !== fp && canAutosave(item) };
+        return {
+          id: item.id,
+          fingerprint: fp,
+          value: item,
+          pending: persisted[item.id] !== fp && canAutosave(item) && !waitsOnBlank(item),
+        };
       }),
     );
   });
@@ -943,7 +954,9 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
   // Which "+" slot's menu is open (a list index; see insertionSlots).
   const [insertSlot, setInsertSlot] = useState<number | null>(null);
   const [outlineMessage, setOutlineMessage] = useState("");
-  const [choiceMessage, setChoiceMessage] = useState("");
+  // F-4: the move is announced in the moved question's card only; every
+  // card has its own live region, so one shared message was read once per card.
+  const [choiceMessage, setChoiceMessage] = useState<{ itemId: string; text: string } | null>(null);
 
   /** Save a new order through the existing reorder route; put the old one back if it is refused. */
   async function saveOrder(next: ItemView[], movedId: string) {
@@ -1025,7 +1038,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
     const item = items.find((i) => i.id === itemId);
     if (!item || to < 0 || to >= item.choices.length || from === to) return;
     updateItem(itemId, (i) => ({ ...i, choices: moveInList(i.choices, from, to) }));
-    setChoiceMessage(choiceMoveAnnouncement(from, to, item.choices.length));
+    setChoiceMessage({ itemId, text: choiceMoveAnnouncement(from, to, item.choices.length) });
   }
 
   function updateItem(itemId: string, mut: (item: ItemView) => ItemView) {
@@ -1463,6 +1476,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   saving: itemSave[i.id]?.kind === "saving",
                   failed: !!itemErrors[i.id],
                   blocked: !canAutosave(i),
+                  waiting: waitsOnBlank(i),
                 })),
               )}
               questionNumber={(id) => items.findIndex((i) => i.id === id) + 1}
@@ -1864,7 +1878,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                   isLocked={isLocked}
                   newAuthoring={newAuthoring}
                   updateItem={updateItem}
-                  choiceMessage={choiceMessage}
+                  choiceMessage={choiceMessageFor(choiceMessage, item.id)}
                   moveChoice={moveChoice}
                 />
 

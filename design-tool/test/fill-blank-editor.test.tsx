@@ -23,6 +23,7 @@ import {
   removeMarker,
   restoreMarker,
   setBlankKind,
+  unplacedBlankIds,
 } from "../lib/items/fillBlankEditor";
 import { FillBlankEditor } from "../app/dashboard/[id]/FillBlankEditor";
 import { CreateItemBody } from "../lib/api/items";
@@ -117,6 +118,13 @@ describe("removing and restoring", () => {
     expect(back.stem).toBe("a [[b2]] [[b1]]");
     expect(back.blanks.map((b) => b.id)).toEqual(["b2", "b1"]);
     expect(restoreMarker("", [], "b1").stem).toBe("[[b1]]");
+  });
+  // F-5 (2026-10-27): the new editor's autosave waits while any is listed.
+  test("unplacedBlankIds lists blanks whose marker is gone", () => {
+    const blanks = [{ id: "b1" }, { id: "b2" }, { id: "b3" }];
+    expect(unplacedBlankIds("a [[b2]] b", blanks)).toEqual(["b1", "b3"]);
+    expect(unplacedBlankIds("[[b1]] [[b2]] [[b3]]", blanks)).toEqual([]);
+    expect(unplacedBlankIds("no markers", [])).toEqual([]);
   });
   test("orphan and duplicate markers", () => {
     expect(orphanMarkers("a [[b1]] [[b5]] [[b5]]", [{ id: "b1" }])).toEqual(["b5"]);

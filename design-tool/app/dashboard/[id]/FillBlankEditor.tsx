@@ -160,7 +160,9 @@ export function FillBlankEditor({ itemId, stem, blanks, onChange, disabled, hand
 
             {!inStem ? (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-destructive">Not in the question any more.</span>
+                <span className="text-warning-foreground">
+                  Not in the question any more. The question won&apos;t save until you put it back or remove the blank.
+                </span>
                 <button
                   type="button"
                   className={SMALL_BUTTON}

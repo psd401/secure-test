@@ -191,6 +191,16 @@ export function isInStem(stem: string, id: string): boolean {
   return fillBlankMarkerIds(stem).includes(id);
 }
 
+/**
+ * Blanks whose marker was deleted from the stem. The server refuses such a
+ * question, so the new editor's autosave waits until each is put back or
+ * removed (F-5, 2026-10-27) instead of failing on every pause.
+ */
+export function unplacedBlankIds(stem: string, blanks: readonly { id: string }[]): string[] {
+  const placed = new Set(fillBlankMarkerIds(stem));
+  return blanks.filter((b) => !placed.has(b.id)).map((b) => b.id);
+}
+
 function emptyDropdown(id: string): FillBlankDropdown {
   return { id, kind: "dropdown", options: [{ id: "o1", text: "" }, { id: "o2", text: "" }] };
 }

@@ -3,6 +3,7 @@ import { counterparts, lookup, parseTag, type StandardEntry } from "@/lib/standa
 import { resolveBareCode } from "@/lib/standards/search";
 import { repairModelJson } from "@/lib/pdfImport/extractCore";
 import { MATH_DOLLAR_RULE } from "./mathPromptRule";
+import { TEXT_ONLY_RULE } from "./textOnlyPromptRule";
 import { normalizeProposalMath } from "./mathNormalize";
 import { everyBlankKeyed, markersInsideMath, normalizeFillBlankProposal } from "./fillBlankNormalize";
 import {
@@ -109,6 +110,7 @@ REQUIREMENTS:
 - When standards are given, write to what the standard describes, not to its code. Do not print standard codes in the items.
 - Math: wrap inline expressions in $...$ (single dollars). Available macros include \\frac, \\sqrt, ^, _, \\cdot, \\div, \\plusminus, \\degree, \\percent.
 - ${MATH_DOLLAR_RULE}
+- ${TEXT_ONLY_RULE}
 - Keep stems and choices age-appropriate for K-12 students.
 - Do NOT add fields beyond the shapes above.`;
 

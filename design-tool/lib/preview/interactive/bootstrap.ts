@@ -127,8 +127,11 @@ export const PREVIEW_BOOTSTRAP_JS = `(function () {
     var at = itemIds.indexOf(id);
     if (at < 0) return;
     var block = document.querySelector('[data-preview-item="' + at + '"]');
-    if (block && typeof block.scrollIntoView === 'function') {
-      block.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+    // Scroll this frame's own window only. scrollIntoView would also scroll
+    // every ancestor, so the editor page jumped on each refresh (F-1).
+    if (block && typeof block.getBoundingClientRect === 'function' && typeof window.scrollTo === 'function') {
+      var top = block.getBoundingClientRect().top + (window.pageYOffset || 0);
+      window.scrollTo({ top: top, behavior: smooth ? 'smooth' : 'auto' });
     }
   }
 

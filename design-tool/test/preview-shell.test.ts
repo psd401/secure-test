@@ -320,12 +320,20 @@ describe("the bootstrap, running the student's renderer", () => {
       context,
     );
     expect(sent()).toContainEqual({ kind: "jump", item_id: "q2" });
+    // The frame scrolls its own window only: scrollIntoView would also scroll
+    // the editor page around the iframe (F-1, 2026-10-27).
     vm.runInContext(
-      "var __scrolled = null; __all('.item', __root)[1].scrollIntoView = function (o) { __scrolled = o; };",
+      `var __scrolled = null; var __intoView = false;
+       var __block = __all('.item', __root)[1];
+       __block.getBoundingClientRect = function () { return { top: 120 }; };
+       __block.scrollIntoView = function () { __intoView = true; };
+       window.pageYOffset = 30;
+       window.scrollTo = function (o) { __scrolled = o; };`,
       context,
     );
     port().onmessage({ data: { kind: "scroll_to", item_id: "q2", smooth: true } });
-    expect(vm.runInContext("JSON.stringify(__scrolled)", context)).toBe('{"block":"start","behavior":"smooth"}');
+    expect(vm.runInContext("JSON.stringify(__scrolled)", context)).toBe('{"top":150,"behavior":"smooth"}');
+    expect(vm.runInContext("__intoView", context)).toBe(false);
   });
 
   test("answering never names the question: only a click on its text (or the block) sends jump", () => {

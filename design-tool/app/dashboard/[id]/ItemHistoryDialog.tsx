@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { itemTypeName } from "@/lib/items/typeLabel";
 import { formatDateTime } from "@/lib/ui/format";
 import type { ItemRow } from "./AssessmentEditor";
 
@@ -32,6 +33,14 @@ export function versionExcerpt(stem: string, max = 120): string {
   const flat = stem.replace(/\s+/g, " ").trim();
   if (flat.length === 0) return "(no question text)";
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+/**
+ * Pure: a version's heading — when it was saved and its question type, so the
+ * versions on either side of a type change don't look the same (F-3, 2026-10-27).
+ */
+export function versionHeading(v: Pick<ItemVersion, "saved_at"> & { item: Pick<ItemRow, "type"> }): string {
+  return `${formatDateTime(v.saved_at)} · ${itemTypeName(v.item.type)}`;
 }
 
 /**
@@ -115,7 +124,7 @@ export function ItemHistoryDialog({
             {load.versions.map((v) => (
               <li key={v.id} className="flex items-start justify-between gap-3 rounded-md border p-2">
                 <div className="min-w-0">
-                  <div className="font-medium">{formatDateTime(v.saved_at)}</div>
+                  <div className="font-medium">{versionHeading(v)}</div>
                   {v.item.stem.trim() ? (
                     // stem_html is the history route's server render: text
                     // HTML-escaped, math KaTeX, pictures as <img> (as MathPreview).

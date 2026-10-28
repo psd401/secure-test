@@ -165,3 +165,12 @@ export function choiceMoveAnnouncement(from: number, to: number, count: number):
   if (from === to) return `Choice ${choiceLetter(from)} did not move.`;
   return `Choice ${choiceLetter(from)} moved. It is now choice ${choiceLetter(to)} of ${count}.`;
 }
+
+/**
+ * The text one card's choice live region shows: the last move's message in
+ * the question it happened in, nothing anywhere else (F-4, 2026-10-27 — a
+ * shared message was read once per multiple-choice card).
+ */
+export function choiceMessageFor(last: { itemId: string; text: string } | null, itemId: string): string {
+  return last?.itemId === itemId ? last.text : "";
+}
