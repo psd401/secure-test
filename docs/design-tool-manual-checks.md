@@ -2046,3 +2046,14 @@ Findings (proposals; nothing changed yet):
 - **F-5 — deleting a blank chip fails the autosave.** After Backspace removes a blank, the panel correctly offers **Put it back**. But the autosave still sends that blank, and the server refuses it with 400 `blank "b4" has no [[b4]] marker in the stem`. The indicator shows "Some changes didn't save" until the teacher clicks **Put it back** or **Remove blank**, or presses ⌘Z.
 - **F-6 — an AI draft referred to a missing diagram.** One question drafted by Bedrock began "The diagram below shows a forest food web…", and there was no diagram.
 - Cosmetic: a blank added at the end follows the period with no space (`.[[b4]]`); the import chips keep "Ready (3)" after **Accept all ready**; the outline shows "[picture]Explain…" with no space; the "Can't convert" reason uses raw validation wording.
+
+### Fixes for the 2026-10-27 findings (branch `fix/editor-hand-check-2026-10-27`)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 827 | F-1, flag ON, Follow my place on, ≥ 1280 px: type a few characters in a question's text, pause | The field you are typing in stays where it was (no jump; a small shift only when a Before publishing line above it disappears); scrolling the editor still moves the preview | ✅ 2026-10-27 local (scrollY 1544 → 1514, the Before publishing line for that question went away; field still in view; the preview follows on scroll) |
+| 828 | F-5: fill in the blank, Backspace over a blank chip, pause | No red error and no PATCH: the indicator reads in amber "Not saved yet — put back or remove the deleted blank in Question N"; the blank's panel says the question won't save until it is put back or removed. **Put it back** (or **Remove blank**, or ⌘Z) → "All changes saved" | ✅ 2026-10-27 local (Put it back path; Remove blank and ⌘Z not re-run) |
+| 829 | F-4: move a choice in one multiple-choice question on an assessment with several | The "Choice B moved…" text appears in that question's live region only (VoiceOver hears it once) | partial 2026-10-27: one live region in the DOM ✅; VoiceOver not run |
+| 830 | F-2: in a question's text type `5**2 and $x^2$` | Saved as `5**2 and \$x^2\$` (the amber note still shows for the `**`); the preview shows `$x^2$` as text | NOT RUN (unit test only) |
+| 831 | F-3: change a question's type, change it back, open **History** | Each version's heading names its type ("Oct 27, 5:24 PM · Multiple select") | ✅ 2026-10-27 local |
+| 832 | F-6: **Generate questions** with an objective, real Bedrock, a few times | No drafted question refers to a diagram, picture, chart, table, map or figure | partial 2026-10-27: one run of 5 questions, none did |
