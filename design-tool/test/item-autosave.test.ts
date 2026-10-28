@@ -186,7 +186,7 @@ describe("createItemAutosaver (debounce per card)", () => {
 
 describe("autosaveSummary", () => {
   const card = (
-    over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean; waiting: boolean }>,
+    over: Partial<{ id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean; waiting: boolean | "blank" | "credit" }>,
   ) => ({
     id: "q1",
     dirty: false,
@@ -222,6 +222,27 @@ describe("autosaveSummary", () => {
     expect(
       autosaveSummary([card({ dirty: true, waiting: true }), card({ id: "q2", dirty: true, failed: true })]),
     ).toEqual({ kind: "error", itemIds: ["q2"] });
+  });
+});
+
+describe("autosaveSummary: an unfinished AI short-answer key (hand-check row 836)", () => {
+  const card = (id: string, waiting: boolean | "blank" | "credit") => ({
+    id,
+    dirty: true,
+    saving: false,
+    failed: false,
+    blocked: false,
+    waiting,
+  });
+  test("a card held on an empty credit level is waiting, and says why", () => {
+    expect(autosaveSummary([card("q1", "credit")])).toEqual({ kind: "waiting", itemIds: ["q1"], creditIds: ["q1"] });
+  });
+  test("blank and credit holds are told apart", () => {
+    expect(autosaveSummary([card("q1", "blank"), card("q2", "credit")])).toEqual({
+      kind: "waiting",
+      itemIds: ["q1", "q2"],
+      creditIds: ["q2"],
+    });
   });
 });
 

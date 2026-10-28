@@ -121,25 +121,44 @@ export type AutosaveSummary =
   | { kind: "saving" }
   | { kind: "error"; itemIds: string[] }
   | { kind: "blocked"; itemIds: string[] }
-  | { kind: "waiting"; itemIds: string[] };
+  /** `creditIds`: the held cards that wait on an unfinished AI short-answer
+   * key (hand-check row 836); the rest wait on a deleted blank (F-5). */
+  | { kind: "waiting"; itemIds: string[]; creditIds?: string[] };
 
 /**
  * Pure: the indicator for the whole question list. An error outranks
  * everything (a teacher must not read "All changes saved" while one card
  * failed); then edits a published assessment will not take ("blocked"); then
- * cards held back until the teacher finishes a step, such as a deleted blank
- * to put back or remove ("waiting"); then anything dirty or in flight reads
+ * cards held back until the teacher finishes a step — a deleted blank to put
+ * back or remove, or an AI short-answer key with an empty level ("waiting");
+ * then anything dirty or in flight reads
  * "Saving…".
  */
 export function autosaveSummary(
-  cards: { id: string; dirty: boolean; saving: boolean; failed: boolean; blocked: boolean; waiting?: boolean }[],
+  cards: {
+    id: string;
+    dirty: boolean;
+    saving: boolean;
+    failed: boolean;
+    blocked: boolean;
+    /** Held until the teacher finishes a step: true or "blank" = a deleted
+     * blank to put back or remove; "credit" = an empty credit level. */
+    waiting?: boolean | "blank" | "credit";
+  }[],
 ): AutosaveSummary {
   const failed = cards.filter((c) => c.failed && c.dirty).map((c) => c.id);
   if (failed.length > 0) return { kind: "error", itemIds: failed };
   const blocked = cards.filter((c) => c.blocked && c.dirty).map((c) => c.id);
   if (blocked.length > 0) return { kind: "blocked", itemIds: blocked };
-  const waiting = cards.filter((c) => c.waiting && c.dirty).map((c) => c.id);
-  if (waiting.length > 0) return { kind: "waiting", itemIds: waiting };
+  const held = cards.filter((c) => c.waiting && c.dirty);
+  if (held.length > 0) {
+    const creditIds = held.filter((c) => c.waiting === "credit").map((c) => c.id);
+    return {
+      kind: "waiting",
+      itemIds: held.map((c) => c.id),
+      ...(creditIds.length > 0 ? { creditIds } : {}),
+    };
+  }
   if (cards.some((c) => c.saving || c.dirty)) return { kind: "saving" };
   return { kind: "saved" };
 }

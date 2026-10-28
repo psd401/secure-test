@@ -5,6 +5,7 @@ import { isShortAnswerRubric } from "../lib/api/items";
 import {
   addPartialLevel,
   creditLevels,
+  keyUnfinished,
   removeLevel,
   seedShortAnswerRubric,
   shortAnswerMax,
@@ -26,26 +27,26 @@ describe("shortAnswerAi", () => {
   test("partial credit: add a level, set points, names follow the points", () => {
     let r = updateLevel(seedShortAnswerRubric("full"), "sa-1", { points: 2 });
     r = addPartialLevel(r);
-    expect(labels(r)).toEqual(["No credit:0", "Full credit:2", "Partial credit:1"]);
+    expect(labels(r)).toEqual(["No credit:0", "Partial credit:1", "Full credit:2"]);
     const partial = creditLevels(r).find((l) => l.label === "Partial credit")!;
     expect(isShortAnswerRubric(r)).toBe(false); // the new level has no text yet
     r = updateLevel(r, partial.id, { descriptor: "names births" });
     expect(isShortAnswerRubric(r)).toBe(true);
     expect(shortAnswerMax(r)).toBe(2);
     // Ids stay put through edits, so autosave diffs stay small.
-    expect(r.criteria[0]!.levels.map((l) => l.id)).toEqual(["sa-0", "sa-1", "sa-2"]);
+    expect(r.criteria[0]!.levels.map((l) => l.id)).toEqual(["sa-0", "sa-2", "sa-1"]);
   });
 
   test("PR #137 review: partial credit on the seeded 1-point key raises full credit to 2", () => {
     const r = addPartialLevel(seedShortAnswerRubric("full"));
-    expect(labels(r)).toEqual(["No credit:0", "Full credit:2", "Partial credit:1"]);
+    expect(labels(r)).toEqual(["No credit:0", "Partial credit:1", "Full credit:2"]);
     expect(shortAnswerMax(r)).toBe(2);
   });
 
   test("raising partial above full swaps the names, not the rows", () => {
     let r = addPartialLevel(updateLevel(seedShortAnswerRubric("a"), "sa-1", { points: 2 }));
     r = updateLevel(r, "sa-2", { points: 3 });
-    expect(labels(r)).toEqual(["No credit:0", "Partial credit:2", "Full credit:3"]);
+    expect(labels(r)).toEqual(["No credit:0", "Full credit:3", "Partial credit:2"]);
   });
 
   test("a level can be removed, but never the last one that earns points", () => {
@@ -53,6 +54,9 @@ describe("shortAnswerAi", () => {
     expect(removeLevel(one, "sa-1")).toBe(one);
     const two = addPartialLevel(updateLevel(one, "sa-1", { points: 2 }));
     expect(labels(removeLevel(two, "sa-2"))).toEqual(["No credit:0", "Full credit:2"]);
+    // Hand-check row 838: a new partial level sits just below full credit, so
+    // the editor, the queue and the Change dialog read lowest to highest.
+    expect(labels(two)).toEqual(["No credit:0", "Partial credit:1", "Full credit:2"]);
     // The no-credit level is never removed.
     expect(labels(removeLevel(two, "sa-0"))).toEqual(labels(two));
   });
@@ -70,5 +74,12 @@ describe("shortAnswerAi", () => {
     // Other types: only the method changes.
     const essay: Card = { type: "essay", scoring_method: null, rubric: on.rubric, correct_answer: null };
     expect(withScoringMethod(essay, "human").rubric).toBe(on.rubric);
+  });
+
+  test("keyUnfinished: a level that earns points with no text, or none that earns points", () => {
+    const seeded = seedShortAnswerRubric("x");
+    expect(keyUnfinished(seeded)).toBe(false);
+    expect(keyUnfinished(addPartialLevel(seeded))).toBe(true);
+    expect(keyUnfinished(seedShortAnswerRubric(" "))).toBe(true);
   });
 });

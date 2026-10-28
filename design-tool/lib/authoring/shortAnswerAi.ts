@@ -40,7 +40,8 @@ export function updateLevel(
   return mapLevels(rubric, (levels) => levels.map((l) => (l.id === levelId ? { ...l, ...patch } : l)));
 }
 
-/** Add a partial-credit level one point below full credit. On a 1-point
+/** Add a partial-credit level one point below full credit, placed just
+ * before it. On a 1-point
  * key (the seed) full credit goes up to 2 so the new level can be 1 and
  * partial (PR #137 review: it used to make a second 1-point Full credit
  * the teacher could not lower). */
@@ -51,8 +52,20 @@ export function addPartialLevel(rubric: Rubric): Rubric {
     const used = new Set(levels.map((l) => l.id));
     let n = levels.length;
     while (used.has(`sa-${n}`)) n++;
-    return [...raised, { id: `sa-${n}`, label: "", points: Math.max(1, top - 1), descriptor: "" }];
+    // Hand-check row 838: just before full credit, so the stored order (which
+    // the queue's Change dialog shows) reads lowest to highest.
+    const at = raised.findIndex((l) => l.points === Math.max(...raised.map((x) => x.points)));
+    const level = { id: `sa-${n}`, label: "", points: Math.max(1, top - 1), descriptor: "" };
+    return at < 0 ? [...raised, level] : [...raised.slice(0, at), level, ...raised.slice(at)];
   });
+}
+
+/** Hand-check row 836: the key the server would refuse — no level earns
+ * points, or one that does has no text (validateShortAnswerRubric's rule).
+ * The new editor holds the card rather than send it. */
+export function keyUnfinished(rubric: Rubric): boolean {
+  const credit = creditLevels(rubric);
+  return credit.length === 0 || credit.some((l) => !l.descriptor?.trim());
 }
 
 /** Remove a level that earns points, keeping at least one. */
