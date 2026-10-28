@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
+import { itemTypeName } from "@/lib/items/typeLabel";
 import { formatDateTime } from "@/lib/ui/format";
 import type { ItemRow } from "./AssessmentEditor";
 
@@ -40,8 +40,7 @@ export function versionExcerpt(stem: string, max = 120): string {
  * versions on either side of a type change don't look the same (F-3, 2026-10-27).
  */
 export function versionHeading(v: Pick<ItemVersion, "saved_at"> & { item: Pick<ItemRow, "type"> }): string {
-  const labels: Record<string, string> = ITEM_TYPE_LABEL;
-  return `${formatDateTime(v.saved_at)} · ${labels[v.item.type] ?? v.item.type}`;
+  return `${formatDateTime(v.saved_at)} · ${itemTypeName(v.item.type)}`;
 }
 
 /**
