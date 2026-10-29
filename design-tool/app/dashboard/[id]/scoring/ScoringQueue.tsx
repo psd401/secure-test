@@ -1008,7 +1008,7 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
           <span className="text-xs text-muted-foreground">
             {section === ""
               ? "Choose a section to score its written answers with AI, then review them below."
-              : "AI proposals land below for you to approve or change."}
+              : "Scores land below for you to review."}
           </span>
         </div>
       ) : null}
