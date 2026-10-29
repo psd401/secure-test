@@ -17,14 +17,16 @@ openwiki:
     - design-tool/test/item-batch-core.test.ts
     - design-tool/test/ai-generate-items.test.ts
     - design-tool/test/batch-form.test.tsx
+    - design-tool/test/text-only-prompt-rule.test.ts
   invariants:
     - The batch route writes nothing; proposals come back unsaved and the teacher adds them through the items route.
     - At most ten proposals per request, and a request needs at least one of standards, an objective, notes or a resource.
     - The mix never plans match or fill_blank; those types appear only when requested by count.
     - Each element is validated alone against CreateItemBody; one malformed element drops, not the batch.
     - Teacher standards replace any standards or rubric keys the model returns.
+    - Every item-writing prompt carries the text-only rule, so a proposal never refers to a picture or diagram the item does not have.
   validation_commands:
-    - cd design-tool && bun test test/item-batch-core.test.ts
+    - cd design-tool && bun test test/item-batch-core.test.ts test/text-only-prompt-rule.test.ts
 ---
 
 # Batch AI item generation
