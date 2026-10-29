@@ -32,12 +32,17 @@ export interface EssaySection {
   score: {
     points: number;
     max_points: number;
-    teacher_note: string | null;
+    /**
+     * The teacher's written feedback. FR slice 1 (docs/feedback-release-design.md):
+     * always null until slice 2 adds its own table — `rationale.note` is a
+     * score-change reason and never reaches a student.
+     */
+    teacher_feedback: string | null;
     /** Per-criterion rows; `rationale` is the AI's text on an approved AI score. */
     criteria: Array<{ name: string; level: string; points: number; rationale: string | null }>;
     ai_overall: string | null;
-    /** True when the final score was AI-proposed and then approved. */
-    from_ai: boolean;
+    /** Who the final score is from — it names the score (FR D-1, D-13). */
+    method: "human" | "ai" | "auto";
   } | null;
 }
 
@@ -158,17 +163,25 @@ export function docRichAnswerHtml(cleanHtml: string, doubleSpace: boolean): stri
     .replaceAll("</em>", "</i>");
 }
 
+/** FR D-1 / D-13: every score says whose it is; an answer key's is plain "Score". */
+export function scoreLabel(method: "human" | "ai" | "auto"): string {
+  if (method === "ai") return "AI score";
+  if (method === "human") return "Teacher score";
+  return "Score";
+}
+
 function scoreBlock(essay: EssaySection, contents: ReleaseContents): string {
   const s = essay.score;
   if (!s) return "";
   const out: string[] = [];
+  const fromAi = s.method === "ai";
   if (contents.score) {
-    out.push(`<p><b>Score:</b> ${s.points} of ${s.max_points}</p>`);
+    out.push(`<p><b>${scoreLabel(s.method)}:</b> ${s.points} of ${s.max_points}</p>`);
   }
-  const showCriteria = contents.score || (contents.ai_feedback && s.from_ai);
+  const showCriteria = contents.score || (contents.ai_feedback && fromAi);
   if (showCriteria && s.criteria.length > 0) {
-    const withRationale = contents.ai_feedback && s.from_ai;
-    const head = `<tr><th>Criterion</th>${contents.score ? "<th>Level</th><th>Points</th>" : ""}${withRationale ? "<th>Feedback</th>" : ""}</tr>`;
+    const withRationale = contents.ai_feedback && fromAi;
+    const head = `<tr><th>Criterion</th>${contents.score ? "<th>Level</th><th>Points</th>" : ""}${withRationale ? "<th>AI feedback</th>" : ""}</tr>`;
     const rows = s.criteria.map((c) => {
       const cells = [`<td>${escapeHtml(c.name)}</td>`];
       if (contents.score) cells.push(`<td>${escapeHtml(c.level)}</td>`, `<td>${c.points}</td>`);
@@ -177,11 +190,11 @@ function scoreBlock(essay: EssaySection, contents: ReleaseContents): string {
     });
     out.push(`<table border="1">${head}${rows.join("")}</table>`);
   }
-  if (contents.ai_feedback && s.from_ai && s.ai_overall) {
-    out.push(`<p><b>Feedback:</b></p>${paragraphs(s.ai_overall)}`);
+  if (contents.ai_feedback && fromAi && s.ai_overall) {
+    out.push(`<p><b>AI feedback:</b></p>${paragraphs(s.ai_overall)}`);
   }
-  if (contents.teacher_feedback && s.teacher_note) {
-    out.push(`<p><b>Teacher feedback:</b></p>${paragraphs(s.teacher_note)}`);
+  if (contents.teacher_feedback && s.teacher_feedback) {
+    out.push(`<p><b>Teacher feedback:</b></p>${paragraphs(s.teacher_feedback)}`);
   }
   return out.join("\n");
 }

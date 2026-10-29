@@ -99,10 +99,10 @@ describe("buildDocHtml with formatting and spacing", () => {
     score: {
       points: 1,
       max_points: 2,
-      teacher_note: "Note words.",
+      teacher_feedback: "Note words.",
       criteria: [],
       ai_overall: null,
-      from_ai: false,
+      method: "human" as const,
     },
   };
 

@@ -248,7 +248,9 @@ export async function releaseToGoogleDocs(
           ? {
               points: score.points,
               max_points: score.max_points,
-              teacher_note: typeof rationale?.note === "string" && rationale.note.trim() ? rationale.note : null,
+              // FR slice 1: `rationale.note` is a score-change reason, never
+              // feedback; slice 2 fills this from the teacher's own comment.
+              teacher_feedback: null,
               criteria: rubricScoreRows(rubric, rationale).map((c) => ({
                 name: c.criterion_name,
                 level: c.level_label,
@@ -259,7 +261,7 @@ export async function releaseToGoogleDocs(
                 typeof rationale?.overall_rationale === "string" && rationale.overall_rationale.trim()
                   ? rationale.overall_rationale
                   : null,
-              from_ai: score.method === "ai",
+              method: score.method === "ai" ? "ai" : score.method === "auto" ? "auto" : "human",
             }
           : null,
       });

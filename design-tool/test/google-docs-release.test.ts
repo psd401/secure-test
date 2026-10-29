@@ -24,6 +24,7 @@ import { setLogSink } from "../lib/log";
 import {
   PARAGRAPH_OPEN,
   buildDocHtml,
+  scoreLabel,
   docTitle,
   plainContent,
   releaseStamp,
@@ -142,10 +143,10 @@ describe("content", () => {
     score: {
       points: 3,
       max_points: 4,
-      teacher_note: "See me.",
+      teacher_feedback: "See me.",
       criteria: [{ name: "Claim", level: "Proficient", points: 3, rationale: "Clear claim." }],
       ai_overall: "Solid overall.",
-      from_ai: true,
+      method: "ai" as const,
     },
   };
 
@@ -172,10 +173,31 @@ describe("content", () => {
   });
 
   test("AI feedback is never shown for a score that did not come from the AI", () => {
-    const human = { ...essay, score: { ...essay.score, from_ai: false } };
+    const human = { ...essay, score: { ...essay.score, method: "human" as const } };
     const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [human], contents: { ...NONE, ai_feedback: true } });
     expect(html).not.toContain("Clear claim.");
     expect(html).not.toContain("Solid overall.");
+  });
+
+  test("FR D-1: every score and AI feedback block names its source", () => {
+    const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [essay], contents: ALL });
+    expect(html).toContain("<b>AI score:</b> 3 of 4");
+    expect(html).toContain("<th>AI feedback</th>");
+    expect(html).toContain("<b>AI feedback:</b>");
+    expect(html).toContain("<b>Teacher feedback:</b>");
+    expect(html).not.toMatch(/<b>Feedback:|<th>Feedback<|<b>Score:/);
+    const human = buildDocHtml({
+      studentName: "S", assessmentName: "T", draftAsOf: null,
+      essays: [{ ...essay, score: { ...essay.score, method: "human" as const } }], contents: ALL,
+    });
+    expect(human).toContain("<b>Teacher score:</b> 3 of 4");
+    expect(human).not.toContain("AI feedback");
+  });
+
+  test("FR D-13: an answer key's score is a plain Score", () => {
+    expect(scoreLabel("auto")).toBe("Score");
+    expect(scoreLabel("human")).toBe("Teacher score");
+    expect(scoreLabel("ai")).toBe("AI score");
   });
 
   test("a draft says so; two essays get question headings", () => {
@@ -543,6 +565,33 @@ describe("releaseToGoogleDocs", () => {
     expect(html).toContain("2 of 2");
     expect(html).toContain("Strong claim.");
     expect(html).not.toContain("1 of 2"); // the proposal is never released
+  });
+
+  test("FR slice 1: a score-change reason never reaches the Doc as teacher feedback", async () => {
+    const s = await scene();
+    const db = getDb();
+    await db.insert(scores).values({
+      response_id: s.ada.responses[0]!.id,
+      method: "human",
+      points: 1,
+      max_points: 2,
+      scorer: OWNER,
+      status: "final",
+      reviewed_by_sub: OWNER,
+      rationale: { note: "Regraded after appeal." },
+    });
+    const drive = new FakeDrive();
+    await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, contents: ALL },
+      drive,
+    });
+    const html = drive.docs[0]!.html;
+    expect(html).toContain("<b>Teacher score:</b> 1 of 2");
+    expect(html).not.toContain("Regraded after appeal.");
+    expect(html).not.toContain("Teacher feedback");
   });
 
   test("blank essays, no email, no essays on the assessment, a foreign attempt", async () => {
