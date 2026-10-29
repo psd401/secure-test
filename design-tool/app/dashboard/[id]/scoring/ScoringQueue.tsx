@@ -9,6 +9,7 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
 import { ChangeScoreControl } from "@/components/app/ChangeScoreControl";
+import { ScoreEssaysWithAiControl, scoreAllLabel } from "@/components/app/ScoreEssaysWithAiControl";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 import { reviewQueueUrl, unreviewedCardLine } from "@/lib/scoring/methodLabel";
 
@@ -146,6 +147,20 @@ interface QueueRationale {
 interface QueueSections {
   labels: string[];
   hasBlank: boolean;
+}
+
+/** Score all with AI (2026-10-28): what a press in the filtered section
+ * sends. Absent below edit access. */
+interface QueueAiBatch {
+  has_ai_items: boolean;
+  attempt_ids: string[];
+  count: number;
+}
+
+/** The control's section label: null with All sections (D-2: disabled). */
+export function queueSectionLabel(section: string): string | null {
+  if (section === "") return null;
+  return section === NO_SECTION ? "No section" : section;
 }
 
 /**
@@ -435,6 +450,7 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [unreviewed, setUnreviewed] = useState<QueueEntry[]>([]);
   const [sections, setSections] = useState<QueueSections>({ labels: [], hasBlank: false });
+  const [aiBatch, setAiBatch] = useState<QueueAiBatch | null>(null);
   const [section, setSection] = useState(initialSection);
   // The results page's "Review them" link lands on #unreviewed; the list
   // only exists once the fetch is back, so scroll there once, after it.
@@ -457,10 +473,12 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
         entries: QueueEntry[];
         unreviewed?: QueueEntry[];
         sections?: QueueSections;
+        ai_batch?: QueueAiBatch;
       };
       setEntries(body.entries);
       setUnreviewed(body.unreviewed ?? []);
       setSections(body.sections ?? { labels: [], hasBlank: false });
+      setAiBatch(body.ai_batch ?? null);
       // D-6: an override starts from what the AI proposed, so a teacher who
       // disagrees with one criterion changes that one instead of re-picking
       // the whole rubric. Anything the teacher has already touched wins.
@@ -976,6 +994,23 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
             {sections.hasBlank ? <option value={NO_SECTION}>No section</option> : null}
           </select>
         </label>
+      ) : null}
+
+      {aiBatch?.has_ai_items ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <ScoreEssaysWithAiControl
+            attemptIds={aiBatch.attempt_ids}
+            essayCount={aiBatch.count}
+            sectionLabel={queueSectionLabel(section)}
+            label={scoreAllLabel}
+            onFinished={() => void refetch()}
+          />
+          <span className="text-xs text-muted-foreground">
+            {section === ""
+              ? "Choose a section to score its written answers with AI, then review them below."
+              : "AI proposals land below for you to approve or change."}
+          </span>
+        </div>
       ) : null}
 
       {loading ? (

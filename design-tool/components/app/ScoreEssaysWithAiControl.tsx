@@ -38,6 +38,11 @@ export function scoreEssaysLabel(n: number): string {
   return `Score written answers with AI (${n})`;
 }
 
+/** The scoring queue's shorter label for the same press (2026-10-28). */
+export function scoreAllLabel(n: number): string {
+  return `Score all with AI (${n})`;
+}
+
 /** Why the button is disabled, or undefined when it is not (D-2). */
 export function scoreEssaysDisabledReason(
   n: number,
@@ -258,12 +263,15 @@ export function ScoreEssaysWithAiControl({
   essayCount,
   sectionLabel,
   onFinished,
+  label = scoreEssaysLabel,
 }: {
   attemptIds: string[];
   essayCount: number;
   /** null = no section chosen (D-2: disabled). */
   sectionLabel: string | null;
   onFinished: () => void;
+  /** The button's text for n; the queue passes scoreAllLabel. */
+  label?: (n: number) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
@@ -309,7 +317,7 @@ export function ScoreEssaysWithAiControl({
           disabled={disabledReason !== undefined}
           title={disabledReason}
         >
-          {scoreEssaysLabel(essayCount)}
+          {label(essayCount)}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

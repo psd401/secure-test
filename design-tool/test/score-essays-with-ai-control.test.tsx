@@ -13,9 +13,12 @@ import {
   ScoreEssaysWithAiControl,
   scoreEssaysDialogCopy,
   scoreEssaysDisabledReason,
+  scoreAllLabel,
   scoreEssaysLabel,
   scoreEssaysSummary,
 } from "../components/app/ScoreEssaysWithAiControl";
+import { queueSectionLabel } from "../app/dashboard/[id]/scoring/ScoringQueue";
+import { NO_SECTION } from "../lib/scoring/sectionFilter";
 
 describe("ScoreEssaysWithAiControl", () => {
   test("enabled with the count when a section is chosen", () => {
@@ -193,5 +196,28 @@ describe("runPool", () => {
       (id) => seen.push(id),
     );
     expect(seen).toEqual([]);
+  });
+});
+
+// Score all with AI at the top of the scoring queue (2026-10-28).
+describe("the scoring queue's Score all with AI", () => {
+  test("takes the queue's shorter label", () => {
+    const html = renderToStaticMarkup(
+      <ScoreEssaysWithAiControl
+        attemptIds={["a"]}
+        essayCount={2}
+        sectionLabel="P2 English"
+        label={scoreAllLabel}
+        onFinished={() => {}}
+      />,
+    );
+    expect(html).toContain("Score all with AI (2)");
+    expect(html).not.toContain(scoreEssaysLabel(2));
+  });
+
+  test("D-2: All sections maps to no section chosen", () => {
+    expect(queueSectionLabel("")).toBeNull();
+    expect(queueSectionLabel(NO_SECTION)).toBe("No section");
+    expect(queueSectionLabel("P2 English")).toBe("P2 English");
   });
 });

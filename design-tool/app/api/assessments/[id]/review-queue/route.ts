@@ -23,7 +23,8 @@ import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment } from "@/lib/api/access";
+import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
+import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
 import { graphAnswerLines, graphMaxPoints, type GraphObject } from "@secure-test/graphing/server";
 
@@ -369,9 +370,32 @@ export async function GET(req: Request, ctx: RouteContext) {
   entries.sort(byQuestionThenStart);
   unreviewed.sort(byQuestionThenStart);
 
+  // "Score all with AI (n)" at the top of the queue (roadmap U-24's Results
+  // button, beta feedback 2026-10-28): the same count Results shows, over the
+  // handed-in attempts in the filtered section, at the same edit level. The
+  // score-ai route stays the authority on what a press actually scores.
+  const aiBatch = levelSatisfies(access.level, "edit")
+    ? await aiBatchCounts(
+        db,
+        id,
+        submitted
+          .filter((a) => matchesSectionFilter(sectionByAttempt.get(a.id) ?? null, sectionFilter))
+          .map((a) => a.id),
+      )
+    : null;
+
   return NextResponse.json({
     entries,
     unreviewed,
     sections: sectionFilterOptions(results),
+    ...(aiBatch
+      ? {
+          ai_batch: {
+            has_ai_items: aiBatch.has_ai_items,
+            attempt_ids: [...aiBatch.counts.keys()],
+            count: [...aiBatch.counts.values()].reduce((sum, n) => sum + n, 0),
+          },
+        }
+      : {}),
   });
 }
