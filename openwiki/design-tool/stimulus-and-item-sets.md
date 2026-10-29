@@ -21,6 +21,8 @@ openwiki:
   test_paths:
     - design-tool/test/item-sets-api.test.ts
     - design-tool/test/itemSetLayout.test.ts
+    - design-tool/test/page-group.test.ts
+    - design-tool/test/pdf-import-group-edit.test.ts
     - design-tool/test/delivery-api.test.ts
     - design-tool/test/import-api.test.ts
     - design-tool/test/item-readiness.test.ts
@@ -95,6 +97,7 @@ Added 2026-10-28 for the teacher's "page break" request (Route B: no schema chan
 - Readiness skips page groups; the static preview and print draw no box for them.
 - The editor (new editor only for the controls) shows a group as a "Same page" bar with **Add stimulus text** and **Separate pages**. Per question: **Same page as question above / below**, **Start a new page here** (the split route), **Add to the stimulus above / below**, **Remove from stimulus**. The outline rail captions a group "Same page".
 - The PDF import review has the same controls over proposed sets (`lib/pdfImport/groupEdit.ts`), and a group posts as `inline`.
+- Focused checks: `test/page-group.test.ts` pins the inference rule (`isPageGroup`: two or more questions, no text, no sources, no source link). `test/item-sets-api.test.ts` (describe "item sets — split a page group") covers the split route's refusals and its atomic outcome, including two concurrent splits of one group. `test/pdf-import-group-edit.test.ts` covers the proposal-side helpers. Narrow check: `cd design-tool && bun test test/page-group.test.ts test/pdf-import-group-edit.test.ts`.
 
 ## E12 source-backed sets
 
