@@ -2273,7 +2273,7 @@ public enum AssessmentPage {
             };
           }
           label.appendChild(input);
-          // P-1 (2026-10-28): a choice may hold a picture (`![alt](asset:…)`)
+          // CP-1 (2026-10-28): a choice may hold a picture (`![alt](asset:…)`)
           // — the editor's Image… puts it there and the bundle carries it.
           // No context: the picture is part of the label, so a click on it
           // selects the choice rather than opening the overlay.

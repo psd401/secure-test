@@ -1,7 +1,7 @@
 import XCTest
 @testable import SecureTestCore
 
-/// P-1 (2026-10-28, `docs/design-tool-manual-checks.md`): a picture the
+/// CP-1 (2026-10-28, finding CP-1 and row 777 in `docs/design-tool-manual-checks.md`): a picture the
 /// teacher put in a multiple-choice choice (`![alt](asset:…)`) renders as a
 /// picture inside the choice's label, not as the raw reference — and, being
 /// part of the label, it selects the choice rather than opening the overlay.
@@ -9,7 +9,7 @@ final class RendererChoicePictureTests: XCTestCase {
     private static let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
     private static let bundle = """
     {
-      "test_id": "p1", "title": "P-1",
+      "test_id": "cp1", "title": "CP-1",
       "items": [
         { "type": "multiple_choice_single", "id": "q1", "stem": "Which is a plant cell?",
           "choices": [
