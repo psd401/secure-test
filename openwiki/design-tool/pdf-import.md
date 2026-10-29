@@ -131,7 +131,7 @@ The success response (`ok: true`) carries these fields alongside `candidates` an
 | `numbered_items`, `extracted_count`, `missing_numbers`, `shortfall` | `numberingReport`, `countNumberedItems` | Compares the printed question numbering with what came back. With source numbers the missing list is exact; without them only the count is compared. Scanned PDFs have no text layer to count. |
 | `changes` | `readCandidateChanges` | Per validated candidate, the model's rewrites. `[]` means printed as is. |
 | `proposed_sets`, `rejected_sets` | `validateProposedSets`, `adjacencyFallback` | Stimulus sets the model proposed (remapped to validated candidate indexes), plus sets the adjacency rule places for figures the model did not attach. `source` says whether the model or the rule paired them. |
-| `figures`, `figure_count` | `extractPdfLayout` | Each raster figure above `MIN_FIGURE_PT` with its page and, unless omitted for size, a PNG data URL. Figure limits are `MAX_FIGURES`, `MAX_FIGURE_BYTES` and `MAX_FIGURES_TOTAL_BYTES`. An oversize PNG is first redrawn smaller by `shrinkToFit` (2026-10-27) until it fits, giving up below `MIN_SHRUNK_FIGURE_PX` (320 px on the long side) or after four tries; only then is it omitted as `too_large`. |
+| `figures`, `figure_count` | `extractPdfLayout` | Each raster figure above `MIN_FIGURE_PT` with its page and, unless omitted for size, a PNG data URL. Figure limits are `MAX_FIGURES`, `MAX_FIGURE_BYTES` and `MAX_FIGURES_TOTAL_BYTES`. An oversize PNG is first redrawn smaller; only if that fails is it omitted as `too_large` (see [figures and stimulus sets](#figures-and-stimulus-sets)). |
 | `forms` | `formsReport`, `detectForms` | Several forms in one document, detected when numbering restarts at 1 into at least two groups of two or more questions each, or from "Form A / Form B" labels. The teacher confirms the grouping in the panel. |
 | `ocr_used`, `page_count`, `extracted_chars` | route | Which branch ran and how much text was read. |
 
@@ -142,6 +142,8 @@ Proposed sources are bounded: at most `MAX_PROPOSED_SOURCES` (12) per set, `MAX_
 Extraction writes no assets. Figures travel in the response as data URLs. When the teacher adds a proposed set, `PdfImportPanel.tsx` creates the item-set through `POST /api/assessments/[id]/item-sets`, and the figure bytes are attached then. Shared stimuli and their delivery rules are in [stimulus and item sets](stimulus-and-item-sets.md).
 
 A vector figure (a drawing made of paths, not an image) is cropped from the page render to its own box, and `cropBoxWithLabels` (`lib/pdfImport/extractFigures.ts`, 2026-10-28) grows that box to take in the point labels the figure claims (`isFigureLabel`). Those labels leave the page text, so before this rule a vertex letter a few points outside the strokes was cut from the picture. `fig.bbox` stays the drawing's own box, and the crop is the only place the labels are added. Covered by `pdf-figures.test.ts`.
+
+A figure whose PNG passes `MAX_FIGURE_BYTES` (2 MiB) is first redrawn smaller by `shrinkToFit` (`lib/pdfImport/extractFigures.ts`, added 2026-10-27 after a beta teacher's multiple-choice test lost one picture to "too large to preview"). Each of up to four tries shrinks the last size by the square root of its byte overshoot, with a 10% margin. It gives up when the long side would fall below `MIN_SHRUNK_FIGURE_PX` (320 px) or the canvas does not load. Only then is the figure omitted with `omitted: "too_large"`. The case is covered by `pdf-figures.test.ts`.
 
 ## Errors
 
@@ -157,3 +159,4 @@ A guardrail block on this route is 422 `blocked_by_guardrail` with `stage: "outp
 Focused checks: `cd design-tool && bun test test/pdf-extract.test.ts` (pure validators, numbering, sets, forms, the prompt fence, the output screen text and the mock; no database). `test/pdf-import-route.test.ts` covers the route's status codes and response shape and needs `DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test`. The figure extractor, including the page-image gate, is covered by `test/pdf-figures.test.ts`, and the teacher's "changed from PDF" note on an imported card by `test/changed-from-pdf.test.tsx`.
 
 Live behaviour of the fence and the record-only input check against Bedrock is not verified by these tests; it is tracked as a manual check in the ledger entry for PR #108.
+fied by these tests; it is tracked as a manual check in the ledger entry for PR #108.
