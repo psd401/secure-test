@@ -107,6 +107,7 @@ public enum AssessmentPage {
     static let itemStyles = """
     .choice { display: block; margin: 8px 0; line-height: 1.4; }
     .choice input { margin-right: 8px; }
+    .choice img { max-width: 100%; max-height: 240px; display: block; margin: 6px 0 0 24px; }
     /* Client-fixes batch 1b (#3, 2026-09-03): withdraws a multiple-choice answer. */
     .clear-answer {
       font: inherit; font-size: 0.8125rem; padding: 4px 10px; margin-top: 6px;
@@ -2272,7 +2273,11 @@ public enum AssessmentPage {
             };
           }
           label.appendChild(input);
-          label.appendChild(emphasisNodes(choice.text || ''));
+          // CP-1 (2026-10-28): a choice may hold a picture (`![alt](asset:…)`)
+          // — the editor's Image… puts it there and the bundle carries it.
+          // No context: the picture is part of the label, so a click on it
+          // selects the choice rather than opening the overlay.
+          label.appendChild(textWithAssets(choice.text || ''));
           wrap.appendChild(label);
         });
         clearBtn.onclick = function () {
