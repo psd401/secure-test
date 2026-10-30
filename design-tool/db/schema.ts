@@ -2283,8 +2283,11 @@ export const google_doc_releases = pgTable(
     sender_sub: text("sender_sub").notNull(),
     drive_file_id: text("drive_file_id").notNull(),
     title: text("title").notNull(),
-    /** Which content boxes were ticked: { prompt, sources, score,
-     * teacher_feedback, ai_feedback }. */
+    /** Which content boxes were ticked: { prompt, sources, teacher_score,
+     * ai_score, teacher_feedback, ai_feedback, rubric_table } (FR slice 3).
+     * Rows from before it carry one `score` instead; read every row through
+     * readReleaseContents (lib/googleDocs/sendDialog.ts), which reads `score`
+     * as both score boxes. */
     contents: jsonb("contents").$type<Record<string, boolean>>().notNull(),
     /** D-12: the attempt was not handed in when the Doc was made. */
     was_draft: boolean("was_draft").notNull().default(false),
@@ -2364,6 +2367,31 @@ export const attempt_feedback = pgTable(
 
 export type ResponseFeedbackRow = typeof response_feedback.$inferSelect;
 export type AttemptFeedbackRow = typeof attempt_feedback.$inferSelect;
+
+// FR R-4: a teacher's last release choices per assessment, so the next send
+// starts from them. Keyed by the session `sub` like `gradebook_section_prefs`;
+// one row per (teacher, assessment), shared by the Doc dialog and — slice 4 —
+// the packet toolbar, which is why it is its own table rather than the latest
+// `google_doc_releases` row. `contents` holds only box flags, never student
+// content; read it through readReleaseContents (lib/googleDocs/sendDialog.ts).
+export const feedback_release_prefs = pgTable(
+  "feedback_release_prefs",
+  {
+    staff_sub: text("staff_sub").notNull(),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    contents: jsonb("contents").$type<Record<string, boolean>>().notNull(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.staff_sub, t.assessment_id] }),
+  }),
+);
+
+export type FeedbackReleasePrefRow = typeof feedback_release_prefs.$inferSelect;
 
 // --- Per-staff preferences (docs/editor-redesign-design.md, R-12) ----------
 //

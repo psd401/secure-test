@@ -37,6 +37,7 @@ import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { docUrl } from "@/lib/googleDocs/drive";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { practiceAttemptIsCallers } from "@/lib/api/staffAttempt";
@@ -412,6 +413,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
       actingAs: Boolean(session.actor_sub),
       itemTypes: itemRows.map((i) => i.type),
     });
+  // FR R-4: the dialog starts from this teacher's last send here.
+  const docPrefs = showGoogleDocs ? await loadFeedbackReleasePrefs(db, session.sub, id) : null;
   const myReleases = showGoogleDocs
     ? await db
         .select()
@@ -637,6 +640,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 attemptId={attemptId}
                 studentName={row.student.name || row.student.ssid || "this student"}
                 returnPath={`/dashboard/${id}/results/${attemptId}`}
+                initialContents={docPrefs ?? undefined}
               />
             ) : null}
             {row.status === "in_progress" ? (

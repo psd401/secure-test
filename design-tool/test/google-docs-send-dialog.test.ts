@@ -3,6 +3,7 @@
 // repo has no DOM harness.
 import { describe, expect, test } from "bun:test";
 import {
+  CONTENT_OPTIONS,
   DEFAULT_CONTENTS,
   authOutcomeCopy,
   authStartHref,
@@ -10,6 +11,7 @@ import {
   outcomeReason,
   ownershipNote,
   parseSavedState,
+  readReleaseContents,
   stateToSave,
   storageKey,
   summaryLine,
@@ -88,6 +90,36 @@ describe("send dialog logic", () => {
     expect(parseSavedState(JSON.stringify({ ...STATE, contents: { prompt: "yes" } }))!.contents).toEqual(
       DEFAULT_CONTENTS,
     );
+  });
+
+  test("FR slice 3: seven boxes, all off by default (R-2), in the dialog's order", () => {
+    expect(CONTENT_OPTIONS.map((o) => o.label)).toEqual([
+      "Prompt",
+      "Sources",
+      "Teacher score",
+      "AI score",
+      "Teacher feedback",
+      "AI feedback",
+      "Rubric table",
+    ]);
+    expect(Object.values(DEFAULT_CONTENTS).every((v) => v === false)).toBe(true);
+    expect(Object.keys(DEFAULT_CONTENTS).sort()).toEqual(CONTENT_OPTIONS.map((o) => o.key).sort());
+  });
+
+  test("FR slice 3: a state saved before it carries `score`; it comes back as both score boxes", () => {
+    const before = { ...STATE, contents: { prompt: true, sources: false, score: true, teacher_feedback: false, ai_feedback: true } };
+    expect(parseSavedState(JSON.stringify(before))!.contents).toEqual({
+      ...DEFAULT_CONTENTS,
+      prompt: true,
+      teacher_score: true,
+      ai_score: true,
+      ai_feedback: true,
+    });
+    // A new key beats the legacy one when both are there.
+    expect(readReleaseContents({ score: true, ai_score: false })).toMatchObject({ teacher_score: true, ai_score: false });
+    expect(readReleaseContents(null)).toEqual(DEFAULT_CONTENTS);
+    expect(readReleaseContents("x")).toEqual(DEFAULT_CONTENTS);
+    expect(readReleaseContents({ rubric_table: true, extra: true })).toEqual({ ...DEFAULT_CONTENTS, rubric_table: true });
   });
 
   test("keys and the authorization link", () => {

@@ -1,15 +1,22 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import {
+  attempt_feedback,
   google_doc_folders,
   google_doc_releases,
   item_sets,
   items,
+  response_feedback,
   responses,
   scores,
   type AssessmentRow,
+  type ScoreRow,
 } from "@/db/schema";
-import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import {
+  buildFeedbackRelease,
+  type FeedbackBlock,
+  type FeedbackQuestionInput,
+} from "@/lib/reporting/feedbackRelease";
 import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 import { buildResults, type ResultsRow } from "@/lib/scoring/results";
 import {
@@ -159,22 +166,42 @@ export async function releaseToGoogleDocs(
       : [];
   const responseByCell = new Map(responseRows.map((r) => [`${r.attempt_id}:${r.item_id}`, r]));
 
-  const finalScores =
-    responseRows.length > 0
+  // FR slice 3: every non-research row, not just the final — D-10's AI
+  // feedback comes from the AI's own row, which after an override is a
+  // proposal. The builder picks the final and the AI row itself.
+  const responseIds = responseRows.map((r) => r.id);
+  const scoreRows =
+    responseIds.length > 0
       ? await db
           .select()
           .from(scores)
-          .where(
-            and(
-              inArray(
-                scores.response_id,
-                responseRows.map((r) => r.id),
-              ),
-              eq(scores.status, "final"),
-            ),
-          )
+          .where(and(inArray(scores.response_id, responseIds), ne(scores.status, "research")))
       : [];
-  const scoreByResponse = new Map(finalScores.map((s) => [s.response_id, s]));
+  const scoresByResponse = new Map<string, ScoreRow[]>();
+  for (const s of scoreRows) {
+    const list = scoresByResponse.get(s.response_id) ?? [];
+    list.push(s);
+    scoresByResponse.set(s.response_id, list);
+  }
+
+  // FR R-1 / D-4: the teacher's own comments. Student-record content — read
+  // only into the Doc, never logged (D-14).
+  const questionFeedback =
+    responseIds.length > 0
+      ? await db
+          .select({ response_id: response_feedback.response_id, text: response_feedback.text })
+          .from(response_feedback)
+          .where(inArray(response_feedback.response_id, responseIds))
+      : [];
+  const feedbackByResponse = new Map(questionFeedback.map((f) => [f.response_id, f.text]));
+  const overallFeedback =
+    attemptIds.length > 0
+      ? await db
+          .select({ attempt_id: attempt_feedback.attempt_id, text: attempt_feedback.text })
+          .from(attempt_feedback)
+          .where(inArray(attempt_feedback.attempt_id, attemptIds))
+      : [];
+  const feedbackByAttempt = new Map(overallFeedback.map((f) => [f.attempt_id, f.text]));
 
   const openAlerts = await openAlertCountsByAttempt(db, attemptIds);
 
@@ -199,7 +226,7 @@ export async function releaseToGoogleDocs(
 
   // ── Decide every student before Drive is touched.
   const outcomes: StudentOutcome[] = [];
-  const toSend: Array<{ row: ResultsRow; essays: EssaySection[] }> = [];
+  const toSend: Array<{ row: ResultsRow; essays: EssaySection[]; overall: FeedbackBlock | null }> = [];
   for (const row of rows) {
     const base = { attempt_id: row.attempt_id, name: studentName(row) };
     const skip = (reason: SkipReason) => outcomes.push({ ...base, status: "skipped", reason });
@@ -221,6 +248,7 @@ export async function releaseToGoogleDocs(
       continue;
     }
     const essays: EssaySection[] = [];
+    const questions: Array<FeedbackQuestionInput<ScoreRow>> = [];
     const setShown = new Set<string>();
     let anyText = false;
     for (const item of essayItems) {
@@ -231,9 +259,21 @@ export async function releaseToGoogleDocs(
       const set = item.item_set_id ? setsById.get(item.item_set_id) : undefined;
       const firstOfSet = set ? !setShown.has(set.id) : false;
       if (set) setShown.add(set.id);
-      const score = resp ? scoreByResponse.get(resp.id) : undefined;
-      const rationale = score?.rationale as Record<string, unknown> | null | undefined;
-      const rubric = item.config.rubric ?? score?.rubric_snapshot ?? null;
+      const rowsHere = resp ? (scoresByResponse.get(resp.id) ?? []) : [];
+      questions.push({
+        rubric:
+          item.config.rubric ??
+          rowsHere.find((r) => r.status === "final")?.rubric_snapshot ??
+          rowsHere.find((r) => r.rubric_snapshot)?.rubric_snapshot ??
+          null,
+        scores: rowsHere,
+        // FR slice 1: never `rationale.note` (a score-change reason); the
+        // teacher's comment is its own row (R-1).
+        teacher_feedback: resp ? (feedbackByResponse.get(resp.id) ?? null) : null,
+        // D-10: an AI proposal left over from before a pass-back is about the
+        // old answer; the builder drops AI rows older than the last edit.
+        answer_updated_at: resp ? resp.updated_at : null,
+      });
       essays.push({
         number: numberOf.get(item.id) ?? 0,
         stem: item.stem,
@@ -244,33 +284,22 @@ export async function releaseToGoogleDocs(
         // stored html re-cleaned here (essayRichHtml), then mapped to
         // Docs-friendly tags by buildDocHtml.
         answer_html: text && resp ? essayRichHtml(resp.response) : null,
-        score: score
-          ? {
-              points: score.points,
-              max_points: score.max_points,
-              // FR slice 1: `rationale.note` is a score-change reason, never
-              // feedback; slice 2 fills this from the teacher's own comment.
-              teacher_feedback: null,
-              criteria: rubricScoreRows(rubric, rationale).map((c) => ({
-                name: c.criterion_name,
-                level: c.level_label,
-                points: c.points,
-                rationale: c.rationale,
-              })),
-              ai_overall:
-                typeof rationale?.overall_rationale === "string" && rationale.overall_rationale.trim()
-                  ? rationale.overall_rationale
-                  : null,
-              method: score.method === "ai" ? "ai" : score.method === "auto" ? "auto" : "human",
-            }
-          : null,
+        feedback: [],
       });
     }
     if (!anyText) {
       skip("no_essay");
       continue;
     }
-    toSend.push({ row, essays });
+    // FR R-3: the labelled blocks for the boxes ticked (D-3, D-10, D-13, R-2).
+    const release = buildFeedbackRelease(options.contents, {
+      questions,
+      overall_teacher_feedback: feedbackByAttempt.get(row.attempt_id) ?? null,
+    });
+    release.questions.forEach((blocks, i) => {
+      essays[i]!.feedback = blocks;
+    });
+    toSend.push({ row, essays, overall: release.overall });
   }
   if (toSend.length === 0) return { ok: true, outcomes, drive_auth_needed: false };
 
@@ -322,7 +351,7 @@ export async function releaseToGoogleDocs(
   const queue = [...toSend];
   async function worker() {
     for (let job = queue.shift(); job; job = queue.shift()) {
-      const { row, essays } = job;
+      const { row, essays, overall } = job;
       const base = { attempt_id: row.attempt_id, name: studentName(row) };
       if (authLost) {
         outcomes.push({ ...base, status: "skipped", reason: "drive_auth_expired" });
@@ -336,6 +365,7 @@ export async function releaseToGoogleDocs(
           assessmentName: assessment.name,
           draftAsOf: draft ? now : null,
           essays,
+          overall,
           contents: options.contents,
           doubleSpace: options.doubleSpace ?? false,
         });

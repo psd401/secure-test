@@ -88,7 +88,15 @@ describe("buildDocHtml with formatting and spacing", () => {
     studentName: "S",
     assessmentName: "T",
     draftAsOf: null,
-    contents: { prompt: true, sources: false, score: false, teacher_feedback: true, ai_feedback: false },
+    contents: {
+      prompt: true,
+      sources: false,
+      teacher_score: false,
+      ai_score: false,
+      teacher_feedback: true,
+      ai_feedback: false,
+      rubric_table: false,
+    },
   };
   const plain = {
     number: 1,
@@ -96,14 +104,15 @@ describe("buildDocHtml with formatting and spacing", () => {
     stimulus: null,
     sources: [],
     answer: "Para one.\n\nPara two.",
-    score: {
-      points: 1,
-      max_points: 2,
-      teacher_feedback: "Note words.",
-      criteria: [],
-      ai_overall: null,
-      method: "human" as const,
-    },
+    feedback: [
+      {
+        kind: "feedback" as const,
+        source: "teacher" as const,
+        label: "Teacher feedback" as const,
+        text: "Note words.",
+        criteria: [],
+      },
+    ],
   };
 
   test("a formatted essay goes in formatted; its plain answer is not printed beside it", () => {

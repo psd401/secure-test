@@ -5,12 +5,19 @@
 // A Doc cannot run KaTeX, so math in a prompt or source stays as its LaTeX
 // source, and a picture (`![alt](asset:<uuid>)`) becomes "[Image: alt]".
 
-export interface ReleaseContents {
+import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
+
+export { scoreLabel } from "@/lib/reporting/feedbackRelease";
+
+/**
+ * The Doc's boxes: prompt and sources (GD D-2), plus FR's D-2 / R-2 set
+ * (teacher score, AI score, teacher feedback, AI feedback, rubric table).
+ * Slice 3 replaced the single `score` box; an old row or an old dialog's
+ * `score` reads as both score boxes (readReleaseContents, sendDialog.ts).
+ */
+export interface ReleaseContents extends FeedbackContents {
   prompt: boolean;
   sources: boolean;
-  score: boolean;
-  teacher_feedback: boolean;
-  ai_feedback: boolean;
 }
 
 export interface EssaySection {
@@ -28,22 +35,11 @@ export interface EssaySection {
    * the plain reading. Optional so a caller from before RT still compiles.
    */
   answer_html?: string | null;
-  /** The FINAL score only (D-13); null when there is none. */
-  score: {
-    points: number;
-    max_points: number;
-    /**
-     * The teacher's written feedback. FR slice 1 (docs/feedback-release-design.md):
-     * always null until slice 2 adds its own table — `rationale.note` is a
-     * score-change reason and never reaches a student.
-     */
-    teacher_feedback: string | null;
-    /** Per-criterion rows; `rationale` is the AI's text on an approved AI score. */
-    criteria: Array<{ name: string; level: string; points: number; rationale: string | null }>;
-    ai_overall: string | null;
-    /** Who the final score is from — it names the score (FR D-1, D-13). */
-    method: "human" | "ai" | "auto";
-  } | null;
+  /**
+   * FR R-3: this question's labelled blocks from buildFeedbackRelease
+   * (lib/reporting/feedbackRelease.ts), already filtered by the boxes ticked.
+   */
+  feedback: FeedbackBlock[];
 }
 
 export interface DocInput {
@@ -53,6 +49,8 @@ export interface DocInput {
   draftAsOf: Date | null;
   essays: EssaySection[];
   contents: ReleaseContents;
+  /** FR D-4: the per-student overall teacher feedback, printed once at the top. */
+  overall?: FeedbackBlock | null;
   /**
    * RT D-10: the essay answers carry line spacing 2.0, so the Doc stays
    * double-spaced as the student edits it. Essays only — prompt, sources and
@@ -163,40 +161,34 @@ export function docRichAnswerHtml(cleanHtml: string, doubleSpace: boolean): stri
     .replaceAll("</em>", "</i>");
 }
 
-/** FR D-1 / D-13: every score says whose it is; an answer key's is plain "Score". */
-export function scoreLabel(method: "human" | "ai" | "auto"): string {
-  if (method === "ai") return "AI score";
-  if (method === "human") return "Teacher score";
-  return "Score";
-}
-
-function scoreBlock(essay: EssaySection, contents: ReleaseContents): string {
-  const s = essay.score;
-  if (!s) return "";
-  const out: string[] = [];
-  const fromAi = s.method === "ai";
-  if (contents.score) {
-    out.push(`<p><b>${scoreLabel(s.method)}:</b> ${s.points} of ${s.max_points}</p>`);
+/**
+ * FR R-3: one block as Doc HTML. Labels come from the block (D-1), so the
+ * renderer never names a source itself.
+ */
+function blockHtml(block: FeedbackBlock): string {
+  if (block.kind === "score") {
+    return `<p><b>${escapeHtml(block.label)}:</b> ${block.points} of ${block.max_points}</p>`;
   }
-  const showCriteria = contents.score || (contents.ai_feedback && fromAi);
-  if (showCriteria && s.criteria.length > 0) {
-    const withRationale = contents.ai_feedback && fromAi;
-    const head = `<tr><th>Criterion</th>${contents.score ? "<th>Level</th><th>Points</th>" : ""}${withRationale ? "<th>AI feedback</th>" : ""}</tr>`;
-    const rows = s.criteria.map((c) => {
-      const cells = [`<td>${escapeHtml(c.name)}</td>`];
-      if (contents.score) cells.push(`<td>${escapeHtml(c.level)}</td>`, `<td>${c.points}</td>`);
-      if (withRationale) cells.push(`<td>${escapeHtml(c.rationale ?? "")}</td>`);
+  if (block.kind === "rubric_table") {
+    const { columns } = block;
+    const head = `<tr><th>Criterion</th>${columns.level ? "<th>Level</th>" : ""}${columns.points ? "<th>Points</th>" : ""}${columns.ai_feedback ? "<th>AI feedback</th>" : ""}</tr>`;
+    const rows = block.rows.map((r) => {
+      const cells = [`<td>${escapeHtml(r.criterion)}</td>`];
+      if (columns.level) cells.push(`<td>${escapeHtml(r.level ?? "")}</td>`);
+      if (columns.points) cells.push(`<td>${r.points ?? ""}</td>`);
+      if (columns.ai_feedback) cells.push(`<td>${escapeHtml(r.ai_feedback ?? "")}</td>`);
       return `<tr>${cells.join("")}</tr>`;
     });
-    out.push(`<table border="1">${head}${rows.join("")}</table>`);
+    return `<table border="1">${head}${rows.join("")}</table>`;
   }
-  if (contents.ai_feedback && fromAi && s.ai_overall) {
-    out.push(`<p><b>AI feedback:</b></p>${paragraphs(s.ai_overall)}`);
+  const out = [`<p><b>${escapeHtml(block.label)}:</b></p>`];
+  if (block.text) out.push(paragraphs(block.text));
+  if (block.criteria.length > 0) {
+    out.push(
+      `<ul>${block.criteria.map((c) => `<li><b>${escapeHtml(c.criterion)}:</b> ${escapeHtml(c.text)}</li>`).join("")}</ul>`,
+    );
   }
-  if (contents.teacher_feedback && s.teacher_feedback) {
-    out.push(`<p><b>Teacher feedback:</b></p>${paragraphs(s.teacher_feedback)}`);
-  }
-  return out.join("\n");
+  return out.join("");
 }
 
 export function buildDocHtml(input: DocInput): string {
@@ -209,6 +201,7 @@ export function buildDocHtml(input: DocInput): string {
       `<p><i>Draft — not handed in as of ${escapeHtml(releaseStamp(input.draftAsOf))}</i></p>`,
     );
   }
+  if (input.overall) parts.push(blockHtml(input.overall));
   const many = input.essays.length > 1;
   for (const essay of input.essays) {
     if (many) parts.push(`<h2>Question ${essay.number}</h2>`);
@@ -232,8 +225,7 @@ export function buildDocHtml(input: DocInput): string {
           ? plainAnswerHtml(essay.answer, doubleSpace)
           : `<p><i>No response.</i></p>`,
     );
-    const score = scoreBlock(essay, contents);
-    if (score) parts.push(score);
+    for (const block of essay.feedback) parts.push(blockHtml(block));
   }
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>\n${parts.join("\n")}\n</body></html>`;
 }

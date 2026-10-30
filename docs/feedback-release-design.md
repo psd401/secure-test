@@ -216,3 +216,26 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   sentinel that must not appear. Known gap: a comment on a question is
   deleted with its response row, so if an attempt is passed back and the
   student withdraws that answer, the comment goes with it.
+- 2026-10-29: slice 3 built. `buildFeedbackRelease` (`lib/reporting/feedbackRelease.ts`,
+  R-3) turns the boxes plus each question's score rows, rubric and teacher
+  comment into labelled blocks (score, rubric table, AI feedback, teacher
+  feedback) and the overall comment; `lib/googleDocs/content.ts` only renders
+  them. The Doc dialog's boxes are prompt, sources, teacher score, AI score,
+  teacher feedback, AI feedback and rubric table (R-2, off by default). AI
+  score only when the final row is the AI's, reviewed or not (D-3, D-17); AI
+  feedback from the latest non-research, non-superseded `ai` row, so it
+  survives an override (D-10), but never an AI row older than the answer's
+  last edit (`responses.updated_at`): a pass-back leaves proposals in place,
+  and one about the old answer must not reach the student. Rubric-table
+  levels and points come from the final row only. The route still accepts an older tab's `score` and every
+  saved `contents` is read through `readReleaseContents`, where `score` means
+  both score boxes. Migration 0067 adds `feedback_release_prefs`
+  (staff × assessment, R-4), written after each send (best-effort: a failed
+  write is a bare warning, never a failed send) and read by both pages that
+  show the dialog. Open for a ruling: (T1) a changed Hybrid final loses its
+  AI feedback, because Hybrid's only AI row is superseded by the change — the
+  code and the dialog's hint ("even when you overrode the AI's proposal")
+  follow D-10 as written until James rules;
+  (T2) an unreviewed proposal with no final still sends its comments as AI
+  feedback, as D-10 is written; teachers' own per-criterion comments on a
+  manual score are not printed.

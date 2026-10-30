@@ -27,6 +27,7 @@ import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
 import { RescoreAndReload } from "./RescoreAndReload";
 import { canReleaseAnswers, showsReleasedLine } from "@/lib/feedback/settingsUi";
@@ -161,6 +162,10 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
       actingAs: Boolean(session.actor_sub),
       itemTypes: results.items.map((i) => i.type),
     });
+  // FR R-4: the dialog starts from this teacher's last send here.
+  const docPrefs = showGoogleDocs
+    ? await loadFeedbackReleasePrefs(db, session.sub, assessment.id)
+    : null;
   const resultsPath = `/dashboard/${assessment.id}/results${
     selectedSection ? `?section=${encodeURIComponent(selectedSection)}` : ""
   }`;
@@ -246,6 +251,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
               sections={labels}
               defaultSection={selectedSection}
               returnPath={resultsPath}
+              initialContents={docPrefs ?? undefined}
             />
           ) : null}
           {showReleaseButton || showReleasedLine ? (

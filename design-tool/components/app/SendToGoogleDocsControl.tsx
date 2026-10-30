@@ -27,6 +27,7 @@ import {
   type DialogState,
   type SendOutcome,
 } from "@/lib/googleDocs/sendDialog";
+import type { ReleaseContents } from "@/lib/googleDocs/content";
 
 /**
  * "Send to Google Docs" (docs/google-docs-release-design.md, row GD slice 4).
@@ -35,6 +36,8 @@ import {
  * `drive_auth_needed`, the dialog's choices are saved to sessionStorage, the
  * teacher goes through Google, and the callback's `?gdrive=` reopens the
  * dialog here with those choices — the teacher presses Send once more.
+ * FR R-4: the boxes start from `initialContents`, this teacher's last send
+ * from this assessment; the redirect's saved choices still win.
  */
 export function SendToGoogleDocsControl({
   assessmentId,
@@ -43,6 +46,7 @@ export function SendToGoogleDocsControl({
   attemptId,
   studentName,
   returnPath,
+  initialContents,
 }: {
   assessmentId: string;
   /** Section labels to choose from (results page). */
@@ -53,6 +57,8 @@ export function SendToGoogleDocsControl({
   studentName?: string;
   /** This page's path + query; the authorization run returns here. */
   returnPath: string;
+  /** FR R-4: the remembered boxes, read on the server; absent = all off. */
+  initialContents?: ReleaseContents;
 }) {
   const single = attemptId ?? null;
   const key = storageKey(assessmentId, single);
@@ -62,7 +68,7 @@ export function SendToGoogleDocsControl({
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<DialogState>({
     section: initialSection,
-    contents: DEFAULT_CONTENTS,
+    contents: initialContents ?? DEFAULT_CONTENTS,
     mode: "skip",
     includeDrafts: false,
     transferOwnership: false,
@@ -272,9 +278,11 @@ export function SendToGoogleDocsControl({
                     </label>
                   ))}
                 </div>
+                {/* FR D-3 / D-10 / R-2: what each box draws on, in a line. */}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Score and feedback come from final scores only. With Prompt or Sources, students can
-                  copy them out of the Doc.
+                  An AI score is sent only where it stands; AI feedback can be sent even when you overrode
+                  the AI&apos;s proposal. Every score and comment is labelled with its source. With Prompt or
+                  Sources, students can copy them out of the Doc.
                 </p>
               </fieldset>
 
