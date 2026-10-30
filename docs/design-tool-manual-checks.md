@@ -2107,3 +2107,72 @@ Findings (proposals; nothing changed yet):
 | 861 | Scoring queue of a test with an AI / Hybrid essay or short answer, handed-in answers unscored, **All sections** | **Score all with AI (n)** under the section picker, disabled with "Choose a section first."; the hint says to choose a section | PASS 2026-10-28 (local, `_demo` DB, branch head `06aebafc`, mock scorer, built-in browser): Hybrid essay test, 2 of 9 hand-ins unscored, All sections → **Score all with AI (2)** disabled, title "Choose a section first.", hint shown; 2 cards showed **Score with AI** |
 | 862 | Choose a section → **Score all with AI (n)** → confirm → close the summary | n matches the cards in that section showing **Score with AI**; the dialog runs and summarises; on close the cards turn into proposals (or Hybrid finals under "Finalized by AI — not reviewed") without a page reload, and the button reads (0), disabled | PASS 2026-10-28 (same run): AP Biology section → **(1)**, enabled, 1 card with **Score with AI**; dialog "Score 1 written answer…" → summary "1 written answer scored — 1 finalized by AI (Hybrid)" → Done: the card moved to "Finalized by AI — not reviewed (1)" with no page reload (navigation type unchanged), button **(0)** disabled with "No written answers in this section are waiting for an AI score."; no server or console errors. Finding: the hint "AI proposals land below…" reads oddly when Hybrid finalizes instead of proposing — fixed: now "Scores land below for you to review." |
 | 863 | The same queue opened by a view-level co-teacher | No **Score all with AI** button | not run — needs a second staff cookie; covered by `test/review-queue-ai-batch.test.ts` ("absent below edit access, present at edit") |
+
+## Feedback release to students (row FR, branch `feat/feedback-release`, 2026-10-29; `docs/feedback-release-design.md`)
+
+Setup: local dev on the branch with migrations 0066–0067 applied, the `_demo`
+DB. A made-up test with Q1 multiple choice, Q2 an essay with a two-criterion
+rubric scored **Hybrid**, Q3 a short answer with **Score with AI** (Hybrid,
+Full 2 / Partial 1) and Q4 an exact-match short answer. Three demo students
+hand in; then score Q2 so that `<demo-student-A>` has an approved AI score,
+`<demo-student-B>` an AI proposal the teacher overrode with their own score,
+and `<demo-student-C>` a Hybrid AI final nobody reviewed. On A's Q2, **Change**
+the final with the reason "regraded after a recount" (a made-up reason that
+must never print). Doc rows need a real Google sign-in and Drive; packet rows
+use **Save as PDF** in Chrome. Unless a row says otherwise, "the Doc" and "the
+packet" are the student copy from the same ticked boxes. None of these rows
+has been run: the build sessions had no dev server and no DOM harness.
+Two rows need a state the three accounts do not hold after this setup: run
+row 877 on A *before* the Change step (A's approval is then unchanged), and
+run row 898 on a second made-up test whose essay is scored with the **AI**
+method (not Hybrid), leaving one student's proposal unreviewed.
+
+### Writing feedback (slice 2)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 864 | Scoring queue: type in a card's **Teacher feedback** box, pause, then **Save feedback** | **Not saved** while the text differs; **Save feedback** is disabled until you type; after saving the status line reads Saved with the time and **Not saved** goes; a reload keeps the text | NOT RUN |
+| 865 | Same card: empty the box | The button reads **Clear feedback**; pressing it saves; a reload shows an empty box; the student's timeline shows "Feedback edited by teacher" then "Feedback cleared by teacher" | NOT RUN |
+| 866 | Type in card 1's box without saving; **Approve** card 2 (the queue refetches) | Card 1 keeps its unsaved text and **Not saved** (the box keeps its own state). Then score card 1 itself: the card leaves the queue and the draft goes with it — known, **Not saved** is the only guard | NOT RUN |
+| 867 | Per-student page (Results → a student) of a handed-in attempt | A **Teacher feedback** box under each answered question (none under a question left blank) holding the queue's text, and **Teacher feedback (overall)** between the safeguarding panel and Answers. On a practice attempt, no boxes | NOT RUN |
+| 868 | Edit-level co-teacher saves a different comment on the same answer; then a view-level co-teacher opens the page | The co-teacher's text replaces the owner's on reload (one comment, last editor wins, D-12); the view-level co-teacher sees the text read-only, with no box or Save | NOT RUN |
+| 869 | An admin (not impersonating) opens that student's page, then the scoring queue, and saves in a queue card's box | The student page shows feedback read-only; the queue box's save fails with a message (the route answers 404 to a non-impersonating admin, as the queue's score buttons do) — known | NOT RUN |
+| 870 | Paste more than 4000 characters into a box; separately, with the page open, **Pass back** the attempt from another tab and press **Save feedback** | The box stops at 4000 characters; the pass-back save reads "Couldn't save — this test was passed back to the student. Save again once it's handed in." (not "may be too long") | NOT RUN |
+| 871 | Read the hint line under any feedback box | It tells the teacher the truth about who sees the comment — see finding FR-H1 below: it still reads "Not shown to students yet." | NOT RUN — expected to fail until FR-H1 is fixed |
+
+### What reaches the student: the Doc and the packet (slices 3–5)
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 872 | Open **Send to Google Docs** (Results, a section) | Seven boxes in two columns, in order Prompt, Sources, Teacher score, AI score, Teacher feedback, AI feedback, Rubric table, all off the first time; the legend reads "In the Doc (the student's answers are always included)"; the description says "essays and short answers"; the hint line under the boxes fits without overflow | NOT RUN |
+| 873 | Open **Print student work** | A "Scores and feedback" fieldset with Teacher score, AI score, Teacher feedback, AI feedback, Rubric table (same labels and order as the Doc), then **Teacher copy (…not for students)**; the toolbar wraps cleanly at 1280 px and on a 13" MacBook | NOT RUN |
+| 874 | None ticked: send a Doc, and print the packet | Doc: the answers (and prompt/sources only if ticked), no score or feedback line. Packet: the answers only; with **Leave out answers** also ticked the status line says a score or feedback box is needed | NOT RUN |
+| 875 | **Teacher score** alone, for B (overridden) and A (changed) | A "Teacher score" line on Q2 (the Doc reads "Teacher score: n of m"); Q4 (and Q1, in the packet only — the Doc holds essays and short answers) prints a plain "Score" (D-13); no AI score, no comments; A's change reason appears nowhere | NOT RUN |
+| 876 | **AI score** alone, for A, B and C | A (after the change) and B: no score on Q2 (D-3); C: "AI score" on Q2 (Hybrid not reviewed, D-17). Q4 (and Q1 in the packet) prints "Score" (D-13). The packet prints no "No … score" placeholder where a score was hidden | NOT RUN |
+| 877 | Approve-only case (run on A before the Change step — see setup): a student whose AI proposal was approved and never changed, **AI score** ticked | An "AI score" line on Q2 in both outputs | NOT RUN |
+| 878 | **AI feedback** alone, for B | B's Q2 prints the AI's comments under "AI feedback" (D-10) and no score of either kind; the per-criterion comments print as a list (R-2 off) | NOT RUN |
+| 879 | **Teacher feedback** alone, for a student with per-question and overall comments | "Teacher feedback" once at the top (overall), then under each question that has a comment; no scores; a question without a comment prints nothing extra | NOT RUN |
+| 880 | Overall feedback only: a student with an overall comment and no per-question comments, **Teacher feedback** ticked | The overall comment prints once at the top and nothing under the questions | NOT RUN |
+| 881 | **Rubric table** alone, then with **Teacher score**, then with **AI feedback** | Alone: criterion and level only, no Points column; with a score box: points too, from the FINAL row (B: the teacher's levels, never the AI proposal's); with AI feedback: the AI's comment column, and no separate list | NOT RUN |
+| 882 | All four (both scores, both feedbacks), no rubric table, for B | Q2: "Teacher score", "AI feedback", "Teacher feedback", each labelled; no "AI score"; no unlabelled "Feedback" or "Points" anywhere (D-1) | NOT RUN |
+| 883 | The change reason, every box ticked, Doc and packet (both copies) for A | "regraded after a recount" appears nowhere | NOT RUN |
+| 884 | Short answers in the Doc (Q3 AI holistic, Q4 exact match), every box ticked, essays double-spaced | Q3 and Q4 appear in question order beside the essay, headed "Answer" (never "Essay"), single-spaced inside a double-spaced Doc; Q3 shows "AI score" or "Teacher score" with a one-row rubric table; Q4 a plain "Score" | NOT RUN |
+| 885 | A short answer typed with math (e.g. `$\frac{1}{2}$`), sent to the Doc | Prints as typed (raw), not drawn — known, as prompt math already does in the Doc | NOT RUN |
+| 886 | A test whose only written questions are short answers; a student who wrote only a short answer | The **Send to Google Docs** button shows; that student gets a Doc. A test with neither essays nor short answers shows no button | NOT RUN |
+| 887 | An open safeguarding alert on a student's short answer, then **Send** | That student is listed "held back — an open safeguarding alert needs your review first"; after the alert is acknowledged a send makes their Doc | NOT RUN |
+| 888 | Same choices, same student (B, then A): the Doc and the packet side by side | Same blocks in the same order with the same labels and numbers (one model, R-3); the packet also prints the answers unless **Leave out answers** is ticked | NOT RUN |
+| 889 | Remembered boxes (R-4): send with a mix ticked, close, reload; open the dialog again, and on one student's page | The same boxes are ticked. A second teacher on the same test sees their own choices, not these | NOT RUN |
+| 890 | First send that needs Google consent: tick a mix, **Send**, finish the Google screens | Back on the page the dialog shows the mix chosen before the redirect, not the remembered one | NOT RUN |
+| 891 | Real Drive render of 878 and 881: open the Docs in Google Docs | The AI-criteria list renders as a bulleted list; the table without a Points column has no empty column; labels are bold as in the HTML | NOT RUN |
+| 892 | Packet **Save as PDF** with every box ticked; one student with a 4000-character teacher comment | Each block is labelled; a feedback block is not split from its label at a page break; the long comment wraps and runs onto the next page without clipping; line breaks the teacher typed are kept | NOT RUN |
+| 893 | **Teacher copy** with **Teacher score**, **AI score** and **Rubric table** ticked, for B | Q2 shows "AI proposal" with the AI's own levels and points beside the teacher's block with theirs; "Teacher copy — not for students" under the handed-in line and "Teacher copy" in every page footer. Unticked: the student copy, no AI proposal | NOT RUN |
+| 894 | **Anonymous** with **Teacher feedback**, a comment that names the student | Names are replaced by labels everywhere except inside the comment, which prints as typed — known, nothing redacts a teacher's own words | NOT RUN |
+| 895 | An old bookmark `…/results/work?scores=both` | Prints as Teacher score + AI score ticked, student copy: no rubric table, no AI comments, no overridden AI proposal (unlike before FR); the toolbar shows those two boxes ticked, and **Select all** keeps them as boxes | NOT RUN |
+| 896 | Pass back B after the AI scored Q2, B edits Q2 and hands in again; **AI feedback** ticked, Doc and packet | The old AI comments do not print (the AI row is older than the answer's last edit, D-10); they print again once the AI re-scores. In the teacher copy "AI proposal" still shows the old row — known mismatch | NOT RUN |
+| 897 | For James's ruling T1: change C's Hybrid AI final, then send with **AI feedback** | As built: no AI feedback for that question (Hybrid's only AI row is superseded by the change) | NOT RUN — open ruling |
+| 898 | For James's ruling T2: a student whose Q2 has only an unreviewed AI proposal (AI method, no final), **AI feedback** ticked | As built: the proposal's comments print under "AI feedback" and no score prints | NOT RUN — open ruling |
+| 899 | AI short answer, wrong answer, **AI feedback** ticked | Read the comment: as built it can name the expected answer (the level descriptor is seeded from it) — teachers should leave AI feedback off while a makeup sitting is open | NOT RUN — open |
+| 900 | A dialog tab opened before the deploy, used to send after it | The send succeeds and the Doc carries both score boxes (the route still reads the old `score` key) | NOT RUN — deploy day |
+| 901 | After the deploy | Health stamp is the deployed commit; migrations 0066 and 0067 applied at boot; `/help.html#score` shows "Write your own feedback"; `/help.html#results` lists the seven Doc boxes; the "Looks wrong" FAQ has the AI-score entry; `/roadmap.html` has the 2026-10-29 milestone and 68 migrations | NOT RUN — not deployed |
+
+- **FR-H1 — the feedback box still says "Not shown to students yet." (2026-10-29, found writing row 871).** `TEACHER_FEEDBACK_HINT` (`design-tool/lib/teacherFeedback/limits.ts`) was written for slice 2, when nothing released the text; slices 3–4 now send it to students through the Doc and the packet when **Teacher feedback** is ticked. The line is false on every box. Fix candidate: "Students see this when you send it to Google Docs or print it with Teacher feedback ticked." — and the two tests that pin the old line (`test/scoring-queue.test.tsx`, `test/reporting-views.test.tsx`) plus the two route header comments and the per-student page's comment (`app/dashboard/[id]/results/[attemptId]/page.tsx`, beside `showFeedback`). Not changed in slice 6 (docs only).

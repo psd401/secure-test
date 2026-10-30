@@ -576,6 +576,13 @@
           <figcaption>The scoring queue, with an AI proposal to review.</figcaption>
         </figure>
       </div>
+      <h3 class="sub">Write your own feedback</h3>
+      <ol class="steps">
+        <li>Type in the <b class="ui">Teacher feedback</b> box under an answer, on its scoring queue card or on the student's page from <b class="ui">Results</b>, and press <b class="ui">Save feedback</b>. <b class="ui">Not saved</b> shows until you do; a card leaves the queue once it is scored, so save first.</li>
+        <li>For a comment on the whole test, use <b class="ui">Teacher feedback (overall)</b> near the top of the student's page.</li>
+        <li>There is one comment per answer, shared with your co-teachers: whoever saves last is kept. Changing a score does not change the comment. Empty the box and press <b class="ui">Clear feedback</b> to remove it.</li>
+      </ol>
+      <p class="note">Students see your feedback only when you send it: tick <b class="ui">Teacher feedback</b> in <b class="ui">Send to Google Docs</b> or <b class="ui">Print student work</b> (see <a href="#results">Results and printing</a>). The reason you give when you change a score is never sent. Your feedback is not shared with the AI.</p>
       <h3 class="sub">Fixed an answer key after students handed in</h3>
       <ol class="steps">
         <li>Fix the key on the question and press <b class="ui">Save question</b>. Questions with keys are scored when each student hands in, so work already handed in still has the old scores.</li>
@@ -602,7 +609,7 @@
             <li>Open a student for their answers, scores and a timeline of their session.</li>
             <li><b class="ui">Print report</b> gives a class summary, or a single family-facing page for one student.</li>
             <li><b class="ui">Print student work</b> prints each student's answers, optionally anonymous with a key page or with essays double-spaced, for marking by hand. Tick several sections to print them as one packet, a section at a time, or tick just the students you want; <b class="ui">Include work not yet handed in</b> adds the students still working. Anonymous labels are numbered within each section, with a key page after each one. Tick any of <b class="ui">Teacher score</b>, <b class="ui">AI score</b>, <b class="ui">Teacher feedback</b>, <b class="ui">AI feedback</b> and <b class="ui">Rubric table</b>; each prints labelled with where it came from. An AI score prints only where it stands as the final score, so one you changed never reaches a student; the AI's feedback can still print. With <b class="ui">AI score</b> ticked, <b class="ui">Teacher copy</b> also shows the AI's latest proposal on each question, for you to annotate, and marks each page as a teacher copy. Tick <b class="ui">Leave out answers</b> as well to print the scores and feedback without the student's writing, to hand back.</li>
-            <li><b class="ui">Send to Google Docs</b> (on <b class="ui">Results</b> for a class, or on one student's page) makes an editable Google Doc of each student's essays and short answers in your Drive and shares it with the student. Choose what goes in the Doc (prompt, sources, score, feedback), <b class="ui">Skip</b> or <b class="ui">Make a new Doc</b> for students who already have one, and optionally <b class="ui">Double-space essays</b> or give the student ownership. Formatting from the test (bold, italics, lists, indents) carries over. Changes in the Doc do not come back here.</li>
+            <li><b class="ui">Send to Google Docs</b> (on <b class="ui">Results</b> for a class, or on one student's page) makes an editable Google Doc of each student's essays and short answers in your Drive and shares it with the student. The student's answers are always in it; tick any of <b class="ui">Prompt</b>, <b class="ui">Sources</b>, <b class="ui">Teacher score</b>, <b class="ui">AI score</b>, <b class="ui">Teacher feedback</b>, <b class="ui">AI feedback</b> and <b class="ui">Rubric table</b> to add them, with the same rules and labels as the printed packet. The boxes you sent with last time on that test are ticked for you. A short answer prints as the student typed it, so math shows in its typed form. <b class="ui">Skip</b> or <b class="ui">Make a new Doc</b> for students who already have one, and optionally <b class="ui">Double-space essays</b> or give the student ownership. Formatting from the test (bold, italics, lists, indents) carries over. Changes in the Doc do not come back here.</li>
             <li><b class="ui">Pass back</b> returns a handed-in test to a student to keep working; earlier scores are kept as a record.</li>
             <li><b class="ui">Send to gradebook</b> puts each student's total points into PowerSchool, one class section at a time. Pick the section and a category; the name and due date (today) can be changed before sending. It creates the assignment in PowerTeacher Pro, and publishing follows that category's default.</li>
             <li>Only fully scored work is sent. Anything still waiting in the scoring queue is held back, and a later send picks it up. After you change a score, <b class="ui">Send again</b> updates just the changed ones.</li>
@@ -677,6 +684,8 @@
         <dd>Open the student from <b class="ui">Results</b>, find <b class="ui">Earlier versions</b> under the essay, and press <b class="ui">Restore this version</b> on the last full one. If the session is still open, close it first. See <a href="#results">Results and printing</a>.</dd>
         <dt>I fixed an answer key, but the students' scores didn't change.</dt>
         <dd>Scores are set when each student hands in. Open <b class="ui">Results</b> and press <b class="ui">Rescore with current key</b>. If it is greyed out, the fix may not be saved yet: wait for <b class="ui">All changes saved</b> at the top first. See <a href="#score">Score and give feedback</a>.</dd>
+        <dt>I ticked AI score, but some questions in the Doc or packet have no AI score.</dt>
+        <dd>An AI score is sent only where it stands as the final score. Where you changed it or scored the answer yourself, tick <b class="ui">Teacher score</b> to send your score; the AI's comments usually still go with <b class="ui">AI feedback</b>, labelled as the AI's — but not after you change a score the AI finalized on its own (Hybrid), or after the student edits an answer you passed back. For your own marking copy, tick <b class="ui">Teacher copy</b> on <b class="ui">Print student work</b>. See <a href="#results">Results and printing</a>.</dd>
         <dt>I adjusted time, but students still can't get back in.</dt>
         <dd>The session has ended, and Adjust time doesn't reopen it. Press <b class="ui">Continue in a new session</b> on that session (Test sessions tab or its Monitor) and share the new code; students can also find the test under <b class="ui">Your tests</b>. If you set a deadline that has passed, also choose <b class="ui">No time limit</b> or a later time.</dd>
         <dt>A student keeps getting "Time is up." when they press Resume.</dt>
@@ -745,7 +754,7 @@
 </dialog>
 
 <script>
-const UPDATED = "2026-10-18";
+const UPDATED = "2026-10-29";
 document.getElementById("updated").textContent =
   new Date(UPDATED + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 

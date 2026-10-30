@@ -289,3 +289,26 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   should leave AI feedback off while a makeup sitting is open; a later
   option is a "do not state the expected answer" line in the scoring
   prompt.
+- 2026-10-29: slice 6 written (docs only, no code change). Hand-check rows
+  864–901 in `docs/design-tool-manual-checks.md` ("Feedback release to
+  students"): writing feedback (864–871: save, clear, a draft across a
+  queue refetch, the per-student boxes, co-teacher last-editor, admin
+  read-only, the 4000 cap and the pass-back message) and what reaches the
+  student (872–901: both menus, none / each box alone / all four, an
+  approved, overridden, changed and Hybrid-unreviewed AI score, overall
+  feedback only, short answers and their math, the alert gate, the Doc and
+  the packet matching from the same choices, R-4 and the Google redirect,
+  a real Drive render, PDF pagination of a long comment, the teacher copy,
+  anonymous mode, an old `?scores=` bookmark, the pass-back guard, T1, T2,
+  the short-answer key leak, an old tab after the deploy, and the deploy
+  itself). All NOT RUN. `/help.html`: a "Write your own feedback"
+  sub-topic under scoring, the Doc line lists the seven boxes, and a "Looks
+  wrong" entry for a missing AI score; `test/feedback-release-help-page.test.ts`
+  fails if a box in `CONTENT_OPTIONS` or the packet toolbar is missing from
+  the help page. `/roadmap.html`: a 2026-10-29 milestone and 68 migrations.
+  Found while writing row 871 (finding FR-H1, not fixed): every feedback box
+  still says "Not shown to students yet.", which slices 3–4 made false.
+  Still open: T1, T2, R-2 levels printing with no score box ticked, the
+  teacher copy's pass-back mismatch, the cascade gap, the short-answer key
+  leak, and R-4 is the Doc dialog's only (the packet keeps its choices in
+  the URL, not per teacher).
