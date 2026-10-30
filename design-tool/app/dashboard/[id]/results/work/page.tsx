@@ -931,6 +931,9 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
                     // D-10: an AI row older than the answer's last edit is
                     // about the answer before a pass back.
                     answer_updated_at: resp ? resp.updated_at : null,
+                    // A short answer's AI comments can state its key: left out
+                    // of the student copy, kept in the teacher copy (D-16).
+                    withhold_ai_feedback: item.type === "short_text" && !query.teacherCopy,
                   };
                 }),
                 overall_teacher_feedback: feedbackByAttempt.get(row.attempt_id) ?? null,

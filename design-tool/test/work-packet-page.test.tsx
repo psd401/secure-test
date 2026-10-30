@@ -996,6 +996,36 @@ describe("work packet — feedback release boxes (FR)", () => {
     expect(fbOnly).not.toContain("AI score");
   });
 
+  test("a short answer's AI comments: left out of the student copy, kept in the teacher copy (PR #157 review)", async () => {
+    const { assessment, adaAttempt, items: sceneItems } = await seedFeedbackScene();
+    const db = getDb();
+    const [adaShort] = await db
+      .select()
+      .from(responses)
+      .where(and(eq(responses.attempt_id, adaAttempt.id), eq(responses.item_id, sceneItems[2]!.id)));
+    await db.insert(scores).values({
+      response_id: adaShort!.id,
+      method: "ai",
+      points: 0,
+      max_points: 1,
+      scorer: "bedrock",
+      status: "final",
+      rationale: { overall_rationale: "SA-KEY-LEAK the answer is Olympia" },
+    });
+    const student = pageOf(
+      await render(assessment.id, { section: SECTION, ai_score: "1", ai_feedback: "1" }),
+      "Fixture, Ada",
+    );
+    expect(student).not.toContain("SA-KEY-LEAK");
+    // The essay's AI feedback on the same page still prints.
+    expect(student).toContain("AI-OVERALL");
+    const teacher = pageOf(
+      await render(assessment.id, { section: SECTION, ai_score: "1", ai_feedback: "1", teacher_copy: "1" }),
+      "Fixture, Ada",
+    );
+    expect(teacher).toContain("SA-KEY-LEAK");
+  });
+
   test("teacher feedback per question and overall, labelled; nothing without the box (D-4)", async () => {
     const { assessment } = await seedFeedbackScene();
     const off = packetBody(await render(assessment.id, { section: SECTION, teacher_score: "1" }));

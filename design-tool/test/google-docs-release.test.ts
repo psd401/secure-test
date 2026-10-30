@@ -954,10 +954,13 @@ describe("releaseToGoogleDocs", () => {
     // The answer, plain and single-spaced even with double spacing on (RT D-10).
     expect(html).toContain(`${PARAGRAPH_OPEN}4 to the 2</p>`);
     expect(html.split("<h3>Answer</h3>").length - 1).toBe(2);
-    // The AI's holistic score, its feedback and the teacher's comment (FR D-1, R-3).
+    // The AI's holistic score, its level and the teacher's comment (FR D-1,
+    // R-3) — but never the AI's comments on a short answer, which can state
+    // its key (PR #157 review, withhold_ai_feedback), though AI feedback and
+    // the rubric table are both ticked.
     expect(html).toContain("<b>AI score:</b> 1 of 2");
-    expect(html).toContain("Add the exponent.");
-    expect(html).toContain("Names the base only.");
+    expect(html).not.toContain("Add the exponent.");
+    expect(html).not.toContain("Names the base only.");
     expect(html).toContain("Partial credit");
     expect(html).toContain("Close — try again.");
     // The exact-match one prints a plain Score (D-13).

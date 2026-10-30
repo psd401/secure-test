@@ -287,6 +287,9 @@ export async function releaseToGoogleDocs(
         // D-10: an AI proposal left over from before a pass-back is about the
         // old answer; the builder drops AI rows older than the last edit.
         answer_updated_at: resp ? resp.updated_at : null,
+        // The Doc goes to the student: no AI comments on a short answer,
+        // which can state its key (withhold_ai_feedback).
+        withhold_ai_feedback: item.type === "short_text",
       });
       essays.push({
         number: numberOf.get(item.id) ?? 0,

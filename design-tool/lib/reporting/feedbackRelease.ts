@@ -45,6 +45,15 @@ export interface FeedbackQuestionInput<T extends PacketScoreRow = PacketScoreRow
    * in place — so its comments are not D-10's AI feedback.
    */
   answer_updated_at: Date | null;
+  /**
+   * Leave the AI's comments out for this question (PR #157 review): an AI
+   * short answer's level descriptors are seeded from its correct answer, so
+   * on a wrong answer the AI's rationale can name the expected answer — a
+   * key leak while a makeup sitting is open. Callers set it for `short_text`
+   * on anything a student receives; the AI score and its level label still
+   * print under their own boxes. Absent = false.
+   */
+  withhold_ai_feedback?: boolean;
 }
 
 export interface FeedbackReleaseInput<T extends PacketScoreRow = PacketScoreRow> {
@@ -159,7 +168,7 @@ function questionBlocks<T extends PacketScoreRow>(
   // row written before the answer last changed is about the old answer (a
   // pass-back leaves proposals alone), so it is dropped first.
   const answeredAt = q.answer_updated_at;
-  const aiRow = contents.ai_feedback
+  const aiRow = contents.ai_feedback && !q.withhold_ai_feedback
     ? selectPacketScores(
         "ai",
         answeredAt ? q.scores.filter((r) => r.method !== "ai" || r.created_at >= answeredAt) : q.scores,

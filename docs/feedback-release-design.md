@@ -320,7 +320,8 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   feedback ticked.") and the scoring queue's box for a non-impersonating
   admin, which is now grayed out with the reason under it (`readOnly` on
   `TeacherFeedbackBox`, set from `access.via` on the scoring page) instead
-  of a box whose save fails. Still open: the short-answer key leak.
+  of a box whose save fails. Still open: the short-answer key leak
+  (resolved below).
 - 2026-10-29: T1 and T2 ruled. T1 accepted for now: approval cannot split
   the score from the feedback (the approve route copies the proposal's
   points and rationale into the final row together), so a changed Hybrid
@@ -328,3 +329,14 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   keep the AI's comments after changing its score. T2 accepted: an
   unreviewed proposal with no final sends its comments as AI feedback, as
   D-10 is written.
+- 2026-10-29: short-answer key leak closed (PR #157 review). The builder
+  takes `withhold_ai_feedback` per question; the Doc sets it for every
+  `short_text` and the packet's student copy does too, so the AI's
+  comments on a short answer (overall, per-criterion list and the rubric
+  table's AI column) never reach a student. The AI score and its level
+  label still print under their own boxes; the teacher copy keeps the
+  comments (D-16). This narrows D-5 for AI feedback only. No help-page
+  line had warned teachers before this, so withholding replaces the
+  "leave AI feedback off during a makeup" advice above. A later scoring
+  prompt line ("do not state the expected answer") could restore the
+  comments; not built.

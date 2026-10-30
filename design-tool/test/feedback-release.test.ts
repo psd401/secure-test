@@ -388,6 +388,26 @@ describe("buildFeedbackRelease: edges", () => {
     ]);
   });
 
+  test("withhold_ai_feedback (short answers, PR #157 review): no AI comments anywhere, the score and levels still print", () => {
+    const ai = row("ai", "final", 2, aiRationale("SA", "c1", "e1"));
+    const withheld = buildFeedbackRelease(ALL, {
+      questions: [{ rubric: RUBRIC, scores: [ai], teacher_feedback: "Mine.", answer_updated_at: HANDED_IN, withhold_ai_feedback: true }],
+      overall_teacher_feedback: null,
+    }).questions[0]!;
+    expect(JSON.stringify(withheld)).not.toContain("SA ");
+    expect(withheld.some((b) => b.kind === "feedback" && b.source === "ai")).toBe(false);
+    expect(withheld[0]).toEqual({ kind: "score", label: "AI score", points: 2, max_points: 4 });
+    const table = withheld.find((b) => b.kind === "rubric_table");
+    expect(table).toMatchObject({ columns: { level: true, points: true, ai_feedback: false } });
+    expect(withheld.at(-1)).toMatchObject({ source: "teacher", text: "Mine." });
+    // The same question without the flag carries the AI's comments.
+    const shown = buildFeedbackRelease(ALL, {
+      questions: [{ rubric: RUBRIC, scores: [ai], teacher_feedback: null, answer_updated_at: HANDED_IN }],
+      overall_teacher_feedback: null,
+    }).questions[0]!;
+    expect(JSON.stringify(shown)).toContain("SA claim comment");
+  });
+
   test("an AI row with no comments at all prints no AI feedback block", () => {
     const out = buildFeedbackRelease({ ...ALL, ai_score: false, rubric_table: false }, {
       questions: [{ rubric: RUBRIC, scores: [row("ai", "final", 2, { overall_rationale: "  " })], teacher_feedback: null, answer_updated_at: HANDED_IN }],
