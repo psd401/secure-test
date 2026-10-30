@@ -10,11 +10,14 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { renderToStaticMarkup } from "react-dom/server";
 import { closeDb, getDb } from "../db/client";
 import {
+  access_grants,
   assessments,
   assets,
   attempt_events,
+  attempt_feedback,
   attempts,
   items,
+  response_feedback,
   response_revisions,
   responses,
   scores,
@@ -28,6 +31,7 @@ import * as sessionMod from "../lib/auth/session";
 import { buildResults } from "../lib/scoring/results";
 import {
   OTHER_STUDENT,
+  OTHER_TEACHER_EMAIL,
   STUDENT,
   TEACHER_EMAIL,
   clearRoster,
@@ -73,6 +77,7 @@ afterEach(async () => {
   await db.execute(sql`truncate table students restart identity cascade`);
   await db.execute(sql`truncate table scoring_runs restart identity cascade`);
   await db.execute(sql`truncate table assets restart identity cascade`);
+  await db.execute(sql`truncate table access_grants restart identity cascade`);
 });
 
 afterAll(async () => {
@@ -744,6 +749,59 @@ describe("the per-student attempt page", () => {
     expect(html).toContain("sent no session events");
   });
 
+  // Teacher feedback (docs/feedback-release-design.md, D-1 / D-4): a box per
+  // answered question and one overall, opening on what was saved, labelled by
+  // source. Not shown to students yet — this is the staff page.
+  test("an editor gets a feedback box per answer and one overall, opening on the saved text", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    const [essayResponse] = await db
+      .select()
+      .from(responses)
+      .where(sql`${responses.attempt_id} = ${scene.aliceAttempt.id} and ${responses.response}->>'type' = 'essay'`);
+    await db.insert(response_feedback).values({
+      response_id: essayResponse!.id,
+      author_sub: OWNER,
+      text: "FB-QUESTION-TEXT",
+    });
+    await db.insert(attempt_feedback).values({
+      attempt_id: scene.aliceAttempt.id,
+      author_sub: OWNER,
+      text: "FB-OVERALL-TEXT",
+    });
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("Teacher feedback (overall)");
+    expect(html).toContain("FB-QUESTION-TEXT");
+    expect(html).toContain("FB-OVERALL-TEXT");
+    expect(html).toContain("Not shown to students yet.");
+    // One box per answered question (Alice answered 8) plus the overall one.
+    expect(html.match(/<textarea/g)).toHaveLength(9);
+  });
+
+  test("a view-level grantee reads the comments but gets no box", async () => {
+    const scene = await seedScene();
+    const db = getDb();
+    await db.insert(attempt_feedback).values({
+      attempt_id: scene.aliceAttempt.id,
+      author_sub: OWNER,
+      text: "FB-OVERALL-TEXT",
+    });
+    await db.insert(access_grants).values({
+      grantee_email: OTHER_TEACHER_EMAIL,
+      scope_kind: "assessment",
+      scope_id: scene.assessment.id,
+      level: "view",
+      granted_by_sub: OWNER,
+      granted_by_email: TEACHER_EMAIL,
+      note: "viewer",
+    });
+    principal = { sub: "reporting-views-viewer", role: "staff", email: OTHER_TEACHER_EMAIL };
+    const html = await renderAttempt(scene.assessment.id, scene.aliceAttempt.id);
+    expect(html).toContain("Teacher feedback (overall)");
+    expect(html).toContain("FB-OVERALL-TEXT");
+    expect(html).not.toContain("<textarea");
+  });
+
   test("another teacher's assessment is not found, not forbidden", async () => {
     const scene = await seedScene();
     principal = { sub: "someone-else", role: "staff", email: "teacher.two@psd401.net" };
@@ -942,6 +1000,16 @@ describe("in-progress attempts on the teacher surfaces", () => {
     });
     return { carolAttempt: carolAttempt!, itemCount: itemRows.length };
   }
+
+  // Teacher feedback (docs/feedback-release-design.md): the routes refuse an
+  // in-progress attempt, so the page offers no box.
+  test("the per-student page offers no feedback box on an in-progress attempt", async () => {
+    const scene = await seedScene();
+    const { carolAttempt } = await seedInProgressAttempt(scene.assessment.id);
+    const html = await renderAttempt(scene.assessment.id, carolAttempt.id);
+    expect(html).not.toContain("Teacher feedback");
+    expect(html).not.toContain("<textarea");
+  });
 
   test("the matrix shows an in-progress row's Not-handed-in line, no totals, and a Hand in control", async () => {
     const scene = await seedScene();

@@ -198,3 +198,21 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
 
 - 2026-10-29: note written; revised the same day (PDF route = the packet,
   AI short answer live). No code.
+- 2026-10-29: slice 2 built. Migration
+  0066 adds `response_feedback` and `attempt_feedback` (unique per response /
+  attempt, text 1–4000, `author_sub` = last editor) and the staff-only
+  `feedback_edited` event kind (detail `{ scope, response_id?, item_id?,
+  action }`, never the text). `PUT`/`DELETE /api/responses/[responseId]/feedback`
+  (through `loadResponseChain`) and `/api/attempts/[attemptId]/feedback`
+  (through `authorizeAttempt`), both edit level, write intent, 404 posture,
+  handed-in attempts only; an identical save writes nothing and a DELETE of
+  nothing is a quiet 200. Writes live in `lib/teacherFeedback/write.ts`, which
+  rethrows a DB failure as a bare error so the text cannot reach the error
+  log (D-14). `TeacherFeedbackBox` (explicit Save, "Not saved" while dirty)
+  on every scoring-queue card and per answer on the per-student page, plus
+  an overall box there; read-only text below edit level. Not printed by the
+  family report (`NOT_PRINTED`); the timeline says "Feedback edited / cleared
+  by teacher". The insights evidence-pack test now carries a feedback
+  sentinel that must not appear. Known gap: a comment on a question is
+  deleted with its response row, so if an attempt is passed back and the
+  student withdraws that answer, the comment goes with it.

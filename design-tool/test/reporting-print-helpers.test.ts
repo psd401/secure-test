@@ -73,6 +73,16 @@ describe("formatIntegrityLine", () => {
     ).toBe("Left the test window");
   });
 
+  test("feedback_edited is never printed (docs/feedback-release-design.md, D-4)", () => {
+    // A teacher writing feedback is not an integrity event, and this page
+    // reaches families before the feedback does — the raw kind must not print.
+    expect(formatIntegrityLine([{ kind: "feedback_edited" }])).toBe(NO_EVENTS);
+    expect(integrityPhrases([{ kind: "feedback_edited" }])).toEqual([]);
+    expect(
+      formatIntegrityLine([{ kind: "feedback_edited" }, { kind: "focus_loss" }]),
+    ).toBe("Left the test window");
+  });
+
   test("focus_regained is tolerated in input but never printed (P5-2)", () => {
     // Alone, it produces no line at all rather than a redundant
     // "Came back to the test window" sentence.

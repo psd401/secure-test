@@ -266,6 +266,30 @@ describe("buildTimeline — feedback_shown", () => {
   });
 });
 
+// Feedback release (docs/feedback-release-design.md, D-4 / D-12): which
+// comment and whether it was saved or cleared — never the text (D-14).
+describe("buildTimeline — feedback_edited", () => {
+  test("names the scope and the action", () => {
+    const line = (detail: Record<string, unknown> | null) =>
+      buildTimeline([{ kind: "feedback_edited", at: at("21:07:00"), detail }])[0]!.text;
+    expect(line({ scope: "question", response_id: "r", item_id: "i", action: "saved" })).toBe(
+      "Feedback edited by teacher 2:07 PM",
+    );
+    expect(line({ scope: "question", response_id: "r", item_id: "i", action: "cleared" })).toBe(
+      "Feedback cleared by teacher 2:07 PM",
+    );
+    expect(line({ scope: "overall", action: "saved" })).toBe(
+      "Overall feedback edited by teacher 2:07 PM",
+    );
+    expect(line({ scope: "overall", action: "cleared" })).toBe(
+      "Overall feedback cleared by teacher 2:07 PM",
+    );
+    for (const detail of [null, {}]) {
+      expect(line(detail)).toBe("Feedback edited by teacher 2:07 PM");
+    }
+  });
+});
+
 describe("durationLabel", () => {
   test("under a minute is seconds; a minute and over rounds to minutes", () => {
     expect(durationLabel(0)).toBe("0 sec");

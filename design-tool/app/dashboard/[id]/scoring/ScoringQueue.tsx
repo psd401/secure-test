@@ -9,6 +9,7 @@ import { tableCellMatches } from "@/lib/scoring/auto";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
 import { ChangeScoreControl } from "@/components/app/ChangeScoreControl";
+import { TeacherFeedbackBox } from "@/components/app/TeacherFeedbackBox";
 import { ScoreEssaysWithAiControl, scoreAllLabel } from "@/components/app/ScoreEssaysWithAiControl";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 import { reviewQueueUrl, unreviewedCardLine } from "@/lib/scoring/methodLabel";
@@ -47,6 +48,11 @@ interface QueueEntry {
     rationale: QueueRationale | null;
     scorer: string;
   };
+  /**
+   * Teacher feedback (docs/feedback-release-design.md, D-4): the saved comment
+   * on this answer, or null. Absent from an older payload = none.
+   */
+  teacher_feedback?: { text: string; updated_at: string } | null;
   /** E12 slice 4: what this student saw as the stimulus, when it was their own earlier answer. */
   outline?: { origin: "source" | "inline" | "missing"; words: number } | null;
   student: { name: string; ssid: string };
@@ -948,6 +954,13 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
             )}
           </>
         )}
+        {/* Teacher feedback (docs/feedback-release-design.md, D-4 / D-12):
+            saves on its own route, not through `act`, so a save neither
+            refetches the queue nor waits on `busy`. */}
+        <TeacherFeedbackBox
+          endpoint={`/api/responses/${entry.response_id}/feedback`}
+          initialText={entry.teacher_feedback?.text ?? ""}
+        />
       </li>
     );
   }

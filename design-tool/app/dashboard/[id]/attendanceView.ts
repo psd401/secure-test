@@ -212,6 +212,12 @@ export function eventLabel(kind: string): string {
     // an earlier version of a text answer the current one.
     case "answer_restored":
       return "Answer restored by teacher";
+    // Feedback release (docs/feedback-release-design.md, D-4 / D-12): a teacher
+    // saved or cleared their written feedback. Which question, and whether it
+    // was saved or cleared, is on the row's detail and spelled out by the
+    // timeline; the text itself is never on the row (D-14).
+    case "feedback_edited":
+      return "Feedback edited by teacher";
     default:
       return kind;
   }

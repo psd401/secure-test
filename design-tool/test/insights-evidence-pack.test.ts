@@ -7,8 +7,10 @@ import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
+  attempt_feedback,
   attempts,
   items,
+  response_feedback,
   responses,
   safeguarding_alerts,
   scores,
@@ -399,6 +401,19 @@ describe("buildEvidencePack (DB)", () => {
       { response_id: resp[1]!.id, method: "ai", points: 1, max_points: 1, scorer: "mock", status: "proposed" },
       { response_id: resp[2]!.id, method: "auto", points: 0, max_points: 1, scorer: "auto", status: "final" },
     ]);
+    // D-14 (docs/feedback-release-design.md): teacher feedback stays out of
+    // AI — a comment on a counted answer and an overall one must not reach
+    // the pack.
+    await db.insert(response_feedback).values({
+      response_id: resp[0]!.id,
+      author_sub: OWNER,
+      text: "FB-SENTINEL-QUESTION",
+    });
+    await db.insert(attempt_feedback).values({
+      attempt_id: attemptRows[0]!.id,
+      author_sub: OWNER,
+      text: "FB-SENTINEL-OVERALL",
+    });
     await db.insert(safeguarding_alerts).values({
       response_id: resp[1]!.id,
       attempt_id: attemptRows[1]!.id,
@@ -419,7 +434,14 @@ describe("buildEvidencePack (DB)", () => {
     expect(pack.item_analytics[0]!.answers).toEqual([{ answer: "Oxygen", count: 1, mean_points: 1 }]);
     expect(pack.figures["tag.ngss:MS-LS2-1.percent"]).toBe(100);
     const json = JSON.stringify(pack);
-    for (const v of ["Student", "SSID-", "alerted answer", "practice answer", ...attemptRows.map((r) => r.id)]) {
+    for (const v of [
+      "Student",
+      "SSID-",
+      "alerted answer",
+      "practice answer",
+      "FB-SENTINEL",
+      ...attemptRows.map((r) => r.id),
+    ]) {
       expect(json).not.toContain(v);
     }
 

@@ -122,7 +122,9 @@ describe("every API route reads JSON through readJsonBody", () => {
       expect(tier, `${rel} reads with ${calls[0]}`).toBeDefined();
       seen[rel] = tier!;
     }
-    expect(Object.keys(seen).length).toBe(47);
+    // 49 with the two teacher-feedback PUTs (docs/feedback-release-design.md),
+    // both on the default tier.
+    expect(Object.keys(seen).length).toBe(49);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }
