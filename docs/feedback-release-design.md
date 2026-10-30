@@ -320,4 +320,11 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   feedback ticked.") and the scoring queue's box for a non-impersonating
   admin, which is now grayed out with the reason under it (`readOnly` on
   `TeacherFeedbackBox`, set from `access.via` on the scoring page) instead
-  of a box whose save fails. Still open: T1, T2, the short-answer key leak.
+  of a box whose save fails. Still open: the short-answer key leak.
+- 2026-10-29: T1 and T2 ruled. T1 accepted for now: approval cannot split
+  the score from the feedback (the approve route copies the proposal's
+  points and rationale into the final row together), so a changed Hybrid
+  final losing its AI feedback stays as built; revisit if teachers ask to
+  keep the AI's comments after changing its score. T2 accepted: an
+  unreviewed proposal with no final sends its comments as AI feedback, as
+  D-10 is written.
