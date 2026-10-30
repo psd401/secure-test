@@ -239,3 +239,33 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   (T2) an unreviewed proposal with no final still sends its comments as AI
   feedback, as D-10 is written; teachers' own per-criterion comments on a
   manual score are not printed.
+- 2026-10-29: slice 4 built. The packet toolbar's score radio is now the
+  Doc dialog's boxes and labels (`CONTENT_OPTIONS` less prompt and sources:
+  teacher score, AI score, teacher feedback, AI feedback, rubric table), one
+  URL parameter each, off when absent, plus `teacher_copy` (D-16). Every
+  student page runs through `buildFeedbackRelease` (R-3) with the Doc's rubric
+  rule (now `questionRubric`, shared) and the answer's `updated_at`; the
+  overall comment prints once under the handed-in line. Student copy (the
+  default): the builder's one score block, no "No … score" placeholders (a
+  placeholder where D-3 hid a score would say something was hidden). Teacher
+  copy: `selectPacketScores` and the pre-FR headings and placeholders, with the
+  builder's feedback blocks beside them; with the rubric table ticked, each
+  score block carries its OWN row's levels and points (the AI proposal's
+  under "AI proposal", the teacher's under theirs) and the builder's
+  final-only table is left out, since beside a proposal it would print the
+  teacher's levels under no heading. The old score block's "Why" column and
+  unlabelled overall line are gone in both copies (D-1); the AI's comments
+  print through AI feedback (as its labelled list in the teacher copy). Unlike
+  before FR, the teacher copy prints levels only when the rubric-table box is
+  ticked, so the box means the same in both copies. `answers=0` hides
+  answers when any box is ticked (D-11); the ✓ / ✗ key follows the Teacher
+  score box only (W-1). An old `?scores=` URL is read only when no box is in
+  the URL, as the two score boxes; it prints the student copy without the
+  rubric table or comments it used to carry, and the toolbar's "Select all"
+  rebuilds it as boxes. Feedback text is read only when its box is ticked
+  and never logged. The teacher copy prints "Teacher copy — not for
+  students" under the handed-in line and "Teacher copy" in each page's
+  footer, so a sheet handed back by mistake says what it is. Open: the
+  teacher copy's "AI proposal" comes from all rows, while its AI feedback
+  drops a row older than the answer's last edit (D-10), so after a
+  pass-back the two can disagree until the AI re-scores.

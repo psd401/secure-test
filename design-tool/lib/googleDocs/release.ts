@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import {
   buildFeedbackRelease,
+  questionRubric,
   type FeedbackBlock,
   type FeedbackQuestionInput,
 } from "@/lib/reporting/feedbackRelease";
@@ -261,11 +262,7 @@ export async function releaseToGoogleDocs(
       if (set) setShown.add(set.id);
       const rowsHere = resp ? (scoresByResponse.get(resp.id) ?? []) : [];
       questions.push({
-        rubric:
-          item.config.rubric ??
-          rowsHere.find((r) => r.status === "final")?.rubric_snapshot ??
-          rowsHere.find((r) => r.rubric_snapshot)?.rubric_snapshot ??
-          null,
+        rubric: questionRubric(item.config.rubric, rowsHere),
         scores: rowsHere,
         // FR slice 1: never `rationale.note` (a score-change reason); the
         // teacher's comment is its own row (R-1).

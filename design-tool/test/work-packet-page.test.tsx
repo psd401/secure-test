@@ -11,9 +11,11 @@ import { closeDb, getDb } from "../db/client";
 import {
   assessments,
   assets,
+  attempt_feedback,
   attempts,
   item_sets,
   items,
+  response_feedback,
   responses,
   roster_sections,
   scores,
@@ -313,6 +315,9 @@ async function seedPacketScene() {
         attempt_id: adaAttempt!.id,
         item_id: itemRows[1]!.id,
         response: { type: "essay", text: "ADA-ESSAY-PROSE line one\nline two" },
+        // Last edited at hand-in, before the AI scored it: FR D-10 drops an AI
+        // row older than the answer's last edit (a pass-back's leftover).
+        updated_at: new Date("2026-09-14T17:00:00Z"),
       },
       {
         attempt_id: adaAttempt!.id,
@@ -710,13 +715,19 @@ describe("work packet — feedback without the answer (U-23)", () => {
   test("answers=0 keeps stems, choices and feedback; drops every answer", async () => {
     const { assessment } = await seedPacketScene();
     const body = packetBody(
-      await render(assessment.id, { section: SECTION, scores: "both", answers: "0" }),
+      await render(assessment.id, {
+        section: SECTION,
+        teacher_score: "1",
+        ai_score: "1",
+        ai_feedback: "1",
+        answers: "0",
+      }),
     );
     // The question and the feedback stay.
     expect(body).toContain("STEM-ESSAY");
     expect(body).toContain("STEM-MC-MULTI");
     expect(body).toContain("CHOICE-NEON");
-    expect(body).toContain("HUMAN-WHY");
+    expect(body).toContain("Teacher score");
     expect(body).toContain("AI-OVERALL");
     // Nothing the student wrote or chose: no essay, no ticks, no drawing, no
     // table grid, no short-text math, no "No answer." placeholder.
@@ -731,11 +742,11 @@ describe("work packet — feedback without the answer (U-23)", () => {
     expect(body).not.toContain("answer-text");
   });
 
-  test("answers=0 with scores=none prints the answers and says why", async () => {
+  test("answers=0 with no box ticked prints the answers and says why", async () => {
     const { assessment } = await seedPacketScene();
     const html = await render(assessment.id, { section: SECTION, answers: "0" });
     expect(packetBody(html)).toContain("ADA-ESSAY-PROSE");
-    expect(html).toContain("Leaving out answers needs a score choice");
+    expect(html).toContain("Leaving out answers needs a score or feedback box");
   });
 
   test("the toolbar box follows ?answers=, and Select all keeps it", async () => {
@@ -743,7 +754,7 @@ describe("work packet — feedback without the answer (U-23)", () => {
     const off = await render(assessment.id, { section: SECTION });
     expect(off).toContain('name="answers" value="0"/>');
     expect(off).toContain("Leave out answers (scores and feedback only)");
-    expect(off).not.toContain("Leaving out answers needs a score choice");
+    expect(off).not.toContain("Leaving out answers needs a score or feedback box");
     const on = await render(assessment.id, { section: SECTION, scores: "ai", answers: "0" });
     expect(on).toContain('name="answers" checked="" value="0"/>');
     expect(on).toMatch(/href="[^"]*answers=0[^"]*">Select all/);
@@ -751,14 +762,26 @@ describe("work packet — feedback without the answer (U-23)", () => {
 });
 
 describe("work packet — scores", () => {
-  test("scores=both prints the teacher block and the AI proposal, never the research row", async () => {
+  // FR D-16: the teacher copy keeps the pre-FR blocks — the AI proposal, its
+  // heading, the placeholders. The AI's comments come through AI feedback.
+  test("teacher copy prints the teacher block and the AI proposal, never the research row", async () => {
     const { assessment } = await seedPacketScene();
-    const html = await render(assessment.id, { section: SECTION, scores: "both" });
+    const html = packetBody(
+      await render(assessment.id, {
+        section: SECTION,
+        teacher_copy: "1",
+        teacher_score: "1",
+        ai_score: "1",
+        ai_feedback: "1",
+      }),
+    );
 
     expect(html).toContain("Teacher score");
     expect(html).toContain("3 / 4");
-    expect(html).toContain("HUMAN-WHY");
-    expect(html).toContain("HUMAN-OVERALL");
+    // R-1: a teacher's row's text is never "Teacher feedback" — that comes
+    // only from response_feedback (the fixture's human text is synthetic).
+    expect(html).not.toContain("HUMAN-WHY");
+    expect(html).not.toContain("HUMAN-OVERALL");
     expect(html).toContain("AI proposal");
     expect(html).toContain("2 / 4");
     expect(html).toContain("AI-WHY");
@@ -778,35 +801,347 @@ describe("work packet — scores", () => {
     expect(html).not.toContain(">hi<");
   });
 
+  test("a legacy scores=both URL is the student copy with both score boxes", async () => {
+    const { assessment } = await seedPacketScene();
+    const html = await render(assessment.id, { section: SECTION, scores: "both" });
+    const body = packetBody(html);
+    expect(body).toContain("Teacher score");
+    expect(body).toContain("3 / 4");
+    expect(body).not.toContain("AI proposal");
+    expect(body).not.toContain("2 / 4");
+    expect(body).not.toContain("No AI score");
+    expect(body).not.toContain("No teacher score");
+    // D-13: the MC's answer-key score is a plain "Score".
+    expect(body).toContain("<h3>Score</h3>");
+    expect(body).not.toContain("Auto score (your answer key)");
+    // The mapping is the two score boxes only.
+    expect(body).not.toContain("AI feedback");
+    expect(box(html, "teacher_score", "1")?.checked).toBe(true);
+    expect(box(html, "ai_score", "1")?.checked).toBe(true);
+    expect(box(html, "ai_feedback", "1")?.checked).toBe(false);
+  });
+
   test("scores=none is the default: no score block anywhere", async () => {
     const { assessment } = await seedPacketScene();
-    const html = await render(assessment.id, { section: SECTION });
+    // The packet itself: the toolbar always carries the box labels.
+    const html = packetBody(await render(assessment.id, { section: SECTION }));
     expect(html).not.toContain("Teacher score");
     expect(html).not.toContain("AI proposal");
     expect(html).not.toContain("No teacher score");
+    expect(html).not.toContain("score-block");
   });
 
   test("scores=teacher and scores=ai each drop the other side", async () => {
     const { assessment } = await seedPacketScene();
-    const teacherOnly = await render(assessment.id, {
-      section: SECTION,
-      scores: "teacher",
-    });
+    const teacherOnly = packetBody(
+      await render(assessment.id, {
+        section: SECTION,
+        scores: "teacher",
+      }),
+    );
     expect(teacherOnly).toContain("Teacher score");
     expect(teacherOnly).not.toContain("AI proposal");
     expect(teacherOnly).not.toContain("AI-OVERALL");
 
-    const aiOnly = await render(assessment.id, { section: SECTION, scores: "ai" });
-    expect(aiOnly).toContain("AI proposal");
+    // Student copy: Ada's AI score was overridden, so it prints nothing (D-3).
+    const aiOnly = packetBody(await render(assessment.id, { section: SECTION, scores: "ai" }));
+    expect(aiOnly).not.toContain("AI proposal");
+    expect(aiOnly).not.toContain("2 / 4");
     expect(aiOnly).not.toContain("Teacher score");
     expect(aiOnly).not.toContain("HUMAN-OVERALL");
+    // D-16: only the teacher copy marks the printed page as not for students.
+    expect(aiOnly).not.toContain("Teacher copy");
+
+    const aiTeacherCopy = packetBody(
+      await render(assessment.id, { section: SECTION, scores: "ai", teacher_copy: "1" }),
+    );
+    expect(aiTeacherCopy).toContain("AI proposal");
+    expect(aiTeacherCopy).toContain("2 / 4");
+    expect(aiTeacherCopy).not.toContain("Teacher score");
+    expect(aiTeacherCopy).toContain("Teacher copy — not for students");
+    expect(aiTeacherCopy).toContain("· Teacher copy</p>");
   });
 
   test("an unreadable scores value falls back to none instead of erroring", async () => {
     const { assessment } = await seedPacketScene();
-    const html = await render(assessment.id, { section: SECTION, scores: "everything" });
+    const html = packetBody(await render(assessment.id, { section: SECTION, scores: "everything" }));
     expect(html).not.toContain("Teacher score");
     expect(html).toContain("ADA-ESSAY-PROSE");
+  });
+});
+
+// FR slice 4 (docs/feedback-release-design.md): the packet's boxes. Ada's
+// essay is the override case (human final 3/4, AI proposal 2/4); Ben's gets an
+// approved AI final here — the approve route's shape: a NEW final row with the
+// proposal's rationale, the proposal left in place. Ada also gets the
+// teacher's own comments and a score-change reason that must never print.
+describe("work packet — feedback release boxes (FR)", () => {
+  async function seedFeedbackScene() {
+    const scene = await seedPacketScene();
+    const db = getDb();
+    const essay = scene.items[1]!;
+    const [adaEssay] = await db
+      .select()
+      .from(responses)
+      .where(and(eq(responses.attempt_id, scene.adaAttempt.id), eq(responses.item_id, essay.id)));
+    const [benEssay] = await db
+      .select()
+      .from(responses)
+      .where(and(eq(responses.attempt_id, scene.benAttempt.id), eq(responses.item_id, essay.id)));
+    await db
+      .update(responses)
+      .set({ updated_at: new Date("2026-09-14T17:05:00Z") })
+      .where(eq(responses.id, benEssay!.id));
+    const benRationale = {
+      criterion_scores: [{ criterion_id: "focus", level_id: "hi", points: 4, rationale: "BEN-AI-WHY" }],
+      overall_rationale: "BEN-AI-OVERALL",
+    };
+    await db.insert(scores).values([
+      {
+        response_id: benEssay!.id,
+        method: "ai",
+        points: 4,
+        max_points: 4,
+        scorer: "bedrock",
+        status: "proposed",
+        created_at: new Date("2026-09-14T18:00:00Z"),
+        rationale: benRationale,
+      },
+      {
+        response_id: benEssay!.id,
+        method: "ai",
+        points: 4,
+        max_points: 4,
+        scorer: "bedrock",
+        status: "final",
+        reviewed_by_sub: OWNER,
+        created_at: new Date("2026-09-14T18:30:00Z"),
+        rationale: benRationale,
+      },
+    ]);
+    // A change of score: the reason lives in rationale.note (R-1) and must
+    // never print, under any box, in either copy.
+    await db
+      .update(scores)
+      .set({
+        rationale: {
+          criterion_scores: [{ criterion_id: "focus", level_id: "hi", points: 3, rationale: "" }],
+          note: "CHANGE-REASON",
+        },
+      })
+      .where(and(eq(scores.response_id, adaEssay!.id), eq(scores.method, "human")));
+    await db.insert(response_feedback).values({
+      response_id: adaEssay!.id,
+      author_sub: OWNER,
+      text: "ADA-TEACHER-NOTE\nsecond line",
+    });
+    await db.insert(attempt_feedback).values({
+      attempt_id: scene.adaAttempt.id,
+      author_sub: OWNER,
+      text: "ADA-OVERALL-NOTE",
+    });
+    return scene;
+  }
+
+  /** One student's printed page, by name. */
+  function pageOf(html: string, name: string): string {
+    const body = packetBody(html);
+    const start = body.indexOf(`aria-label="Work for ${name}"`);
+    const next = body.indexOf('class="student-page', start + 1);
+    return body.slice(start, next === -1 ? undefined : next);
+  }
+
+  test("student copy: an overridden AI score never prints, its feedback does, labelled (D-3, D-10)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const html = await render(assessment.id, {
+      section: SECTION,
+      teacher_score: "1",
+      ai_score: "1",
+      ai_feedback: "1",
+    });
+    const ada = pageOf(html, "Fixture, Ada");
+    expect(ada).toContain("<h3>Teacher score</h3>");
+    expect(ada).toContain("3 / 4");
+    expect(ada).not.toContain("2 / 4");
+    expect(ada).not.toContain("AI proposal");
+    expect(ada).not.toContain("AI score");
+    expect(ada).not.toContain("No AI score");
+    expect(ada).toContain("<h3>AI feedback</h3>");
+    expect(ada).toContain("AI-OVERALL");
+    // R-2 off: the AI's per-criterion comment as a labelled list.
+    expect(ada).toContain("<strong>CRITERION-FOCUS:</strong>");
+    expect(ada).toContain("AI-WHY");
+    expect(ada).not.toContain("RESEARCH");
+    // No unlabelled feedback anywhere (D-1): the old ScoreBlock's "Why"
+    // column and loose overall line are gone.
+    expect(ada).not.toContain("<th>Why</th>");
+  });
+
+  test("an approved AI final prints as AI score, and its comments once (D-17, no double print)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const html = await render(assessment.id, { section: SECTION, ai_score: "1", ai_feedback: "1" });
+    const ben = pageOf(html, "Sample, Ben");
+    expect(ben).toContain("<h3>AI score</h3>");
+    expect(ben).toContain("4 / 4");
+    expect(ben).not.toContain("AI score (approved)");
+    expect(ben.split("BEN-AI-OVERALL").length - 1).toBe(1);
+    expect(ben.split("BEN-AI-WHY").length - 1).toBe(1);
+    // AI feedback alone: the comments without the score (the beta teacher's ask).
+    const fbOnly = pageOf(
+      await render(assessment.id, { section: SECTION, ai_feedback: "1" }),
+      "Sample, Ben",
+    );
+    expect(fbOnly).toContain("BEN-AI-OVERALL");
+    expect(fbOnly).not.toContain("4 / 4");
+    expect(fbOnly).not.toContain("AI score");
+  });
+
+  test("teacher feedback per question and overall, labelled; nothing without the box (D-4)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const off = packetBody(await render(assessment.id, { section: SECTION, teacher_score: "1" }));
+    expect(off).not.toContain("ADA-TEACHER-NOTE");
+    expect(off).not.toContain("ADA-OVERALL-NOTE");
+    expect(off).not.toContain("Teacher feedback");
+
+    const html = await render(assessment.id, { section: SECTION, teacher_feedback: "1" });
+    const ada = pageOf(html, "Fixture, Ada");
+    expect(ada).toContain("<h3>Teacher feedback</h3>");
+    // Plain text with its line break kept by pre-line, never as HTML.
+    expect(ada).toContain('<p class="feedback-text">ADA-TEACHER-NOTE\nsecond line</p>');
+    // The overall comment once, above the first question.
+    expect(ada.split("ADA-OVERALL-NOTE").length - 1).toBe(1);
+    expect(ada.indexOf("ADA-OVERALL-NOTE")).toBeLessThan(ada.indexOf("Q1"));
+    expect(ada.indexOf("ADA-TEACHER-NOTE")).toBeGreaterThan(ada.indexOf("STEM-ESSAY"));
+    // Ben has no comment: no empty label.
+    expect(pageOf(html, "Sample, Ben")).not.toContain("Teacher feedback");
+  });
+
+  test("a score-change reason never prints, in either copy, under every box (R-1)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const all = {
+      section: SECTION,
+      teacher_score: "1",
+      ai_score: "1",
+      teacher_feedback: "1",
+      ai_feedback: "1",
+      rubric_table: "1",
+    };
+    for (const search of [all, { ...all, teacher_copy: "1" }]) {
+      const html = await render(assessment.id, search);
+      expect(html).not.toContain("CHANGE-REASON");
+      expect(packetBody(html)).toContain("ADA-TEACHER-NOTE");
+    }
+  });
+
+  test("rubric table (R-2): levels from the final only, points with a score, AI comments as a column", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const html = await render(assessment.id, {
+      section: SECTION,
+      teacher_score: "1",
+      ai_feedback: "1",
+      rubric_table: "1",
+    });
+    const ada = pageOf(html, "Fixture, Ada");
+    expect(ada).toContain("<th>Criterion</th><th>Level</th><th>Points</th><th>AI feedback</th>");
+    expect(ada).toContain("<td>CRITERION-FOCUS</td><td>Strong</td><td>3</td><td>AI-WHY</td>");
+    // The comment sits in the table, not repeated as a list.
+    expect(ada).not.toContain("<strong>CRITERION-FOCUS:</strong>");
+
+    // D-3 through the table: with only the AI score ticked on an overridden
+    // response, the AI's level ("Weak") must not leak as the table's level.
+    const aiOnly = pageOf(
+      await render(assessment.id, { section: SECTION, ai_score: "1", rubric_table: "1" }),
+      "Fixture, Ada",
+    );
+    expect(aiOnly).not.toContain("Weak");
+    expect(aiOnly).not.toContain("<th>Points</th>");
+
+    // Off: no table at all.
+    const off = pageOf(
+      await render(assessment.id, { section: SECTION, teacher_score: "1", ai_feedback: "1" }),
+      "Fixture, Ada",
+    );
+    expect(off).not.toContain("<th>Level</th>");
+  });
+
+  test("answers=0 with AI feedback alone is a feedback sheet (D-11)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const html = await render(assessment.id, { section: SECTION, ai_feedback: "1", answers: "0" });
+    const body = packetBody(html);
+    expect(body).not.toContain("ADA-ESSAY-PROSE");
+    expect(body).toContain("AI-OVERALL");
+    expect(html).not.toContain("Leaving out answers needs");
+  });
+
+  test("teacher copy keeps the proposal headings beside the labelled feedback (D-16)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    const html = await render(assessment.id, {
+      section: SECTION,
+      teacher_copy: "1",
+      ai_score: "1",
+      teacher_feedback: "1",
+    });
+    expect(pageOf(html, "Fixture, Ada")).toContain("AI proposal");
+    expect(pageOf(html, "Fixture, Ada")).toContain("ADA-TEACHER-NOTE");
+    expect(pageOf(html, "Sample, Ben")).toContain("AI score (approved)");
+    expect(box(html, "teacher_copy", "1")?.checked).toBe(true);
+    expect(html).toMatch(/href="[^"]*teacher_copy=1[^"]*">Select all/);
+  });
+
+  test("teacher copy + rubric table: the proposal's own levels sit under AI proposal, the teacher's under theirs (D-16)", async () => {
+    const { assessment } = await seedFeedbackScene();
+    /** Each score block on a page, by heading → its inner HTML (no div nests inside one). */
+    const scoreBlocks = (page: string): Map<string, string> => {
+      const out = new Map<string, string>();
+      for (const part of page.split('<div class="score-block">').slice(1)) {
+        const inner = part.slice(0, part.indexOf("</div>"));
+        out.set(/<h3>([^<]*)<\/h3>/.exec(inner)![1]!, inner);
+      }
+      return out;
+    };
+
+    // AI score alone on Ada's overridden essay: the proposal's level, never the teacher's.
+    const aiOnly = pageOf(
+      await render(assessment.id, { section: SECTION, teacher_copy: "1", ai_score: "1", rubric_table: "1" }),
+      "Fixture, Ada",
+    );
+    const proposal = scoreBlocks(aiOnly).get("AI proposal")!;
+    expect(proposal).toContain("2 / 4");
+    expect(proposal).toContain("<td>CRITERION-FOCUS</td><td>Weak</td><td>2</td>");
+    expect(aiOnly).not.toContain("Strong");
+    // The builder's final-only table is not printed in the teacher copy.
+    expect(aiOnly.split("<th>Level</th>").length - 1).toBe(1);
+
+    // Both scores and AI feedback: each block its own levels; no "Why" column
+    // (D-1) — the AI's comment prints once, as AI feedback's labelled list.
+    const both = pageOf(
+      await render(assessment.id, {
+        section: SECTION,
+        teacher_copy: "1",
+        teacher_score: "1",
+        ai_score: "1",
+        ai_feedback: "1",
+        rubric_table: "1",
+      }),
+      "Fixture, Ada",
+    );
+    const blocks = scoreBlocks(both);
+    expect(blocks.get("Teacher score")).toContain("<td>CRITERION-FOCUS</td><td>Strong</td><td>3</td>");
+    expect(blocks.get("Teacher score")).not.toContain("Weak");
+    expect(blocks.get("AI proposal")).toContain("<td>CRITERION-FOCUS</td><td>Weak</td><td>2</td>");
+    expect(blocks.get("AI proposal")).not.toContain("Strong");
+    expect(both).not.toContain("<th>Why</th>");
+    expect(both).not.toContain("<th>AI feedback</th>");
+    expect(both.split("AI-WHY").length - 1).toBe(1);
+    expect(both).toContain("<strong>CRITERION-FOCUS:</strong>");
+
+    // Box off: no levels in the teacher copy (R-2).
+    const off = pageOf(
+      await render(assessment.id, { section: SECTION, teacher_copy: "1", ai_score: "1" }),
+      "Fixture, Ada",
+    );
+    expect(off).toContain("AI proposal");
+    expect(off).not.toContain("<th>Level</th>");
   });
 });
 
@@ -898,11 +1233,15 @@ describe("work packet — slice 2's toolbar", () => {
       section: SECTION,
       items: itemRows[1]!.id,
       scores: "both",
+      teacher_copy: "1",
     });
+    // FR slice 4: rebuilt as the boxes, never the legacy scores=.
     const expectedQuery = new URLSearchParams({
       section: SECTION,
       questions: "1",
-      scores: "both",
+      teacher_score: "1",
+      ai_score: "1",
+      teacher_copy: "1",
     }).toString();
     expect(html).toContain(
       `href="/dashboard/${assessment.id}/results/work?${expectedQuery.replace(/&/g, "&amp;")}">Select all</a>`,
@@ -912,11 +1251,26 @@ describe("work packet — slice 2's toolbar", () => {
     expect(html.slice(0, legendEnd)).not.toContain("items=");
   });
 
-  test("the scores radio follows ?scores=, and the anonymous checkbox follows ?anon=", async () => {
+  test("the score and feedback boxes follow the URL, and the anonymous checkbox follows ?anon=", async () => {
     const { assessment } = await seedPacketScene();
-    const html = await render(assessment.id, { section: SECTION, scores: "ai", anon: "1" });
-    expect(html).toContain('<input type="radio" name="scores" checked="" value="ai"/>');
-    expect(html).not.toContain('<input type="radio" name="scores" checked="" value="none"/>');
+    const html = await render(assessment.id, {
+      section: SECTION,
+      ai_score: "1",
+      teacher_feedback: "1",
+      anon: "1",
+    });
+    expect(html).not.toContain('name="scores"');
+    // FR D-7: the Doc dialog's labels, in its order.
+    expect(box(html, "teacher_score", "1")).toEqual({ checked: false, text: "Teacher score" });
+    expect(box(html, "ai_score", "1")).toEqual({ checked: true, text: "AI score" });
+    expect(box(html, "teacher_feedback", "1")).toEqual({ checked: true, text: "Teacher feedback" });
+    expect(box(html, "ai_feedback", "1")).toEqual({ checked: false, text: "AI feedback" });
+    expect(box(html, "rubric_table", "1")).toEqual({ checked: false, text: "Rubric table" });
+    expect(box(html, "teacher_copy", "1")?.checked).toBe(false);
+    const order = ["teacher_score", "ai_score", "teacher_feedback", "ai_feedback", "rubric_table"].map(
+      (k) => html.indexOf(`name="${k}"`),
+    );
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain('<input type="checkbox" name="anon" checked="" value="1"/>');
   });
 

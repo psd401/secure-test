@@ -86,6 +86,23 @@ export interface FeedbackRelease {
   questions: FeedbackBlock[][];
 }
 
+/**
+ * The rubric a question's criteria resolve through: the item's own, else the
+ * final row's snapshot, else any row's. One rule for the Doc and the packet
+ * (R-3), so a criterion reads the same name in both.
+ */
+export function questionRubric(
+  itemRubric: Rubric | null | undefined,
+  rows: Array<{ status: string; rubric_snapshot?: Rubric | null }>,
+): Rubric | null {
+  return (
+    itemRubric ??
+    rows.find((r) => r.status === "final")?.rubric_snapshot ??
+    rows.find((r) => r.rubric_snapshot)?.rubric_snapshot ??
+    null
+  );
+}
+
 function teacherBlock(text: string | null): FeedbackBlock | null {
   const t = text?.trim() ?? "";
   return t ? { kind: "feedback", source: "teacher", label: "Teacher feedback", text: t, criteria: [] } : null;

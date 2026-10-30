@@ -3,8 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  attempt_feedback,
   item_sets,
   items,
+  response_feedback,
   responses,
   scores,
   type ItemRow,
@@ -20,25 +22,28 @@ import { renderFillBlankAnswerHtml, renderFillBlankGapsHtml } from "@/lib/report
 import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import {
-  overallRationale,
-  rubricScoreRows,
-  type RubricScoreRow,
-} from "@/lib/reporting/rubricScoreView";
+  buildFeedbackRelease,
+  questionRubric,
+  type FeedbackBlock,
+} from "@/lib/reporting/feedbackRelease";
+import { CONTENT_OPTIONS } from "@/lib/googleDocs/sendDialog";
 import {
   choiceCheckboxLines,
   packetHidesAnswers,
-  packetScoreHeading,
+  packetPrintsBlocks,
+  packetScoreBlocks,
+  packetShowsKey,
   parsePacketQuery,
   keyCountLine,
-  PACKET_SCORE_MODES,
+  PACKET_CONTENT_KEYS,
   sectionAnonymousLabels,
   selectPacket,
   studentChoices,
-  selectPacketScores,
   stemExcerpt,
   stripLine,
   type PacketQuery,
   type PacketRun,
+  type PacketScoreBlock,
 } from "@/lib/reporting/workPacket";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { buildResults, sectionEnrolment, type ResultsRow } from "@/lib/scoring/results";
@@ -50,8 +55,10 @@ import { pageAssessment } from "@/lib/api/access";
  * Student work export — the printable class packet
  * (docs/student-work-export-design.md, slices 0–1). A pilot-teacher request:
  * one page per student, a new sheet each, one PDF per class, an inch of margin
- * to annotate in, checkboxes on every multiple-choice option, and scores from
- * the teacher, the AI, both or neither.
+ * to annotate in, checkboxes on every multiple-choice option, and — since FR
+ * slice 4 (docs/feedback-release-design.md) — any combination of teacher
+ * score, AI score, teacher feedback, AI feedback and a rubric table, each
+ * labelled by its source (D-1, D-2, R-2).
  *
  * FERPA posture — READ THE DESIGN PAGE. This page is deliberately NOT the
  * print report. `results/print/page.tsx` carries a hard rule in its header,
@@ -66,7 +73,20 @@ import { pageAssessment } from "@/lib/api/access";
  * student identifier in the URL beyond the section label. Anonymous mode
  * (D-1) exists so a packet can leave the teacher's hands — labels
  * everywhere, and the name ↔ label mapping only on a tear-off key page at
- * the very end.
+ * the very end. Anonymous mode cannot reach inside free text: a teacher's
+ * feedback could name the student, and prints as written.
+ *
+ * FR (docs/feedback-release-design.md): the page also prints the teacher's
+ * own feedback (`response_feedback` per question, `attempt_feedback` once
+ * per student — student-record content, D-4 / FERPA there), read only when
+ * that box is ticked. The default is the STUDENT copy: an AI score prints only
+ * while it is the response's final score (D-3, D-17), so a score the teacher
+ * overrode never reaches a student, and AI feedback comes from the AI's own
+ * row (D-10). "Teacher copy" (D-16) brings back the AI proposal headings for
+ * a teacher to annotate, each score block with its own row's rubric levels
+ * when the rubric table is ticked. A score-change reason (`rationale.note`) never
+ * prints in either. Nothing here logs — keep it that way: feedback text never
+ * goes to a log (D-14).
  *
  * URL contract (docs/student-work-export-design.md §The page):
  *   /dashboard/<assessmentId>/results/work
@@ -81,12 +101,18 @@ import { pageAssessment } from "@/lib/api/access";
  *                        picker only offers the chosen section's students.
  *     ?items=<uuid,...>  the questions to include; default every one
  *     ?questions=0       answers only (no stems, stimulus or unselected choices)
+ *     ?teacher_score=1 ?ai_score=1 ?teacher_feedback=1 ?ai_feedback=1
+ *     ?rubric_table=1    FR D-2 / R-2: the boxes, each off when absent
+ *     ?teacher_copy=1    FR D-16: AI proposals and today's headings, to annotate
  *     ?scores=none|teacher|ai|both
+ *                        legacy (before FR): read only when none of the boxes
+ *                        is in the URL, as the two score boxes (`both` = both)
  *     ?anon=1            labels instead of names, key page last
  *     ?spacing=double    every essay answer double-spaced (RT D-10; default single)
- *     ?answers=0         feedback without the answer (U-23): the question and the
- *                        score blocks print, what the student wrote or chose does
- *                        not. Ignored with `scores=none` (nothing would print).
+ *     ?answers=0         feedback without the answer (U-23, FR D-11): the question
+ *                        and the score / feedback blocks print, what the student
+ *                        wrote or chose does not. Ignored with no box ticked
+ *                        (nothing would print).
  *
  * The section packet is handed-in attempts only: an in-progress answer can
  * still change and a packet is a record. `?attempt=` (a pilot teacher,
@@ -150,6 +176,11 @@ const PRINT_CSS = `
   grid-template-columns: 1fr 1fr; break-inside: avoid; page-break-inside: avoid; }
 .packet .scores-one { grid-template-columns: 1fr; }
 .packet .score-block { border: 1px solid #000; padding: .4rem .5rem; }
+/* FR D-1: every feedback block under its source's label, in print ink. The
+   text is a teacher's or the AI's plain text: pre-line keeps its breaks. */
+.packet .feedback-block { margin-top: .5rem; break-inside: avoid; page-break-inside: avoid; }
+.packet .feedback-text { margin: 0; white-space: pre-line; }
+.packet .feedback-criteria { margin: .15rem 0 0; padding-left: 1.25rem; }
 .packet .page-footer { margin-top: 1.5rem; padding-top: .35rem;
   border-top: 1px solid #000; font-size: 9pt; color: #333; }
 .packet .key-page table { width: auto; }
@@ -166,7 +197,7 @@ const PRINT_CSS = `
 .toolbar-item { display: block; font-size: .85rem; white-space: nowrap; }
 .toolbar-flag { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; }
 .toolbar-scores { display: flex; flex-wrap: wrap; gap: .25rem 1rem;
-  align-items: center; border: none; padding: 0; }
+  align-items: center; border: 1px solid #ccc; border-radius: .375rem; padding: .5rem .75rem; }
 .toolbar-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .toolbar-students { border: 1px solid #ccc; border-radius: .375rem; padding: .5rem .75rem;
   display: flex; flex-wrap: wrap; gap: .5rem 2rem; }
@@ -205,7 +236,10 @@ function packetHref(
   if (query.inProgress) params.set("in_progress", "1");
   if (!omit.has("items") && query.items) params.set("items", query.items.join(","));
   params.set("questions", query.questions ? "1" : "0");
-  params.set("scores", query.scores);
+  // FR slice 4: the boxes, never the legacy `scores=` — a rebuilt link that
+  // kept it would carry the old mapping into every later click.
+  for (const key of PACKET_CONTENT_KEYS) if (query.contents[key]) params.set(key, "1");
+  if (query.teacherCopy) params.set("teacher_copy", "1");
   if (query.anon) params.set("anon", "1");
   if (query.doubleSpace) params.set("spacing", "double");
   if (!query.answers) params.set("answers", "0");
@@ -215,8 +249,8 @@ function packetHref(
 /**
  * answerView's lines, with its ✓ / ✗ only when the packet shows the teacher's
  * side (`showKey`, hand-run 2026-09-14 finding W-1): a mark against the key is
- * the key, and a packet printed with `scores=none` or `scores=ai` may leave
- * the teacher's hands (anonymous peer review, calibration).
+ * the key, and a packet printed without the Teacher score box may leave the
+ * teacher's hands (anonymous peer review, calibration).
  */
 function AnswerLines({ lines, showKey }: { lines: AnswerLine[]; showKey: boolean }) {
   if (lines.length === 0) return <p className="meta muted">Nothing selected.</p>;
@@ -285,53 +319,94 @@ function TableGrid({
   );
 }
 
-/** One score block: points, the criterion rows and the overall note. */
-function ScoreBlock({
-  heading,
-  row,
-  rubricRows,
-  overall,
-}: {
-  heading: string;
-  row: { points: number; max_points: number } | null;
-  rubricRows: RubricScoreRow[];
-  overall: string | null;
-}) {
+/**
+ * One score block: its source's heading and the points, or "—" (teacher copy's
+ * placeholder). In the teacher copy with the rubric table ticked it carries
+ * its own row's levels and points (D-16, R-2), inside the block so whose they
+ * are is never in doubt.
+ */
+function ScoreBlock({ block }: { block: PacketScoreBlock }) {
   return (
     <div className="score-block">
-      <h3>{heading}</h3>
-      {row ? (
+      <h3>{block.label}</h3>
+      {block.row ? (
         <p className="meta">
           <strong>
-            {row.points} / {row.max_points}
+            {block.row.points} / {block.row.max_points}
           </strong>
         </p>
       ) : (
         <p className="meta muted">—</p>
       )}
-      {rubricRows.length > 0 ? (
+      {block.criteria.length > 0 ? (
         <table>
           <thead>
             <tr>
               <th>Criterion</th>
               <th>Level</th>
               <th>Points</th>
-              <th>Why</th>
             </tr>
           </thead>
           <tbody>
-            {rubricRows.map((r) => (
-              <tr key={r.criterion_id}>
-                <td>{r.criterion_name}</td>
-                <td>{r.level_label}</td>
-                <td>{r.points}</td>
-                <td>{r.rationale ?? "—"}</td>
+            {block.criteria.map((c, i) => (
+              <tr key={i}>
+                <td>{c.criterion}</td>
+                <td>{c.level}</td>
+                <td>{c.points}</td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : null}
-      {overall ? <p className="meta muted">{overall}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * A rubric table or a labelled feedback block from FR R-3's builder (the score
+ * blocks go through ScoreBlock). Text is plain and prints as JSX text, never
+ * as HTML: a teacher's comment is whatever they typed.
+ */
+function ReleaseBlock({ block }: { block: FeedbackBlock }) {
+  if (block.kind === "score") return null;
+  if (block.kind === "rubric_table") {
+    const { columns } = block;
+    return (
+      <table>
+        <thead>
+          <tr>
+            <th>Criterion</th>
+            {columns.level ? <th>Level</th> : null}
+            {columns.points ? <th>Points</th> : null}
+            {columns.ai_feedback ? <th>AI feedback</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.criterion}</td>
+              {columns.level ? <td>{r.level ?? ""}</td> : null}
+              {columns.points ? <td>{r.points ?? ""}</td> : null}
+              {columns.ai_feedback ? <td>{r.ai_feedback ?? ""}</td> : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+  return (
+    <div className="feedback-block">
+      <h3>{block.label}</h3>
+      {block.text ? <p className="feedback-text">{block.text}</p> : null}
+      {block.criteria.length > 0 ? (
+        <ul className="feedback-criteria">
+          {block.criteria.map((c, i) => (
+            <li key={i}>
+              <strong>{c.criterion}:</strong> <span className="feedback-text">{c.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -584,11 +659,22 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
 
   // W-1 (hand-run 2026-09-14): the teacher's key — ✓ / ✗ on keyed lines and
   // the "expected" cell under a table — prints only with the teacher's side.
-  const showKey = query.scores === "teacher" || query.scores === "both";
+  const showKey = packetShowsKey(query.contents);
   const hideAnswers = packetHidesAnswers(query);
+  const { contents } = query;
+  // D-16: the teacher copy's levels print inside each score block
+  // (packetScoreBlocks), so the builder's final-only rubric table is left out
+  // there — beside an AI proposal it would print the teacher's levels under no
+  // heading. With it off, the AI's per-criterion comments print as AI
+  // feedback's labelled list instead (R-2).
+  const builderContents = query.teacherCopy ? { ...contents, rubric_table: false } : contents;
 
+  // FR slice 4: score rows feed the score boxes, AI feedback (the AI's own
+  // row, D-10) and the rubric table's levels — any of them reads them.
+  const needScores =
+    contents.teacher_score || contents.ai_score || contents.ai_feedback || contents.rubric_table;
   const scoreRows =
-    query.scores !== "none" && responseRows.length > 0
+    needScores && responseRows.length > 0
       ? await db
           .select()
           .from(scores)
@@ -610,6 +696,30 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
     if (list) list.push(s);
     else scoresByResponse.set(s.response_id, [s]);
   }
+
+  // FR R-1 / D-4: the teacher's own comments, read only when that box is
+  // ticked. Student-record content — printed here, never logged (D-14).
+  const questionFeedback =
+    contents.teacher_feedback && responseRows.length > 0
+      ? await db
+          .select({ response_id: response_feedback.response_id, text: response_feedback.text })
+          .from(response_feedback)
+          .where(
+            inArray(
+              response_feedback.response_id,
+              responseRows.map((r) => r.id),
+            ),
+          )
+      : [];
+  const feedbackByResponse = new Map(questionFeedback.map((f) => [f.response_id, f.text]));
+  const overallFeedback =
+    contents.teacher_feedback && attemptIds.length > 0
+      ? await db
+          .select({ attempt_id: attempt_feedback.attempt_id, text: attempt_feedback.text })
+          .from(attempt_feedback)
+          .where(inArray(attempt_feedback.attempt_id, attemptIds))
+      : [];
+  const feedbackByAttempt = new Map(overallFeedback.map((f) => [f.attempt_id, f.text]));
 
   function identityLine(row: ResultsRow): string {
     if (labels) return labels.get(row.attempt_id) ?? "Student";
@@ -736,18 +846,29 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           Show questions (stems, choices, stimulus)
         </label>
         <fieldset className="toolbar-scores">
-          <legend>Scores</legend>
-          {PACKET_SCORE_MODES.map((mode) => (
-            <label key={mode} className="toolbar-flag">
+          {/* FR D-7: the Doc dialog's boxes and labels (CONTENT_OPTIONS), less
+              prompt and sources. Each is off by default, so an unchecked box
+              (which submits nothing) is the default — no hidden field. */}
+          <legend>Scores and feedback</legend>
+          {CONTENT_OPTIONS.filter((o) =>
+            (PACKET_CONTENT_KEYS as readonly string[]).includes(o.key),
+          ).map((o) => (
+            <label key={o.key} className="toolbar-flag">
               <input
-                type="radio"
-                name="scores"
-                value={mode}
-                defaultChecked={query.scores === mode}
-              />
-              {mode}
+                type="checkbox"
+                name={o.key}
+                value="1"
+                defaultChecked={query.contents[o.key as (typeof PACKET_CONTENT_KEYS)[number]]}
+              />{" "}
+              {o.label}
             </label>
           ))}
+          <label className="toolbar-flag">
+            {/* FR D-16: off by default — the student copy, where an AI score
+                the teacher overrode never prints. */}
+            <input type="checkbox" name="teacher_copy" value="1" defaultChecked={query.teacherCopy} />{" "}
+            Teacher copy (shows the AI's proposal even where you changed it — not for students)
+          </label>
         </fieldset>
         <label className="toolbar-flag">
           <input type="checkbox" name="anon" value="1" defaultChecked={query.anon} />
@@ -770,10 +891,10 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
           <input type="checkbox" name="answers" value="0" defaultChecked={!query.answers} />
           Leave out answers (scores and feedback only)
         </label>
-        {!query.answers && query.scores === "none" ? (
+        {!query.answers && !packetPrintsBlocks(contents) ? (
           <p className="meta" role="status">
-            Leaving out answers needs a score choice above — answers are
-            printed until you pick teacher, ai or both.
+            Leaving out answers needs a score or feedback box ticked above —
+            answers are printed until you tick one.
           </p>
         ) : null}
         <button type="submit" className="rounded-md border px-3 py-1.5 text-sm self-start">
@@ -790,264 +911,303 @@ export default async function StudentWorkPacketPage({ params, searchParams }: Pa
               </p>
             ) : null}
 
-            {run.rows.map((row, i) => (
-              <section
-                key={row.attempt_id}
-                className="student-page"
-                aria-label={
-                  labels
-                    ? `Work for ${labels.get(row.attempt_id)}`
-                    : `Work for ${row.student.name}`
-                }
-              >
-                {/* Batch print: a divider on the first page of each section's
-                    run, so a stack can be split by hand. A one-section packet
-                    prints as before. */}
-                {multiRun && i === 0 ? (
-                  <p className="section-divider">{run.section ?? "No section"}</p>
-                ) : null}
-                <h2>{identityLine(row)}</h2>
-                <p className="meta">
-                  {[run.section, assessment.name].filter(Boolean).join(" · ")}
-                </p>
-                {/* Printed, not screen-only: the paper itself has to say these
-                    answers were not handed in (only `?attempt=` reaches here). */}
-                {row.status === "in_progress" ? (
+            {run.rows.map((row, i) => {
+              // FR R-3: the same builder as the Doc, so a box means the same
+              // thing in both outputs. One question per included item.
+              const rowsFor = (item: ItemRow): ScoreRow[] => {
+                const resp = responseByCell.get(`${row.attempt_id}:${item.id}`);
+                return resp ? (scoresByResponse.get(resp.id) ?? []) : [];
+              };
+              const rubricFor = (item: ItemRow) => questionRubric(item.config.rubric, rowsFor(item));
+              const release = buildFeedbackRelease(builderContents, {
+                questions: includedItems.map((item) => {
+                  const resp = responseByCell.get(`${row.attempt_id}:${item.id}`);
+                  const rowsHere = rowsFor(item);
+                  return {
+                    rubric: rubricFor(item),
+                    scores: rowsHere,
+                    // Never `rationale.note` (a score-change reason, R-1).
+                    teacher_feedback: resp ? (feedbackByResponse.get(resp.id) ?? null) : null,
+                    // D-10: an AI row older than the answer's last edit is
+                    // about the answer before a pass back.
+                    answer_updated_at: resp ? resp.updated_at : null,
+                  };
+                }),
+                overall_teacher_feedback: feedbackByAttempt.get(row.attempt_id) ?? null,
+              });
+              return (
+                <section
+                  key={row.attempt_id}
+                  className="student-page"
+                  aria-label={
+                    labels
+                      ? `Work for ${labels.get(row.attempt_id)}`
+                      : `Work for ${row.student.name}`
+                  }
+                >
+                  {/* Batch print: a divider on the first page of each section's
+                      run, so a stack can be split by hand. A one-section packet
+                      prints as before. */}
+                  {multiRun && i === 0 ? (
+                    <p className="section-divider">{run.section ?? "No section"}</p>
+                  ) : null}
+                  <h2>{identityLine(row)}</h2>
                   <p className="meta">
-                    <strong>In progress — not handed in</strong> · answers saved so far
+                    {[run.section, assessment.name].filter(Boolean).join(" · ")}
                   </p>
-                ) : (
-                  <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
-                )}
+                  {/* Printed, not screen-only: the paper itself has to say these
+                      answers were not handed in (only `?attempt=` reaches here). */}
+                  {row.status === "in_progress" ? (
+                    <p className="meta">
+                      <strong>In progress — not handed in</strong> · answers saved so far
+                    </p>
+                  ) : (
+                    <p className="meta muted">Handed in {printWhen(row.submitted_at)}</p>
+                  )}
+                  {/* FR D-16: the teacher copy prints AI proposals D-3/D-17 keep
+                      from students, so the paper itself says who it is for —
+                      like the key page's "do not distribute". */}
+                  {query.teacherCopy ? (
+                    <p className="meta">
+                      <strong>Teacher copy — not for students</strong>
+                    </p>
+                  ) : null}
+                  {/* FR D-4: the overall comment, once, above the questions. */}
+                  {release.overall ? <ReleaseBlock block={release.overall} /> : null}
 
-                {includedItems.map((item) => {
-                  const setId = setOpensAtItem.get(item.id);
-                  const set = setId ? setsById.get(setId)! : null;
-                  const response = responseByCell.get(`${row.attempt_id}:${item.id}`);
-                  const responseJson = response
-                    ? (response.response as unknown as Record<string, unknown>)
-                    : null;
-                  const view = describeAnswer(
-                    {
-                      type: item.type,
-                      stem: item.stem,
-                      choices: item.choices as Array<{ id: string; text: string }>,
-                      correct_choice_ids: item.correct_choice_ids as string[],
-                      correct_answer: item.correct_answer,
-                      config: item.config,
-                    },
-                    responseJson,
-                  );
-                  const boxes = query.questions
-                    ? choiceCheckboxLines(
-                        {
-                          type: item.type,
-                          choices: item.choices as Array<{ id: string; text: string }>,
-                        },
-                        responseJson,
-                      )
-                    : [];
-                  const picked = selectPacketScores(query.scores, [
-                    ...(response ? (scoresByResponse.get(response.id) ?? []) : []),
-                  ]);
-                  const rubric = item.config.rubric ?? null;
-                  // U-23: a hidden answer has nothing to paginate.
-                  const isText = view.kind === "text" && !hideAnswers;
-                  return (
-                    <div key={item.id}>
-                      {/* A set's stimulus and sources print once, above the first
-                          of its questions in this packet. Suppressed with
-                          ?questions=0, which is an answers-only packet. */}
-                      {set && query.questions ? (
-                        <StimulusBlock set={set} resolved={resolvedAssets} />
-                      ) : null}
-                      <div className={`item${isText ? " item-flow" : ""}`}>
-                        <p className="qnum">Q{item.position + 1}</p>
-                        {/* FB slice 3: with the questions printed, a
-                            fill-in-the-blank stem is printed ONCE, as the sentence
-                            with the student's answers in place
-                            (renderFillBlankAnswerHtml: stem through
-                            renderItemContent, answers escaped). Marks and
-                            "expected" only with the teacher's side (W-1). An
-                            answers-only packet prints the "Blank n: …" lines
-                            below instead. */}
-                        {query.questions && item.type === "fill_blank" && hideAnswers ? (
-                          <div
-                            className="stem"
-                            dangerouslySetInnerHTML={{
-                              __html: renderFillBlankGapsHtml(item.stem, resolvedAssets),
-                            }}
-                          />
-                        ) : query.questions && item.type === "fill_blank" ? (
-                          <div
-                            className="stem"
-                            dangerouslySetInnerHTML={{
-                              __html: renderFillBlankAnswerHtml(
-                                item.stem,
-                                item.config.blanks,
-                                responseJson,
-                                resolvedAssets,
-                                { showKey, summary: showKey && responseJson != null, handScored: fillBlankHandScored(item.config) },
-                              ),
-                            }}
-                          />
-                        ) : query.questions ? (
-                          <div
-                            className="stem"
-                            dangerouslySetInnerHTML={{
-                              __html: renderItemContent(item.stem, resolvedAssets),
-                            }}
-                          />
+                  {includedItems.map((item, itemIndex) => {
+                    const setId = setOpensAtItem.get(item.id);
+                    const set = setId ? setsById.get(setId)! : null;
+                    const response = responseByCell.get(`${row.attempt_id}:${item.id}`);
+                    const responseJson = response
+                      ? (response.response as unknown as Record<string, unknown>)
+                      : null;
+                    const view = describeAnswer(
+                      {
+                        type: item.type,
+                        stem: item.stem,
+                        choices: item.choices as Array<{ id: string; text: string }>,
+                        correct_choice_ids: item.correct_choice_ids as string[],
+                        correct_answer: item.correct_answer,
+                        config: item.config,
+                      },
+                      responseJson,
+                    );
+                    const boxes = query.questions
+                      ? choiceCheckboxLines(
+                          {
+                            type: item.type,
+                            choices: item.choices as Array<{ id: string; text: string }>,
+                          },
+                          responseJson,
+                        )
+                      : [];
+                    const blocks = release.questions[itemIndex] ?? [];
+                    // Student copy: the builder's score block (D-3, D-13, D-17);
+                    // teacher copy: today's, each with its own levels (D-16).
+                    const scoreBlocks = packetScoreBlocks(
+                      contents,
+                      query.teacherCopy,
+                      rowsFor(item),
+                      blocks,
+                      rubricFor(item),
+                    );
+                    const otherBlocks = blocks.filter((b) => b.kind !== "score");
+                    // U-23: a hidden answer has nothing to paginate.
+                    const isText = view.kind === "text" && !hideAnswers;
+                    return (
+                      <div key={item.id}>
+                        {/* A set's stimulus and sources print once, above the first
+                            of its questions in this packet. Suppressed with
+                            ?questions=0, which is an answers-only packet. */}
+                        {set && query.questions ? (
+                          <StimulusBlock set={set} resolved={resolvedAssets} />
                         ) : null}
-                        {/* Hotspot: the picture, then the regions the student
-                            picked beneath it (no overlay drawing in v1). */}
-                        {query.questions &&
-                        item.type === "hotspot" &&
-                        item.config.image_asset_id ? (
-                          <img
-                            src={assessmentAssetUrl(assessment.id, item.config.image_asset_id)}
-                            alt={`Picture for question ${item.position + 1}`}
-                          />
-                        ) : null}
+                        <div className={`item${isText ? " item-flow" : ""}`}>
+                          <p className="qnum">Q{item.position + 1}</p>
+                          {/* FB slice 3: with the questions printed, a
+                              fill-in-the-blank stem is printed ONCE, as the sentence
+                              with the student's answers in place
+                              (renderFillBlankAnswerHtml: stem through
+                              renderItemContent, answers escaped). Marks and
+                              "expected" only with the teacher's side (W-1). An
+                              answers-only packet prints the "Blank n: …" lines
+                              below instead. */}
+                          {query.questions && item.type === "fill_blank" && hideAnswers ? (
+                            <div
+                              className="stem"
+                              dangerouslySetInnerHTML={{
+                                __html: renderFillBlankGapsHtml(item.stem, resolvedAssets),
+                              }}
+                            />
+                          ) : query.questions && item.type === "fill_blank" ? (
+                            <div
+                              className="stem"
+                              dangerouslySetInnerHTML={{
+                                __html: renderFillBlankAnswerHtml(
+                                  item.stem,
+                                  item.config.blanks,
+                                  responseJson,
+                                  resolvedAssets,
+                                  { showKey, summary: showKey && responseJson != null, handScored: fillBlankHandScored(item.config) },
+                                ),
+                              }}
+                            />
+                          ) : query.questions ? (
+                            <div
+                              className="stem"
+                              dangerouslySetInnerHTML={{
+                                __html: renderItemContent(item.stem, resolvedAssets),
+                              }}
+                            />
+                          ) : null}
+                          {/* Hotspot: the picture, then the regions the student
+                              picked beneath it (no overlay drawing in v1). */}
+                          {query.questions &&
+                          item.type === "hotspot" &&
+                          item.config.image_asset_id ? (
+                            <img
+                              src={assessmentAssetUrl(assessment.id, item.config.image_asset_id)}
+                              alt={`Picture for question ${item.position + 1}`}
+                            />
+                          ) : null}
 
-                        {/* U-23: answers=0 — the choices still print for
-                            context (no ticks), nothing the student wrote does. */}
-                        {hideAnswers ? (
-                          boxes.length > 0 ? (
-                            <ul className="choices">
-                              {boxes.map((b) => (
-                                <li key={b.id}>{b.text}</li>
-                              ))}
-                            </ul>
-                          ) : null
-                        ) : (
-                        <div className="answer">
-                          {view.kind === "none" ? (
-                            <p className="meta muted">No answer.</p>
-                          ) : isText && view.kind === "text" ? (
-                            // Roadmap 4b-f (2026-09-14): a short-text answer
-                            // prints as the math the student saw (the client's
-                            // formulaTex preview), essays as prose.
-                            item.type === "short_text" && view.text !== "" ? (
-                              <p
-                                className="answer-text"
-                                dangerouslySetInnerHTML={{
-                                  __html: renderShortTextAnswer(view.text),
-                                }}
-                              />
-                            ) : item.type === "essay" ? (
-                              // RT slice 2 (docs/rich-text-essay-design.md): the
-                              // one sanitising renderer — a formatted essay keeps
-                              // its formatting, a plain one is its escaped text
-                              // (pre-line keeps the line breaks). A div, since the
-                              // formatted form holds paragraphs and lists. D-10:
-                              // ?spacing=double double-spaces it.
-                              view.text === "" ? (
-                                <div
-                                  className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
-                                >
-                                  (blank)
-                                </div>
-                              ) : (
-                                <div
-                                  className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                          {/* U-23: answers=0 — the choices still print for
+                              context (no ticks), nothing the student wrote does. */}
+                          {hideAnswers ? (
+                            boxes.length > 0 ? (
+                              <ul className="choices">
+                                {boxes.map((b) => (
+                                  <li key={b.id}>{b.text}</li>
+                                ))}
+                              </ul>
+                            ) : null
+                          ) : (
+                          <div className="answer">
+                            {view.kind === "none" ? (
+                              <p className="meta muted">No answer.</p>
+                            ) : isText && view.kind === "text" ? (
+                              // Roadmap 4b-f (2026-09-14): a short-text answer
+                              // prints as the math the student saw (the client's
+                              // formulaTex preview), essays as prose.
+                              item.type === "short_text" && view.text !== "" ? (
+                                <p
+                                  className="answer-text"
                                   dangerouslySetInnerHTML={{
-                                    __html: renderEssayAnswerHtml(responseJson),
+                                    __html: renderShortTextAnswer(view.text),
                                   }}
                                 />
-                              )
-                            ) : (
-                              <p className="answer-text">
-                                {view.text === "" ? "(blank)" : view.text}
-                              </p>
-                            )
-                          ) : boxes.length > 0 ? (
-                            <ul className="choices">
-                              {boxes.map((b) => (
-                                <li key={b.id}>
-                                  <span className="box">{b.selected ? "☑" : "☐"}</span>
-                                  {/* WP-2: choice text follows the stem's content
-                                      rules (KaTeX, emphasis, `![alt](asset:…)`);
-                                      it printed raw until 2026-10-18. */}
-                                  <span
-                                    className="choice-text"
+                              ) : item.type === "essay" ? (
+                                // RT slice 2 (docs/rich-text-essay-design.md): the
+                                // one sanitising renderer — a formatted essay keeps
+                                // its formatting, a plain one is its escaped text
+                                // (pre-line keeps the line breaks). A div, since the
+                                // formatted form holds paragraphs and lists. D-10:
+                                // ?spacing=double double-spaces it.
+                                view.text === "" ? (
+                                  <div
+                                    className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
+                                  >
+                                    (blank)
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`answer-text${query.doubleSpace ? " answer-double" : ""}`}
                                     dangerouslySetInnerHTML={{
-                                      __html: renderItemContent(b.text, resolvedAssets),
+                                      __html: renderEssayAnswerHtml(responseJson),
                                     }}
                                   />
-                                </li>
-                              ))}
-                            </ul>
-                          ) : view.kind === "drawing" && response ? (
-                            <img
-                              src={`/api/responses/${response.id}/upload`}
-                              alt={`Drawing for question ${item.position + 1}`}
-                            />
-                          ) : view.kind === "table" && response ? (
-                            <TableGrid
-                              item={item}
-                              cells={
-                                (
-                                  response.response as unknown as {
-                                    cells?: Record<string, Record<string, string>>;
-                                  }
-                                ).cells ?? {}
-                              }
-                              showKey={showKey}
-                            />
-                          ) : view.kind === "lines" ? (
-                            <AnswerLines lines={view.lines} showKey={showKey} />
-                          ) : view.kind === "fill_blank" && !query.questions ? (
-                            <AnswerLines lines={view.lines} showKey={showKey} />
-                          ) : null}
-                        </div>
-                        )}
-
-                        {query.scores === "none" ? null : (
-                          // Two columns only for `both`, and only while both sides
-                          // have something to show: one lonely block in a
-                          // half-width column reads as a rendering bug.
-                          <div
-                            className={
-                              query.scores === "both" && picked.teacher && picked.ai
-                                ? "scores"
-                                : "scores scores-one"
-                            }
-                          >
-                            {query.scores === "ai" ? null : (
-                              <ScoreBlock
-                                heading={packetScoreHeading("teacher", picked.teacher)}
-                                row={picked.teacher}
-                                rubricRows={rubricScoreRows(rubric, picked.teacher?.rationale)}
-                                overall={overallRationale(picked.teacher?.rationale)}
+                                )
+                              ) : (
+                                <p className="answer-text">
+                                  {view.text === "" ? "(blank)" : view.text}
+                                </p>
+                              )
+                            ) : boxes.length > 0 ? (
+                              <ul className="choices">
+                                {boxes.map((b) => (
+                                  <li key={b.id}>
+                                    <span className="box">{b.selected ? "☑" : "☐"}</span>
+                                    {/* WP-2: choice text follows the stem's content
+                                        rules (KaTeX, emphasis, `![alt](asset:…)`);
+                                        it printed raw until 2026-10-18. */}
+                                    <span
+                                      className="choice-text"
+                                      dangerouslySetInnerHTML={{
+                                        __html: renderItemContent(b.text, resolvedAssets),
+                                      }}
+                                    />
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : view.kind === "drawing" && response ? (
+                              <img
+                                src={`/api/responses/${response.id}/upload`}
+                                alt={`Drawing for question ${item.position + 1}`}
                               />
-                            )}
-                            {query.scores === "teacher" ? null : (
-                              <ScoreBlock
-                                heading={packetScoreHeading("ai", picked.ai)}
-                                row={picked.ai}
-                                rubricRows={rubricScoreRows(rubric, picked.ai?.rationale)}
-                                overall={overallRationale(picked.ai?.rationale)}
+                            ) : view.kind === "table" && response ? (
+                              <TableGrid
+                                item={item}
+                                cells={
+                                  (
+                                    response.response as unknown as {
+                                      cells?: Record<string, Record<string, string>>;
+                                    }
+                                  ).cells ?? {}
+                                }
+                                showKey={showKey}
                               />
-                            )}
+                            ) : view.kind === "lines" ? (
+                              <AnswerLines lines={view.lines} showKey={showKey} />
+                            ) : view.kind === "fill_blank" && !query.questions ? (
+                              <AnswerLines lines={view.lines} showKey={showKey} />
+                            ) : null}
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                          )}
 
-                {/* Page numbers are the browser's; this is the identity line that
-                    gets a loose annotated sheet back to the right student. */}
-                <p className="page-footer">
-                  {/* D-2: "Student 01" repeats once per section in a batch, so
-                      the footer names the section beside it. */}
-                  {[assessment.name, multiRun ? run.section : null, identityLine(row)]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </section>
-            ))}
+                          {scoreBlocks.length > 0 ? (
+                            // Two columns only while two blocks both have a score
+                            // (teacher copy): one lonely block in a half-width
+                            // column reads as a rendering bug.
+                            <div
+                              className={
+                                scoreBlocks.length === 2 && scoreBlocks.every((b) => b.row)
+                                  ? "scores"
+                                  : "scores scores-one"
+                              }
+                            >
+                              {scoreBlocks.map((b, bi) => (
+                                <ScoreBlock key={bi} block={b} />
+                              ))}
+                            </div>
+                          ) : null}
+                          {/* FR R-2 / D-10 / D-4: the rubric table, AI feedback
+                              and teacher feedback, each labelled (D-1). */}
+                          {otherBlocks.map((b, bi) => (
+                            <ReleaseBlock key={bi} block={b} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Page numbers are the browser's; this is the identity line that
+                      gets a loose annotated sheet back to the right student. */}
+                  <p className="page-footer">
+                    {/* D-2: "Student 01" repeats once per section in a batch, so
+                        the footer names the section beside it. */}
+                    {[
+                      assessment.name,
+                      multiRun ? run.section : null,
+                      identityLine(row),
+                      query.teacherCopy ? "Teacher copy" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </section>
+              );
+            })}
 
             {/* D-1 / D-2: a key page closes each section's run, so each
                 section's stack tears off on its own. */}
