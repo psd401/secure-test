@@ -169,8 +169,9 @@ describe("queueBodyState", () => {
     expect(queueBodyState(false, 0, 0)).toBe("loading");
   });
 
-  test("keeps the list during a refetch once the first fetch is back", () => {
-    // `loaded` stays true while a later fetch runs, so cards are not swapped out.
+  test("answers list, not loading, once loaded is true (a refetch never clears it)", () => {
+    // The predicate only; the component gates "Loading…" on it. Hand-check
+    // row 866 is the rendered check that a draft survives a refetch.
     expect(queueBodyState(true, 2, 1)).toBe("list");
     expect(queueBodyState(true, 0, 1)).toBe("list");
   });

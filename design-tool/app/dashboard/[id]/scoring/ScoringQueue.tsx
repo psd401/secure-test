@@ -991,6 +991,8 @@ export function ScoringQueue({
     );
   }
 
+  const bodyState = queueBodyState(loaded, entries.length, unreviewed.length);
+
   return (
     <div className="space-y-8">
       <div>
@@ -1052,9 +1054,9 @@ export function ScoringQueue({
         </div>
       ) : null}
 
-      {queueBodyState(loaded, entries.length, unreviewed.length) === "loading" ? (
+      {bodyState === "loading" ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : queueBodyState(loaded, entries.length, unreviewed.length) === "empty" ? (
+      ) : bodyState === "empty" ? (
         <p className="text-sm text-muted-foreground">
           Nothing to review — every response is scored or auto-scorable.
         </p>
