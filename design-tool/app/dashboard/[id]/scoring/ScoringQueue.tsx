@@ -170,6 +170,20 @@ export function queueSectionLabel(section: string): string | null {
 }
 
 /**
+ * What the queue shows under its controls. "Loading…" only until the FIRST
+ * fetch is back (FR-H2): a refetch after a score keeps the list mounted, so a
+ * card's unsaved feedback draft survives scoring another card.
+ */
+export function queueBodyState(
+  loaded: boolean,
+  entries: number,
+  unreviewed: number,
+): "loading" | "empty" | "list" {
+  if (!loaded) return "loading";
+  return entries === 0 && unreviewed === 0 ? "empty" : "list";
+}
+
+/**
  * R-4: does this entry offer a FIRST AI proposal? True only for an
  * `ai` / `hybrid` item that has no proposal yet — a `human` item never
  * offers one, and once a proposal exists the card shows "Re-run AI".
@@ -470,6 +484,8 @@ export function ScoringQueue({
   // only exists once the fetch is back, so scroll there once, after it.
   const scrolledToHash = useRef(false);
   const [loading, setLoading] = useState(true);
+  // True once the first fetch is back; a refetch does not clear it (FR-H2).
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Per-response rubric level picks: response_id -> criterion_id -> level_id
@@ -507,6 +523,7 @@ export function ScoringQueue({
       setError(`load queue: ${(e as Error).message}`);
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, [assessmentId, section]);
 
@@ -974,6 +991,8 @@ export function ScoringQueue({
     );
   }
 
+  const bodyState = queueBodyState(loaded, entries.length, unreviewed.length);
+
   return (
     <div className="space-y-8">
       <div>
@@ -1035,9 +1054,9 @@ export function ScoringQueue({
         </div>
       ) : null}
 
-      {loading ? (
+      {bodyState === "loading" ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : entries.length === 0 && unreviewed.length === 0 ? (
+      ) : bodyState === "empty" ? (
         <p className="text-sm text-muted-foreground">
           Nothing to review — every response is scored or auto-scorable.
         </p>

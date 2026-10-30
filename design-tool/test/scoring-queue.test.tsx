@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   offersAiScoring,
+  queueBodyState,
   ScoreWithAiRow,
   ShortAnswerCredit,
 } from "../app/dashboard/[id]/scoring/ScoringQueue";
@@ -157,5 +158,25 @@ describe("TeacherFeedbackBox", () => {
     );
     // Only Save is disabled (nothing to save yet).
     expect(html.match(/disabled=""/g)).toHaveLength(1);
+  });
+});
+
+// FR-H2 (hand-check row 866): scoring a card refetches the queue. The list
+// must stay mounted through that refetch, or every TeacherFeedbackBox
+// remounts from its saved text and an unsaved draft is lost.
+describe("queueBodyState", () => {
+  test("shows Loading… only before the first fetch is back", () => {
+    expect(queueBodyState(false, 0, 0)).toBe("loading");
+  });
+
+  test("answers list, not loading, once loaded is true (a refetch never clears it)", () => {
+    // The predicate only; the component gates "Loading…" on it. Hand-check
+    // row 866 is the rendered check that a draft survives a refetch.
+    expect(queueBodyState(true, 2, 1)).toBe("list");
+    expect(queueBodyState(true, 0, 1)).toBe("list");
+  });
+
+  test("an empty queue after loading says there is nothing to review", () => {
+    expect(queueBodyState(true, 0, 0)).toBe("empty");
   });
 });
