@@ -322,6 +322,9 @@ interface Props {
   assessmentName: string;
   /** Slice 2 (5.4): the `?section=` the page was opened with ("" = all). */
   initialSection?: string;
+  /** FR: false for a non-impersonating admin — the feedback box is grayed
+   * out, since the routes refuse that write (SEC-03). */
+  canWriteFeedback?: boolean;
 }
 
 function rubricMax(rubric: Rubric): number {
@@ -452,7 +455,12 @@ function tableGrid(entry: QueueEntry) {
   );
 }
 
-export function ScoringQueue({ assessmentId, assessmentName, initialSection = "" }: Props) {
+export function ScoringQueue({
+  assessmentId,
+  assessmentName,
+  initialSection = "",
+  canWriteFeedback = true,
+}: Props) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [unreviewed, setUnreviewed] = useState<QueueEntry[]>([]);
   const [sections, setSections] = useState<QueueSections>({ labels: [], hasBlank: false });
@@ -960,6 +968,7 @@ export function ScoringQueue({ assessmentId, assessmentName, initialSection = ""
         <TeacherFeedbackBox
           endpoint={`/api/responses/${entry.response_id}/feedback`}
           initialText={entry.teacher_feedback?.text ?? ""}
+          readOnly={!canWriteFeedback}
         />
       </li>
     );

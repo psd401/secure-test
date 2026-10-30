@@ -14,7 +14,8 @@ interface RouteContext {
 /**
  * Overall teacher feedback on an attempt (docs/feedback-release-design.md,
  * D-4 / D-12): one comment per student, edited in place by any edit-level
- * teacher; the last editor is recorded. Not shown to students yet (slice 2).
+ * teacher; the last editor is recorded. Students see it only through a
+ * release (FR slices 3–4) with Teacher feedback ticked.
  *
  * `edit` with write intent through `authorizeAttempt`, refused with the same
  * 404 as the per-question route. Like that route (via `loadResponseChain`), a

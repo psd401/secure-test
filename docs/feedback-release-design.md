@@ -312,3 +312,12 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   teacher copy's pass-back mismatch, the cascade gap, the short-answer key
   leak, and R-4 is the Doc dialog's only (the packet keeps its choices in
   the URL, not per teacher).
+- 2026-10-29: James's rulings after slice 6. Accepted as they are: the
+  teacher copy's pass-back mismatch, R-2 levels with no score box ticked,
+  the cascade gap (a cleared answer takes its comment with it), and R-4
+  being the Doc dialog's only. Fixed: FR-H1 (the hint now reads "Students
+  see this when you send it to Google Docs or print it with Teacher
+  feedback ticked.") and the scoring queue's box for a non-impersonating
+  admin, which is now grayed out with the reason under it (`readOnly` on
+  `TeacherFeedbackBox`, set from `access.via` on the scoring page) instead
+  of a box whose save fails. Still open: T1, T2, the short-answer key leak.

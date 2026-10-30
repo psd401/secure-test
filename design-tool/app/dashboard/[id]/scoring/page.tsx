@@ -3,7 +3,7 @@ import { getDb } from "@/db/client";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import { ScoringQueue } from "./ScoringQueue";
 import { UUID_RE } from "@/lib/uuid";
-import { pageAssessment } from "@/lib/api/access";
+import { authorizeAssessment } from "@/lib/api/access";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +28,11 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
   // Access slice 1 (D-3): the Forbidden panel this used to render told a
   // stranger the assessment exists. A row the caller cannot reach is a 404,
   // the posture every other surface already had.
-  const assessment = await pageAssessment(db, session, id, "edit", "read");
-  if (!assessment) {
+  const access = await authorizeAssessment(db, session, id, "edit", "read");
+  if (!access.ok) {
     notFound();
   }
+  const assessment = access.assessment;
 
   // Hybrid transparency slice 2 (5.4): the results page's "Review them"
   // carries its section filter here.
@@ -44,6 +45,9 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
         assessmentId={assessment.id}
         assessmentName={assessment.name}
         initialSection={initialSection}
+        // FR: a non-impersonating admin reads feedback but cannot write it
+        // (SEC-03, the routes refuse the same way), so the box is grayed out.
+        canWriteFeedback={access.via !== "admin"}
       />
     </main>
   );

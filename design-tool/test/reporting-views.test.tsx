@@ -29,6 +29,7 @@ import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { buildResults } from "../lib/scoring/results";
+import { TEACHER_FEEDBACK_HINT } from "../lib/teacherFeedback/limits";
 import {
   OTHER_STUDENT,
   OTHER_TEACHER_EMAIL,
@@ -773,7 +774,7 @@ describe("the per-student attempt page", () => {
     expect(html).toContain("Teacher feedback (overall)");
     expect(html).toContain("FB-QUESTION-TEXT");
     expect(html).toContain("FB-OVERALL-TEXT");
-    expect(html).toContain("Not shown to students yet.");
+    expect(html).toContain(TEACHER_FEEDBACK_HINT);
     // One box per answered question (Alice answered 8) plus the overall one.
     expect(html.match(/<textarea/g)).toHaveLength(9);
   });

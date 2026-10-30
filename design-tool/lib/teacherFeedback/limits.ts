@@ -10,8 +10,15 @@
  * (a DB error would carry the text in its message — D-14). */
 export const TEACHER_FEEDBACK_MAX = 4000;
 
-/** Under every box: feedback is entry-only until the release slices land. */
-export const TEACHER_FEEDBACK_HINT = "Not shown to students yet.";
+/** Under every box: who sees the comment (FR-H1). Slices 3–4 release it
+ * through the Doc and the work packet when Teacher feedback is ticked. */
+export const TEACHER_FEEDBACK_HINT =
+  "Students see this when you send it to Google Docs or print it with Teacher feedback ticked.";
+
+/** Under the box a non-impersonating admin sees (SEC-03: admins read, they
+ * do not write outside Act as; the routes refuse the save the same way). */
+export const TEACHER_FEEDBACK_ADMIN_HINT =
+  "Admins can read this but not edit it. Use Act as to write feedback as the teacher.";
 
 export type FeedbackRequest =
   | { method: "PUT"; body: { text: string } }

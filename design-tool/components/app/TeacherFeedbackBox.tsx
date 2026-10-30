@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StatusLine, type SaveState } from "@/components/app/StatusLine";
 import {
   FEEDBACK_OFFLINE_MESSAGE,
+  TEACHER_FEEDBACK_ADMIN_HINT,
   TEACHER_FEEDBACK_HINT,
   TEACHER_FEEDBACK_MAX,
   feedbackFailureMessage,
@@ -24,18 +25,23 @@ import {
  * shows while the text differs from what the server last accepted — on the
  * queue a card leaves the list once it is scored, taking any unsaved draft
  * with it, so the hint matters there.
+ *
+ * `readOnly`: a non-impersonating admin on the queue sees the box grayed out
+ * (the routes refuse the write, SEC-03), not a box whose save fails.
  */
 export function TeacherFeedbackBox({
   endpoint,
   initialText,
   label = "Teacher feedback",
-  hint = TEACHER_FEEDBACK_HINT,
+  hint,
+  readOnly = false,
 }: {
   /** `/api/responses/<id>/feedback` or `/api/attempts/<id>/feedback`. */
   endpoint: string;
   initialText: string;
   label?: string;
   hint?: string;
+  readOnly?: boolean;
 }) {
   const id = useId();
   const [text, setText] = useState(initialText);
@@ -78,12 +84,14 @@ export function TeacherFeedbackBox({
       <label htmlFor={id} className="block text-sm font-medium">
         {label}
       </label>
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      <p className="text-xs text-muted-foreground">
+        {hint ?? (readOnly ? TEACHER_FEEDBACK_ADMIN_HINT : TEACHER_FEEDBACK_HINT)}
+      </p>
       <Textarea
         id={id}
         value={text}
         maxLength={TEACHER_FEEDBACK_MAX}
-        disabled={saving}
+        disabled={saving || readOnly}
         onChange={(e) => {
           setText(e.target.value);
           if (save.kind === "saved" || save.kind === "failed") setSave({ kind: "idle" });
@@ -96,7 +104,7 @@ export function TeacherFeedbackBox({
           type="button"
           size="sm"
           variant="outline"
-          disabled={saving || !dirty}
+          disabled={saving || !dirty || readOnly}
           onClick={() => void persist()}
         >
           {text.trim() === "" && saved !== "" ? "Clear feedback" : "Save feedback"}

@@ -11,7 +11,11 @@ import {
   ShortAnswerCredit,
 } from "../app/dashboard/[id]/scoring/ScoringQueue";
 import { TeacherFeedbackBox } from "../components/app/TeacherFeedbackBox";
-import { TEACHER_FEEDBACK_MAX } from "../lib/teacherFeedback/limits";
+import {
+  TEACHER_FEEDBACK_ADMIN_HINT,
+  TEACHER_FEEDBACK_HINT,
+  TEACHER_FEEDBACK_MAX,
+} from "../lib/teacherFeedback/limits";
 
 function entry(
   scoring_method: string,
@@ -112,7 +116,7 @@ describe("TeacherFeedbackBox", () => {
       <TeacherFeedbackBox endpoint="/api/responses/r1/feedback" initialText="Cite a source." />,
     );
     expect(html).toContain("Teacher feedback");
-    expect(html).toContain("Not shown to students yet.");
+    expect(html).toContain(TEACHER_FEEDBACK_HINT);
     expect(html).toContain(">Cite a source.</textarea>");
     expect(html).toContain(`maxLength="${TEACHER_FEEDBACK_MAX}"`);
     expect(html).toContain("Save feedback");
@@ -130,5 +134,28 @@ describe("TeacherFeedbackBox", () => {
       />,
     );
     expect(html).toContain("Teacher feedback (overall)");
+  });
+
+  test("read-only for a non-impersonating admin: grayed out, says why, keeps the text", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox
+        endpoint="/api/responses/r1/feedback"
+        initialText="Cite a source."
+        readOnly
+      />,
+    );
+    expect(html).toContain(TEACHER_FEEDBACK_ADMIN_HINT);
+    expect(html).not.toContain(TEACHER_FEEDBACK_HINT);
+    expect(html).toContain(">Cite a source.</textarea>");
+    // Both the textarea and the Save button are disabled.
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
+  });
+
+  test("a writer's box leaves the textarea enabled", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox endpoint="/api/responses/r1/feedback" initialText="" />,
+    );
+    // Only Save is disabled (nothing to save yet).
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
   });
 });

@@ -446,7 +446,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
   // comment per answer and one overall, on a handed-in, non-practice attempt.
   // Written at edit level and never by a non-impersonating admin (the routes
   // refuse that write the same way, SEC-03); everyone else who can read the
-  // page reads the comments. Not shown to students yet.
+  // page reads the comments. Students see them only through a release (FR
+  // slices 3–4) with Teacher feedback ticked.
   const showFeedback = row.status === "submitted" && !attempt.practice;
   const canWriteFeedback = levelSatisfies(access.level, "edit") && access.via !== "admin";
   const feedbackByResponse = new Map<string, string>();
