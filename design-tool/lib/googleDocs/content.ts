@@ -3,7 +3,9 @@
 // in, a string out — so every content box is tested without Drive.
 //
 // A Doc cannot run KaTeX, so math in a prompt or source stays as its LaTeX
-// source, and a picture (`![alt](asset:<uuid>)`) becomes "[Image: alt]".
+// source, and a picture (`![alt](asset:<uuid>)`) becomes "[Image: alt]". A
+// short answer (FR D-5) is likewise the student's typed text, escaped — the
+// screen renders it as math (lib/reporting/shortTextView.ts), the Doc cannot.
 
 import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
 
@@ -26,7 +28,12 @@ export interface EssaySection {
   stem: string;
   stimulus: string | null;
   sources: Array<{ label: string; text: string }>;
-  /** The student's text, or null when the essay was left blank. */
+  /**
+   * FR D-5 (docs/feedback-release-design.md): a short answer sits beside the
+   * essays. Absent = essay, so a caller from before slice 5 still compiles.
+   */
+  kind?: "essay" | "short_text";
+  /** The student's text, or null when the question was left blank. */
   answer: string | null;
   /**
    * RT slice 2 (docs/rich-text-essay-design.md): a formatted essay's html,
@@ -216,10 +223,13 @@ export function buildDocHtml(input: DocInput): string {
         parts.push(`<h3>${escapeHtml(src.label)}</h3>`, paragraphs(plainContent(src.text)));
       }
     }
-    parts.push(`<h3>${many ? "Response" : "Essay"}</h3>`);
-    const doubleSpace = input.doubleSpace === true;
+    const shortAnswer = essay.kind === "short_text";
+    parts.push(`<h3>${shortAnswer ? "Answer" : many ? "Response" : "Essay"}</h3>`);
+    // RT D-10 double spacing and rich text are essays only; a short answer
+    // (FR D-5) is plain paragraphs at normal spacing.
+    const doubleSpace = input.doubleSpace === true && !shortAnswer;
     parts.push(
-      essay.answer_html
+      essay.answer_html && !shortAnswer
         ? docRichAnswerHtml(essay.answer_html, doubleSpace)
         : essay.answer && essay.answer.trim()
           ? plainAnswerHtml(essay.answer, doubleSpace)

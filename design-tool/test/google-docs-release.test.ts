@@ -2,7 +2,7 @@
 // the Drive client, the release itself against the test DB with a fake
 // Drive, and `POST /api/assessments/[id]/google-docs`.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -25,6 +25,7 @@ import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink } from "../lib/log";
 import {
+  DOUBLE_SPACING,
   PARAGRAPH_OPEN,
   buildDocHtml,
   scoreLabel,
@@ -266,6 +267,45 @@ describe("content", () => {
     expect(html).toContain("Question 4");
     expect(html).toContain("No response.");
   });
+
+  test("FR D-5: a short answer is headed Answer, never Essay; plain, single-spaced, its math as typed", () => {
+    const short = {
+      number: 3,
+      kind: "short_text" as const,
+      stem: "Evaluate.",
+      stimulus: null,
+      sources: [],
+      answer: "x < 4^2",
+      // Rich text is essays only: a stray html never reaches the Doc.
+      answer_html: "<p><strong>ignored</strong></p>",
+      feedback: [],
+    };
+    const alone = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [short], contents: NONE, doubleSpace: true });
+    expect(alone).toContain("<h3>Answer</h3>");
+    expect(alone).not.toContain("<h3>Essay</h3>");
+    // RT D-10 double spacing is essays only; the raw text is escaped, not KaTeX.
+    expect(alone).toContain(`${PARAGRAPH_OPEN}x &lt; 4^2</p>`);
+    expect(alone).not.toContain(DOUBLE_SPACING);
+    expect(alone).not.toContain("ignored");
+    expect(alone).not.toContain("katex");
+
+    // Beside an essay: both get question headings, the essay keeps its own
+    // heading and double spacing, a blank short answer says so.
+    const both = buildDocHtml({
+      studentName: "S",
+      assessmentName: "T",
+      draftAsOf: null,
+      essays: [essayFor(NONE), { ...short, answer: null, answer_html: null }],
+      contents: NONE,
+      doubleSpace: true,
+    });
+    expect(both).toContain("Question 2");
+    expect(both).toContain("Question 3");
+    expect(both).toContain("<h3>Response</h3>");
+    expect(both).toContain("<h3>Answer</h3>");
+    expect(both).toContain(`<p style="margin:0 0 10pt 0;${DOUBLE_SPACING}">Para two.</p>`);
+    expect(both).toContain("No response.");
+  });
 });
 
 // ── Drive client ─────────────────────────────────────────────────────────────
@@ -432,6 +472,57 @@ async function scene(opts: { essays?: number } = {}) {
   const section = results.rows[0]!.student.section!;
   return { assessment: a!, essayItems, ada: made[0]!, ben: made[1]!, section };
 }
+
+/**
+ * FR D-5: a short answer at `position` (free in the scene), answered by each
+ * student as given; `null` leaves that student without a response row.
+ */
+async function addShortAnswer(
+  s: Awaited<ReturnType<typeof scene>>,
+  position: number,
+  answers: { ada: string | null; ben: string | null },
+  config: Record<string, unknown> = {},
+) {
+  const db = getDb();
+  const [item] = await db
+    .insert(items)
+    .values({
+      assessment_id: s.assessment.id,
+      position,
+      type: "short_text",
+      stem: `Short question at ${position}.`,
+      correct_answer: "16",
+      config,
+    })
+    .returning();
+  const made: Record<"ada" | "ben", typeof responses.$inferSelect | null> = { ada: null, ben: null };
+  for (const who of ["ada", "ben"] as const) {
+    const text = answers[who];
+    if (text === null) continue;
+    const [r] = await db
+      .insert(responses)
+      .values({ attempt_id: s[who].attempt.id, item_id: item!.id, response: { type: "short_text", text } })
+      .returning();
+    made[who] = r!;
+  }
+  return { item: item!, ...made };
+}
+
+/** FR D-5: an AI short answer's holistic key (as test/ai-short-answer.test.ts). */
+const SHORT_KEY: Rubric = {
+  style: "holistic",
+  criteria: [
+    {
+      id: "sa",
+      name: "Answer",
+      levels: [
+        { id: "sa0", label: "No credit", points: 0 },
+        { id: "sa1", label: "Partial credit", points: 1, descriptor: "Names the base." },
+        { id: "sa2", label: "Full credit", points: 2, descriptor: "Names base and exponent." },
+      ],
+    },
+  ],
+};
 
 const OPTS: ReleaseOptions = { contents: NONE, mode: "skip", includeDrafts: false };
 
@@ -812,6 +903,162 @@ describe("releaseToGoogleDocs", () => {
       assessment: s.assessment, senderSub: OWNER, scope: { section: s.section }, options: OPTS, drive,
     });
     expect(none).toEqual({ ok: false, error: "no_essays" });
+  });
+
+  test("FR D-5: short answers sit beside the essays in question order, with the same score and feedback blocks", async () => {
+    const s = await scene({ essays: 2 });
+    const db = getDb();
+    // Essays at 1 and 3 (Q2, Q4); an AI-scored short answer between them at
+    // 2 (Q3) and an exact-match one after them at 4 (Q5).
+    await db.update(items).set({ position: 3 }).where(eq(items.id, s.essayItems[1]!.id));
+    const ai = await addShortAnswer(s, 2, { ada: "4 to the 2", ben: "16" }, { scoring_method: "ai", rubric: SHORT_KEY });
+    const auto = await addShortAnswer(s, 4, { ada: "16", ben: "16" });
+    await db.insert(scores).values([
+      {
+        response_id: ai.ada!.id,
+        method: "ai",
+        points: 1,
+        max_points: 2,
+        scorer: "mock",
+        status: "final",
+        rationale: {
+          criterion_scores: [{ criterion_id: "sa", level_id: "sa1", points: 1, rationale: "Names the base only." }],
+          overall_rationale: "Add the exponent.",
+        },
+      },
+      { response_id: auto.ada!.id, method: "auto", points: 1, max_points: 1, scorer: "auto", status: "final" },
+    ]);
+    await db.insert(response_feedback).values({ response_id: ai.ada!.id, author_sub: OWNER, text: "Close — try again." });
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, contents: ALL, doubleSpace: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.outcomes[0]!.status).toBe("sent");
+    const html = drive.docs[0]!.html;
+    const at = (needle: string) => {
+      const i = html.indexOf(needle);
+      expect(i).toBeGreaterThan(-1);
+      return i;
+    };
+    // Question order (GD D-10): Q2 essay, Q3 short, Q4 essay, Q5 short.
+    expect(at("Question 2")).toBeLessThan(at("Question 3"));
+    expect(at("Question 3")).toBeLessThan(at("Question 4"));
+    expect(at("Question 4")).toBeLessThan(at("Question 5"));
+    expect(at("Short question at 2.")).toBeGreaterThan(at("Question 3"));
+    expect(at("Short question at 2.")).toBeLessThan(at("Question 4"));
+    // The answer, plain and single-spaced even with double spacing on (RT D-10).
+    expect(html).toContain(`${PARAGRAPH_OPEN}4 to the 2</p>`);
+    expect(html.split("<h3>Answer</h3>").length - 1).toBe(2);
+    // The AI's holistic score, its feedback and the teacher's comment (FR D-1, R-3).
+    expect(html).toContain("<b>AI score:</b> 1 of 2");
+    expect(html).toContain("Add the exponent.");
+    expect(html).toContain("Names the base only.");
+    expect(html).toContain("Partial credit");
+    expect(html).toContain("Close — try again.");
+    // The exact-match one prints a plain Score (D-13).
+    expect(html).toContain("<b>Score:</b> 1 of 1");
+    // Sources still print once, at the set's first included item.
+    expect(html.split("Alpha says so.").length - 1).toBe(1);
+  });
+
+  test("FR D-5: a short answer alone gets a Doc; an answer of the other type is no answer", async () => {
+    const s = await scene();
+    const db = getDb();
+    await addShortAnswer(s, 5, { ada: "16", ben: null });
+    await db.update(responses).set({ response: { type: "essay", text: " " } }).where(eq(responses.id, s.ada.responses[0]!.id));
+    // Ben's essay item holds a short answer (left from a type change): not an essay.
+    await db
+      .update(responses)
+      .set({ response: { type: "short_text", text: "Wrong shape." } })
+      .where(eq(responses.id, s.ben.responses[0]!.id));
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: OPTS,
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    const by = new Map(r.outcomes.map((o) => [o.name, o]));
+    // Ada left the essay blank but answered the short answer: sent.
+    expect(by.get("Ada Fixture")!.status).toBe("sent");
+    const html = drive.docs[0]!.html;
+    expect(html).toContain(`${PARAGRAPH_OPEN}16</p>`);
+    expect(html).toContain("No response."); // the blank essay
+    // Ben wrote nothing of either type.
+    expect(by.get("Ben Sample")!.reason).toBe("no_essay");
+    expect(drive.docs.length).toBe(1);
+    expect(drive.docs.some((d) => d.html.includes("Wrong shape."))).toBe(false);
+
+    // Only short answers on the assessment: still a Doc.
+    await db
+      .delete(items)
+      .where(and(eq(items.assessment_id, s.assessment.id), eq(items.type, "essay")));
+    const only = new FakeDrive();
+    const r2 = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, mode: "new" },
+      drive: only,
+    });
+    if (!r2.ok) throw new Error(r2.error);
+    expect(r2.outcomes[0]!.status).toBe("sent");
+    expect(only.docs[0]!.html).toContain("<h3>Answer</h3>");
+    expect(only.docs[0]!.html).not.toContain("Question"); // one question: no heading
+    // Neither type: refused before any student is looked at.
+    await db
+      .delete(items)
+      .where(and(eq(items.assessment_id, s.assessment.id), eq(items.type, "short_text")));
+    const none = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: OPTS,
+      drive: only,
+    });
+    expect(none).toEqual({ ok: false, error: "no_essays" });
+  });
+
+  test("FR D-5 / GD D-6: an open alert on a short answer holds the whole Doc back", async () => {
+    const s = await scene();
+    const short = await addShortAnswer(s, 5, { ada: "16", ben: "16" });
+    const [alert] = await getDb()
+      .insert(safeguarding_alerts)
+      .values({
+        response_id: short.ada!.id,
+        attempt_id: s.ada.attempt.id,
+        assessment_id: s.assessment.id,
+        item_id: short.item.id,
+        kind: "wellbeing",
+        category: "self_harm",
+        detector: "mock",
+      })
+      .returning();
+    const drive = new FakeDrive();
+    const run = () =>
+      releaseToGoogleDocs(getDb(), {
+        assessment: s.assessment,
+        senderSub: OWNER,
+        scope: { attemptId: s.ada.attempt.id },
+        options: OPTS,
+        drive,
+      });
+    const held = await run();
+    if (!held.ok) throw new Error(held.error);
+    expect(held.outcomes[0]!.reason).toBe("safeguarding_alert");
+    expect(drive.docs.length).toBe(0);
+    expect(drive.folders.length).toBe(0);
+    await getDb().update(safeguarding_alerts).set({ acknowledged_at: new Date() }).where(eq(safeguarding_alerts.id, alert!.id));
+    const sent = await run();
+    if (!sent.ok) throw new Error(sent.error);
+    expect(sent.outcomes[0]!.status).toBe("sent");
   });
 
   test("ownership transfer: done after the share, recorded on the row (slice 5)", async () => {

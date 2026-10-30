@@ -19,7 +19,8 @@ const Body = z
   .object({
     section: z.string().trim().min(1).max(200).optional(),
     attempt_id: z.string().uuid().optional(),
-    // D-2: the essay itself is always in the Doc; these are the extras.
+    // D-2: the student's answers (essays and, FR D-5, short answers) are
+    // always in the Doc; these are the extras.
     contents: z.object({
       prompt: z.boolean(),
       sources: z.boolean(),
@@ -46,9 +47,10 @@ const Body = z
   });
 
 /**
- * Release essays to Google Docs (docs/google-docs-release-design.md, row GD
- * slice 3). `edit` on the assessment (D-9: co-teachers with edit can send;
- * their Docs land in their own Drive). The Drive token is the slice 2 cookie;
+ * Release essays and short answers (FR D-5) to Google Docs
+ * (docs/google-docs-release-design.md, row GD slice 3). `edit` on the
+ * assessment (D-9: co-teachers with edit can send; their Docs land in their
+ * own Drive). The Drive token is the slice 2 cookie;
  * without one — or when Drive refuses it mid-send — the answer carries
  * `drive_auth_needed` and the page runs the authorization again.
  *

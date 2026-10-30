@@ -74,7 +74,8 @@ const REASONS: Record<string, string> = {
   already_released: "already has a Doc from you",
   safeguarding_alert: "held back — an open safeguarding alert needs your review first",
   no_email: "no school email on the roster",
-  no_essay: "no essay written",
+  // FR D-5: the code keeps its name; short answers count too.
+  no_essay: "no essay or short answer written",
   drive_auth_expired: "not sent — Google access expired",
 };
 
@@ -124,7 +125,7 @@ export function authOutcomeCopy(outcome: string): { ok: boolean; text: string } 
 export function sendErrorCopy(code: string): string {
   switch (code) {
     case "no_essays":
-      return "This assessment has no essay questions.";
+      return "This assessment has no essay or short-answer questions.";
     case "attempt_not_found":
       return "This student's attempt is no longer here.";
     case "not_while_acting_as":
@@ -177,15 +178,23 @@ export function authStartHref(returnPath: string): string {
   return `/api/google/drive/start?next=${encodeURIComponent(returnPath)}`;
 }
 
+/** GD D-8 as widened by FR D-5: the item types that go in the Doc. */
+export const DOC_ITEM_TYPES = ["essay", "short_text"] as const;
+
 /**
  * Whether a page shows the button: edit level (D-9), never while acting as a
  * teacher (the Drive would be the admin's), and only when the assessment has
- * an essay (D-8). The route enforces the first two on its own.
+ * an essay or a short answer (D-8, widened by FR D-5). The route enforces the
+ * first two on its own.
  */
 export function canSendToGoogleDocs(input: {
   editLevel: boolean;
   actingAs: boolean;
   itemTypes: string[];
 }): boolean {
-  return input.editLevel && !input.actingAs && input.itemTypes.includes("essay");
+  return (
+    input.editLevel &&
+    !input.actingAs &&
+    input.itemTypes.some((t) => (DOC_ITEM_TYPES as readonly string[]).includes(t))
+  );
 }

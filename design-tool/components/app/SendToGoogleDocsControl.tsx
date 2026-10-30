@@ -184,8 +184,8 @@ export function SendToGoogleDocsControl({
             <DialogTitle>Send to Google Docs</DialogTitle>
             <DialogDescription>
               {single
-                ? `Makes a Google Doc of ${studentName ?? "this student"}'s essays in your Drive and shares it with them to edit.`
-                : "Makes a Google Doc of each student's essays in your Drive and shares it with them to edit."}{" "}
+                ? `Makes a Google Doc of ${studentName ?? "this student"}'s essays and short answers in your Drive and shares it with them to edit.`
+                : "Makes a Google Doc of each student's essays and short answers in your Drive and shares it with them to edit."}{" "}
               Changes in the Doc do not come back here.
             </DialogDescription>
           </DialogHeader>
@@ -261,7 +261,7 @@ export function SendToGoogleDocsControl({
 
               <fieldset>
                 <legend className="text-xs text-muted-foreground">
-                  In the Doc (the essay is always included)
+                  In the Doc (the student's answers are always included)
                 </legend>
                 <div className="mt-1 grid grid-cols-2 gap-1">
                   {CONTENT_OPTIONS.map(({ key: k, label }) => (

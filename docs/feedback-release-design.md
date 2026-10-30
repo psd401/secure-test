@@ -269,3 +269,23 @@ None open. Answered 2026-10-29: 1.1 → D-10, 1.2 → D-11, 1.3 → D-12,
   teacher copy's "AI proposal" comes from all rows, while its AI feedback
   drops a row older than the answer's last edit (D-10), so after a
   pass-back the two can disagree until the AI re-scores.
+- 2026-10-29: slice 5 built. The Doc takes short answers (`short_text`)
+  beside essays, in question order (GD D-10), each with the student's
+  answer and the same blocks from `buildFeedbackRelease` (an AI short
+  answer's holistic key prints as a one-row rubric; an exact-match one as
+  a plain "Score", D-13). The answer prints as typed, escaped — the Doc
+  cannot run KaTeX, so `4^2` stays `4^2` — under "Answer", never "Essay",
+  and never double-spaced or rich (RT D-10 is essays only). An answer
+  whose type is not its item's (left from a type change) is no answer. A
+  student with only a short answer written gets a Doc; the codes
+  `no_essay` / `no_essays` keep their names and now read "no essay or short
+  answer". The button shows when the assessment has either type
+  (`DOC_ITEM_TYPES`, `lib/googleDocs/sendDialog.ts`). GD D-6's alert gate
+  is per attempt, so an open alert on a short answer holds the whole Doc
+  back (tested). GD D-8 carries a dated note. Open: an AI short answer's
+  holistic level descriptor is seeded from its correct answer, so with the
+  AI feedback box ticked (D-10) the rationale on a wrong answer can name
+  the expected answer (the rubric table prints labels only). Teachers
+  should leave AI feedback off while a makeup sitting is open; a later
+  option is a "do not state the expected answer" line in the scoring
+  prompt.

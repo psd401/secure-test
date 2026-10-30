@@ -26,6 +26,7 @@ import {
   type EssaySection,
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
+import { DOC_ITEM_TYPES } from "@/lib/googleDocs/sendDialog";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -35,6 +36,12 @@ import { PRODUCT_NAME } from "@/lib/brand";
 // under SecureTest / <assessment> / <section> (D-4), shared with the student
 // as editor (D-1). Skips are decided before anything touches Drive, so a send
 // where everyone is skipped creates no folders.
+//
+// FR D-5 (docs/feedback-release-design.md slice 5): short answers
+// (`short_text`) go in too, beside the essays in question order, with the
+// same score and feedback blocks. The `no_essay` / `no_essays` codes keep
+// their names (they are on the wire to an open dialog) but now mean "no
+// essay or short answer".
 
 type Db = ReturnType<typeof getDb>;
 
@@ -130,12 +137,13 @@ export async function releaseToGoogleDocs(
   const { assessment, senderSub, scope, options, drive } = args;
   const now = args.now ?? new Date();
 
-  const essayItems = await db
+  // FR D-5: essays and short answers, in question order (D-10).
+  const docItems = await db
     .select()
     .from(items)
-    .where(and(eq(items.assessment_id, assessment.id), eq(items.type, "essay")))
+    .where(and(eq(items.assessment_id, assessment.id), inArray(items.type, [...DOC_ITEM_TYPES])))
     .orderBy(asc(items.position));
-  if (essayItems.length === 0) return { ok: false, error: "no_essays" };
+  if (docItems.length === 0) return { ok: false, error: "no_essays" };
 
   const allItems = await db
     .select({ id: items.id })
@@ -157,13 +165,13 @@ export async function releaseToGoogleDocs(
   rows.sort((a, b) => studentName(a).localeCompare(studentName(b)));
 
   const attemptIds = rows.map((r) => r.attempt_id);
-  const essayIds = essayItems.map((i) => i.id);
+  const docItemIds = docItems.map((i) => i.id);
   const responseRows =
     attemptIds.length > 0
       ? await db
           .select()
           .from(responses)
-          .where(and(inArray(responses.attempt_id, attemptIds), inArray(responses.item_id, essayIds)))
+          .where(and(inArray(responses.attempt_id, attemptIds), inArray(responses.item_id, docItemIds)))
       : [];
   const responseByCell = new Map(responseRows.map((r) => [`${r.attempt_id}:${r.item_id}`, r]));
 
@@ -220,7 +228,7 @@ export async function releaseToGoogleDocs(
       : [];
   const released = new Set(priorReleases.map((r) => r.attempt_id));
 
-  const setIds = [...new Set(essayItems.map((i) => i.item_set_id).filter((x): x is string => !!x))];
+  const setIds = [...new Set(docItems.map((i) => i.item_set_id).filter((x): x is string => !!x))];
   const setRows =
     setIds.length > 0 ? await db.select().from(item_sets).where(inArray(item_sets.id, setIds)) : [];
   const setsById = new Map(setRows.map((s) => [s.id, s]));
@@ -236,6 +244,8 @@ export async function releaseToGoogleDocs(
       continue;
     }
     // D-6: any open alert on the attempt holds the whole Doc back (D-10).
+    // Counted per attempt, whatever the item, so it covers the short answers
+    // FR D-5 adds (the screener screens `short_text` too).
     if ((openAlerts.get(row.attempt_id) ?? 0) > 0) {
       skip("safeguarding_alert");
       continue;
@@ -252,10 +262,17 @@ export async function releaseToGoogleDocs(
     const questions: Array<FeedbackQuestionInput<ScoreRow>> = [];
     const setShown = new Set<string>();
     let anyText = false;
-    for (const item of essayItems) {
+    for (const item of docItems) {
       const resp = responseByCell.get(`${row.attempt_id}:${item.id}`);
+      // The answer must be the item's own type: one left from before a type
+      // change is no answer, as before FR D-5.
       const text =
-        resp && resp.response.type === "essay" && resp.response.text.trim() ? resp.response.text : null;
+        resp &&
+        (resp.response.type === "essay" || resp.response.type === "short_text") &&
+        resp.response.type === item.type &&
+        resp.response.text.trim()
+          ? resp.response.text
+          : null;
       if (text) anyText = true;
       const set = item.item_set_id ? setsById.get(item.item_set_id) : undefined;
       const firstOfSet = set ? !setShown.has(set.id) : false;
@@ -273,18 +290,20 @@ export async function releaseToGoogleDocs(
       });
       essays.push({
         number: numberOf.get(item.id) ?? 0,
+        kind: item.type === "short_text" ? "short_text" : "essay",
         stem: item.stem,
         stimulus: firstOfSet && set ? set.stimulus_text : null,
         sources: firstOfSet && set ? set.sources.map((s) => ({ label: s.label, text: s.text })) : [],
         answer: text,
         // RT slice 2: a formatted essay goes into the Doc formatted — its
         // stored html re-cleaned here (essayRichHtml), then mapped to
-        // Docs-friendly tags by buildDocHtml.
-        answer_html: text && resp ? essayRichHtml(resp.response) : null,
+        // Docs-friendly tags by buildDocHtml. Rich text is essays only.
+        answer_html: text && resp && item.type === "essay" ? essayRichHtml(resp.response) : null,
         feedback: [],
       });
     }
     if (!anyText) {
+      // FR D-5: no essay AND no short answer written.
       skip("no_essay");
       continue;
     }

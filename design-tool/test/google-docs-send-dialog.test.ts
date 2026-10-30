@@ -12,6 +12,7 @@ import {
   ownershipNote,
   parseSavedState,
   readReleaseContents,
+  sendErrorCopy,
   stateToSave,
   storageKey,
   summaryLine,
@@ -41,7 +42,14 @@ describe("send dialog logic", () => {
     expect(canSendToGoogleDocs(base)).toBe(true);
     expect(canSendToGoogleDocs({ ...base, editLevel: false })).toBe(false);
     expect(canSendToGoogleDocs({ ...base, actingAs: true })).toBe(false);
-    expect(canSendToGoogleDocs({ ...base, itemTypes: ["short_text"] })).toBe(false);
+    // FR D-5: a short answer alone is enough; a choice question is not.
+    expect(canSendToGoogleDocs({ ...base, itemTypes: ["short_text"] })).toBe(true);
+    expect(canSendToGoogleDocs({ ...base, itemTypes: ["multiple_choice_single", "table"] })).toBe(false);
+  });
+
+  test("FR D-5: the essay-only copy now names short answers; the wire codes keep their names", () => {
+    expect(outcomeReason(o("skipped", "no_essay"))).toBe("no essay or short answer written");
+    expect(sendErrorCopy("no_essays")).toBe("This assessment has no essay or short-answer questions.");
   });
 
   test("the summary counts each status", () => {
