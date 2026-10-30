@@ -87,11 +87,15 @@ export const NO_EVENTS = "No integrity events";
 
 /** Kinds counted but never printed (see `integrityPhrases`). */
 // `feedback_shown` (instant feedback, D-5) is not an integrity event; the
-// per-student timeline carries it.
+// per-student timeline carries it. Nor is `feedback_edited`
+// (docs/feedback-release-design.md, D-4): a teacher writing feedback says
+// nothing about the sitting, and this page reaches families before that
+// feedback is released to them — it would otherwise print under its raw name.
 const NOT_PRINTED: ReadonlySet<string> = new Set([
   "focus_regained",
   "speech_preflight",
   "feedback_shown",
+  "feedback_edited",
 ]);
 
 export function countByKind(

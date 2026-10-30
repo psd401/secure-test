@@ -69,6 +69,14 @@ export function speechPreflightText(detail: Record<string, unknown> | null | und
   return prefix;
 }
 
+/** `feedback_edited`: "Overall feedback cleared by teacher" and the like. */
+export function feedbackEditedText(detail: Record<string, unknown> | null | undefined): string {
+  const what = detail?.scope === "overall" ? "Overall feedback" : "Feedback";
+  if (detail?.action === "cleared") return `${what} cleared by teacher`;
+  if (detail?.scope === "overall") return `${what} edited by teacher`;
+  return eventLabel("feedback_edited");
+}
+
 /** The one-event sentences. Unknown kinds fall back to the monitor's label. */
 function lineText(event: TimelineEvent): string {
   switch (event.kind) {
@@ -105,6 +113,12 @@ function lineText(event: TimelineEvent): string {
       return event.detail?.source === "rescore"
         ? "Rescored with the updated key"
         : eventLabel(event.kind);
+    case "feedback_edited":
+      // Feedback release (docs/feedback-release-design.md, D-4 / D-12): the
+      // detail says which comment and whether it was saved or cleared, never
+      // the text (D-14). A row without a readable detail gets the monitor's
+      // words.
+      return feedbackEditedText(event.detail);
     case "lockdown_failed":
     case "lockdown_interrupted":
       // The monitor's words, deliberately shared rather than re-typed.

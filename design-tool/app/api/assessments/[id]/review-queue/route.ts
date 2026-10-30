@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import {
   attempts,
   items,
+  response_feedback,
   responses,
   scores,
   students,
@@ -149,6 +150,26 @@ export async function GET(req: Request, ctx: RouteContext) {
   const finalByResponse = new Map(
     scoreRows.filter((s) => s.status === "final").map((s) => [s.response_id, s]),
   );
+  // Teacher feedback (docs/feedback-release-design.md, D-4): each card carries
+  // its comment so the box opens on what was saved. Staff-only, like every
+  // other field here — not shown to students yet.
+  const feedbackRows =
+    responseRows.length > 0
+      ? await db
+          .select({
+            response_id: response_feedback.response_id,
+            text: response_feedback.text,
+            updated_at: response_feedback.updated_at,
+          })
+          .from(response_feedback)
+          .where(
+            inArray(
+              response_feedback.response_id,
+              responseRows.map((r) => r.id),
+            ),
+          )
+      : [];
+  const feedbackByResponse = new Map(feedbackRows.map((f) => [f.response_id, f]));
   // Latest proposed per response (created_at, then insertion order).
   const proposedByResponse = new Map<string, ScoreRow>();
   for (const s of scoreRows) {
@@ -216,6 +237,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       ? null
       : (responseAlerts.find((a) => a.kind === "prompt_injection" && a.ai_forced_at !== null) ??
         null);
+    const feedback = feedbackByResponse.get(response.id);
     const card = {
       section,
       outline,
@@ -242,6 +264,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       },
       response_id: response.id,
       attempt_id: response.attempt_id,
+      teacher_feedback: feedback ? { text: feedback.text, updated_at: feedback.updated_at } : null,
       student: student
         ? { name: student.name, ssid: student.ssid }
         : { name: "(unknown)", ssid: "" },

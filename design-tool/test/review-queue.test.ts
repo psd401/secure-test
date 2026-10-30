@@ -9,6 +9,7 @@ import {
   assessments,
   attempts,
   items,
+  response_feedback,
   responses,
   scores,
   scoring_runs,
@@ -262,6 +263,26 @@ describe("GET review-queue", () => {
     expect(
       body.entries.filter((e) => e.proposed === null).map((e) => e.item.stem).sort(),
     ).toEqual(["Human essay", "Short human"]);
+  });
+
+  // Teacher feedback (docs/feedback-release-design.md, D-4): each card
+  // carries its saved comment so the box opens on it; none is null.
+  test("entries carry their teacher feedback, or null", async () => {
+    const { db, assessment, responseRows } = await seedQueueScenario();
+    const human = responseRows[1]!; // "Human essay", awaiting a manual score
+    await db.insert(response_feedback).values({
+      response_id: human.id,
+      author_sub: OWNER,
+      text: "Add a second example.",
+    });
+    const body = (await (await getQueue(assessment.id)).json()) as {
+      entries: Array<{ response_id: string; teacher_feedback: { text: string } | null }>;
+    };
+    const withFb = body.entries.find((e) => e.response_id === human.id)!;
+    expect(withFb.teacher_feedback?.text).toBe("Add a second example.");
+    for (const e of body.entries.filter((e) => e.response_id !== human.id)) {
+      expect(e.teacher_feedback).toBeNull();
+    }
   });
 
   // E12 slice 4: a question under a source-backed stimulus says what the

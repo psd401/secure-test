@@ -6,6 +6,8 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { DRIVE_TOKEN_COOKIE_NAME, cookieFromHeader, readDriveToken } from "@/lib/googleDocs/driveAuth";
 import { createDriveClient } from "@/lib/googleDocs/drive";
 import { releaseToGoogleDocs } from "@/lib/googleDocs/release";
+import { readReleaseContents } from "@/lib/googleDocs/sendDialog";
+import { rememberFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { log } from "@/lib/log";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
@@ -17,13 +19,20 @@ const Body = z
   .object({
     section: z.string().trim().min(1).max(200).optional(),
     attempt_id: z.string().uuid().optional(),
-    // D-2: the essay itself is always in the Doc; these are the extras.
+    // D-2: the student's answers (essays and, FR D-5, short answers) are
+    // always in the Doc; these are the extras.
     contents: z.object({
       prompt: z.boolean(),
       sources: z.boolean(),
-      score: z.boolean(),
       teacher_feedback: z.boolean(),
       ai_feedback: z.boolean(),
+      // FR slice 3 (docs/feedback-release-design.md, D-2 / R-2): optional so
+      // a tab opened before the deploy, which still posts the one `score`
+      // box, keeps working — readReleaseContents reads it as both boxes.
+      teacher_score: z.boolean().optional(),
+      ai_score: z.boolean().optional(),
+      rubric_table: z.boolean().optional(),
+      score: z.boolean().optional(),
     }),
     mode: z.enum(["skip", "new"]),
     include_drafts: z.boolean(),
@@ -38,9 +47,10 @@ const Body = z
   });
 
 /**
- * Release essays to Google Docs (docs/google-docs-release-design.md, row GD
- * slice 3). `edit` on the assessment (D-9: co-teachers with edit can send;
- * their Docs land in their own Drive). The Drive token is the slice 2 cookie;
+ * Release essays and short answers (FR D-5) to Google Docs
+ * (docs/google-docs-release-design.md, row GD slice 3). `edit` on the
+ * assessment (D-9: co-teachers with edit can send; their Docs land in their
+ * own Drive). The Drive token is the slice 2 cookie;
  * without one — or when Drive refuses it mid-send — the answer carries
  * `drive_auth_needed` and the page runs the authorization again.
  *
@@ -72,6 +82,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
   const body = parsed.data;
+  const contents = readReleaseContents(body.contents);
 
   const db = getDb();
   const access = await authorizeAssessment(db, session, id, "edit", "write");
@@ -93,7 +104,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     senderSub: session.sub,
     scope: body.attempt_id ? { attemptId: body.attempt_id } : { section: body.section! },
     options: {
-      contents: body.contents,
+      contents,
       mode: body.mode,
       includeDrafts: body.include_drafts,
       transferOwnership: body.transfer_ownership ?? false,
@@ -104,6 +115,16 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!result.ok) {
     const status = result.error === "attempt_not_found" ? 404 : 409;
     return NextResponse.json({ ok: false, error: result.error }, { status });
+  }
+
+  // FR R-4: the next send from this assessment starts from these boxes.
+  // Best-effort: the Docs already exist, so a failed write here must not turn
+  // the send into a 500 (a retry with mode "new" would duplicate them). The
+  // warning carries the id only — no boxes, no student data.
+  try {
+    await rememberFeedbackReleasePrefs(db, session.sub, access.assessment.id, { ...contents });
+  } catch {
+    log.warn("feedback_release_prefs_failed", { assessment_id: id });
   }
 
   const count = (s: string) => result.outcomes.filter((o) => o.status === s).length;

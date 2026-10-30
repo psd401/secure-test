@@ -5,9 +5,11 @@ import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   attempt_events,
+  attempt_feedback,
   attempts,
   google_doc_releases,
   items,
+  response_feedback,
   responses,
   scores,
   type ItemRow,
@@ -35,6 +37,7 @@ import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
 import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { docUrl } from "@/lib/googleDocs/drive";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { practiceAttemptIsCallers } from "@/lib/api/staffAttempt";
@@ -50,6 +53,7 @@ import { alertsForAttempt } from "@/lib/safeguarding/alertQueries";
 import { SafeguardingPanel, type PanelAlert } from "@/components/app/SafeguardingPanel";
 import { CopyTextButton } from "@/components/app/CopyTextButton";
 import { RestoreVersionControl } from "@/components/app/RestoreVersionControl";
+import { TeacherFeedbackBox } from "@/components/app/TeacherFeedbackBox";
 import { listAnswerHistory, type AnswerRevisionView } from "@/lib/api/answerHistory";
 import {
   revisionMeasure,
@@ -146,6 +150,20 @@ function RubricScoreDetail({
       {overall ? (
         <p className="mt-1 text-xs text-muted-foreground">{overall}</p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Teacher feedback (docs/feedback-release-design.md, D-1 / D-4), read-only:
+ * what a reader below edit level (or an admin not acting as the teacher) sees
+ * in place of the box. Labelled by source like the box.
+ */
+function TeacherFeedbackText({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="mt-3 border-t border-border pt-3" data-teacher-feedback>
+      <p className="text-sm font-medium">{label}</p>
+      <p className="mt-1 whitespace-pre-line text-sm">{text}</p>
     </div>
   );
 }
@@ -395,6 +413,8 @@ export default async function AttemptResultPage({ params }: PageProps) {
       actingAs: Boolean(session.actor_sub),
       itemTypes: itemRows.map((i) => i.type),
     });
+  // FR R-4: the dialog starts from this teacher's last send here.
+  const docPrefs = showGoogleDocs ? await loadFeedbackReleasePrefs(db, session.sub, id) : null;
   const myReleases = showGoogleDocs
     ? await db
         .select()
@@ -421,6 +441,37 @@ export default async function AttemptResultPage({ params }: PageProps) {
     .from(responses)
     .where(eq(responses.attempt_id, attemptId));
   const responseByItem = new Map(responseRows.map((r) => [r.item_id, r]));
+
+  // Teacher feedback (docs/feedback-release-design.md, D-4 / D-12): one
+  // comment per answer and one overall, on a handed-in, non-practice attempt.
+  // Written at edit level and never by a non-impersonating admin (the routes
+  // refuse that write the same way, SEC-03); everyone else who can read the
+  // page reads the comments. Students see them only through a release (FR
+  // slices 3–4) with Teacher feedback ticked.
+  const showFeedback = row.status === "submitted" && !attempt.practice;
+  const canWriteFeedback = levelSatisfies(access.level, "edit") && access.via !== "admin";
+  const feedbackByResponse = new Map<string, string>();
+  let overallFeedback = "";
+  if (showFeedback) {
+    if (responseRows.length > 0) {
+      const fbRows = await db
+        .select({ response_id: response_feedback.response_id, text: response_feedback.text })
+        .from(response_feedback)
+        .where(
+          inArray(
+            response_feedback.response_id,
+            responseRows.map((r) => r.id),
+          ),
+        );
+      for (const f of fbRows) feedbackByResponse.set(f.response_id, f.text);
+    }
+    const [overall] = await db
+      .select({ text: attempt_feedback.text })
+      .from(attempt_feedback)
+      .where(eq(attempt_feedback.attempt_id, attemptId))
+      .limit(1);
+    overallFeedback = overall?.text ?? "";
+  }
 
   // Answer history (docs/answer-history-design.md, D-4): edit level and above.
   const historyByItem = levelSatisfies(access.level, "edit")
@@ -590,6 +641,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 attemptId={attemptId}
                 studentName={row.student.name || row.student.ssid || "this student"}
                 returnPath={`/dashboard/${id}/results/${attemptId}`}
+                initialContents={docPrefs ?? undefined}
               />
             ) : null}
             {row.status === "in_progress" ? (
@@ -660,6 +712,20 @@ export default async function AttemptResultPage({ params }: PageProps) {
       ) : null}
 
       <SafeguardingPanel alerts={panelAlerts} canAcknowledge={canAcknowledge} />
+
+      {showFeedback && (canWriteFeedback || overallFeedback) ? (
+        <section aria-label="Overall teacher feedback" className="mb-4">
+          {canWriteFeedback ? (
+            <TeacherFeedbackBox
+              endpoint={`/api/attempts/${attemptId}/feedback`}
+              initialText={overallFeedback}
+              label="Teacher feedback (overall)"
+            />
+          ) : (
+            <TeacherFeedbackText label="Teacher feedback (overall)" text={overallFeedback} />
+          )}
+        </section>
+      ) : null}
 
       <section aria-labelledby="answers" className="space-y-4">
         <h2 id="answers" className="text-lg font-semibold">
@@ -888,6 +954,22 @@ export default async function AttemptResultPage({ params }: PageProps) {
                       rows={proposedDetail.rows}
                       overall={proposedDetail.overall}
                     />
+                  ) : null}
+                  {/* Teacher feedback (docs/feedback-release-design.md, D-4):
+                      only on an answer — a question left blank has no
+                      response row to hang a comment on. */}
+                  {response && showFeedback ? (
+                    canWriteFeedback ? (
+                      <TeacherFeedbackBox
+                        endpoint={`/api/responses/${response.id}/feedback`}
+                        initialText={feedbackByResponse.get(response.id) ?? ""}
+                      />
+                    ) : feedbackByResponse.has(response.id) ? (
+                      <TeacherFeedbackText
+                        label="Teacher feedback"
+                        text={feedbackByResponse.get(response.id)!}
+                      />
+                    ) : null
                   ) : null}
                 </div>
               )}

@@ -34,7 +34,10 @@ for peer review.
 - **D-7 The student's name is in the Doc** (title and heading). No
   anonymous mode.
 - **D-8 Essays only.** Short text, tables, drawings and choices are out
-  of scope.
+  of scope. *2026-10-29: short answers (`short_text`) now go in the Doc
+  too, beside the essays in question order, with the same score and
+  feedback blocks — FR D-5, `docs/feedback-release-design.md` slice 5.
+  Tables, drawings and choices stay out.*
 - **D-9 Co-teachers with edit access can send.** Their Docs land in
   their own Drive under the same folder path.
 - **D-10 One Doc per student per assessment.** Every essay on the
@@ -270,3 +273,8 @@ D-10).
   the session:** 432's Drive email (the demo student's inbox), 441
   (co-teacher send into their own Drive — a second staff Google account)
   and 442 (picking another Google account at consent).
+- 2026-10-29 — **D-8 widened by FR D-5** (`docs/feedback-release-design.md`
+  slice 5): short answers go in the Doc beside essays. The skip code
+  `no_essay` and the refusal `no_essays` keep their names on the wire; their
+  copy now says "essay or short answer". D-6's gate is per attempt, so an
+  open alert on a short answer holds the Doc back too.

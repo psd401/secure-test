@@ -980,6 +980,14 @@ export const ATTEMPT_EVENT_KINDS = [
   // Server-written only: a client that could post one could plant a line
   // claiming a teacher changed a student's answer.
   "answer_restored",
+  // Feedback release (docs/feedback-release-design.md, D-4 / D-12): a teacher
+  // saved or cleared their feedback on one question or on the attempt as a
+  // whole. `detail` is { scope: "question", response_id, item_id, action } or
+  // { scope: "overall", action }, action "saved" | "cleared" — never the text
+  // or its length (D-14: teacher feedback stays out of logs and AI). Server-
+  // written by the feedback routes only: a client that could post one could
+  // plant a line claiming a teacher wrote feedback they never wrote.
+  "feedback_edited",
 ] as const;
 export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
 
@@ -998,6 +1006,10 @@ export type AttemptEventKind = (typeof ATTEMPT_EVENT_KINDS)[number];
  * `feedback_shown` (docs/instant-feedback-design.md, D-5) is not a staff
  * action but rides the same list: it is server-written by the submit route
  * and must not be client-postable either.
+ *
+ * `answer_restored` (docs/answer-history-design.md) and `feedback_edited`
+ * (docs/feedback-release-design.md, D-4 / D-12) are staff actions written by
+ * their own routes, like the first five.
  */
 export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "teacher_hand_in",
@@ -1007,6 +1019,7 @@ export const STAFF_ONLY_ATTEMPT_EVENT_KINDS = [
   "score_changed",
   "feedback_shown",
   "answer_restored",
+  "feedback_edited",
 ] as const;
 export type StaffOnlyAttemptEventKind = (typeof STAFF_ONLY_ATTEMPT_EVENT_KINDS)[number];
 export type ClientAttemptEventKind = Exclude<AttemptEventKind, StaffOnlyAttemptEventKind>;
@@ -1051,7 +1064,7 @@ export const attempt_events = pgTable(
     attemptIdIdx: index("attempt_events_attempt_id_idx").on(t.attempt_id),
     kindCheck: check(
       "attempt_events_kind_check",
-      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored')`,
+      sql`kind IN ('quit', 'emergency_exit', 'focus_loss', 'focus_regained', 'lockdown_begin', 'lockdown_end', 'lockdown_failed', 'lockdown_interrupted', 'client_error', 'time_expired', 'sitting_closed', 'speech_preflight', 'teacher_hand_in', 'deadline_extended', 'passed_back', 'gradebook_sent', 'score_changed', 'feedback_shown', 'answer_restored', 'feedback_edited')`,
     ),
   }),
 );
@@ -2270,8 +2283,11 @@ export const google_doc_releases = pgTable(
     sender_sub: text("sender_sub").notNull(),
     drive_file_id: text("drive_file_id").notNull(),
     title: text("title").notNull(),
-    /** Which content boxes were ticked: { prompt, sources, score,
-     * teacher_feedback, ai_feedback }. */
+    /** Which content boxes were ticked: { prompt, sources, teacher_score,
+     * ai_score, teacher_feedback, ai_feedback, rubric_table } (FR slice 3).
+     * Rows from before it carry one `score` instead; read every row through
+     * readReleaseContents (lib/googleDocs/sendDialog.ts), which reads `score`
+     * as both score boxes. */
     contents: jsonb("contents").$type<Record<string, boolean>>().notNull(),
     /** D-12: the attempt was not handed in when the Doc was made. */
     was_draft: boolean("was_draft").notNull().default(false),
@@ -2287,6 +2303,95 @@ export const google_doc_releases = pgTable(
 
 export type GoogleDocFolderRow = typeof google_doc_folders.$inferSelect;
 export type GoogleDocReleaseRow = typeof google_doc_releases.$inferSelect;
+
+// --- Teacher feedback (docs/feedback-release-design.md, R-1 / D-4 / D-12) ---
+//
+// A teacher's own written feedback, one comment per response and one overall
+// comment per attempt. Its own tables rather than `scores.rationale` (R-1):
+// scores are append-only and superseded on a change, while feedback is edited
+// in place and survives a score change. Co-teachers edit the same row and
+// `author_sub` records the last editor (D-12). Student-record content: never
+// logged, never in class insights, the insights chat or any AI prompt (D-14).
+// The 4000 cap is `TEACHER_FEEDBACK_MAX` (lib/teacherFeedback/limits.ts); the
+// routes refuse longer text before the CHECK can fire.
+export const response_feedback = pgTable(
+  "response_feedback",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    response_id: uuid("response_id")
+      .notNull()
+      .references(() => responses.id, { onDelete: "cascade" }),
+    author_sub: text("author_sub").notNull(),
+    text: text("text").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    responseIdUnq: uniqueIndex("response_feedback_response_id_unq").on(t.response_id),
+    textCheck: check(
+      "response_feedback_text_check",
+      sql`char_length(text) BETWEEN 1 AND 4000`,
+    ),
+  }),
+);
+
+// The per-student overall comment (D-4): the same shape keyed on the attempt.
+export const attempt_feedback = pgTable(
+  "attempt_feedback",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    attempt_id: uuid("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    author_sub: text("author_sub").notNull(),
+    text: text("text").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    attemptIdUnq: uniqueIndex("attempt_feedback_attempt_id_unq").on(t.attempt_id),
+    textCheck: check(
+      "attempt_feedback_text_check",
+      sql`char_length(text) BETWEEN 1 AND 4000`,
+    ),
+  }),
+);
+
+export type ResponseFeedbackRow = typeof response_feedback.$inferSelect;
+export type AttemptFeedbackRow = typeof attempt_feedback.$inferSelect;
+
+// FR R-4: a teacher's last release choices per assessment, so the next send
+// starts from them. Keyed by the session `sub` like `gradebook_section_prefs`;
+// one row per (teacher, assessment), shared by the Doc dialog and — slice 4 —
+// the packet toolbar, which is why it is its own table rather than the latest
+// `google_doc_releases` row. `contents` holds only box flags, never student
+// content; read it through readReleaseContents (lib/googleDocs/sendDialog.ts).
+export const feedback_release_prefs = pgTable(
+  "feedback_release_prefs",
+  {
+    staff_sub: text("staff_sub").notNull(),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    contents: jsonb("contents").$type<Record<string, boolean>>().notNull(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.staff_sub, t.assessment_id] }),
+  }),
+);
+
+export type FeedbackReleasePrefRow = typeof feedback_release_prefs.$inferSelect;
 
 // --- Per-staff preferences (docs/editor-redesign-design.md, R-12) ----------
 //

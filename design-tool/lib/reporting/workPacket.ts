@@ -7,10 +7,33 @@
 // renders anything; the page draws what these return.
 
 import { UUID_RE } from "@/lib/uuid";
-import { FILL_BLANK_MARKER_RE } from "@secure-test/schema";
+import { FILL_BLANK_MARKER_RE, type Rubric } from "@secure-test/schema";
+import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+// Type only: feedbackRelease.ts imports this file's selectPacketScores.
+import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
 
+/**
+ * The packet's score choice before FR slice 4 (docs/feedback-release-design.md):
+ * one `scores=` radio. Kept to read bookmarked URLs (mapped onto the two score
+ * boxes by `parsePacketQuery`) and as `selectPacketScores`' mode.
+ */
 export const PACKET_SCORE_MODES = ["none", "teacher", "ai", "both"] as const;
 export type PacketScoresMode = (typeof PACKET_SCORE_MODES)[number];
+
+/**
+ * FR D-2 / R-2 / D-7: the packet toolbar's boxes — the Doc dialog's, less
+ * prompt and sources (the packet has its own `questions` choice). Each is its
+ * own URL parameter, `=1` when ticked, off when absent.
+ */
+export const PACKET_CONTENT_KEYS = [
+  "teacher_score",
+  "ai_score",
+  "teacher_feedback",
+  "ai_feedback",
+  "rubric_table",
+] as const satisfies ReadonlyArray<keyof FeedbackContents>;
+
+export type PacketContents = FeedbackContents;
 
 export interface PacketQuery {
   /**
@@ -35,7 +58,20 @@ export interface PacketQuery {
   items: string[] | null;
   /** `questions=0` prints answers only. */
   questions: boolean;
-  scores: PacketScoresMode;
+  /**
+   * FR D-2 / R-2: which score and feedback blocks print. An old `scores=`
+   * URL with none of these parameters reads as the two score boxes
+   * (`both` = both ticked), so a bookmark keeps working.
+   */
+  contents: PacketContents;
+  /**
+   * FR D-16: `teacher_copy=1` keeps the score blocks as they were before FR
+   * — the latest AI row whatever its status, headed "AI proposal" / "AI score
+   * (not reviewed)" / "AI score (approved)", with "No … score" placeholders —
+   * for a teacher to annotate. Off (the default) is the student copy, where
+   * D-3 / D-17 / D-13 decide what prints.
+   */
+  teacherCopy: boolean;
   /** D-1: labels instead of names, with a teacher key page last. */
   anon: boolean;
   /**
@@ -48,7 +84,7 @@ export interface PacketQuery {
    * U-23 (beta teachers, 2026-10-13): `answers=0` leaves out what the student
    * wrote or chose, keeping the question and the score / feedback blocks — a
    * feedback sheet to hand back. Default on. Read it through
-   * `packetHidesAnswers`, never directly: with `scores=none` it is ignored.
+   * `packetHidesAnswers`, never directly: with no box ticked it is ignored.
    */
   answers: boolean;
 }
@@ -85,7 +121,8 @@ function flag(raw: string | null, fallback: boolean): boolean {
  * The packet's whole URL contract. Never throws and never 400s: a packet is a
  * link a teacher bookmarks and hand-edits, so an unreadable value falls back
  * to the documented default (an unknown `scores` becomes `none` — the safest
- * of the four) rather than taking the page down.
+ * of the four — and every box is off unless it reads as on) rather than
+ * taking the page down.
  */
 export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
   const sections: string[] = [];
@@ -114,10 +151,33 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
     if (UUID_RE.test(id) && !attempts.includes(id)) attempts.push(id);
   }
 
-  const rawScores = (lastParam(searchParams.scores) ?? "").trim().toLowerCase();
-  const scores = (PACKET_SCORE_MODES as readonly string[]).includes(rawScores)
-    ? (rawScores as PacketScoresMode)
-    : "none";
+  // FR slice 4: the boxes win. Only a URL with none of them — a bookmark
+  // from before the boxes — reads the legacy `scores=`, and it maps onto the
+  // two SCORE boxes only (the design note's mapping): feedback and the rubric
+  // table stay off, and it prints the student copy.
+  const anyBox = PACKET_CONTENT_KEYS.some((k) => lastParam(searchParams[k]) !== null);
+  let contents: PacketContents;
+  if (anyBox) {
+    contents = {
+      teacher_score: flag(lastParam(searchParams.teacher_score), false),
+      ai_score: flag(lastParam(searchParams.ai_score), false),
+      teacher_feedback: flag(lastParam(searchParams.teacher_feedback), false),
+      ai_feedback: flag(lastParam(searchParams.ai_feedback), false),
+      rubric_table: flag(lastParam(searchParams.rubric_table), false),
+    };
+  } else {
+    const rawScores = (lastParam(searchParams.scores) ?? "").trim().toLowerCase();
+    const scores = (PACKET_SCORE_MODES as readonly string[]).includes(rawScores)
+      ? (rawScores as PacketScoresMode)
+      : "none";
+    contents = {
+      teacher_score: scores === "teacher" || scores === "both",
+      ai_score: scores === "ai" || scores === "both",
+      teacher_feedback: false,
+      ai_feedback: false,
+      rubric_table: false,
+    };
+  }
 
   return {
     sections,
@@ -125,22 +185,47 @@ export function parsePacketQuery(searchParams: SearchParams): PacketQuery {
     inProgress: flag(lastParam(searchParams.in_progress), false),
     items: ids.length > 0 ? ids : null,
     questions: flag(lastParam(searchParams.questions), true),
-    scores,
+    contents,
+    teacherCopy: flag(lastParam(searchParams.teacher_copy), false),
     anon: flag(lastParam(searchParams.anon), false),
     doubleSpace: (lastParam(searchParams.spacing) ?? "").trim().toLowerCase() === "double",
     answers: flag(lastParam(searchParams.answers), true),
   };
 }
 
+/** Whether any score or feedback box is ticked (FR D-2: none is allowed). */
+export function packetPrintsBlocks(contents: PacketContents): boolean {
+  return PACKET_CONTENT_KEYS.some((k) => contents[k]);
+}
+
 /**
- * U-23 decision 1.5: answers are left out only when a score side prints —
- * `answers=0` with `scores=none` would print question numbers and nothing
- * else, so the answers print as usual and the toolbar says why. A rule
- * rather than a disabled checkbox because the toolbar is a plain GET form
- * with no client JS (the page's FERPA posture).
+ * U-23 decision 1.5: answers are left out only when a block can print —
+ * `answers=0` with no box ticked would print question numbers and nothing
+ * else, so the answers print as usual and the toolbar says why (FR D-11:
+ * any score or feedback box counts, so an AI-feedback-only sheet works). A
+ * rule rather than a disabled checkbox because the toolbar is a plain GET
+ * form with no client JS (the page's FERPA posture).
  */
-export function packetHidesAnswers(query: Pick<PacketQuery, "answers" | "scores">): boolean {
-  return !query.answers && query.scores !== "none";
+export function packetHidesAnswers(query: Pick<PacketQuery, "answers" | "contents">): boolean {
+  return !query.answers && packetPrintsBlocks(query.contents);
+}
+
+/**
+ * W-1 (hand-run 2026-09-14): the ✓ / ✗ and "expected" key print only with
+ * the teacher's side. Under FR that is the Teacher score box — not AI score,
+ * even though an auto score prints as "Score" under either (D-13): the key
+ * is the teacher's, and a sheet without their score may leave their hands.
+ */
+export function packetShowsKey(contents: PacketContents): boolean {
+  return contents.teacher_score;
+}
+
+/** The two score boxes as `selectPacketScores`' mode (FR D-16's teacher copy). */
+export function packetScoresMode(contents: PacketContents): PacketScoresMode {
+  if (contents.teacher_score && contents.ai_score) return "both";
+  if (contents.teacher_score) return "teacher";
+  if (contents.ai_score) return "ai";
+  return "none";
 }
 
 /**
@@ -269,8 +354,9 @@ export function selectPacketScores<T extends PacketScoreRow>(
 }
 
 /**
- * The heading above a score block — including the empty case, so the page
- * never has to compose "No teacher score" itself.
+ * The heading above a TEACHER-COPY score block (FR D-16) — including the
+ * empty case, so the page never has to compose "No teacher score" itself.
+ * The student copy uses `scoreLabel` through `buildFeedbackRelease`.
  */
 export function packetScoreHeading(
   kind: "teacher" | "ai",
@@ -285,6 +371,70 @@ export function packetScoreHeading(
   // Hybrid transparency (D-1): a final AI score Hybrid settled on its own is
   // not one the teacher accepted.
   return row.reviewed_by_sub === null ? "AI score (not reviewed)" : "AI score (approved)";
+}
+
+/** One printed score block: a heading and the points, or a placeholder (no row). */
+export interface PacketScoreBlock {
+  label: string;
+  row: { points: number; max_points: number } | null;
+  /**
+   * Teacher copy with the rubric-table box (D-16, R-2): THIS block's row's
+   * own per-criterion levels and points, so the AI proposal's levels sit under
+   * "AI proposal" and the teacher's under theirs. Never the comments — the
+   * pre-FR "Why" column was unlabelled (D-1); the AI's print as AI feedback.
+   * Always empty in the student copy, whose table is the builder's (final
+   * row only, D-3).
+   */
+  criteria: Array<{ criterion: string; level: string; points: number }>;
+}
+
+/**
+ * The score blocks one question prints.
+ *
+ * - Student copy (the default): the builder's own score block, if any —
+ *   the final row only, "AI score" only while the AI's score stands (D-3,
+ *   D-17), an answer key's as "Score" (D-13). Never a placeholder: "No AI
+ *   score" where D-3 hid an overridden one would tell the student something
+ *   was hidden.
+ * - Teacher copy (D-16): today's blocks — `selectPacketScores` for the two
+ *   score boxes, `packetScoreHeading`'s headings and placeholders — each
+ *   carrying its own row's levels when the rubric table is ticked (R-2). The
+ *   page then leaves out the builder's final-only table, which would print the
+ *   teacher's levels under no heading beside an AI proposal.
+ */
+export function packetScoreBlocks<T extends PacketScoreRow>(
+  contents: PacketContents,
+  teacherCopy: boolean,
+  rowsForResponse: T[],
+  releaseBlocks: FeedbackBlock[],
+  rubric: Rubric | null,
+): PacketScoreBlock[] {
+  if (!teacherCopy) {
+    return releaseBlocks.flatMap((b) =>
+      b.kind === "score"
+        ? [{ label: b.label, row: { points: b.points, max_points: b.max_points }, criteria: [] }]
+        : [],
+    );
+  }
+  const mode = packetScoresMode(contents);
+  if (mode === "none") return [];
+  const picked = selectPacketScores(mode, rowsForResponse);
+  const block = (label: string, row: T | null): PacketScoreBlock => ({
+    label,
+    row,
+    criteria:
+      contents.rubric_table && row
+        ? rubricScoreRows(rubric, row.rationale).map((c) => ({
+            criterion: c.criterion_name,
+            level: c.level_label,
+            points: c.points,
+          }))
+        : [],
+  });
+  const out: PacketScoreBlock[] = [];
+  if (mode !== "ai") out.push(block(packetScoreHeading("teacher", picked.teacher), picked.teacher));
+  if (mode !== "teacher") out.push(block(packetScoreHeading("ai", picked.ai), picked.ai));
+  return out;
 }
 
 export interface ChoiceCheckboxLine {

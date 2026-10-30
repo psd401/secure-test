@@ -26,29 +26,56 @@ export interface DialogState {
   doubleSpace: boolean;
 }
 
+/** FR R-2: every box off, the rubric table included. */
 export const DEFAULT_CONTENTS: ReleaseContents = {
   prompt: false,
   sources: false,
-  score: false,
+  teacher_score: false,
+  ai_score: false,
   teacher_feedback: false,
   ai_feedback: false,
+  rubric_table: false,
 };
 
-/** D-2: the checkbox menu, in the order the dialog shows it. */
+/** D-2 (and FR D-2 / R-2): the checkbox menu, in the order the dialog shows it. */
 export const CONTENT_OPTIONS: Array<{ key: keyof ReleaseContents; label: string }> = [
   { key: "prompt", label: "Prompt" },
   { key: "sources", label: "Sources" },
-  { key: "score", label: "Score" },
+  { key: "teacher_score", label: "Teacher score" },
+  { key: "ai_score", label: "AI score" },
   { key: "teacher_feedback", label: "Teacher feedback" },
   { key: "ai_feedback", label: "AI feedback" },
+  { key: "rubric_table", label: "Rubric table" },
 ];
+
+/**
+ * Any saved set of boxes — a `google_doc_releases.contents` row, a remembered
+ * choice (FR R-4), a state saved across the Google redirect, an older
+ * dialog's post — as today's boxes. A missing or non-boolean key is off.
+ * Before FR slice 3 there was one `score` box; where a row has it and not
+ * the new keys, it reads as `teacher_score || ai_score` — both ticked.
+ */
+export function readReleaseContents(raw: unknown): ReleaseContents {
+  const contents = { ...DEFAULT_CONTENTS };
+  if (!raw || typeof raw !== "object") return contents;
+  const v = raw as Record<string, unknown>;
+  for (const { key } of CONTENT_OPTIONS) {
+    if (typeof v[key] === "boolean") contents[key] = v[key] as boolean;
+  }
+  if (typeof v.score === "boolean") {
+    if (typeof v.teacher_score !== "boolean") contents.teacher_score = v.score;
+    if (typeof v.ai_score !== "boolean") contents.ai_score = v.score;
+  }
+  return contents;
+}
 
 const REASONS: Record<string, string> = {
   not_handed_in: "not handed in",
   already_released: "already has a Doc from you",
   safeguarding_alert: "held back — an open safeguarding alert needs your review first",
   no_email: "no school email on the roster",
-  no_essay: "no essay written",
+  // FR D-5: the code keeps its name; short answers count too.
+  no_essay: "no essay or short answer written",
   drive_auth_expired: "not sent — Google access expired",
 };
 
@@ -98,7 +125,7 @@ export function authOutcomeCopy(outcome: string): { ok: boolean; text: string } 
 export function sendErrorCopy(code: string): string {
   switch (code) {
     case "no_essays":
-      return "This assessment has no essay questions.";
+      return "This assessment has no essay or short-answer questions.";
     case "attempt_not_found":
       return "This student's attempt is no longer here.";
     case "not_while_acting_as":
@@ -131,14 +158,10 @@ export function parseSavedState(raw: string | null): DialogState | null {
     if (typeof v.section !== "string") return null;
     if (v.mode !== "skip" && v.mode !== "new") return null;
     if (typeof v.includeDrafts !== "boolean") return null;
-    const contents = { ...DEFAULT_CONTENTS };
-    for (const { key } of CONTENT_OPTIONS) {
-      const flag = (v.contents as Record<string, unknown> | undefined)?.[key];
-      if (typeof flag === "boolean") contents[key] = flag;
-    }
     return {
       section: v.section,
-      contents,
+      // FR slice 3: a state saved before it carries `score`; read it as both.
+      contents: readReleaseContents(v.contents),
       mode: v.mode,
       includeDrafts: v.includeDrafts,
       transferOwnership: v.transferOwnership === true,
@@ -155,15 +178,23 @@ export function authStartHref(returnPath: string): string {
   return `/api/google/drive/start?next=${encodeURIComponent(returnPath)}`;
 }
 
+/** GD D-8 as widened by FR D-5: the item types that go in the Doc. */
+export const DOC_ITEM_TYPES = ["essay", "short_text"] as const;
+
 /**
  * Whether a page shows the button: edit level (D-9), never while acting as a
  * teacher (the Drive would be the admin's), and only when the assessment has
- * an essay (D-8). The route enforces the first two on its own.
+ * an essay or a short answer (D-8, widened by FR D-5). The route enforces the
+ * first two on its own.
  */
 export function canSendToGoogleDocs(input: {
   editLevel: boolean;
   actingAs: boolean;
   itemTypes: string[];
 }): boolean {
-  return input.editLevel && !input.actingAs && input.itemTypes.includes("essay");
+  return (
+    input.editLevel &&
+    !input.actingAs &&
+    input.itemTypes.some((t) => (DOC_ITEM_TYPES as readonly string[]).includes(t))
+  );
 }

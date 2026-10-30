@@ -1,15 +1,23 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import {
+  attempt_feedback,
   google_doc_folders,
   google_doc_releases,
   item_sets,
   items,
+  response_feedback,
   responses,
   scores,
   type AssessmentRow,
+  type ScoreRow,
 } from "@/db/schema";
-import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import {
+  buildFeedbackRelease,
+  questionRubric,
+  type FeedbackBlock,
+  type FeedbackQuestionInput,
+} from "@/lib/reporting/feedbackRelease";
 import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 import { buildResults, type ResultsRow } from "@/lib/scoring/results";
 import {
@@ -18,6 +26,7 @@ import {
   type EssaySection,
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
+import { DOC_ITEM_TYPES } from "@/lib/googleDocs/sendDialog";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -27,6 +36,12 @@ import { PRODUCT_NAME } from "@/lib/brand";
 // under SecureTest / <assessment> / <section> (D-4), shared with the student
 // as editor (D-1). Skips are decided before anything touches Drive, so a send
 // where everyone is skipped creates no folders.
+//
+// FR D-5 (docs/feedback-release-design.md slice 5): short answers
+// (`short_text`) go in too, beside the essays in question order, with the
+// same score and feedback blocks. The `no_essay` / `no_essays` codes keep
+// their names (they are on the wire to an open dialog) but now mean "no
+// essay or short answer".
 
 type Db = ReturnType<typeof getDb>;
 
@@ -122,12 +137,13 @@ export async function releaseToGoogleDocs(
   const { assessment, senderSub, scope, options, drive } = args;
   const now = args.now ?? new Date();
 
-  const essayItems = await db
+  // FR D-5: essays and short answers, in question order (D-10).
+  const docItems = await db
     .select()
     .from(items)
-    .where(and(eq(items.assessment_id, assessment.id), eq(items.type, "essay")))
+    .where(and(eq(items.assessment_id, assessment.id), inArray(items.type, [...DOC_ITEM_TYPES])))
     .orderBy(asc(items.position));
-  if (essayItems.length === 0) return { ok: false, error: "no_essays" };
+  if (docItems.length === 0) return { ok: false, error: "no_essays" };
 
   const allItems = await db
     .select({ id: items.id })
@@ -149,32 +165,52 @@ export async function releaseToGoogleDocs(
   rows.sort((a, b) => studentName(a).localeCompare(studentName(b)));
 
   const attemptIds = rows.map((r) => r.attempt_id);
-  const essayIds = essayItems.map((i) => i.id);
+  const docItemIds = docItems.map((i) => i.id);
   const responseRows =
     attemptIds.length > 0
       ? await db
           .select()
           .from(responses)
-          .where(and(inArray(responses.attempt_id, attemptIds), inArray(responses.item_id, essayIds)))
+          .where(and(inArray(responses.attempt_id, attemptIds), inArray(responses.item_id, docItemIds)))
       : [];
   const responseByCell = new Map(responseRows.map((r) => [`${r.attempt_id}:${r.item_id}`, r]));
 
-  const finalScores =
-    responseRows.length > 0
+  // FR slice 3: every non-research row, not just the final — D-10's AI
+  // feedback comes from the AI's own row, which after an override is a
+  // proposal. The builder picks the final and the AI row itself.
+  const responseIds = responseRows.map((r) => r.id);
+  const scoreRows =
+    responseIds.length > 0
       ? await db
           .select()
           .from(scores)
-          .where(
-            and(
-              inArray(
-                scores.response_id,
-                responseRows.map((r) => r.id),
-              ),
-              eq(scores.status, "final"),
-            ),
-          )
+          .where(and(inArray(scores.response_id, responseIds), ne(scores.status, "research")))
       : [];
-  const scoreByResponse = new Map(finalScores.map((s) => [s.response_id, s]));
+  const scoresByResponse = new Map<string, ScoreRow[]>();
+  for (const s of scoreRows) {
+    const list = scoresByResponse.get(s.response_id) ?? [];
+    list.push(s);
+    scoresByResponse.set(s.response_id, list);
+  }
+
+  // FR R-1 / D-4: the teacher's own comments. Student-record content — read
+  // only into the Doc, never logged (D-14).
+  const questionFeedback =
+    responseIds.length > 0
+      ? await db
+          .select({ response_id: response_feedback.response_id, text: response_feedback.text })
+          .from(response_feedback)
+          .where(inArray(response_feedback.response_id, responseIds))
+      : [];
+  const feedbackByResponse = new Map(questionFeedback.map((f) => [f.response_id, f.text]));
+  const overallFeedback =
+    attemptIds.length > 0
+      ? await db
+          .select({ attempt_id: attempt_feedback.attempt_id, text: attempt_feedback.text })
+          .from(attempt_feedback)
+          .where(inArray(attempt_feedback.attempt_id, attemptIds))
+      : [];
+  const feedbackByAttempt = new Map(overallFeedback.map((f) => [f.attempt_id, f.text]));
 
   const openAlerts = await openAlertCountsByAttempt(db, attemptIds);
 
@@ -192,14 +228,14 @@ export async function releaseToGoogleDocs(
       : [];
   const released = new Set(priorReleases.map((r) => r.attempt_id));
 
-  const setIds = [...new Set(essayItems.map((i) => i.item_set_id).filter((x): x is string => !!x))];
+  const setIds = [...new Set(docItems.map((i) => i.item_set_id).filter((x): x is string => !!x))];
   const setRows =
     setIds.length > 0 ? await db.select().from(item_sets).where(inArray(item_sets.id, setIds)) : [];
   const setsById = new Map(setRows.map((s) => [s.id, s]));
 
   // ── Decide every student before Drive is touched.
   const outcomes: StudentOutcome[] = [];
-  const toSend: Array<{ row: ResultsRow; essays: EssaySection[] }> = [];
+  const toSend: Array<{ row: ResultsRow; essays: EssaySection[]; overall: FeedbackBlock | null }> = [];
   for (const row of rows) {
     const base = { attempt_id: row.attempt_id, name: studentName(row) };
     const skip = (reason: SkipReason) => outcomes.push({ ...base, status: "skipped", reason });
@@ -208,6 +244,8 @@ export async function releaseToGoogleDocs(
       continue;
     }
     // D-6: any open alert on the attempt holds the whole Doc back (D-10).
+    // Counted per attempt, whatever the item, so it covers the short answers
+    // FR D-5 adds (the screener screens `short_text` too).
     if ((openAlerts.get(row.attempt_id) ?? 0) > 0) {
       skip("safeguarding_alert");
       continue;
@@ -221,54 +259,66 @@ export async function releaseToGoogleDocs(
       continue;
     }
     const essays: EssaySection[] = [];
+    const questions: Array<FeedbackQuestionInput<ScoreRow>> = [];
     const setShown = new Set<string>();
     let anyText = false;
-    for (const item of essayItems) {
+    for (const item of docItems) {
       const resp = responseByCell.get(`${row.attempt_id}:${item.id}`);
+      // The answer must be the item's own type: one left from before a type
+      // change is no answer, as before FR D-5.
       const text =
-        resp && resp.response.type === "essay" && resp.response.text.trim() ? resp.response.text : null;
+        resp &&
+        (resp.response.type === "essay" || resp.response.type === "short_text") &&
+        resp.response.type === item.type &&
+        resp.response.text.trim()
+          ? resp.response.text
+          : null;
       if (text) anyText = true;
       const set = item.item_set_id ? setsById.get(item.item_set_id) : undefined;
       const firstOfSet = set ? !setShown.has(set.id) : false;
       if (set) setShown.add(set.id);
-      const score = resp ? scoreByResponse.get(resp.id) : undefined;
-      const rationale = score?.rationale as Record<string, unknown> | null | undefined;
-      const rubric = item.config.rubric ?? score?.rubric_snapshot ?? null;
+      const rowsHere = resp ? (scoresByResponse.get(resp.id) ?? []) : [];
+      questions.push({
+        rubric: questionRubric(item.config.rubric, rowsHere),
+        scores: rowsHere,
+        // FR slice 1: never `rationale.note` (a score-change reason); the
+        // teacher's comment is its own row (R-1).
+        teacher_feedback: resp ? (feedbackByResponse.get(resp.id) ?? null) : null,
+        // D-10: an AI proposal left over from before a pass-back is about the
+        // old answer; the builder drops AI rows older than the last edit.
+        answer_updated_at: resp ? resp.updated_at : null,
+        // The Doc goes to the student: no AI comments on a short answer,
+        // which can state its key (withhold_ai_feedback).
+        withhold_ai_feedback: item.type === "short_text",
+      });
       essays.push({
         number: numberOf.get(item.id) ?? 0,
+        kind: item.type === "short_text" ? "short_text" : "essay",
         stem: item.stem,
         stimulus: firstOfSet && set ? set.stimulus_text : null,
         sources: firstOfSet && set ? set.sources.map((s) => ({ label: s.label, text: s.text })) : [],
         answer: text,
         // RT slice 2: a formatted essay goes into the Doc formatted — its
         // stored html re-cleaned here (essayRichHtml), then mapped to
-        // Docs-friendly tags by buildDocHtml.
-        answer_html: text && resp ? essayRichHtml(resp.response) : null,
-        score: score
-          ? {
-              points: score.points,
-              max_points: score.max_points,
-              teacher_note: typeof rationale?.note === "string" && rationale.note.trim() ? rationale.note : null,
-              criteria: rubricScoreRows(rubric, rationale).map((c) => ({
-                name: c.criterion_name,
-                level: c.level_label,
-                points: c.points,
-                rationale: c.rationale,
-              })),
-              ai_overall:
-                typeof rationale?.overall_rationale === "string" && rationale.overall_rationale.trim()
-                  ? rationale.overall_rationale
-                  : null,
-              from_ai: score.method === "ai",
-            }
-          : null,
+        // Docs-friendly tags by buildDocHtml. Rich text is essays only.
+        answer_html: text && resp && item.type === "essay" ? essayRichHtml(resp.response) : null,
+        feedback: [],
       });
     }
     if (!anyText) {
+      // FR D-5: no essay AND no short answer written.
       skip("no_essay");
       continue;
     }
-    toSend.push({ row, essays });
+    // FR R-3: the labelled blocks for the boxes ticked (D-3, D-10, D-13, R-2).
+    const release = buildFeedbackRelease(options.contents, {
+      questions,
+      overall_teacher_feedback: feedbackByAttempt.get(row.attempt_id) ?? null,
+    });
+    release.questions.forEach((blocks, i) => {
+      essays[i]!.feedback = blocks;
+    });
+    toSend.push({ row, essays, overall: release.overall });
   }
   if (toSend.length === 0) return { ok: true, outcomes, drive_auth_needed: false };
 
@@ -320,7 +370,7 @@ export async function releaseToGoogleDocs(
   const queue = [...toSend];
   async function worker() {
     for (let job = queue.shift(); job; job = queue.shift()) {
-      const { row, essays } = job;
+      const { row, essays, overall } = job;
       const base = { attempt_id: row.attempt_id, name: studentName(row) };
       if (authLost) {
         outcomes.push({ ...base, status: "skipped", reason: "drive_auth_expired" });
@@ -334,6 +384,7 @@ export async function releaseToGoogleDocs(
           assessmentName: assessment.name,
           draftAsOf: draft ? now : null,
           essays,
+          overall,
           contents: options.contents,
           doubleSpace: options.doubleSpace ?? false,
         });

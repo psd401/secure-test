@@ -211,6 +211,12 @@ const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
     join("responses", "[responseId]", "rescore-ai"),
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
   ],
+  // Teacher feedback (docs/feedback-release-design.md, D-12): the score
+  // routes' door, at the same edit level.
+  [
+    join("responses", "[responseId]", "feedback"),
+    { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },
+  ],
   [
     join("scores", "[scoreId]", "approve"),
     { symbol: "loadResponseChain", module: "lib/api/reviewActions.ts" },

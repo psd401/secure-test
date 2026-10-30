@@ -3,14 +3,23 @@
 // in, a string out — so every content box is tested without Drive.
 //
 // A Doc cannot run KaTeX, so math in a prompt or source stays as its LaTeX
-// source, and a picture (`![alt](asset:<uuid>)`) becomes "[Image: alt]".
+// source, and a picture (`![alt](asset:<uuid>)`) becomes "[Image: alt]". A
+// short answer (FR D-5) is likewise the student's typed text, escaped — the
+// screen renders it as math (lib/reporting/shortTextView.ts), the Doc cannot.
 
-export interface ReleaseContents {
+import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
+
+export { scoreLabel } from "@/lib/reporting/feedbackRelease";
+
+/**
+ * The Doc's boxes: prompt and sources (GD D-2), plus FR's D-2 / R-2 set
+ * (teacher score, AI score, teacher feedback, AI feedback, rubric table).
+ * Slice 3 replaced the single `score` box; an old row or an old dialog's
+ * `score` reads as both score boxes (readReleaseContents, sendDialog.ts).
+ */
+export interface ReleaseContents extends FeedbackContents {
   prompt: boolean;
   sources: boolean;
-  score: boolean;
-  teacher_feedback: boolean;
-  ai_feedback: boolean;
 }
 
 export interface EssaySection {
@@ -19,7 +28,12 @@ export interface EssaySection {
   stem: string;
   stimulus: string | null;
   sources: Array<{ label: string; text: string }>;
-  /** The student's text, or null when the essay was left blank. */
+  /**
+   * FR D-5 (docs/feedback-release-design.md): a short answer sits beside the
+   * essays. Absent = essay, so a caller from before slice 5 still compiles.
+   */
+  kind?: "essay" | "short_text";
+  /** The student's text, or null when the question was left blank. */
   answer: string | null;
   /**
    * RT slice 2 (docs/rich-text-essay-design.md): a formatted essay's html,
@@ -28,17 +42,11 @@ export interface EssaySection {
    * the plain reading. Optional so a caller from before RT still compiles.
    */
   answer_html?: string | null;
-  /** The FINAL score only (D-13); null when there is none. */
-  score: {
-    points: number;
-    max_points: number;
-    teacher_note: string | null;
-    /** Per-criterion rows; `rationale` is the AI's text on an approved AI score. */
-    criteria: Array<{ name: string; level: string; points: number; rationale: string | null }>;
-    ai_overall: string | null;
-    /** True when the final score was AI-proposed and then approved. */
-    from_ai: boolean;
-  } | null;
+  /**
+   * FR R-3: this question's labelled blocks from buildFeedbackRelease
+   * (lib/reporting/feedbackRelease.ts), already filtered by the boxes ticked.
+   */
+  feedback: FeedbackBlock[];
 }
 
 export interface DocInput {
@@ -48,6 +56,8 @@ export interface DocInput {
   draftAsOf: Date | null;
   essays: EssaySection[];
   contents: ReleaseContents;
+  /** FR D-4: the per-student overall teacher feedback, printed once at the top. */
+  overall?: FeedbackBlock | null;
   /**
    * RT D-10: the essay answers carry line spacing 2.0, so the Doc stays
    * double-spaced as the student edits it. Essays only — prompt, sources and
@@ -158,32 +168,34 @@ export function docRichAnswerHtml(cleanHtml: string, doubleSpace: boolean): stri
     .replaceAll("</em>", "</i>");
 }
 
-function scoreBlock(essay: EssaySection, contents: ReleaseContents): string {
-  const s = essay.score;
-  if (!s) return "";
-  const out: string[] = [];
-  if (contents.score) {
-    out.push(`<p><b>Score:</b> ${s.points} of ${s.max_points}</p>`);
+/**
+ * FR R-3: one block as Doc HTML. Labels come from the block (D-1), so the
+ * renderer never names a source itself.
+ */
+function blockHtml(block: FeedbackBlock): string {
+  if (block.kind === "score") {
+    return `<p><b>${escapeHtml(block.label)}:</b> ${block.points} of ${block.max_points}</p>`;
   }
-  const showCriteria = contents.score || (contents.ai_feedback && s.from_ai);
-  if (showCriteria && s.criteria.length > 0) {
-    const withRationale = contents.ai_feedback && s.from_ai;
-    const head = `<tr><th>Criterion</th>${contents.score ? "<th>Level</th><th>Points</th>" : ""}${withRationale ? "<th>Feedback</th>" : ""}</tr>`;
-    const rows = s.criteria.map((c) => {
-      const cells = [`<td>${escapeHtml(c.name)}</td>`];
-      if (contents.score) cells.push(`<td>${escapeHtml(c.level)}</td>`, `<td>${c.points}</td>`);
-      if (withRationale) cells.push(`<td>${escapeHtml(c.rationale ?? "")}</td>`);
+  if (block.kind === "rubric_table") {
+    const { columns } = block;
+    const head = `<tr><th>Criterion</th>${columns.level ? "<th>Level</th>" : ""}${columns.points ? "<th>Points</th>" : ""}${columns.ai_feedback ? "<th>AI feedback</th>" : ""}</tr>`;
+    const rows = block.rows.map((r) => {
+      const cells = [`<td>${escapeHtml(r.criterion)}</td>`];
+      if (columns.level) cells.push(`<td>${escapeHtml(r.level ?? "")}</td>`);
+      if (columns.points) cells.push(`<td>${r.points ?? ""}</td>`);
+      if (columns.ai_feedback) cells.push(`<td>${escapeHtml(r.ai_feedback ?? "")}</td>`);
       return `<tr>${cells.join("")}</tr>`;
     });
-    out.push(`<table border="1">${head}${rows.join("")}</table>`);
+    return `<table border="1">${head}${rows.join("")}</table>`;
   }
-  if (contents.ai_feedback && s.from_ai && s.ai_overall) {
-    out.push(`<p><b>Feedback:</b></p>${paragraphs(s.ai_overall)}`);
+  const out = [`<p><b>${escapeHtml(block.label)}:</b></p>`];
+  if (block.text) out.push(paragraphs(block.text));
+  if (block.criteria.length > 0) {
+    out.push(
+      `<ul>${block.criteria.map((c) => `<li><b>${escapeHtml(c.criterion)}:</b> ${escapeHtml(c.text)}</li>`).join("")}</ul>`,
+    );
   }
-  if (contents.teacher_feedback && s.teacher_note) {
-    out.push(`<p><b>Teacher feedback:</b></p>${paragraphs(s.teacher_note)}`);
-  }
-  return out.join("\n");
+  return out.join("");
 }
 
 export function buildDocHtml(input: DocInput): string {
@@ -196,6 +208,7 @@ export function buildDocHtml(input: DocInput): string {
       `<p><i>Draft — not handed in as of ${escapeHtml(releaseStamp(input.draftAsOf))}</i></p>`,
     );
   }
+  if (input.overall) parts.push(blockHtml(input.overall));
   const many = input.essays.length > 1;
   for (const essay of input.essays) {
     if (many) parts.push(`<h2>Question ${essay.number}</h2>`);
@@ -210,17 +223,19 @@ export function buildDocHtml(input: DocInput): string {
         parts.push(`<h3>${escapeHtml(src.label)}</h3>`, paragraphs(plainContent(src.text)));
       }
     }
-    parts.push(`<h3>${many ? "Response" : "Essay"}</h3>`);
-    const doubleSpace = input.doubleSpace === true;
+    const shortAnswer = essay.kind === "short_text";
+    parts.push(`<h3>${shortAnswer ? "Answer" : many ? "Response" : "Essay"}</h3>`);
+    // RT D-10 double spacing and rich text are essays only; a short answer
+    // (FR D-5) is plain paragraphs at normal spacing.
+    const doubleSpace = input.doubleSpace === true && !shortAnswer;
     parts.push(
-      essay.answer_html
+      essay.answer_html && !shortAnswer
         ? docRichAnswerHtml(essay.answer_html, doubleSpace)
         : essay.answer && essay.answer.trim()
           ? plainAnswerHtml(essay.answer, doubleSpace)
           : `<p><i>No response.</i></p>`,
     );
-    const score = scoreBlock(essay, contents);
-    if (score) parts.push(score);
+    for (const block of essay.feedback) parts.push(blockHtml(block));
   }
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>\n${parts.join("\n")}\n</body></html>`;
 }

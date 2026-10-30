@@ -2,16 +2,19 @@
 // the Drive client, the release itself against the test DB with a fake
 // Drive, and `POST /api/assessments/[id]/google-docs`.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
+  attempt_feedback,
   attempts,
+  feedback_release_prefs,
   google_doc_folders,
   google_doc_releases,
   item_sets,
   items,
+  response_feedback,
   responses,
   safeguarding_alerts,
   scores,
@@ -22,13 +25,16 @@ import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { setLogSink } from "../lib/log";
 import {
+  DOUBLE_SPACING,
   PARAGRAPH_OPEN,
   buildDocHtml,
+  scoreLabel,
   docTitle,
   plainContent,
   releaseStamp,
   type ReleaseContents,
 } from "../lib/googleDocs/content";
+import { buildFeedbackRelease } from "../lib/reporting/feedbackRelease";
 import {
   DriveAuthError,
   DriveError,
@@ -37,7 +43,10 @@ import {
 } from "../lib/googleDocs/drive";
 import { DRIVE_TOKEN_COOKIE_NAME, mintDriveTokenCookie } from "../lib/googleDocs/driveAuth";
 import { releaseToGoogleDocs, type ReleaseOptions } from "../lib/googleDocs/release";
+import { readReleaseContents } from "../lib/googleDocs/sendDialog";
+import { loadFeedbackReleasePrefs } from "../lib/reporting/feedbackReleasePrefs";
 import { buildResults } from "../lib/scoring/results";
+import { passBackAttempt } from "../lib/api/passBackAttempt";
 import { OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
 
 const expectTestDb = () => {
@@ -96,16 +105,20 @@ afterAll(async () => {
 const ALL: ReleaseContents = {
   prompt: true,
   sources: true,
-  score: true,
+  teacher_score: true,
+  ai_score: true,
   teacher_feedback: true,
   ai_feedback: true,
+  rubric_table: true,
 };
 const NONE: ReleaseContents = {
   prompt: false,
   sources: false,
-  score: false,
+  teacher_score: false,
+  ai_score: false,
   teacher_feedback: false,
   ai_feedback: false,
+  rubric_table: false,
 };
 
 // ── content ──────────────────────────────────────────────────────────────────
@@ -126,56 +139,119 @@ describe("content", () => {
       studentName: "A <b>",
       assessmentName: "T",
       draftAsOf: null,
-      essays: [{ number: 1, stem: "x", stimulus: null, sources: [], answer: "1 < 2 & 3", score: null }],
+      essays: [{ number: 1, stem: "x", stimulus: null, sources: [], answer: "1 < 2 & 3", feedback: [] }],
       contents: NONE,
     });
     expect(html).toContain("A &lt;b&gt;");
     expect(html).toContain("1 &lt; 2 &amp; 3");
   });
 
-  const essay = {
+  // FR slice 3: the blocks come from the shared model (R-3), as release.ts
+  // builds them — an approved AI final, the teacher's own comment.
+  const CONTENT_RUBRIC: Rubric = {
+    style: "analytic",
+    criteria: [{ id: "claim", name: "Claim", levels: [{ id: "p", label: "Proficient", points: 3 }] }],
+  };
+  const aiFinal = (method: "ai" | "human") => ({
+    method,
+    status: "final",
+    reviewed_by_sub: "t1",
+    points: 3,
+    max_points: 4,
+    rationale: {
+      criterion_scores: [{ criterion_id: "claim", level_id: "p", points: 3, rationale: "Clear claim." }],
+      overall_rationale: "Solid overall.",
+    },
+    created_at: new Date("2026-10-01T00:00:00Z"),
+  });
+  const essayFor = (contents: ReleaseContents, method: "ai" | "human" = "ai") => ({
     number: 2,
     stem: "Argue it.",
     stimulus: "Read both.",
     sources: [{ label: "Source A", text: "Alpha text" }],
     answer: "Para one line one.\nLine two.\n\nPara two.",
-    score: {
-      points: 3,
-      max_points: 4,
-      teacher_note: "See me.",
-      criteria: [{ name: "Claim", level: "Proficient", points: 3, rationale: "Clear claim." }],
-      ai_overall: "Solid overall.",
-      from_ai: true,
-    },
-  };
+    feedback: buildFeedbackRelease(contents, {
+      questions: [{ rubric: CONTENT_RUBRIC, scores: [aiFinal(method)], teacher_feedback: "See me.", answer_updated_at: null }],
+      overall_teacher_feedback: null,
+    }).questions[0]!,
+  });
+  const doc = (contents: ReleaseContents, method: "ai" | "human" = "ai", overall: string | null = null) =>
+    buildDocHtml({
+      studentName: "S",
+      assessmentName: "T",
+      draftAsOf: null,
+      essays: [essayFor(contents, method)],
+      overall: buildFeedbackRelease(contents, { questions: [], overall_teacher_feedback: overall }).overall,
+      contents,
+    });
 
   test("the essay alone when every box is off; paragraphs and line breaks kept", () => {
-    const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [essay], contents: NONE });
+    const html = doc(NONE);
     // GD-1: each body paragraph carries its own space after.
     expect(html).toContain(`${PARAGRAPH_OPEN}Para one line one.<br>Line two.</p>`);
     expect(html).toContain(`${PARAGRAPH_OPEN}Para two.</p>`);
-    for (const absent of ["Argue it.", "Read both.", "Alpha text", "3 of 4", "See me.", "Solid overall.", "Clear claim."]) {
+    for (const absent of ["Argue it.", "Read both.", "Alpha text", "3 of 4", "See me.", "Solid overall.", "Clear claim.", "Proficient"]) {
       expect(html).not.toContain(absent);
     }
     expect(html).not.toContain("Question 2"); // one essay: no question heading
   });
 
   test("each box adds its part", () => {
-    const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [essay], contents: ALL });
+    const html = doc(ALL);
     for (const present of ["Argue it.", "Read both.", "Source A", "Alpha text", "3 of 4", "Proficient", "Clear claim.", "Solid overall.", "See me."]) {
       expect(html).toContain(present);
     }
-    const scoreOnly = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [essay], contents: { ...NONE, score: true } });
+    const scoreOnly = doc({ ...NONE, ai_score: true });
     expect(scoreOnly).toContain("3 of 4");
     expect(scoreOnly).not.toContain("Clear claim.");
     expect(scoreOnly).not.toContain("See me.");
+    expect(scoreOnly).not.toContain("<table"); // R-2: the table is its own box
+    // The other score box alone prints nothing for an AI final (D-3).
+    expect(doc({ ...NONE, teacher_score: true })).not.toContain("3 of 4");
   });
 
-  test("AI feedback is never shown for a score that did not come from the AI", () => {
-    const human = { ...essay, score: { ...essay.score, from_ai: false } };
-    const html = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [human], contents: { ...NONE, ai_feedback: true } });
-    expect(html).not.toContain("Clear claim.");
-    expect(html).not.toContain("Solid overall.");
+  test("FR D-10: AI feedback prints without the AI score, as a labelled list when the table is off (R-2)", () => {
+    const html = doc({ ...NONE, ai_feedback: true });
+    expect(html).not.toContain("3 of 4");
+    expect(html).toContain("<p><b>AI feedback:</b></p>");
+    expect(html).toContain("Solid overall.");
+    expect(html).toContain("<li><b>Claim:</b> Clear claim.</li>");
+    expect(html).not.toContain("<table");
+  });
+
+  test("FR R-2: the rubric table shows level always, points only beside a printed score, AI comments only with AI feedback", () => {
+    const levelOnly = doc({ ...NONE, rubric_table: true });
+    expect(levelOnly).toContain("<tr><th>Criterion</th><th>Level</th></tr><tr><td>Claim</td><td>Proficient</td></tr>");
+    const withScore = doc({ ...NONE, rubric_table: true, ai_score: true, ai_feedback: true });
+    expect(withScore).toContain(
+      "<tr><th>Criterion</th><th>Level</th><th>Points</th><th>AI feedback</th></tr><tr><td>Claim</td><td>Proficient</td><td>3</td><td>Clear claim.</td></tr>",
+    );
+    expect(withScore).not.toContain("<li>"); // the comments are in the table, not listed twice
+  });
+
+  test("FR D-1: every score and feedback block names its source", () => {
+    const html = doc(ALL, "ai", "Great unit.");
+    expect(html).toContain("<b>AI score:</b> 3 of 4");
+    expect(html).toContain("<th>AI feedback</th>");
+    expect(html).toContain("<b>AI feedback:</b>");
+    expect(html).toContain("<b>Teacher feedback:</b>");
+    expect(html).not.toMatch(/<b>Feedback:|<th>Feedback<|<b>Score:/);
+    const human = doc(ALL, "human");
+    expect(human).toContain("<b>Teacher score:</b> 3 of 4");
+    expect(human).not.toContain("AI score");
+  });
+
+  test("FR D-4: the overall teacher feedback prints once, before the questions", () => {
+    const html = doc({ ...NONE, teacher_feedback: true }, "ai", "Great unit.");
+    expect(html.split("Great unit.").length - 1).toBe(1);
+    expect(html.indexOf("Great unit.")).toBeLessThan(html.indexOf("Para one"));
+    expect(doc(NONE, "ai", "Great unit.")).not.toContain("Great unit.");
+  });
+
+  test("FR D-13: an answer key's score is a plain Score", () => {
+    expect(scoreLabel("auto")).toBe("Score");
+    expect(scoreLabel("human")).toBe("Teacher score");
+    expect(scoreLabel("ai")).toBe("AI score");
   });
 
   test("a draft says so; two essays get question headings", () => {
@@ -183,13 +259,52 @@ describe("content", () => {
       studentName: "S",
       assessmentName: "T",
       draftAsOf: at,
-      essays: [essay, { ...essay, number: 4, answer: null }],
+      essays: [essayFor(NONE), { ...essayFor(NONE), number: 4, answer: null }],
       contents: NONE,
     });
     expect(html).toContain("Draft — not handed in as of 2026-10-05 14:30");
     expect(html).toContain("Question 2");
     expect(html).toContain("Question 4");
     expect(html).toContain("No response.");
+  });
+
+  test("FR D-5: a short answer is headed Answer, never Essay; plain, single-spaced, its math as typed", () => {
+    const short = {
+      number: 3,
+      kind: "short_text" as const,
+      stem: "Evaluate.",
+      stimulus: null,
+      sources: [],
+      answer: "x < 4^2",
+      // Rich text is essays only: a stray html never reaches the Doc.
+      answer_html: "<p><strong>ignored</strong></p>",
+      feedback: [],
+    };
+    const alone = buildDocHtml({ studentName: "S", assessmentName: "T", draftAsOf: null, essays: [short], contents: NONE, doubleSpace: true });
+    expect(alone).toContain("<h3>Answer</h3>");
+    expect(alone).not.toContain("<h3>Essay</h3>");
+    // RT D-10 double spacing is essays only; the raw text is escaped, not KaTeX.
+    expect(alone).toContain(`${PARAGRAPH_OPEN}x &lt; 4^2</p>`);
+    expect(alone).not.toContain(DOUBLE_SPACING);
+    expect(alone).not.toContain("ignored");
+    expect(alone).not.toContain("katex");
+
+    // Beside an essay: both get question headings, the essay keeps its own
+    // heading and double spacing, a blank short answer says so.
+    const both = buildDocHtml({
+      studentName: "S",
+      assessmentName: "T",
+      draftAsOf: null,
+      essays: [essayFor(NONE), { ...short, answer: null, answer_html: null }],
+      contents: NONE,
+      doubleSpace: true,
+    });
+    expect(both).toContain("Question 2");
+    expect(both).toContain("Question 3");
+    expect(both).toContain("<h3>Response</h3>");
+    expect(both).toContain("<h3>Answer</h3>");
+    expect(both).toContain(`<p style="margin:0 0 10pt 0;${DOUBLE_SPACING}">Para two.</p>`);
+    expect(both).toContain("No response.");
   });
 });
 
@@ -357,6 +472,57 @@ async function scene(opts: { essays?: number } = {}) {
   const section = results.rows[0]!.student.section!;
   return { assessment: a!, essayItems, ada: made[0]!, ben: made[1]!, section };
 }
+
+/**
+ * FR D-5: a short answer at `position` (free in the scene), answered by each
+ * student as given; `null` leaves that student without a response row.
+ */
+async function addShortAnswer(
+  s: Awaited<ReturnType<typeof scene>>,
+  position: number,
+  answers: { ada: string | null; ben: string | null },
+  config: Record<string, unknown> = {},
+) {
+  const db = getDb();
+  const [item] = await db
+    .insert(items)
+    .values({
+      assessment_id: s.assessment.id,
+      position,
+      type: "short_text",
+      stem: `Short question at ${position}.`,
+      correct_answer: "16",
+      config,
+    })
+    .returning();
+  const made: Record<"ada" | "ben", typeof responses.$inferSelect | null> = { ada: null, ben: null };
+  for (const who of ["ada", "ben"] as const) {
+    const text = answers[who];
+    if (text === null) continue;
+    const [r] = await db
+      .insert(responses)
+      .values({ attempt_id: s[who].attempt.id, item_id: item!.id, response: { type: "short_text", text } })
+      .returning();
+    made[who] = r!;
+  }
+  return { item: item!, ...made };
+}
+
+/** FR D-5: an AI short answer's holistic key (as test/ai-short-answer.test.ts). */
+const SHORT_KEY: Rubric = {
+  style: "holistic",
+  criteria: [
+    {
+      id: "sa",
+      name: "Answer",
+      levels: [
+        { id: "sa0", label: "No credit", points: 0 },
+        { id: "sa1", label: "Partial credit", points: 1, descriptor: "Names the base." },
+        { id: "sa2", label: "Full credit", points: 2, descriptor: "Names base and exponent." },
+      ],
+    },
+  ],
+};
 
 const OPTS: ReleaseOptions = { contents: NONE, mode: "skip", includeDrafts: false };
 
@@ -545,6 +711,173 @@ describe("releaseToGoogleDocs", () => {
     expect(html).not.toContain("1 of 2"); // the proposal is never released
   });
 
+  test("FR slice 1: a score-change reason never reaches the Doc as teacher feedback", async () => {
+    const s = await scene();
+    const db = getDb();
+    await db.insert(scores).values({
+      response_id: s.ada.responses[0]!.id,
+      method: "human",
+      points: 1,
+      max_points: 2,
+      scorer: OWNER,
+      status: "final",
+      reviewed_by_sub: OWNER,
+      rationale: { note: "Regraded after appeal." },
+    });
+    const drive = new FakeDrive();
+    await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, contents: ALL },
+      drive,
+    });
+    const html = drive.docs[0]!.html;
+    expect(html).toContain("<b>Teacher score:</b> 1 of 2");
+    expect(html).not.toContain("Regraded after appeal.");
+    expect(html).not.toContain("Teacher feedback");
+  });
+
+  test("FR D-10 / D-3: after an override the AI's comments print as AI feedback, its score and levels never", async () => {
+    const s = await scene();
+    const db = getDb();
+    await db.insert(scores).values([
+      {
+        response_id: s.ada.responses[0]!.id,
+        method: "ai",
+        points: 1,
+        max_points: 2,
+        scorer: "mock",
+        status: "proposed",
+        rationale: {
+          criterion_scores: [{ criterion_id: "claim", level_id: "c1", points: 1, rationale: "Claim is vague." }],
+          overall_rationale: "Needs a sharper claim.",
+        },
+      },
+      {
+        response_id: s.ada.responses[0]!.id,
+        method: "human",
+        points: 2,
+        max_points: 2,
+        scorer: OWNER,
+        status: "final",
+        reviewed_by_sub: OWNER,
+        rationale: { criterion_scores: [{ criterion_id: "claim", level_id: "c2", points: 2 }] },
+      },
+    ]);
+    const drive = new FakeDrive();
+    await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, contents: ALL },
+      drive,
+    });
+    const html = drive.docs[0]!.html;
+    expect(html).toContain("<b>Teacher score:</b> 2 of 2");
+    expect(html).not.toContain("AI score");
+    expect(html).not.toContain("1 of 2");
+    expect(html).toContain("Needs a sharper claim.");
+    // The table's level is the teacher's; the AI's comment sits beside it.
+    expect(html).toContain("<td>Claim</td><td>Proficient</td><td>2</td><td>Claim is vague.</td>");
+    expect(html).not.toContain("Emerging");
+  });
+
+  test("FR D-10: a proposal left from before a pass-back is not sent once the student rewrites", async () => {
+    const s = await scene();
+    const db = getDb();
+    const resp = s.ada.responses[0]!;
+    // Explicit instants, so the order does not hang on the clock's resolution.
+    const at = (ms: number) => new Date(resp.updated_at.getTime() + ms);
+    await db.insert(scores).values({
+      response_id: resp.id,
+      method: "ai",
+      points: 1,
+      max_points: 2,
+      scorer: "mock",
+      status: "proposed",
+      rationale: { overall_rationale: "About the first draft." },
+      created_at: at(1_000),
+    });
+    // Pass back: finals superseded, the proposal left alone (passBackAttempt).
+    await passBackAttempt(db, s.ada.attempt, OWNER);
+    const send = async () => {
+      const drive = new FakeDrive();
+      await releaseToGoogleDocs(db, {
+        assessment: s.assessment,
+        senderSub: OWNER,
+        scope: { attemptId: s.ada.attempt.id },
+        options: { ...OPTS, mode: "new", includeDrafts: true, contents: ALL },
+        drive,
+      });
+      return drive.docs[0]!.html;
+    };
+    // Not rewritten yet: the proposal is about this answer, so it still sends.
+    expect(await send()).toContain("About the first draft.");
+    // The student rewrites (the save route moves updated_at) and hands it in;
+    // the teacher scores by hand without re-running AI.
+    await db
+      .update(responses)
+      .set({ response: { type: "essay", text: "A rewritten essay." }, updated_at: at(60_000) })
+      .where(eq(responses.id, resp.id));
+    await db
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: at(61_000) })
+      .where(eq(attempts.id, s.ada.attempt.id));
+    await db.insert(scores).values({
+      response_id: resp.id,
+      method: "human",
+      points: 2,
+      max_points: 2,
+      scorer: OWNER,
+      status: "final",
+      reviewed_by_sub: OWNER,
+      rationale: {},
+      created_at: at(120_000),
+    });
+    const html = await send();
+    expect(html).toContain("A rewritten essay.");
+    expect(html).toContain("<b>Teacher score:</b> 2 of 2");
+    expect(html).not.toContain("About the first draft.");
+    expect(html).not.toContain("AI feedback");
+  });
+
+  test("FR R-1 / D-4: the teacher's own comments print under their labels, only with the box", async () => {
+    const s = await scene();
+    const db = getDb();
+    await db.insert(response_feedback).values({ response_id: s.ada.responses[0]!.id, author_sub: OWNER, text: "Cite a source next time." });
+    await db.insert(attempt_feedback).values({ attempt_id: s.ada.attempt.id, author_sub: OWNER, text: "Strong unit overall." });
+    const drive = new FakeDrive();
+    const send = (contents: ReleaseContents) =>
+      releaseToGoogleDocs(db, {
+        assessment: s.assessment,
+        senderSub: OWNER,
+        scope: { attemptId: s.ada.attempt.id },
+        options: { ...OPTS, mode: "new", contents },
+        drive,
+      });
+    await send({ ...NONE, teacher_feedback: true });
+    const html = drive.docs[0]!.html;
+    expect(html).toContain(`<p><b>Teacher feedback:</b></p>${PARAGRAPH_OPEN}Strong unit overall.</p>`);
+    expect(html).toContain(`<p><b>Teacher feedback:</b></p>${PARAGRAPH_OPEN}Cite a source next time.</p>`);
+    expect(html.indexOf("Strong unit overall.")).toBeLessThan(html.indexOf("Ada Fixture writes."));
+    await send(NONE);
+    expect(drive.docs[1]!.html).not.toContain("Teacher feedback");
+    // Ben has no comments: nothing borrowed from Ada.
+    const ben = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ben.attempt.id },
+      options: { ...OPTS, contents: ALL },
+      drive,
+    });
+    if (!ben.ok) throw new Error(ben.error);
+    expect(drive.docs[2]!.html).not.toContain("Teacher feedback");
+    // The release row stores the new boxes (FR slice 3).
+    const rows = await db.select().from(google_doc_releases).where(eq(google_doc_releases.attempt_id, s.ada.attempt.id));
+    expect(rows[0]!.contents).toEqual({ ...NONE, teacher_feedback: true });
+  });
+
   test("blank essays, no email, no essays on the assessment, a foreign attempt", async () => {
     const s = await scene();
     const db = getDb();
@@ -570,6 +903,165 @@ describe("releaseToGoogleDocs", () => {
       assessment: s.assessment, senderSub: OWNER, scope: { section: s.section }, options: OPTS, drive,
     });
     expect(none).toEqual({ ok: false, error: "no_essays" });
+  });
+
+  test("FR D-5: short answers sit beside the essays in question order, with the same score and feedback blocks", async () => {
+    const s = await scene({ essays: 2 });
+    const db = getDb();
+    // Essays at 1 and 3 (Q2, Q4); an AI-scored short answer between them at
+    // 2 (Q3) and an exact-match one after them at 4 (Q5).
+    await db.update(items).set({ position: 3 }).where(eq(items.id, s.essayItems[1]!.id));
+    const ai = await addShortAnswer(s, 2, { ada: "4 to the 2", ben: "16" }, { scoring_method: "ai", rubric: SHORT_KEY });
+    const auto = await addShortAnswer(s, 4, { ada: "16", ben: "16" });
+    await db.insert(scores).values([
+      {
+        response_id: ai.ada!.id,
+        method: "ai",
+        points: 1,
+        max_points: 2,
+        scorer: "mock",
+        status: "final",
+        rationale: {
+          criterion_scores: [{ criterion_id: "sa", level_id: "sa1", points: 1, rationale: "Names the base only." }],
+          overall_rationale: "Add the exponent.",
+        },
+      },
+      { response_id: auto.ada!.id, method: "auto", points: 1, max_points: 1, scorer: "auto", status: "final" },
+    ]);
+    await db.insert(response_feedback).values({ response_id: ai.ada!.id, author_sub: OWNER, text: "Close — try again." });
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, contents: ALL, doubleSpace: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.outcomes[0]!.status).toBe("sent");
+    const html = drive.docs[0]!.html;
+    const at = (needle: string) => {
+      const i = html.indexOf(needle);
+      expect(i).toBeGreaterThan(-1);
+      return i;
+    };
+    // Question order (GD D-10): Q2 essay, Q3 short, Q4 essay, Q5 short.
+    expect(at("Question 2")).toBeLessThan(at("Question 3"));
+    expect(at("Question 3")).toBeLessThan(at("Question 4"));
+    expect(at("Question 4")).toBeLessThan(at("Question 5"));
+    expect(at("Short question at 2.")).toBeGreaterThan(at("Question 3"));
+    expect(at("Short question at 2.")).toBeLessThan(at("Question 4"));
+    // The answer, plain and single-spaced even with double spacing on (RT D-10).
+    expect(html).toContain(`${PARAGRAPH_OPEN}4 to the 2</p>`);
+    expect(html.split("<h3>Answer</h3>").length - 1).toBe(2);
+    // The AI's holistic score, its level and the teacher's comment (FR D-1,
+    // R-3) — but never the AI's comments on a short answer, which can state
+    // its key (PR #157 review, withhold_ai_feedback), though AI feedback and
+    // the rubric table are both ticked.
+    expect(html).toContain("<b>AI score:</b> 1 of 2");
+    expect(html).not.toContain("Add the exponent.");
+    expect(html).not.toContain("Names the base only.");
+    expect(html).toContain("Partial credit");
+    expect(html).toContain("Close — try again.");
+    // The exact-match one prints a plain Score (D-13).
+    expect(html).toContain("<b>Score:</b> 1 of 1");
+    // Sources still print once, at the set's first included item.
+    expect(html.split("Alpha says so.").length - 1).toBe(1);
+  });
+
+  test("FR D-5: a short answer alone gets a Doc; an answer of the other type is no answer", async () => {
+    const s = await scene();
+    const db = getDb();
+    await addShortAnswer(s, 5, { ada: "16", ben: null });
+    await db.update(responses).set({ response: { type: "essay", text: " " } }).where(eq(responses.id, s.ada.responses[0]!.id));
+    // Ben's essay item holds a short answer (left from a type change): not an essay.
+    await db
+      .update(responses)
+      .set({ response: { type: "short_text", text: "Wrong shape." } })
+      .where(eq(responses.id, s.ben.responses[0]!.id));
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: OPTS,
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    const by = new Map(r.outcomes.map((o) => [o.name, o]));
+    // Ada left the essay blank but answered the short answer: sent.
+    expect(by.get("Ada Fixture")!.status).toBe("sent");
+    const html = drive.docs[0]!.html;
+    expect(html).toContain(`${PARAGRAPH_OPEN}16</p>`);
+    expect(html).toContain("No response."); // the blank essay
+    // Ben wrote nothing of either type.
+    expect(by.get("Ben Sample")!.reason).toBe("no_essay");
+    expect(drive.docs.length).toBe(1);
+    expect(drive.docs.some((d) => d.html.includes("Wrong shape."))).toBe(false);
+
+    // Only short answers on the assessment: still a Doc.
+    await db
+      .delete(items)
+      .where(and(eq(items.assessment_id, s.assessment.id), eq(items.type, "essay")));
+    const only = new FakeDrive();
+    const r2 = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...OPTS, mode: "new" },
+      drive: only,
+    });
+    if (!r2.ok) throw new Error(r2.error);
+    expect(r2.outcomes[0]!.status).toBe("sent");
+    expect(only.docs[0]!.html).toContain("<h3>Answer</h3>");
+    expect(only.docs[0]!.html).not.toContain("Question"); // one question: no heading
+    // Neither type: refused before any student is looked at.
+    await db
+      .delete(items)
+      .where(and(eq(items.assessment_id, s.assessment.id), eq(items.type, "short_text")));
+    const none = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: OPTS,
+      drive: only,
+    });
+    expect(none).toEqual({ ok: false, error: "no_essays" });
+  });
+
+  test("FR D-5 / GD D-6: an open alert on a short answer holds the whole Doc back", async () => {
+    const s = await scene();
+    const short = await addShortAnswer(s, 5, { ada: "16", ben: "16" });
+    const [alert] = await getDb()
+      .insert(safeguarding_alerts)
+      .values({
+        response_id: short.ada!.id,
+        attempt_id: s.ada.attempt.id,
+        assessment_id: s.assessment.id,
+        item_id: short.item.id,
+        kind: "wellbeing",
+        category: "self_harm",
+        detector: "mock",
+      })
+      .returning();
+    const drive = new FakeDrive();
+    const run = () =>
+      releaseToGoogleDocs(getDb(), {
+        assessment: s.assessment,
+        senderSub: OWNER,
+        scope: { attemptId: s.ada.attempt.id },
+        options: OPTS,
+        drive,
+      });
+    const held = await run();
+    if (!held.ok) throw new Error(held.error);
+    expect(held.outcomes[0]!.reason).toBe("safeguarding_alert");
+    expect(drive.docs.length).toBe(0);
+    expect(drive.folders.length).toBe(0);
+    await getDb().update(safeguarding_alerts).set({ acknowledged_at: new Date() }).where(eq(safeguarding_alerts.id, alert!.id));
+    const sent = await run();
+    if (!sent.ok) throw new Error(sent.error);
+    expect(sent.outcomes[0]!.status).toBe("sent");
   });
 
   test("ownership transfer: done after the share, recorded on the row (slice 5)", async () => {
@@ -679,6 +1171,47 @@ describe("POST /api/assessments/[id]/google-docs", () => {
     expect((await post(s.assessment.id, body({ section: s.section }), cookie)).status).toBe(404);
     principal = { sub: OWNER, role: "staff", email: TEACHER_EMAIL, actor_sub: "admin" };
     expect((await post(s.assessment.id, body({ section: s.section }), cookie)).status).toBe(403);
+  });
+
+  test("FR slice 3: an older dialog's `score` still sends, as both score boxes; the choice is remembered (R-4)", async () => {
+    const s = await scene();
+    let n = 0;
+    globalThis.fetch = (async () => Response.json({ id: `id-${++n}` })) as unknown as typeof fetch;
+    const cookie = await mintDriveTokenCookie("ya29.t", OWNER, 600);
+    const legacy = { prompt: true, sources: false, score: true, teacher_feedback: false, ai_feedback: true };
+    const res = await post(s.assessment.id, body({ section: s.section, contents: legacy }), cookie);
+    expect(res.status).toBe(200);
+    const want = { ...NONE, prompt: true, teacher_score: true, ai_score: true, ai_feedback: true };
+    const [release] = await getDb().select().from(google_doc_releases).limit(1);
+    expect(release!.contents).toEqual(want); // no `score` key stored
+    expect(await loadFeedbackReleasePrefs(getDb(), OWNER, s.assessment.id)).toEqual(want);
+    // Another teacher, another assessment: nothing remembered.
+    expect(await loadFeedbackReleasePrefs(getDb(), OTHER, s.assessment.id)).toBeNull();
+
+    // The next send replaces the remembered boxes.
+    const next = { ...NONE, rubric_table: true, teacher_feedback: true };
+    expect((await post(s.assessment.id, body({ section: s.section, mode: "new", contents: next }), cookie)).status).toBe(200);
+    expect(await loadFeedbackReleasePrefs(getDb(), OWNER, s.assessment.id)).toEqual(next);
+    const prefRows = await getDb().select().from(feedback_release_prefs);
+    expect(prefRows.length).toBe(1);
+
+    // A refused body remembers nothing.
+    const bad = await post(s.assessment.id, body({ section: s.section, contents: { ...next, ai_score: "yes" } }), cookie);
+    expect(bad.status).toBe(400);
+    expect(await loadFeedbackReleasePrefs(getDb(), OWNER, s.assessment.id)).toEqual(next);
+  });
+
+  test("an old release row reads its `score` as both score boxes", () => {
+    const old = { prompt: true, sources: true, score: true, teacher_feedback: true, ai_feedback: false };
+    expect(readReleaseContents(old)).toEqual({
+      ...NONE,
+      prompt: true,
+      sources: true,
+      teacher_score: true,
+      ai_score: true,
+      teacher_feedback: true,
+    });
+    expect(readReleaseContents({ ...old, score: false })).toMatchObject({ teacher_score: false, ai_score: false });
   });
 
   test("a token minted for another session is no token", async () => {

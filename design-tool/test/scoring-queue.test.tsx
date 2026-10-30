@@ -10,6 +10,12 @@ import {
   ScoreWithAiRow,
   ShortAnswerCredit,
 } from "../app/dashboard/[id]/scoring/ScoringQueue";
+import { TeacherFeedbackBox } from "../components/app/TeacherFeedbackBox";
+import {
+  TEACHER_FEEDBACK_ADMIN_HINT,
+  TEACHER_FEEDBACK_HINT,
+  TEACHER_FEEDBACK_MAX,
+} from "../lib/teacherFeedback/limits";
 
 function entry(
   scoring_method: string,
@@ -98,5 +104,58 @@ describe("ShortAnswerCredit (AI short answer, 2026-10-27)", () => {
     const stored = { ...rubric, criteria: [{ ...rubric.criteria[0]!, levels: [...rubric.criteria[0]!.levels].reverse() }] };
     const html = renderToStaticMarkup(<ShortAnswerCredit type="short_text" rubric={stored} />);
     expect(html.indexOf("Partial credit")).toBeLessThan(html.indexOf("Full credit"));
+  });
+});
+
+// Teacher feedback (docs/feedback-release-design.md, D-1 / D-4): the box on
+// every queue card and on the per-student page. No DOM harness, so the save
+// itself is a hand-run row; the markup it opens with is checked here.
+describe("TeacherFeedbackBox", () => {
+  test("opens on the saved text, labelled by source, capped, with Save disabled until edited", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox endpoint="/api/responses/r1/feedback" initialText="Cite a source." />,
+    );
+    expect(html).toContain("Teacher feedback");
+    expect(html).toContain(TEACHER_FEEDBACK_HINT);
+    expect(html).toContain(">Cite a source.</textarea>");
+    expect(html).toContain(`maxLength="${TEACHER_FEEDBACK_MAX}"`);
+    expect(html).toContain("Save feedback");
+    // Nothing to save until the text differs from what was saved.
+    expect(html).toContain('disabled=""');
+    expect(html).not.toContain("Not saved");
+  });
+
+  test("takes the overall label", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox
+        endpoint="/api/attempts/a1/feedback"
+        initialText=""
+        label="Teacher feedback (overall)"
+      />,
+    );
+    expect(html).toContain("Teacher feedback (overall)");
+  });
+
+  test("read-only for a non-impersonating admin: grayed out, says why, keeps the text", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox
+        endpoint="/api/responses/r1/feedback"
+        initialText="Cite a source."
+        readOnly
+      />,
+    );
+    expect(html).toContain(TEACHER_FEEDBACK_ADMIN_HINT);
+    expect(html).not.toContain(TEACHER_FEEDBACK_HINT);
+    expect(html).toContain(">Cite a source.</textarea>");
+    // Both the textarea and the Save button are disabled.
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
+  });
+
+  test("a writer's box leaves the textarea enabled", () => {
+    const html = renderToStaticMarkup(
+      <TeacherFeedbackBox endpoint="/api/responses/r1/feedback" initialText="" />,
+    );
+    // Only Save is disabled (nothing to save yet).
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
   });
 });

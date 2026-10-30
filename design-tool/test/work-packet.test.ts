@@ -8,6 +8,10 @@ import {
   choiceCheckboxLines,
   packetOrdering,
   packetHidesAnswers,
+  packetPrintsBlocks,
+  packetScoreBlocks,
+  packetScoresMode,
+  packetShowsKey,
   keyCountLine,
   packetScoreHeading,
   parsePacketQuery,
@@ -18,8 +22,18 @@ import {
   stripLine,
   studentChoices,
   PACKET_STUDENT_CHOICE_CAP,
+  type PacketContents,
   type PacketScoreRow,
 } from "../lib/reporting/workPacket";
+import { buildFeedbackRelease } from "../lib/reporting/feedbackRelease";
+
+const NO_BOXES: PacketContents = {
+  teacher_score: false,
+  ai_score: false,
+  teacher_feedback: false,
+  ai_feedback: false,
+  rubric_table: false,
+};
 import { workPacketHref } from "../lib/reporting/workPacketLinks";
 
 const A = "11111111-1111-4111-8111-111111111111";
@@ -33,7 +47,8 @@ describe("parsePacketQuery", () => {
       inProgress: false,
       items: null,
       questions: true,
-      scores: "none",
+      contents: NO_BOXES,
+      teacherCopy: false,
       anon: false,
       doubleSpace: false,
       answers: true,
@@ -115,13 +130,56 @@ describe("parsePacketQuery", () => {
     expect(parsePacketQuery({ anon: "0" }).anon).toBe(false);
   });
 
-  test("scores takes the four values, and anything else is none rather than a throw", () => {
-    expect(parsePacketQuery({ scores: "teacher" }).scores).toBe("teacher");
-    expect(parsePacketQuery({ scores: "ai" }).scores).toBe("ai");
-    expect(parsePacketQuery({ scores: "BOTH" }).scores).toBe("both");
-    expect(parsePacketQuery({ scores: "none" }).scores).toBe("none");
-    expect(parsePacketQuery({ scores: "everything" }).scores).toBe("none");
-    expect(parsePacketQuery({ scores: "" }).scores).toBe("none");
+  // FR slice 4: a bookmark from before the boxes maps onto the two SCORE
+  // boxes only (docs/feedback-release-design.md §Contents model).
+  test("legacy scores= maps onto the two score boxes; anything else is none rather than a throw", () => {
+    const only = (over: Partial<PacketContents>) => ({ ...NO_BOXES, ...over });
+    expect(parsePacketQuery({ scores: "teacher" }).contents).toEqual(only({ teacher_score: true }));
+    expect(parsePacketQuery({ scores: "ai" }).contents).toEqual(only({ ai_score: true }));
+    expect(parsePacketQuery({ scores: "BOTH" }).contents).toEqual(
+      only({ teacher_score: true, ai_score: true }),
+    );
+    expect(parsePacketQuery({ scores: "none" }).contents).toEqual(NO_BOXES);
+    expect(parsePacketQuery({ scores: "everything" }).contents).toEqual(NO_BOXES);
+    expect(parsePacketQuery({ scores: "" }).contents).toEqual(NO_BOXES);
+    // A legacy URL is the student copy (D-16: teacher copy is opt-in).
+    expect(parsePacketQuery({ scores: "both" }).teacherCopy).toBe(false);
+  });
+
+  test("each box is its own parameter, off when absent, last value wins", () => {
+    const q = parsePacketQuery({ ai_feedback: "1", rubric_table: ["0", "1"], teacher_feedback: "0" });
+    expect(q.contents).toEqual({ ...NO_BOXES, ai_feedback: true, rubric_table: true });
+    expect(parsePacketQuery({ teacher_score: "1", ai_score: "1" }).contents).toEqual({
+      ...NO_BOXES,
+      teacher_score: true,
+      ai_score: true,
+    });
+  });
+
+  // Trap: a re-submitted form, or a hand-edited link, that still carries
+  // scores= must not bring the legacy mapping back beside the boxes.
+  test("any box in the URL beats a leftover scores=", () => {
+    expect(parsePacketQuery({ scores: "both", ai_feedback: "1" }).contents).toEqual({
+      ...NO_BOXES,
+      ai_feedback: true,
+    });
+    // Even a box that reads as off counts as "the boxes are in charge".
+    expect(parsePacketQuery({ scores: "both", teacher_score: "0" }).contents).toEqual(NO_BOXES);
+  });
+
+  test("teacher_copy=1 turns the teacher copy on (D-16); off by default", () => {
+    expect(parsePacketQuery({}).teacherCopy).toBe(false);
+    expect(parsePacketQuery({ teacher_copy: "1" }).teacherCopy).toBe(true);
+    expect(parsePacketQuery({ teacher_copy: "0" }).teacherCopy).toBe(false);
+  });
+
+  test("the key follows the Teacher score box only (W-1); the boxes map back to a mode", () => {
+    expect(packetShowsKey({ ...NO_BOXES, teacher_score: true })).toBe(true);
+    expect(packetShowsKey({ ...NO_BOXES, ai_score: true, teacher_feedback: true })).toBe(false);
+    expect(packetScoresMode(NO_BOXES)).toBe("none");
+    expect(packetScoresMode({ ...NO_BOXES, teacher_score: true })).toBe("teacher");
+    expect(packetScoresMode({ ...NO_BOXES, ai_score: true })).toBe("ai");
+    expect(packetScoresMode({ ...NO_BOXES, teacher_score: true, ai_score: true })).toBe("both");
   });
 });
 
@@ -135,13 +193,23 @@ describe("answers=0 — feedback without the answer (U-23)", () => {
     expect(parsePacketQuery({ answers: "" }).answers).toBe(true);
   });
 
-  test("answers are hidden only when a score side prints (decision 1.5)", () => {
+  test("answers are hidden only when a block can print (decision 1.5)", () => {
     expect(packetHidesAnswers(parsePacketQuery({ answers: "0", scores: "none" }))).toBe(false);
     expect(packetHidesAnswers(parsePacketQuery({ answers: "0" }))).toBe(false);
     for (const scores of ["teacher", "ai", "both"]) {
       expect(packetHidesAnswers(parsePacketQuery({ answers: "0", scores }))).toBe(true);
       expect(packetHidesAnswers(parsePacketQuery({ scores }))).toBe(false);
     }
+  });
+
+  // FR D-11: a feedback-only sheet — any box counts, not just a score.
+  test("any one box is enough to leave the answers out", () => {
+    for (const key of ["teacher_score", "ai_score", "teacher_feedback", "ai_feedback", "rubric_table"]) {
+      const q = parsePacketQuery({ answers: "0", [key]: "1" });
+      expect(packetPrintsBlocks(q.contents)).toBe(true);
+      expect(packetHidesAnswers(q)).toBe(true);
+    }
+    expect(packetHidesAnswers(parsePacketQuery({ answers: "0", teacher_copy: "1" }))).toBe(false);
   });
 });
 
@@ -251,6 +319,122 @@ describe("selectPacketScores", () => {
       "AI score (not reviewed)",
     );
     expect(packetScoreHeading("teacher", human)).toBe("Teacher score");
+  });
+});
+
+// FR slice 4: which score blocks one question prints — the student copy
+// through the R-3 builder (D-3, D-13, D-17), the teacher copy as before (D-16).
+describe("packetScoreBlocks", () => {
+  const row = (over: Partial<PacketScoreRow>): PacketScoreRow => ({
+    method: "human",
+    status: "final",
+    reviewed_by_sub: null,
+    points: 3,
+    max_points: 4,
+    rationale: null,
+    created_at: new Date("2026-09-01T00:00:00Z"),
+    ...over,
+  });
+  const both: PacketContents = { ...NO_BOXES, teacher_score: true, ai_score: true };
+  const student = (contents: PacketContents, rows: PacketScoreRow[]) =>
+    packetScoreBlocks(
+      contents,
+      false,
+      rows,
+      buildFeedbackRelease(contents, {
+        questions: [{ rubric: null, scores: rows, teacher_feedback: null, answer_updated_at: null }],
+        overall_teacher_feedback: null,
+      }).questions[0]!,
+      null,
+    );
+  const teacher = (contents: PacketContents, rows: PacketScoreRow[]) =>
+    packetScoreBlocks(contents, true, rows, [], null);
+
+  const humanFinal = row({ method: "human", status: "final", points: 3 });
+  const aiProposal = row({ method: "ai", status: "proposed", points: 2, created_at: new Date("2026-09-02T00:00:00Z") });
+
+  test("student copy: a human final with an AI proposal beside it — the AI score never prints (D-3)", () => {
+    expect(student(both, [humanFinal, aiProposal])).toEqual([
+      { label: "Teacher score", row: { points: 3, max_points: 4 }, criteria: [] },
+    ]);
+    // AI score alone: nothing at all, and no "No AI score" placeholder.
+    expect(student({ ...NO_BOXES, ai_score: true }, [humanFinal, aiProposal])).toEqual([]);
+  });
+
+  test("student copy: an approved AI final and an unreviewed Hybrid final both print as AI score (D-17)", () => {
+    const approved = row({ method: "ai", status: "final", reviewed_by_sub: "t1", points: 4 });
+    const hybrid = row({ method: "ai", status: "final", reviewed_by_sub: null, points: 1 });
+    for (const final of [approved, hybrid]) {
+      expect(student({ ...NO_BOXES, ai_score: true }, [aiProposal, final])).toEqual([
+        { label: "AI score", row: { points: final.points, max_points: 4 }, criteria: [] },
+      ]);
+      expect(student({ ...NO_BOXES, teacher_score: true }, [final])).toEqual([]);
+    }
+  });
+
+  test("student copy: an answer key's score is a plain Score under either box (D-13)", () => {
+    const auto = row({ method: "auto", status: "final", points: 1, max_points: 1 });
+    for (const contents of [
+      { ...NO_BOXES, teacher_score: true },
+      { ...NO_BOXES, ai_score: true },
+      both,
+    ]) {
+      expect(student(contents, [auto])).toEqual([
+        { label: "Score", row: { points: 1, max_points: 1 }, criteria: [] },
+      ]);
+    }
+    expect(student(NO_BOXES, [auto])).toEqual([]);
+  });
+
+  test("student copy: superseded and research rows never print; no final is no block", () => {
+    expect(student(both, [row({ status: "superseded" }), row({ method: "ai", status: "research" })])).toEqual([]);
+    expect(student(both, [aiProposal])).toEqual([]);
+  });
+
+  test("teacher copy keeps today's blocks: the proposal, its heading, the placeholders (D-16)", () => {
+    expect(teacher(both, [humanFinal, aiProposal])).toEqual([
+      { label: "Teacher score", row: humanFinal, criteria: [] },
+      { label: "AI proposal", row: aiProposal, criteria: [] },
+    ]);
+    expect(teacher(both, [])).toEqual([
+      { label: "No teacher score", row: null, criteria: [] },
+      { label: "No AI score", row: null, criteria: [] },
+    ]);
+    expect(teacher({ ...NO_BOXES, ai_score: true }, [humanFinal, aiProposal])).toEqual([
+      { label: "AI proposal", row: aiProposal, criteria: [] },
+    ]);
+    // Feedback boxes alone print no score block in either copy.
+    expect(teacher({ ...NO_BOXES, ai_feedback: true }, [humanFinal, aiProposal])).toEqual([]);
+    // The second lock still holds in the teacher copy.
+    expect(teacher(both, [row({ method: "ai", status: "superseded" })])).toEqual([
+      { label: "No teacher score", row: null, criteria: [] },
+      { label: "No AI score", row: null, criteria: [] },
+    ]);
+  });
+
+  test("teacher copy + rubric table: each block carries its OWN row's levels and points, no comments (D-16, D-1)", () => {
+    const rationale = (level: string, points: number, why: string) => ({
+      criterion_scores: [{ criterion_id: "focus", level_id: level, points, rationale: why }],
+    });
+    const human = row({ method: "human", status: "final", points: 3, rationale: rationale("hi", 3, "T-WHY") });
+    const proposal = row({
+      method: "ai",
+      status: "proposed",
+      points: 2,
+      rationale: rationale("lo", 2, "AI-WHY"),
+      created_at: new Date("2026-09-02T00:00:00Z"),
+    });
+    const withTable = { ...both, rubric_table: true };
+    const blocks = teacher(withTable, [human, proposal]);
+    expect(blocks.map((b) => [b.label, b.criteria])).toEqual([
+      ["Teacher score", [{ criterion: "focus", level: "hi", points: 3 }]],
+      ["AI proposal", [{ criterion: "focus", level: "lo", points: 2 }]],
+    ]);
+    expect(JSON.stringify(blocks.map((b) => b.criteria))).not.toContain("WHY");
+    // Box off: no levels in the teacher copy either (R-2).
+    expect(teacher(both, [human, proposal]).every((b) => b.criteria.length === 0)).toBe(true);
+    // Student copy: never — its table is the builder's, final row only (D-3).
+    expect(student(withTable, [human, proposal]).every((b) => b.criteria.length === 0)).toBe(true);
   });
 });
 
