@@ -1,7 +1,7 @@
 ---
 type: Subsystem Reference
 title: Reporting views, printable work packets and run comparison
-description: How the design tool's teacher reporting pages are built - the class work packet (printable per-student PDF with scores from teacher, AI, both or neither), its URL contract and anonymous mode, the pure helpers under lib/reporting, the print and timeline views, and the scoring-corpus run comparison that measures AI scoring against teacher finals.
+description: How the design tool's teacher reporting pages are built - the class work packet (printable per-student PDF whose score and feedback boxes follow the feedback release rules), its URL contract and anonymous mode, the pure helpers under lib/reporting, the print and timeline views, and the scoring-corpus run comparison that measures AI scoring against teacher finals.
 tags: [reporting, work-packet, printing, run-comparison, results, ferpa]
 openwiki:
   roles: [domain, architecture]
@@ -9,6 +9,7 @@ openwiki:
   source_paths:
     - design-tool/lib/reporting/workPacket.ts
     - design-tool/lib/reporting/workPacketLinks.ts
+    - design-tool/lib/reporting/feedbackRelease.ts
     - design-tool/lib/reporting/runComparison.ts
     - design-tool/lib/reporting/answerView.ts
     - design-tool/lib/reporting/answerHistoryView.ts
@@ -30,7 +31,7 @@ openwiki:
     - design-tool/test/reporting-analytics.test.ts
     - design-tool/test/answer-history.test.ts
   invariants:
-    - The work packet prints only final scores; a superseded score row is never printed.
+    - The work packet prints a score only from a `final` row; a superseded or proposed score row never prints as a score. AI comments come from the AI's own row ([feedback release](feedback-release.md)).
     - parsePacketQuery never throws; an unknown scores value falls back to none, and the last repeated query value wins.
     - compareRun reads only research rows and their human finals and is identifier-free; it never writes to the database.
     - The results print report never prints free-text responses; only the work packet prints what students wrote.
@@ -59,14 +60,14 @@ Essay answers are rendered by `renderEssayAnswerHtml` in `lib/richText/`, not by
 
 ## The class work packet
 
-The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and scores from the teacher, the AI, both or neither. Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on an explicit teacher action. The page checks `view` access on the assessment (`pageAssessment` in `lib/api/access.ts`), so the owner, a grant holder or an admin can print it. Failures are `notFound()` so the URL cannot probe for other assessments. The page comments and this FERPA note now say `view`, not owner-only (G-3 in [co-teacher gaps](auth-and-access.md#co-teacher-gaps)).
+The packet is a printable PDF-ready page: one sheet per student, an inch of margin for annotation, checkboxes on each multiple-choice option, and the score and feedback boxes defined in [feedback release](feedback-release.md) (teacher score, AI score, teacher feedback, AI feedback and the rubric table). Its design note is `docs/student-work-export-design.md`, and the page header records the FERPA posture: unlike the results print report, this page deliberately prints student names, numbers and written answers, and only on an explicit teacher action. The page checks `view` access on the assessment (`pageAssessment` in `lib/api/access.ts`), so the owner, a grant holder or an admin can print it. Failures are `notFound()` so the URL cannot probe for other assessments. The page comments and this FERPA note now say `view`, not owner-only (G-3 in [co-teacher gaps](auth-and-access.md#co-teacher-gaps)).
 
 URL contract (`parsePacketQuery`, `PacketQuery`):
 
 - `section` is repeatable and names the sections to print. With no section and no student, the page shows a screen-only chooser of sections with handed-in work and prints nothing. Several sections make a batch: one run per section, in alphabetical order, each with its own divider, labels and key page.
 - `attempt=<uuid>` is repeatable and names chosen students. One chosen student with no section is "one student's work" and may be in progress. Several print grouped by their own sections. With a `section`, chosen students outside those sections are ignored, and with none left the sections print in full. A chosen student prints whatever their status.
 - `in_progress=1` adds work not yet handed in to section runs, with the in-progress mark. It is off by default and chosen students ignore it.
-- `items` is a comma list or repeated values from the toolbar checklist; `questions=0` prints answers only; `answers=0` leaves out what the student wrote or chose and keeps the question and the score and feedback blocks, a feedback sheet to hand back (ignored when `scores=none`, so the answers still print: `packetHidesAnswers` in `lib/reporting/workPacket.ts`); `scores` is `none | teacher | ai | both`; `anon` switches to labels with a teacher key page last; `spacing=double` double-spaces essay answers.
+- `items` is a comma list or repeated values from the toolbar checklist; `questions=0` prints answers only; `answers=0` leaves out what the student wrote or chose and keeps the question and the score and feedback blocks, a feedback sheet to hand back (only when a box is ticked, so the answers still print otherwise: `packetHidesAnswers` in `lib/reporting/workPacket.ts`); the boxes are `teacher_score`, `ai_score`, `teacher_feedback`, `ai_feedback` and `rubric_table`, plus `teacher_copy=1` for the annotated teacher copy ([feedback release](feedback-release.md#the-two-outputs)); the older `scores=none | teacher | ai | both` is read only when no box is in the URL; `anon` switches to labels with a teacher key page last; `spacing=double` double-spaces essay answers.
 - The last repeated value wins, and every malformed value falls back to a default. The parser never returns a 400.
 
 Behaviour that matters for changes:
@@ -107,10 +108,10 @@ The module is deliberately identifier-free: a pair carries response and item ids
 
 - **Changing the packet URL or flags**: edit `parsePacketQuery` and `PacketQuery` first, then `selectPacket` if the selection rules change, then `work/page.tsx`. Keep the never-throw rule; the test file `work-packet.test.ts` has `parsePacketQuery` and `selectPacket` suites (the batch cases sit in the `selectPacket` describe block).
 - **Changing batch selection or the toolbar**: `selectPacket` decides the runs, `studentChoices` builds the student checkboxes and enforces the cap, and `workPacketHref` builds the results-page link. Tests: `work-packet.test.ts` (`selectPacket`, `studentChoices`, `workPacketHref` describes) and `work-packet-page.test.tsx` (`work packet — slice 2's toolbar` and `work packet — batch print (several sections, chosen students)`). A new section or cap value must change `PACKET_STUDENT_CHOICE_CAP` and its test together.
-- **Changing what prints for a score**: `selectPacketScores` and `packetScoreHeading`. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)). A final AI score heads the row "AI score (not reviewed)" or "AI score (approved)" (the `reviewed_by_sub` rule in `packetScoreHeading`, which is separate from the per-student wording in `lib/scoring/methodLabel.ts`; see [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores)).
+- **Changing what prints for a score or comment**: the per-question rules live in `buildFeedbackRelease` (`lib/reporting/feedbackRelease.ts`, see [feedback release](feedback-release.md#what-a-release-can-print)). `selectPacketScores` and `packetScoreHeading` choose the finals and their headings. Any score reader must filter `status = 'final'` (see [scoring](scoring-and-results.md)). A final AI score heads the row "AI score (not reviewed)" or "AI score (approved)" (the `reviewed_by_sub` rule in `packetScoreHeading`, which is separate from the per-student wording in `lib/scoring/methodLabel.ts`; see [Hybrid and unreviewed AI scores](scoring-and-results.md#hybrid-and-unreviewed-ai-scores)).
 - **Changing an answer's printed form**: the `*View.ts` renderer for that type, plus `renderEssayAnswerHtml` for essays. Escape all text; the renderers feed HTML.
 - **Changing run statistics**: `runComparison.ts`, with `run-comparison.test.ts` (`compareRun`, `comparisonToCsv`). It needs no database.
 - **Focused checks**: `cd design-tool && bun test test/work-packet.test.ts test/run-comparison.test.ts`. For print helpers and timeline, add `test/reporting-print-helpers.test.ts` and `test/reporting-timeline.test.ts`. The per-criterion rubric rows that `rubricScoreView.ts` builds are covered by `test/rubric-score-view.test.ts` (`rubricScoreRows`, `overallRationale`). The packet page's markup is in `test/work-packet-page.test.tsx`.
 - **Scope boundary**: this is a read-only area. A change here should not need a migration or a route change unless the URL contract changes. Checks against the test database are needed only for DB-backed suites such as `superseded-scores.test.ts`, which can be run per [testing](../testing/testing-and-validation.md).
 
-Related: [scoring and results](scoring-and-results.md) (which finals exist), [integrations](integrations.md) (Google Docs and gradebook consume the same finals), [sittings and attempts](sittings-and-attempts.md) (the events the timeline reads).
+Related: [scoring and results](scoring-and-results.md) (which finals exist), [feedback release](feedback-release.md) (which boxes print, and for whom), [integrations](integrations.md) (Google Docs and gradebook consume the same finals), [sittings and attempts](sittings-and-attempts.md) (the events the timeline reads).

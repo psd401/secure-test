@@ -1,7 +1,7 @@
 ---
 type: Integration Reference
 title: Outbound integrations - gradebook push, Google Docs release, class insights, email and SNS
-description: PowerSchool/PowerTeacher Pro gradebook push, Google Docs essay release through a Drive token cookie, evidence-pack class insights with checked AI claims, and the email and SNS notification providers.
+description: PowerSchool/PowerTeacher Pro gradebook push, Google Docs release of essays and short answers through a Drive token cookie, evidence-pack class insights with checked AI claims, and the email and SNS notification providers.
 tags: [integrations, powerschool, gradebook, google-docs, insights, notifications]
 openwiki:
   roles: [integration, workflow]
@@ -39,7 +39,7 @@ openwiki:
 
 # Outbound integrations
 
-Consult this page for anything that sends data out of the design tool: scores to a gradebook, essays to Google Docs, evidence to a model for class insights, and notifications by SNS or email. All of them consume finals produced by [scoring and results](scoring-and-results.md) and scope teacher access through [auth and access](auth-and-access.md). Each one uses a provider or client selected by an environment variable with a safe default (`mock`/off), the same pattern as [AI and safeguarding](ai-and-safeguarding.md).
+Consult this page for anything that sends data out of the design tool: scores to a gradebook, essays and short answers to Google Docs, evidence to a model for class insights, and notifications by SNS or email. All of them consume finals produced by [scoring and results](scoring-and-results.md) and scope teacher access through [auth and access](auth-and-access.md). Each one uses a provider or client selected by an environment variable with a safe default (`mock`/off), the same pattern as [AI and safeguarding](ai-and-safeguarding.md).
 
 ## Gradebook push (PowerSchool)
 
@@ -95,8 +95,8 @@ Read-only operator checks (`ps-reach`, `student-lookup`) run as one-off ECS task
 Design page: `docs/google-docs-release-design.md`. Routes: `GET /api/google/drive/start` and `/callback` (Drive consent) and `POST /api/assessments/[id]/google-docs` (the send).
 
 - Auth: `lib/googleDocs/driveAuth.ts` runs a PKCE authorization for the single scope `drive.file` and keeps a one-hour access token in an encrypted httpOnly cookie (`secure-test-gdrive`, path `/api/assessments`). Nothing is stored in the database; no refresh token exists. The callback refuses any token whose granted scopes are not exactly `drive.file` (finding GD-P1).
-- Release (`lib/googleDocs/release.ts`): one Google Doc per student per assessment holding every essay, created in the sender's Drive under `<product> / <assessment> / <section>` and shared with the student as editor; optional ownership transfer, double spacing and "include drafts". Skips are decided before anything touches Drive (`SkipReason`: `not_handed_in`, `already_released`, `safeguarding_alert`, `no_email`, `no_essay`, `drive_auth_expired`), concurrency is 3, and a send where everyone is skipped creates no folders. `mode: "skip" | "new"` decides what happens to students who already have a Doc.
-- Persistence: `google_doc_folders`, `google_doc_releases`. The content builders (`content.ts`) reuse the results and rubric views, and essay HTML goes through the same sanitiser as the reporting views.
+- Release (`lib/googleDocs/release.ts`): one Google Doc per student per assessment holding every essay and short answer. The boxes (teacher and AI score, teacher and AI feedback, rubric table, prompt, sources) and the per-question rules are those of [feedback release](feedback-release.md); the Doc is rendered from the same `buildFeedbackRelease` blocks as the packet, and AI comments on a short answer are withheld. The Doc is created in the sender's Drive under `<product> / <assessment> / <section>` and shared with the student as editor; optional ownership transfer, double spacing and "include drafts". Skips are decided before anything touches Drive (`SkipReason`: `not_handed_in`, `already_released`, `safeguarding_alert`, `no_email`, `no_essay`, `drive_auth_expired`), concurrency is 3, and a send where everyone is skipped creates no folders. `mode: "skip" | "new"` decides what happens to students who already have a Doc.
+- Persistence: `google_doc_folders`, `google_doc_releases`, and the last dialog choices in `feedback_release_prefs`. The content builders (`content.ts`) reuse the results and rubric views, and essay HTML goes through the same sanitiser as the reporting views.
 
 ## Class insights
 
@@ -118,7 +118,7 @@ Design page: `docs/class-insights-design.md`. Routes: `POST /api/assessments/[id
 | Gradebook rules or payloads | `lib/gradebook/mapping.ts` (`planSend`), `sendPowerSchool.ts`, `powerschoolPayloads.ts` | `gradebook-send.test.ts`, `gradebook-powerschool.test.ts`, `gradebook-send-dialog.test.ts` |
 | Publish Scores on a PowerSchool assignment (create field, create retry, turn on for an existing assignment) | `sendPowerSchool.ts` (`turnOnPublishScores`, the create retry in `sendToPowerSchool`), `powerschoolPayloads.ts` (`buildAssignmentCreateBody`, `buildPublishScoresUpdateBody`, `changedAssignmentFields`) | `gradebook-send.test.ts` (`slice 2: …` and the `isscorespublish` cases), `gradebook-powerschool.test.ts` |
 | Add a gradebook target | add a client beside `powerschool.ts`, branch in `gradebook-send/route.ts`, extend `GradebookTarget` in `db/schema.ts` | same files |
-| Drive consent or release behaviour | `driveAuth.ts`, `release.ts`, `content.ts` | `google-drive-auth.test.ts`, `google-docs-release.test.ts`, `google-docs-send-dialog.test.ts` |
+| Drive consent or release behaviour | `driveAuth.ts`, `release.ts`, `content.ts`; the per-question rules are in `lib/reporting/feedbackRelease.ts` ([feedback release](feedback-release.md)) | `google-drive-auth.test.ts`, `google-docs-release.test.ts`, `google-docs-send-dialog.test.ts`, `feedback-release.test.ts` |
 | Insights exclusions or claim checks (the digit rule and its `contentNumbers` exception live in `report.ts`) | `evidencePack.ts`, `report.ts` (`fillClaim`, `contentNumbers`), `reportPrompt.ts`, `chat.ts` | `insights-evidence-pack.test.ts`, `insights-report.test.ts`, `insights-chat.test.ts`, `insights-*-route.test.ts` |
 
 Do not exercise `live` gradebook or Drive paths in automated checks; the mock client and injected `DriveClient` exist for that. Related: [scoring and results](scoring-and-results.md), [accommodations and roster](accommodations-and-roster.md) (section and `dcid` data used for the send).
