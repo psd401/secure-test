@@ -14,7 +14,7 @@ openwiki:
     - design-tool/app/api/responses/[responseId]/feedback/route.ts
     - design-tool/app/api/attempts/[attemptId]/feedback/route.ts
     - design-tool/components/app/TeacherFeedbackBox.tsx
-  symbols: [buildFeedbackRelease, questionRubric, scoreLabel, CONTENT_OPTIONS, readReleaseContents, setResponseFeedback, clearResponseFeedback, loadFeedbackReleasePrefs, rememberFeedbackReleasePrefs, TeacherFeedbackBox]
+  symbols: [buildFeedbackRelease, questionRubric, scoreLabel, CONTENT_OPTIONS, readReleaseContents, setResponseFeedback, clearResponseFeedback, loadFeedbackReleasePrefs, rememberFeedbackReleasePrefs, TeacherFeedbackBox, queueBodyState]
   test_paths:
     - design-tool/test/feedback-release.test.ts
     - design-tool/test/teacher-feedback-api.test.ts
@@ -62,7 +62,9 @@ sequenceDiagram
 
 Caption: the save path. A failed database write is rethrown as a bare error so the comment text cannot reach the error log (D-14).
 
-The comment box appears on every scoring-queue card and beside each answer on the per-student results page, with an overall box on that page (`components/app/TeacherFeedbackBox.tsx`, used by the scoring queue in [scoring and results](scoring-and-results.md#teacher-review-queue-and-approval)). A non-impersonating admin sees the box read-only.
+The comment box appears on every scoring-queue card and beside each answer on the per-student results page, with an overall box on that page (`components/app/TeacherFeedbackBox.tsx`, used by the scoring queue in [scoring and results](scoring-and-results.md#teacher-review-queue-and-approval)). Under every box, `TEACHER_FEEDBACK_HINT` (`lib/teacherFeedback/limits.ts`) says that students see the comment only when it is sent to Google Docs or printed with the teacher feedback box ticked. A non-impersonating admin sees the box grayed out with `TEACHER_FEEDBACK_ADMIN_HINT` beneath it, because SEC-03 keeps admins read-only outside Act as (`readOnly` on `TeacherFeedbackBox`, set from the access result on the scoring page).
+
+The scoring queue keeps its list mounted across refetches. `queueBodyState` (`app/dashboard/[id]/scoring/ScoringQueue.tsx`) shows "Loading…" only until the first fetch returns, so a card's unsaved comment draft survives scoring another card (FR-H2; `test/scoring-queue.test.tsx`, describe `queueBodyState`).
 
 Teacher feedback is student-record content. It is never printed by the family results report, never sent to a model (not in class insights or the insights chat, D-14), and never written to a log.
 
@@ -149,5 +151,5 @@ cd design-tool && bun test test/feedback-release.test.ts
 cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/teacher-feedback-api.test.ts test/google-docs-release.test.ts test/work-packet-page.test.tsx
 ```
 
-The first command needs no database. The second needs the test database described in [testing and validation](../testing/testing-and-validation.md). Treat a Drive or browser check as a manual step, not an automated one: the Doc's real render and the printed packet are covered by the hand-run rows in `docs/design-tool-manual-checks.md` (rows 864 to 901), which were not run when this page was written.
+The first command needs no database. The second needs the test database described in [testing and validation](../testing/testing-and-validation.md). Treat a Drive or browser check as a manual step, not an automated one. The hand-run rows are in `docs/design-tool-manual-checks.md` (rows 864 to 901). The 2026-10-30 local run passed rows 864, 865, 868–873 and 895, and the packet halves of 874–883, 893, 894, 896 and 899. Row 866 failed on the lost draft that `queueBodyState` now prevents, and it has not been re-run. Row 901 (help page and production health) passed on 2026-10-30. The Doc halves (884–892, 900) and the real Drive render still need a Google sign-in on production.
 
