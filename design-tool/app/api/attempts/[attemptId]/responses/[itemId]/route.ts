@@ -14,6 +14,7 @@ import {
   unsealResponseIds,
 } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfLocked } from "@/lib/api/correctionLocks";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import {
   loadUploadForItem,
@@ -85,6 +86,9 @@ export async function PUT(req: Request, ctx: RouteContext) {
   // never reach the 409.
   const expired = await refuseIfPastDeadline(db, access.attempt);
   if (expired) return expired;
+  // U-25 slice 3 (D-8): a full-credit answer the reopened test locked.
+  const locked = refuseIfLocked(access.attempt, itemId);
+  if (locked) return locked;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();
@@ -197,6 +201,9 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   // never reach the 409.
   const expired = await refuseIfPastDeadline(db, access.attempt);
   if (expired) return expired;
+  // U-25 slice 3 (D-8): a full-credit answer the reopened test locked.
+  const locked = refuseIfLocked(access.attempt, itemId);
+  if (locked) return locked;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();

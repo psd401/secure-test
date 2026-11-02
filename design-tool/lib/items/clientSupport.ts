@@ -83,3 +83,36 @@ export function clientSupportsHighlighting(clientVersion: string | null): boolea
   const have = parseClientVersion(clientVersion);
   return have !== null && atLeast(have, parseClientVersion(MIN_CLIENT_VERSION_FOR_HIGHLIGHTING)!);
 }
+
+/**
+ * Corrections mode (docs/bulk-pass-back-and-corrections-design.md, slice 3,
+ * D-27): the oldest SERVED RENDERER version that draws marks and locks. Null
+ * until that renderer is signed (slice 3d) — so until then no bundle carries
+ * corrections, and no write is ever refused for a lock.
+ */
+export const MIN_RENDERER_VERSION_FOR_CORRECTIONS: number | null = null;
+
+let correctionsRendererFloor: number | null = MIN_RENDERER_VERSION_FOR_CORRECTIONS;
+
+/** Test seam (like `setRendererResolver`): the floor the delivery route
+ * uses; returns the previous one so a test can restore it. */
+export function setCorrectionsRendererFloor(next: number | null): number | null {
+  const previous = correctionsRendererFloor;
+  correctionsRendererFloor = next;
+  return previous;
+}
+
+/**
+ * Whether a delivery may carry corrections: a 2.0+ client (the served
+ * renderer's floor) AND a named renderer at least
+ * `MIN_RENDERER_VERSION_FOR_CORRECTIONS`. Like highlighting, a client that
+ * fails this is never refused — it gets no marks and no locks (D-27).
+ */
+export function correctionsDeliverable(
+  clientVersion: string | null,
+  renderer: { version: number } | null | undefined,
+  minRendererVersion: number | null = correctionsRendererFloor,
+): boolean {
+  if (minRendererVersion === null || !renderer) return false;
+  return clientSupportsHighlighting(clientVersion) && renderer.version >= minRendererVersion;
+}

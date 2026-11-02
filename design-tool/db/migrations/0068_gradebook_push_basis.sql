@@ -1,0 +1,2 @@
+ALTER TABLE "gradebook_pushes" ADD COLUMN "basis" text DEFAULT 'latest' NOT NULL;--> statement-breakpoint
+ALTER TABLE "gradebook_pushes" ADD CONSTRAINT "gradebook_pushes_basis_check" CHECK (basis IN ('latest', 'attempt_one'));

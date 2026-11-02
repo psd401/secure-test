@@ -284,6 +284,25 @@ export function canHandInAll(
 }
 
 /**
+ * "Pass back everyone" on a sitting (docs/bulk-pass-back-and-corrections-design.md,
+ * slice 1): the attempts the per-row Pass back is offered on — handed in here,
+ * or handed in during an earlier session (H-1; the route works on the attempt
+ * whichever sitting it is bound to) — and whether any of them needs a new
+ * deadline. Pure so the Monitor and the Test sessions list share one rule.
+ */
+export function passBackAllTargets(
+  rows: ReadonlyArray<Pick<AttendanceRow, "status" | "attempt_id" | "timed">>,
+): { attemptIds: string[]; timed: boolean } {
+  const targets = rows.filter(
+    (r) => (r.status === "submitted" || r.status === "submitted_earlier") && r.attempt_id !== null,
+  );
+  return {
+    attemptIds: targets.map((r) => r.attempt_id!),
+    timed: targets.some((r) => r.timed),
+  };
+}
+
+/**
  * "Extend time": whether an in-progress attempt/sitting may have its
  * deadline extended. Deliberately NOT gated on the sitting being open or
  * closed — the whole point (like "Hand in everyone now") is a class that

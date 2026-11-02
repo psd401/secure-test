@@ -405,6 +405,49 @@ describe("POST /api/assessments/[id]/rescore", () => {
     expect(body.sections_sent_before[0]).toContain("Biology");
   });
 
+  // U-25 slice 2: a push sending attempt 1 is not moved by a rescore of an
+  // attempt that has one, so its section is not named; with no attempt 1 the
+  // push sends the latest and the section still is.
+  for (const [label, passedBack, expected] of [
+    ["an attempt-1 push is not named for an attempt with an attempt 1", true, 0],
+    ["an attempt-1 push is still named for an attempt with none", false, 1],
+  ] as const) {
+    test(label, async () => {
+      const s = await scene();
+      const a = await s.student("R-1", "c1");
+      const db = getDb();
+      await db.insert(roster_sections).values({
+        ps_id: "SEC-1",
+        course_name: "Biology",
+        period_expression: "2(A)",
+        last_seen_snapshot_id: "snap",
+      });
+      const [push] = await db
+        .insert(gradebook_pushes)
+        .values({
+          assessment_id: s.assessment.id,
+          section_ps_id: "SEC-1",
+          target: "powerschool",
+          name: "Rescore",
+          created_by_sub: OWNER,
+          external_assignment_id: "1",
+          last_sent_at: new Date(),
+          basis: "attempt_one",
+        })
+        .returning();
+      await db
+        .insert(gradebook_push_scores)
+        .values({ push_id: push!.id, attempt_id: a.attempt.id, points_sent: 1 });
+      if (passedBack) {
+        // The student's own hand-in was passed back (and handed in again).
+        await db.insert(attempt_events).values({ attempt_id: a.attempt.id, kind: "passed_back" });
+      }
+      await s.fixKey();
+      const body = await (await post(s.assessment.id, { dry_run: false })).json();
+      expect(body.sections_sent_before).toHaveLength(expected);
+    });
+  }
+
   test("another teacher gets 404 and nothing is written", async () => {
     const s = await scene();
     const a = await s.student("R-1", "c1");

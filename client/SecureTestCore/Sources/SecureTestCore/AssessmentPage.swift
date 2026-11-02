@@ -273,6 +273,21 @@ public enum AssessmentPage {
     .time-limit-hide:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     /* display: flex outranks the UA [hidden] rule on its own (T-1, 2026-09-14). */
     .time-limit[hidden] { display: none; }
+    /* Corrections mode (U-25 slice 3, docs/bulk-pass-back-and-corrections-design.md):
+       how a question went last time, as a glyph AND words — never colour
+       alone. --danger is redefined by every contrast set. A locked answer
+       keeps its own colours (it must stay readable) and takes no pointer. */
+    .correction-note {
+      display: inline-block; margin: 0 0 8px; padding: 3px 8px;
+      font-size: 0.875rem; font-weight: 600;
+      color: var(--ink); background: var(--panel);
+      border: 1px solid var(--line-strong); border-radius: 6px;
+    }
+    .correction-note.correction-incorrect {
+      color: var(--danger);
+      border-color: color-mix(in srgb, var(--danger) 45%, var(--paper));
+    }
+    .locked-answer { pointer-events: none; }
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
     .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
@@ -822,6 +837,29 @@ public enum AssessmentPage {
       // only an explicit true opens it. Absent or false is the page exactly
       // as before — no class, no listener, no button.
       var ALLOW_HIGHLIGHTING = !!(BUNDLE && BUNDLE.allow_highlighting === true);
+      // Corrections mode (U-25 slice 3, docs/bulk-pass-back-and-corrections-design.md,
+      // D-21 / D-8): on a test passed back for another try, how each question
+      // went last time (a word, never points or an answer) and which answers
+      // are locked for full credit. Only the three known words and string ids
+      // are taken; anything else is ignored, so an absent or odd field is the
+      // page exactly as before. The server refuses a write to a locked item
+      // too — the page simply never sends one.
+      var CORRECTION_MARKS = {};
+      var LOCKED = {};
+      (function () {
+        var c = BUNDLE && BUNDLE.corrections;
+        if (!c || typeof c !== 'object') return;
+        var marks = c.marks;
+        if (marks && typeof marks === 'object') {
+          Object.keys(marks).forEach(function (id) {
+            var m = marks[id];
+            if (m === 'correct' || m === 'partial' || m === 'incorrect') CORRECTION_MARKS[id] = m;
+          });
+        }
+        if (Array.isArray(c.locked)) {
+          c.locked.forEach(function (id) { if (typeof id === 'string') LOCKED[id] = true; });
+        }
+      })();
       // Finding 8.5: on the offline path the host ignores uploads and
       // hand-ins by design, so the "in flight" labels would never resolve.
       // Anything short of an explicit true is the server path.
@@ -924,6 +962,7 @@ public enum AssessmentPage {
       // Batch 0b slice 3 (2026-09-03): `mark === false` posts without touching
       // the answered mark — the caller decides (match marks on completeness).
       function post(itemId, response, mark) {
+        if (LOCKED[itemId] === true) return;
         try {
           window.webkit.messageHandlers.response.postMessage({
             item_id: itemId,
@@ -944,6 +983,7 @@ public enum AssessmentPage {
       }
 
       function withdraw(itemId) {
+        if (LOCKED[itemId] === true) return;
         try {
           window.webkit.messageHandlers.withdraw.postMessage({ item_id: itemId });
         } catch (e) {
@@ -3893,6 +3933,7 @@ public enum AssessmentPage {
       // student's own machine is the only thing that ever holds the image
       // before it reaches storage.
       function postDrawing(itemId, dataURL) {
+        if (LOCKED[itemId] === true) return;
         try {
           window.webkit.messageHandlers.upload.postMessage({
             item_id: itemId,
@@ -6445,7 +6486,62 @@ public enum AssessmentPage {
         var answer = fillBlank ? fillBlankField(item, stem) : answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
         wrap.appendChild(answer);
+        // Corrections mode: the note sits above the stem; a locked answer
+        // (a fill-in-the-blank's lives in its stem) is made read-only.
+        var note = correctionNote(item.id);
+        if (note) wrap.insertBefore(note, stem);
+        if (LOCKED[item.id] === true) lockAnswer(wrap, fillBlank ? stem : answer);
         return wrap;
+      }
+
+      // Corrections mode: the words for one question, glyph first and the
+      // same words for VoiceOver without the glyph. A locked answer says so
+      // whether or not marks were asked for, so a student is never left
+      // wondering why a field will not change.
+      function correctionWords(mark, locked) {
+        if (locked) return 'Correct \u2014 locked';
+        if (mark === 'correct') return 'Correct last time';
+        if (mark === 'partial') return 'Partly correct last time';
+        return 'Not correct last time';
+      }
+
+      function correctionNote(itemId) {
+        var mark = CORRECTION_MARKS[itemId];
+        var locked = LOCKED[itemId] === true;
+        if (!mark && !locked) return null;
+        var glyph = locked || mark === 'correct' ? '\u2713' : mark === 'partial' ? '\u25D0' : '\u2717';
+        var words = correctionWords(mark, locked);
+        var note = document.createElement('p');
+        note.className = 'correction-note ' + (locked ? 'correction-locked' : 'correction-' + mark);
+        note.setAttribute('role', 'note');
+        note.setAttribute('aria-label', words);
+        note.textContent = glyph + ' ' + words;
+        return note;
+      }
+
+      // Read-only, but still readable: controls are disabled (out of the Tab
+      // order, not clickable), anything given its own tab stop leaves the
+      // order, editable text stops being editable, and the pointer is off.
+      // Not `inert` — that would hide the student's own answer from VoiceOver.
+      // A control built later (a graph board) is still covered: the pointer
+      // is off and `post` refuses the item.
+      function lockAnswer(wrap, area) {
+        wrap.className += ' locked';
+        area.className = (area.className ? area.className + ' ' : '') + 'locked-answer';
+        area.setAttribute('aria-disabled', 'true');
+        (function walk(n) {
+          var tag = String(n.tagName || '').toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') {
+            n.disabled = true;
+          } else if (n.getAttribute && n.getAttribute('tabindex') !== null) {
+            n.setAttribute('tabindex', '-1');
+          }
+          if (n.getAttribute && n.getAttribute('contenteditable') === 'true') {
+            n.setAttribute('contenteditable', 'false');
+          }
+          if (n.contentEditable === 'true') n.contentEditable = 'false';
+          Array.prototype.forEach.call(n.children || [], walk);
+        })(area);
       }
 
       // One page at a time (D-2, D-3). A question with no set is a page; an

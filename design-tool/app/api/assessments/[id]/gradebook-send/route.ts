@@ -17,6 +17,9 @@ const Body = z.object({
   target: z.enum(["powerschool", "schoology"]),
   section_ps_id: z.string().trim().min(1).max(64),
   category_id: z.string().trim().min(1).max(64),
+  // U-25 slice 2 (D-7): which score to send. Omitted = latest, every send's
+  // behaviour before U-25.
+  basis: z.enum(["latest", "attempt_one"]).optional(),
   // Default: the assessment's title. Cut to 50 characters for PTP.
   name: z.string().trim().min(1).max(200).optional(),
   // 8.1: default = today in Pacific time.
@@ -89,6 +92,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     category_id: body.category_id,
     name: body.name ?? access.assessment.name,
     due_date: body.due_date ?? todayPacific(),
+    basis: body.basis ?? "latest",
   });
   if (!outcome.ok) {
     return NextResponse.json(

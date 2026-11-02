@@ -865,6 +865,14 @@ export const attempts = pgTable(
     // (`passed_back`, with `detail.by`). The column exists so a reader does not
     // have to aggregate the event table to answer the common case.
     pass_back_count: integer("pass_back_count").notNull().default(0),
+    // U-25 slice 3 (docs/bulk-pass-back-and-corrections-design.md, D-8 /
+    // D-21…D-27): corrections mode for the CURRENT pass back — whether the
+    // reopened test shows right/wrong marks and locks full-credit answers.
+    // Null when the last pass back asked for neither (and on every attempt
+    // never passed back). `passed_back_at` names the round the marks come
+    // from (D-24); `locks_delivered` is set once a delivery bundle actually
+    // carried locks (slice 3b), so the write guard refuses only then (D-27).
+    corrections: jsonb("corrections").$type<AttemptCorrections>(),
     // Practice sittings (docs/practice-sitting-design.md, D-1/D-4): true when
     // the attempt was started through a `practice` sitting — a staff member
     // sitting their own test. On the attempt rather than read through the
@@ -1547,6 +1555,15 @@ export type AssessmentStudentOverrideInsert =
 export type GuardrailEventRow = typeof guardrail_events.$inferSelect;
 export type GuardrailEventInsert = typeof guardrail_events.$inferInsert;
 export type TestSessionRow = typeof test_sessions.$inferSelect;
+export interface AttemptCorrections {
+  show_marks: boolean;
+  lock_correct: boolean;
+  passed_back_at: string;
+  locks_delivered: boolean;
+  /** Slice 3b: the items a delivery locked, written with `locks_delivered`
+   * so the write guard reads one row instead of rebuilding the marks. */
+  locked_item_ids?: string[];
+}
 export type AttemptRow = typeof attempts.$inferSelect;
 export type AttemptInsert = typeof attempts.$inferInsert;
 export type AttemptEventRow = typeof attempt_events.$inferSelect;
@@ -2019,6 +2036,8 @@ export type SafeguardingAlertInsert = typeof safeguarding_alerts.$inferInsert;
 //                           (D-5), pre-filling the dialog, never sending alone.
 export const GRADEBOOK_TARGETS = ["powerschool", "schoology"] as const;
 export type GradebookTarget = (typeof GRADEBOOK_TARGETS)[number];
+export const GRADEBOOK_BASES = ["latest", "attempt_one"] as const;
+export type GradebookBasis = (typeof GRADEBOOK_BASES)[number];
 
 export const gradebook_pushes = pgTable(
   "gradebook_pushes",
@@ -2054,6 +2073,10 @@ export const gradebook_pushes = pgTable(
     /** Set when the external assignment is found deleted; the next send then
      * creates a new one (the unique index is partial on this). */
     archived_at: timestamp("archived_at", { withTimezone: true }),
+    /** U-25 slice 2 (D-20): which score this push sends — `latest`, or
+     * `attempt_one` (the score before a pass back). Set by every send, so
+     * Send again keeps the teacher's last choice. */
+    basis: text("basis").notNull().default("latest"),
   },
   (t) => ({
     liveUnq: uniqueIndex("gradebook_pushes_live_unq")
@@ -2063,6 +2086,10 @@ export const gradebook_pushes = pgTable(
     targetCheck: check(
       "gradebook_pushes_target_check",
       sql`target IN ('powerschool', 'schoology')`,
+    ),
+    basisCheck: check(
+      "gradebook_pushes_basis_check",
+      sql`basis IN ('latest', 'attempt_one')`,
     ),
   }),
 );

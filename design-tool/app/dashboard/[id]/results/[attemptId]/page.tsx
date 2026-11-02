@@ -30,7 +30,7 @@ import {
 } from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
-import { buildResults, itemMaxPoints } from "@/lib/scoring/results";
+import { attemptOneDisplay, buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
 import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
@@ -622,6 +622,16 @@ export default async function AttemptResultPage({ params }: PageProps) {
               ) : null}
             </p>
           )}
+          {/* U-25 slice 2 (D-6, D-19): the score before the pass back and
+              the change since — also while the student is working again. */}
+          {row.attempt_one ? (
+            <p className="text-sm">
+              Attempt 1: <strong>{attemptOneDisplay(row).attempt}</strong>
+              {attemptOneDisplay(row).change ? (
+                <> · Change {attemptOneDisplay(row).change}</>
+              ) : null}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             {/* Print one student's work (docs/student-work-export-design.md
                 §Progress, 2026-09-23): the packet page for this attempt alone,

@@ -2718,3 +2718,29 @@ session is begun in either case.
 |---|---|---|
 | **Close the session while the test loads.** Student presses Resume; teacher presses Close session on the Monitor before the test page draws | stderr `bundle refused: the sitting is closed — not starting the secure session` → `sitting closed: the server refused the test for this attempt …`, then the student is sent home told (the Row CS path); the teacher's timeline gets `sitting_closed` with `via: "bundle"`; no `BUNDLE FETCH FAILED`, no `bundle_fetch_failed` in `errors.log` | ✅ 2026-10-25 evening, a Debug build of `f5c0567b` (simulated lockdown) against local dev, a demo student signed in by token, James at the client. **Forced:** the server refuses a closed sitting's bundle only after its 10 s close grace (`SITTING_CLOSE_GRACE_SECONDS`), and the 5 s peek poll reports the close first (an earlier try took the peek path), so a scratchpad proxy in front of the server pressed Close through the Monitor's API when the delivery GET arrived, held that GET 12 s and held peek polls until it was answered — a stalled network. Delivery → 409; stderr `bundle refused: the sitting is closed — not starting the secure session` → `sitting closed: the server refused the test for this attempt (teacher closed the session, or it expired)` → `sitting closed (bundle) — ending the secure session` → home; no `begin()`; timeline `sitting_closed` `{"via": "bundle"}`; no `BUNDLE FETCH FAILED`. Without the forcing this path is near-unreachable — the client branch is a safety net |
 | **Hand in from the Monitor while the test loads.** Same, but the teacher presses Close session and then Hand in on the student's row (Hand in is refused, 409 `session_open`, while the sitting is open and time remains) | stderr `bundle refused: the attempt is already handed in — not starting the secure session` → `attempt already handed in on arrival — no secure session, back to Your tests`; the student is on "Your tests" with a sheet carrying the join's handed-in line; no `bundle_fetch_failed`, and no further peek or countdown lines for that attempt | ✅ 2026-10-25 evening, same build and set-up; the proxy pressed Close then Hand in (both 200) when the delivery GET arrived, no hold. Delivery → 409; stderr `bundle refused: the attempt is already handed in — not starting the secure session` → `attempt already handed in on arrival — no secure session, back to Your tests`; no `begin()`, no `BUNDLE FETCH FAILED`, no peek or countdown lines for that attempt after; "Your tests" with the handed-in sheet (James, by eye) |
+
+## Corrections mode in the test page (row U-25 slice 3c, branch `feat/bulk-pass-back`, 2026-11-02)
+
+`docs/bulk-pass-back-and-corrections-design.md`, D-8 / D-21…D-27. The page
+draws `corrections` from the bundle: a note above each marked question
+("✓ Correct last time", "◐ Partly correct last time", "✗ Not correct last
+time") and, on a locked question, "✓ Correct — locked" with the answer
+read-only. It reaches a student only after slice 3d sets the renderer floor
+and the renderer from this change is signed and current, so these rows run
+after that deploy, with the design tool's rows 902–920. Real AAC sessions,
+v2.0+ client, James at the client. VoiceOver rows follow the VoiceOver
+testing method (quit or hide Claude first; steps written beforehand). None
+of these rows has been run: the build session drove the page only in the
+JavaScriptCore harness (`RendererCorrectionsTests`).
+
+| Check | Expected | Result |
+|---|---|---|
+| **Marks only.** A demo test with a multiple-choice, a short answer and an essay; `<demo-student-A>` hands in one right, one wrong, the essay scored partial; pass back with **Show right/wrong** | Each question shows its note above the stem, glyph and words; every answer can still be changed and saves | NOT RUN |
+| **Locks only.** Same student, pass back with **Lock correct answers** only | The right question shows "✓ Correct — locked"; its choices can't be clicked or reached with Tab; the others show no note and stay editable | NOT RUN |
+| **Both.** Pass back with both boxes | Notes on every scored question; the full-credit one locked, the partial essay editable | NOT RUN |
+| **Locked fill-in-the-blank and essay.** A test whose fill-in-the-blank and essay earned full credit; lock them | The blanks' dropdowns / boxes in the sentence are disabled; the essay text is readable but can't be typed in or formatted | NOT RUN |
+| **Locked graph answer.** A graph question with full credit, locked | The board shows the answer; clicking or dragging changes nothing; Tab may still reach the board — record what happens (the page refuses to save it either way) | NOT RUN |
+| **Contrast sets.** Each contrast set (system default, dark, high contrast) with marks showing | The ✗ note in that set's danger colour, every note readable at 4.5:1 or better | NOT RUN |
+| **VoiceOver.** Navigate to a marked and a locked question | VoiceOver reads the note's words ("Not correct last time", "Correct — locked") without the glyph name, then the stem; the locked answer is read as dimmed / unavailable, its text still read | NOT RUN |
+| **Older client.** A 1.x client (if one remains) on the same passed-back attempt | No notes, nothing locked, every answer saves (D-27) | NOT RUN |
+| **Paged layout.** The same test with the paged layout | Notes on each question page; the page strip and review page are unchanged (marks are not shown there) | NOT RUN |

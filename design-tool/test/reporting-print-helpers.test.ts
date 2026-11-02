@@ -181,6 +181,7 @@ function row(overrides: Partial<ResultsRow> & Pick<ResultsRow, "attempt_id" | "c
     ai_unreviewed_count: 0,
     max_points: 6,
     percent: null,
+    attempt_one: null,
     ...overrides,
   };
 }

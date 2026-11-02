@@ -301,6 +301,24 @@ describe("submit — the event, the retry, and the paths with no feedback", () =
     expect(await feedbackEvents(s.attemptId)).toHaveLength(0);
   });
 
+  test("U-25 D-26: corrections mode does not turn feedback back on after the re-hand-in", async () => {
+    const s = await scenario({ level: "answers", release: "at_hand_in" });
+    await getDb()
+      .update(attempts)
+      .set({
+        pass_back_count: 1,
+        corrections: {
+          show_marks: true,
+          lock_correct: true,
+          passed_back_at: new Date().toISOString(),
+          locks_delivered: false,
+        },
+      })
+      .where(eq(attempts.id, s.attemptId));
+    const body = await (await submit(s.attemptId)).json();
+    expect("feedback" in body).toBe(false);
+  });
+
   test("D-6: a teacher's hand-in builds no feedback, and a later student retry gets none", async () => {
     const s = await scenario({ level: "answers", release: "at_hand_in" });
     await getDb().update(test_sessions).set({ status: "closed" }).where(eq(test_sessions.id, s.sittingId));

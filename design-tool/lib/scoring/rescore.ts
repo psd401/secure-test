@@ -26,6 +26,7 @@
  * is scored at its own hand-in, against the current key already.
  */
 
+import { attemptOneByAttempt } from "@/lib/scoring/attemptOne";
 import { and, eq, inArray } from "drizzle-orm";
 import { ItemResponseSchema } from "@secure-test/schema";
 import type { getDb } from "@/db/client";
@@ -348,15 +349,29 @@ export async function applyRescore(
   };
 }
 
-/** Sections with a live gradebook push that already carries one of these attempts. */
+/**
+ * Sections with a live gradebook push that already carries one of these
+ * attempts — the "Send again" note.
+ *
+ * U-25 slice 2: a push that sends attempt 1 (`basis = 'attempt_one'`) is not
+ * moved by a rescore of an attempt that HAS an attempt 1: that score is built
+ * from rows the rescore never touches (it only supersedes `final`s; attempt 1
+ * comes from the round before the pass back). Such a pair is left out. An
+ * attempt with no attempt 1 still sends its latest under that basis, so it
+ * still counts.
+ */
 async function sectionsSentBefore(
   db: Db,
   assessmentId: string,
   attemptIds: string[],
 ): Promise<string[]> {
   if (attemptIds.length === 0) return [];
-  const rows = await db
-    .selectDistinct({ section_ps_id: gradebook_pushes.section_ps_id })
+  const sent = await db
+    .select({
+      section_ps_id: gradebook_pushes.section_ps_id,
+      basis: gradebook_pushes.basis,
+      attempt_id: gradebook_push_scores.attempt_id,
+    })
     .from(gradebook_push_scores)
     .innerJoin(gradebook_pushes, eq(gradebook_pushes.id, gradebook_push_scores.push_id))
     .where(
@@ -365,6 +380,17 @@ async function sectionsSentBefore(
         inArray(gradebook_push_scores.attempt_id, attemptIds),
       ),
     );
+  const attemptOnes = await attemptOneByAttempt(
+    db,
+    [...new Set(sent.filter((r) => r.basis === "attempt_one").map((r) => r.attempt_id))],
+  );
+  const rows = [
+    ...new Set(
+      sent
+        .filter((r) => r.basis !== "attempt_one" || !attemptOnes.has(r.attempt_id))
+        .map((r) => r.section_ps_id),
+    ),
+  ].map((section_ps_id) => ({ section_ps_id }));
   if (rows.length === 0) return [];
   const sections = await db
     .select()
