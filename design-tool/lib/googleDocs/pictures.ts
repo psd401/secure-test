@@ -25,7 +25,8 @@ export function dataUri(contentType: string, bytes: Uint8Array): string {
 }
 
 /**
- * Pure: which pictures fit. `keys` in document order; `uris` the readable
+ * Pure: which pictures fit. `baseLength` is in bytes; a data URI is ASCII,
+ * so its length is its bytes. `keys` in document order; `uris` the readable
  * ones. A picture that does not fit is marked too large and later ones are
  * still tried (a small picture after a big one may fit). An unreadable key
  * is left out of the map, so it reads "[Picture]".
@@ -84,14 +85,26 @@ export function createPictureLoader(
     return dataUri(upload.content_type, bytes);
   }
 
-  /** `key` is a `pictureKey`; uploads also need their upload id. */
+  // A read error leaves "[Picture]" in the Doc; the warning carries the
+  // picture key only (an asset or response id), never student content.
+  const quiet = (key: string) => (err: unknown) => {
+    console.warn(`google docs: picture ${key} not read:`, err instanceof Error ? err.message : err);
+    return null;
+  };
+
+  /**
+   * `key` is a `pictureKey`; uploads also need their upload id. Only assets
+   * are cached — a stem's picture is every student's — so a send does not
+   * hold every student's drawing in memory at once (PR #174 review).
+   */
   return function load(key: string, uploadId?: string): Promise<string | null> {
+    const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+    if (kind !== "asset") {
+      return uploadId ? readUpload(id, uploadId).catch(quiet(key)) : Promise.resolve(null);
+    }
     let p = cache.get(key);
     if (!p) {
-      const [kind, id] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
-      p = (kind === "asset" ? readAsset(id) : uploadId ? readUpload(id, uploadId) : Promise.resolve(null)).catch(
-        () => null,
-      );
+      p = readAsset(id).catch(quiet(key));
       cache.set(key, p);
     }
     return p;

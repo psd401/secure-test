@@ -289,7 +289,13 @@ export function docAnswerHtml(answer: DocAnswer, pictures?: ReadonlyMap<string, 
     }
     case "fill_blank": {
       const sentence = answer.segments
-        .map((s) => ("text" in s ? contentInline(s.text, pictures) : `<b>[${contentInline(s.answer, pictures)}]</b>`))
+        // A typed answer is the student's: plain text, never a picture ref
+        // (PR #174 review). A dropdown's option is teacher content.
+        .map((s) =>
+          "text" in s
+            ? contentInline(s.text, pictures)
+            : `<b>[${s.teacher ? contentInline(s.answer, pictures) : escapeHtml(plainContent(s.answer))}]</b>`,
+        )
         .join("")
         .replace(/\r\n?/g, "\n")
         .replace(/\n/g, "<br>");
@@ -326,7 +332,10 @@ export function docPictureKeys(input: Pick<DocInput, "essays" | "contents">): st
     const a = essay.answer_view;
     if (a?.kind === "choices") for (const o of a.options) keys.push(...contentPictureKeys(o.text));
     if (a?.kind === "fill_blank") {
-      for (const seg of a.segments) keys.push(...contentPictureKeys("text" in seg ? seg.text : seg.answer));
+      for (const seg of a.segments) {
+        if ("text" in seg) keys.push(...contentPictureKeys(seg.text));
+        else if (seg.teacher) keys.push(...contentPictureKeys(seg.answer));
+      }
     }
     if (a?.kind === "picture") keys.push(pictureKey(a.picture.ref));
   }

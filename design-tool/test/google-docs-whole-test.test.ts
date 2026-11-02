@@ -13,6 +13,7 @@ import {
 } from "../lib/googleDocs/content";
 import { fitPictures } from "../lib/googleDocs/pictures";
 import {
+  keyFreeConfig,
   pictureKey,
   questionPictures,
   wholeTestAnswer,
@@ -151,7 +152,13 @@ describe("wholeTestAnswer", () => {
     const a = wholeTestAnswer(item, resp({ type: "fill_blank", answers: { b1: "grey", b2: "o2" } }), 1);
     expect(a).toEqual({
       kind: "fill_blank",
-      segments: [{ text: "The sky is " }, { answer: "grey" }, { text: " and grass is " }, { answer: "red" }, { text: "." }],
+      segments: [
+        { text: "The sky is " },
+        { answer: "grey", teacher: false },
+        { text: " and grass is " },
+        { answer: "red", teacher: true },
+        { text: "." },
+      ],
       unplaced: [],
     });
   });
@@ -273,7 +280,7 @@ describe("buildDocHtml whole test", () => {
           kind: "item",
           stem: "Sky is [[b1]]",
           stem_in_answer: true,
-          answer_view: { kind: "fill_blank", segments: [{ text: "Sky is " }, { answer: "blue" }], unplaced: [] },
+          answer_view: { kind: "fill_blank", segments: [{ text: "Sky is " }, { answer: "blue", teacher: false }], unplaced: [] },
         }),
       ],
     });
@@ -354,6 +361,60 @@ describe("pictures (slice 4, images)", () => {
       `asset:${ID}`,
       "asset:44444444-4444-4444-8444-444444444444",
       "upload:r1",
+    ]);
+  });
+});
+
+describe("PR #174 review", () => {
+  const ID = "55555555-5555-4555-8555-555555555555";
+
+  test("a student's typed asset ref stays text and is never collected for loading", () => {
+    const item: WholeTestItem = {
+      type: "fill_blank",
+      stem: "Type [[b1]], pick [[b2]]",
+      config: {
+        blanks: [
+          { id: "b1", kind: "text" },
+          { id: "b2", kind: "dropdown", options: [{ id: "o1", text: `![dot](asset:${ID})` }, { id: "o2", text: "no" }] },
+        ],
+      },
+    };
+    const a = wholeTestAnswer(item, resp({ type: "fill_blank", answers: { b1: `![x](asset:${ID})`, b2: "o2" } }), 1);
+    const essays: EssaySection[] = [
+      { number: 1, stem: item.stem, stimulus: null, sources: [], answer: null, feedback: [], kind: "item", answer_view: a, stem_in_answer: true },
+    ];
+    expect(docPictureKeys({ essays, contents: NONE })).toEqual([]);
+    const html = docAnswerHtml(a, new Map([[`asset:${ID}`, "data:image/png;base64,QQ=="]]));
+    expect(html).not.toContain("<img");
+    expect(html).toContain("[Image: x]");
+    // A dropdown's chosen option is teacher content: its picture is embedded.
+    const picked = wholeTestAnswer(item, resp({ type: "fill_blank", answers: { b1: "hi", b2: "o1" } }), 1);
+    expect(docPictureKeys({ essays: [{ ...essays[0]!, answer_view: picked }], contents: NONE })).toEqual([`asset:${ID}`]);
+  });
+
+  test("keyFreeConfig drops every key field and keeps what the mapper reads", () => {
+    const cfg = keyFreeConfig({
+      columns: [{ id: "c", label: "x" }],
+      rows: [{ id: "r", label: "y" }],
+      cell_keys: { r: { c: "K" } },
+      correct_region_ids: ["h1"],
+      image_asset_id: "img",
+      graph_board: BOARD,
+      graph_key: { objects: [LINE], scoring: "all" },
+      blanks: [
+        { id: "b1", kind: "text", keys: ["K"], exact_form: true },
+        { id: "b2", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }], correct_option_id: "o1" },
+      ],
+    } as never);
+    const json = JSON.stringify(cfg);
+    for (const k of ["cell_keys", "correct_region_ids", "graph_key", "keys", "correct_option_id", "exact_form"]) {
+      expect(json).not.toContain(`"${k}"`);
+    }
+    expect(cfg.columns).toEqual([{ id: "c", label: "x" }]);
+    expect(cfg.image_asset_id).toBe("img");
+    expect(cfg.blanks).toEqual([
+      { id: "b1", kind: "text" },
+      { id: "b2", kind: "dropdown", options: [{ id: "o1", text: "a" }, { id: "o2", text: "b" }] },
     ]);
   });
 });

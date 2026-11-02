@@ -36,7 +36,12 @@ export type DocAnswer =
   /** The stem as text and the student's answers; `unplaced` follow it. */
   | {
       kind: "fill_blank";
-      segments: Array<{ text: string } | { answer: string }>;
+      /**
+       * `teacher` marks an answer that is teacher-authored text (a dropdown's
+       * chosen option), whose pictures may be embedded; a typed answer is
+       * the student's own and is never read for picture refs (PR #174 review).
+       */
+      segments: Array<{ text: string } | { answer: string; teacher: boolean }>;
       unplaced: Array<{ number: number; answer: string }>;
     }
   | {
@@ -62,6 +67,28 @@ export interface WholeTestItem {
     corner?: string;
     blanks?: FillBlankBlank[];
     graph_board?: GraphBoard;
+  };
+}
+
+/**
+ * D-11 at the handoff (PR #174 review): the config with only the fields
+ * WholeTestItem declares, a blank cut to its id, kind and options — so
+ * `cell_keys`, a blank's `keys` / `correct_option_id`, `correct_region_ids`
+ * and `graph_key` never reach the mapper at all.
+ */
+export function keyFreeConfig(config: Record<string, unknown> & WholeTestItem["config"]): WholeTestItem["config"] {
+  return {
+    pairs: config.pairs,
+    sequence: config.sequence,
+    image_asset_id: config.image_asset_id,
+    prompt_asset_id: config.prompt_asset_id,
+    columns: config.columns,
+    rows: config.rows,
+    corner: config.corner,
+    blanks: config.blanks?.map((b) =>
+      b.kind === "dropdown" ? { id: b.id, kind: b.kind, options: b.options } : { id: b.id, kind: b.kind },
+    ),
+    graph_board: config.graph_board,
   };
 }
 
@@ -176,7 +203,12 @@ export function wholeTestAnswer(
       return {
         kind: "fill_blank",
         segments: filled.segments.map((s) =>
-          s.kind === "text" ? { text: s.text } : { answer: filledBlankAnswerText(s.blank) },
+          s.kind === "text"
+            ? { text: s.text }
+            : {
+                answer: filledBlankAnswerText(s.blank),
+                teacher: s.blank.format === "content" && s.blank.answer !== null,
+              },
         ),
         unplaced: filled.unplaced.map((b) => ({ number: b.number, answer: filledBlankAnswerText(b) })),
       };

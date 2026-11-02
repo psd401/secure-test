@@ -28,7 +28,7 @@ import {
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
 import { DOC_ITEM_TYPES } from "@/lib/googleDocs/sendDialog";
-import { pictureKey, questionPictures, wholeTestAnswer } from "@/lib/googleDocs/wholeTest";
+import { keyFreeConfig, pictureKey, questionPictures, wholeTestAnswer } from "@/lib/googleDocs/wholeTest";
 import { createPictureLoader, fitPictures } from "@/lib/googleDocs/pictures";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
@@ -291,12 +291,13 @@ export async function releaseToGoogleDocs(
       const isText = item.type === "essay" || item.type === "short_text";
       // U-25 slice 4: any other type, key-free by type (wholeTest.ts, D-11).
       // Only a whole-test send reaches here with one.
-      // Only the fields wholeTest.ts reads: no key column is handed over.
+      // Only the fields wholeTest.ts reads: no key column, and a config cut
+      // to its declared fields with every key field dropped (keyFreeConfig).
       const wtItem = {
         type: item.type,
         stem: item.stem,
         choices: Array.isArray(item.choices) ? (item.choices as Array<{ id: string; text: string }>) : [],
-        config: item.config,
+        config: keyFreeConfig(item.config),
       };
       const answerView = isText
         ? undefined
@@ -427,7 +428,8 @@ export async function releaseToGoogleDocs(
       const uri = await loadPicture(key, uploadIds.get(key));
       if (uri) uris.set(key, uri);
     }
-    return fitPictures(buildDocHtml(base).length, keys, uris);
+    // Drive's limit is bytes; ☐ ☑ → — are three each (PR #174 review).
+    return fitPictures(Buffer.byteLength(buildDocHtml(base)), keys, uris);
   }
 
   // ── One Doc per student, a few at a time.
