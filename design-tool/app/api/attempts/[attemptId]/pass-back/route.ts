@@ -6,6 +6,7 @@ import { authorizeAttempt } from "@/lib/api/access";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { passBackAttempt } from "@/lib/api/passBackAttempt";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ attemptId: string }>;
@@ -78,12 +79,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   const { attempt, assessment } = access;
 
   // An empty body is legitimate (an unlimited assessment), so a request with no
-  // JSON at all parses as `{}` rather than failing.
+  // JSON at all parses as `{}` rather than failing. Read under the default
+  // body cap like every other route (PR #169 review).
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   let endsAt: Date | null = null;
   let corrections = { show_marks: false, lock_correct: false };
   try {
-    const raw = await req.text();
-    const parsed = Body.parse(raw.trim() === "" ? {} : JSON.parse(raw));
+    const parsed = Body.parse(bodyRead.empty ? {} : bodyRead.parse());
     endsAt = parsed.ends_at ? new Date(Date.parse(parsed.ends_at)) : null;
     corrections = {
       show_marks: parsed.show_marks ?? false,

@@ -560,6 +560,13 @@ describe("corrections mode (U-25 slice 3a)", () => {
     expect((await attemptRow(s.attempt.id)).corrections).toBeNull();
   });
 
+  test("the body is capped like every other route: 413 past the default limit (PR #169 review)", async () => {
+    const s = await scenario();
+    const res = await passBack(s.attempt.id, undefined, JSON.stringify({ pad: "x".repeat(300 * 1024) }));
+    expect(res.status).toBe(413);
+    expect((await attemptRow(s.attempt.id)).status).toBe("submitted");
+  });
+
   test("a non-boolean option is 400", async () => {
     const s = await scenario();
     expect((await passBack(s.attempt.id, undefined, JSON.stringify({ show_marks: "yes" }))).status).toBe(400);

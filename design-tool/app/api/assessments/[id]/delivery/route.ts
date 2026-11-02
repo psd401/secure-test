@@ -1,7 +1,7 @@
 import { correctionsDeliverable, requiredClientUpgrade } from "@/lib/items/clientSupport";
 import { loadCorrections } from "@/lib/feedback/correctionMarks";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assessments, attempts } from "@/db/schema";
 import { requireStudentOrPractice } from "@/lib/api/requireSession";
@@ -188,6 +188,9 @@ export async function GET(req: Request, ctx: RouteContext) {
       if (corrections) {
         bundle.corrections = corrections;
         if (corrections.locked && !attempt.corrections.locks_delivered) {
+          // Only onto the SAME round (PR #169 review): a teacher who passes
+          // the attempt back again between the read above and this write
+          // must not have the old round's locks land on the new one.
           await db
             .update(attempts)
             .set({
@@ -197,7 +200,12 @@ export async function GET(req: Request, ctx: RouteContext) {
                 locked_item_ids: corrections.locked,
               },
             })
-            .where(eq(attempts.id, attempt.id));
+            .where(
+              and(
+                eq(attempts.id, attempt.id),
+                sql`${attempts.corrections}->>'passed_back_at' = ${attempt.corrections.passed_back_at}`,
+              ),
+            );
         }
       }
     }
