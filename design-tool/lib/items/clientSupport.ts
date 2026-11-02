@@ -101,6 +101,11 @@ export const MIN_RENDERER_VERSION_FOR_CORRECTIONS: number | null = 1793647928;
 
 let correctionsRendererFloor: number | null = MIN_RENDERER_VERSION_FOR_CORRECTIONS;
 
+/** The floor the delivery route uses now (tests save it before changing it). */
+export function getCorrectionsRendererFloor(): number | null {
+  return correctionsRendererFloor;
+}
+
 /** Test seam (like `setRendererResolver`): the floor the delivery route
  * uses; returns the previous one so a test can restore it. */
 export function setCorrectionsRendererFloor(next: number | null): number | null {

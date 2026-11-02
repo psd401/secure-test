@@ -24,7 +24,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MATCH_LEFT, MATCH_RIGHT, opaqueId } from "../lib/api/opaqueIds";
 import { setLogSink } from "../lib/log";
-import { setCorrectionsRendererFloor } from "../lib/items/clientSupport";
+import {
+  getCorrectionsRendererFloor,
+  setCorrectionsRendererFloor,
+} from "../lib/items/clientSupport";
 import {
   createRendererResolver,
   setRendererResolver,
@@ -1046,8 +1049,7 @@ describe("GET /api/assessments/:id/delivery — corrections (U-25 slice 3b)", ()
   beforeAll(async () => {
     tmp = await mkdtemp(join(tmpdir(), "secure-test-delivery-corrections-"));
     originalFlag = process.env.RENDERER_DELIVERY;
-    originalFloor = setCorrectionsRendererFloor(null);
-    setCorrectionsRendererFloor(originalFloor);
+    originalFloor = getCorrectionsRendererFloor();
   });
   afterEach(() => {
     if (previousResolver) setRendererResolver(previousResolver);
