@@ -2019,6 +2019,8 @@ export type SafeguardingAlertInsert = typeof safeguarding_alerts.$inferInsert;
 //                           (D-5), pre-filling the dialog, never sending alone.
 export const GRADEBOOK_TARGETS = ["powerschool", "schoology"] as const;
 export type GradebookTarget = (typeof GRADEBOOK_TARGETS)[number];
+export const GRADEBOOK_BASES = ["latest", "attempt_one"] as const;
+export type GradebookBasis = (typeof GRADEBOOK_BASES)[number];
 
 export const gradebook_pushes = pgTable(
   "gradebook_pushes",
@@ -2054,6 +2056,10 @@ export const gradebook_pushes = pgTable(
     /** Set when the external assignment is found deleted; the next send then
      * creates a new one (the unique index is partial on this). */
     archived_at: timestamp("archived_at", { withTimezone: true }),
+    /** U-25 slice 2 (D-20): which score this push sends — `latest`, or
+     * `attempt_one` (the score before a pass back). Set by every send, so
+     * Send again keeps the teacher's last choice. */
+    basis: text("basis").notNull().default("latest"),
   },
   (t) => ({
     liveUnq: uniqueIndex("gradebook_pushes_live_unq")
@@ -2063,6 +2069,10 @@ export const gradebook_pushes = pgTable(
     targetCheck: check(
       "gradebook_pushes_target_check",
       sql`target IN ('powerschool', 'schoology')`,
+    ),
+    basisCheck: check(
+      "gradebook_pushes_basis_check",
+      sql`basis IN ('latest', 'attempt_one')`,
     ),
   }),
 );

@@ -190,7 +190,7 @@ describe("SendToGradebookControl markup", () => {
       createElement(SendToGradebookControl, {
         assessmentId: "a",
         assessmentName: "Unit 3",
-        sections: [{ ps_id: "s1", label: "AP Seminar", scored: 2, awaiting: 0, last_sent_at: last, changed_since_send: 0 }],
+        sections: [{ ps_id: "s1", label: "AP Seminar", scored: 2, awaiting: 0, last_sent_at: last, changed_since_send: 0, basis: null, attempt_one_students: 0 }],
         onDone: () => {},
       }),
     );

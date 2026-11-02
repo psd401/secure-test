@@ -12,15 +12,17 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import type { SendSummary } from "@/lib/gradebook/types";
+import type { GradebookBasis, SendSummary } from "@/lib/gradebook/types";
 import {
   ASSIGNMENT_NAME_MAX,
   SEND_TARGET,
+  basisHint,
   canSubmitSend,
   chooseCategory,
   defaultAssignmentName,
   formatFailure,
   formatSendSummary,
+  offersBasisChoice,
   sectionOptionLabel,
   sendAgainNote,
   sendButtonLabel,
@@ -93,8 +95,13 @@ export function SendToGradebookControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<SendSummary | null>(null);
+  const [basis, setBasis] = useState<GradebookBasis>("latest");
 
   const section = sections.find((s) => s.ps_id === sectionPsId) ?? null;
+  // U-25 slice 2 (D-20): each section starts on the basis its last send used.
+  useEffect(() => {
+    setBasis(section?.basis ?? "latest");
+  }, [section?.ps_id, section?.basis]);
   const lastSent = sections.reduce<string | null>(
     (latest, s) => (s.last_sent_at && (!latest || s.last_sent_at > latest) ? s.last_sent_at : latest),
     null,
@@ -160,6 +167,7 @@ export function SendToGradebookControl({
           category_id: categoryId,
           name: name.trim(),
           due_date: dueDate,
+          basis,
         }),
       });
       if (!res.ok) throw await readError(res);
@@ -258,6 +266,29 @@ export function SendToGradebookControl({
                   </span>
                 ) : null}
               </label>
+
+              {/* U-25 slice 2 (D-7): offered once someone in the section
+                  has an attempt 1 from a pass back. */}
+              {section && offersBasisChoice(section) ? (
+                <label className="block">
+                  <span className="block text-xs text-muted-foreground">Score to send</span>
+                  <NativeSelect
+                    value={basis}
+                    disabled={busy}
+                    onChange={(e) => setBasis(e.target.value as GradebookBasis)}
+                    aria-label="Score to send"
+                    className="w-full"
+                  >
+                    <NativeSelectOption value="latest">Latest score</NativeSelectOption>
+                    <NativeSelectOption value="attempt_one">
+                      Attempt 1 (before the pass back)
+                    </NativeSelectOption>
+                  </NativeSelect>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {basisHint(basis, section.attempt_one_students)}
+                  </span>
+                </label>
+              ) : null}
 
               <label className="block">
                 <span className="block text-xs text-muted-foreground">Assignment name</span>

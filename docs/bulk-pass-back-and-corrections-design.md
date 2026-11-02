@@ -176,3 +176,4 @@ None open for slices 1–2.
   then run with the later slices' rows in one session (James, 2026-11-02).
 - 2026-11-02 — D-16…D-20 decided; slice 2a (attempt-1 calculator) built.
 - 2026-11-02 — slice 2b (Results / per-student page / CSV) built; rows 912–916.
+- 2026-11-02 — slice 2c (gradebook Latest / Attempt 1, migration 0068) built; rows 917–920. Known gap: the rescore note's "Send again" section list ignores the basis.

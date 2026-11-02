@@ -2205,3 +2205,7 @@ route and the controls only through tests.
 | 914 | Timed test: let C's time run out, **Hand in**, **Pass back**, C hands in | No attempt 1 for C (the first round was an extension, D-15); C shows "—" | NOT RUN |
 | 915 | An essay left unscored, then the student is passed back and hands in again | Attempt 1 reads "Not fully scored", no change shown | NOT RUN |
 | 916 | **Download CSV** with and without anyone passed back | `attempt_1` and `change` columns only when someone has an attempt 1 | NOT RUN |
+| 917 | After 912, **Send to gradebook** for A's section | **Score to send** appears, on **Latest score**; the hint names the passed-back count; sending writes A's new total | NOT RUN |
+| 918 | **Send again** with **Attempt 1** | A's PowerSchool score changes to the attempt-1 total (one update); B, still working, is sent with B's attempt-1 score | NOT RUN |
+| 919 | Reopen the dialog for that section | It starts on **Attempt 1** (remembered) | NOT RUN |
+| 920 | A section where nobody was passed back | No **Score to send** choice | NOT RUN |
