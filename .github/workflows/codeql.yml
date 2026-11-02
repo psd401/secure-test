@@ -1,0 +1,42 @@
+name: CodeQL
+
+# Advanced setup, replacing CodeQL default setup (2026-11-02): default setup
+# analyzed Swift on a macOS runner (~11 min) on every push and pull request,
+# OpenWiki bot PRs included. The languages that run on Linux stay here on every
+# change; Swift moved to codeql-swift.yml, which runs only when Swift changes.
+# Same query suite as default setup had (extended).
+#
+# Actions are pinned by commit SHA (the tag in the comment), like ci.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
