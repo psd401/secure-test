@@ -3,6 +3,8 @@ import { unreviewedCountLine, unreviewedQueueHref } from "@/lib/scoring/methodLa
 import { workPacketHref } from "@/lib/reporting/workPacketLinks";
 import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/db/client";
+import { attempts } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import {
   buildResults,
@@ -22,6 +24,8 @@ import { renderItemContent } from "@/lib/items/renderItemContent";
 import { resolveAssessmentAssets } from "@/lib/assets/assessmentAssets";
 import { HandInAttemptAndReload } from "./HandInAttemptAndReload";
 import { HandInInProgressAndReload } from "./HandInInProgressAndReload";
+import { PassBackAllAndReload } from "./PassBackAllAndReload";
+import { attemptIsTimed } from "@/lib/api/attemptDeadline";
 import { ScoreEssaysWithAiAndReload } from "./ScoreEssaysWithAiAndReload";
 import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
@@ -189,6 +193,28 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   // The count is the essays a press would send; with no section chosen the
   // button shows it but stays disabled (D-2).
   const submittedShown = filtered.filter((r) => r.status === "submitted");
+  // U-25 slice 1 (docs/bulk-pass-back-and-corrections-design.md, D-1 by
+  // section): "Pass back all handed in" over the rows shown, edit level like
+  // the per-attempt Pass back. `timed` asks the route's own question per
+  // attempt, so the dialog shows the deadline picker exactly when the route
+  // would require one.
+  const showPassBackAll = levelSatisfies(access.level, "edit") && submittedShown.length > 0;
+  const passBackTimed = showPassBackAll
+    ? (
+        await db
+          .select()
+          .from(attempts)
+          .where(
+            and(
+              eq(attempts.assessment_id, assessment.id),
+              inArray(
+                attempts.id,
+                submittedShown.map((r) => r.attempt_id),
+              ),
+            ),
+          )
+      ).some((a) => attemptIsTimed(a, assessment))
+    : false;
   const aiBatch = levelSatisfies(access.level, "edit") && submittedShown.length > 0
     ? await aiBatchCounts(
         db,
@@ -345,6 +371,20 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           />
           <span className="text-xs text-muted-foreground">
             Unfinished work from every session{selectedSection === "" ? "" : " in this section"} — only handed-in work reaches the scoring queue.
+          </span>
+        </div>
+      ) : null}
+
+      {showPassBackAll ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <PassBackAllAndReload
+            assessmentId={assessment.id}
+            attemptIds={submittedShown.map((r) => r.attempt_id)}
+            timed={passBackTimed}
+            sectionLabel={sectionLabel}
+          />
+          <span className="text-xs text-muted-foreground">
+            Reopens every handed-in test{selectedSection === "" ? "" : " in this section"} so students can change their answers and hand in again.
           </span>
         </div>
       ) : null}
