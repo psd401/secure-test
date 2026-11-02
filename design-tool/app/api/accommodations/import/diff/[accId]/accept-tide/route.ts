@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { mapCatalogIdToTide } from "@/lib/accommodations/tideCatalog";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeStudent } from "@/lib/api/access";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ accId: string }>;
@@ -14,7 +15,7 @@ interface RouteContext {
 // Accept TIDE's value for one preserved-with-diff row. Mutates the row
 // back to `source = tide_import` with TIDE's value + tide_code, and
 // clears `edited_at`. Powers the dedicated diff review screen.
-export async function POST(_req: Request, ctx: RouteContext) {
+export async function POST(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
   const { accId } = await ctx.params;
@@ -56,12 +57,15 @@ export async function POST(_req: Request, ctx: RouteContext) {
   // The current `value` is the kept (edited) value; the client tells us which
   // TIDE value to accept. That value is then re-derived from the catalog
   // below — the client is trusted to *choose*, never to *define*, TIDE truth.
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
   let body: { tide_value?: string } = {};
-  try {
-    const text = await _req.text();
-    if (text) body = JSON.parse(text);
-  } catch {
-    // Empty body is OK — we just won't have a tide_value to apply.
+  if (!bodyRead.empty) {
+    try {
+      body = bodyRead.parse() as { tide_value?: string };
+    } catch {
+      // Unparseable is treated as empty — no tide_value to apply.
+    }
   }
   if (!body.tide_value) {
     return NextResponse.json(

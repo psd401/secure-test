@@ -10,6 +10,7 @@ import {
   sha256Hex,
 } from "@/lib/api/uploads";
 import { getStorageProvider } from "@/lib/storage/provider";
+import { FORM_OVERHEAD_BYTES, readFormDataWithin } from "@/lib/api/jsonBody";
 
 export async function POST(req: Request) {
   const auth = await requireStaff();
@@ -25,7 +26,14 @@ export async function POST(req: Request) {
 
   let file: File | null = null;
   try {
-    const form = await req.formData();
+    // SEC-08: capped while it is read, not after (readFormDataWithin).
+    const form = await readFormDataWithin(req, MAX_UPLOAD_BYTES + FORM_OVERHEAD_BYTES);
+    if (!form) {
+      return NextResponse.json(
+        { ok: false, error: "file_too_large", limit: MAX_UPLOAD_BYTES },
+        { status: 413 },
+      );
+    }
     const field = form.get("file");
     if (field instanceof File) file = field;
   } catch {

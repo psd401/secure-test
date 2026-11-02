@@ -11,6 +11,7 @@ import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 
 import { makeEmptyPagesPdf, makeTextAndImagePdf, makeTextPdf, makeVectorChartPdf } from "./helpers/pdf";
+import { oversizedMultipart } from "./helpers/oversizedMultipart";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -102,6 +103,17 @@ const GOOD_LINES = [
 ];
 
 describe("POST items/import-pdf", () => {
+  test("a body past the 25 MiB cap is 413 and read no further than it (SEC-08)", async () => {
+    const id = await createAssessment("Streamed");
+    const { POST } = await import("../app/api/assessments/[id]/items/import-pdf/route");
+    const big = oversizedMultipart(`http://localhost/api/assessments/${id}/items/import-pdf`, 40);
+    const res = await POST(big.req, { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("file_too_large");
+    // 25 MiB + 64 KiB is passed in the 26th chunk. Not all 40.
+    expect(big.sent()).toBeLessThan(30);
+  });
+
   test("returns validated candidates, reports rejected, writes nothing", async () => {
     const id = await createAssessment("PDF");
     const res = await postPdf(id, makeTextPdf(GOOD_LINES));

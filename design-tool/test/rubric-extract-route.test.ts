@@ -9,6 +9,7 @@ import { guardrail_events, items } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
+import { oversizedMultipart } from "./helpers/oversizedMultipart";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -205,6 +206,17 @@ describe("POST assessments/[id]/rubrics/extract", () => {
     const body = (await res.json()) as { error: string; limit: number };
     expect(body.error).toBe("file_too_large");
     expect(body.limit).toBe(5 * 1024 * 1024);
+  });
+
+  test("a body past the cap is 413 and read no further than it (SEC-08)", async () => {
+    const id = await createAssessment("Streamed");
+    const { POST } = await import("../app/api/assessments/[id]/rubrics/extract/route");
+    const big = oversizedMultipart(`http://localhost/api/assessments/${id}/rubrics/extract`, 40);
+    const res = await POST(big.req, { params: Promise.resolve({ id }) });
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("file_too_large");
+    // 5 MiB + 64 KiB is passed in the 6th chunk. Not all 40.
+    expect(big.sent()).toBeLessThan(10);
   });
 
   test("an empty or oversized text body → 400", async () => {

@@ -40,6 +40,7 @@ import { MAX_UPLOAD_BYTES, allowedUploadFor } from "@/lib/ai/documentUpload";
 import { DocxReadError, readDocx } from "@/lib/docxImport/readDocx";
 import type { WordDocument } from "@/lib/docxImport/document";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
+import { FORM_OVERHEAD_BYTES, readFormDataWithin } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -143,7 +144,14 @@ export async function POST(req: Request, ctx: RouteContext) {
 
   let file: File;
   try {
-    const form = await req.formData();
+    // SEC-08: capped while it is read, not after (readFormDataWithin).
+    const form = await readFormDataWithin(req, MAX_BYTES + FORM_OVERHEAD_BYTES);
+    if (!form) {
+      return NextResponse.json(
+        { ok: false, error: "file_too_large", limit: MAX_BYTES },
+        { status: 413 },
+      );
+    }
     const candidate = form.get("file");
     if (!(candidate instanceof File)) {
       return NextResponse.json({ ok: false, error: "missing_file" }, { status: 400 });

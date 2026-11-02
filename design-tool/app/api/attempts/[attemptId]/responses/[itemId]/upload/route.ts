@@ -17,6 +17,7 @@ import {
   markUploadComplete,
 } from "@/lib/api/responseUploads";
 import { getStorageProviderById } from "@/lib/storage/provider";
+import { readBodyWithin } from "@/lib/api/jsonBody";
 import { UUID_RE } from "@/lib/uuid";
 
 interface RouteContext {
@@ -67,16 +68,15 @@ export async function PUT(req: Request, ctx: RouteContext) {
   const registered = await loadUploadForItem(db, access.attempt, item, uploadId);
   if (!registered) return notFound();
 
-  const bytes = new Uint8Array(await req.arrayBuffer());
+  // The cap is applied while the bytes arrive (SEC-08), not after buffering
+  // them: on this path there is no signature holding the client to its
+  // declared size, and a Content-Length can be absent or false.
+  const bytes = await readBodyWithin(req, UPLOAD_MAX_BYTES);
+  if (bytes === null) {
+    return NextResponse.json({ ok: false, error: "upload_too_large" }, { status: 413 });
+  }
   if (bytes.byteLength === 0) {
     return NextResponse.json({ ok: false, error: "empty_upload" }, { status: 400 });
-  }
-  // Checked here as well as at registration. On the presigned path the
-  // signature holds the client to its declared size; on this one there is no
-  // signature, so the cap has to be re-applied against the bytes that actually
-  // arrived rather than trusted from the declaration.
-  if (bytes.byteLength > UPLOAD_MAX_BYTES) {
-    return NextResponse.json({ ok: false, error: "upload_too_large" }, { status: 413 });
   }
 
   const provider = getStorageProviderById(registered.storage_provider);

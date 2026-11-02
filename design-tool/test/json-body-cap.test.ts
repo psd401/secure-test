@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { JSON_BODY_LIMITS, readJsonBody } from "../lib/api/jsonBody";
+import { JSON_BODY_LIMITS, readFormDataWithin, readJsonBody } from "../lib/api/jsonBody";
 
 const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
   new Request("http://localhost/x", {
@@ -71,6 +71,38 @@ describe("readJsonBody", () => {
   });
 });
 
+describe("readFormDataWithin", () => {
+  const form = (headers: Record<string, string> = {}) => {
+    const fd = new FormData();
+    fd.append("file", new File([new Uint8Array(100)], "f.bin"));
+    fd.append("note", "hi");
+    const r = new Request("http://localhost/x", { method: "POST", body: fd });
+    return new Request(r, { headers: { "content-type": r.headers.get("content-type")!, ...headers } });
+  };
+
+  test("a form within the limit parses, its fields intact", async () => {
+    const fd = await readFormDataWithin(form(), 4096);
+    expect(fd).not.toBeNull();
+    expect(fd!.get("note")).toBe("hi");
+    expect((fd!.get("file") as File).size).toBe(100);
+  });
+
+  test("a body over the limit is null", async () => {
+    expect(await readFormDataWithin(form(), 50)).toBeNull();
+  });
+
+  test("a declared Content-Length over the limit is null without reading the body", async () => {
+    const req = form({ "content-length": String(10 * 1024 * 1024) });
+    expect(await readFormDataWithin(req, 4096)).toBeNull();
+    expect(req.bodyUsed).toBe(false);
+  });
+
+  test("a malformed form throws, as req.formData() did, so each route keeps its own 400", async () => {
+    const req = post("--x--", { "content-type": "multipart/form-data; boundary=nope" });
+    await expect(readFormDataWithin(req, 4096)).rejects.toThrow();
+  });
+});
+
 const API = path.join(import.meta.dir, "..", "app", "api");
 
 async function routeFiles(dir: string): Promise<string[]> {
@@ -84,11 +116,21 @@ async function routeFiles(dir: string): Promise<string[]> {
 }
 
 describe("every API route reads JSON through readJsonBody", () => {
-  test("no direct req.json() / request.json() under app/api", async () => {
+  // Routes that read a body directly, and why. Anything else that calls
+  // req.text() / .json() / .arrayBuffer() / .formData() skips the cap — two
+  // staff routes did, unseen, because the tier table below only lists routes
+  // that DO call readJsonBody (PR #169 re-review). None today: the canvas PUT
+  // reads through readBodyWithin, the multipart routes readFormDataWithin.
+  const DIRECT_READ_ALLOWED: Record<string, string> = {};
+
+  test("no direct req.json() / .text() / .arrayBuffer() / .formData() under app/api", async () => {
     const offenders: string[] = [];
     for (const f of await routeFiles(API)) {
       const src = await Bun.file(f).text();
-      if (/\b(req|request)\.json\(\)/.test(src)) offenders.push(path.relative(API, f));
+      const rel = path.relative(API, f);
+      if (/\b_?(req|request)\.(json|text|arrayBuffer|formData)\(\)/.test(src) && !(rel in DIRECT_READ_ALLOWED)) {
+        offenders.push(rel);
+      }
     }
     expect(offenders).toEqual([]);
   });
@@ -125,8 +167,9 @@ describe("every API route reads JSON through readJsonBody", () => {
     // 49 with the two teacher-feedback PUTs (docs/feedback-release-design.md),
     // both on the default tier. 50 with Pass back everyone (U-25), default;
     // 51 with the per-attempt pass back, which read its body uncapped until
-    // the PR #169 review.
-    expect(Object.keys(seen).length).toBe(51);
+    // the PR #169 review; 53 with rescore-ai and accept-tide, which read
+    // theirs with req.text() until the PR #169 re-review.
+    expect(Object.keys(seen).length).toBe(53);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

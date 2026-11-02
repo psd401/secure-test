@@ -10,6 +10,7 @@ import { CreateItemBody } from "../lib/api/items";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
+import { oversizedMultipart } from "./helpers/oversizedMultipart";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -140,6 +141,17 @@ describe("POST /api/ai/generate-items — validation", () => {
     const body = (await res.json()) as { error: string; detail: string };
     expect(body.error).toBe("invalid_body");
     expect(body.detail.length).toBeGreaterThan(0);
+  });
+
+  test("a multipart body past the cap is 413 and read no further than it (SEC-08)", async () => {
+    mockSession = { sub: OWNER, role: "staff" };
+    const { POST } = await import("../app/api/ai/generate-items/route");
+    const big = oversizedMultipart("http://localhost/api/ai/generate-items", 40);
+    const res = await POST(big.req);
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("file_too_large");
+    // 5 MiB file + 1 MiB request field + 64 KiB is passed in the 7th chunk.
+    expect(big.sent()).toBeLessThan(10);
   });
 
   test("415 for an unsupported file type", async () => {

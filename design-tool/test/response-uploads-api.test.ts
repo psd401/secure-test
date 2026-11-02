@@ -300,6 +300,40 @@ describe("PUT .../upload — the non-presigned fallback", () => {
     expect(res.status).toBe(400);
   });
 
+  test("a body past UPLOAD_MAX_BYTES is 413, read no further than the cap, and the slot stays open", async () => {
+    const s = await scenario();
+    asStudent();
+    const { upload_id } = await (await requestUrl(s.attempt.id, s.drawing.id)).json();
+    // No Content-Length: the cap has to hold while the bytes arrive.
+    let sent = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (sent >= 100) return c.close();
+        sent++;
+        c.enqueue(chunk);
+      },
+    });
+    const { PUT } = await import(
+      "../app/api/attempts/[attemptId]/responses/[itemId]/upload/route"
+    );
+    const res = await PUT(
+      new Request(`http://localhost/x?upload_id=${upload_id}`, {
+        method: "PUT",
+        body,
+        // @ts-expect-error -- `duplex` is required for a stream body; not in lib.dom yet.
+        duplex: "half",
+      }),
+      { params: Promise.resolve({ attemptId: s.attempt.id, itemId: s.drawing.id }) },
+    );
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("upload_too_large");
+    // 20 MiB is 20 chunks of 1 MiB; the 21st passes it. Not all 100.
+    expect(sent).toBeLessThan(30);
+    const [row] = await getDb().select().from(response_uploads);
+    expect(row?.status).not.toBe("complete");
+  });
+
   // Everything the presigned path gets from the signature has to be enforced
   // by hand here, ownership of the slot included.
   test("refuses a slot minted for a different attempt", async () => {
