@@ -8,6 +8,7 @@
 // screen renders it as math (lib/reporting/shortTextView.ts), the Doc cannot.
 
 import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
+import { pictureKey, type DocAnswer, type DocPicture } from "@/lib/googleDocs/wholeTest";
 
 export { scoreLabel } from "@/lib/reporting/feedbackRelease";
 
@@ -32,7 +33,7 @@ export interface EssaySection {
    * FR D-5 (docs/feedback-release-design.md): a short answer sits beside the
    * essays. Absent = essay, so a caller from before slice 5 still compiles.
    */
-  kind?: "essay" | "short_text";
+  kind?: "essay" | "short_text" | "item";
   /** The student's text, or null when the question was left blank. */
   answer: string | null;
   /**
@@ -47,6 +48,15 @@ export interface EssaySection {
    * (lib/reporting/feedbackRelease.ts), already filtered by the boxes ticked.
    */
   feedback: FeedbackBlock[];
+  /**
+   * U-25 slice 4 (docs/google-docs-whole-test-design.md): any other item
+   * type's answer (kind "item"), key-free by type (wholeTest.ts, D-11).
+   */
+  answer_view?: DocAnswer;
+  /** Slice 4 (1.1): the question's own pictures, under its stem. */
+  pictures?: DocPicture[];
+  /** Slice 4: a fill-in-the-blank's stem is its answer sentence, not printed twice. */
+  stem_in_answer?: boolean;
 }
 
 export interface DocInput {
@@ -64,6 +74,16 @@ export interface DocInput {
    * feedback keep normal spacing. Default off.
    */
   doubleSpace?: boolean;
+  /**
+   * U-25 slice 4 (1.3): a whole-test Doc carries every question's text and
+   * stimulus whatever the Prompt box says; Sources stays a box.
+   */
+  wholeTest?: boolean;
+  /**
+   * Slice 4, images: resolved pictures as `data:` URIs by `pictureKey`. A
+   * picture missing here goes in as a line of text.
+   */
+  pictures?: ReadonlyMap<string, string>;
 }
 
 const TZ = "America/Los_Angeles";
@@ -198,6 +218,50 @@ function blockHtml(block: FeedbackBlock): string {
   return out.join("");
 }
 
+/** A picture as an `<img>`, or its text stand-in when it was not resolved. */
+function pictureHtml(picture: DocPicture, pictures: ReadonlyMap<string, string> | undefined): string {
+  const src = pictures?.get(pictureKey(picture.ref));
+  if (src) return `<p><img src="${src}" alt="${escapeHtml(picture.alt)}" style="max-width:100%"></p>`;
+  return `<p><i>[Picture: ${escapeHtml(picture.alt)}]</i></p>`;
+}
+
+/** Slice 4: one non-text answer (wholeTest.ts), never a mark or a key (D-11). */
+export function docAnswerHtml(answer: DocAnswer, pictures?: ReadonlyMap<string, string>): string {
+  switch (answer.kind) {
+    case "none":
+      return `<p><i>No answer.</i></p>`;
+    case "choices":
+      // D-12: every option, the student's marked.
+      return answer.options
+        .map((o) => `<p style="margin:0 0 4pt 0">${o.chosen ? "☑" : "☐"} ${escapeHtml(plainContent(o.text))}</p>`)
+        .join("");
+    case "lines": {
+      const tag = answer.ordered ? "ol" : "ul";
+      return `<${tag}>${answer.lines.map((l) => `<li>${escapeHtml(plainContent(l))}</li>`).join("")}</${tag}>`;
+    }
+    case "fill_blank": {
+      const sentence = answer.segments
+        .map((s) => ("text" in s ? escapeHtml(plainContent(s.text)) : `<b>[${escapeHtml(plainContent(s.answer))}]</b>`))
+        .join("")
+        .replace(/\r\n?/g, "\n")
+        .replace(/\n/g, "<br>");
+      const rest = answer.unplaced.map((b) => `<p>Blank ${b.number}: ${escapeHtml(plainContent(b.answer))}</p>`);
+      return `${PARAGRAPH_OPEN}${sentence}</p>${rest.join("")}`;
+    }
+    case "table": {
+      const showLabels = answer.rows.some((r) => r.label.trim() !== "");
+      const head = `<tr>${showLabels ? `<th>${escapeHtml(answer.corner)}</th>` : ""}${answer.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
+      const rows = answer.rows.map(
+        (r) =>
+          `<tr>${showLabels ? `<th>${escapeHtml(r.label)}</th>` : ""}${r.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`,
+      );
+      return `<table border="1">${head}${rows.join("")}</table>`;
+    }
+    case "picture":
+      return pictureHtml(answer.picture, pictures);
+  }
+}
+
 export function buildDocHtml(input: DocInput): string {
   const { contents } = input;
   const parts: string[] = [];
@@ -210,9 +274,17 @@ export function buildDocHtml(input: DocInput): string {
   }
   if (input.overall) parts.push(blockHtml(input.overall));
   const many = input.essays.length > 1;
+  const whole = input.wholeTest === true;
   for (const essay of input.essays) {
-    if (many) parts.push(`<h2>Question ${essay.number}</h2>`);
-    if (contents.prompt) {
+    if (many || whole) parts.push(`<h2>Question ${essay.number}</h2>`);
+    if (whole) {
+      // 1.3: the question text always; no "Prompt" heading, as on a test.
+      if (essay.stimulus && essay.stimulus.trim()) {
+        parts.push(paragraphs(plainContent(essay.stimulus)));
+      }
+      if (!essay.stem_in_answer) parts.push(paragraphs(plainContent(essay.stem)));
+      for (const pic of essay.pictures ?? []) parts.push(pictureHtml(pic, input.pictures));
+    } else if (contents.prompt) {
       if (essay.stimulus && essay.stimulus.trim()) {
         parts.push(paragraphs(plainContent(essay.stimulus)));
       }
@@ -223,8 +295,13 @@ export function buildDocHtml(input: DocInput): string {
         parts.push(`<h3>${escapeHtml(src.label)}</h3>`, paragraphs(plainContent(src.text)));
       }
     }
+    if (essay.kind === "item") {
+      parts.push(`<h3>Answer</h3>`, docAnswerHtml(essay.answer_view ?? { kind: "none" }, input.pictures));
+      for (const block of essay.feedback) parts.push(blockHtml(block));
+      continue;
+    }
     const shortAnswer = essay.kind === "short_text";
-    parts.push(`<h3>${shortAnswer ? "Answer" : many ? "Response" : "Essay"}</h3>`);
+    parts.push(`<h3>${shortAnswer ? "Answer" : many || whole ? "Response" : "Essay"}</h3>`);
     // RT D-10 double spacing and rich text are essays only; a short answer
     // (FR D-5) is plain paragraphs at normal spacing.
     const doubleSpace = input.doubleSpace === true && !shortAnswer;
