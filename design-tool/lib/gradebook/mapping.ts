@@ -20,8 +20,8 @@ import {
 } from "@/db/schema";
 import type { getDb } from "@/db/client";
 import { normalizeEmail, studentsEnrolledInSection, teacherAssignmentIsCurrent } from "@/lib/roster/queries";
-import { buildResults } from "@/lib/scoring/results";
-import type { HeldBackReason } from "./types";
+import { buildResults, type ResultsRow } from "@/lib/scoring/results";
+import type { GradebookBasis, HeldBackReason } from "./types";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -107,6 +107,29 @@ export interface SectionCandidates {
 }
 
 /**
+ * What one results row sends under a basis (U-25 slice 2, D-7 / D-17 / D-19),
+ * or null when the row is not a candidate at all.
+ *   - `latest`: handed-in rows, their total (every send before U-25). A
+ *     reopened student is not a candidate — held back until they hand in.
+ *   - `attempt_one`: a row with attempt 1 sends it, handed in or working
+ *     again; one "not fully scored" is held back as unscored (D-17). A row
+ *     with no attempt 1 sends its latest, exactly as `latest` would.
+ * Pure for the tests.
+ */
+export function candidateScore(
+  row: Pick<ResultsRow, "status" | "total_points" | "unscored_count" | "attempt_one">,
+  basis: GradebookBasis,
+): { total_points: number; unscored_count: number } | null {
+  if (basis === "attempt_one" && row.attempt_one) {
+    return row.attempt_one.kind === "scored"
+      ? { total_points: row.attempt_one.total, unscored_count: 0 }
+      : { total_points: 0, unscored_count: 1 };
+  }
+  if (row.status !== "submitted") return null;
+  return { total_points: row.total_points ?? 0, unscored_count: row.unscored_count };
+}
+
+/**
  * The SUBMITTED, non-practice attempts of this assessment that belong to the
  * section — by the same rule the results page uses for a row's section
  * label: the attempt's sitting's section when it named one, else the
@@ -118,9 +141,19 @@ export async function loadSectionCandidates(
   db: Db,
   assessmentId: string,
   sectionPsId: string,
+  basis: GradebookBasis = "latest",
 ): Promise<SectionCandidates> {
-  const results = await buildResults(assessmentId);
-  const max_points = results.rows[0]?.max_points ?? 0;
+  // In-progress rows only for `attempt_one`: a student working again still
+  // has an attempt 1 to send (D-19). `candidateScore` drops the rest.
+  const all = await buildResults(assessmentId, { include_in_progress: basis === "attempt_one" });
+  const max_points = all.rows[0]?.max_points ?? 0;
+  const scoreByAttempt = new Map(
+    all.rows.flatMap((r) => {
+      const score = candidateScore(r, basis);
+      return score ? [[r.attempt_id, score] as const] : [];
+    }),
+  );
+  const results = { rows: all.rows.filter((r) => scoreByAttempt.has(r.attempt_id)) };
   if (results.rows.length === 0) return { candidates: [], max_points };
 
   const attemptRows = await db
@@ -168,8 +201,7 @@ export async function loadSectionCandidates(
       student_dcid: row.student.student_number
         ? dcidByNumber.get(row.student.student_number) ?? null
         : null,
-      total_points: row.total_points ?? 0,
-      unscored_count: row.unscored_count,
+      ...scoreByAttempt.get(row.attempt_id)!,
     })),
   };
 }

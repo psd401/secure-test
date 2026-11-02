@@ -59,6 +59,7 @@ import { DeleteAttemptControl } from "@/components/app/DeleteAttemptControl";
 import { ContinueInNewSessionControl } from "@/components/app/ContinueInNewSessionControl";
 import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
+import { PassBackAllControl } from "@/components/app/PassBackAllControl";
 import { HandInAttemptControl } from "@/components/app/HandInAttemptControl";
 import { PassBackControl } from "@/components/app/PassBackControl";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
@@ -73,6 +74,7 @@ import {
   alertIsCurrent,
   canExtend,
   canHandInAll,
+  passBackAllTargets,
   closeDialogCopy,
   countInProgress,
   deadlineNote,
@@ -375,6 +377,18 @@ export function MonitorView({
                     ? undefined
                     : "End the test session first, then hand in."
                 }
+              />
+            ) : null}
+            {/* U-25 slice 1 (docs/bulk-pass-back-and-corrections-design.md,
+                D-1 by sitting): every handed-in row's Pass back at once.
+                Not on a practice sitting, like Hand in everyone. */}
+            {!isPractice ? (
+              <PassBackAllControl
+                assessmentId={assessmentId}
+                {...passBackAllTargets(data?.rows ?? [])}
+                scope="this test session"
+                onPassedBack={() => void load()}
+                size="default"
               />
             ) : null}
             {/* Extend time, whole sitting: additive, so — unlike Hand in

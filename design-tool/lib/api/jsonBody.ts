@@ -37,7 +37,13 @@ export const JSON_BODY_LIMITS = {
 } as const;
 
 export type JsonBodyRead =
-  | { ok: true; parse: () => unknown }
+  | {
+      ok: true;
+      /** Whether the body was empty or whitespace — for the routes where no
+       * body at all is a valid request (the per-attempt pass back). */
+      empty: boolean;
+      parse: () => unknown;
+    }
   | { ok: false; response: NextResponse };
 
 /**
@@ -53,7 +59,7 @@ export async function readJsonBody(req: Request, maxBytes: number): Promise<Json
   const bytes = await readBodyWithin(req, maxBytes);
   if (bytes === null) return tooLarge(maxBytes);
   const text = new TextDecoder().decode(bytes);
-  return { ok: true, parse: () => JSON.parse(text) as unknown };
+  return { ok: true, empty: text.trim() === "", parse: () => JSON.parse(text) as unknown };
 }
 
 function tooLarge(limit: number): JsonBodyRead {

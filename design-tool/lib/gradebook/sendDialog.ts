@@ -7,7 +7,12 @@
 // names a target.
 import { levelSatisfies, type AccessLevel } from "@/lib/api/accessLevels";
 import { ASSIGNMENT_NAME_MAX, truncateAssignmentName } from "./powerschoolPayloads";
-import { HELD_BACK_REASONS, type HeldBackReason, type SendSummary } from "./types";
+import {
+  HELD_BACK_REASONS,
+  type GradebookBasis,
+  type HeldBackReason,
+  type SendSummary,
+} from "./types";
 
 /** The one destination this slice sends to. */
 export const SEND_TARGET = "powerschool" as const;
@@ -28,6 +33,12 @@ export interface SendDialogSection {
    * 0 when nothing was sent.
    */
   changed_since_send: number;
+  /** U-25 slice 2 (D-20): the basis the last send to this section used, or
+   * null before any send. The dialog starts on it. */
+  basis: GradebookBasis | null;
+  /** Students in the section with an attempt 1; the Latest / Attempt 1
+   * choice is offered only when there is one (or the last send used it). */
+  attempt_one_students: number;
 }
 
 /** Edit level (owner, edit-level co-teacher, admin) — 8.4 confirmed. */
@@ -222,4 +233,20 @@ export function sendErrorCopy(code: string, detail?: unknown): string {
     default:
       return `That didn't work. Try again, or tell IT this code: ${code}`;
   }
+}
+
+/** Whether the dialog offers Latest / Attempt 1 for this section (U-25
+ * slice 2): someone in it has an attempt 1, or the last send used one. */
+export function offersBasisChoice(
+  s: Pick<SendDialogSection, "attempt_one_students" | "basis">,
+): boolean {
+  return s.attempt_one_students > 0 || s.basis === "attempt_one";
+}
+
+/** The line under "Score to send". Pure for the tests. */
+export function basisHint(basis: GradebookBasis, attemptOneStudents: number): string {
+  const who = `${attemptOneStudents} student${attemptOneStudents === 1 ? "" : "s"}`;
+  return basis === "attempt_one"
+    ? `${who} passed back get their score from before the pass back; everyone else gets their only score.`
+    : `${who} passed back get their newest handed-in score; anyone still working is held back.`;
 }

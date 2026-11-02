@@ -30,7 +30,9 @@ import { SESSION_COOKIE_NAME, type SessionPayload } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
 import { authorizeSend } from "../lib/gradebook/authorizeSend";
-import { loadSectionCandidates } from "../lib/gradebook/mapping";
+import { candidateScore, loadSectionCandidates } from "../lib/gradebook/mapping";
+import { basisHint, offersBasisChoice } from "../lib/gradebook/sendDialog";
+import { passBackAttempt } from "../lib/api/passBackAttempt";
 import { defaultMockCategories, mockPowerSchool } from "../lib/gradebook/powerschool";
 import { todayPacific } from "../lib/gradebook/sendPowerSchool";
 import { setLogSink } from "../lib/log";
@@ -887,5 +889,130 @@ describe("GET /api/assessments/[id]/gradebook-categories", () => {
     expect((await categories(s.assessment.id, "target=powerschool")).status).toBe(400);
     mockPowerSchool.failNext("listCategories", 500, "boom");
     expect((await categories(s.assessment.id, "target=powerschool&section_ps_id=5001")).status).toBe(502);
+  });
+});
+
+// ── U-25 slice 2c: Latest / Attempt 1 (docs/bulk-pass-back-and-corrections-design.md) ──
+
+describe("candidateScore", () => {
+  const row = (status: "submitted" | "in_progress", total: number | null, unscored: number, one: unknown) =>
+    ({ status, total_points: total, unscored_count: unscored, attempt_one: one }) as Parameters<
+      typeof candidateScore
+    >[0];
+  const scored = (total: number) => ({ kind: "scored" as const, total, passed_back_at: "x" });
+
+  test("latest: handed-in rows only, their total", () => {
+    expect(candidateScore(row("submitted", 7, 0, scored(5)), "latest")).toEqual({ total_points: 7, unscored_count: 0 });
+    expect(candidateScore(row("in_progress", null, 2, scored(5)), "latest")).toBeNull();
+  });
+
+  test("attempt_one: attempt 1 when there is one, working again included (D-19)", () => {
+    expect(candidateScore(row("in_progress", null, 2, scored(5)), "attempt_one")).toEqual({
+      total_points: 5,
+      unscored_count: 0,
+    });
+  });
+
+  test("attempt_one not fully scored is held back as unscored (D-17)", () => {
+    expect(
+      candidateScore(row("submitted", 7, 0, { kind: "not_fully_scored", passed_back_at: "x" }), "attempt_one"),
+    ).toEqual({ total_points: 0, unscored_count: 1 });
+  });
+
+  test("attempt_one with no attempt 1 sends the latest; a never-handed-in row is no candidate", () => {
+    expect(candidateScore(row("submitted", 7, 0, null), "attempt_one")).toEqual({ total_points: 7, unscored_count: 0 });
+    expect(candidateScore(row("in_progress", null, 0, null), "attempt_one")).toBeNull();
+  });
+});
+
+describe("dialog basis copy", () => {
+  test("the choice shows with an attempt 1 or after an attempt-1 send", () => {
+    expect(offersBasisChoice({ attempt_one_students: 0, basis: null })).toBe(false);
+    expect(offersBasisChoice({ attempt_one_students: 2, basis: null })).toBe(true);
+    expect(offersBasisChoice({ attempt_one_students: 0, basis: "attempt_one" })).toBe(true);
+  });
+  test("the hint names the count", () => {
+    expect(basisHint("attempt_one", 1)).toStartWith("1 student passed back get their score from before");
+    expect(basisHint("latest", 3)).toStartWith("3 students passed back get their newest");
+  });
+});
+
+describe("gradebook-send basis (U-25 slice 2c)", () => {
+  async function pointsSent(attemptId: string) {
+    const [row] = await getDb()
+      .select()
+      .from(gradebook_push_scores)
+      .where(eq(gradebook_push_scores.attempt_id, attemptId));
+    return row?.points_sent;
+  }
+  // Handed in again and scored afresh. Not `scoreAll`: it deletes earlier
+  // scores, and the superseded ones ARE attempt 1 — the app never deletes them.
+  async function retake(attemptId: string, points: number) {
+    const db = getDb();
+    await db
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: new Date() })
+      .where(eq(attempts.id, attemptId));
+    for (const r of await db.select().from(responses).where(eq(responses.attempt_id, attemptId))) {
+      await db.insert(scores).values({
+        response_id: r.id,
+        method: "auto",
+        points,
+        max_points: 1,
+        scorer: "auto",
+        status: "final",
+      });
+    }
+  }
+
+  test("passed back and handed in again: latest sends the retake, attempt_one the first; the push remembers", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await passBackAttempt(getDb(), ada, "teacher");
+    await retake(ada.id, 0);
+
+    await send(s.assessment.id, BASE_BODY);
+    expect(await pointsSent(ada.id)).toBe(0);
+
+    const body = await (await send(s.assessment.id, { ...BASE_BODY, basis: "attempt_one" })).json();
+    expect(body).toMatchObject({ updated: 1 });
+    expect(await pointsSent(ada.id)).toBe(2);
+    const [push] = await getDb().select().from(gradebook_pushes);
+    expect(push!.basis).toBe("attempt_one");
+  });
+
+  test("working again: attempt_one sends attempt 1; latest keeps them out", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await passBackAttempt(getDb(), ada, "teacher");
+
+    const latest = await loadSectionCandidates(getDb(), s.assessment.id, "5001", "latest");
+    expect(latest.candidates).toEqual([]);
+    const one = await loadSectionCandidates(getDb(), s.assessment.id, "5001", "attempt_one");
+    expect(one.candidates.map((c) => [c.attempt_id, c.total_points, c.unscored_count])).toEqual([[ada.id, 2, 0]]);
+  });
+
+  test("a teacher hand-in that was passed back is no attempt 1: attempt_one sends the latest (D-15)", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await getDb().insert(attempt_events).values({ attempt_id: ada.id, kind: "teacher_hand_in", at: new Date(Date.now() - 1000) });
+    await passBackAttempt(getDb(), ada, "teacher");
+    await retake(ada.id, 0);
+    await send(s.assessment.id, { ...BASE_BODY, basis: "attempt_one" });
+    expect(await pointsSent(ada.id)).toBe(0);
+  });
+
+  test("attempt 1 not fully scored: held back as unscored under attempt_one (D-17)", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, null]);
+    await passBackAttempt(getDb(), ada, "teacher");
+    await retake(ada.id, 1);
+    const body = await (await send(s.assessment.id, { ...BASE_BODY, basis: "attempt_one" })).json();
+    expect(body).toMatchObject({ sent: 0, held_back: { count: 1, reasons: { unscored: 1 } } });
+  });
+
+  test("an unknown basis is 400", async () => {
+    const s = await scene();
+    expect((await send(s.assessment.id, { ...BASE_BODY, basis: "best" })).status).toBe(400);
   });
 });

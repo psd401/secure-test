@@ -41,6 +41,8 @@ import {
 import { EmptyState } from "@/components/app/EmptyState";
 import { ExtendTimeControl } from "@/components/app/ExtendTimeControl";
 import { HandInAllControl } from "@/components/app/HandInAllControl";
+import { PassBackAllControl } from "@/components/app/PassBackAllControl";
+import { PassBackSectionControl } from "@/components/app/PassBackSectionControl";
 import { LiveIndicator } from "@/components/app/LiveIndicator";
 import { ProgressBar } from "@/components/app/ProgressBar";
 import { SessionCode } from "@/components/app/SessionCode";
@@ -63,6 +65,7 @@ import {
   canContinueInNewSession,
   canExtend,
   canHandInAll,
+  passBackAllTargets,
   closeDialogCopy,
   countInProgress,
   deadlineNote,
@@ -762,6 +765,15 @@ export function SittingsPanel({
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Test sessions ({displayedSittings.length})</h3>
           <span className="flex gap-2">
+            {/* U-25 slice 1, 4.1: pass back a whole class section, across
+                every session its students sat in. */}
+            <PassBackSectionControl
+              assessmentId={assessmentId}
+              onPassedBack={() => {
+                setNow(Date.now());
+                for (const id of Object.keys(attendance)) void loadAttendance(id);
+              }}
+            />
             {/* D-2 / D-4: the same toggle shape as the Assessments home —
                 the count is known from the load-time fetch, not a guess. */}
             {archivedSittings.length > 0 || showArchived ? (
@@ -942,6 +954,24 @@ export function SittingsPanel({
                                 canHandInAll(!open, att?.rows ?? [])
                                   ? undefined
                                   : "End the test session first, then hand in."
+                              }
+                            />
+                          ) : null}
+                          {/* U-25 slice 1 (D-1 by sitting): the Monitor's
+                              "Pass back everyone", on the row. Who handed in
+                              is known only once Attendance is expanded. */}
+                          {!archived && !isPractice ? (
+                            <PassBackAllControl
+                              assessmentId={assessmentId}
+                              {...passBackAllTargets(att?.rows ?? [])}
+                              scope="this test session"
+                              onPassedBack={() => {
+                                setNow(Date.now());
+                                void loadAttendance(s.id);
+                              }}
+                              variant="ghost"
+                              disabledReason={
+                                att ? undefined : "Open Attendance to see who handed in."
                               }
                             />
                           ) : null}

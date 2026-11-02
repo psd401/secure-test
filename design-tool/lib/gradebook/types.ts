@@ -15,6 +15,15 @@ export type { GradebookTarget } from "@/db/schema";
 export const HELD_BACK_REASONS = ["unscored", "not_on_roster", "no_dcid"] as const;
 export type HeldBackReason = (typeof HELD_BACK_REASONS)[number];
 
+/**
+ * Which score a send puts in the gradebook (U-25 slice 2, D-7 / D-20):
+ *   - `latest`      — the latest handed-in total (every send before U-25).
+ *   - `attempt_one` — attempt 1 where a student has one
+ *                     (`lib/scoring/attemptOne.ts`), else their only score.
+ * Remembered on the section's push, so Send again keeps it.
+ */
+export type { GradebookBasis } from "@/db/schema";
+
 export interface SendFailure {
   /** The student's number. Fine in the API response; never in a log line. */
   student_number: string;

@@ -24,7 +24,7 @@ import {
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
-import { passBackAttempt } from "../lib/api/passBackAttempt";
+import { correctionsFor, passBackAttempt } from "../lib/api/passBackAttempt";
 import {
   OTHER_TEACHER_EMAIL,
   STUDENT,
@@ -525,6 +525,53 @@ async function getDelivery(assessmentId: string) {
     params: Promise.resolve({ id: assessmentId }) as Promise<{ id: string }>,
   });
 }
+
+describe("corrections mode (U-25 slice 3a)", () => {
+  test("correctionsFor: null for neither, the record otherwise", () => {
+    const now = new Date("2026-11-02T18:00:00Z");
+    expect(correctionsFor(undefined, now)).toBeNull();
+    expect(correctionsFor({ show_marks: false, lock_correct: false }, now)).toBeNull();
+    expect(correctionsFor({ show_marks: true, lock_correct: false }, now)).toEqual({
+      show_marks: true,
+      lock_correct: false,
+      passed_back_at: now.toISOString(),
+      locks_delivered: false,
+    });
+  });
+
+  test("the route stores the choice and the event records it; a plain pass back later clears it", async () => {
+    const s = await scenario();
+    const res = await passBack(s.attempt.id, undefined, JSON.stringify({ show_marks: true, lock_correct: true }));
+    expect(res.status).toBe(200);
+    const row = await attemptRow(s.attempt.id);
+    expect(row.corrections).toMatchObject({ show_marks: true, lock_correct: true, locks_delivered: false });
+    const [event] = await getDb()
+      .select()
+      .from(attempt_events)
+      .where(eq(attempt_events.attempt_id, s.attempt.id));
+    expect(event!.detail).toMatchObject({ show_marks: true, lock_correct: true });
+
+    // Hand in again, then a pass back that asks for neither.
+    await getDb()
+      .update(attempts)
+      .set({ status: "submitted", submitted_at: new Date() })
+      .where(eq(attempts.id, s.attempt.id));
+    expect((await passBack(s.attempt.id)).status).toBe(200);
+    expect((await attemptRow(s.attempt.id)).corrections).toBeNull();
+  });
+
+  test("the body is capped like every other route: 413 past the default limit (PR #169 review)", async () => {
+    const s = await scenario();
+    const res = await passBack(s.attempt.id, undefined, JSON.stringify({ pad: "x".repeat(300 * 1024) }));
+    expect(res.status).toBe(413);
+    expect((await attemptRow(s.attempt.id)).status).toBe("submitted");
+  });
+
+  test("a non-boolean option is 400", async () => {
+    const s = await scenario();
+    expect((await passBack(s.attempt.id, undefined, JSON.stringify({ show_marks: "yes" }))).status).toBe(400);
+  });
+});
 
 describe("the student plane after a pass back", () => {
   test("an untimed attempt takes answers again, and the bundle brings them back", async () => {

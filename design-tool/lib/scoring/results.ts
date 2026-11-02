@@ -1,3 +1,4 @@
+import { attemptOneByAttempt, type AttemptOne } from "@/lib/scoring/attemptOne";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { isAiUnreviewed } from "@/lib/scoring/methodLabel";
 import { getDb } from "@/db/client";
@@ -125,6 +126,12 @@ export interface ResultsRow {
   // D-R2: null (blank in CSV) until unscored_count is 0, or when max_points
   // is 0 (nothing to divide by).
   percent: number | null;
+  // U-25 slice 2 (docs/bulk-pass-back-and-corrections-design.md): the score
+  // before the test was passed back for another try (`lib/scoring/attemptOne.ts`),
+  // or null when there is none — never passed back, or only as an extension
+  // (D-15). On an in-progress row it is the score a reopened student keeps
+  // while working again (D-19).
+  attempt_one: AttemptOne | null;
 }
 
 export interface AssessmentResults {
@@ -539,6 +546,11 @@ export async function buildResults(
     finalByResponse,
   ).students_changed;
 
+  const attemptOnes = await attemptOneByAttempt(
+    db,
+    submitted.filter((a) => a.pass_back_count > 0).map((a) => a.id),
+  );
+
   const rows: ResultsRow[] = submitted.map((attempt) => {
     const student = studentsById.get(attempt.student_id);
     const inProgress = attempt.status !== "submitted";
@@ -625,6 +637,7 @@ export async function buildResults(
       ai_unreviewed_count: aiUnreviewed,
       max_points: assessmentMaxPoints,
       percent,
+      attempt_one: attemptOnes.get(attempt.id) ?? null,
     };
   });
 
@@ -657,6 +670,8 @@ function csvField(value: string): string {
 // (blank = not final yet or no response). PowerSchool / Schoology formats
 // are separate future slices gated on sample exports.
 export function resultsToCsv(results: AssessmentResults): string {
+  // D-18: the attempt-1 columns only when someone on the test has one.
+  const withAttemptOne = results.rows.some((r) => r.attempt_one !== null);
   const header = [
     "student_number",
     "name",
@@ -669,6 +684,7 @@ export function resultsToCsv(results: AssessmentResults): string {
     "percent",
     "unscored",
     "ai_not_reviewed",
+    ...(withAttemptOne ? ["attempt_1", "change"] : []),
   ];
   const lines = [header.map(csvField).join(",")];
   for (const row of results.rows) {
@@ -687,8 +703,46 @@ export function resultsToCsv(results: AssessmentResults): string {
         row.percent === null ? "" : String(row.percent),
         String(row.unscored_count),
         String(row.ai_unreviewed_count),
+        ...(withAttemptOne
+          ? [attemptOneTotal(row)?.toString() ?? "", attemptOneChange(row)?.toString() ?? ""]
+          : []),
       ].join(","),
     );
   }
   return lines.join("\r\n") + "\r\n";
+}
+
+/** Attempt 1's total, or null when there is none or it is not fully scored
+ * (D-17: no total is shown for it). */
+export function attemptOneTotal(row: Pick<ResultsRow, "attempt_one">): number | null {
+  return row.attempt_one?.kind === "scored" ? row.attempt_one.total : null;
+}
+
+/** Latest minus attempt 1, only when both are whole numbers: attempt 1 fully
+ * scored, and the latest handed in and fully scored (`percent` is set exactly
+ * then). Otherwise null — a change against a partial total misleads. */
+export function attemptOneChange(
+  row: Pick<ResultsRow, "attempt_one" | "status" | "total_points" | "percent">,
+): number | null {
+  const one = attemptOneTotal(row);
+  if (one === null || row.status !== "submitted" || row.percent === null) return null;
+  return (row.total_points ?? 0) - one;
+}
+
+/** The matrix's and the per-student page's words for attempt 1 and the
+ * change (U-25 slice 2): "—" when there is no attempt 1, "Not fully scored"
+ * (D-17), else "7/10"; the change signed ("+2", "−1", "0"), or "" when it
+ * cannot be worked out. Pure so both pages say the same thing. */
+export function attemptOneDisplay(
+  row: Pick<ResultsRow, "attempt_one" | "status" | "total_points" | "percent" | "max_points">,
+): { attempt: string; change: string } {
+  const attempt =
+    row.attempt_one === null
+      ? "—"
+      : row.attempt_one.kind === "not_fully_scored"
+        ? "Not fully scored"
+        : `${row.attempt_one.total}/${row.max_points}`;
+  const delta = attemptOneChange(row);
+  const change = delta === null ? "" : delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : "0";
+  return { attempt, change };
 }

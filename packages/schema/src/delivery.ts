@@ -319,6 +319,19 @@ export const DeliveryBundleSchema = z
     // renderer verifies; absent otherwise, never null. A v1.x client ignores
     // the key (Swift's decoder skips unknown keys).
     renderer: RendererRefSchema.optional(),
+    // Corrections mode (docs/bulk-pass-back-and-corrections-design.md, slice
+    // 3, D-21 / D-8): on a test passed back for another try, how each
+    // question went last time — a WORD per item id, never points and never an
+    // answer, so this field cannot carry a key (ADR 0016) — and which items
+    // are read-only because they earned full credit. Emitted only to a 2.0+
+    // client running a served renderer new enough to draw it (D-27), and only
+    // when the teacher asked; absent otherwise.
+    corrections: z
+      .object({
+        marks: z.record(z.string().min(1), z.enum(["correct", "partial", "incorrect"])).optional(),
+        locked: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
   })
   .superRefine((bundle, ctx) => {
     if (bundle.item_sets) {

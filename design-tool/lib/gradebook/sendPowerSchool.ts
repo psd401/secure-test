@@ -44,7 +44,13 @@ import {
   buildScoreWriteBodyUnconfirmed,
   parseScoreWriteResponseUnconfirmed,
 } from "./powerschoolScoreBodyUnconfirmed";
-import { HELD_BACK_REASONS, type HeldBackReason, type SendFailure, type SendSummary } from "./types";
+import {
+  HELD_BACK_REASONS,
+  type GradebookBasis,
+  type HeldBackReason,
+  type SendFailure,
+  type SendSummary,
+} from "./types";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -82,6 +88,8 @@ export interface PowerSchoolSendInput {
   category_id: string;
   name: string;
   due_date: string;
+  /** U-25 slice 2 (D-7 / D-20): latest score or attempt 1. */
+  basis: GradebookBasis;
 }
 
 export type SendOutcome =
@@ -175,6 +183,7 @@ async function claim(
         name,
         created_by_sub: input.teacher.sub,
         actor_sub: input.actor_sub,
+        basis: input.basis,
       })
       .returning();
     return { ok: true, row: row! };
@@ -207,7 +216,12 @@ export async function sendToPowerSchool(
   }
 
   const prior = push ? await priorScores(db, push.id) : new Map<string, PriorScore>();
-  const { candidates, max_points } = await loadSectionCandidates(db, assessment.id, section.ps_id);
+  const { candidates, max_points } = await loadSectionCandidates(
+    db,
+    assessment.id,
+    section.ps_id,
+    input.basis,
+  );
   const plan = planSend(candidates, prior);
 
   const reasons = emptyReasons();
@@ -555,6 +569,8 @@ async function recordSend(
     .update(gradebook_pushes)
     .set({
       last_sent_at: now,
+      // D-20: the choice this send made is the one Send again offers.
+      basis: input.basis,
       last_result: {
         sent: summary.sent,
         updated: summary.updated,
