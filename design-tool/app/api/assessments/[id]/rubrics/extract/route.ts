@@ -23,7 +23,7 @@ import {
   MAX_UPLOAD_BYTES as MAX_BYTES,
   allowedUploadFor as allowedFor,
 } from "@/lib/ai/documentUpload";
-import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { FORM_OVERHEAD_BYTES, JSON_BODY_LIMITS, readFormDataWithin, readJsonBody } from "@/lib/api/jsonBody";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -105,7 +105,14 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (ct.includes("multipart/form-data")) {
     let file: File;
     try {
-      const form = await req.formData();
+      // SEC-08: capped while it is read, not after (readFormDataWithin).
+      const form = await readFormDataWithin(req, MAX_BYTES + FORM_OVERHEAD_BYTES);
+      if (!form) {
+        return NextResponse.json(
+          { ok: false, error: "file_too_large", limit: MAX_BYTES },
+          { status: 413 },
+        );
+      }
       const candidate = form.get("file");
       if (!(candidate instanceof File)) {
         return NextResponse.json({ ok: false, error: "missing_file" }, { status: 400 });

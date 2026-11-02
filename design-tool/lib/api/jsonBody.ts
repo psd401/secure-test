@@ -5,8 +5,9 @@
 // zod 3.25 then multiplies the cost: an array of wrong-typed elements keeps
 // one issue object per element (advisory GHSA-mrhx-c7xc-m3w5 — a 2 MB array
 // measured ~224 MB of heap). Every API route reads its JSON through
-// `readJsonBody` instead; test/json-body-cap.test.ts refuses a direct
-// `req.json()`, `req.text()` or `req.arrayBuffer()` under app/api.
+// `readJsonBody` instead (a multipart body, `readFormDataWithin`);
+// test/json-body-cap.test.ts refuses a direct `req.json()`, `req.text()`,
+// `req.arrayBuffer()` or `req.formData()` under app/api.
 //
 // The tiers come from production's stored payload sizes (`oneoff-aurora.sh
 // payload-sizes`, 2026-10-25: largest stored item 8.7 KiB, answer 13.9 KiB,
@@ -67,6 +68,26 @@ function tooLarge(limit: number): JsonBodyRead {
     ok: false,
     response: NextResponse.json({ ok: false, error: "body_too_large", limit }, { status: 413 }),
   };
+}
+
+/** Room on top of a file cap for a multipart body's boundaries and part headers. */
+export const FORM_OVERHEAD_BYTES = 64 * 1024;
+
+/**
+ * A multipart body parsed with a ceiling — the TIDE import's SEC-08 recipe
+ * (2026-10-25) as one call, because `req.formData()` buffers the whole body
+ * before a route can look at `file.size`. A declared Content-Length over
+ * `maxBytes` is refused before a byte is read, the body is read with a byte
+ * counter, then parsed from those bytes. `null` means too large; a malformed
+ * form throws, as `req.formData()` did, so each route keeps its own 400.
+ */
+export async function readFormDataWithin(req: Request, maxBytes: number): Promise<FormData | null> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  const bytes = await readBodyWithin(req, maxBytes);
+  if (bytes === null) return null;
+  const ct = req.headers.get("content-type") ?? "";
+  return new Response(bytes, { headers: { "content-type": ct } }).formData();
 }
 
 /** The request body, or `null` once it passes `max` bytes (SEC-08). */

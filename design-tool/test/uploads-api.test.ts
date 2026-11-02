@@ -7,6 +7,7 @@ import { closeDb, getDb } from "../db/client";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
+import { oversizedMultipart } from "./helpers/oversizedMultipart";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -105,6 +106,17 @@ describe("POST /api/uploads/image", () => {
     asUser(null);
     const res = await postUpload(PNG_1X1);
     expect(res.status).toBe(401);
+  });
+
+  test("a body past the cap is 413 and read no further than it (SEC-08)", async () => {
+    asUser("teacher-1");
+    const { POST } = await import("../app/api/uploads/image/route");
+    const big = oversizedMultipart("http://localhost/api/uploads/image", 40);
+    const res = await POST(big.req);
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("file_too_large");
+    // 5 MiB + 64 KiB is passed in the 6th chunk. Not all 40.
+    expect(big.sent()).toBeLessThan(10);
   });
 
   test("201 creates asset row + persists bytes; round-trip via GET matches", async () => {

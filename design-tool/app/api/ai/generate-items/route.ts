@@ -25,7 +25,7 @@ import {
 import type { CreateItemBody } from "@/lib/api/items";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { itemProposalText } from "@/lib/safeguarding/itemText";
-import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { FORM_OVERHEAD_BYTES, JSON_BODY_LIMITS, readFormDataWithin, readJsonBody } from "@/lib/api/jsonBody";
 
 // BG slice 3 (docs/batch-item-generation-design.md, D-3 … D-7): up to ten AI
 // item proposals in one call, tied to standards / an objective / a resource.
@@ -49,7 +49,18 @@ export async function POST(req: Request) {
   const ct = req.headers.get("content-type") ?? "";
   if (ct.includes("multipart/form-data")) {
     try {
-      const form = await req.formData();
+      // SEC-08: capped while it is read, not after (readFormDataWithin). The
+      // `request` field is the JSON body's longText allowance.
+      const form = await readFormDataWithin(
+        req,
+        MAX_UPLOAD_BYTES + JSON_BODY_LIMITS.longText + FORM_OVERHEAD_BYTES,
+      );
+      if (!form) {
+        return NextResponse.json(
+          { ok: false, error: "file_too_large", limit: MAX_UPLOAD_BYTES },
+          { status: 413 },
+        );
+      }
       const request = form.get("request");
       if (typeof request !== "string") return invalid("missing request field");
       rawBody = JSON.parse(request);
