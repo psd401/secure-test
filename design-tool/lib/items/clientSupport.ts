@@ -86,13 +86,25 @@ export function clientSupportsHighlighting(clientVersion: string | null): boolea
 
 /**
  * Corrections mode (docs/bulk-pass-back-and-corrections-design.md, slice 3,
- * D-27): the oldest SERVED RENDERER version that draws marks and locks. Null
- * until that renderer is signed (slice 3d) — so until then no bundle carries
- * corrections, and no write is ever refused for a lock.
+ * D-27): the oldest SERVED RENDERER version that draws marks and locks.
+ *
+ * Slice 3d: a renderer's version is the committer time of the `main` commit
+ * it was built from (`packages/renderer/scripts/build.ts`), and `main` is
+ * linear. 1793647928 (2026-11-02 11:32:08 PT) is the committer time of
+ * `bbd1b58f`, the squash merge of PR #169 that brought the page half (3c) to
+ * `main` — so every renderer built at or after it draws corrections, and
+ * every renderer built before it is below this floor. A time taken from a
+ * branch commit would NOT be safe: a renderer signed from `main` before the
+ * merge could carry a later time without the page half.
  */
-export const MIN_RENDERER_VERSION_FOR_CORRECTIONS: number | null = null;
+export const MIN_RENDERER_VERSION_FOR_CORRECTIONS: number | null = 1793647928;
 
 let correctionsRendererFloor: number | null = MIN_RENDERER_VERSION_FOR_CORRECTIONS;
+
+/** The floor the delivery route uses now (tests save it before changing it). */
+export function getCorrectionsRendererFloor(): number | null {
+  return correctionsRendererFloor;
+}
 
 /** Test seam (like `setRendererResolver`): the floor the delivery route
  * uses; returns the previous one so a test can restore it. */

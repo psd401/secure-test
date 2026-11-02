@@ -3,7 +3,10 @@
 // guard, as pure functions. The wire and the routes are in delivery-api.test.ts.
 import { describe, expect, test } from "bun:test";
 import { correctionsFromRound, markFor } from "../lib/feedback/correctionMarks";
-import { correctionsDeliverable } from "../lib/items/clientSupport";
+import {
+  MIN_RENDERER_VERSION_FOR_CORRECTIONS,
+  correctionsDeliverable,
+} from "../lib/items/clientSupport";
 import { refuseIfLocked } from "../lib/api/correctionLocks";
 
 const t = (minute: number) => new Date(Date.UTC(2026, 10, 2, 9, minute));
@@ -104,6 +107,14 @@ describe("correctionsDeliverable (D-27)", () => {
     expect(correctionsDeliverable("2.0.0", { version: 99 }, 100)).toBe(false);
     expect(correctionsDeliverable("2.0.0", undefined, 100)).toBe(false);
     expect(correctionsDeliverable("2.0.0", { version: 100 }, null)).toBe(false);
+  });
+});
+
+describe("the renderer floor (slice 3d)", () => {
+  test("is the merge time of PR #169, and the delivery gate uses it by default", () => {
+    expect(MIN_RENDERER_VERSION_FOR_CORRECTIONS).toBe(1793647928);
+    expect(correctionsDeliverable("2.0.0", { version: 1793647928 })).toBe(true);
+    expect(correctionsDeliverable("2.0.0", { version: 1793647927 })).toBe(false);
   });
 });
 
