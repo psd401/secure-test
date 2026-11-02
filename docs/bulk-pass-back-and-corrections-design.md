@@ -161,9 +161,19 @@ in the deploy.
   `SecureTestCore` (headless). Manual-check rows in `client/MANUAL-CHECKS.md`
   (VoiceOver per the VoiceOver method). Then James builds and signs the
   renderer.
-- **3d — turn it on.** Set `MIN_RENDERER_VERSION_FOR_CORRECTIONS` to the
-  signed renderer's version; deploy with `renderers/current.json` naming it.
-  Hand-run rows then run with slices 1–2's.
+- **3d — turn it on.** A renderer's version is the committer time of the
+  `main` commit it is built from (`packages/renderer/scripts/build.ts`), and
+  `main` is linear, so every renderer built at or after the merge of 3c has
+  a version ≥ that merge's time `T`, and every older one is below it. After
+  the slices 1–3c PR merges, read `T` (`git log -1 --format=%ct origin/main`
+  right after the merge); a second small PR sets
+  `MIN_RENDERER_VERSION_FOR_CORRECTIONS = T` and adds the help-page text.
+  Then ONE deploy after school (D-29): `deploy.sh` re-signs the renderer
+  (Touch ID) with a version ≥ `T` because the page files changed. A floor
+  taken from a branch commit is not safe — a renderer built from `main`
+  before the merge could carry a later time without 3c, and the server would
+  then refuse writes on a page that shows the field as editable. Hand-run
+  rows 902–920 and the client "Corrections mode" rows run after that deploy.
 
 ## Slice 4: Full test to Google Docs (D-11, D-12, D-13)
 
@@ -220,6 +230,12 @@ in the deploy.
 - **D-26** (6.6) Instant feedback stays off after the re-hand-in.
 - **D-27** (6.7) A client or renderer too old for marks gets no marks and no
   locks, and the server refuses none of its writes.
+- **D-28** (7.1) Slices 1–3c go to `main` in one PR, with the renderer floor
+  still null.
+- **D-29** (7.2) That PR is not deployed on its own: one deploy after 3d,
+  so teachers never see corrections checkboxes that do nothing.
+- **D-30** (7.3) Slice 4 (whole test to Google Docs) starts on a fresh
+  branch after this ships.
 
 ## Open questions
 
@@ -239,3 +255,4 @@ None open for slices 1–2.
 - 2026-11-02 — slice 3a built (migration 0069 `attempts.corrections`, the two checkboxes in all three dialogs). Until 3d the checkboxes are stored but change nothing a student sees, so 3a should not reach production on its own; the help page is updated with 3d.
 - 2026-11-02 — slice 3b built (marks/locks, bundle field, gate with a null renderer floor, write guard). Delivery also needs `RENDERER_DELIVERY=on`; the deployed service sets it (`design-tool/infra/lib/app-service.ts`).
 - 2026-11-02 — slice 3c built: the page draws the notes and locks (`AssessmentPage.swift`: `correctionNote`, `lockAnswer`; `post` / `withdraw` / `postDrawing` refuse a locked item). `RendererCorrectionsTests` (7). Hand-run rows in `client/MANUAL-CHECKS.md` ("Corrections mode in the test page"). Not drawn on the paged strip or review page. Next: 3d — confirm how a renderer version is numbered, set the floor, deploy.
+- 2026-11-02 — D-28…D-30 decided; 3d planned (floor = the merge commit's time).
