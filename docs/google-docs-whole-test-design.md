@@ -109,3 +109,10 @@ below) before the slice is called done.
   mentioned. 4: help (`#results`) and rows 921–931, all NOT RUN — row 925
   is the first real check that Drive keeps `data:` images. The roadmap's
   U-25 row lives on the slices 1–3 branch and is updated when they meet.
+- 2026-11-02 — **rows 921–931 PASS** locally against real Drive (a
+  throwaway `_gdlive` fixture DB, the demo-student accounts, Chrome).
+  Drive's HTML import keeps `data:` images (row 925). Observations WT-O1
+  (heading at a page foot), WT-O2 (picture on the ☐ line) and finding WT-F1
+  (per-student page prints a picture choice as raw markdown, pre-existing)
+  are in `docs/design-tool-manual-checks.md`.
+
