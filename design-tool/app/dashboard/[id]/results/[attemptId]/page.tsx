@@ -36,7 +36,7 @@ import { formatWhen } from "@/lib/ui/format";
 import { UUID_RE } from "@/lib/uuid";
 import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
-import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { canSendToGoogleDocs, hasDocTextItems } from "@/lib/googleDocs/sendDialog";
 import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { docUrl } from "@/lib/googleDocs/drive";
 import { attemptIsTimed } from "@/lib/api/attemptDeadline";
@@ -642,6 +642,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 studentName={row.student.name || row.student.ssid || "this student"}
                 returnPath={`/dashboard/${id}/results/${attemptId}`}
                 initialContents={docPrefs ?? undefined}
+                textItems={hasDocTextItems(itemRows.map((i) => i.type))}
               />
             ) : null}
             {row.status === "in_progress" ? (

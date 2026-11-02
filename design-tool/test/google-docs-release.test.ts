@@ -1139,6 +1139,181 @@ describe("releaseToGoogleDocs", () => {
 
 // ── route ────────────────────────────────────────────────────────────────────
 
+describe("whole test (U-25 slice 4)", () => {
+  const WHOLE: ReleaseOptions = { ...OPTS, wholeTest: true };
+
+  /** Two more questions on the scene: a two-option MC and a keyed table. */
+  async function addChoiceAndTable(s: Awaited<ReturnType<typeof scene>>) {
+    const db = getDb();
+    const [mc] = await db
+      .insert(items)
+      .values({
+        assessment_id: s.assessment.id,
+        position: 5,
+        type: "multiple_choice_single",
+        stem: "Which is even?",
+        choices: [{ id: "e1", text: "Three" }, { id: "e2", text: "Four" }],
+        correct_choice_ids: ["e2"],
+      })
+      .returning();
+    const [table] = await db
+      .insert(items)
+      .values({
+        assessment_id: s.assessment.id,
+        position: 6,
+        type: "table",
+        stem: "Fill the table.",
+        config: {
+          columns: [{ id: "c1", label: "Value" }],
+          rows: [{ id: "r1", label: "Twice two" }],
+          cell_keys: { r1: { c1: "ZZKEYZZ" } },
+        },
+      })
+      .returning();
+    const [adaMc] = await db
+      .insert(responses)
+      .values({ attempt_id: s.ada.attempt.id, item_id: mc!.id, response: { type: "multiple_choice_single", choice_id: "e1" } })
+      .returning();
+    const [adaTable] = await db
+      .insert(responses)
+      .values({ attempt_id: s.ada.attempt.id, item_id: table!.id, response: { type: "table", cells: { r1: { c1: "5" } } } })
+      .returning();
+    return { mc: mc!, table: table!, adaMc: adaMc!, adaTable: adaTable! };
+  }
+
+  test("every question in order, the choice marked, no key, approved scores only (D-11, D-12)", async () => {
+    const s = await scene();
+    const db = getDb();
+    const q = await addChoiceAndTable(s);
+    await db.insert(scores).values([
+      { response_id: q.adaMc.id, method: "auto", points: 0, max_points: 1, scorer: "auto", status: "final" },
+      {
+        response_id: q.adaTable.id,
+        method: "ai",
+        points: 0,
+        max_points: 1,
+        scorer: "mock",
+        status: "final",
+        reviewed_by_sub: OWNER,
+        rationale: { overall_rationale: "The answer should be ZZKEYZZ." },
+      },
+    ]);
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...WHOLE, contents: ALL },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.outcomes[0]!.status).toBe("sent");
+    const html = drive.docs[0]!.html;
+    // Question 1 is the scene's unanswered MC; the essay, then the two added
+    // (numbered by order, not by stored position).
+    const order = ["<h2>Question 1</h2>", "Pick one", "<h2>Question 2</h2>", "Argue point 1.", "<h2>Question 3</h2>", "Which is even?", "<h2>Question 4</h2>", "Fill the table."];
+    let at = -1;
+    for (const part of order) {
+      const i = html.indexOf(part);
+      expect(i).toBeGreaterThan(at);
+      at = i;
+    }
+    expect(html).toContain("<p><i>No answer.</i></p>");
+    expect(html).toContain("☑ Three");
+    expect(html).toContain("☐ Four");
+    expect(html).toContain("<td>5</td>");
+    expect(html).toContain("Score:</b> 0 of 1");
+    // D-11: the table's key and the AI's comment restating it never go.
+    expect(html).not.toContain("ZZKEYZZ");
+    expect(html).not.toMatch(/[✓✗]/);
+    const [row] = await db.select().from(google_doc_releases).where(eq(google_doc_releases.attempt_id, s.ada.attempt.id));
+    expect(row!.contents.whole_test).toBe(true);
+  });
+
+  test("without the option the Doc stays essays and short answers", async () => {
+    const s = await scene();
+    await addChoiceAndTable(s);
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(getDb(), {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: OPTS,
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    expect(drive.docs[0]!.html).not.toContain("Which is even?");
+    const [row] = await getDb().select().from(google_doc_releases);
+    expect(row!.contents.whole_test).toBeUndefined();
+  });
+
+  test("a student with any answer gets a Doc; nothing answered is no_answers; no questions is no_items", async () => {
+    const s = await scene();
+    const db = getDb();
+    await addChoiceAndTable(s);
+    // Ada's essay blank, but she answered the MC and the table: sent.
+    await db.update(responses).set({ response: { type: "essay", text: " " } }).where(eq(responses.id, s.ada.responses[0]!.id));
+    // Ben wrote nothing anywhere.
+    await db.update(responses).set({ response: { type: "essay", text: "" } }).where(eq(responses.id, s.ben.responses[0]!.id));
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: WHOLE,
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    const by = new Map(r.outcomes.map((o) => [o.name, o]));
+    expect(by.get("Ada Fixture")!.status).toBe("sent");
+    expect(by.get("Ben Sample")!.reason).toBe("no_answers");
+
+    await db.delete(items).where(eq(items.assessment_id, s.assessment.id));
+    const none = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { section: s.section },
+      options: WHOLE,
+      drive,
+    });
+    expect(none).toEqual({ ok: false, error: "no_items" });
+  });
+
+  test("a passed-back student: skipped until handed in, or the latest answers as a draft (D-13, 1.6)", async () => {
+    const s = await scene();
+    const db = getDb();
+    const q = await addChoiceAndTable(s);
+    await passBackAttempt(db, s.ada.attempt, OWNER);
+    await db
+      .update(responses)
+      .set({ response: { type: "multiple_choice_single", choice_id: "e2" }, updated_at: new Date() })
+      .where(eq(responses.id, q.adaMc.id));
+    const skipped = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: WHOLE,
+      drive: new FakeDrive(),
+    });
+    if (!skipped.ok) throw new Error(skipped.error);
+    expect(skipped.outcomes[0]!.reason).toBe("not_handed_in");
+
+    const drive = new FakeDrive();
+    const draft = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { ...WHOLE, includeDrafts: true },
+      drive,
+    });
+    if (!draft.ok) throw new Error(draft.error);
+    const html = drive.docs[0]!.html;
+    expect(html).toContain("Draft — not handed in");
+    expect(html).toContain("☐ Three");
+    expect(html).toContain("☑ Four");
+  });
+});
+
 async function post(assessmentId: string, body: unknown, cookie?: string) {
   const { POST } = await import("../app/api/assessments/[id]/google-docs/route");
   const headers = new Headers({ "content-type": "application/json" });
@@ -1240,6 +1415,27 @@ describe("POST /api/assessments/[id]/google-docs", () => {
     expect(uploads.length).toBe(2);
     expect(uploads.some((u) => u.includes("line-height"))).toBe(false);
     expect((await post(s.assessment.id, body({ section: s.section, double_space: "yes" }), cookie)).status).toBe(400);
+  });
+
+  test("whole_test reaches the release; absent means essays only (U-25 slice 4)", async () => {
+    const s = await scene();
+    const uploads: string[] = [];
+    let n = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("/upload/")) uploads.push(String(init?.body ?? ""));
+      return Response.json({ id: `id-${++n}` });
+    }) as typeof fetch;
+    const cookie = await mintDriveTokenCookie("ya29.t", OWNER, 600);
+    const res = await post(s.assessment.id, body({ section: s.section, whole_test: true }), cookie);
+    expect(res.status).toBe(200);
+    expect(uploads.length).toBe(2);
+    expect(uploads.every((u) => u.includes("Pick one"))).toBe(true);
+
+    uploads.length = 0;
+    const again = await post(s.assessment.id, body({ section: s.section, mode: "new" }), cookie);
+    expect(again.status).toBe(200);
+    expect(uploads.some((u) => u.includes("Pick one"))).toBe(false);
+    expect((await post(s.assessment.id, body({ section: s.section, whole_test: 1 }), cookie)).status).toBe(400);
   });
 
   test("sends through real Drive calls (stubbed fetch)", async () => {

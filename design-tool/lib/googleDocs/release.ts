@@ -27,6 +27,7 @@ import {
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
 import { DOC_ITEM_TYPES } from "@/lib/googleDocs/sendDialog";
+import { questionPictures, wholeTestAnswer } from "@/lib/googleDocs/wholeTest";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -64,6 +65,11 @@ export interface ReleaseOptions {
   transferOwnership?: boolean;
   /** RT D-10 (docs/rich-text-essay-design.md): essays at line spacing 2.0. */
   doubleSpace?: boolean;
+  /**
+   * U-25 slice 4 (docs/google-docs-whole-test-design.md): every question,
+   * answers and approved scores only, never a key (D-11).
+   */
+  wholeTest?: boolean;
 }
 
 export type SkipReason =
@@ -72,6 +78,7 @@ export type SkipReason =
   | "safeguarding_alert"
   | "no_email"
   | "no_essay"
+  | "no_answers"
   | "drive_auth_expired";
 
 export interface StudentOutcome {
@@ -88,7 +95,7 @@ export interface StudentOutcome {
 
 export type ReleaseResult =
   | { ok: true; outcomes: StudentOutcome[]; drive_auth_needed: boolean }
-  | { ok: false; error: "no_essays" | "attempt_not_found" };
+  | { ok: false; error: "no_essays" | "no_items" | "attempt_not_found" };
 
 function studentName(row: ResultsRow): string {
   return row.student.name || row.student.student_number || "Student";
@@ -136,14 +143,20 @@ export async function releaseToGoogleDocs(
 ): Promise<ReleaseResult> {
   const { assessment, senderSub, scope, options, drive } = args;
   const now = args.now ?? new Date();
+  const whole = options.wholeTest === true;
 
-  // FR D-5: essays and short answers, in question order (D-10).
+  // FR D-5: essays and short answers, in question order (D-10) — or, U-25
+  // slice 4, every question.
   const docItems = await db
     .select()
     .from(items)
-    .where(and(eq(items.assessment_id, assessment.id), inArray(items.type, [...DOC_ITEM_TYPES])))
+    .where(
+      whole
+        ? eq(items.assessment_id, assessment.id)
+        : and(eq(items.assessment_id, assessment.id), inArray(items.type, [...DOC_ITEM_TYPES])),
+    )
     .orderBy(asc(items.position));
-  if (docItems.length === 0) return { ok: false, error: "no_essays" };
+  if (docItems.length === 0) return { ok: false, error: whole ? "no_items" : "no_essays" };
 
   const allItems = await db
     .select({ id: items.id })
@@ -273,7 +286,24 @@ export async function releaseToGoogleDocs(
         resp.response.text.trim()
           ? resp.response.text
           : null;
-      if (text) anyText = true;
+      const isText = item.type === "essay" || item.type === "short_text";
+      // U-25 slice 4: any other type, key-free by type (wholeTest.ts, D-11).
+      // Only a whole-test send reaches here with one.
+      // Only the fields wholeTest.ts reads: no key column is handed over.
+      const wtItem = {
+        type: item.type,
+        stem: item.stem,
+        choices: Array.isArray(item.choices) ? (item.choices as Array<{ id: string; text: string }>) : [],
+        config: item.config,
+      };
+      const answerView = isText
+        ? undefined
+        : wholeTestAnswer(
+            wtItem,
+            resp ? { id: resp.id, response: resp.response as unknown as Record<string, unknown> } : null,
+            numberOf.get(item.id) ?? 0,
+          );
+      if (text || (answerView && answerView.kind !== "none")) anyText = true;
       const set = item.item_set_id ? setsById.get(item.item_set_id) : undefined;
       const firstOfSet = set ? !setShown.has(set.id) : false;
       if (set) setShown.add(set.id);
@@ -288,12 +318,17 @@ export async function releaseToGoogleDocs(
         // old answer; the builder drops AI rows older than the last edit.
         answer_updated_at: resp ? resp.updated_at : null,
         // The Doc goes to the student: no AI comments on a short answer,
-        // which can state its key (withhold_ai_feedback).
-        withhold_ai_feedback: item.type === "short_text",
+        // which can state its key (withhold_ai_feedback) — nor, in a
+        // whole-test Doc, on any type but an essay (D-11).
+        withhold_ai_feedback: item.type !== "essay",
       });
+      const number = numberOf.get(item.id) ?? 0;
       essays.push({
-        number: numberOf.get(item.id) ?? 0,
-        kind: item.type === "short_text" ? "short_text" : "essay",
+        number,
+        kind: !isText ? "item" : item.type === "short_text" ? "short_text" : "essay",
+        answer_view: answerView,
+        pictures: isText ? undefined : questionPictures(wtItem, number),
+        stem_in_answer: item.type === "fill_blank" && answerView?.kind === "fill_blank",
         stem: item.stem,
         stimulus: firstOfSet && set ? set.stimulus_text : null,
         sources: firstOfSet && set ? set.sources.map((s) => ({ label: s.label, text: s.text })) : [],
@@ -306,8 +341,9 @@ export async function releaseToGoogleDocs(
       });
     }
     if (!anyText) {
-      // FR D-5: no essay AND no short answer written.
-      skip("no_essay");
+      // FR D-5: no essay AND no short answer written (U-25 slice 4: no
+      // question answered at all).
+      skip(whole ? "no_answers" : "no_essay");
       continue;
     }
     // FR R-3: the labelled blocks for the boxes ticked (D-3, D-10, D-13, R-2).
@@ -387,6 +423,7 @@ export async function releaseToGoogleDocs(
           overall,
           contents: options.contents,
           doubleSpace: options.doubleSpace ?? false,
+          wholeTest: whole,
         });
         const fileId = await drive.uploadDoc(title, sectionFolders.get(row.student.section ?? "")!, html);
         const permissionId = await drive.shareWriter(fileId, row.student.email!);
@@ -411,7 +448,8 @@ export async function releaseToGoogleDocs(
           sender_sub: senderSub,
           drive_file_id: fileId,
           title,
-          contents: { ...options.contents },
+          // U-25 slice 4: the record says it was a whole-test Doc.
+          contents: whole ? { ...options.contents, whole_test: true } : { ...options.contents },
           was_draft: draft,
           ownership_transferred_at: ownership.ownership === "transferred" ? new Date() : null,
         });

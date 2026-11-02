@@ -47,6 +47,7 @@ export function SendToGoogleDocsControl({
   studentName,
   returnPath,
   initialContents,
+  textItems = true,
 }: {
   assessmentId: string;
   /** Section labels to choose from (results page). */
@@ -59,6 +60,11 @@ export function SendToGoogleDocsControl({
   returnPath: string;
   /** FR R-4: the remembered boxes, read on the server; absent = all off. */
   initialContents?: ReleaseContents;
+  /**
+   * U-25 slice 4: whether the test has an essay or short answer. Without one,
+   * only a whole-test Doc has anything in it, so the box is ticked and fixed.
+   */
+  textItems?: boolean;
 }) {
   const single = attemptId ?? null;
   const key = storageKey(assessmentId, single);
@@ -73,6 +79,7 @@ export function SendToGoogleDocsControl({
     includeDrafts: false,
     transferOwnership: false,
     doubleSpace: false,
+    wholeTest: !textItems,
   });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -136,6 +143,7 @@ export function SendToGoogleDocsControl({
           include_drafts: state.includeDrafts,
           transfer_ownership: state.transferOwnership,
           double_space: state.doubleSpace,
+          whole_test: state.wholeTest || !textItems,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -184,8 +192,8 @@ export function SendToGoogleDocsControl({
             <DialogTitle>Send to Google Docs</DialogTitle>
             <DialogDescription>
               {single
-                ? `Makes a Google Doc of ${studentName ?? "this student"}'s essays and short answers in your Drive and shares it with them to edit.`
-                : "Makes a Google Doc of each student's essays and short answers in your Drive and shares it with them to edit."}{" "}
+                ? `Makes a Google Doc of ${studentName ?? "this student"}'s answers in your Drive and shares it with them to edit.`
+                : "Makes a Google Doc of each student's answers in your Drive and shares it with them to edit."}{" "}
               Changes in the Doc do not come back here.
             </DialogDescription>
           </DialogHeader>
@@ -258,6 +266,26 @@ export function SendToGoogleDocsControl({
                   </NativeSelect>
                 </label>
               )}
+
+              {/* U-25 slice 4 (docs/google-docs-whole-test-design.md): off
+                  by default, not remembered (1.4); fixed on when the test has
+                  no essay or short answer. */}
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={state.wholeTest || !textItems}
+                  disabled={busy || !textItems}
+                  onChange={(e) => setState({ ...state, wholeTest: e.target.checked })}
+                />
+                <span>
+                  Whole test
+                  <span className="block text-xs text-muted-foreground">
+                    Every question with the student&apos;s answer, not only essays and short answers.
+                    Choices are listed with theirs marked. Correct answers are never included.
+                  </span>
+                </span>
+              </label>
 
               <fieldset>
                 <legend className="text-xs text-muted-foreground">

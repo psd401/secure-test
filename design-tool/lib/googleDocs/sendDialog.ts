@@ -24,6 +24,11 @@ export interface DialogState {
   transferOwnership: boolean;
   /** RT D-10 (docs/rich-text-essay-design.md): default off. */
   doubleSpace: boolean;
+  /**
+   * U-25 slice 4 (docs/google-docs-whole-test-design.md): every question,
+   * not only essays and short answers. Default off; not remembered (1.4).
+   */
+  wholeTest: boolean;
 }
 
 /** FR R-2: every box off, the rubric table included. */
@@ -76,6 +81,8 @@ const REASONS: Record<string, string> = {
   no_email: "no school email on the roster",
   // FR D-5: the code keeps its name; short answers count too.
   no_essay: "no essay or short answer written",
+  // U-25 slice 4: a whole-test send with nothing answered at all.
+  no_answers: "no question answered",
   drive_auth_expired: "not sent — Google access expired",
 };
 
@@ -125,7 +132,9 @@ export function authOutcomeCopy(outcome: string): { ok: boolean; text: string } 
 export function sendErrorCopy(code: string): string {
   switch (code) {
     case "no_essays":
-      return "This assessment has no essay or short-answer questions.";
+      return "This assessment has no essay or short-answer questions. Tick Whole test to send every question.";
+    case "no_items":
+      return "This assessment has no questions.";
     case "attempt_not_found":
       return "This student's attempt is no longer here.";
     case "not_while_acting_as":
@@ -167,6 +176,8 @@ export function parseSavedState(raw: string | null): DialogState | null {
       transferOwnership: v.transferOwnership === true,
       // RT D-10: absent from a state saved before it — off, the default.
       doubleSpace: v.doubleSpace === true,
+      // U-25 slice 4: absent from a state saved before it — off.
+      wholeTest: v.wholeTest === true,
     };
   } catch {
     return null;
@@ -181,10 +192,16 @@ export function authStartHref(returnPath: string): string {
 /** GD D-8 as widened by FR D-5: the item types that go in the Doc. */
 export const DOC_ITEM_TYPES = ["essay", "short_text"] as const;
 
+/** Whether an essays-and-short-answers Doc has anything to carry (D-8, FR D-5). */
+export function hasDocTextItems(itemTypes: string[]): boolean {
+  return itemTypes.some((t) => (DOC_ITEM_TYPES as readonly string[]).includes(t));
+}
+
 /**
  * Whether a page shows the button: edit level (D-9), never while acting as a
- * teacher (the Drive would be the admin's), and only when the assessment has
- * an essay or a short answer (D-8, widened by FR D-5). The route enforces the
+ * teacher (the Drive would be the admin's), and on any assessment with a
+ * question — U-25 slice 4's Whole test sends tests with no essay or short
+ * answer (the dialog then ticks it for the teacher). The route enforces the
  * first two on its own.
  */
 export function canSendToGoogleDocs(input: {
@@ -195,6 +212,6 @@ export function canSendToGoogleDocs(input: {
   return (
     input.editLevel &&
     !input.actingAs &&
-    input.itemTypes.some((t) => (DOC_ITEM_TYPES as readonly string[]).includes(t))
+    input.itemTypes.length > 0
   );
 }

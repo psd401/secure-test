@@ -26,7 +26,7 @@ import { ScoreEssaysWithAiAndReload } from "./ScoreEssaysWithAiAndReload";
 import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { SendToGradebookAndReload } from "./SendToGradebookAndReload";
 import { SendToGoogleDocsControl } from "@/components/app/SendToGoogleDocsControl";
-import { canSendToGoogleDocs } from "@/lib/googleDocs/sendDialog";
+import { canSendToGoogleDocs, hasDocTextItems } from "@/lib/googleDocs/sendDialog";
 import { loadFeedbackReleasePrefs } from "@/lib/reporting/feedbackReleasePrefs";
 import { ReleaseAnswersAndReload } from "./ReleaseAnswersAndReload";
 import { RescoreAndReload } from "./RescoreAndReload";
@@ -252,6 +252,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
               defaultSection={selectedSection}
               returnPath={resultsPath}
               initialContents={docPrefs ?? undefined}
+              textItems={hasDocTextItems(results.items.map((i) => i.type))}
             />
           ) : null}
           {showReleaseButton || showReleasedLine ? (
