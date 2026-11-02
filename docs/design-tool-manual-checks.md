@@ -2209,3 +2209,34 @@ route and the controls only through tests.
 | 918 | **Send again** with **Attempt 1** | A's PowerSchool score changes to the attempt-1 total (one update); B, still working, is sent with B's attempt-1 score | NOT RUN |
 | 919 | Reopen the dialog for that section | It starts on **Attempt 1** (remembered) | NOT RUN |
 | 920 | A section where nobody was passed back | No **Score to send** choice | NOT RUN |
+
+## Whole test to Google Docs (U-25 slice 4, branch `claude/confident-lehmann-8fdd2d`, 2026-11-02; `docs/google-docs-whole-test-design.md`)
+
+Setup: local dev on the branch, a throwaway fixture DB whose name ends in
+`_gdlive` (not `_demo`: the sends must go to the demo-student accounts, and
+`_demo` stays fictional), signed in to Google with a staff account (Docs
+need a real Drive). A made-up test with Q1 multiple
+choice (one correct option), Q2 multiple select, Q3 an essay, Q4 match, Q5
+order, Q6 a fill-in-the-blank with a typed and a dropdown blank, Q7 a table
+with keyed cells, Q8 a graph with a key, Q9 a hotspot with a picture, Q10 a
+drawing, plus a picture inside one Q1 option and one stem. A demo student
+answers everything (some wrong, so a key differs from the answer) and
+hands in; a second demo student answers only Q1; a third answers nothing.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 921 | Open **Send to Google Docs** on Results | A **Whole test** box, unticked; the description says "answers" | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): the box is there, unticked; the description says "answers" |
+| 922 | Send with **Whole test** ticked and every other box off | One Doc per student who answered; each question headed "Question n" with its text (no "Prompt" heading), in order | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): section send, 2 Docs created and shared, C skipped; "Question 1"…"Question 10" in order with their text, no Prompt heading, Q6's sentence printed once. The Drive connect round trip came back with the choices kept (no consent screen). Observation WT-O1 below |
+| 923 | The Doc's choice questions (Q1, Q2) | Every option listed, ☑ on the student's picks, ☐ on the rest; nothing says which is correct (D-11, D-12) | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): Q1 ☐ (picture) / ☑ A circle / ☐ A square; Q2 ☑ 2, ☑ 3, ☐ 4; nothing marks the correct ones |
+| 924 | Q4–Q8 in the Doc | The student's own pairing, order, blanks (in brackets in the sentence), cells and graph objects in words; no ✓ / ✗, "expected" or key text anywhere | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): Cat → Woof, Dog → Meow, Cow → Moo; Water it / Plant the seed / Pick the fruit; "The sky is **[grey]** and grass is **[red]**."; the table with forty / six; "y = x"; no ✓ / ✗ or "expected" |
+| 925 | Pictures (Q9, Q10, the option and stem pictures) | Shown as pictures in the Doc — this is the live check that Drive's HTML import keeps `data:` images; Q9 reads "You picked n areas" | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): **Drive's HTML import keeps `data:` images.** The option picture, the stem picture, the hotspot picture (then "You picked 1 area.") and the drawing all show at their own size (240×160 and 200×200 px). Observation WT-O2 below |
+| 926 | Every score and feedback box ticked | Approved scores only, as on an essay Doc; no AI comments on any question but the essay | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): (Student A's page, every box ticked) Score / Teacher score / AI score lines, the essay's rubric table and teacher feedback; Find in the Doc: "forty-two" (the table key) 0, "should read" (the approved AI comment restating it) 0, "expected" 0, "AI feedback" 0; control "forty" 1 |
+| 927 | The student who answered nothing | Skipped, "no question answered" | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): "Staging Student C — no question answered" |
+| 928 | Pass back the first student, change an answer in the client, send again (**Make a new Doc**) | Skipped "not handed in"; with **Include students who have not handed in**, a Draft Doc with the changed answer; after the re-hand-in, the latest answers (D-13) | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): passed back on the page, Q1's answer changed in the DB (standing in for the client); drafts off → "not handed in"; **Send even if not handed in yet** → a Doc with "Draft — not handed in as of …", ☑ on the new choice and no scores (superseded); after **Hand in** → ☑ new choice, "Score: 1 of 1", no Draft line (D-13) |
+| 929 | A test with only choice questions | The button shows; **Whole test** is ticked and cannot be unticked; the send works | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): the button shows on a test of two choice questions; **Whole test** ticked and greyed; one Doc, the unanswered question reads "No answer." |
+| 930 | Send without **Whole test** on the first test | The Doc holds the essay only, as before | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): the essay alone under Prompt / Essay, as before (no Teacher score after the pass back — the essay's human score was superseded and not redone, as designed) |
+| 931 | Close and reopen the dialog after a whole-test send | **Whole test** is unticked again (not remembered, 1.4) | PASS 2026-11-02 (local, fixture DB `_gdlive`, real Drive, Chrome): after a send, the reopened dialog has **Whole test** unticked while the other boxes are remembered (FR R-4) |
+
+- **WT-O1 — a "Question n" heading can end a page with its question on the next (2026-11-02, row 922; observation).** Drive's import gives the `<h2>` no "keep with next", so in a 10-question Doc Q3's and Q8's headings sat alone at the foot of a page. Cosmetic; the essay-only Doc has the same import.
+- **WT-O2 — a picture inside a choice sits on the ☐'s line (2026-11-02, row 925; observation).** The box ends up at the picture's lower left, and a stem picture sits at the end of the stem's line. Readable; a line break before an inline picture would tidy it.
+- **WT-F1 — the per-student page shows a picture choice as raw markdown (2026-11-02, found running row 928; not slice 4).** Q1's answer on the student's page reads `✓ ![an orange shape](asset:…)`; the page's answer lines print a choice's text unrendered. Pre-existing on `main`, out of this slice's scope.

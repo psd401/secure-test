@@ -41,6 +41,9 @@ const Body = z
     // RT D-10 (docs/rich-text-essay-design.md): essays double-spaced in the
     // Doc. Optional (default off) so an older dialog still posts.
     double_space: z.boolean().optional(),
+    // U-25 slice 4 (docs/google-docs-whole-test-design.md): every question,
+    // never a key. Optional so an open dialog from before it still sends.
+    whole_test: z.boolean().optional(),
   })
   .refine((b) => (b.section === undefined) !== (b.attempt_id === undefined), {
     message: "exactly one of section or attempt_id",
@@ -109,6 +112,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       includeDrafts: body.include_drafts,
       transferOwnership: body.transfer_ownership ?? false,
       doubleSpace: body.double_space ?? false,
+      wholeTest: body.whole_test ?? false,
     },
     drive: createDriveClient(token),
   });
