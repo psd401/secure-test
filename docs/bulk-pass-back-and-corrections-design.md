@@ -175,3 +175,4 @@ None open for slices 1–2.
   run in a browser. Hand-run rows 902–911 wait until every slice is built,
   then run with the later slices' rows in one session (James, 2026-11-02).
 - 2026-11-02 — D-16…D-20 decided; slice 2a (attempt-1 calculator) built.
+- 2026-11-02 — slice 2b (Results / per-student page / CSV) built; rows 912–916.

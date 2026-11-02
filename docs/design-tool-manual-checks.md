@@ -2200,3 +2200,8 @@ route and the controls only through tests.
 | 909 | A passed-back student rejoins, changes an answer, hands in | New score on the changed answer; the per-student page shows the old score under "Earlier scores (before pass back)" | NOT RUN |
 | 910 | Test sessions tab: **Pass back a class…**, pick A's section | The picker lists each section with its handed-in count; the dialog names the section; after **Pass back** only that section's students are passed back, including any who handed in during another session | NOT RUN |
 | 911 | Same, on the timed test | The deadline picker appears for that section; a past time is refused | NOT RUN |
+| 912 | After 902, A rejoins, changes an answer, hands in; B stays working | Results shows **Attempt 1** and **Change** columns; A: old total, new total, signed change; B: "Working again — k of N answered" with B's attempt-1 score; C: "—" | NOT RUN |
+| 913 | A's page | "Attempt 1: x/10 · Change +n" under the handed-in line | NOT RUN |
+| 914 | Timed test: let C's time run out, **Hand in**, **Pass back**, C hands in | No attempt 1 for C (the first round was an extension, D-15); C shows "—" | NOT RUN |
+| 915 | An essay left unscored, then the student is passed back and hands in again | Attempt 1 reads "Not fully scored", no change shown | NOT RUN |
+| 916 | **Download CSV** with and without anyone passed back | `attempt_1` and `change` columns only when someone has an attempt 1 | NOT RUN |

@@ -11,6 +11,7 @@ import {
   matchesSectionFilter,
   NO_SECTION,
   sectionFilterOptions,
+  attemptOneDisplay,
   type ResultsCell,
 } from "@/lib/scoring/results";
 import { formatMean } from "@/lib/reporting/analytics";
@@ -229,6 +230,9 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
   const showScoreEssays = aiBatch?.has_ai_items ?? false;
   // Hybrid transparency slice 2 (D-3): final AI scores Hybrid settled on its
   // own, over the rows shown (the section filter applies, 5.4).
+  // U-25 slice 2 (D-6/D-7): attempt 1 and the change, as two columns, only
+  // when someone shown has an attempt 1.
+  const showAttemptOne = filtered.some((r) => r.attempt_one !== null);
   const unreviewedLine = unreviewedCountLine(
     filtered.reduce((sum, r) => sum + r.ai_unreviewed_count, 0),
   );
@@ -434,6 +438,17 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                 ))}
                 <th className="px-2 py-2 text-right font-medium">Total</th>
                 <th className="px-2 py-2 text-right font-medium">%</th>
+                {showAttemptOne ? (
+                  <>
+                    <th
+                      className="px-2 py-2 text-right font-medium"
+                      title="The score before the test was passed back for another try"
+                    >
+                      Attempt 1
+                    </th>
+                    <th className="px-2 py-2 text-right font-medium">Change</th>
+                  </>
+                ) : null}
                 <th className="sticky right-0 bg-background px-2 py-2 text-right font-medium">
                   Scoring
                 </th>
@@ -485,8 +500,10 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                         className="px-2 py-2 text-right text-muted-foreground"
                         colSpan={2}
                       >
-                        Not handed in — {row.answered_count} of {results.items.length}{" "}
-                        answered
+                        {/* D-19: a reopened test is "working again", not
+                            "not handed in" — attempt 1 is in. */}
+                        {row.attempt_one ? "Working again" : "Not handed in"} —{" "}
+                        {row.answered_count} of {results.items.length} answered
                         {/* 2026-10-05: an in-progress attempt past its deadline
                             cannot be resumed — the fix (Adjust time) is on the
                             student's own page, one click away on the name. */}
@@ -494,6 +511,12 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                           <span className="text-warning-foreground"> · Time ran out</span>
                         ) : null}
                       </td>
+                      {showAttemptOne ? (
+                        <>
+                          <td className="px-2 py-2 text-right">{attemptOneDisplay(row).attempt}</td>
+                          <td className="px-2 py-2 text-right text-muted-foreground" />
+                        </>
+                      ) : null}
                       <td className="sticky right-0 bg-background px-2 py-2 text-right whitespace-nowrap">
                         <HandInAttemptAndReload
                           attemptId={row.attempt_id}
@@ -515,6 +538,14 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
                       <td className="px-2 py-2 text-right text-muted-foreground">
                         {row.percent === null ? "" : `${row.percent}%`}
                       </td>
+                      {showAttemptOne ? (
+                        <>
+                          <td className="px-2 py-2 text-right">{attemptOneDisplay(row).attempt}</td>
+                          <td className="px-2 py-2 text-right text-muted-foreground">
+                            {attemptOneDisplay(row).change}
+                          </td>
+                        </>
+                      ) : null}
                       {/* Text + a glyph, never colour alone: this cell is the
                           answer to "is this one finished?" and has to survive
                           a greyscale print and a colour-blind reader. */}
