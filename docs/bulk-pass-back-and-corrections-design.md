@@ -72,23 +72,34 @@ Why one route and not a sitting route plus a section route: the sitting's
 attendance rows already carry attempt ids, so both callers can send ids, and
 selecting by `test_session_id` misses rebinds (U-14's reason).
 
-## Slice 2: Attempt 1 vs latest (D-5, D-6, D-7)
+## Slice 2: Attempt 1 vs latest (D-5…D-7, D-15…D-20)
 
 - Results and the per-student page show **attempt 1**, **latest**, and the
-  **change** for any attempt with `pass_back_count > 0`. Only those two, even
-  after several pass backs (D-6).
-- Attempt 1 is rebuilt rather than stored: for each response, the last
-  `final` or `superseded` score created before the attempt's first
-  `passed_back` event. `proposed` and `research` rows never count.
-- An incomplete attempt the teacher reopens does not count as its own
-  attempt (D-15): no attempt 1 or change is shown for it, and the gradebook
-  offers only the latest. Teachers may use pass back as an extension, and a
-  total from an unfinished test is not a result. What counts as incomplete
-  is open question 4.3.
-- The gradebook send dialog offers **attempt 1** or **latest** (D-7). Anything
-  else is entered by hand in PowerSchool.
-- Still open for slice 2: whether a COMPLETE attempt 1 stays listed in
-  Results and the gradebook while the student works on the reopened test.
+  **change** for an attempt that has an attempt 1. Only those two, even after
+  several pass backs (D-6). The CSV gains the same columns only when someone
+  on the test has an attempt 1 (D-18).
+- **Which hand-in is attempt 1** (D-15, D-16, D-20): the first pass back that
+  reverses a hand-in the student made themselves. A student cannot hand in
+  after their deadline, so time running out always ends in a teacher hand-in
+  (`teacher_hand_in` event); a pass back of one of those is an extension and
+  not an attempt. After extensions, attempt 1 is the first round the student
+  handed in themselves. Read from `attempt_events`, so pass backs made before
+  this slice are covered.
+- **Its score**: for each answer that existed at that pass back, the last
+  `final` or `superseded` score given in that round. An answer with none makes
+  attempt 1 **"not fully scored"**: shown, no total, and an attempt-1
+  gradebook send leaves the student out (D-17).
+- A student with no attempt 1 has one score; attempt 1 and latest are the
+  same for them.
+- **While the test is reopened** (D-19): the student stays listed as working
+  again with their attempt-1 score. An attempt-1 send includes them; a latest
+  send holds them back until they hand in.
+- **Gradebook** (D-7, D-20): the send dialog chooses **Latest** or
+  **Attempt 1**. The choice is stored on the section's push
+  (`gradebook_pushes.basis`), so Send again keeps it; switching re-sends only
+  the scores that change.
+- Built in three commits: 2a the calculator (`lib/scoring/attemptOne.ts`),
+  2b the display, 2c the gradebook.
 
 ## Slice 3: Corrections mode (D-8, D-9, D-10)
 
@@ -143,12 +154,19 @@ back and not stored on the assessment:
   picker.
 - **D-15** (4.2) An incomplete test the teacher reopens does not count as its
   own attempt: no "attempt 1" is shown for it (slice 2).
+- **D-16** (4.3) Incomplete = the student did not hand it in themselves (time
+  ran out, or a teacher hand-in).
+- **D-17** (5.1) Attempt 1 handed in by the student but not fully scored at the
+  pass back shows "not fully scored" and is left out of an attempt-1 send.
+- **D-18** (5.3) CSV attempt-1 columns only when someone was passed back.
+- **D-19** (5.2) A complete attempt 1 stays listed while the test is reopened;
+  an attempt-1 send includes it, a latest send holds it back.
+- **D-20** (5.4, 5.5) The send's basis is remembered per section push; after
+  extensions, attempt 1 is the first time the student handed in themselves.
 
 ## Open questions
 
-- **4.3** (slice 2) What makes attempt 1 "incomplete" under D-15: any item
-  unscored at the pass back, any item unanswered, or the student never
-  handed it in themselves (time ran out, or Hand in everyone)?
+None open for slices 1–2.
 
 ## Progress
 
@@ -156,3 +174,4 @@ back and not stored on the assessment:
   `feat/bulk-pass-back` (route + GET, three controls, rows 902–911); not
   run in a browser. Hand-run rows 902–911 wait until every slice is built,
   then run with the later slices' rows in one session (James, 2026-11-02).
+- 2026-11-02 — D-16…D-20 decided; slice 2a (attempt-1 calculator) built.
