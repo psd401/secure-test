@@ -1,0 +1,49 @@
+name: CodeQL Swift
+
+# The Swift half of CodeQL advanced setup (see codeql.yml). Swift needs a
+# macOS runner, which is the expensive one, so this runs only when Swift
+# sources or Swift project files change, plus weekly, and never on bot PRs.
+# The poc-* folders are throwaway proofs of concept and do not trigger a run.
+#
+# Autobuild picks what to compile; paths filters do not limit what a compiled
+# language analyzes, so a run may still include poc-* code.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.swift"
+      - "**/Package.resolved"
+      - "**/*.xcodeproj/**"
+      - "!poc-*/**"
+  pull_request:
+    paths:
+      - "**/*.swift"
+      - "**/Package.resolved"
+      - "**/*.xcodeproj/**"
+      - "!poc-*/**"
+  schedule:
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: swift
+          build-mode: autobuild
+          queries: security-extended
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:swift
