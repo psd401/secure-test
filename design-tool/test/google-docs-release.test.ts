@@ -7,6 +7,7 @@ import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
+  assets,
   attempt_feedback,
   attempts,
   feedback_release_prefs,
@@ -15,6 +16,7 @@ import {
   item_sets,
   items,
   response_feedback,
+  response_uploads,
   responses,
   safeguarding_alerts,
   scores,
@@ -47,6 +49,10 @@ import { readReleaseContents } from "../lib/googleDocs/sendDialog";
 import { loadFeedbackReleasePrefs } from "../lib/reporting/feedbackReleasePrefs";
 import { buildResults } from "../lib/scoring/results";
 import { passBackAttempt } from "../lib/api/passBackAttempt";
+import { localFsProvider } from "../lib/storage/provider";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { OTHER_STUDENT, STUDENT, TEACHER_EMAIL, clearRoster, seedRoster } from "./helpers/roster";
 
 const expectTestDb = () => {
@@ -1311,6 +1317,106 @@ describe("whole test (U-25 slice 4)", () => {
     expect(html).toContain("Draft — not handed in");
     expect(html).toContain("☐ Three");
     expect(html).toContain("☑ Four");
+  });
+});
+
+describe("whole test pictures (U-25 slice 4, images)", () => {
+  let root = "";
+  let savedRoot: string | undefined;
+  beforeAll(async () => {
+    savedRoot = process.env.STORAGE_LOCAL_ROOT;
+    root = await mkdtemp(join(tmpdir(), "gd-whole-pictures-"));
+    process.env.STORAGE_LOCAL_ROOT = root;
+  });
+  afterAll(async () => {
+    if (savedRoot === undefined) delete process.env.STORAGE_LOCAL_ROOT;
+    else process.env.STORAGE_LOCAL_ROOT = savedRoot;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function storedAsset(contentType: string, bytes: Uint8Array) {
+    const id = crypto.randomUUID();
+    await localFsProvider.put({ id, bytes, content_type: contentType } as Parameters<typeof localFsProvider.put>[0]);
+    const [row] = await getDb()
+      .insert(assets)
+      .values({
+        id,
+        owner_sub: OWNER,
+        content_type: contentType,
+        size_bytes: bytes.length,
+        sha256: id,
+        storage_provider: "local-fs",
+        storage_key: id,
+      })
+      .returning();
+    return row!;
+  }
+
+  test("a hotspot picture, a picture in an option and a drawing are embedded; an svg stays text (1.1, 1.5)", async () => {
+    const s = await scene();
+    const db = getDb();
+    const png = await storedAsset("image/png", new Uint8Array([1, 2, 3]));
+    const gif = await storedAsset("image/gif", new Uint8Array([4, 5]));
+    const svg = await storedAsset("image/svg+xml", new TextEncoder().encode("<svg/>"));
+    const [hot] = await db
+      .insert(items)
+      .values({
+        assessment_id: s.assessment.id,
+        position: 5,
+        type: "hotspot",
+        stem: `Click the cell. ![a diagram](asset:${svg.id})`,
+        config: { image_asset_id: png.id, regions: [{ id: "r1", x: 0, y: 0, w: 0.5, h: 0.5 }], correct_region_ids: ["r1"] },
+      })
+      .returning();
+    const [mc] = await db
+      .insert(items)
+      .values({
+        assessment_id: s.assessment.id,
+        position: 6,
+        type: "multiple_choice_single",
+        stem: "Which shape?",
+        choices: [{ id: "k1", text: `![a dot](asset:${gif.id})` }, { id: "k2", text: "None" }],
+        correct_choice_ids: ["k1"],
+      })
+      .returning();
+    const [draw] = await db
+      .insert(items)
+      .values({ assessment_id: s.assessment.id, position: 7, type: "drawing_upload", stem: "Draw it." })
+      .returning();
+    const storageKey = `responses/${s.ada.attempt.id}/${draw!.id}/${crypto.randomUUID()}`;
+    await localFsProvider.put({ id: storageKey, bytes: new Uint8Array([9, 9, 9, 9]), content_type: "image/png" } as Parameters<typeof localFsProvider.put>[0]);
+    const [upload] = await db
+      .insert(response_uploads)
+      .values({
+        attempt_id: s.ada.attempt.id,
+        item_id: draw!.id,
+        storage_provider: "local-fs",
+        storage_key: storageKey,
+        content_type: "image/png",
+        status: "complete",
+      })
+      .returning();
+    await db.insert(responses).values([
+      { attempt_id: s.ada.attempt.id, item_id: hot!.id, response: { type: "hotspot", region_ids: ["r1"] } },
+      { attempt_id: s.ada.attempt.id, item_id: mc!.id, response: { type: "multiple_choice_single", choice_id: "k2" } },
+      { attempt_id: s.ada.attempt.id, item_id: draw!.id, response: { type: "drawing_upload", upload_id: upload!.id } },
+    ]);
+    const drive = new FakeDrive();
+    const r = await releaseToGoogleDocs(db, {
+      assessment: s.assessment,
+      senderSub: OWNER,
+      scope: { attemptId: s.ada.attempt.id },
+      options: { contents: NONE, mode: "skip", includeDrafts: false, wholeTest: true },
+      drive,
+    });
+    if (!r.ok) throw new Error(r.error);
+    const html = drive.docs[0]!.html;
+    expect(html).toContain(`<img src="data:image/png;base64,${Buffer.from([1, 2, 3]).toString("base64")}" alt="Picture for question 3"`);
+    expect(html).toContain(`☐ <img src="data:image/gif;base64,${Buffer.from([4, 5]).toString("base64")}" alt="a dot"`);
+    expect(html).toContain("☑ None");
+    expect(html).toContain(`<img src="data:image/png;base64,${Buffer.from([9, 9, 9, 9]).toString("base64")}" alt="Drawing for question 5"`);
+    expect(html).toContain("<i>[Picture: a diagram]</i>");
+    expect(html).toContain("You picked 1 area.");
   });
 });
 

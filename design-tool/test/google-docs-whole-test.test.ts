@@ -2,7 +2,16 @@
 // per-type answers (lib/googleDocs/wholeTest.ts) and their HTML
 // (lib/googleDocs/content.ts). Pure — no database, no Drive.
 import { describe, expect, test } from "bun:test";
-import { buildDocHtml, docAnswerHtml, type EssaySection, type ReleaseContents } from "../lib/googleDocs/content";
+import {
+  PICTURE_TOO_LARGE,
+  buildDocHtml,
+  contentInline,
+  docAnswerHtml,
+  docPictureKeys,
+  type EssaySection,
+  type ReleaseContents,
+} from "../lib/googleDocs/content";
+import { fitPictures } from "../lib/googleDocs/pictures";
 import {
   pictureKey,
   questionPictures,
@@ -296,5 +305,55 @@ describe("buildDocHtml whole test", () => {
     });
     expect(html).toContain("<h3>Response</h3>");
     expect(html).toContain("My essay.");
+  });
+});
+
+describe("pictures (slice 4, images)", () => {
+  const ID = "33333333-3333-4333-8333-333333333333";
+
+  test("contentInline embeds a resolved picture and escapes the rest", () => {
+    const text = `a < b ![dot](asset:${ID}) end`;
+    expect(contentInline(text, undefined)).toBe("a &lt; b <i>[Picture: dot]</i> end");
+    expect(contentInline(text, new Map([[`asset:${ID}`, "data:image/png;base64,QQ=="]]))).toBe(
+      'a &lt; b <img src="data:image/png;base64,QQ==" alt="dot" style="max-width:100%"> end',
+    );
+    expect(contentInline(text, new Map([[`asset:${ID}`, PICTURE_TOO_LARGE]]))).toBe(
+      "a &lt; b <i>[Picture not included, the Doc's size limit: dot]</i> end",
+    );
+  });
+
+  test("fitPictures fills the budget in order, marks what does not fit, skips the unreadable", () => {
+    const uris = new Map([
+      ["a", "x".repeat(40)],
+      ["b", "y".repeat(50)],
+      ["c", "z".repeat(10)],
+    ]);
+    const fit = fitPictures(30, ["a", "b", "c", "d"], uris, 100);
+    expect(fit.get("a")).toBe("x".repeat(40));
+    expect(fit.get("b")).toBe(PICTURE_TOO_LARGE);
+    expect(fit.get("c")).toBe("z".repeat(10));
+    expect(fit.has("d")).toBe(false);
+  });
+
+  test("docPictureKeys lists each picture once, in document order; sources only with the box", () => {
+    const essays: EssaySection[] = [
+      {
+        number: 1,
+        stem: `S ![x](asset:${ID})`,
+        stimulus: null,
+        sources: [{ label: "A", text: "![y](asset:44444444-4444-4444-8444-444444444444)" }],
+        answer: null,
+        feedback: [],
+        kind: "item",
+        pictures: [{ ref: { kind: "asset", asset_id: ID }, alt: "p" }],
+        answer_view: { kind: "picture", picture: { ref: { kind: "upload", response_id: "r1", upload_id: "u1" }, alt: "d" } },
+      },
+    ];
+    expect(docPictureKeys({ essays, contents: NONE })).toEqual([`asset:${ID}`, "upload:r1"]);
+    expect(docPictureKeys({ essays, contents: { ...NONE, sources: true } })).toEqual([
+      `asset:${ID}`,
+      "asset:44444444-4444-4444-8444-444444444444",
+      "upload:r1",
+    ]);
   });
 });

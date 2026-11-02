@@ -22,12 +22,14 @@ import { openAlertCountsByAttempt } from "@/lib/safeguarding/alertQueries";
 import { buildResults, type ResultsRow } from "@/lib/scoring/results";
 import {
   buildDocHtml,
+  docPictureKeys,
   docTitle,
   type EssaySection,
   type ReleaseContents,
 } from "@/lib/googleDocs/content";
 import { DOC_ITEM_TYPES } from "@/lib/googleDocs/sendDialog";
-import { questionPictures, wholeTestAnswer } from "@/lib/googleDocs/wholeTest";
+import { pictureKey, questionPictures, wholeTestAnswer } from "@/lib/googleDocs/wholeTest";
+import { createPictureLoader, fitPictures } from "@/lib/googleDocs/pictures";
 import { essayRichHtml } from "@/lib/richText/renderEssayAnswer";
 import { DriveAuthError, DriveError, docUrl, type DriveClient } from "@/lib/googleDocs/drive";
 import { PRODUCT_NAME } from "@/lib/brand";
@@ -402,6 +404,32 @@ export async function releaseToGoogleDocs(
     return { ok: true, outcomes, drive_auth_needed: true };
   }
 
+  // Slice 4, images: read once per send (a stem's picture is every student's).
+  const loadPicture = whole
+    ? createPictureLoader(db, assessment, new Map(responseRows.map((r) => [r.id, r])))
+    : null;
+
+  /** Slice 4: the pictures that fit this student's Doc (pictures.ts). */
+  async function docPictures(
+    essays: EssaySection[],
+    base: Omit<Parameters<typeof buildDocHtml>[0], "pictures">,
+  ): Promise<Map<string, string> | undefined> {
+    if (!loadPicture) return undefined;
+    const keys = docPictureKeys({ essays, contents: options.contents });
+    if (keys.length === 0) return undefined;
+    const uploadIds = new Map<string, string>();
+    for (const e of essays) {
+      const ref = e.answer_view?.kind === "picture" ? e.answer_view.picture.ref : null;
+      if (ref?.kind === "upload") uploadIds.set(pictureKey(ref), ref.upload_id);
+    }
+    const uris = new Map<string, string>();
+    for (const key of keys) {
+      const uri = await loadPicture(key, uploadIds.get(key));
+      if (uri) uris.set(key, uri);
+    }
+    return fitPictures(buildDocHtml(base).length, keys, uris);
+  }
+
   // ── One Doc per student, a few at a time.
   const queue = [...toSend];
   async function worker() {
@@ -415,7 +443,7 @@ export async function releaseToGoogleDocs(
       const draft = row.status !== "submitted";
       const title = docTitle(studentName(row), assessment.name, now);
       try {
-        const html = buildDocHtml({
+        const docInput = {
           studentName: studentName(row),
           assessmentName: assessment.name,
           draftAsOf: draft ? now : null,
@@ -424,7 +452,8 @@ export async function releaseToGoogleDocs(
           contents: options.contents,
           doubleSpace: options.doubleSpace ?? false,
           wholeTest: whole,
-        });
+        };
+        const html = buildDocHtml({ ...docInput, pictures: await docPictures(essays, docInput) });
         const fileId = await drive.uploadDoc(title, sectionFolders.get(row.student.section ?? "")!, html);
         const permissionId = await drive.shareWriter(fileId, row.student.email!);
         // Slice 5: the Doc is already shared, so a failed transfer is
