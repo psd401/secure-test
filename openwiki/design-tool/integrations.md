@@ -33,6 +33,7 @@ openwiki:
     - The Send to gradebook button appears only when GRADEBOOK_PROVIDER is explicitly live or mock.
     - The insights model sees an evidence pack with no names or ids and every number in a claim is filled server-side from a keyed figure.
     - The Drive token is a one-hour encrypted cookie limited to the drive.file scope and is never stored in the database.
+    - A whole-test Doc never carries a key: the answer view type has no key field and the config is cut to its declared fields before mapping.
   validation_commands:
     - cd design-tool && DATABASE_URL=postgres://$USER@localhost:5432/secure_test_design_tool_test bun test test/gradebook-send.test.ts
 ---
@@ -97,6 +98,21 @@ Design page: `docs/google-docs-release-design.md`. Routes: `GET /api/google/driv
 
 - Auth: `lib/googleDocs/driveAuth.ts` runs a PKCE authorization for the single scope `drive.file` and keeps a one-hour access token in an encrypted httpOnly cookie (`secure-test-gdrive`, path `/api/assessments`). Nothing is stored in the database; no refresh token exists. The callback refuses any token whose granted scopes are not exactly `drive.file` (finding GD-P1).
 - Release (`lib/googleDocs/release.ts`): one Google Doc per student per assessment holding every essay and short answer. The boxes (teacher and AI score, teacher and AI feedback, rubric table, prompt, sources) and the per-question rules are those of [feedback release](feedback-release.md); the Doc is rendered from the same `buildFeedbackRelease` blocks as the packet, and AI comments on a short answer are withheld. The Doc is created in the sender's Drive under `<product> / <assessment> / <section>` and shared with the student as editor; optional ownership transfer, double spacing and "include drafts". Skips are decided before anything touches Drive (`SkipReason`: `not_handed_in`, `already_released`, `safeguarding_alert`, `no_email`, `no_essay`, `drive_auth_expired`), concurrency is 3, and a send where everyone is skipped creates no folders. `mode: "skip" | "new"` decides what happens to students who already have a Doc.
+- Whole-test Doc (U-25 slice 4, `docs/google-docs-whole-test-design.md`): the dialog's **Whole test** box (`SendToGoogleDocsControl.tsx`, `sendDialog.ts` `wholeTest`) and the route's `whole_test` flag make `releaseToGoogleDocs` read every item in position order instead of only essays and short answers. The box is forced on, and disabled, when the test has no essay or short answer. The choice is not remembered between sends: the route's remembered prefs store only the boxes. Each question is a heading with its stem and the student's answer, and the score and feedback boxes apply as in any Doc. `wholeTestAnswer` (`lib/googleDocs/wholeTest.ts`) maps the answer per type: every option with the chosen ones marked, match pairs as `left → right` or `(none)`, order numbered, fill-in blanks as the student's words, a table grid with `—` for an empty cell, a hotspot as a count of areas, and a drawing as its picture. Graph answers are written in words; no graph is drawn. The key rule (D-11) is enforced by type, not by a filter: `DocAnswer` has no key field, and `keyFreeConfig` cuts the item config to its declared fields before any mapping, so correct answers, cell keys, blank keys and region keys never reach the mapper. A match's pairing and an order's sequence are shown only as the student's own arrangement. An all-blank student is skipped as `no_answers`; a test with no questions fails as `no_items` (HTTP 409). A release row records `contents.whole_test: true`.
+- Pictures in a whole-test Doc (`lib/googleDocs/pictures.ts`): Google cannot fetch the app's signed image URLs, so each picture is embedded as a `data:` URI. Only PNG, JPEG and GIF are embedded. `fitPictures` adds pictures in document order until the HTML would pass `DOC_HTML_BUDGET` (4.5 MiB, under Drive's 5 MB multipart limit); later ones become a text line marking the picture as too large. An unreadable picture falls back to the text placeholder with its alt text. Asset pictures are read as the assessment owner; drawings are read through the response they belong to, and only completed uploads are embedded.
+```mermaid
+flowchart LR
+  Dialog["SendToGoogleDocsControl: Whole test box"] --> Route["POST /api/assessments/[id]/google-docs"]
+  Route --> Release["releaseToGoogleDocs (release.ts)"]
+  Release --> Answers["wholeTestAnswer per item (key-free)"]
+  Release --> Pics["createPictureLoader and fitPictures"]
+  Answers --> Content["content.ts Doc HTML"]
+  Pics --> Content
+  Content --> Drive["Drive upload under drive.file"]
+```
+
+Caption: a whole-test send maps each item key-free, embeds pictures within the budget, and uploads one HTML Doc per student.
+
 - Persistence: `google_doc_folders`, `google_doc_releases`, and the last dialog choices in `feedback_release_prefs`. The content builders (`content.ts`) reuse the results and rubric views, and essay HTML goes through the same sanitiser as the reporting views.
 
 ## Class insights
@@ -123,3 +139,4 @@ Design page: `docs/class-insights-design.md`. Routes: `POST /api/assessments/[id
 | Insights exclusions or claim checks (the digit rule and its `contentNumbers` exception live in `report.ts`) | `evidencePack.ts`, `report.ts` (`fillClaim`, `contentNumbers`), `reportPrompt.ts`, `chat.ts` | `insights-evidence-pack.test.ts`, `insights-report.test.ts`, `insights-chat.test.ts`, `insights-*-route.test.ts` |
 
 Do not exercise `live` gradebook or Drive paths in automated checks; the mock client and injected `DriveClient` exist for that. Related: [scoring and results](scoring-and-results.md), [accommodations and roster](accommodations-and-roster.md) (section and `dcid` data used for the send).
+`dcid` data used for the send).
