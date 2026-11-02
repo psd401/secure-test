@@ -584,7 +584,7 @@ describe("POST /api/accommodations/import (slice 23a)", () => {
       return acc!.id;
     }
 
-    async function acceptTide(accId: string, tide_value: unknown) {
+    async function acceptTide(accId: string, tide_value: unknown, extra: object = {}) {
       const { POST } = await import(
         "../app/api/accommodations/import/diff/[accId]/accept-tide/route"
       );
@@ -594,7 +594,7 @@ describe("POST /api/accommodations/import (slice 23a)", () => {
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ tide_value }),
+            body: JSON.stringify({ tide_value, ...extra }),
           },
         ),
         { params: Promise.resolve({ accId }) },
@@ -614,6 +614,16 @@ describe("POST /api/accommodations/import (slice 23a)", () => {
       expect(row!.source).toBe("tide_then_edited");
       expect(row!.value).toBe("Yellow on Black");
       expect(row!.edited_at).not.toBeNull();
+    });
+
+    test("a body past the default limit is 413 and the row is unchanged (PR #169 re-review)", async () => {
+      const accId = await seedEditedRow();
+      const res = await acceptTide(accId, "Red on White", { pad: "x".repeat(300 * 1024) });
+      expect(res.status).toBe(413);
+      expect(((await res.json()) as { error: string }).error).toBe("body_too_large");
+      const [row] = await getDb().select().from(student_accommodations);
+      expect(row!.source).toBe("tide_then_edited");
+      expect(row!.value).toBe("Yellow on Black");
     });
 
     test("rejects a catalog value that belongs to a DIFFERENT tool", async () => {

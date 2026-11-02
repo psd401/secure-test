@@ -6,7 +6,7 @@
 // one issue object per element (advisory GHSA-mrhx-c7xc-m3w5 — a 2 MB array
 // measured ~224 MB of heap). Every API route reads its JSON through
 // `readJsonBody` instead; test/json-body-cap.test.ts refuses a direct
-// `req.json()` under app/api.
+// `req.json()`, `req.text()` or `req.arrayBuffer()` under app/api.
 //
 // The tiers come from production's stored payload sizes (`oneoff-aurora.sh
 // payload-sizes`, 2026-10-25: largest stored item 8.7 KiB, answer 13.9 KiB,

@@ -84,11 +84,23 @@ async function routeFiles(dir: string): Promise<string[]> {
 }
 
 describe("every API route reads JSON through readJsonBody", () => {
-  test("no direct req.json() / request.json() under app/api", async () => {
+  // Routes that read a non-JSON body directly, and why. Anything else that
+  // calls req.text() / .json() / .arrayBuffer() skips the cap — two staff
+  // routes did, unseen, because the tier table below only lists routes that
+  // DO call readJsonBody (PR #169 re-review).
+  const DIRECT_READ_ALLOWED: Record<string, string> = {
+    "attempts/[attemptId]/responses/[itemId]/upload/route.ts":
+      "binary canvas PUT, the local-fs fallback for storage that cannot presign; checks UPLOAD_MAX_BYTES itself",
+  };
+
+  test("no direct req.json() / .text() / .arrayBuffer() under app/api", async () => {
     const offenders: string[] = [];
     for (const f of await routeFiles(API)) {
       const src = await Bun.file(f).text();
-      if (/\b(req|request)\.json\(\)/.test(src)) offenders.push(path.relative(API, f));
+      const rel = path.relative(API, f);
+      if (/\b_?(req|request)\.(json|text|arrayBuffer)\(\)/.test(src) && !(rel in DIRECT_READ_ALLOWED)) {
+        offenders.push(rel);
+      }
     }
     expect(offenders).toEqual([]);
   });
@@ -125,8 +137,9 @@ describe("every API route reads JSON through readJsonBody", () => {
     // 49 with the two teacher-feedback PUTs (docs/feedback-release-design.md),
     // both on the default tier. 50 with Pass back everyone (U-25), default;
     // 51 with the per-attempt pass back, which read its body uncapped until
-    // the PR #169 review.
-    expect(Object.keys(seen).length).toBe(51);
+    // the PR #169 review; 53 with rescore-ai and accept-tide, which read
+    // theirs with req.text() until the PR #169 re-review.
+    expect(Object.keys(seen).length).toBe(53);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

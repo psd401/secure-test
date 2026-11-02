@@ -4,6 +4,7 @@ import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
 import { loadResponseChain } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
+import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 import { injectionAlertFor, recordAiForced } from "@/lib/safeguarding/alerts";
 import { screenResponse } from "@/lib/safeguarding/screening/screen";
 
@@ -32,6 +33,11 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!UUID_RE.test(responseId)) {
     return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
   }
+  // Read before anything else so an oversized body is a 413 whether or not
+  // the answer is flagged (the body only matters when it is).
+  const bodyRead = await readJsonBody(req, JSON_BODY_LIMITS.default);
+  if (!bodyRead.ok) return bodyRead.response;
+  const force = readForce(bodyRead);
 
   const chain = await loadResponseChain(responseId, auth.session);
   if (!chain.ok) {
@@ -54,7 +60,7 @@ export async function POST(req: Request, ctx: RouteContext) {
   await screenResponse(db, chain.response.id);
   const alert = await injectionAlertFor(db, chain.response.id);
   if (alert) {
-    if (!(await readForce(req))) {
+    if (!force) {
       return NextResponse.json(
         {
           ok: false,
@@ -129,11 +135,10 @@ export async function POST(req: Request, ctx: RouteContext) {
 
 // `{ "force": true }` or nothing. An empty or unparseable body is "no force"
 // rather than a 400: the queue has always posted this route bodiless.
-async function readForce(req: Request): Promise<boolean> {
+function readForce(bodyRead: { empty: boolean; parse: () => unknown }): boolean {
+  if (bodyRead.empty) return false;
   try {
-    const text = await req.text();
-    if (!text.trim()) return false;
-    const body = JSON.parse(text) as unknown;
+    const body = bodyRead.parse();
     return (
       typeof body === "object" &&
       body !== null &&

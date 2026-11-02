@@ -647,15 +647,33 @@ describe("POST /api/attempts/:id/score-ai", () => {
   });
 });
 
-async function postRescoreAi(responseId: string) {
+async function postRescoreAi(responseId: string, body?: string) {
   const { POST } = await import("../app/api/responses/[responseId]/rescore-ai/route");
   return POST(
     new Request(`http://localhost/api/responses/${responseId}/rescore-ai`, {
       method: "POST",
+      ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body }),
     }),
     { params: Promise.resolve({ responseId }) },
   );
 }
+
+describe("POST /api/responses/:id/rescore-ai body", () => {
+  test("a body past the default limit is 413 and nothing is scored (PR #169 re-review)", async () => {
+    const { db, itemRows } = await seedAiScenario();
+    const [aiResponse] = await db
+      .select()
+      .from(responses)
+      .where(eq(responses.item_id, itemRows[0]!.id));
+    const res = await postRescoreAi(
+      aiResponse!.id,
+      JSON.stringify({ force: true, pad: "x".repeat(300 * 1024) }),
+    );
+    expect(res.status).toBe(413);
+    expect(((await res.json()) as { error: string }).error).toBe("body_too_large");
+    expect(await db.select().from(scores)).toHaveLength(0);
+  });
+});
 
 // docs/ai-score-concurrency-design.md: a short-lived claim per response so
 // concurrent requests never both call the scorer.
