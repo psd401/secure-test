@@ -4,7 +4,7 @@ import { aiScoreResponse } from "@/lib/scoring/aiScoreResponse";
 import { loadResponseChain } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
-import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { JSON_BODY_LIMITS, readJsonBody, type JsonBodyRead } from "@/lib/api/jsonBody";
 import { injectionAlertFor, recordAiForced } from "@/lib/safeguarding/alerts";
 import { screenResponse } from "@/lib/safeguarding/screening/screen";
 
@@ -135,7 +135,7 @@ export async function POST(req: Request, ctx: RouteContext) {
 
 // `{ "force": true }` or nothing. An empty or unparseable body is "no force"
 // rather than a 400: the queue has always posted this route bodiless.
-function readForce(bodyRead: { empty: boolean; parse: () => unknown }): boolean {
+function readForce(bodyRead: Extract<JsonBodyRead, { ok: true }>): boolean {
   if (bodyRead.empty) return false;
   try {
     const body = bodyRead.parse();
