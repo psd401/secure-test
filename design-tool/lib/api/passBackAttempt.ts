@@ -25,7 +25,14 @@
  */
 
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { attempt_events, attempts, responses, scores, type AttemptRow } from "@/db/schema";
+import {
+  attempt_events,
+  attempts,
+  responses,
+  scores,
+  type AttemptCorrections,
+  type AttemptRow,
+} from "@/db/schema";
 import type { getDb } from "@/db/client";
 
 type Db = ReturnType<typeof getDb>;
@@ -43,6 +50,27 @@ export interface PassBackOptions {
    */
   endsAt?: Date | null;
   now?: Date;
+  /**
+   * U-25 slice 3 (D-8, D-21…D-27): corrections mode for THIS pass back. Both
+   * false (the default) clears any earlier choice — each pass back says what
+   * it wants, so an old lock never outlives the press that asked for it.
+   */
+  corrections?: { show_marks: boolean; lock_correct: boolean };
+}
+
+/** The `attempts.corrections` value a pass back writes: null when it asked
+ * for neither option. Pure for the tests. */
+export function correctionsFor(
+  options: PassBackOptions["corrections"],
+  now: Date,
+): AttemptCorrections | null {
+  if (!options || (!options.show_marks && !options.lock_correct)) return null;
+  return {
+    show_marks: options.show_marks,
+    lock_correct: options.lock_correct,
+    passed_back_at: now.toISOString(),
+    locks_delivered: false,
+  };
 }
 
 export interface PassBackResult {
@@ -59,6 +87,7 @@ export async function passBackAttempt(
 ): Promise<PassBackResult> {
   const now = options.now ?? new Date();
   const endsAt = options.endsAt ?? null;
+  const corrections = correctionsFor(options.corrections, now);
   const previouslySubmittedAt = attempt.submitted_at;
 
   return db.transaction(async (tx) => {
@@ -98,6 +127,7 @@ export async function passBackAttempt(
         submitted_at: null,
         submitted_by_sub: null,
         pass_back_count: sql`${attempts.pass_back_count} + 1`,
+        corrections,
         // Only when the caller has one: an unlimited assessment must not gain a
         // deadline it never had, and a `null` here would ERASE an extension on
         // a timed one.
@@ -119,6 +149,11 @@ export async function passBackAttempt(
         previously_submitted_at: previouslySubmittedAt?.toISOString() ?? null,
         superseded_scores: supersededScores,
         ends_at: endsAt?.toISOString() ?? null,
+        // Slice 3: what the student was told to work on, for the audit trail
+        // — only when asked, so a plain pass back's event is unchanged.
+        ...(corrections
+          ? { show_marks: corrections.show_marks, lock_correct: corrections.lock_correct }
+          : {}),
       },
     });
 

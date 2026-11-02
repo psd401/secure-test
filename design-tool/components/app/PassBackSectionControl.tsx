@@ -11,6 +11,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  CorrectionsOptions,
+  NO_CORRECTIONS,
+  correctionsBody,
+  type CorrectionsChoice,
+} from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 import { passBackAllCopy } from "@/components/app/PassBackAllControl";
@@ -72,6 +78,7 @@ export function PassBackSectionControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<CorrectionsChoice>(NO_CORRECTIONS);
 
   const chosen = options?.find((o) => o.section === section) ?? null;
 
@@ -105,7 +112,11 @@ export function PassBackSectionControl({
       const res = await fetch(`/api/assessments/${assessmentId}/pass-back`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ section: chosen.section, ...(endsAt ? { ends_at: endsAt } : {}) }),
+        body: JSON.stringify({
+          section: chosen.section,
+          ...(endsAt ? { ends_at: endsAt } : {}),
+          ...correctionsBody(corrections),
+        }),
       });
       if (!res.ok) throw await readError(res);
       const body = (await res.json()) as { passed_back?: number };
@@ -127,6 +138,7 @@ export function PassBackSectionControl({
           setError(null);
           setStatus(null);
           setValue(defaultExtendValue());
+          setCorrections(NO_CORRECTIONS);
           setOpen(true);
           void loadOptions();
         } else if (!busy) setOpen(false);
@@ -195,6 +207,9 @@ export function PassBackSectionControl({
               This test has a time limit — pick when it ends now, for everyone.
             </span>
           </label>
+        ) : null}
+        {chosen ? (
+          <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />
         ) : null}
         {error ? (
           <p role="alert" className="text-sm text-danger-foreground">

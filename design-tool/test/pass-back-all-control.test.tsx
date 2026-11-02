@@ -12,6 +12,11 @@ import {
   sectionOptionLabel,
 } from "../components/app/PassBackSectionControl";
 import { NO_SECTION } from "../lib/scoring/sectionFilter";
+import {
+  CorrectionsOptions,
+  NO_CORRECTIONS,
+  correctionsBody,
+} from "../components/app/CorrectionsOptions";
 
 describe("PassBackAllControl", () => {
   test("enabled with ids and no disabledReason", () => {
@@ -131,5 +136,25 @@ describe("PassBackSectionControl", () => {
     expect(sectionOptionLabel({ section: NO_SECTION, handed_in: 1, timed: true })).toBe(
       "No section — 1 handed in",
     );
+  });
+});
+
+describe("CorrectionsOptions (U-25 slice 3a)", () => {
+  test("both boxes, unticked by default", () => {
+    const html = renderToStaticMarkup(
+      <CorrectionsOptions value={NO_CORRECTIONS} onChange={() => {}} disabled={false} />,
+    );
+    expect(html).toContain("Show right/wrong");
+    expect(html).toContain("Lock correct answers");
+    expect(html).toContain("never the answer");
+    expect(html).not.toContain("checked");
+  });
+
+  test("the body carries nothing when both are off, both fields otherwise", () => {
+    expect(correctionsBody(NO_CORRECTIONS)).toEqual({});
+    expect(correctionsBody({ show_marks: true, lock_correct: false })).toEqual({
+      show_marks: true,
+      lock_correct: false,
+    });
   });
 });

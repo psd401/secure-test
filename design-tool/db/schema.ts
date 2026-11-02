@@ -865,6 +865,14 @@ export const attempts = pgTable(
     // (`passed_back`, with `detail.by`). The column exists so a reader does not
     // have to aggregate the event table to answer the common case.
     pass_back_count: integer("pass_back_count").notNull().default(0),
+    // U-25 slice 3 (docs/bulk-pass-back-and-corrections-design.md, D-8 /
+    // D-21…D-27): corrections mode for the CURRENT pass back — whether the
+    // reopened test shows right/wrong marks and locks full-credit answers.
+    // Null when the last pass back asked for neither (and on every attempt
+    // never passed back). `passed_back_at` names the round the marks come
+    // from (D-24); `locks_delivered` is set once a delivery bundle actually
+    // carried locks (slice 3b), so the write guard refuses only then (D-27).
+    corrections: jsonb("corrections").$type<AttemptCorrections>(),
     // Practice sittings (docs/practice-sitting-design.md, D-1/D-4): true when
     // the attempt was started through a `practice` sitting — a staff member
     // sitting their own test. On the attempt rather than read through the
@@ -1547,6 +1555,12 @@ export type AssessmentStudentOverrideInsert =
 export type GuardrailEventRow = typeof guardrail_events.$inferSelect;
 export type GuardrailEventInsert = typeof guardrail_events.$inferInsert;
 export type TestSessionRow = typeof test_sessions.$inferSelect;
+export interface AttemptCorrections {
+  show_marks: boolean;
+  lock_correct: boolean;
+  passed_back_at: string;
+  locks_delivered: boolean;
+}
 export type AttemptRow = typeof attempts.$inferSelect;
 export type AttemptInsert = typeof attempts.$inferInsert;
 export type AttemptEventRow = typeof attempt_events.$inferSelect;

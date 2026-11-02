@@ -29,6 +29,10 @@ const BodySchema = z.object({
       message: "ends_at must be a parseable date",
     })
     .optional(),
+  /** U-25 slice 3 (D-8, D-25): corrections mode, for everyone this press
+   * passes back. */
+  show_marks: z.boolean().optional(),
+  lock_correct: z.boolean().optional(),
 });
 
 /**
@@ -128,6 +132,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   for (const attempt of toPassBack) {
     const result = await passBackAttempt(db, attempt, auth.session.sub, {
       endsAt: attemptIsTimed(attempt, assessment) ? endsAt : null,
+      corrections: {
+        show_marks: parsed.data.show_marks ?? false,
+        lock_correct: parsed.data.lock_correct ?? false,
+      },
     });
     supersededScores += result.superseded_scores;
     passed.push({ attempt_id: result.attempt.id, status: result.attempt.status });

@@ -24,6 +24,9 @@ const Body = z.object({
       message: "ends_at must be a parseable date",
     })
     .optional(),
+  /** U-25 slice 3 (D-8): corrections mode for this pass back. */
+  show_marks: z.boolean().optional(),
+  lock_correct: z.boolean().optional(),
 });
 
 /**
@@ -77,10 +80,15 @@ export async function POST(req: Request, ctx: RouteContext) {
   // An empty body is legitimate (an unlimited assessment), so a request with no
   // JSON at all parses as `{}` rather than failing.
   let endsAt: Date | null = null;
+  let corrections = { show_marks: false, lock_correct: false };
   try {
     const raw = await req.text();
     const parsed = Body.parse(raw.trim() === "" ? {} : JSON.parse(raw));
     endsAt = parsed.ends_at ? new Date(Date.parse(parsed.ends_at)) : null;
+    corrections = {
+      show_marks: parsed.show_marks ?? false,
+      lock_correct: parsed.lock_correct ?? false,
+    };
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
@@ -116,7 +124,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     db,
     attempt,
     auth.session.sub,
-    { endsAt },
+    { endsAt, corrections },
   );
 
   return NextResponse.json({

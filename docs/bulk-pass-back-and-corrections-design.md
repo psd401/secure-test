@@ -236,3 +236,4 @@ None open for slices 1–2.
 - 2026-11-02 — slice 2c (gradebook Latest / Attempt 1, migration 0068) built; rows 917–920.
 - 2026-11-02 — the rescore note's "Send again" section list made basis-aware (an attempt-1 push is not named for attempts with an attempt 1).
 - 2026-11-02 — D-21…D-27 decided; slice 3 planned as 3a–3d. Nothing built.
+- 2026-11-02 — slice 3a built (migration 0069 `attempts.corrections`, the two checkboxes in all three dialogs). Until 3d the checkboxes are stored but change nothing a student sees, so 3a should not reach production on its own; the help page is updated with 3d.

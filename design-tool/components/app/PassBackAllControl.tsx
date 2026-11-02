@@ -11,6 +11,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  CorrectionsOptions,
+  NO_CORRECTIONS,
+  correctionsBody,
+  type CorrectionsChoice,
+} from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
 import {
   defaultExtendValue,
@@ -90,6 +96,7 @@ export function PassBackAllControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<CorrectionsChoice>(NO_CORRECTIONS);
 
   const reason =
     disabledReason ?? (attemptIds.length === 0 ? "No handed-in tests to pass back." : undefined);
@@ -112,6 +119,7 @@ export function PassBackAllControl({
         body: JSON.stringify({
           attempt_ids: attemptIds,
           ...(endsAt ? { ends_at: endsAt } : {}),
+          ...correctionsBody(corrections),
         }),
       });
       if (!res.ok) throw await readError(res);
@@ -134,6 +142,7 @@ export function PassBackAllControl({
           setError(null);
           setStatus(null);
           setValue(defaultExtendValue());
+          setCorrections(NO_CORRECTIONS);
           setOpen(true);
         } else if (!busy) setOpen(false);
       }}
@@ -177,6 +186,7 @@ export function PassBackAllControl({
             </span>
           </label>
         ) : null}
+        <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />
         {error ? (
           <p role="alert" className="text-sm text-danger-foreground">
             {error}

@@ -386,6 +386,34 @@ describe("POST /api/assessments/[id]/pass-back", () => {
   });
 });
 
+describe("corrections mode on the bulk route (U-25 slice 3a, D-25)", () => {
+  test("the choice goes to everyone this press passes back", async () => {
+    const a = await seed({ attempts: [{}, {}] });
+    const { POST } = await import("../app/api/assessments/[id]/pass-back/route");
+    const res = await POST(
+      new Request(`http://localhost/api/assessments/${a.assessment.id}/pass-back`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ attempt_ids: a.attempts.map((x) => x.id), lock_correct: true }),
+      }),
+      { params: Promise.resolve({ id: a.assessment.id }) },
+    );
+    expect(res.status).toBe(200);
+    for (const attempt of a.attempts) {
+      expect((await attemptRow(attempt.id)).corrections).toMatchObject({
+        show_marks: false,
+        lock_correct: true,
+      });
+    }
+  });
+
+  test("without the options nothing is stored", async () => {
+    const a = await seed({ attempts: [{}] });
+    await passBackAll(a.assessment.id, [a.attempts[0]!.id]);
+    expect((await attemptRow(a.attempts[0]!.id)).corrections).toBeNull();
+  });
+});
+
 describe("GET /api/assessments/[id]/pass-back", () => {
   test("lists sections with handed-in counts and whether a deadline is needed", async () => {
     const a = await seed({ timeLimitSeconds: 600, attempts: [{}, {}, { status: "in_progress" }] });

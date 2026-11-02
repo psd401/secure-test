@@ -11,6 +11,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  CorrectionsOptions,
+  NO_CORRECTIONS,
+  correctionsBody,
+  type CorrectionsChoice,
+} from "@/components/app/CorrectionsOptions";
 import { ApiError, passBackErrorCopy } from "@/lib/ui/errorCopy";
 import {
   defaultExtendValue,
@@ -91,12 +97,14 @@ export function PassBackControl({
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<CorrectionsChoice>(NO_CORRECTIONS);
 
   const needsDeadline = passBackNeedsDeadline(timed);
 
   function openDialog() {
     setError(null);
     setValue(defaultExtendValue());
+    setCorrections(NO_CORRECTIONS);
     setOpen(true);
   }
 
@@ -115,7 +123,10 @@ export function PassBackControl({
       const res = await fetch(`/api/attempts/${attemptId}/pass-back`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(endsAt ? { ends_at: endsAt } : {}),
+        body: JSON.stringify({
+          ...(endsAt ? { ends_at: endsAt } : {}),
+          ...correctionsBody(corrections),
+        }),
       });
       if (!res.ok) throw await readError(res);
       setOpen(false);
@@ -172,6 +183,7 @@ export function PassBackControl({
               </span>
             </label>
           ) : null}
+          <CorrectionsOptions value={corrections} onChange={setCorrections} disabled={busy} />
           {error ? (
             <p role="alert" className="text-sm text-danger-foreground">
               {error}
