@@ -1,4 +1,4 @@
-# Competency assessments in SecureTest (roadmap row TBD)
+# Competency assessments in SecureTest (roadmap row CB)
 
 Design note, 2026-11-02. DRAFT — nothing is built. The district's
 competency-based assessments (CBAs) let a student earn course credit, or
