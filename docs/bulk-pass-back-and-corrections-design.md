@@ -256,3 +256,4 @@ None open for slices 1–2.
 - 2026-11-02 — slice 3b built (marks/locks, bundle field, gate with a null renderer floor, write guard). Delivery also needs `RENDERER_DELIVERY=on`; the deployed service sets it (`design-tool/infra/lib/app-service.ts`).
 - 2026-11-02 — slice 3c built: the page draws the notes and locks (`AssessmentPage.swift`: `correctionNote`, `lockAnswer`; `post` / `withdraw` / `postDrawing` refuse a locked item). `RendererCorrectionsTests` (7). Hand-run rows in `client/MANUAL-CHECKS.md` ("Corrections mode in the test page"). Not drawn on the paged strip or review page. Next: 3d — confirm how a renderer version is numbered, set the floor, deploy.
 - 2026-11-02 — D-28…D-30 decided; 3d planned (floor = the merge commit's time).
+- 2026-11-02 — slice 4 (whole test to Google Docs) built on its own branch per D-30; its record is `docs/google-docs-whole-test-design.md` (rows 921–931).
