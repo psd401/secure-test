@@ -88,10 +88,8 @@ describe("every API route reads JSON through readJsonBody", () => {
   // calls req.text() / .json() / .arrayBuffer() skips the cap — two staff
   // routes did, unseen, because the tier table below only lists routes that
   // DO call readJsonBody (PR #169 re-review).
-  const DIRECT_READ_ALLOWED: Record<string, string> = {
-    "attempts/[attemptId]/responses/[itemId]/upload/route.ts":
-      "binary canvas PUT, the local-fs fallback for storage that cannot presign; checks UPLOAD_MAX_BYTES itself",
-  };
+  // (None today: the binary canvas PUT reads through readBodyWithin.)
+  const DIRECT_READ_ALLOWED: Record<string, string> = {};
 
   test("no direct req.json() / .text() / .arrayBuffer() under app/api", async () => {
     const offenders: string[] = [];
