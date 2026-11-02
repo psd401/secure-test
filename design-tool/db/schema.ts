@@ -1560,6 +1560,9 @@ export interface AttemptCorrections {
   lock_correct: boolean;
   passed_back_at: string;
   locks_delivered: boolean;
+  /** Slice 3b: the items a delivery locked, written with `locks_delivered`
+   * so the write guard reads one row instead of rebuilding the marks. */
+  locked_item_ids?: string[];
 }
 export type AttemptRow = typeof attempts.$inferSelect;
 export type AttemptInsert = typeof attempts.$inferInsert;

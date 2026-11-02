@@ -1,4 +1,5 @@
-import { requiredClientUpgrade } from "@/lib/items/clientSupport";
+import { correctionsDeliverable, requiredClientUpgrade } from "@/lib/items/clientSupport";
+import { loadCorrections } from "@/lib/feedback/correctionMarks";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -172,6 +173,33 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (process.env.RENDERER_DELIVERY === "on") {
       const renderer = await currentRenderer();
       if (renderer) bundle.renderer = renderer;
+    }
+    // Corrections mode (docs/bulk-pass-back-and-corrections-design.md, slice
+    // 3, D-21…D-27): marks and locks on a test passed back for another try,
+    // only past the gate — a 2.0+ client on a served renderer new enough to
+    // draw them. Below it nothing is added and nothing is ever refused. The
+    // first bundle that carries locks records them on the attempt, which is
+    // what the write guard (`refuseIfLocked`) reads.
+    if (
+      attempt.corrections &&
+      correctionsDeliverable(req.headers.get(CLIENT_VERSION_HEADER), bundle.renderer)
+    ) {
+      const corrections = await loadCorrections(db, attempt);
+      if (corrections) {
+        bundle.corrections = corrections;
+        if (corrections.locked && !attempt.corrections.locks_delivered) {
+          await db
+            .update(attempts)
+            .set({
+              corrections: {
+                ...attempt.corrections,
+                locks_delivered: true,
+                locked_item_ids: corrections.locked,
+              },
+            })
+            .where(eq(attempts.id, attempt.id));
+        }
+      }
     }
     return NextResponse.json(bundle, {
       status: 200,

@@ -9,6 +9,7 @@ import {
   notFound,
 } from "@/lib/api/studentAttempt";
 import { refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
+import { refuseIfLocked } from "@/lib/api/correctionLocks";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import {
   UPLOAD_MAX_BYTES,
@@ -56,6 +57,9 @@ export async function PUT(req: Request, ctx: RouteContext) {
   // finished after time is up does not land.
   const expired = await refuseIfPastDeadline(db, access.attempt);
   if (expired) return expired;
+  // U-25 slice 3 (D-8): a full-credit answer the reopened test locked.
+  const locked = refuseIfLocked(access.attempt, itemId);
+  if (locked) return locked;
 
   const item = await loadItemForAttempt(db, access.attempt, itemId);
   if (!item) return notFound();

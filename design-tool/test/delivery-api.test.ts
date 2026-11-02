@@ -9,11 +9,13 @@ import { DeliveryBundleSchema, type ItemResponse, type Rubric } from "@secure-te
 import { closeDb, getDb } from "../db/client";
 import {
   assessments,
+  attempt_events,
   attempts,
   item_sets,
   items,
   response_uploads,
   responses,
+  scores,
   students,
   test_sessions,
 } from "../db/schema";
@@ -22,6 +24,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MATCH_LEFT, MATCH_RIGHT, opaqueId } from "../lib/api/opaqueIds";
 import { setLogSink } from "../lib/log";
+import { setCorrectionsRendererFloor } from "../lib/items/clientSupport";
 import {
   createRendererResolver,
   setRendererResolver,
@@ -1023,6 +1026,150 @@ describe("GET /api/assessments/:id/delivery — renderer", () => {
     } finally {
       setLogSink(restoreSink);
     }
+  });
+});
+
+// Corrections mode (docs/bulk-pass-back-and-corrections-design.md, slice 3b,
+// D-21…D-27): marks and locks ride only past the gate — a 2.0+ client on a
+// served renderer at or above the floor — and carry words, never points or
+// keys. The first bundle with locks records them; the write guard reads that.
+describe("GET /api/assessments/:id/delivery — corrections (U-25 slice 3b)", () => {
+  let tmp: string;
+  let previousResolver: RendererResolver | undefined;
+  let previousFloor: number | null = null;
+  let originalFlag: string | undefined;
+  const key = makeTestKey();
+
+  beforeAll(async () => {
+    tmp = await mkdtemp(join(tmpdir(), "secure-test-delivery-corrections-"));
+    originalFlag = process.env.RENDERER_DELIVERY;
+  });
+  afterEach(() => {
+    if (previousResolver) setRendererResolver(previousResolver);
+    previousResolver = undefined;
+    setCorrectionsRendererFloor(previousFloor);
+    if (originalFlag === undefined) delete process.env.RENDERER_DELIVERY;
+    else process.env.RENDERER_DELIVERY = originalFlag;
+  });
+  afterAll(async () => {
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  /** A served renderer, the floor at its version (unless `floor` says
+   * otherwise), and a passed-back attempt whose round scored the first item
+   * full credit and the second zero. */
+  async function scene(opts: { floor?: "renderer" | "above" | null } = {}) {
+    const r = await writeSignedRenderer(tmp, key, { issuedAt: new Date(Date.now() - 1000) });
+    previousResolver = setRendererResolver(
+      createRendererResolver({
+        storage: () => ({
+          id: "test",
+          put: async () => ({ storage_key: "" }),
+          delete: async () => {},
+          get: async (k: string) => new Uint8Array(await readFile(join(tmp, k))),
+        }),
+        publicKeys: [key.publicPem],
+      }),
+    );
+    process.env.RENDERER_DELIVERY = "on";
+    const floor = opts.floor === undefined ? "renderer" : opts.floor;
+    previousFloor = setCorrectionsRendererFloor(
+      floor === null ? null : floor === "above" ? r.version + 1 : r.version,
+    );
+
+    const id = await seedAllTypes();
+    const { attempt } = await admitStudent(id);
+    const db = getDb();
+    const itemRows = (await db.select().from(items).where(eq(items.assessment_id, id))).sort(
+      (a, b) => a.position - b.position,
+    );
+    const passedBackAt = new Date(Date.now() - 1000);
+    for (const [i, points] of [1, 0].entries()) {
+      const [response] = await db
+        .insert(responses)
+        .values({
+          attempt_id: attempt.id,
+          item_id: itemRows[i]!.id,
+          response: { type: "multiple_choice_single", choice_id: "x" } as ItemResponse,
+          created_at: new Date(Date.now() - 60_000),
+        })
+        .returning();
+      await db.insert(scores).values({
+        response_id: response!.id,
+        method: "auto",
+        points,
+        max_points: 1,
+        scorer: "auto",
+        status: "superseded",
+        created_at: new Date(Date.now() - 30_000),
+      });
+    }
+    await db.insert(attempt_events).values({ attempt_id: attempt.id, kind: "passed_back", at: passedBackAt });
+    await db
+      .update(attempts)
+      .set({
+        pass_back_count: 1,
+        corrections: {
+          show_marks: true,
+          lock_correct: true,
+          passed_back_at: passedBackAt.toISOString(),
+          locks_delivered: false,
+        },
+      })
+      .where(eq(attempts.id, attempt.id));
+    return { id, attempt, first: itemRows[0]!.id, second: itemRows[1]!.id };
+  }
+
+  test("past the gate: marks are words, locks are full credit, and the attempt records them", async () => {
+    const s = await scene();
+    const body = await (await getDelivery(s.id, "2.0.0")).json();
+    expect(body.corrections).toEqual({
+      marks: { [s.first]: "correct", [s.second]: "incorrect" },
+      locked: [s.first],
+    });
+    expect(DeliveryBundleSchema.parse(body).corrections).toEqual(body.corrections);
+    const [row] = await getDb().select().from(attempts).where(eq(attempts.id, s.attempt.id));
+    expect(row!.corrections).toMatchObject({ locks_delivered: true, locked_item_ids: [s.first] });
+  });
+
+  test("the locked answer refuses a write (409 item_locked); an open one does not", async () => {
+    const s = await scene();
+    await getDelivery(s.id, "2.0.0");
+    const { PUT } = await import("../app/api/attempts/[attemptId]/responses/[itemId]/route");
+    const put = (itemId: string) =>
+      PUT(
+        new Request(`http://localhost/api/attempts/${s.attempt.id}/responses/${itemId}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ response: { type: "multiple_choice_single", choice_id: "x" } }),
+        }),
+        { params: Promise.resolve({ attemptId: s.attempt.id, itemId }) },
+      );
+    const locked = await put(s.first);
+    expect(locked.status).toBe(409);
+    expect(await locked.json()).toEqual({ ok: false, error: "item_locked" });
+    expect((await put(s.second)).status).not.toBe(409);
+  });
+
+  test("below the gate nothing rides and nothing is refused (D-27)", async () => {
+    for (const [floor, version] of [
+      ["renderer", "1.9.0"],
+      ["above", "2.0.0"],
+      [null, "2.0.0"],
+    ] as const) {
+      const s = await scene({ floor });
+      expect(await (await getDelivery(s.id, version)).json()).not.toHaveProperty("corrections");
+      const [row] = await getDb().select().from(attempts).where(eq(attempts.id, s.attempt.id));
+      expect(row!.corrections!.locks_delivered).toBe(false);
+      await getDb().execute(sql`truncate table assessments restart identity cascade`);
+      await getDb().execute(sql`truncate table students restart identity cascade`);
+    }
+  });
+
+  test("no choice on the attempt: no field", async () => {
+    const s = await scene();
+    await getDb().update(attempts).set({ corrections: null }).where(eq(attempts.id, s.attempt.id));
+    expect(await (await getDelivery(s.id, "2.0.0")).json()).not.toHaveProperty("corrections");
   });
 });
 
