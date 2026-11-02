@@ -2178,3 +2178,29 @@ method (not Hybrid), leaving one student's proposal unreviewed.
 - **FR-H1 — the feedback box still says "Not shown to students yet." (2026-10-29, found writing row 871).** `TEACHER_FEEDBACK_HINT` (`design-tool/lib/teacherFeedback/limits.ts`) was written for slice 2, when nothing released the text; slices 3–4 now send it to students through the Doc and the packet when **Teacher feedback** is ticked. The line is false on every box. Fix candidate: "Students see this when you send it to Google Docs or print it with Teacher feedback ticked." — and the two tests that pin the old line (`test/scoring-queue.test.tsx`, `test/reporting-views.test.tsx`) plus the two route header comments and the per-student page's comment (`app/dashboard/[id]/results/[attemptId]/page.tsx`, beside `showFeedback`). Not changed in slice 6 (docs only). **Fixed 2026-10-29** with that wording; the tests now pin `TEACHER_FEEDBACK_HINT` rather than the text.
 - **FR-H2 — an unsaved queue draft is lost when another card is scored (2026-10-30, row 866).** The queue's load function sets `loading` on every refetch, and the page renders "Loading…" in place of the card list while it is set, so every `TeacherFeedbackBox` unmounts and remounts with its saved text. `TeacherFeedbackBox`'s own comment says a parent's refetch should not reset a draft; that holds only when the box stays mounted. Fix candidate: set `loading` only on the first load (keep the list on screen during a refetch). **Fixed 2026-10-30 in #164** ("Loading…" only before the first fetch; row 866 re-run PASS).
 - **FR-O1 — rubric table with AI feedback pairs AI comments with the teacher's levels (2026-10-30, row 881; observation).** For a student whose AI proposal the teacher overrode, the table's levels come from the final (teacher) row while the AI-feedback column holds the AI's comments on its own levels, so a cell can read "Proficient" beside "selected Developing". Same family as the accepted teacher-copy disagreement. **Ruled 2026-10-30: accepted as built** (James) — the AI-feedback box is opt-in, and the teacher copy already shows the same disagreement; no code change.
+
+## Whole test to Google Docs (U-25 slice 4, branch `claude/confident-lehmann-8fdd2d`, 2026-11-02; `docs/google-docs-whole-test-design.md`)
+
+Setup: local dev on the branch, the `_demo` DB, signed in to Google with a
+staff account (Docs need a real Drive). A made-up test with Q1 multiple
+choice (one correct option), Q2 multiple select, Q3 an essay, Q4 match, Q5
+order, Q6 a fill-in-the-blank with a typed and a dropdown blank, Q7 a table
+with keyed cells, Q8 a graph with a key, Q9 a hotspot with a picture, Q10 a
+drawing, plus a picture inside one Q1 option and one stem. A demo student
+answers everything (some wrong, so a key differs from the answer) and
+hands in; a second demo student answers only Q1; a third answers nothing.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 921 | Open **Send to Google Docs** on Results | A **Whole test** box, unticked; the description says "answers" | NOT RUN |
+| 922 | Send with **Whole test** ticked and every other box off | One Doc per student who answered; each question headed "Question n" with its text (no "Prompt" heading), in order | NOT RUN |
+| 923 | The Doc's choice questions (Q1, Q2) | Every option listed, ☑ on the student's picks, ☐ on the rest; nothing says which is correct (D-11, D-12) | NOT RUN |
+| 924 | Q4–Q8 in the Doc | The student's own pairing, order, blanks (in brackets in the sentence), cells and graph objects in words; no ✓ / ✗, "expected" or key text anywhere | NOT RUN |
+| 925 | Pictures (Q9, Q10, the option and stem pictures) | Shown as pictures in the Doc — this is the live check that Drive's HTML import keeps `data:` images; Q9 reads "You picked n areas" | NOT RUN |
+| 926 | Every score and feedback box ticked | Approved scores only, as on an essay Doc; no AI comments on any question but the essay | NOT RUN |
+| 927 | The student who answered nothing | Skipped, "no question answered" | NOT RUN |
+| 928 | Pass back the first student, change an answer in the client, send again (**Make a new Doc**) | Skipped "not handed in"; with **Include students who have not handed in**, a Draft Doc with the changed answer; after the re-hand-in, the latest answers (D-13) | NOT RUN |
+| 929 | A test with only choice questions | The button shows; **Whole test** is ticked and cannot be unticked; the send works | NOT RUN |
+| 930 | Send without **Whole test** on the first test | The Doc holds the essay only, as before | NOT RUN |
+| 931 | Close and reopen the dialog after a whole-test send | **Whole test** is unticked again (not remembered, 1.4) | NOT RUN |
+

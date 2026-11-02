@@ -97,3 +97,15 @@ below) before the slice is called done.
 ## Progress
 
 - 2026-11-02 — note written; nothing built.
+- 2026-11-02 — slices 1–4 BUILT on branch `claude/confident-lehmann-8fdd2d`
+  (not pushed, not deployed). 1: `lib/googleDocs/wholeTest.ts` + the
+  renderer, with a key-leak test per keyed type. 2: `whole_test` on the
+  route, the dialog's **Whole test** box (fixed on for a test with no essay
+  or short answer), the button on any test with a question, `no_answers` /
+  `no_items`. 3: `lib/googleDocs/pictures.ts`. **Deviation:** a 4.5 MB
+  picture budget instead of a resumable upload, to keep one Drive upload
+  path; past it a picture is a line of text. Only png, jpeg and gif are
+  embedded. A stimulus graph (`config.graph`) is not drawn and not
+  mentioned. 4: help (`#results`) and rows 921–931, all NOT RUN — row 925
+  is the first real check that Drive keeps `data:` images. The roadmap's
+  U-25 row lives on the slices 1–3 branch and is updated when they meet.
