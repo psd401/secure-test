@@ -1036,18 +1036,23 @@ describe("GET /api/assessments/:id/delivery — renderer", () => {
 describe("GET /api/assessments/:id/delivery — corrections (U-25 slice 3b)", () => {
   let tmp: string;
   let previousResolver: RendererResolver | undefined;
-  let previousFloor: number | null = null;
+  // The floor before this suite, saved ONCE: `scene()` may run several times
+  // in one test, and restoring to the last value it saw would leak a test
+  // floor into later files.
+  let originalFloor: number | null = null;
   let originalFlag: string | undefined;
   const key = makeTestKey();
 
   beforeAll(async () => {
     tmp = await mkdtemp(join(tmpdir(), "secure-test-delivery-corrections-"));
     originalFlag = process.env.RENDERER_DELIVERY;
+    originalFloor = setCorrectionsRendererFloor(null);
+    setCorrectionsRendererFloor(originalFloor);
   });
   afterEach(() => {
     if (previousResolver) setRendererResolver(previousResolver);
     previousResolver = undefined;
-    setCorrectionsRendererFloor(previousFloor);
+    setCorrectionsRendererFloor(originalFloor);
     if (originalFlag === undefined) delete process.env.RENDERER_DELIVERY;
     else process.env.RENDERER_DELIVERY = originalFlag;
   });
@@ -1073,7 +1078,7 @@ describe("GET /api/assessments/:id/delivery — corrections (U-25 slice 3b)", ()
     );
     process.env.RENDERER_DELIVERY = "on";
     const floor = opts.floor === undefined ? "renderer" : opts.floor;
-    previousFloor = setCorrectionsRendererFloor(
+    setCorrectionsRendererFloor(
       floor === null ? null : floor === "above" ? r.version + 1 : r.version,
     );
 
