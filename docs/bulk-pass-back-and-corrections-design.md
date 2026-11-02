@@ -101,22 +101,69 @@ selecting by `test_session_id` misses rebinds (U-14's reason).
 - Built in three commits: 2a the calculator (`lib/scoring/attemptOne.ts`),
   2b the display, 2c the gradebook.
 
-## Slice 3: Corrections mode (D-8, D-9, D-10)
+## Slice 3: Corrections mode (D-8…D-10, D-21…D-27)
 
-Two options in the pass-back dialog, single and bulk, chosen for that pass
-back and not stored on the assessment:
+Two checkboxes in every pass-back dialog (one student, Pass back everyone,
+Pass back a class): **Show right/wrong** and **Lock correct answers**. They
+apply to everyone that press passes back (D-25) and are stored on the
+attempt, not the assessment.
 
-- **Show right / wrong.** The reopened test marks each item correct, partly
-  correct or incorrect from its attempt-1 final score. The dialog's choice
-  overrides the assessment's `student_feedback` level for that pass back (D-9).
-  The delivery bundle carries a mark per item and never a key (ADR 0016).
-- **Lock correct answers.** Items with full credit become read-only; the
-  student-write route refuses a change to them. Partial credit stays open (D-8).
-- No "show only missed items" view (D-10).
-- Needs a migration (the choices, on the attempt or the event), delivery
-  bundle fields, server write refusal, and client rendering, which means a
-  client release (AutoPkg next-day delivery). An older client ignores the
-  marks; the server's write refusal still holds.
+What the student sees on the reopened test:
+
+- **Marks** (D-21): each question shows ✓ correct, "partly correct" or ✗
+  incorrect — no points, never the answer. The delivery bundle carries the
+  mark only (ADR 0016: the student's wire format has no field for a key).
+- **Which scores** (D-24): the hand-in just passed back — the last `final` or
+  `superseded` score per answer in that round (the round rule from
+  `lib/scoring/attemptOne.ts`, applied to the latest round instead of the
+  first). After two pass backs, marks follow the second.
+- An unreviewed AI final counts (D-22): it already counts in totals.
+- A question with no score in that round gets no mark and stays open (D-23).
+- **Locks** (D-8): only full-credit answers; partial credit stays open. A
+  locked question is read-only on the page, and the response write routes
+  refuse a change to it (409 `item_locked`).
+- Instant feedback stays off after the re-hand-in, as today (D-26).
+- **Older clients and renderers** (D-27): marks and locks reach a student only
+  when the client is 2.0+ AND the served renderer is new enough to draw them.
+  Otherwise the bundle carries neither and the server refuses nothing — the
+  `allow_highlighting` precedent (H-1), not the calculator's refusal. The
+  attempt records whether locks were delivered; the write guard refuses only
+  then, so a student is never shown a field that silently will not save.
+
+No client release: the page is the signed served renderer (v2.0), whose
+source is extracted from `client/SecureTestCore/…/AssessmentPage.swift`. A
+new renderer is built and signed (James) and named by `renderers/current.json`
+in the deploy.
+
+### Commits
+
+- **3a — the choice.** Migration: `attempts.corrections` jsonb (null, or
+  `{ show_marks, lock_correct, passed_back_at, locks_delivered }`).
+  `passBackAttempt` takes the two options and writes them (cleared on a pass
+  back without them); the per-attempt route, the bulk route (ids and section)
+  and all three dialogs send them. No student-visible change yet. Tests: the
+  route and helper write and clear it; dialog copy.
+- **3b — the server half.** `lib/feedback/correctionMarks.ts` (pure, plus a
+  loader): marks per item from the latest round's scores with
+  `buildFeedback`'s correct / partial / incorrect rule; locks = full credit.
+  `DeliveryBundleSchema` gains an optional `corrections: { marks, locked }`
+  (`packages/schema`, `bun run build` there). `buildDeliveryBundle` adds it
+  only past the gate (client ≥ 2.0.0 and the current renderer's version ≥
+  `MIN_RENDERER_VERSION_FOR_CORRECTIONS`, null until 3d — so nothing is
+  delivered yet) and sets `locks_delivered`. The response and upload write
+  routes refuse a locked item when `locks_delivered`. Tests: marks rules,
+  bundle never carries points or keys (the delivery-api key sweep), the gate
+  both ways, the write refusal, instant feedback still off after the
+  re-hand-in.
+- **3c — the page.** `AssessmentPage.swift`: a mark beside each question
+  number and on the question; a locked answer drawn read-only with "Correct —
+  locked"; VoiceOver labels; never colour alone. Swift tests in
+  `SecureTestCore` (headless). Manual-check rows in `client/MANUAL-CHECKS.md`
+  (VoiceOver per the VoiceOver method). Then James builds and signs the
+  renderer.
+- **3d — turn it on.** Set `MIN_RENDERER_VERSION_FOR_CORRECTIONS` to the
+  signed renderer's version; deploy with `renderers/current.json` naming it.
+  Hand-run rows then run with slices 1–2's.
 
 ## Slice 4: Full test to Google Docs (D-11, D-12, D-13)
 
@@ -163,6 +210,16 @@ back and not stored on the assessment:
   an attempt-1 send includes it, a latest send holds it back.
 - **D-20** (5.4, 5.5) The send's basis is remembered per section push; after
   extensions, attempt 1 is the first time the student handed in themselves.
+- **D-21** (6.1) Marks are ✓ / partly / ✗ only: no points, no answers.
+- **D-22** (6.2) An unreviewed AI final produces a mark.
+- **D-23** (6.3) A question unscored at the pass back gets no mark and stays
+  editable.
+- **D-24** (6.4) Marks and locks follow the hand-in just passed back, not
+  attempt 1.
+- **D-25** (6.5) In a bulk pass back the options apply to everyone in it.
+- **D-26** (6.6) Instant feedback stays off after the re-hand-in.
+- **D-27** (6.7) A client or renderer too old for marks gets no marks and no
+  locks, and the server refuses none of its writes.
 
 ## Open questions
 
@@ -178,3 +235,4 @@ None open for slices 1–2.
 - 2026-11-02 — slice 2b (Results / per-student page / CSV) built; rows 912–916.
 - 2026-11-02 — slice 2c (gradebook Latest / Attempt 1, migration 0068) built; rows 917–920.
 - 2026-11-02 — the rescore note's "Send again" section list made basis-aware (an attempt-1 push is not named for attempts with an attempt 1).
+- 2026-11-02 — D-21…D-27 decided; slice 3 planned as 3a–3d. Nothing built.
