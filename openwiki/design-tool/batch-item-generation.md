@@ -12,6 +12,8 @@ openwiki:
     - design-tool/lib/ai/types.ts
     - design-tool/lib/ai/batchForm.ts
     - design-tool/lib/ai/documentUpload.ts
+    - design-tool/components/app/GenerateQuestionsDialog.tsx
+    - design-tool/app/dashboard/[id]/QuestionsToolbar.tsx
   symbols: [GenerateItemsRequest, BatchTypeCounts, resolveTargetStandards, buildBatchUserText, parseBatchArray, validateBatchProposals, normalizeMatchElement, planTypes, runGuarded]
   test_paths:
     - design-tool/test/item-batch-core.test.ts
@@ -33,7 +35,9 @@ openwiki:
 
 Batch generation lets a teacher ask the AI for up to ten item drafts in one call, tied to standards, a learning objective, free notes, or pasted or uploaded source material. The single-item generator (`POST /api/ai/generate-item`, `lib/ai/itemGenCore.ts`, described in [AI providers and guardrails](ai-and-safeguarding.md)) stays for "one more like this". This page owns the batch route, its prompt and its validation. The provider selector and guardrail wrapper it calls are documented in [AI providers, guardrails and safeguarding screening](ai-and-safeguarding.md).
 
-Consult this page when changing the batch request shape, the item types a batch may plan, the prompt, the per-element validation, or the proposal response. The teacher's dialog that calls it is in `components/app/GenerateQuestionsDialog.tsx`, and its form helpers are in `lib/ai/batchForm.ts`; the dialog UI itself is not separately documented.
+Consult this page when changing the batch request shape, the item types a batch may plan, the prompt, the per-element validation, or the proposal response.
+
+Teachers reach the batch from the Items toolbar. `app/dashboard/[id]/QuestionsToolbar.tsx` renders `GenerateQuestionsDialog` (`components/app/GenerateQuestionsDialog.tsx`) only when `allow_llm_authoring` is on, and passes `canOpen={!isLocked}` so the dialog cannot open on a locked assessment. The dialog's form helpers are in `lib/ai/batchForm.ts` (`buildBatchFetchInit` builds the `POST /api/ai/generate-items` call). The new editor's start screen can open the same dialog for an `ai` draft ([start screen](new-authoring-editor.md#the-start-screen)). The dialog's answer is unsaved proposals; it does not write items, so adding a proposal goes through the items route as described below.
 
 ## Request contract
 
@@ -114,3 +118,4 @@ The result carries `proposals`, `dropped` (requested minus kept), and up to five
 Narrow check: `cd design-tool && bun test test/item-batch-core.test.ts`. Broader check when the route changes: add `DATABASE_URL=... bun test test/ai-generate-items.test.ts`.
 
 Change recipe, adding a batch type: add it to `BATCH_GENERABLE_ITEM_TYPES` in `lib/ai/types.ts`, extend `BatchTypeCounts`, add a shape block and rules in `itemBatchCore.ts`, add a per-element normalizer if the type needs one, and mirror the count limit in `batchForm.ts`. The item type itself must also exist in `CreateItemBody` ([authoring](authoring.md)) and be delivered as described in [wire formats](../architecture/wire-formats.md). Escalate to a cross-system change when the type reaches students.
+ add a shape block and rules in `itemBatchCore.ts`, add a per-element normalizer if the type needs one, and mirror the count limit in `batchForm.ts`. The item type itself must also exist in `CreateItemBody` ([authoring](authoring.md)) and be delivered as described in [wire formats](../architecture/wire-formats.md). Escalate to a cross-system change when the type reaches students.

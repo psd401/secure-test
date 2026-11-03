@@ -15,6 +15,8 @@ openwiki:
     - design-tool/app/api/standards/route.ts
     - design-tool/app/api/ai/suggest-standards/route.ts
     - design-tool/lib/ai/standardsSuggestCore.ts
+    - design-tool/lib/ai/suggestForm.ts
+    - design-tool/components/app/SuggestStandardsDialog.tsx
     - design-tool/lib/api/items.ts
     - design-tool/lib/api/requireDraft.ts
     - design-tool/lib/insights/evidencePack.ts
@@ -26,6 +28,7 @@ openwiki:
     - design-tool/test/standards-ngss.test.ts
     - design-tool/test/standards-suggest-core.test.ts
     - design-tool/test/ai-suggest-standards.test.ts
+    - design-tool/test/suggest-form.test.tsx
     - design-tool/test/item-standards.test.ts
     - design-tool/test/standards-tag-input.test.tsx
   invariants:
@@ -76,7 +79,11 @@ The catalog is generated, not hand-edited. The committed inputs live in `lib/sta
 
 ## Suggest standards
 
-`POST /api/ai/suggest-standards` (`app/api/ai/suggest-standards/route.ts`) proposes tags for an assessment's untagged items. The flow is:
+`POST /api/ai/suggest-standards` (`app/api/ai/suggest-standards/route.ts`) proposes tags for an assessment's untagged items.
+
+The teacher starts it from the Items toolbar's **Suggest standards** button. `SuggestStandardsDialog.tsx` renders that button and dialog, and `QuestionsToolbar.tsx` shows it only when `allow_llm_authoring` is on; it is disabled while the assessment has no items, and it is not blocked by the publish lock. The dialog's form validation, request body, error copy and answer summary are pure functions in `lib/ai/suggestForm.ts`, which is client-safe and mirrors the server limits (`SUGGEST_ITEM_CAP` of 40 items and `SUGGEST_MAX_UNIT_LIST` of 20,000 characters). The dialog remembers the last subject, grade, course and scheme through the picker's preferences. A successful answer is page state only: `StandardSuggestionChips` (rendered by `AssessmentEditor.tsx`) shows each suggested tag with its reason on the untagged question's card, and Accept or Dismiss removes that chip. Accept saves the tag through the ordinary item save; a reload discards chips that were not accepted. The same route-level rules apply whichever client calls it, so the form helpers and the route must agree on limits (`test/suggest-form.test.tsx`).
+
+The flow is:
 
 ```mermaid
 sequenceDiagram
@@ -115,4 +122,3 @@ Class insights display tags through `lookupTags` and `chipLabel` (`lib/insights/
 - **Export and import**: `exportBundle.ts` emits `standards` only when non-empty, and `importBundle.ts` normalizes them, so older bundles stay byte-stable. Changing this touches [wire formats](../architecture/wire-formats.md).
 - Do not hand-edit `catalog.json` or `crosswalk.json`. Their source-of-truth is the build script and the committed sources.
 - Focused checks: `cd design-tool && bun test test/standards-catalog.test.ts test/standards-suggest-core.test.ts`. Route checks (`standards-api.test.ts`, `ai-suggest-standards.test.ts`) and the item write checks (`item-standards.test.ts`) are the next step when the HTTP contract changes. The build equality check is part of `standards-catalog.test.ts`; run the build script only when the source files change.
-.
