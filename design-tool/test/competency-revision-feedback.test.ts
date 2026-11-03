@@ -209,11 +209,28 @@ describe("revision feedback in the delivery bundle", () => {
     expect(await res.json()).not.toHaveProperty("revision_feedback");
   });
 
-  test("the shipped floor is null: nothing is emitted until the merge sets it", async () => {
-    expect(MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK).toBeNull();
+  test("a null floor emits nothing (the seam still turns it off)", async () => {
     const { a } = await seed({ claim: 2, evidence: 4 });
     setRevisionFeedbackRendererFloor(null);
     expect(await (await getDelivery(a.id)).json()).not.toHaveProperty("revision_feedback");
+  });
+
+  test("the shipped floor is #178's merge commit time: a renderer one second older gets nothing, one at it gets the panel", async () => {
+    expect(MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK).toBe(1793687410);
+    setRevisionFeedbackRendererFloor(MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK);
+    const { a } = await seed({ claim: 2, evidence: 4 });
+    const at = (version: number): RendererResolver => ({
+      current: async () => ({ sha256: "b".repeat(64), version }),
+      reset() {},
+    });
+    try {
+      setRendererResolver(at(1793687409));
+      expect(await (await getDelivery(a.id)).json()).not.toHaveProperty("revision_feedback");
+      setRendererResolver(at(1793687410));
+      expect(await (await getDelivery(a.id)).json()).toHaveProperty("revision_feedback");
+    } finally {
+      setRendererResolver(fakeRenderer);
+    }
   });
 
   test("a superseded Pass sends nothing", async () => {

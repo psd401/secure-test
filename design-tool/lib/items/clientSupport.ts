@@ -132,13 +132,15 @@ export function correctionsDeliverable(
 /**
  * Revision feedback (docs/competency-assessment-design.md, D-16, slice 7):
  * the oldest SERVED RENDERER version that draws the "Scorer feedback" panel.
- * Null until the `main` merge commit that lands the panel exists — set it
- * then to that commit's committer time, exactly as
- * `MIN_RENDERER_VERSION_FOR_CORRECTIONS` was set (slice 3d), never to a
- * branch commit's time. While null, no bundle carries the field and no
- * client is refused.
+ * 1793687410 (2026-11-02 22:30:10 PT) is the committer time of `4f44cc09`,
+ * the squash merge of PR #178 that brought the panel to `main` — so every
+ * renderer built at or after it draws the panel, and every renderer built
+ * before it is below this floor. Set the same way as
+ * `MIN_RENDERER_VERSION_FOR_CORRECTIONS` (slice 3d), never from a branch
+ * commit's time. Below it no bundle carries the field and no client is
+ * refused.
  */
-export const MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK: number | null = null;
+export const MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK: number | null = 1793687410;
 
 let revisionFeedbackRendererFloor: number | null = MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK;
 
