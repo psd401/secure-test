@@ -346,4 +346,9 @@ None open.
   `ASSIGNMENT_TRANSITIONS` in `lib/competency/assignments.ts`; only
   withdrawal is written yet — in progress, handed in, scored and released are
   written by the slices that own those events (4, 6). Rows 939–947 NOT RUN.
+- **Slice 3 BUILT 2026-11-02**: on a district assessment, delivery needs the
+  student's live assignment (else 404) and bundles only that option's set
+  plus questions in no set (shared by every option); sources, assets and
+  saved answers follow the filtered questions. A teacher assessment is
+  unchanged. The answer write routes are not yet restricted to the option.
 - Nothing committed here is pushed or deployed.

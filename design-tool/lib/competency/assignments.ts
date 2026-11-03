@@ -1,7 +1,8 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
 import type { getDb } from "@/db/client";
 import {
+  competency_assignments,
   item_sets,
   type AssessmentRow,
   type CompetencyAssignmentStatus,
@@ -94,4 +95,29 @@ export async function isOptionOf(db: Db, assessmentId: string, itemSetId: string
     .where(and(eq(item_sets.id, itemSetId), eq(item_sets.assessment_id, assessmentId)))
     .limit(1);
   return Boolean(row);
+}
+
+/**
+ * The student's live (not withdrawn) assignment on this assessment, or null —
+ * what delivery filters the bundle by (slice 3). Keyed by the roster id: an
+ * overlay student with none has no assignment.
+ */
+export async function liveAssignmentFor(
+  db: Db,
+  assessmentId: string,
+  rosterPsId: string | null,
+): Promise<{ id: string; item_set_id: string } | null> {
+  if (!rosterPsId) return null;
+  const [row] = await db
+    .select({ id: competency_assignments.id, item_set_id: competency_assignments.item_set_id })
+    .from(competency_assignments)
+    .where(
+      and(
+        eq(competency_assignments.assessment_id, assessmentId),
+        eq(competency_assignments.student_ps_id, rosterPsId),
+        ne(competency_assignments.status, "withdrawn"),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }

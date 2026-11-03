@@ -59,12 +59,24 @@ export async function buildDeliveryBundle(
    * `allow_highlighting` (lib/items/clientSupport.ts, H-1).
    */
   clientVersion: string | null = null,
+  /**
+   * CBA slice 3 (docs/competency-assessment-design.md, D-4): on a district
+   * assessment, the item set (option) on this student's assignment. Only that
+   * set's questions — and questions in no set, which every option shares —
+   * are bundled. Everything downstream (sets, sources, assets, saved answers)
+   * is derived from these rows, so another option's stimulus, sources and
+   * images never reach the bundle. Null = every question, as before.
+   */
+  onlyItemSetId: string | null = null,
 ): Promise<{ bundle: DeliveryBundle; bundledCount: number }> {
-  const itemRows = await db
+  const allItemRows = await db
     .select()
     .from(items)
     .where(eq(items.assessment_id, assessment.id))
     .orderBy(asc(items.position));
+  const itemRows = onlyItemSetId
+    ? allItemRows.filter((r) => r.item_set_id === null || r.item_set_id === onlyItemSetId)
+    : allItemRows;
 
   // Same posture as the export route (slice 46): the DB `type` column is plain
   // text, so a forged or legacy row can carry a type this switch does not know.
