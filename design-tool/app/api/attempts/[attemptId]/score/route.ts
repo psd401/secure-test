@@ -24,7 +24,8 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
+  // `score` (competency D-11): a scorer may run the auto pass it is reviewing.
+  const access = await authorizeAttempt(db, auth.session, attemptId, "score", "write");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
   if (attempt.status !== "submitted") {

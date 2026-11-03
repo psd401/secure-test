@@ -444,12 +444,12 @@ export default async function AttemptResultPage({ params }: PageProps) {
 
   // Teacher feedback (docs/feedback-release-design.md, D-4 / D-12): one
   // comment per answer and one overall, on a handed-in, non-practice attempt.
-  // Written at edit level and never by a non-impersonating admin (the routes
+  // Written at score level and never by a non-impersonating admin (the routes
   // refuse that write the same way, SEC-03); everyone else who can read the
   // page reads the comments. Students see them only through a release (FR
   // slices 3–4) with Teacher feedback ticked.
   const showFeedback = row.status === "submitted" && !attempt.practice;
-  const canWriteFeedback = levelSatisfies(access.level, "edit") && access.via !== "admin";
+  const canWriteFeedback = levelSatisfies(access.level, "score") && access.via !== "admin";
   const feedbackByResponse = new Map<string, string>();
   let overallFeedback = "";
   if (showFeedback) {

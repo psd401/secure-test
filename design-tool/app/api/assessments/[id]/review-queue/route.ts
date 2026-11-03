@@ -395,9 +395,9 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   // "Score all with AI (n)" at the top of the queue (roadmap U-24's Results
   // button, beta feedback 2026-10-28): the same count Results shows, over the
-  // handed-in attempts in the filtered section, at the same edit level. The
-  // score-ai route stays the authority on what a press actually scores.
-  const aiBatch = levelSatisfies(access.level, "edit")
+  // handed-in attempts in the filtered section, at the score-ai route's own
+  // `score` level. That route stays the authority on what a press actually scores.
+  const aiBatch = levelSatisfies(access.level, "score")
     ? await aiBatchCounts(
         db,
         id,

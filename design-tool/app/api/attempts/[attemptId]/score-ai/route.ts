@@ -53,7 +53,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
+  // `score` (competency D-11): AI proposals are part of the review a scorer
+  // does; the item's scoring method, set at `edit`, still decides what runs.
+  const access = await authorizeAttempt(db, auth.session, attemptId, "score", "write");
   if (!access.ok) return access.response;
   const attempt = access.attempt;
   const assessment = access.assessment;

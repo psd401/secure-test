@@ -498,6 +498,13 @@
       "when": 1793662721151,
       "tag": "0070_competency_pass_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793664207486,
+      "tag": "0071_access_grant_score_level",
+      "breakpoints": true
     }
   ]
 }

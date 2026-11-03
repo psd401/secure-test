@@ -1,0 +1,2 @@
+ALTER TABLE "access_grants" DROP CONSTRAINT "access_grants_level_check";--> statement-breakpoint
+ALTER TABLE "access_grants" ADD CONSTRAINT "access_grants_level_check" CHECK (level IN ('view', 'run', 'score', 'edit', 'own'));

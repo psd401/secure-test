@@ -429,7 +429,7 @@ export const GRANT_VALIDATION_STATUS: Record<GrantValidationError, 400> = {
   level_not_allowed: 400,
 };
 
-export const GrantLevelSchema = z.enum(["view", "run", "edit", "own"]);
+export const GrantLevelSchema = z.enum(["view", "run", "score", "edit", "own"]);
 
 export const CreateAssessmentGrantBody = z.object({
   grantee_email: z.string().trim().min(3).max(320),

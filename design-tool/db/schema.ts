@@ -1862,10 +1862,12 @@ export type RubricInsert = typeof rubrics.$inferInsert;
 export const ACCESS_GRANT_SCOPES = ["assessment", "teacher", "school"] as const;
 export type AccessGrantScope = (typeof ACCESS_GRANT_SCOPES)[number];
 
-/** The ladder, lowest first: `view` < `run` < `edit` < `own`. Mirrored in
- * `lib/api/accessLevels.ts`, which is what the application code imports (a
- * route must not have to reach into the schema to name a level). */
-export const ACCESS_GRANT_LEVELS = ["view", "run", "edit", "own"] as const;
+/** The ladder, lowest first: `view` < `run` < `score` < `edit` < `own`.
+ * Mirrored in `lib/api/accessLevels.ts`, which is what the application code
+ * imports (a route must not have to reach into the schema to name a level).
+ * `score` is a scorer's time-boxed grant (docs/competency-assessment-design.md,
+ * D-11/D-12). */
+export const ACCESS_GRANT_LEVELS = ["view", "run", "score", "edit", "own"] as const;
 export type AccessGrantLevel = (typeof ACCESS_GRANT_LEVELS)[number];
 
 export const access_grants = pgTable(
@@ -1911,7 +1913,7 @@ export const access_grants = pgTable(
     ),
     levelCheck: check(
       "access_grants_level_check",
-      sql`level IN ('view', 'run', 'edit', 'own')`,
+      sql`level IN ('view', 'run', 'score', 'edit', 'own')`,
     ),
   }),
 );

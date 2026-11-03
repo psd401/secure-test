@@ -216,7 +216,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           )
       ).some((a) => attemptIsTimed(a, assessment))
     : false;
-  const aiBatch = levelSatisfies(access.level, "edit") && submittedShown.length > 0
+  const aiBatch = levelSatisfies(access.level, "score") && submittedShown.length > 0
     ? await aiBatchCounts(
         db,
         assessment.id,
@@ -316,7 +316,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
       {unreviewedLine ? (
         <p className="mt-2 text-sm">
           {unreviewedLine}
-          {levelSatisfies(access.level, "edit") ? (
+          {levelSatisfies(access.level, "score") ? (
             <>
               {" — "}
               <Link

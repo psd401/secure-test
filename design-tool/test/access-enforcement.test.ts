@@ -482,7 +482,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
     }
 
     // Every level the ladder has, since `own` satisfies all of them.
-    for (const need of ["view", "run", "edit", "own"] as const) {
+    for (const need of ["view", "run", "score", "edit", "own"] as const) {
       const at = await authorizeAssessment(db, OWNER, id, need, "read");
       expect(at.ok).toBe(true);
     }
@@ -636,12 +636,16 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
     await db.delete(assets).where(eq(assets.id, asset!.id));
   });
 
-  test("the ladder orders view < run < edit < own", () => {
+  test("the ladder orders view < run < score < edit < own", () => {
     expect(levelSatisfies("own", "view")).toBe(true);
+    expect(levelSatisfies("edit", "score")).toBe(true);
+    expect(levelSatisfies("score", "run")).toBe(true);
     expect(levelSatisfies("edit", "run")).toBe(true);
     expect(levelSatisfies("run", "view")).toBe(true);
     expect(levelSatisfies("view", "view")).toBe(true);
     expect(levelSatisfies("view", "run")).toBe(false);
+    expect(levelSatisfies("run", "score")).toBe(false);
+    expect(levelSatisfies("score", "edit")).toBe(false);
     expect(levelSatisfies("run", "edit")).toBe(false);
     expect(levelSatisfies("edit", "own")).toBe(false);
   });

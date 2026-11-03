@@ -13,11 +13,11 @@ interface RouteContext {
 
 /**
  * Teacher feedback on one question (docs/feedback-release-design.md, D-4 /
- * D-12): one comment per response, edited in place by any edit-level teacher;
+ * D-12): one comment per response, edited in place by any score-level teacher;
  * the last editor is recorded. Students see it only through a release (FR
  * slices 3–4) with Teacher feedback ticked.
  *
- * The same door as the score routes: `loadResponseChain` authorizes at `edit`
+ * The same door as the score routes: `loadResponseChain` authorizes at `score`
  * with write intent, answers 404 for a missing response or one the caller
  * cannot reach, and 400 `attempt_not_submitted` while the student is still
  * working.

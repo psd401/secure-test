@@ -34,8 +34,9 @@ type Db = ReturnType<typeof getDb>;
  * The access ladder (docs/access-model-design.md, D-2).
  *
  * `view` (results and monitor, read-only) < `run` (sittings, monitor actions,
- * hand in, extend) < `edit` (items, settings, publish, scoring) < `own`
- * (share, archive, delete, grant). Every caller names the level it needs; slice
+ * hand in, extend) < `score` (the review queue and scoring actions, D-11 of
+ * docs/competency-assessment-design.md) < `edit` (items, settings, publish,
+ * pass back) < `own` (share, archive, delete, grant). Every caller names the level it needs; slice
  * 1 resolved only the owner, and slice 2 widened resolution here — to admins
  * (D-1) and to `access_grants` (D-2) — without a route changing shape.
  *

@@ -25,7 +25,7 @@ interface ShareRow {
 interface GrantRow {
   id: string;
   grantee_email: string;
-  level: "view" | "run" | "edit" | "own";
+  level: "view" | "run" | "score" | "edit" | "own";
   note: string | null;
   created_at: string;
 }
@@ -117,7 +117,7 @@ export function ShareDialog({
       if (!suggestionsRes.ok) throw await readError(suggestionsRes);
       const grantsBody = (await grantsRes.json()) as { grants: GrantRow[] };
       const suggestionsBody = (await suggestionsRes.json()) as { suggestions: Suggestion[] };
-      // Co-teach only ever writes `edit`; `view` / `run` grants belong to a
+      // Co-teach only ever writes `edit`; `view` / `run` / `score` grants belong to a
       // different feature (substitute / principal) with no UI here yet.
       setCoTeachers(grantsBody.grants.filter((g) => g.level === "edit" || g.level === "own"));
       setSuggestions(suggestionsBody.suggestions);

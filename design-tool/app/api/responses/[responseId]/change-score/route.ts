@@ -16,7 +16,7 @@ interface RouteContext {
 
 // Change a final score (docs/change-score-design.md, D-1): supersede the
 // response's current `final` and write a new human final beside it. The same
-// access and the same body rules as the score route (edit level, 404 posture,
+// access and the same body rules as the score route (score level, 404 posture,
 // max_points = the item's max, criterion picks against the scoring view) —
 // the difference is the precondition: this route REQUIRES a final, and answers
 // 409 `no_final` without one (the score route is the path then). A
