@@ -109,7 +109,7 @@ unambiguous. Each curated option is an **item set** inside it:
 - the set's stimulus is the option's prompt and its built-in sources;
 - the set holds that option's three items: planning and source notes
   (essay, ungraded), and the final response (essay, rich text,
-  `scoring_method: human` — D-6) with the task's OSPI rubric as an analytic
+  `scoring_method: human` by default — D-6, D-19) with the task's OSPI rubric as an analytic
   rubric, levels 4/3/2/1 as points 4/3/2/1, language reproduced exactly.
 
 **The student sees only their option.** Delivery is already built per
@@ -189,16 +189,20 @@ option, status, and Start / Continue session.
   a scorer pass back from the `score` level is a later slice.
 - **Not blind in v1 (D-6).** Scorers see the student's name as any scorer
   does today. The anonymous work-packet mode remains available for printing.
-- **The pass rule.** An assessment-level setting
-  `competency.pass_min_points_per_criterion` (3 for every OSPI task). When
+- **The pass rule.** `assessments.competency_pass_min_points` (3 for every
+  OSPI task), set with `PUT /api/assessments/:id/competency`. When
   the final response has a `final` score, the result is derived:
   `pass` if every criterion's level points ≥ the minimum, else
-  `needs_revision`. A scorer can mark **No Score** (new flag on the score,
-  with a reason from the OSPI list), which yields `no_score`. The rationale
+  `needs_revision`; a score missing a criterion yields no result. A scorer
+  can mark **No Score** (`rationale.no_score_reason`, from the OSPI list),
+  which yields `no_score`. The rationale
   per row is the feedback.
-- **AI later.** Human only (D-6). The corpus captures every CBA final, so
-  the existing eval can measure AI agreement offline; switching to `hybrid`
-  or `ai` is a later decision against the eval's pass bar. With a few CBAs
+- **AI scoring is possible from v1 (D-19).** Items start at `human` (D-6),
+  but nothing in the competency path blocks `hybrid` or `ai`: a `score`
+  grantee can run the AI score actions, and whether AI runs on an item is
+  the item's scoring method, set at `edit`. The corpus captures every CBA
+  final, so the existing eval measures AI agreement before an item is
+  switched. With a few CBAs
   per term, pool across options of one task (shared rubric) to get a usable n.
 
 ### Release and results (D-10, D-13)
@@ -223,8 +227,12 @@ read-only "Scorer feedback" panel beside that item while the student revises.
 - Today nothing like this reaches the client: rubric feedback goes out only
   on the print page and the Google Docs release (`lib/reporting/printFeedback.ts`),
   and pass back shows the student nothing (pass-back design, "What the
-  student sees"). So this is a **client change and a client release**
-  (next-day fleet delivery through IT's AutoPkg recipe), plus
+  student sees"). The test page is the server-delivered signed renderer,
+  so this ships as a **re-signed renderer plus a version floor**, like
+  corrections mode — not a client app release. The server emits the field
+  only to a 2.0+ client whose renderer is at least the committer time of the
+  `main` merge commit that lands the panel (mirror `correctionsDeliverable`);
+  an older client gets no field and is never refused. Plus
   `client/MANUAL-CHECKS.md` rows.
 - It is not an answer key, so it does not cross ADR 0016's line; it is a new
   optional field on the delivery bundle, sent only for a passed-back
@@ -237,7 +245,6 @@ feedback panel, a fresh start on the new option.
 ### Not in this note
 
 - Blind / anonymous online scoring (D-6 — a later slice if wanted).
-- AI scoring of CBAs (D-6).
 - Non-Social-Studies CBAs and semester finals (D-9).
 - Gradebook or transcript integration (D-13).
 - Counselor data from the warehouse: the school-scoped grant is given by
@@ -259,18 +266,22 @@ feedback panel, a fresh start on the new option.
 4. **Proctor path.** Sitting scope accepts assignments for district
    assessments; proctor home list. Tests on the scope check (the security
    surface).
-5. **`score` level.** Ladder change, review-queue and scoring routes accept
-   it, grant UI for scorers.
+5. **`score` level.** Ladder change; review-queue and scoring routes accept
+   it.
+5b. **Scorer grant UI + entry point.** Assessment staff give, see and revoke
+   time-boxed `score` grants; a scorer's home-list row opens the scoring page
+   (the editor needs `edit`).
 6. **Release + counselor view.** Release action; `school` grant resolution
    at `view`; counselor list.
-7. **Feedback on pass back (client release).** Bundle field + client panel +
-   manual-check rows.
+7. **Feedback on pass back (renderer re-sign).** Bundle field + renderer
+   panel + manual-check rows (client half); server emission behind the
+   renderer floor (server half, after slice 2).
 8. **Counselors assign.** `school` grant at `run` reaches assignment
    creation for that school's students.
 9. **Content (Assessment, in the app).** Build the ten task-and-course assessments and
    their options; hand-run one CBA end to end before opening it up.
 
-Later: scorer pass back (D-15); blind online scoring; AI scoring.
+Later: scorer pass back (D-15); blind online scoring.
 
 ## Decisions (James)
 
@@ -287,6 +298,8 @@ Later: scorer pass back (D-15); blind online scoring; AI scoring.
   goal; Assessment assigning is acceptable for v1.
 - **D-6 (2026-11-02):** blind scoring is compromised for v1; human scoring
   until AI agrees consistently, then possibly AI.
+- **D-19 (2026-11-02):** room for AI scoring even in v1 — scorers keep the
+  AI score actions; items default to human.
 - **D-7 (2026-11-02):** no proctor-training check in the app; Assessment
   handles it outside.
 - **D-8 (2026-11-02):** counselors are assigned at the school level.
@@ -314,4 +327,13 @@ None open.
 
 ## Progress
 
-Nothing built.
+- **Slice 1 BUILT 2026-11-02** (`17aae60f`): `COMPETENCY_ADMIN_EMAILS`,
+  `competency_pass_min_points` (migration 0070), `PUT
+  /api/assessments/:id/competency`, `deriveCompetencyResult`. No UI; No Score
+  write path not yet.
+- **Slice 5 BUILT 2026-11-02** (`a3f975a4`): `score` level (migration 0071).
+  No grant UI (slice 5b).
+- **Slice 7 client half BUILT 2026-11-02** (`23af2dff`): `revision_feedback`
+  on the delivery bundle (strict entries and criteria) and the renderer
+  panel; server emission not built; nine manual-check rows NOT RUN.
+- Nothing committed here is pushed or deployed.
