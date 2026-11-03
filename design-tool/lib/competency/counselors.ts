@@ -10,6 +10,7 @@ import {
 import { normalizeEmail } from "@/lib/roster/queries";
 import { studentDisplayName } from "@/lib/roster/teacherRoster";
 import { competencyOptions } from "@/lib/competency/assignments";
+import { schoolGrantSchools } from "@/lib/competency/schoolGrants";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -23,6 +24,13 @@ type Db = ReturnType<typeof getDb>;
  * cases for students whose roster `school_id` is the grant's.
  */
 
+/**
+ * The two counselor grants: `view` reads released results; `run` also assigns
+ * that school's students (slice 8). Anything higher on a school is not
+ * Assessment's to list or remove from here.
+ */
+const COUNSELOR_LEVELS = ["view", "run"];
+
 const live = (now: Date) =>
   and(
     isNull(access_grants.revoked_at),
@@ -30,24 +38,18 @@ const live = (now: Date) =>
     or(isNull(access_grants.ends_at), gt(access_grants.ends_at, now)),
   );
 
-/** The schools whose released results this email may read now. */
+/** The schools whose released results this email may read now (any counselor grant). */
 export async function counselorSchoolIds(db: Db, email: string | null | undefined): Promise<string[]> {
-  const grantee = normalizeEmail(email);
-  if (!grantee) return [];
-  const rows = await db
-    .select({ school: access_grants.scope_id })
-    .from(access_grants)
-    .where(and(eq(access_grants.grantee_email, grantee), eq(access_grants.scope_kind, "school"), live(new Date())));
-  return [...new Set(rows.map((r) => r.school))];
+  return schoolGrantSchools(db, email, "view");
 }
 
-/** Every live counselor grant (school scope at `view`), for Assessment's page. */
+/** Every live counselor grant (school scope at `view` or `run`), for Assessment's page. */
 export async function listCounselorGrants(db: Db): Promise<AccessGrantRow[]> {
   return db
     .select()
     .from(access_grants)
     .where(
-      and(eq(access_grants.scope_kind, "school"), eq(access_grants.level, "view"), live(new Date())),
+      and(eq(access_grants.scope_kind, "school"), inArray(access_grants.level, COUNSELOR_LEVELS), live(new Date())),
     )
     .orderBy(asc(access_grants.scope_id), asc(access_grants.grantee_email));
 }
@@ -66,7 +68,7 @@ export async function rosterSchools(db: Db): Promise<{ school_id: string; studen
 }
 
 /**
- * Soft-revoke one counselor grant. Only a school-scope `view` grant — a
+ * Soft-revoke one counselor grant. Only a school-scope `view` / `run` grant — a
  * principal's school grant made through the admin surface is not
  * Assessment's to remove from here.
  */
@@ -78,7 +80,7 @@ export async function revokeCounselorGrant(db: Db, grantId: string): Promise<boo
       and(
         eq(access_grants.id, grantId),
         eq(access_grants.scope_kind, "school"),
-        eq(access_grants.level, "view"),
+        inArray(access_grants.level, COUNSELOR_LEVELS),
         isNull(access_grants.revoked_at),
       ),
     )

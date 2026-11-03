@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { competency_assignments } from "@/db/schema";
+import { competency_assignments, roster_students } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { notFoundResponse } from "@/lib/api/access";
@@ -66,6 +66,17 @@ export async function PATCH(req: Request, ctx: RouteContext) {
     .where(and(eq(competency_assignments.id, assignmentId), eq(competency_assignments.assessment_id, id)))
     .limit(1);
   if (!current) return notFoundResponse();
+  // Slice 8: a counselor changes their schools' cases only, and never
+  // releases — Release is Assessment's review (D-10).
+  if (access.schools) {
+    if (parsed.data.action === "release") return notFoundResponse();
+    const [student] = await db
+      .select({ school_id: roster_students.school_id })
+      .from(roster_students)
+      .where(eq(roster_students.ps_id, current.student_ps_id))
+      .limit(1);
+    if (!student?.school_id || !access.schools.includes(student.school_id)) return notFoundResponse();
+  }
   if (current.status === "withdrawn") {
     return NextResponse.json({ ok: false, error: "assignment_withdrawn" }, { status: 409 });
   }

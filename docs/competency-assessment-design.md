@@ -391,4 +391,14 @@ None open.
   in the scoring queue on district assessments; "No Score: <reason>" on the
   queue and the student's results page. The Change score dialog does not
   offer it yet (the route accepts it). Rows 965–968 NOT RUN.
+- **Slice 8 BUILT 2026-11-02**: a counselor grant now has two levels —
+  `view` (released results) and `run` (also assigns; **Can assign
+  students** on the Counselors page). `authorizeCompetency` admits a `run`
+  counselor on any non-archived district assessment with `schools` set,
+  and every assignment route filters by it: the list and search show only
+  those schools' students, a create for anyone else is `unknown_student`,
+  a change to another school's case is 404, Release is never theirs, and an
+  unreleased result or review link is never shown. The school scope is read
+  only by `lib/competency/schoolGrants.ts`; general access still ignores
+  it. Counselor entry `/dashboard/competency-assign`. Rows 969–975 NOT RUN.
 - Nothing committed here is pushed or deployed.

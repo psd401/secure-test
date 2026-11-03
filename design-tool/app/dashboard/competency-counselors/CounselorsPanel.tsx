@@ -10,6 +10,7 @@ interface Counselor {
   id: string;
   grantee_email: string;
   school_id: string;
+  can_assign: boolean;
 }
 
 interface School {
@@ -39,6 +40,7 @@ export function CounselorsPanel() {
   const [schools, setSchools] = useState<School[]>([]);
   const [email, setEmail] = useState("");
   const [school, setSchool] = useState("");
+  const [canAssign, setCanAssign] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +63,7 @@ export function CounselorsPanel() {
       const res = await fetch("/api/competency/counselors", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ grantee_email: email.trim().toLowerCase(), school_id: school }),
+        body: JSON.stringify({ grantee_email: email.trim().toLowerCase(), school_id: school, can_assign: canAssign }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -118,6 +120,10 @@ export function CounselorsPanel() {
             ))}
           </NativeSelect>
         </div>
+        <label className="flex items-center gap-2 pb-2 text-sm">
+          <input type="checkbox" checked={canAssign} onChange={(e) => setCanAssign(e.target.checked)} />
+          Can assign students
+        </label>
         <Button type="submit" disabled={!canAdd}>
           {busy === "add" ? "Adding…" : "Add counselor"}
         </Button>
@@ -132,7 +138,10 @@ export function CounselorsPanel() {
             <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <span>
                 <span className="font-medium">{c.grantee_email}</span>
-                <span className="text-muted-foreground"> · School {c.school_id}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · School {c.school_id} · {c.can_assign ? "results and assigning" : "results"}
+                </span>
               </span>
               <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void remove(c.id)}>
                 {busy === c.id ? "Removing…" : "Remove"}

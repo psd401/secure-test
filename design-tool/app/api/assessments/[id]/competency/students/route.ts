@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { roster_students } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -47,6 +47,8 @@ export async function GET(req: Request, ctx: RouteContext) {
     .where(
       and(
         eq(roster_students.is_active, true),
+        // Slice 8: a counselor finds their schools' students only.
+        access.schools ? inArray(roster_students.school_id, access.schools) : undefined,
         ...words.map((w) => {
           const pattern = `${likeEscape(w)}%`;
           return or(ilike(roster_students.first_name, pattern), ilike(roster_students.last_name, pattern));

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { competency_assignments, roster_students } from "@/db/schema";
@@ -48,7 +48,13 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .select({ a: competency_assignments, s: roster_students })
     .from(competency_assignments)
     .innerJoin(roster_students, eq(roster_students.ps_id, competency_assignments.student_ps_id))
-    .where(eq(competency_assignments.assessment_id, id))
+    .where(
+      and(
+        eq(competency_assignments.assessment_id, id),
+        // Slice 8: a counselor sees their schools' students only.
+        access.schools ? inArray(roster_students.school_id, access.schools) : undefined,
+      ),
+    )
     .orderBy(desc(competency_assignments.created_at));
 
   const states = await loadCaseStates(
@@ -56,6 +62,9 @@ export async function GET(_req: Request, ctx: RouteContext) {
     access.assessment,
     rows.map((r) => r.a),
   );
+  // Slice 8: a counselor sees a result only once Assessment has released it
+  // (D-10), and has no results page to review from.
+  const counselor = access.schools !== null;
   return NextResponse.json({
     options,
     assignments: rows.map(({ a, s }) => ({
@@ -70,10 +79,10 @@ export async function GET(_req: Request, ctx: RouteContext) {
       // come from the attempt and score); `result` is what the final score
       // yields now; `released_result` is what the counselor was shown.
       status: states.get(a.id)?.status ?? a.status,
-      result: states.get(a.id)?.result ?? null,
+      result: counselor ? (a.status === "released" ? a.result : null) : (states.get(a.id)?.result ?? null),
       released_result: a.result,
       released_at: a.released_at,
-      attempt_id: states.get(a.id)?.attempt_id ?? null,
+      attempt_id: counselor ? null : (states.get(a.id)?.attempt_id ?? null),
       created_at: a.created_at,
       withdrawn_at: a.withdrawn_at,
     })),
@@ -117,11 +126,13 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "unknown_option" }, { status: 400 });
   }
   const [student] = await db
-    .select({ ps_id: roster_students.ps_id, is_active: roster_students.is_active })
+    .select({ ps_id: roster_students.ps_id, is_active: roster_students.is_active, school_id: roster_students.school_id })
     .from(roster_students)
     .where(eq(roster_students.ps_id, body.student_ps_id))
     .limit(1);
-  if (!student?.is_active) {
+  // Slice 8: a counselor assigns their schools' students only — anyone else
+  // reads as not on the roster, so the refusal says nothing about them.
+  if (!student?.is_active || (access.schools && !access.schools.includes(student.school_id ?? ""))) {
     return NextResponse.json({ ok: false, error: "unknown_student" }, { status: 400 });
   }
 

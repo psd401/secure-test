@@ -2324,3 +2324,19 @@ renumbering at merge.
 | 966 | Scoring queue on an ordinary teacher assessment | No No Score control | NOT RUN |
 | 967 | Choose "Off topic", Save No Score, confirm | The card leaves the queue; the student's results page shows "No Score: Off topic" and 0 points; Assignments reads **Scored**, **No score** | NOT RUN |
 | 968 | Keyboard and screen reader through the control | The select reads "Or No Score:"; Save No Score asks before saving | NOT RUN |
+
+## Competency counselors assign (CBA slice 8, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 6 setup; the counselor account added on Counselors with
+**Can assign students** to the fixture student's school; a second fixture
+student at another school. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 969 | Counselors page | The counselor reads "School <id> · results and assigning"; one added without the box reads "· results" | NOT RUN |
+| 970 | Sign in as the counselor; the home list | The Competency results card has **Assign students** and **Open** | NOT RUN |
+| 971 | Assign students → the task → Assignments | "Assignments · <task>", "You see and assign students at your school only."; no Counselors link | NOT RUN |
+| 972 | Search the other school's student by name | Not offered | NOT RUN |
+| 973 | Assign the own-school student an option and proctor | Listed; Assessment's Assignments page shows the same case | NOT RUN |
+| 974 | After Assessment scores the case | The counselor's row shows Scored with no result and no Review/Release until Assessment releases | NOT RUN |
+| 975 | As a `view`-only counselor, open `/dashboard/competency-assign` and a task's `/assignments` | 404 each | NOT RUN |

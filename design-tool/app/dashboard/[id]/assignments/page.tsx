@@ -12,8 +12,9 @@ interface PageProps {
 }
 
 // CBA slice 2 (docs/competency-assessment-design.md): Assessment staff assign
-// a student an option and a proctor, and withdraw or re-proctor a case. Same
-// gate as the routes behind it; anyone else gets a 404.
+// a student an option and a proctor, and withdraw or re-proctor a case; slice
+// 8 lets a counselor do the same for their school's students. Same gate as
+// the routes behind it; anyone else gets a 404.
 export default async function AssignmentsPage({ params }: PageProps) {
   const session = await readStaffSessionFromCookies();
   if (!session) {
@@ -29,7 +30,11 @@ export default async function AssignmentsPage({ params }: PageProps) {
   }
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <AssignmentsPanel assessmentId={access.assessment.id} assessmentName={access.assessment.name} />
+      <AssignmentsPanel
+        assessmentId={access.assessment.id}
+        assessmentName={access.assessment.name}
+        counselor={access.schools !== null}
+      />
     </main>
   );
 }

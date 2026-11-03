@@ -21,7 +21,7 @@ export default async function CounselorsPage() {
       <PageHeader
         crumbs={[{ label: "Assessments", href: "/dashboard" }]}
         title="Counselors"
-        description="A counselor sees the released competency results of students at their school — the result only, not the response. Nothing else in SecureTest opens to them."
+        description="A counselor sees the released competency results of students at their school — the result only, not the response. With Can assign, they also assign that school's students an option and a proctor. Nothing else in SecureTest opens to them."
       />
       <CounselorsPanel />
     </main>

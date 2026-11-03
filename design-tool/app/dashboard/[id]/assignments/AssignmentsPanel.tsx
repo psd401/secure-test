@@ -67,7 +67,16 @@ async function errorCode(res: Response): Promise<string> {
   }
 }
 
-export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentId: string; assessmentName: string }) {
+export function AssignmentsPanel({
+  assessmentId,
+  assessmentName,
+  counselor = false,
+}: {
+  assessmentId: string;
+  assessmentName: string;
+  /** Slice 8: a counselor — their school's students only, no Release, no editor. */
+  counselor?: boolean;
+}) {
   const base = `/api/assessments/${assessmentId}/competency`;
   const [options, setOptions] = useState<Option[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -180,16 +189,21 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
     <div className="space-y-8">
       <div className="space-y-1">
         <p className="text-sm text-muted-foreground">
-          <Link href={`/dashboard/${assessmentId}`} className="hover:underline">
-            ← {assessmentName}
+          <Link href={counselor ? "/dashboard/competency-assign" : `/dashboard/${assessmentId}`} className="hover:underline">
+            ← {counselor ? "Competency assessments" : assessmentName}
           </Link>
         </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-semibold">Assignments</h1>
-          <Link href="/dashboard/competency-counselors" className="text-sm hover:underline">
-            Counselors
-          </Link>
+          <h1 className="text-2xl font-semibold">{counselor ? `Assignments · ${assessmentName}` : "Assignments"}</h1>
+          {counselor ? null : (
+            <Link href="/dashboard/competency-counselors" className="text-sm hover:underline">
+              Counselors
+            </Link>
+          )}
         </div>
+        {counselor ? (
+          <p className="text-sm text-muted-foreground">You see and assign students at your school only.</p>
+        ) : null}
         <p className="text-sm text-muted-foreground">
           Each student takes one option, with one proctor who runs their sittings. To switch options, withdraw the
           assignment and make a new one; nothing carries over.
@@ -298,7 +312,7 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
             busy={busy}
             onWithdraw={withdraw}
             onChangeProctor={changeProctor}
-            onRelease={release}
+            onRelease={counselor ? undefined : release}
           />
         )}
       </section>

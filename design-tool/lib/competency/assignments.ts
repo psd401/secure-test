@@ -2,6 +2,7 @@ import { and, asc, eq, ne } from "drizzle-orm";
 import type { NextResponse } from "next/server";
 import type { getDb } from "@/db/client";
 import {
+  assessments,
   competency_assignments,
   item_sets,
   type AssessmentRow,
@@ -10,6 +11,8 @@ import {
 import { authorizeAssessment, notFoundResponse } from "@/lib/api/access";
 import { isCompetencyAdmin } from "@/lib/auth/admin";
 import type { SessionPayload } from "@/lib/auth/session";
+import { UUID_RE } from "@/lib/uuid";
+import { schoolGrantSchools } from "@/lib/competency/schoolGrants";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -43,15 +46,32 @@ export function canTransition(from: CompetencyAssignmentStatus, to: CompetencyAs
 }
 
 export type CompetencyAccess =
-  | { ok: true; assessment: AssessmentRow }
+  | {
+      ok: true;
+      assessment: AssessmentRow;
+      /**
+       * Null for Assessment staff, who work every case. For a counselor
+       * (slice 8) the schools whose students they may see and assign — every
+       * route filters by it, and Release stays Assessment's.
+       */
+      schools: string[] | null;
+    }
   | { ok: false; response: NextResponse };
 
 /**
- * Assessment staff (D-14, `COMPETENCY_ADMIN_EMAILS`) on a district assessment
- * they can edit. Anyone else — a co-author not on the list, a listed person
- * on a teacher's own assessment, an act-as session — gets the same 404, so
- * the route does not say which part failed. `edit` rather than `own` lets a
- * second listed person work the cases once the owner shares the assessment.
+ * Who works the cases on a district assessment, every refusal the same 404
+ * so the route does not say which part failed:
+ *
+ *   - Assessment staff (D-14, `COMPETENCY_ADMIN_EMAILS`) who can edit it —
+ *     `edit` rather than `own` lets a second listed person in once the owner
+ *     shares it. Every case.
+ *   - A counselor (slice 8, D-8): a live `school` grant at `run`. Only that
+ *     school's students, on any district assessment that is not archived; no
+ *     level on the assessment itself, so its items, results and scoring stay
+ *     shut.
+ *
+ * A co-author not on the list, or anyone on a teacher's own assessment, gets
+ * neither.
  */
 export async function authorizeCompetency(
   db: Db,
@@ -59,13 +79,22 @@ export async function authorizeCompetency(
   assessmentId: string,
   intent: "read" | "write",
 ): Promise<CompetencyAccess> {
-  if (!isCompetencyAdmin(session)) return { ok: false, response: notFoundResponse() };
-  const access = await authorizeAssessment(db, session, assessmentId, "edit", intent);
-  if (!access.ok) return access;
-  if (access.assessment.assigned_scope !== "district") {
+  if (isCompetencyAdmin(session)) {
+    const access = await authorizeAssessment(db, session, assessmentId, "edit", intent);
+    if (!access.ok) return access;
+    if (access.assessment.assigned_scope !== "district") {
+      return { ok: false, response: notFoundResponse() };
+    }
+    return { ok: true, assessment: access.assessment, schools: null };
+  }
+  if (!UUID_RE.test(assessmentId)) return { ok: false, response: notFoundResponse() };
+  const schools = await schoolGrantSchools(db, session.email, "run");
+  if (schools.length === 0) return { ok: false, response: notFoundResponse() };
+  const [assessment] = await db.select().from(assessments).where(eq(assessments.id, assessmentId)).limit(1);
+  if (!assessment || assessment.assigned_scope !== "district" || assessment.archived_at !== null) {
     return { ok: false, response: notFoundResponse() };
   }
-  return { ok: true, assessment: access.assessment };
+  return { ok: true, assessment, schools };
 }
 
 export interface CompetencyOption {

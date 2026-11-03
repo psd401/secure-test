@@ -13,6 +13,8 @@ const AddCounselorBody = z
   .object({
     grantee_email: z.string().trim().min(3).max(320),
     school_id: z.string().trim().min(1).max(64),
+    // Slice 8: `run` instead of `view` — the counselor also assigns.
+    can_assign: z.boolean().optional(),
   })
   .strict();
 
@@ -28,15 +30,21 @@ export async function GET() {
   const db = getDb();
   const [counselors, schools] = await Promise.all([listCounselorGrants(db), rosterSchools(db)]);
   return NextResponse.json({
-    counselors: counselors.map((g) => ({ id: g.id, grantee_email: g.grantee_email, school_id: g.scope_id })),
+    counselors: counselors.map((g) => ({
+      id: g.id,
+      grantee_email: g.grantee_email,
+      school_id: g.scope_id,
+      can_assign: g.level === "run",
+    })),
     schools,
   });
 }
 
 /**
- * Add a counselor: a `school`-scoped grant at `view`. It reaches only the
- * counselor results list (lib/competency/counselors.ts) — general access
- * still skips the school scope.
+ * Add a counselor: a `school`-scoped grant at `view`, or `run` with
+ * `can_assign` (slice 8). It reaches only the counselor results list and,
+ * at `run`, that school's assignments (lib/competency/schoolGrants.ts) —
+ * general access still skips the school scope.
  */
 export async function POST(req: Request) {
   const auth = await requireStaff();
@@ -57,7 +65,7 @@ export async function POST(req: Request) {
   const valid = validateGrantRequest({
     granter: auth.session,
     grantee_email: parsed.data.grantee_email,
-    level: "view",
+    level: parsed.data.can_assign ? "run" : "view",
   });
   if (!valid.ok) {
     return NextResponse.json({ ok: false, error: valid.error }, { status: GRANT_VALIDATION_STATUS[valid.error] });
@@ -72,7 +80,7 @@ export async function POST(req: Request) {
     grantee_email: valid.grantee_email,
     scope_kind: "school",
     scope_id: parsed.data.school_id,
-    level: "view",
+    level: parsed.data.can_assign ? "run" : "view",
     note: "counselor",
     granted_by_sub: auth.session.sub,
     granted_by_email: granterEmail,
