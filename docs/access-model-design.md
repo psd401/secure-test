@@ -818,3 +818,30 @@ check and adds the test that keeps it that way.
   `test/access-grants.test.ts` "an admin reads everything and writes nothing
   outside the admin surface" (4 cases) and a route case in
   `test/students-api.test.ts`.
+
+## Extensions from competency assessments (2026-11-02)
+
+`docs/competency-assessment-design.md` widened this model in three bounded
+places. The ladder and the helper are still the single authority; nothing
+below adds an inline check to a route.
+
+- **A fifth level, `score`** (CBA D-11, slice 5): `view < run < score < edit
+  < own`. It reaches the review queue and the scoring actions (manual score,
+  change score, approve, AI score, response feedback); pass back, release,
+  rescore, authoring, settings and gradebook stay at `edit` or above.
+  Assessment staff give it as a time-boxed assessment grant (a scorer).
+- **`via: "proctor"`** (CBA slice 4): a live competency assignment naming the
+  caller acts as `run` for that one student. It is never returned by
+  `authorizeAssessment` — the editor, results, review queue and every
+  assessment-wide list stay 404 — and only `authorizeSitting` (a sitting the
+  proctor started, while they still proctor someone on the assessment) and
+  `authorizeAttempt` (a student they proctor now) admit it, plus sitting
+  creation through `authorizeProctorAssessment` with a list of the
+  proctor's own students. District assessments only.
+- **`school` scope is read — by competency code only** (CBA slices 6 and 8).
+  `RESOLVED_SCOPES` above still skips it, so a school grant opens no
+  assessment, sitting or attempt; the D-7 tests still hold.
+  `lib/competency/schoolGrants.ts` is its one reader: at `view` a counselor
+  sees released competency results for that school's students, at `run` they
+  also assign and switch them (never release). Live-window comparisons there
+  use the database clock (`now()`), not the process clock.

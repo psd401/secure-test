@@ -1,11 +1,13 @@
 # Competency assessments in SecureTest (roadmap row CB)
 
-Design note, 2026-11-02. DRAFT — nothing is built. The district's
+Design note, 2026-11-02. Slices 1–8 and the No Score write path are built
+and hand-run on `feat/competency-assessments` (not yet merged); slice 9 is
+content, authored in the app. The district's
 competency-based assessments (CBAs) let a student earn course credit, or
 meet a graduation requirement, by passing a district performance task. This
 note moves the Social Studies CBAs from paper into SecureTest. Decisions
 marked **D-n** are James's and are listed at the end; **§Progress says what
-is built** (nothing yet).
+is built.**
 
 The task content (student and proctor packets, the curated options and their
 source sets) is district material and **never goes in this repo** — it is
@@ -123,13 +125,15 @@ authoring preview shows all options.
 
 **Choosing and switching (D-18).** The student picks an option with the
 counselor before the first sitting; whoever makes the assignment records it.
-A switch is treated as a new assessment: Assessment withdraws the assignment
-and makes a new one for the other option. Nothing carries over — the new
-option's items start empty and no feedback follows. Underneath it is still
-the student's one attempt on this assessment (reopened through pass back if
-it was handed in), but because each option has its own items nothing is
-overwritten: the old option's responses and scores stay as the record of
-the withdrawn assignment.
+A switch is treated as a new assessment, done with one **Switch option**
+action (D-20): it withdraws the assignment, assigns the other option and, if
+the student had handed in, reopens their one attempt through pass back — all
+in one transaction. Nothing carries over — the new option's items start empty
+and no feedback follows. Because each option has its own items nothing is
+overwritten: the old option's responses and superseded scores stay as the
+record of the withdrawn assignment, out of the new option's progress, results
+and scoring queue (F-2, F-10), and they keep that option from being deleted
+(D-21).
 
 **Scoring reads the current option.** The pass rule and the release apply to
 the final-response item of the option on the assignment.
@@ -320,6 +324,13 @@ Later: scorer pass back (D-15); blind online scoring.
   student research, and the tests are used only inside the district.
 - **D-18 (2026-11-02):** switching option is treated as a new assessment;
   feedback does not follow.
+- **D-20 (2026-11-02, after the hand-run's F-1):** a switch is ONE action,
+  Switch option — withdraw, assign the new option and reopen a handed-in
+  attempt together. A counselor who can assign may switch their school's
+  students; it is the only pass back they can cause (D-15 stands otherwise).
+- **D-21 (2026-11-02, F-9, option 9-A):** an option a withdrawn assignment
+  used stays undeletable — it is the student's record; the editor says so
+  ("A student's record uses this option") rather than suggesting a fix.
 
 ## Open questions
 
@@ -401,4 +412,14 @@ None open.
   unreleased result or review link is never shown. The school scope is read
   only by `lib/competency/schoolGrants.ts`; general access still ignores
   it. Counselor entry `/dashboard/competency-assign`. Rows 969–975 NOT RUN.
+- **Hand-run 2026-11-02** (rows 939–975, `docs/design-tool-manual-checks.md`):
+  34 pass, 3 not run (VoiceOver ×2, one needing a classroom assessment).
+  Findings fixed: F-1 Switch option (`78336efe`); F-2 progress, results and
+  the student page count only the student's option (`fe2f2652`); F-3–F-7
+  proctor Monitor, Counselors checkbox, plain copy, row errors, tab title
+  (`43ae8c00`); F-8–F-10 switch row, option-delete copy, scoring queue
+  (`9bdf9980`). A re-run passed; results committed in `eeff6926`.
+- **Deploy wiring:** `COMPETENCY_ADMIN_EMAILS` comes from the CDK context key
+  `competencyAdminEmails` (gitignored `cdk.context.json`), like
+  `ADMIN_EMAILS`; empty = nobody, every competency page 404s.
 - Nothing committed here is pushed or deployed.

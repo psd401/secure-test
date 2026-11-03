@@ -58,6 +58,8 @@ export interface AppServiceProps {
   readonly domainName: string;
   /** Access slice 2 (D-1): ADMIN_EMAILS for the task env. "" = nobody. */
   readonly adminEmails: string;
+  /** Competency assessments (D-14): COMPETENCY_ADMIN_EMAILS for the task env. "" = nobody. */
+  readonly competencyAdminEmails: string;
   /** Observability slice 1 (docs/observability-design.md): the shared
    * alarm/feedback topic. Granted sns:Publish on the task role, exposed as
    * NOTIFY_TOPIC_ARN, and the target for every alarm this construct
@@ -267,6 +269,9 @@ export class AppService extends Construct {
       // deployment's statement about who is an admin rather than something
       // inherited from whatever the last task definition happened to carry.
       ADMIN_EMAILS: props.adminEmails,
+      // Competency assessments (D-14): Assessment staff, set explicitly on
+      // every deploy for the same reason as ADMIN_EMAILS above.
+      COMPETENCY_ADMIN_EMAILS: props.competencyAdminEmails,
       // Gradebook push: Send to gradebook is shown only when this is set
       // explicitly (GB-1). `live` = the production PowerSchool plugin, for
       // every teacher with edit access (James, 2026-09-29).

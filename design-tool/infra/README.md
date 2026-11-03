@@ -117,6 +117,7 @@ Context keys:
 | `guardrailId` | **yes, throws** | Bedrock guardrail id (ADR 0011) |
 | `notifyEmail` | **yes, throws** | Address subscribed to the alarm/feedback topic |
 | `adminEmails` | no, defaults `""` | Access slice 2 (docs/access-model-design.md, D-1): comma-separated staff addresses that get system-admin access → `ADMIN_EMAILS`. Empty = nobody, which is a correct deployment, so the stack does NOT throw without it |
+| `competencyAdminEmails` | no, defaults `""` | Competency assessments (docs/competency-assessment-design.md, D-14): comma-separated Assessment-staff addresses → `COMPETENCY_ADMIN_EMAILS`. Empty = nobody is Assessment staff — every competency page and route answers 404 — so, like `adminEmails`, the stack does not throw without it |
 
 Outputs printed:
 
@@ -149,7 +150,8 @@ What staging leaves out, and why:
 ### Before the first staging deploy
 
 1. `cdk.context.json` gains `"staging": {"domainName": "staging.<origin>"}`
-   (see the `.example`); `notifyEmail` / `adminEmails` fall back to the
+   (see the `.example`); `notifyEmail` / `adminEmails` /
+   `competencyAdminEmails` fall back to the
    top-level values unless the block sets them.
 2. The app secret `secure-test-design-tool/staging/app-env` exists with
    `DESIGN_TOOL_SESSION_SECRET`, `DESIGN_TOOL_PKCE_SECRET`,

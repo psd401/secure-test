@@ -40,6 +40,7 @@ interface StagingContext {
   domainName?: string;
   notifyEmail?: string;
   adminEmails?: string;
+  competencyAdminEmails?: string;
 }
 const staging = (app.node.tryGetContext("staging") as StagingContext | undefined) ?? {};
 if (isStaging && !staging.domainName) {
@@ -121,4 +122,9 @@ new DesignToolStack(app, isStaging ? "SecureTestDesignToolStaging" : "SecureTest
   // require it: an empty list is the correct default (nobody is an admin), and
   // a deploy that forgets it is degraded, not broken.
   adminEmails: contextValue("adminEmails") ?? "",
+  // Competency assessments (docs/competency-assessment-design.md, D-14): the
+  // Assessment-staff list, comma-separated — the same posture as adminEmails
+  // (personal addresses, so context; empty = nobody, a degraded deploy but not
+  // a broken one: every competency page and route answers 404).
+  competencyAdminEmails: contextValue("competencyAdminEmails") ?? "",
 });

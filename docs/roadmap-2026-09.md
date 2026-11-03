@@ -1357,7 +1357,7 @@ which calculator the accommodation would grant (the scientific is the
 candidate) and whether it overrides the per-question mark, likely with the
 TIDE accommodation mapping.
 
-## Row CB — competency-based assessments (CBAs) in SecureTest (James, 2026-11-02) — SCOPED, nothing built — `docs/competency-assessment-design.md` is the record
+## Row CB — competency-based assessments (CBAs) in SecureTest (James, 2026-11-02) — BUILT on `feat/competency-assessments` (slices 1–8 + No Score), hand-run, not merged — `docs/competency-assessment-design.md` is the record
 
 A new use case, not a teacher feature: the district's Social Studies
 competency assessments (credit recovery, or freeing a schedule) move from
@@ -1370,5 +1370,11 @@ of the roster-section check. Human scoring with a new `score` access level,
 a per-row pass rule (Pass / Needs Revision / No Score), Assessment release,
 and Needs Revision feedback shown in the client after a pass back (client
 release). Counselors assign later through a school-scoped grant. No
-PowerSchool push. Decisions D-1…D-18 and nine slices are in the note; the
+PowerSchool push. Decisions D-1…D-21 and nine slices are in the note; the
 task content itself stays out of this repo.
+
+**Status 2026-11-02:** slices 1–8 and the No Score write path built; the
+hand-run of rows 939–975 passed after fixes F-1…F-10 (one Switch option
+action, own-option counting, proctor and counselor UI). Left: merge, then
+set the revision-feedback renderer floor and re-sign; slice 9 (content, by
+Assessment in the app); the VoiceOver rows.
