@@ -66,7 +66,7 @@ export async function seedRoster(): Promise<void> {
 
 export async function clearRoster(): Promise<void> {
   await getDb().execute(
-    sql`truncate table roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`,
+    sql`truncate table competency_assignments, roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`,
   );
 }
 

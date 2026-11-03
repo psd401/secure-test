@@ -2496,3 +2496,77 @@ export const item_snapshots = pgTable(
 );
 
 export type ItemSnapshotRow = typeof item_snapshots.$inferSelect;
+
+// --- Competency assignments (docs/competency-assessment-design.md, slice 2) --
+//
+// The case record that replaces Assessment's spreadsheet row: which student
+// takes which option (item set) of a district assessment, and the one staff
+// member who proctors their sittings. Status moves along
+// lib/competency/assignmentStatus.ts; a switch of option is a withdrawal plus
+// a new row (D-18), so a withdrawn row stays as the record of the old option.
+// One live (not withdrawn) row per (assessment, student).
+//
+// `item_set_id` has no ON DELETE action (NO ACTION, checked at the end of the
+// statement): deleting an option a student is assigned to would leave the
+// record pointing nowhere, so the item-set DELETE refuses with 409 first —
+// while deleting the whole assessment still works, since its cascade removes
+// the assignments in the same statement (RESTRICT would refuse that). `student_ps_id` references the roster, whose rows are deactivated,
+// never deleted.
+export const COMPETENCY_ASSIGNMENT_STATUSES = [
+  "assigned",
+  "in_progress",
+  "handed_in",
+  "scored",
+  "released",
+  "withdrawn",
+] as const;
+export type CompetencyAssignmentStatus = (typeof COMPETENCY_ASSIGNMENT_STATUSES)[number];
+
+export const competency_assignments = pgTable(
+  "competency_assignments",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    student_ps_id: text("student_ps_id")
+      .notNull()
+      .references(() => roster_students.ps_id),
+    item_set_id: uuid("item_set_id")
+      .notNull()
+      .references(() => item_sets.id),
+    /** Staff email, lowercased at the write boundary. */
+    proctor_email: text("proctor_email").notNull(),
+    assigned_by_sub: text("assigned_by_sub").notNull(),
+    assigned_by_email: text("assigned_by_email").notNull(),
+    status: text("status").$type<CompetencyAssignmentStatus>().notNull().default("assigned"),
+    /** pass | needs_revision | no_score; null until scored (slice 6). */
+    result: text("result"),
+    released_at: timestamp("released_at", { withTimezone: true }),
+    released_by_email: text("released_by_email"),
+    withdrawn_at: timestamp("withdrawn_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    liveUnq: uniqueIndex("competency_assignments_live_unq")
+      .on(t.assessment_id, t.student_ps_id)
+      .where(sql`status <> 'withdrawn'`),
+    // The proctor home list (slice 4) starts from the proctor's email.
+    proctorIdx: index("competency_assignments_proctor_email_idx").on(t.proctor_email),
+    statusCheck: check(
+      "competency_assignments_status_check",
+      sql`status IN ('assigned', 'in_progress', 'handed_in', 'scored', 'released', 'withdrawn')`,
+    ),
+    resultCheck: check(
+      "competency_assignments_result_check",
+      sql`result IS NULL OR result IN ('pass', 'needs_revision', 'no_score')`,
+    ),
+  }),
+);
+
+export type CompetencyAssignmentRow = typeof competency_assignments.$inferSelect;

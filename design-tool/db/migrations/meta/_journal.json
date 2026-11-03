@@ -505,6 +505,13 @@
       "when": 1793664207486,
       "tag": "0071_access_grant_score_level",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793668725058,
+      "tag": "0072_competency_assignments",
+      "breakpoints": true
     }
   ]
 }

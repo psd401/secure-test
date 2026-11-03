@@ -135,10 +135,12 @@ interface Props {
   initialItemSets: ItemSetView[];
   /** R-12 (docs/editor-redesign-design.md): the staff member opted in to the new editor. */
   newAuthoring?: boolean;
+  /** CBA slice 2: Assessment staff on a district assessment get the Assignments link. */
+  showAssignments?: boolean;
 }
 
 
-export function AssessmentEditor({ assessment, access, initialItems, initialItemSets, newAuthoring = false }: Props) {
+export function AssessmentEditor({ assessment, access, initialItems, initialItemSets, newAuthoring = false, showAssignments = false }: Props) {
   const isOwner = isOwnerAccess(access);
   const coTeachingBadge = coTeachingBadgeText(access);
   const router = useRouter();
@@ -1428,6 +1430,11 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
           <Link href={`/dashboard/${assessment.id}/results`} className="hover:underline">
             Results
           </Link>
+          {showAssignments ? (
+            <Link href={`/dashboard/${assessment.id}/assignments`} className="hover:underline">
+              Assignments
+            </Link>
+          ) : null}
         </p>
       </div>
 

@@ -183,6 +183,21 @@ const NO_OWNED_ROW = new Map<string, string>([
  * instead of being taken on trust.
  */
 const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
+  // Competency assignments (docs/competency-assessment-design.md, slice 2):
+  // Assessment staff on a district assessment they can edit — the list,
+  // then authorizeAssessment(edit), then the scope, all 404.
+  [
+    join("assessments", "[id]", "competency", "assignments"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
+  [
+    join("assessments", "[id]", "competency", "assignments", "[assignmentId]"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
+  [
+    join("assessments", "[id]", "competency", "students"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
   [
     join("assessments", "[id]", "item-sets", "[setId]"),
     { symbol: "loadItemSetForSession", module: "lib/api/itemSets.ts" },

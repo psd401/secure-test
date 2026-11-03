@@ -336,4 +336,14 @@ None open.
 - **Slice 7 client half BUILT 2026-11-02** (`23af2dff`): `revision_feedback`
   on the delivery bundle (strict entries and criteria) and the renderer
   panel; server emission not built; nine manual-check rows NOT RUN.
+- **Slice 5b BUILT 2026-11-02** (`c6e98ab9`): Scorers in the Share dialog,
+  the "score" email, the scorer's home-list row; rows 932–938 NOT RUN.
+- **Slice 2 BUILT 2026-11-02**: `competency_assignments` (migration 0072),
+  `GET/POST /api/assessments/:id/competency/assignments`, `PATCH
+  …/assignments/:assignmentId` (withdraw, change proctor), a district roster
+  name search (`…/competency/students`), the Assignments page, and a 409 on
+  deleting an assigned option. The status machine is
+  `ASSIGNMENT_TRANSITIONS` in `lib/competency/assignments.ts`; only
+  withdrawal is written yet — in progress, handed in, scored and released are
+  written by the slices that own those events (4, 6). Rows 939–947 NOT RUN.
 - Nothing committed here is pushed or deployed.

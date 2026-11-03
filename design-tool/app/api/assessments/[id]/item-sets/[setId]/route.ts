@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, item_sets } from "@/db/schema";
+import { assessments, competency_assignments, item_sets } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraftStatus } from "@/lib/api/requireDraft";
 import {
@@ -86,6 +86,17 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (lock) return lock;
 
   const db = getDb();
+  // CBA slice 2: an option a student has been assigned — even a withdrawn
+  // assignment, which is the record of that option — cannot be deleted
+  // (the FK would refuse it with a 500 otherwise).
+  const [assigned] = await db
+    .select({ id: competency_assignments.id })
+    .from(competency_assignments)
+    .where(eq(competency_assignments.item_set_id, setId))
+    .limit(1);
+  if (assigned) {
+    return NextResponse.json({ ok: false, error: "option_assigned" }, { status: 409 });
+  }
   await db.transaction(async (tx) => {
     await tx.delete(item_sets).where(eq(item_sets.id, setId));
     await tx

@@ -211,7 +211,7 @@ describe("handleS3Event with the mock source (DB)", () => {
 
   afterEach(async () => {
     await getDb().execute(
-      sql`truncate table roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`,
+      sql`truncate table competency_assignments, roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`,
     );
   });
 

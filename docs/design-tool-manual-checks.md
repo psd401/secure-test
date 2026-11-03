@@ -2259,3 +2259,21 @@ merge if another branch adds rows.
 | 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | NOT RUN |
 | 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | NOT RUN |
 | 938 | Keyboard and screen reader through the Scorers section | Labels read "Staff email" and "Scoring through"; the date input works by keyboard; Remove names nothing ambiguous (one per row) | NOT RUN |
+
+## Competency assignments (CBA slice 2, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: as for the scorer rows above, with two question sets (options) on the
+district assessment, the first with a labelled source. Students from the
+local roster fixture only. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 939 | Open the district assessment's editor as the listed owner | An **Assignments** link beside Results; absent on a teacher assessment and for an unlisted co-author | NOT RUN |
+| 940 | On Assignments, type two letters of a student's name | Up to 20 active students appear; picking one shows it with **Change** | NOT RUN |
+| 941 | Assign the student Option 1 with a staff proctor | Listed under Current assignments: name, "Option 1: <source label>", the proctor, Assigned, today | NOT RUN |
+| 942 | Assign the same student again (either option) | Refused: "already has an assignment … Withdraw it first" | NOT RUN |
+| 943 | Withdraw, confirm, then assign Option 2 | The old row moves under **Show withdrawn**; the new one is live | NOT RUN |
+| 944 | Change proctor to a student address, then to a staff address | The first is refused ("must be a staff email"); the second shows in the row | NOT RUN |
+| 945 | Delete Option 1's question set in the editor (draft) | Refused (409, `option_assigned`); the set stays | NOT RUN |
+| 946 | Open `/dashboard/<id>/assignments` as an unlisted staff account | 404 | NOT RUN |
+| 947 | Keyboard and screen reader through the form | Labels read Student, Option, Proctor email; the search results are reachable by Tab; Withdraw asks first | NOT RUN |
