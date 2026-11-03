@@ -35,6 +35,9 @@ export interface DesignToolStackProps extends cdk.StackProps {
    * addresses that get system-admin access. Defaults to "" — nobody. Personal
    * addresses, so it comes from cdk context, not source. */
   readonly adminEmails?: string;
+  /** Competency assessments (D-14): comma-separated Assessment-staff
+   * addresses → COMPETENCY_ADMIN_EMAILS. Defaults to "" — nobody. */
+  readonly competencyAdminEmails?: string;
   /** Renderer slice 2 (D-7): the staging stack — Aurora may pause (0 ACU),
    * its task count set by `staging.sh up | down`, not by deploys, no alarms, no gradebook, no
    * email. Default false = production, unchanged. */
@@ -328,6 +331,7 @@ export class DesignToolStack extends cdk.Stack {
       oidcNativeClientId: props.oidcNativeClientId,
       domainName: props.domainName,
       adminEmails: props.adminEmails ?? "",
+      competencyAdminEmails: props.competencyAdminEmails ?? "",
       notifyTopic,
       safeguardingCcEmails: props.notifyEmail,
       staging: props.staging ?? false,

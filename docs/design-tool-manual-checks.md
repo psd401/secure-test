@@ -2240,3 +2240,170 @@ hands in; a second demo student answers only Q1; a third answers nothing.
 - **WT-O1 — a "Question n" heading can end a page with its question on the next (2026-11-02, row 922; observation).** Drive's import gives the `<h2>` no "keep with next", so in a 10-question Doc Q3's and Q8's headings sat alone at the foot of a page. Cosmetic; the essay-only Doc has the same import.
 - **WT-O2 — a picture inside a choice sits on the ☐'s line (2026-11-02, row 925; observation).** The box ends up at the picture's lower left, and a stem picture sits at the end of the stem's line. Readable; a line break before an inline picture would tidy it.
 - **WT-F1 — the per-student page shows a picture choice as raw markdown (2026-11-02, found running row 928; not slice 4).** Q1's answer on the student's page reads `✓ ![an orange shape](asset:…)`; the page's answer lines print a choice's text unrendered. Pre-existing on `main`, out of this slice's scope.
+
+## Competency scorers (CBA slice 5b, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: local dev on the branch, `COMPETENCY_ADMIN_EMAILS` set to the
+signed-in owner's address, a made-up assessment with one essay item and an
+analytic rubric, marked district with `PUT /api/assessments/:id/competency`
+(`{ "pass_min_points_per_criterion": 3 }`), and one handed-in demo attempt.
+A second staff account is the scorer. Row numbers may need renumbering at
+merge if another branch adds rows.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | NOT RUN |
+| 933 | Open Share on an ordinary teacher assessment | No Scorers section | NOT RUN |
+| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | NOT RUN |
+| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | NOT RUN |
+| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | NOT RUN |
+| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | NOT RUN |
+| 938 | Keyboard and screen reader through the Scorers section | Labels read "Staff email" and "Scoring through"; the date input works by keyboard; Remove names nothing ambiguous (one per row) | NOT RUN |
+
+## Competency assignments (CBA slice 2, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: as for the scorer rows above, with two question sets (options) on the
+district assessment, the first with a labelled source. Students from the
+local roster fixture only. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 939 | Open the district assessment's editor as the listed owner | An **Assignments** link beside Results; absent on a teacher assessment and for an unlisted co-author | PASS 2026-11-02 (local hand-run, synthetic roster): link present for Assessment staff; proctor gets the not-found page |
+| 940 | On Assignments, type two letters of a student's name | Up to 20 active students appear; picking one shows it with **Change** | PASS: two letters list the matching active student |
+| 941 | Assign the student Option 1 with a staff proctor | Listed under Current assignments: name, "Option 1: <source label>", the proctor, Assigned, today | PASS: row shows name · grade, "Option 1: Water rights", proctor, Assigned, date |
+| 942 | Assign the same student again (either option) | Refused: "already has an assignment … Withdraw it first" | PASS: "This student already has an assignment on this assessment. Withdraw it first to switch options." |
+| 943 | Withdraw, confirm, then assign Option 2 | The old row moves under **Show withdrawn**; the new one is live | PASS: withdraw asks first ("…Their work on this option stays as the record."); old row under Show withdrawn; Option 2 assigned |
+| 944 | Change proctor to a student address, then to a staff address | The first is refused ("must be a staff email"); the second shows in the row | PASS: student address refused ("The proctor must be a staff email."); staff change saved. Finding F-6: the error shows in the Assign form, not beside the row |
+| 945 | Delete Option 1's question set in the editor (draft) | Refused (409, `option_assigned`); the set stays | PASS (refused, 409, set stays). Finding F-5: the editor shows "That didn't save… tell IT this code: option_assigned" — needs plain words |
+| 946 | Open `/dashboard/<id>/assignments` as an unlisted staff account | 404 | PASS: not-found page |
+| 947 | Keyboard and screen reader through the form | Labels read Student, Option, Proctor email; the search results are reachable by Tab; Withdraw asks first | NOT RUN — VoiceOver (James) |
+
+## Competency proctor path (CBA slice 4, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 2 setup, assessment published, the local fixture student
+assigned with a second staff account as proctor. Sign in as the proctor for
+every row unless it says otherwise. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 948 | Open the home list as the proctor | A **Competency assessments** card: "1 student assigned to you as proctor", **Open**; no card for a staff account with no case | PASS: proctor card "1 student assigned to you as proctor"; view-only counselor has no proctor card |
+| 949 | Open it | The assessment, the student with their option and "Assigned"; **Start session** disabled until a student is ticked | PASS |
+| 950 | Tick the student, **Start session** | The Monitor opens on the code; the student is the one expected row | PASS: Monitor opens on the code |
+| 951 | Press **Start session** again for the same student | The same open sitting opens, not a second one | PASS: same sitting id reopens |
+| 952 | Join with the code as the student in the client | Admitted; only their option shows; the Assignments page now reads "In progress" | PASS (Debug client, simulated lockdown): only Option 1's prompt, source and two questions; Assignments reads In progress |
+| 953 | From the Monitor: View screen, Extend time, Hand in, Close | Each works; **Back to competency assessments** returns to the list | PASS: View screen and Adjust time work for the proctor; hand-in from the client; Close; back link returns to the list. Findings F-2 (Monitor progress 2/4 counts the other option's questions) and F-3 (Pass back / Pass back everyone and the editor breadcrumb shown to the proctor; the server refuses, 404) |
+| 954 | As the proctor, open `/dashboard/<id>`, `/results`, `/scoring` | 404 each | PASS: editor, results, results/<attempt>, scoring, assignments all render the not-found page |
+| 955 | As Assessment, change the proctor; reload the old proctor's Monitor | 404; the case is gone from the old proctor's list | PASS: old Monitor not-found; proctor list empty; proctor set back |
+
+## Competency release + counselors (CBA slice 6, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 4 setup through a handed-in attempt; the final response has
+an analytic rubric; the pass rule is 3. A third staff account is the
+counselor. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 956 | Assignments after hand-in | Status **Handed in**, Result —, **Review** opens the student's results page | PASS |
+| 957 | Score the final response 3 / 3 / 3, reload Assignments | **Scored**, Result **Pass**, a **Release** button | PASS: Scored, Pass, Release |
+| 958 | Release, confirm | **Released**, "Released <today>"; no Release button | PASS: confirm text "Release …'s result (Pass)? Their school's counselors will see it."; Released <date> |
+| 959 | Change score so one row is 2, reload | **Scored**, **Needs revision**, "Released … as Pass"; Release again → "Released <today>" | PASS (score changed via the change-score route): Scored, Needs revision, "Released … as Pass"; re-released |
+| 960 | Assignments → **Counselors**: add the counselor to the student's school | Listed as "<email> · School <id>"; a student address is refused | PASS: student address refused; counselor listed "· School hand-100 · results" |
+| 961 | Sign in as the counselor; open the home list | A **Competency results** card; Open lists the student, task, option, the released result and date | PASS: card without Assign students; list shows the student, task, option, Needs revision, date |
+| 962 | As the counselor, open `/dashboard/<id>`, `/results`, `/scoring`, `/assignments` | 404 each | PASS: all four not-found |
+| 963 | As Assessment, Remove the counselor; reload as the counselor | No card; the results page reads "No released results yet." | PASS: no card; "No released results yet." |
+| 964 | Pass the attempt back; reload Assignments | **In progress**; no Release button until it is scored again | PASS (pass back needed an end time because the proctor had adjusted the deadline): In progress, "Released … as Needs revision", no Release |
+
+## Competency No Score (branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 6 setup through a handed-in attempt. Row numbers may need
+renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 965 | Scoring queue on the district assessment | Under the rubric rows: **Or No Score:** with a reason list and **Save No Score** (disabled until a reason is chosen) | PASS: "Or No Score:" + five reasons; Save disabled until a reason |
+| 966 | Scoring queue on an ordinary teacher assessment | No No Score control | NOT RUN — needs a classroom assessment with a handed-in rubric essay |
+| 967 | Choose "Off topic", Save No Score, confirm | The card leaves the queue; the student's results page shows "No Score: Off topic" and 0 points; Assignments reads **Scored**, **No score** | PASS: confirm "Save a final No Score (Off topic)?"; card leaves the queue; results page "0 / 8 … No Score: Off topic"; Assignments Scored, No score. Finding F-2 again: the results page lists the other option's questions ("No answer", "Not scored yet") and totals 0 / 18 |
+| 968 | Keyboard and screen reader through the control | The select reads "Or No Score:"; Save No Score asks before saving | NOT RUN — VoiceOver (James) |
+
+## Competency counselors assign (CBA slice 8, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 6 setup; the counselor account added on Counselors with
+**Can assign students** to the fixture student's school; a second fixture
+student at another school. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 969 | Counselors page | The counselor reads "School <id> · results and assigning"; one added without the box reads "· results" | PASS: "results and assigning" / "results". Finding F-4: the Can assign box stays ticked after Add |
+| 970 | Sign in as the counselor; the home list | The Competency results card has **Assign students** and **Open** | PASS |
+| 971 | Assign students → the task → Assignments | "Assignments · <task>", "You see and assign students at your school only."; no Counselors link | PASS |
+| 972 | Search the other school's student by name | Not offered | PASS: other school's student never offered (UI and API); both hand-100 students are |
+| 973 | Assign the own-school student an option and proctor | Listed; Assessment's Assignments page shows the same case | PASS for the counselor's assignment (Assessment sees the same case). Finding F-1: the new Option 2 case read Handed in at once — the student's one attempt was still the submitted Option 1 attempt — and the student could not start Option 2 until Assessment passed the attempt back |
+| 974 | After Assessment scores the case | The counselor's row shows Scored with no result and no Review/Release until Assessment releases | PASS (after a pass back): student saw only Option 2, empty; counselor's row Scored with no result, no Review, no Release |
+| 975 | As a `view`-only counselor, open `/dashboard/competency-assign` and a task's `/assignments` | 404 each | PASS: both pages not-found; API 404 |
+
+**Hand-run 2026-11-02 findings (rows 939–975; local dev on :3100, fresh DB,
+three made-up roster students, minted local sessions, Debug client with
+simulated lockdown):**
+
+- **F-1 (D-18 switch):** after a handed-in attempt, a new assignment for
+  another option reads Handed in at once (the case reads the student's one
+  attempt) and the student cannot start the new option until Assessment
+  passes the attempt back. A counselor can make the new assignment but cannot
+  pass back. Needs a decision: reopen the attempt on a switch, or make
+  "switch" an Assessment action that passes back.
+- **F-2:** the Monitor's progress (2/4) and the student's results page (Q3–Q4
+  "No answer / Not scored yet", total 0 / 18) count the options the student
+  was never given.
+- **F-3:** a proctor's Monitor shows Pass back / Pass back everyone and an
+  editor breadcrumb; the server refuses (404), so hide them for `via:
+  proctor`.
+- **F-4:** Counselors — "Can assign students" stays ticked after Add, so the
+  next counselor silently gets assigning.
+- **F-5:** removing an assigned option in the editor says "tell IT this code:
+  option_assigned"; needs plain words ("A student is assigned this option").
+- **F-6:** a refused Change proctor shows its message in the Assign form.
+- **F-7 (minor):** the Assignments page tab title is bare "SecureTest";
+  "(1 students)" on the Counselors school list.
+- **Content (slice 9):** planning essays need a not-scored setting, or they
+  sit in "Needs manual scoring".
+- Not app findings: in dev mode the client pages took ~6 s to start fetching
+  (the fetch itself <0.3 s); worth a look on staging.
+
+**Re-run 2026-11-02 after the fixes (`78336efe` F-1, `fe2f2652` F-2,
+`43ae8c00` F-3–F-7); same local setup, a fresh made-up assessment:**
+
+| Row / check | Result |
+|---|---|
+| 943 (now with **Switch option**) | PASS: picker + confirm ("…If they have handed in, their test reopens for the new option."); one live Option 2 row, the old one under Show withdrawn |
+| 945 | PASS: "A student is assigned this option, so it can't be removed. Switch or withdraw their assignment first." — see F-9 |
+| 953 | PASS: proctor's Monitor breadcrumb is Assessments › Competency assessments; no Pass back everyone; no per-row Pass back on the handed-in row; progress 2/2 (F-2) |
+| 967 + student results page | PASS: only Option 1's Q1–Q2, total 0 / 9, "No Score: Off topic"; class results cells unscored / final / not_assigned / not_assigned, max 9 |
+| 969 | PASS: "results and assigning"; the box unticks after Add (F-4); "1 student" (F-7) |
+| 970–972 | PASS: Assign students on the card; tab "Assignments · <task>"; the other school's student not found |
+| 973 (counselor switches a handed-in, scored case) | PASS (F-1 fixed): case reads Option 2, In progress at once — the test reopened |
+| 974 | PASS: the student resumed into Option 2 only, empty; after scoring, the counselor sees Scored with no result |
+| F-7 tab title | PASS: "Assignments · CBA hand-run 2" |
+
+**New findings from the re-run:**
+
+- **F-8:** the Switch option picker is cramped at 1024 px — the select
+  shows "Ch…" and the Student column is clipped. Give the picker its own row
+  or a dialog.
+- **F-9:** the F-5 copy says "Switch or withdraw their assignment first",
+  but a **withdrawn** assignment also blocks deleting its option (it is the
+  record of that option), so once only withdrawn rows reference the set the
+  advice cannot work. Decide: say "a student took this option; it stays as
+  their record", or let withdrawn-only options be deleted.
+- **F-10:** after a switch reopens the test, the scoring queue still lists
+  the old option's responses (their finals were superseded by the pass back)
+  as "Needs manual scoring". They belong to the withdrawn option; the queue
+  should skip a district student's other-option responses (same rule as F-2).
+
+**F-8 to F-10 fixed in `9bdf9980`.** Browser check of F-8 (2026-11-02,
+1024 px): PASS — Switch option opens its own row under the student's row,
+"Switch Handrun, Jordan from Option 2 to [Choose an option] · Switch ·
+Cancel", the select full width (192 px); Cancel closes it. Residual, minor:
+the assignments table is still wider than its box at 1024 px (982 vs 846 px)
+with four row buttons, so "Change proctor" / "Withdraw" sit past the edge
+until scrolled. F-9 and F-10 are covered by tests in that commit (not
+re-checked by hand).

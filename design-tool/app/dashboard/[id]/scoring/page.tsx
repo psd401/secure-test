@@ -27,8 +27,9 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
   const db = getDb();
   // Access slice 1 (D-3): the Forbidden panel this used to render told a
   // stranger the assessment exists. A row the caller cannot reach is a 404,
-  // the posture every other surface already had.
-  const access = await authorizeAssessment(db, session, id, "edit", "read");
+  // the posture every other surface already had. `score` (competency D-11):
+  // the queue is a scorer's whole surface.
+  const access = await authorizeAssessment(db, session, id, "score", "read");
   if (!access.ok) {
     notFound();
   }
@@ -48,6 +49,7 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
         // FR: a non-impersonating admin reads feedback but cannot write it
         // (SEC-03, the routes refuse the same way), so the box is grayed out.
         canWriteFeedback={access.via !== "admin"}
+        competency={assessment.assigned_scope === "district"}
       />
     </main>
   );

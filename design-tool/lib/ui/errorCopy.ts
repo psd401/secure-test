@@ -174,6 +174,19 @@ export function itemErrorCopy(code: string): ErrorCopy {
         message: "A question's type can't change. Add a new question instead.",
         showCode: false,
       };
+    // F-5 / F-9 (CBA hand-run): deleting a question set that is a competency
+    // option (item-set DELETE, 409). A live assignment can be switched away;
+    // a withdrawn one is the student's record and keeps the option.
+    case "option_assigned":
+      return {
+        message: "A student is assigned this option. Switch their assignment first.",
+        showCode: false,
+      };
+    case "option_in_record":
+      return {
+        message: "A student's record uses this option, so it can't be removed.",
+        showCode: false,
+      };
     case "not_found":
     case "forbidden":
       return {
@@ -436,6 +449,9 @@ export function coTeachErrorCopy(code: string): ErrorCopy {
       return { message: "That's you.", showCode: false };
     case "level_not_allowed":
       return { message: "That level isn't available here.", showCode: false };
+    // Competency D-12: a scorer's access needs an end date in the future.
+    case "ends_at_required":
+      return { message: "Pick a scoring end date that hasn't passed.", showCode: false };
     case "not_found":
     case "invalid_id":
       return {

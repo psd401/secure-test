@@ -95,6 +95,13 @@ export const assessments = pgTable(
     // district assessment as their own would be marking away the very
     // constraint this column exists to impose.
     assigned_scope: text("assigned_scope").notNull().default("teacher"),
+    // Competency assessments (docs/competency-assessment-design.md, slice 1):
+    // the pass rule — the minimum points every rubric criterion of the final
+    // response must reach for a Pass (3 on every OSPI task). Null = not a
+    // competency assessment. Set only by Assessment staff through
+    // `PUT /api/assessments/:id/competency`, which also sets `assigned_scope`
+    // to "district"; like that column, not settable through the authoring API.
+    competency_pass_min_points: doublePrecision("competency_pass_min_points"),
     // Client paging (docs/client-paging-design.md, D-1): how students move
     // through the test — "scroll" (one page, the default and what every
     // assessment authored before this column was) or "paged" (one question
@@ -151,6 +158,10 @@ export const assessments = pgTable(
     assignedScopeCheck: check(
       "assessments_assigned_scope_check",
       sql`assigned_scope IN ('teacher', 'school', 'district')`,
+    ),
+    competencyPassMinCheck: check(
+      "assessments_competency_pass_min_check",
+      sql`competency_pass_min_points IS NULL OR competency_pass_min_points >= 0`,
     ),
     studentLayoutCheck: check(
       "assessments_student_layout_check",
@@ -1851,10 +1862,12 @@ export type RubricInsert = typeof rubrics.$inferInsert;
 export const ACCESS_GRANT_SCOPES = ["assessment", "teacher", "school"] as const;
 export type AccessGrantScope = (typeof ACCESS_GRANT_SCOPES)[number];
 
-/** The ladder, lowest first: `view` < `run` < `edit` < `own`. Mirrored in
- * `lib/api/accessLevels.ts`, which is what the application code imports (a
- * route must not have to reach into the schema to name a level). */
-export const ACCESS_GRANT_LEVELS = ["view", "run", "edit", "own"] as const;
+/** The ladder, lowest first: `view` < `run` < `score` < `edit` < `own`.
+ * Mirrored in `lib/api/accessLevels.ts`, which is what the application code
+ * imports (a route must not have to reach into the schema to name a level).
+ * `score` is a scorer's time-boxed grant (docs/competency-assessment-design.md,
+ * D-11/D-12). */
+export const ACCESS_GRANT_LEVELS = ["view", "run", "score", "edit", "own"] as const;
 export type AccessGrantLevel = (typeof ACCESS_GRANT_LEVELS)[number];
 
 export const access_grants = pgTable(
@@ -1900,7 +1913,7 @@ export const access_grants = pgTable(
     ),
     levelCheck: check(
       "access_grants_level_check",
-      sql`level IN ('view', 'run', 'edit', 'own')`,
+      sql`level IN ('view', 'run', 'score', 'edit', 'own')`,
     ),
   }),
 );
@@ -2483,3 +2496,77 @@ export const item_snapshots = pgTable(
 );
 
 export type ItemSnapshotRow = typeof item_snapshots.$inferSelect;
+
+// --- Competency assignments (docs/competency-assessment-design.md, slice 2) --
+//
+// The case record that replaces Assessment's spreadsheet row: which student
+// takes which option (item set) of a district assessment, and the one staff
+// member who proctors their sittings. Status moves along
+// lib/competency/assignmentStatus.ts; a switch of option is a withdrawal plus
+// a new row (D-18), so a withdrawn row stays as the record of the old option.
+// One live (not withdrawn) row per (assessment, student).
+//
+// `item_set_id` has no ON DELETE action (NO ACTION, checked at the end of the
+// statement): deleting an option a student is assigned to would leave the
+// record pointing nowhere, so the item-set DELETE refuses with 409 first —
+// while deleting the whole assessment still works, since its cascade removes
+// the assignments in the same statement (RESTRICT would refuse that). `student_ps_id` references the roster, whose rows are deactivated,
+// never deleted.
+export const COMPETENCY_ASSIGNMENT_STATUSES = [
+  "assigned",
+  "in_progress",
+  "handed_in",
+  "scored",
+  "released",
+  "withdrawn",
+] as const;
+export type CompetencyAssignmentStatus = (typeof COMPETENCY_ASSIGNMENT_STATUSES)[number];
+
+export const competency_assignments = pgTable(
+  "competency_assignments",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    assessment_id: uuid("assessment_id")
+      .notNull()
+      .references(() => assessments.id, { onDelete: "cascade" }),
+    student_ps_id: text("student_ps_id")
+      .notNull()
+      .references(() => roster_students.ps_id),
+    item_set_id: uuid("item_set_id")
+      .notNull()
+      .references(() => item_sets.id),
+    /** Staff email, lowercased at the write boundary. */
+    proctor_email: text("proctor_email").notNull(),
+    assigned_by_sub: text("assigned_by_sub").notNull(),
+    assigned_by_email: text("assigned_by_email").notNull(),
+    status: text("status").$type<CompetencyAssignmentStatus>().notNull().default("assigned"),
+    /** pass | needs_revision | no_score; null until scored (slice 6). */
+    result: text("result"),
+    released_at: timestamp("released_at", { withTimezone: true }),
+    released_by_email: text("released_by_email"),
+    withdrawn_at: timestamp("withdrawn_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    liveUnq: uniqueIndex("competency_assignments_live_unq")
+      .on(t.assessment_id, t.student_ps_id)
+      .where(sql`status <> 'withdrawn'`),
+    // The proctor home list (slice 4) starts from the proctor's email.
+    proctorIdx: index("competency_assignments_proctor_email_idx").on(t.proctor_email),
+    statusCheck: check(
+      "competency_assignments_status_check",
+      sql`status IN ('assigned', 'in_progress', 'handed_in', 'scored', 'released', 'withdrawn')`,
+    ),
+    resultCheck: check(
+      "competency_assignments_result_check",
+      sql`result IS NULL OR result IN ('pass', 'needs_revision', 'no_score')`,
+    ),
+  }),
+);
+
+export type CompetencyAssignmentRow = typeof competency_assignments.$inferSelect;

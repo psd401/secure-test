@@ -83,6 +83,19 @@ async function coTeach(id: string, grantee_email: string) {
   );
 }
 
+async function addScorer(id: string, grantee_email: string) {
+  const { POST } = await import("../app/api/assessments/[id]/grants/route");
+  return POST(
+    post(`http://localhost/api/assessments/${id}/grants`, {
+      grantee_email,
+      level: "score",
+      ends_at: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      note: "scorer",
+    }),
+    { params: Promise.resolve({ id }) },
+  );
+}
+
 describe("buildShareEmail", () => {
   test("share: reply goes to the sharer; name and link in the body", () => {
     const m = buildShareEmail({
@@ -109,6 +122,20 @@ describe("buildShareEmail", () => {
     });
     expect(m.subject).toBe(`${OWNER.email} added you as a co-teacher on "Unit 3 essay"`);
     expect(m.replyTo).toBe(OWNER.email);
+  });
+
+  test("scorer (competency slice 5b): its own subject and body", () => {
+    const m = buildShareEmail({
+      kind: "score",
+      to: PEER,
+      sharerEmail: OWNER.email,
+      assessmentName: "Unit 3 essay",
+      link: "https://example.test/dashboard/x/scoring",
+    });
+    expect(m.subject).toBe(`${OWNER.email} asked you to score "Unit 3 essay"`);
+    expect(m.text).toContain("score the responses");
+    expect(m.text).toContain("https://example.test/dashboard/x/scoring");
+    expect(m.text).not.toContain("co-teacher");
   });
 });
 
@@ -143,6 +170,15 @@ describe("routes send one email per new share or grant", () => {
 
     expect((await coTeach(a.id, PEER)).status).toBe(409);
     expect(sentEmails).toHaveLength(1);
+  });
+
+  test("scorer → one email linking to the scoring page, not the editor", async () => {
+    current = OWNER;
+    const a = await makeAssessment();
+    expect((await addScorer(a.id, PEER)).status).toBe(201);
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]!.subject).toContain("asked you to score");
+    expect(sentEmails[0]!.text).toContain(`/dashboard/${a.id}/scoring`);
   });
 
   test("a send failure is logged and the share still succeeds", async () => {

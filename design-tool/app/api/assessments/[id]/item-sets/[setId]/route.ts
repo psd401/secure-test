@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assessments, item_sets } from "@/db/schema";
+import { assessments, competency_assignments, item_sets } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraftStatus } from "@/lib/api/requireDraft";
 import {
@@ -86,6 +86,22 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (lock) return lock;
 
   const db = getDb();
+  // CBA slice 2: an option a student has been assigned cannot be deleted —
+  // the FK would refuse it with a 500 otherwise. F-9 (hand-run): two
+  // refusals, because the way out differs: a LIVE assignment can be switched
+  // (option_assigned); a withdrawn one is the record of what the student took
+  // and keeps the option for good (option_in_record).
+  const refs = await db
+    .select({ status: competency_assignments.status })
+    .from(competency_assignments)
+    .where(eq(competency_assignments.item_set_id, setId));
+  if (refs.length > 0) {
+    const live = refs.some((r) => r.status !== "withdrawn");
+    return NextResponse.json(
+      { ok: false, error: live ? "option_assigned" : "option_in_record" },
+      { status: 409 },
+    );
+  }
   await db.transaction(async (tx) => {
     await tx.delete(item_sets).where(eq(item_sets.id, setId));
     await tx

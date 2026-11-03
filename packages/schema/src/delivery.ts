@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ItemResponseSchema } from "./responses.js";
 import { GraphBoardSchema } from "./graph.js";
+import { MAX_ITEM_LIST } from "./limits.js";
 import {
   BundleAssetSchema,
   ChoiceSchema,
@@ -332,11 +333,54 @@ export const DeliveryBundleSchema = z
         locked: z.array(z.string().min(1)).optional(),
       })
       .optional(),
+    // Competency assessments (docs/competency-assessment-design.md, D-16):
+    // on an attempt passed back as Needs Revision, the scorer's per-row
+    // feedback for the final response, keyed by item id — each rubric
+    // criterion's NAME, the LEVEL LABEL it was scored at and the scorer's
+    // rationale, plus an optional overall note. Criterion names, level labels
+    // and the scorer's own prose only: no points, no descriptors of other
+    // levels, no answers, so this field cannot carry a key (ADR 0016). Read
+    // from the superseded score of a passed-back attempt on a district
+    // competency assessment and nowhere else; absent otherwise — a Pass, a
+    // classroom test, and a fresh option (D-18) carry none.
+    revision_feedback: z
+      .record(
+        z.string().min(1), // item id
+        z
+          .object({
+            criteria: z
+              .array(
+                z.object({
+                  name: z.string().min(1).max(200),
+                  level_label: z.string().min(1).max(120),
+                  rationale: z.string().max(2000).optional(),
+                }).strict(),
+              )
+              .max(MAX_ITEM_LIST),
+            note: z.string().max(2000).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .superRefine((bundle, ctx) => {
     if (bundle.item_sets) {
       for (const message of itemSetIssues(bundle.items.map((i) => i.id), bundle.item_sets)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["item_sets"], message });
+      }
+    }
+    // Revision feedback belongs to a question on THIS bundle; a key that
+    // names no item is a builder bug, not something to render.
+    if (bundle.revision_feedback) {
+      const ids = new Set(bundle.items.map((i) => i.id));
+      for (const key of Object.keys(bundle.revision_feedback)) {
+        if (!ids.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["revision_feedback", key],
+            message: `revision feedback key must be an item id on this bundle; got "${key}"`,
+          });
+        }
       }
     }
     // Both blob maps are keyed by a server-minted uuid (`assets` by asset id,

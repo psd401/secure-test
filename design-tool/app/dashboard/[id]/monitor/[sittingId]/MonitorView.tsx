@@ -118,6 +118,15 @@ interface Props {
    * gets no button, matching the route's 404. Optional so callers that
    * predate it (tests) render as before. */
     canDeleteAttempts?: boolean;
+  /** CBA slice 4: a proctor has no Test sessions tab to go back to. */
+  backHref?: string;
+  backLabel?: string;
+  /**
+   * F-3 (CBA hand-run): the viewer reached this sitting as its proctor —
+   * `run` on their own students only. Pass back, the editor breadcrumb and the
+   * results link would all be refused (404), so they are not offered.
+   */
+  proctor?: boolean;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -158,6 +167,9 @@ export function MonitorView({
   studentPsIds = null,
   openCodeOnLoad = false,
   canDeleteAttempts = true,
+  backHref,
+  backLabel = "Back to test sessions",
+  proctor = false,
 }: Props) {
   // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
   // or "Extend time" at the header level, same exclusions the Test sessions
@@ -313,13 +325,20 @@ export function MonitorView({
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
       <PageHeader
-        crumbs={[
-          { label: "Assessments", href: "/dashboard" },
-          {
-            label: assessmentName,
-            href: `/dashboard/${assessmentId}?tab=sessions`,
-          },
-        ]}
+        crumbs={
+          proctor
+            ? [
+                { label: "Assessments", href: "/dashboard" },
+                { label: "Competency assessments", href: "/dashboard/proctoring" },
+              ]
+            : [
+                { label: "Assessments", href: "/dashboard" },
+                {
+                  label: assessmentName,
+                  href: `/dashboard/${assessmentId}?tab=sessions`,
+                },
+              ]
+        }
         title={`Monitor ${code}`}
         status={<SessionStatusBadge state={state} />}
         description={
@@ -382,7 +401,7 @@ export function MonitorView({
             {/* U-25 slice 1 (docs/bulk-pass-back-and-corrections-design.md,
                 D-1 by sitting): every handed-in row's Pass back at once.
                 Not on a practice sitting, like Hand in everyone. */}
-            {!isPractice ? (
+            {!isPractice && !proctor ? (
               <PassBackAllControl
                 assessmentId={assessmentId}
                 {...passBackAllTargets(data?.rows ?? [])}
@@ -624,6 +643,7 @@ export function MonitorView({
                     onToggleSelected={toggleSelected}
                     assessmentUntimed={assessmentUntimed}
                     canDelete={canDeleteAttempts}
+                    proctor={proctor}
                   />
                 ))}
               </TableBody>
@@ -634,10 +654,10 @@ export function MonitorView({
 
       <p className="text-sm text-muted-foreground">
         <Link
-          href={`/dashboard/${assessmentId}?tab=sessions`}
+          href={backHref ?? `/dashboard/${assessmentId}?tab=sessions`}
           className="hover:underline"
         >
-          Back to test sessions
+          {backLabel}
         </Link>
       </p>
 
@@ -695,6 +715,7 @@ function StudentRow({
   selected,
   onToggleSelected,
   canDelete,
+  proctor,
 }: {
   row: AttendanceRow;
   state: StudentState;
@@ -710,6 +731,8 @@ function StudentRow({
   selected: boolean;
   onToggleSelected: (attemptId: string) => void;
   canDelete: boolean;
+  /** F-3: no Pass back and no results link for a proctor. */
+  proctor: boolean;
 }) {
   const idle = idleFor(r, now);
   const current = st === "needs_attention";
@@ -780,12 +803,16 @@ function StudentRow({
           {/* Safeguarding alerts slice 2: an OPEN alert on this attempt —
               the per-student results page has the detail and Acknowledge. */}
           {r.attempt_id && (r.safeguarding_open ?? 0) > 0 ? (
-            <Link
-              href={`/dashboard/${assessmentId}/results/${r.attempt_id}`}
-              className="no-underline"
-            >
+            proctor ? (
               <SafeguardingBadge count={r.safeguarding_open ?? 0} />
-            </Link>
+            ) : (
+              <Link
+                href={`/dashboard/${assessmentId}/results/${r.attempt_id}`}
+                className="no-underline"
+              >
+                <SafeguardingBadge count={r.safeguarding_open ?? 0} />
+              </Link>
+            )
           ) : null}
           {/* Time extension: the effective deadline, once there is one to
               show — null on every row with no limit and no extension; "No
@@ -836,7 +863,7 @@ function StudentRow({
             already-submitted-elsewhere attempt back to them. */}
         {r.attempt_id && r.status !== "not_joined" ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
-            {r.status === "submitted" || earlier ? (
+            {(r.status === "submitted" || earlier) && !proctor ? (
               <PassBackControl
                 attemptId={r.attempt_id}
                 studentName={r.name}

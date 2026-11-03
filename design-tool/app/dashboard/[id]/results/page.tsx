@@ -61,6 +61,8 @@ function cellText(cell: ResultsCell): string {
       return "—";
     case "no_response":
       return "·";
+    case "not_assigned":
+      return "";
   }
 }
 
@@ -69,6 +71,7 @@ const CELL_TITLE: Record<ResultsCell["status"], string> = {
   proposed_pending: "AI proposal awaiting review (not counted)",
   unscored: "Awaiting scoring",
   no_response: "No response",
+  not_assigned: "Another option — not given to this student",
 };
 
 // Slice 40 + R1 (docs/reporting-design.md): teacher-facing results matrix.
@@ -216,7 +219,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
           )
       ).some((a) => attemptIsTimed(a, assessment))
     : false;
-  const aiBatch = levelSatisfies(access.level, "edit") && submittedShown.length > 0
+  const aiBatch = levelSatisfies(access.level, "score") && submittedShown.length > 0
     ? await aiBatchCounts(
         db,
         assessment.id,
@@ -316,7 +319,7 @@ export default async function ResultsPage({ params, searchParams }: PageProps) {
       {unreviewedLine ? (
         <p className="mt-2 text-sm">
           {unreviewedLine}
-          {levelSatisfies(access.level, "edit") ? (
+          {levelSatisfies(access.level, "score") ? (
             <>
               {" — "}
               <Link

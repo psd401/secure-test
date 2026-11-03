@@ -15,6 +15,7 @@ import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { UUID_RE } from "@/lib/uuid";
 import { logResolutionFailure } from "@/lib/api/resolutionLog";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
+import { markAssignmentStarted } from "@/lib/competency/assignments";
 
 const StartBody = z.object({
   test_session_id: z.string().regex(UUID_RE, "test_session_id must be a uuid"),
@@ -85,6 +86,12 @@ export async function POST(req: Request) {
       { ok: false, error: resolved.reason },
       { status: statusForResolutionFailure(resolved.reason) },
     );
+  }
+
+  // CBA slice 4: the first join moves a competency case to in progress
+  // (no-op off a district assignment, or once it is already past `assigned`).
+  if (resolved.roster) {
+    await markAssignmentStarted(db, sitting.assessment_id, resolved.roster.ps_id);
   }
 
   const [existing] = await db

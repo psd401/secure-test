@@ -30,6 +30,7 @@ import type { getDb } from "@/db/client";
 import { attemptIsTimed, deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import { studentsInTeachersSections } from "@/lib/roster/queries";
 import { sectionLabel, studentDisplayName } from "@/lib/roster/teacherRoster";
+import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -316,7 +317,7 @@ export async function attendanceForSitting(
   // T-2: the assessment's time limit, read once — the deadline is per attempt
   // (`started_at + limit`), the limit is per assessment.
   const [assessmentRow] = await db
-    .select({ time_limit_seconds: assessments.time_limit_seconds })
+    .select({ time_limit_seconds: assessments.time_limit_seconds, assigned_scope: assessments.assigned_scope })
     .from(assessments)
     .where(eq(assessments.id, sitting.assessment_id))
     .limit(1);
@@ -535,6 +536,13 @@ export async function attendanceForSitting(
     }
   }
 
+  // F-2 (CBA): on a district assessment each student was given one option,
+  // so their progress counts that option's questions (and any in no set),
+  // not every option's (lib/competency/studentItems.ts).
+  if (assessmentRow?.assigned_scope === "district" && rows.length > 0) {
+    await scopeProgressToOptions(db, sitting.assessment_id, rows);
+  }
+
   return {
     rows,
     counts: {
@@ -559,4 +567,34 @@ export async function attendanceForSitting(
     ),
     total_items,
   };
+}
+
+async function scopeProgressToOptions(db: Db, assessmentId: string, rows: AttendanceRow[]): Promise<void> {
+  const options = await optionByStudent(
+    db,
+    assessmentId,
+    rows.map((r) => r.ps_id),
+  );
+  if (options.size === 0) return;
+  const itemRows = await db
+    .select({ id: items.id, item_set_id: items.item_set_id })
+    .from(items)
+    .where(eq(items.assessment_id, assessmentId));
+  const attemptIds = rows.map((r) => r.attempt_id).filter((v): v is string => !!v);
+  const answeredRows =
+    attemptIds.length > 0
+      ? await db
+          .select({ attempt_id: responses.attempt_id, item_id: responses.item_id })
+          .from(responses)
+          .where(inArray(responses.attempt_id, attemptIds))
+      : [];
+  for (const row of rows) {
+    const option = options.get(row.ps_id);
+    if (!option) continue;
+    const mine = new Set(itemRows.filter((i) => inStudentOption(i, option)).map((i) => i.id));
+    row.total_items = mine.size;
+    if (row.attempt_id) {
+      row.answered = answeredRows.filter((r) => r.attempt_id === row.attempt_id && mine.has(r.item_id)).length;
+    }
+  }
 }

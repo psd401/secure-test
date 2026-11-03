@@ -13,6 +13,7 @@ import { healAssessmentOwnerEmail, markAssessmentGrantSeen } from "@/lib/api/gra
 import type { AnswersReleaseSetting, FeedbackLevelSetting } from "@/lib/feedback/settingsUi";
 import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
+import { isCompetencyAdmin } from "@/lib/auth/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
       <AssessmentIdProvider id={assessment.id}>
         <AssessmentEditor
           newAuthoring={newAuthoring}
+          showAssignments={assessment.assigned_scope === "district" && isCompetencyAdmin(session)}
           initialItemSets={itemSetRows.map((s) => ({
             id: s.id,
             stimulus_text: s.stimulus_text,

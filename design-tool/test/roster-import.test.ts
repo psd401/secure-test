@@ -34,7 +34,7 @@ beforeAll(() => expectTestDb());
 
 afterEach(async () => {
   const db = getDb();
-  await db.execute(sql`truncate table roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`);
+  await db.execute(sql`truncate table competency_assignments, roster_enrollments, roster_section_teachers, roster_sections, roster_students, roster_sync_runs`);
 });
 
 afterAll(async () => await closeDb());

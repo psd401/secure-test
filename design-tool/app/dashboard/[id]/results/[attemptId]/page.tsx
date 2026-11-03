@@ -12,6 +12,7 @@ import {
   response_feedback,
   responses,
   scores,
+  students,
   type ItemRow,
   type ScoreRow,
 } from "@/db/schema";
@@ -29,6 +30,8 @@ import {
   type RubricScoreRow,
 } from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
+import { noScoreLabel } from "@/lib/scoring/competencyResult";
+import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { attemptOneDisplay, buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
@@ -397,11 +400,23 @@ export default async function AttemptResultPage({ params }: PageProps) {
     notFound();
   }
 
-  const itemRows = await db
+  const allItemRows = await db
     .select()
     .from(items)
     .where(eq(items.assessment_id, id))
     .orderBy(asc(items.position));
+  // F-2 (CBA): a district assessment shows only this student's option (and
+  // questions in no set) — the other options were never given to them.
+  let studentOption: string | undefined;
+  if (assessment.assigned_scope === "district") {
+    const [owner] = await db
+      .select({ ps: students.roster_ps_id })
+      .from(students)
+      .where(eq(students.id, attempt.student_id))
+      .limit(1);
+    if (owner?.ps) studentOption = (await optionByStudent(db, id, [owner.ps])).get(owner.ps);
+  }
+  const itemRows = allItemRows.filter((i) => inStudentOption(i, studentOption));
 
   // Row GD slice 4 (docs/google-docs-release-design.md): this teacher's own
   // Docs for this attempt (a co-teacher's are in their Drive, not linkable
@@ -444,12 +459,12 @@ export default async function AttemptResultPage({ params }: PageProps) {
 
   // Teacher feedback (docs/feedback-release-design.md, D-4 / D-12): one
   // comment per answer and one overall, on a handed-in, non-practice attempt.
-  // Written at edit level and never by a non-impersonating admin (the routes
+  // Written at score level and never by a non-impersonating admin (the routes
   // refuse that write the same way, SEC-03); everyone else who can read the
   // page reads the comments. Students see them only through a release (FR
   // slices 3–4) with Teacher feedback ticked.
   const showFeedback = row.status === "submitted" && !attempt.practice;
-  const canWriteFeedback = levelSatisfies(access.level, "edit") && access.via !== "admin";
+  const canWriteFeedback = levelSatisfies(access.level, "score") && access.via !== "admin";
   const feedbackByResponse = new Map<string, string>();
   let overallFeedback = "";
   if (showFeedback) {
@@ -763,7 +778,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
           const rubric = item.config.rubric ?? null;
           const finalDetail = {
             rows: rubricScoreRows(rubric, final?.rationale),
-            overall: overallRationale(final?.rationale),
+            // Competency assessments: a No Score carries its OSPI condition
+            // and no rubric rows — say which, where the rows would be.
+            overall: noScoreLabel(final?.rationale) ?? overallRationale(final?.rationale),
           };
           const proposedDetail = {
             rows: rubricScoreRows(rubric, proposed?.rationale),

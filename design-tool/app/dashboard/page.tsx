@@ -30,6 +30,10 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
+import { proctorCaseCount } from "@/lib/competency/proctoring";
+import { counselorSchoolIds } from "@/lib/competency/counselors";
+import { schoolGrantSchools } from "@/lib/competency/schoolGrants";
+import { normalizeEmail } from "@/lib/roster/queries";
 import { SessionCode } from "@/components/app/SessionCode";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
@@ -115,6 +119,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // about what the caller may see. Slice 5a: `showAll` widens that scope to
   // every teacher's rows, admin-only (ignored otherwise by the scope itself).
   const visible = await visibleAssessmentScope(db, session, { all: showAll });
+  // CBA slice 4: the proctor's cue to /dashboard/proctoring.
+  const proctorCases = await proctorCaseCount(db, normalizeEmail(session.email));
+  // CBA slice 6: a counselor's cue to their school's released results.
+  const counselorSchools = await counselorSchoolIds(db, session.email);
+  // CBA slice 8: a counselor who may also assign.
+  const counselorAssigns = (await schoolGrantSchools(db, session.email, "run")).length > 0;
   const [rows, archivedCount, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
@@ -218,6 +228,44 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </>
         }
       />
+
+      {proctorCases > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-medium">Competency assessments</span>
+              <span className="text-muted-foreground">
+                {" "}
+                · {proctorCases} {proctorCases === 1 ? "student" : "students"} assigned to you as proctor
+              </span>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/proctoring">Open</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {counselorSchools.length > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-medium">Competency results</span>
+              <span className="text-muted-foreground"> · released results for your school</span>
+            </div>
+            <div className="flex gap-2">
+              {counselorAssigns ? (
+                <Button asChild variant="outline">
+                  <Link href="/dashboard/competency-assign">Assign students</Link>
+                </Button>
+              ) : null}
+              <Button asChild variant="outline">
+                <Link href="/dashboard/competency-results">Open</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {openSessions.length > 0 ? (
         <section aria-labelledby="open-now" className="space-y-3">
@@ -337,6 +385,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 // grant does not offer a button whose route would 404 either.
                 const ownsRow = accessFor.get(a.id)?.via === "owner";
                 const rowAccess = accessFor.get(a.id);
+                // Slice 5b (docs/competency-assessment-design.md): a scorer's
+                // row opens the scoring page — the editor needs `edit`.
+                const scorerRow = rowAccess?.via === "grant" && rowAccess.level === "score";
                 return (
                   <TableRow key={a.id}>
                     {/* A-1: the name is the elastic column. Auto table layout
@@ -347,7 +398,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         card edge. */}
                     <TableCell className="w-full max-w-0">
                       <Link
-                        href={`/dashboard/${a.id}`}
+                        href={scorerRow ? `/dashboard/${a.id}/scoring` : `/dashboard/${a.id}`}
                         className="block truncate font-medium hover:underline"
                         title={a.name}
                       >
@@ -357,13 +408,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         <div className="truncate text-sm text-muted-foreground">{a.description}</div>
                       ) : null}
                       {/* Access slice 3 (docs/access-model-design.md, D-4 (b)):
-                          `via: "grant"` is a co-teacher's own row — the ONLY
-                          grant kind with UI so far, so the label doesn't need
-                          to say which level. */}
+                          `via: "grant"` is a co-teacher's own row, or since
+                          slice 5b a scorer's — the two grant kinds with UI. */}
                       {rowAccess?.via === "grant" ? (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <span className="truncate">
-                            Shared with you as co-teacher
+                            {scorerRow ? "Shared with you as scorer" : "Shared with you as co-teacher"}
                             {rowAccess.owner_email ? ` · by ${rowAccess.owner_email}` : ""}
                           </span>
                           {unseenGrants.has(a.id.toLowerCase()) ? <Badge variant="info">New</Badge> : null}

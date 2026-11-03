@@ -24,6 +24,7 @@ import { renderFillBlankAnswerHtml } from "@/lib/reporting/fillBlankView";
 import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints, fillBlankHandScored } from "@/lib/scoring/auto";
 import { UUID_RE } from "@/lib/uuid";
+import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { authorizeAssessment, levelSatisfies } from "@/lib/api/access";
 import { aiBatchCounts } from "@/lib/scoring/aiBatch";
 import { alertsForResponses } from "@/lib/safeguarding/alertQueries";
@@ -120,7 +121,7 @@ export async function GET(req: Request, ctx: RouteContext) {
   const studentsById = new Map(studentRows.map((s) => [s.id, s]));
   const attemptsById = new Map(submitted.map((a) => [a.id, a]));
 
-  const responseRows = await db
+  const allResponseRows = await db
     .select()
     .from(responses)
     .where(
@@ -129,6 +130,26 @@ export async function GET(req: Request, ctx: RouteContext) {
         submitted.map((a) => a.id),
       ),
     );
+  // F-10 (CBA hand-run): on a district assessment a student's queue holds
+  // only their current option's responses (and shared questions). After a
+  // Switch option reopens the test, the old option's answers keep their
+  // superseded scores as the record — they are not work left to score.
+  let responseRows = allResponseRows;
+  if (access.assessment.assigned_scope === "district") {
+    const optionOf = await optionByStudent(
+      db,
+      id,
+      studentRows.map((s) => s.roster_ps_id).filter((v): v is string => !!v),
+    );
+    const psByAttempt = new Map(
+      submitted.map((a) => [a.id, studentsById.get(a.student_id)?.roster_ps_id ?? null]),
+    );
+    responseRows = allResponseRows.filter((r) => {
+      const item = itemsById.get(r.item_id);
+      const ps = psByAttempt.get(r.attempt_id);
+      return !item || !ps || inStudentOption(item, optionOf.get(ps));
+    });
+  }
 
   const scoreRows: ScoreRow[] =
     responseRows.length > 0
@@ -395,9 +416,9 @@ export async function GET(req: Request, ctx: RouteContext) {
 
   // "Score all with AI (n)" at the top of the queue (roadmap U-24's Results
   // button, beta feedback 2026-10-28): the same count Results shows, over the
-  // handed-in attempts in the filtered section, at the same edit level. The
-  // score-ai route stays the authority on what a press actually scores.
-  const aiBatch = levelSatisfies(access.level, "edit")
+  // handed-in attempts in the filtered section, at the score-ai route's own
+  // `score` level. That route stays the authority on what a press actually scores.
+  const aiBatch = levelSatisfies(access.level, "score")
     ? await aiBatchCounts(
         db,
         id,

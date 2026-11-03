@@ -13,11 +13,11 @@ interface RouteContext {
 
 /**
  * Overall teacher feedback on an attempt (docs/feedback-release-design.md,
- * D-4 / D-12): one comment per student, edited in place by any edit-level
+ * D-4 / D-12): one comment per student, edited in place by any score-level
  * teacher; the last editor is recorded. Students see it only through a
  * release (FR slices 3–4) with Teacher feedback ticked.
  *
- * `edit` with write intent through `authorizeAttempt`, refused with the same
+ * `score` with write intent through `authorizeAttempt`, refused with the same
  * 404 as the per-question route. Like that route (via `loadResponseChain`), a
  * handed-in attempt only: 400 `attempt_not_submitted` while the student is
  * still working.
@@ -42,7 +42,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "score", "write");
   if (!access.ok) return access.response;
   if (access.attempt.status !== "submitted") {
     return NextResponse.json({ ok: false, error: "attempt_not_submitted" }, { status: 400 });
@@ -75,7 +75,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   }
 
   const db = getDb();
-  const access = await authorizeAttempt(db, auth.session, attemptId, "edit", "write");
+  const access = await authorizeAttempt(db, auth.session, attemptId, "score", "write");
   if (!access.ok) return access.response;
   if (access.attempt.status !== "submitted") {
     return NextResponse.json({ ok: false, error: "attempt_not_submitted" }, { status: 400 });

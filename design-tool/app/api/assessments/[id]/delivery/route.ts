@@ -1,4 +1,10 @@
-import { correctionsDeliverable, requiredClientUpgrade } from "@/lib/items/clientSupport";
+import {
+  correctionsDeliverable,
+  requiredClientUpgrade,
+  revisionFeedbackDeliverable,
+} from "@/lib/items/clientSupport";
+import { loadRevisionFeedback } from "@/lib/competency/revisionFeedback";
+import { DeliveryBundleSchema } from "@secure-test/schema";
 import { loadCorrections } from "@/lib/feedback/correctionMarks";
 import { NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
@@ -23,6 +29,7 @@ import { deadlineFor, refuseIfPastDeadline } from "@/lib/api/attemptDeadline";
 import { refuseIfSittingOver } from "@/lib/api/sittingOver";
 import { UUID_RE } from "@/lib/uuid";
 import { currentRenderer } from "@/lib/renderer/current";
+import { liveAssignmentFor } from "@/lib/competency/assignments";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -119,6 +126,19 @@ export async function GET(req: Request, ctx: RouteContext) {
     if (expired) return expired;
   }
 
+  // CBA slice 3 (docs/competency-assessment-design.md, D-4): a district
+  // assessment is delivered only as the option on the student's live
+  // assignment. No assignment — never made, or withdrawn — is the same 404
+  // as no attempt: nothing of any option is served without one.
+  let onlyItemSetId: string | null = null;
+  if (assessment.assigned_scope === "district") {
+    const assignment = await liveAssignmentFor(db, assessment.id, resolved.student.roster_ps_id);
+    if (!assignment) {
+      return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+    }
+    onlyItemSetId = assignment.item_set_id;
+  }
+
   const accommodations = await resolveEffectiveAccommodations(
     db,
     assessment,
@@ -143,6 +163,7 @@ export async function GET(req: Request, ctx: RouteContext) {
       deadlineFor(attempt, assessment),
       // Passage highlighting rides only to a 2.0+ client (H-1: never refused).
       req.headers.get(CLIENT_VERSION_HEADER),
+      onlyItemSetId,
     );
     // FB slice 6 (docs/fill-in-blank-design.md, D-4): a bundle carrying an
     // item type this client cannot render would fail its whole decode, so
@@ -207,6 +228,20 @@ export async function GET(req: Request, ctx: RouteContext) {
               ),
             );
         }
+      }
+    }
+    // CBA slice 7, server half (docs/competency-assessment-design.md, D-16):
+    // the scorer's per-row feedback on a passed-back Needs Revision, beside
+    // the option's final response — only past the renderer floor that draws
+    // the panel (null until the merge that lands it). Below it nothing is
+    // added and nothing is refused. Re-checked against the bundle schema so
+    // the field can never ride unvalidated.
+    if (onlyItemSetId && revisionFeedbackDeliverable(req.headers.get(CLIENT_VERSION_HEADER), bundle.renderer)) {
+      const feedback = await loadRevisionFeedback(db, assessment, attempt, onlyItemSetId);
+      if (feedback) {
+        const checked = DeliveryBundleSchema.safeParse({ ...bundle, revision_feedback: feedback });
+        if (checked.success) bundle.revision_feedback = feedback;
+        else console.error(`delivery: revision feedback refused by the schema (assessment ${assessment.id})`);
       }
     }
     return NextResponse.json(bundle, {

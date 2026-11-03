@@ -1,4 +1,5 @@
-// The two share emails (docs/share-notifications-design.md, D-2 / D-3).
+// The share emails (docs/share-notifications-design.md, D-2 / D-3), plus the
+// scorer invitation (docs/competency-assessment-design.md, slice 5b).
 // Content is the sharer, the assessment's name and a link — no student data,
 // no assessment content. Sending is best effort: a failure is logged and never
 // fails the share or grant that triggered it.
@@ -8,7 +9,7 @@ import { getEmailSender } from "./provider";
 import type { EmailMessage } from "./types";
 
 export interface ShareEmailInput {
-  kind: "share" | "co_teach";
+  kind: "share" | "co_teach" | "score";
   to: string;
   sharerEmail: string;
   assessmentName: string;
@@ -16,7 +17,7 @@ export interface ShareEmailInput {
   link: string;
 }
 
-/** Pure: the message for one share or co-teach grant. */
+/** Pure: the message for one share, co-teach or scorer grant. */
 export function buildShareEmail(input: ShareEmailInput): EmailMessage {
   const name = input.assessmentName.replace(/[\r\n]+/g, " ").trim() || "an assessment";
   const who = input.sharerEmail;
@@ -30,6 +31,21 @@ export function buildShareEmail(input: ShareEmailInput): EmailMessage {
         "",
         "Adding it gives you your own copy to edit; it does not change theirs.",
         `Open ${PRODUCT_NAME} to add it: ${input.link}`,
+        "",
+        `Reply to this email to reach ${who}.`,
+      ].join("\n"),
+    };
+  }
+  if (input.kind === "score") {
+    return {
+      to: input.to,
+      replyTo: who,
+      subject: `${who} asked you to score "${name}"`,
+      text: [
+        `${who} added you as a scorer on the assessment "${name}" in ${PRODUCT_NAME}.`,
+        "",
+        "You can read and score the responses until the scoring window closes.",
+        `Open the scoring page: ${input.link}`,
         "",
         `Reply to this email to reach ${who}.`,
       ].join("\n"),

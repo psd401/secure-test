@@ -64,6 +64,8 @@ function markText(cell: ResultsCell): string {
     case "unscored":
     case "no_response":
       return "—";
+    case "not_assigned":
+      return "";
   }
 }
 

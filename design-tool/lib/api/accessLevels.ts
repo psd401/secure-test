@@ -14,18 +14,26 @@
 
 /**
  * `view` (results and monitor, read-only) < `run` (sittings, monitor actions,
- * hand in, extend) < `edit` (items, settings, publish, scoring) < `own`
- * (share, archive, delete, grant). docs/access-model-design.md, D-2.
+ * hand in, extend) < `score` (run + the review queue and every scoring action:
+ * manual, per-criterion and AI scores, feedback) < `edit` (items, settings,
+ * publish, pass back, release) < `own` (share, archive, delete, grant).
+ * docs/access-model-design.md, D-2; `score` is docs/competency-assessment-design.md,
+ * D-11 — a scorer reaches the queue, not the items or settings, and pass back
+ * stays at `edit` (D-15).
  */
-export type AccessLevel = "view" | "run" | "edit" | "own";
+export type AccessLevel = "view" | "run" | "score" | "edit" | "own";
 
 /**
  * How the level was reached. `"owner"` is the assessment's `owner_sub`;
  * `"admin"` is `ADMIN_EMAILS` (D-1); `"grant"` is a row in `access_grants`
  * (D-2). The distinction is shown to the teacher — "Shared with you as
  * co-teacher" — and is what the sitting-creation branch keys on.
+ * `"proctor"` is a live competency assignment naming the caller
+ * (docs/competency-assessment-design.md, slice 4): `run`, and only through
+ * the sitting and attempt doors for the proctor's own sittings and students
+ * — never through `authorizeAssessment`, so results and scoring stay shut.
  */
-export type AccessVia = "owner" | "grant" | "admin";
+export type AccessVia = "owner" | "grant" | "admin" | "proctor";
 
 /**
  * What the caller is about to do with the row (security audit 2026-10-24,
@@ -43,6 +51,7 @@ export type AccessIntent = "read" | "write";
 export const ACCESS_LEVELS: readonly AccessLevel[] = [
   "view",
   "run",
+  "score",
   "edit",
   "own",
 ] as const;

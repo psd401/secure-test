@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/ui/format";
 import { ApiError, coTeachErrorCopy } from "@/lib/ui/errorCopy";
+import { ScorersSection } from "@/components/app/ScorersSection";
 
 interface ShareRow {
   id: string;
@@ -25,7 +26,7 @@ interface ShareRow {
 interface GrantRow {
   id: string;
   grantee_email: string;
-  level: "view" | "run" | "edit" | "own";
+  level: "view" | "run" | "score" | "edit" | "own";
   note: string | null;
   created_at: string;
 }
@@ -65,15 +66,20 @@ export function sectionLabel(s: CoTeachSection): string {
  * THIS assessment, so the colleague edits and runs it in place rather than
  * getting a copy. Only the owner opens this dialog (the caller gates the
  * Share button on `own`), so nothing here gates itself a second time.
+ * A district competency assessment adds a third mode, Scorers
+ * (docs/competency-assessment-design.md, slice 5b).
  */
 export function ShareDialog({
   assessmentId,
   open,
   onOpenChange,
+  competency = false,
 }: {
   assessmentId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A district competency assessment: show the Scorers section. */
+  competency?: boolean;
 }) {
   const base = `/api/assessments/${assessmentId}/shares`;
   const grantsBase = `/api/assessments/${assessmentId}/grants`;
@@ -117,8 +123,8 @@ export function ShareDialog({
       if (!suggestionsRes.ok) throw await readError(suggestionsRes);
       const grantsBody = (await grantsRes.json()) as { grants: GrantRow[] };
       const suggestionsBody = (await suggestionsRes.json()) as { suggestions: Suggestion[] };
-      // Co-teach only ever writes `edit`; `view` / `run` grants belong to a
-      // different feature (substitute / principal) with no UI here yet.
+      // Co-teach only ever writes `edit`; `score` grants are the Scorers
+      // section's, and `view` / `run` (substitute / principal) have no UI yet.
       setCoTeachers(grantsBody.grants.filter((g) => g.level === "edit" || g.level === "own"));
       setSuggestions(suggestionsBody.suggestions);
     } catch (e) {
@@ -367,6 +373,8 @@ export function ShareDialog({
             <p className="text-sm text-muted-foreground">No co-teachers yet.</p>
           )}
         </section>
+
+        {competency && open ? <ScorersSection assessmentId={assessmentId} /> : null}
 
         <DialogFooter>
           <Button

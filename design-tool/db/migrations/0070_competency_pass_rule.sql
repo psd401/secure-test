@@ -1,0 +1,2 @@
+ALTER TABLE "assessments" ADD COLUMN "competency_pass_min_points" double precision;--> statement-breakpoint
+ALTER TABLE "assessments" ADD CONSTRAINT "assessments_competency_pass_min_check" CHECK (competency_pass_min_points IS NULL OR competency_pass_min_points >= 0);

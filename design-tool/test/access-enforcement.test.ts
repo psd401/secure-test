@@ -170,6 +170,17 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("admin", "safeguarding-alerts"),
     "admin surface: district-wide list, gated by isAdmin with a 404 refusal",
   ],
+  // CBA slice 6 (docs/competency-assessment-design.md, 6.2): counselor
+  // grants address a SCHOOL, not an owned row, and carry the
+  // isCompetencyAdmin-with-a-404 gate.
+  [
+    join("competency", "counselors"),
+    "Assessment-staff surface: school-scoped grants, gated by isCompetencyAdmin with a 404",
+  ],
+  [
+    join("competency", "counselors", "[grantId]"),
+    "Assessment-staff surface: revokes a school-scoped view grant, gated by isCompetencyAdmin with a 404",
+  ],
   [
     join("admin", "impersonate", "stop"),
     "gated on the session's own actor_* with a 404 refusal; addresses no row",
@@ -183,6 +194,21 @@ const NO_OWNED_ROW = new Map<string, string>([
  * instead of being taken on trust.
  */
 const VIA_HELPER = new Map<string, { symbol: string; module: string }>([
+  // Competency assignments (docs/competency-assessment-design.md, slice 2):
+  // Assessment staff on a district assessment they can edit — the list,
+  // then authorizeAssessment(edit), then the scope, all 404.
+  [
+    join("assessments", "[id]", "competency", "assignments"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
+  [
+    join("assessments", "[id]", "competency", "assignments", "[assignmentId]"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
+  [
+    join("assessments", "[id]", "competency", "students"),
+    { symbol: "authorizeCompetency", module: "lib/competency/assignments.ts" },
+  ],
   [
     join("assessments", "[id]", "item-sets", "[setId]"),
     { symbol: "loadItemSetForSession", module: "lib/api/itemSets.ts" },
@@ -482,7 +508,7 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
     }
 
     // Every level the ladder has, since `own` satisfies all of them.
-    for (const need of ["view", "run", "edit", "own"] as const) {
+    for (const need of ["view", "run", "score", "edit", "own"] as const) {
       const at = await authorizeAssessment(db, OWNER, id, need, "read");
       expect(at.ok).toBe(true);
     }
@@ -636,12 +662,16 @@ describe("authorize* resolves the owner and refuses everyone else with 404", () 
     await db.delete(assets).where(eq(assets.id, asset!.id));
   });
 
-  test("the ladder orders view < run < edit < own", () => {
+  test("the ladder orders view < run < score < edit < own", () => {
     expect(levelSatisfies("own", "view")).toBe(true);
+    expect(levelSatisfies("edit", "score")).toBe(true);
+    expect(levelSatisfies("score", "run")).toBe(true);
     expect(levelSatisfies("edit", "run")).toBe(true);
     expect(levelSatisfies("run", "view")).toBe(true);
     expect(levelSatisfies("view", "view")).toBe(true);
     expect(levelSatisfies("view", "run")).toBe(false);
+    expect(levelSatisfies("run", "score")).toBe(false);
+    expect(levelSatisfies("score", "edit")).toBe(false);
     expect(levelSatisfies("run", "edit")).toBe(false);
     expect(levelSatisfies("edit", "own")).toBe(false);
   });
