@@ -49,6 +49,7 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
         // FR: a non-impersonating admin reads feedback but cannot write it
         // (SEC-03, the routes refuse the same way), so the box is grayed out.
         canWriteFeedback={access.via !== "admin"}
+        competency={assessment.assigned_scope === "district"}
       />
     </main>
   );

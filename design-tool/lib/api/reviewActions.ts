@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai/essayScorer/scoreCore";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { graphMaxPoints } from "@secure-test/graphing/server";
+import { NO_SCORE_REASONS } from "@/lib/scoring/competencyResult";
 
 // Slice 39: shared plumbing for the review actions (manual score, approve,
 // re-run AI). Loads the response → attempt → assessment chain and enforces
@@ -35,10 +36,19 @@ export const ManualScoreBody = z
       .min(1)
       .optional(),
     note: z.string().max(4000).optional(),
+    // Competency assessments (docs/competency-assessment-design.md): the
+    // OSPI No Score condition. Not a rubric level — a No Score is 0 points
+    // with no picks, and only a district assessment takes one
+    // (checkManualScore).
+    no_score_reason: z.enum(NO_SCORE_REASONS).optional(),
   })
   .refine((b) => b.points <= b.max_points, {
     message: "points must be <= max_points",
     path: ["points"],
+  })
+  .refine((b) => !b.no_score_reason || (b.points === 0 && !b.criterion_scores), {
+    message: "a No Score is 0 points with no criterion picks",
+    path: ["no_score_reason"],
   });
 export type ManualScoreBody = z.infer<typeof ManualScoreBody>;
 
@@ -51,7 +61,14 @@ export const ChangeScoreBody = ManualScoreBody.and(
 export type ChangeScoreBody = z.infer<typeof ChangeScoreBody>;
 
 export type ResponseChain =
-  | { ok: true; response: typeof responses.$inferSelect; item: typeof items.$inferSelect; hasFinal: boolean }
+  | {
+      ok: true;
+      response: typeof responses.$inferSelect;
+      item: typeof items.$inferSelect;
+      hasFinal: boolean;
+      /** The assessment is a district (competency) one — the only kind a No Score is for. */
+      competency: boolean;
+    }
   | { ok: false; status: 400 | 403 | 404; error: string };
 
 export async function loadResponseChain(
@@ -93,6 +110,7 @@ export async function loadResponseChain(
     response,
     item,
     hasFinal: scoreRows.some((s) => s.status === "final"),
+    competency: access.assessment.assigned_scope === "district",
   };
 }
 
@@ -120,8 +138,14 @@ export type ManualScoreCheck =
 export function checkManualScore(
   item: typeof items.$inferSelect,
   body: ManualScoreBody,
+  opts: { competency?: boolean } = {},
 ): ManualScoreCheck {
   const rubric = item.config.rubric;
+  // A No Score is OSPI's, for a competency assessment's rubric-scored
+  // response; anywhere else it is a request this score cannot mean.
+  if (body.no_score_reason && (!opts.competency || !rubric)) {
+    return { ok: false, status: 400, body: { ok: false, error: "no_score_not_allowed" } };
+  }
   const expectedMax = rubric
     ? rubricMaxPoints(rubric)
     : item.type === "table"

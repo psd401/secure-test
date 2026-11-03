@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  NO_SCORE_REASONS,
+  NO_SCORE_REASON_LABEL,
+  noScoreLabel,
+  type NoScoreReason,
+} from "@/lib/scoring/competencyResult";
 import Link from "next/link";
 import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/schema";
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
@@ -339,6 +345,8 @@ interface Props {
   /** FR: false for a non-impersonating admin — the feedback box is grayed
    * out, since the routes refuse that write (SEC-03). */
   canWriteFeedback?: boolean;
+  /** A district (competency) assessment: the rubric picker offers No Score. */
+  competency?: boolean;
 }
 
 function rubricMax(rubric: Rubric): number {
@@ -474,12 +482,14 @@ export function ScoringQueue({
   assessmentName,
   initialSection = "",
   canWriteFeedback = true,
+  competency = false,
 }: Props) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [unreviewed, setUnreviewed] = useState<QueueEntry[]>([]);
   const [sections, setSections] = useState<QueueSections>({ labels: [], hasBlank: false });
   const [aiBatch, setAiBatch] = useState<QueueAiBatch | null>(null);
   const [section, setSection] = useState(initialSection);
+  const [noScorePick, setNoScorePick] = useState<Record<string, NoScoreReason | undefined>>({});
   // The results page's "Review them" link lands on #unreviewed; the list
   // only exists once the fetch is back, so scroll there once, after it.
   const scrolledToHash = useRef(false);
@@ -623,6 +633,23 @@ export function ScoringQueue({
     );
   }
 
+  // Competency assessments: OSPI's No Score — 0 points, no picks, the
+  // condition carried on the score. Asked first: a final cannot be un-made.
+  function saveNoScore(entry: QueueEntry) {
+    if (!entry.item.rubric) return;
+    const reason = noScorePick[entry.response_id];
+    if (!reason) return;
+    if (!window.confirm(`Save a final No Score (${NO_SCORE_REASON_LABEL[reason]})?`)) return;
+    const rubric = pickableRubric(entry.item.rubric);
+    void act(() =>
+      fetch(`/api/responses/${entry.response_id}/score`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ points: 0, max_points: rubricMax(rubric), no_score_reason: reason }),
+      }),
+    );
+  }
+
   function saveRawScore(entry: QueueEntry) {
     // Review fix (2026-08-14): a typed-then-cleared field is "" and
     // Number("") === 0 — which would submit an IRREVERSIBLE final 0 (there
@@ -705,6 +732,39 @@ export function ScoringQueue({
             Save final score
           </button>
         </div>
+        {competency ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+            <label htmlFor={`no-score-${entry.response_id}`} className="text-xs text-muted-foreground">
+              Or No Score:
+            </label>
+            <select
+              id={`no-score-${entry.response_id}`}
+              className="rounded border border-border bg-transparent px-2 py-1 text-xs"
+              disabled={busy}
+              value={noScorePick[entry.response_id] ?? ""}
+              onChange={(e) =>
+                setNoScorePick((prev) => ({
+                  ...prev,
+                  [entry.response_id]: (e.target.value || undefined) as NoScoreReason | undefined,
+                }))
+              }
+            >
+              <option value="">Choose a reason</option>
+              {NO_SCORE_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {NO_SCORE_REASON_LABEL[r]}
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={busy || !noScorePick[entry.response_id]}
+              onClick={() => saveNoScore(entry)}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium disabled:opacity-40"
+            >
+              Save No Score
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -718,6 +778,8 @@ export function ScoringQueue({
   }
 
   function rationaleDetail(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
+    const noScore = noScoreLabel(rationale);
+    if (noScore) return <p className="mt-2 text-xs font-medium">{noScore}</p>;
     const rows = rubricScoreRows(entry.item.rubric, rationale);
     if (rows.length === 0) return null;
     const cell = "border border-border px-2 py-1 align-top text-xs";

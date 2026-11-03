@@ -2312,3 +2312,15 @@ counselor. Row numbers may need renumbering at merge.
 | 962 | As the counselor, open `/dashboard/<id>`, `/results`, `/scoring`, `/assignments` | 404 each | NOT RUN |
 | 963 | As Assessment, Remove the counselor; reload as the counselor | No card; the results page reads "No released results yet." | NOT RUN |
 | 964 | Pass the attempt back; reload Assignments | **In progress**; no Release button until it is scored again | NOT RUN |
+
+## Competency No Score (branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 6 setup through a handed-in attempt. Row numbers may need
+renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 965 | Scoring queue on the district assessment | Under the rubric rows: **Or No Score:** with a reason list and **Save No Score** (disabled until a reason is chosen) | NOT RUN |
+| 966 | Scoring queue on an ordinary teacher assessment | No No Score control | NOT RUN |
+| 967 | Choose "Off topic", Save No Score, confirm | The card leaves the queue; the student's results page shows "No Score: Off topic" and 0 points; Assignments reads **Scored**, **No score** | NOT RUN |
+| 968 | Keyboard and screen reader through the control | The select reads "Or No Score:"; Save No Score asks before saving | NOT RUN |

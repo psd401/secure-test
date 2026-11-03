@@ -55,7 +55,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     );
   }
 
-  const check = checkManualScore(chain.item, body);
+  const check = checkManualScore(chain.item, body, { competency: chain.competency });
   if (!check.ok) {
     return NextResponse.json(check.body, { status: check.status });
   }
@@ -76,6 +76,7 @@ export async function POST(req: Request, ctx: RouteContext) {
           ? { criterion_scores: body.criterion_scores }
           : {}),
         ...(body.note ? { note: body.note } : {}),
+        ...(body.no_score_reason ? { no_score_reason: body.no_score_reason } : {}),
       },
       scorer: auth.session.sub,
       status: "final",

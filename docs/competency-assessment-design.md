@@ -384,4 +384,11 @@ None open.
   that lands the panel (as corrections' floor was, slice 3d) and re-sign the
   renderer; until then no bundle carries the field and nothing is refused.
   The client rows in `client/MANUAL-CHECKS.md` cover the panel.
+- **No Score BUILT 2026-11-02**: `no_score_reason` on the manual score and
+  Change score bodies (0 points, no picks; refused off a district
+  assessment's rubric-scored response with 400 `no_score_not_allowed`),
+  stored on the final's `rationale`; a reason picker and **Save No Score**
+  in the scoring queue on district assessments; "No Score: <reason>" on the
+  queue and the student's results page. The Change score dialog does not
+  offer it yet (the route accepts it). Rows 965–968 NOT RUN.
 - Nothing committed here is pushed or deployed.

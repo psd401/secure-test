@@ -72,6 +72,7 @@ export async function changeFinalScore(
         rationale: {
           ...(body.criterion_scores ? { criterion_scores: body.criterion_scores } : {}),
           ...(body.reason ? { note: body.reason } : {}),
+          ...(body.no_score_reason ? { no_score_reason: body.no_score_reason } : {}),
           changed_from: {
             score_id: replaced.id,
             points: replaced.points,

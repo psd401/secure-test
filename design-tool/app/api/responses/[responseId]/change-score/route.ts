@@ -53,7 +53,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: "no_final" }, { status: 409 });
   }
 
-  const check = checkManualScore(chain.item, body);
+  const check = checkManualScore(chain.item, body, { competency: chain.competency });
   if (!check.ok) {
     return NextResponse.json(check.body, { status: check.status });
   }

@@ -11,7 +11,8 @@ export const COMPETENCY_RESULTS = ["pass", "needs_revision", "no_score"] as cons
 export type CompetencyResult = (typeof COMPETENCY_RESULTS)[number];
 
 // The OSPI No Score conditions, as the scorer picks them. Carried on the final
-// score's `rationale.no_score_reason`; the write path is a later slice.
+// score's `rationale.no_score_reason`, written by the manual score and Change
+// score routes on a district assessment only (lib/api/reviewActions.ts).
 export const NO_SCORE_REASONS = [
   "unintelligible",
   "not_english",
@@ -20,6 +21,21 @@ export const NO_SCORE_REASONS = [
   "copied",
 ] as const;
 export type NoScoreReason = (typeof NO_SCORE_REASONS)[number];
+
+/** Plain words for each reason, as the scorer and the results page show them. */
+export const NO_SCORE_REASON_LABEL: Record<NoScoreReason, string> = {
+  unintelligible: "Unintelligible",
+  not_english: "Not in English",
+  off_topic: "Off topic",
+  off_purpose: "Off purpose",
+  copied: "Copied text",
+};
+
+/** "No Score: <reason>" for a score that carries one, else null. */
+export function noScoreLabel(rationale: unknown): string | null {
+  const reason = noScoreReasonOf(rationale);
+  return reason ? `No Score: ${NO_SCORE_REASON_LABEL[reason]}` : null;
+}
 
 interface CriterionPick {
   criterion_id: string;

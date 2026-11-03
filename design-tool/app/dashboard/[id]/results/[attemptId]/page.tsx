@@ -29,6 +29,7 @@ import {
   type RubricScoreRow,
 } from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
+import { noScoreLabel } from "@/lib/scoring/competencyResult";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { attemptOneDisplay, buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
@@ -763,7 +764,9 @@ export default async function AttemptResultPage({ params }: PageProps) {
           const rubric = item.config.rubric ?? null;
           const finalDetail = {
             rows: rubricScoreRows(rubric, final?.rationale),
-            overall: overallRationale(final?.rationale),
+            // Competency assessments: a No Score carries its OSPI condition
+            // and no rubric rows — say which, where the rows would be.
+            overall: noScoreLabel(final?.rationale) ?? overallRationale(final?.rationale),
           };
           const proposedDetail = {
             rows: rubricScoreRows(rubric, proposed?.rationale),
