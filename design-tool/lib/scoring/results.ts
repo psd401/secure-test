@@ -26,6 +26,7 @@ import {
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { planRescore } from "@/lib/scoring/rescore";
+import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { graphMaxPoints } from "@secure-test/graphing/server";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
@@ -44,7 +45,9 @@ import { graphMaxPoints } from "@secure-test/graphing/server";
 // pins per item (`app/api/responses/[responseId]/score/route.ts`). `percent`
 // (D-R2) stays blank until every cell is scored.
 
-export type CellStatus = "final" | "proposed_pending" | "unscored" | "no_response";
+// F-2 (CBA): `not_assigned` — a question from another option of a district
+// assessment, never given to this student; never counted.
+export type CellStatus = "final" | "proposed_pending" | "unscored" | "no_response" | "not_assigned";
 
 export interface ResultsCell {
   status: CellStatus;
@@ -121,7 +124,8 @@ export interface ResultsRow {
   // `ai_not_reviewed` column says how many there are.
   ai_unreviewed_count: number;
   // D-R1: the assessment-level constant denominator (same value on every
-  // row — carried per row so the CSV and JSON need no second lookup).
+  // row — carried per row so the CSV and JSON need no second lookup). F-2:
+  // on a district assessment, the student's own option's maximum.
   max_points: number;
   // D-R2: null (blank in CSV) until unscored_count is 0, or when max_points
   // is 0 (nothing to divide by).
@@ -551,8 +555,28 @@ export async function buildResults(
     submitted.filter((a) => a.pass_back_count > 0).map((a) => a.id),
   );
 
+  // F-2 (CBA): on a district assessment each student's row counts only their
+  // option's questions (lib/competency/studentItems.ts).
+  const [scopeRow] = await db
+    .select({ assigned_scope: assessments.assigned_scope })
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
+  const optionOf =
+    scopeRow?.assigned_scope === "district"
+      ? await optionByStudent(
+          db,
+          assessmentId,
+          [...studentsById.values()].map((s) => s.roster_ps_id).filter((v): v is string => !!v),
+        )
+      : new Map<string, string>();
+
   const rows: ResultsRow[] = submitted.map((attempt) => {
     const student = studentsById.get(attempt.student_id);
+    const option = student?.roster_ps_id ? optionOf.get(student.roster_ps_id) : undefined;
+    const rowMaxPoints = option
+      ? itemRows.filter((i) => inStudentOption(i, option)).reduce((sum, i) => sum + itemMaxPoints(i), 0)
+      : assessmentMaxPoints;
     const inProgress = attempt.status !== "submitted";
     let total = 0;
     let scoredMax = 0;
@@ -560,6 +584,9 @@ export async function buildResults(
     let answered = 0;
     let aiUnreviewed = 0;
     const cells: ResultsCell[] = itemRows.map((item) => {
+      if (!inStudentOption(item, option)) {
+        return { status: "not_assigned", points: null, max_points: null };
+      }
       const response = responseByCell.get(`${attempt.id}:${item.id}`);
       if (!response) {
         return { status: "no_response", points: null, max_points: null };
@@ -603,8 +630,8 @@ export async function buildResults(
     const deadline = inProgress ? deadlineFor(attempt, timeLimit) : null;
     const deadlinePassed = inProgress && isPastDeadline(now, deadline);
     const percent =
-      !inProgress && unscored === 0 && assessmentMaxPoints > 0
-        ? Math.round((100 * total) / assessmentMaxPoints)
+      !inProgress && unscored === 0 && rowMaxPoints > 0
+        ? Math.round((100 * total) / rowMaxPoints)
         : null;
     return {
       attempt_id: attempt.id,
@@ -635,7 +662,7 @@ export async function buildResults(
       scored_max_points: inProgress ? null : scoredMax,
       unscored_count: unscored,
       ai_unreviewed_count: aiUnreviewed,
-      max_points: assessmentMaxPoints,
+      max_points: rowMaxPoints,
       percent,
       attempt_one: attemptOnes.get(attempt.id) ?? null,
     };

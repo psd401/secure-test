@@ -12,6 +12,7 @@ import {
   response_feedback,
   responses,
   scores,
+  students,
   type ItemRow,
   type ScoreRow,
 } from "@/db/schema";
@@ -30,6 +31,7 @@ import {
 } from "@/lib/reporting/rubricScoreView";
 import { buildTimeline } from "@/lib/reporting/timeline";
 import { noScoreLabel } from "@/lib/scoring/competencyResult";
+import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
 import { tableCellMatches, fillBlankHandScored } from "@/lib/scoring/auto";
 import { attemptOneDisplay, buildResults, itemMaxPoints } from "@/lib/scoring/results";
 import { listSupersededScores } from "@/lib/scoring/supersededScores";
@@ -398,11 +400,23 @@ export default async function AttemptResultPage({ params }: PageProps) {
     notFound();
   }
 
-  const itemRows = await db
+  const allItemRows = await db
     .select()
     .from(items)
     .where(eq(items.assessment_id, id))
     .orderBy(asc(items.position));
+  // F-2 (CBA): a district assessment shows only this student's option (and
+  // questions in no set) — the other options were never given to them.
+  let studentOption: string | undefined;
+  if (assessment.assigned_scope === "district") {
+    const [owner] = await db
+      .select({ ps: students.roster_ps_id })
+      .from(students)
+      .where(eq(students.id, attempt.student_id))
+      .limit(1);
+    if (owner?.ps) studentOption = (await optionByStudent(db, id, [owner.ps])).get(owner.ps);
+  }
+  const itemRows = allItemRows.filter((i) => inStudentOption(i, studentOption));
 
   // Row GD slice 4 (docs/google-docs-release-design.md): this teacher's own
   // Docs for this attempt (a co-teacher's are in their Drive, not linkable

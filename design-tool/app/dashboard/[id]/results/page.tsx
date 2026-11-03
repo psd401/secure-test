@@ -61,6 +61,8 @@ function cellText(cell: ResultsCell): string {
       return "—";
     case "no_response":
       return "·";
+    case "not_assigned":
+      return "";
   }
 }
 
@@ -69,6 +71,7 @@ const CELL_TITLE: Record<ResultsCell["status"], string> = {
   proposed_pending: "AI proposal awaiting review (not counted)",
   unscored: "Awaiting scoring",
   no_response: "No response",
+  not_assigned: "Another option — not given to this student",
 };
 
 // Slice 40 + R1 (docs/reporting-design.md): teacher-facing results matrix.
