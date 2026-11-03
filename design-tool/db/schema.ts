@@ -95,6 +95,13 @@ export const assessments = pgTable(
     // district assessment as their own would be marking away the very
     // constraint this column exists to impose.
     assigned_scope: text("assigned_scope").notNull().default("teacher"),
+    // Competency assessments (docs/competency-assessment-design.md, slice 1):
+    // the pass rule — the minimum points every rubric criterion of the final
+    // response must reach for a Pass (3 on every OSPI task). Null = not a
+    // competency assessment. Set only by Assessment staff through
+    // `PUT /api/assessments/:id/competency`, which also sets `assigned_scope`
+    // to "district"; like that column, not settable through the authoring API.
+    competency_pass_min_points: doublePrecision("competency_pass_min_points"),
     // Client paging (docs/client-paging-design.md, D-1): how students move
     // through the test — "scroll" (one page, the default and what every
     // assessment authored before this column was) or "paged" (one question
@@ -151,6 +158,10 @@ export const assessments = pgTable(
     assignedScopeCheck: check(
       "assessments_assigned_scope_check",
       sql`assigned_scope IN ('teacher', 'school', 'district')`,
+    ),
+    competencyPassMinCheck: check(
+      "assessments_competency_pass_min_check",
+      sql`competency_pass_min_points IS NULL OR competency_pass_min_points >= 0`,
     ),
     studentLayoutCheck: check(
       "assessments_student_layout_check",

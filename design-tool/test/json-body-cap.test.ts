@@ -168,8 +168,9 @@ describe("every API route reads JSON through readJsonBody", () => {
     // both on the default tier. 50 with Pass back everyone (U-25), default;
     // 51 with the per-attempt pass back, which read its body uncapped until
     // the PR #169 review; 53 with rescore-ai and accept-tide, which read
-    // theirs with req.text() until the PR #169 re-review.
-    expect(Object.keys(seen).length).toBe(53);
+    // theirs with req.text() until the PR #169 re-review; 54 with the
+    // competency pass rule (docs/competency-assessment-design.md), default.
+    expect(Object.keys(seen).length).toBe(54);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

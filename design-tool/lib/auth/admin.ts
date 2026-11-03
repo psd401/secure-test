@@ -48,6 +48,36 @@ export function adminEmails(): readonly string[] {
   return cachedList;
 }
 
+// Assessment staff (docs/competency-assessment-design.md, D-14): the people who
+// run the district's competency assessments. A second configuration list, not
+// an extension of ADMIN_EMAILS — a system admin is not thereby Assessment staff,
+// and Assessment staff gain no admin reads. Same parse, its own memo.
+let cachedCompetencyRaw: string | null = null;
+let cachedCompetencyList: readonly string[] = [];
+
+/** `COMPETENCY_ADMIN_EMAILS`, lowercased and de-duplicated; empty when unset. */
+export function competencyAdminEmails(): readonly string[] {
+  const raw = process.env.COMPETENCY_ADMIN_EMAILS ?? "";
+  if (raw !== cachedCompetencyRaw) {
+    cachedCompetencyRaw = raw;
+    cachedCompetencyList = parse(raw);
+  }
+  return cachedCompetencyList;
+}
+
+/**
+ * Is this session's verified address on the Assessment-staff list? Same rules
+ * as `isAdmin`: the session's own email, and never while impersonating.
+ */
+export function isCompetencyAdmin(
+  session: { email?: string; actor_sub?: string } | null | undefined,
+): boolean {
+  if (isImpersonating(session)) return false;
+  const email = (session?.email ?? "").trim().toLowerCase();
+  if (!email) return false;
+  return competencyAdminEmails().includes(email);
+}
+
 /**
  * Is this session ACTING AS somebody else? (Access slice 5, D-8.)
  *
