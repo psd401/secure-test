@@ -288,6 +288,27 @@ public enum AssessmentPage {
       border-color: color-mix(in srgb, var(--danger) 45%, var(--paper));
     }
     .locked-answer { pointer-events: none; }
+    /* Competency assessments (D-16, docs/competency-assessment-design.md): the
+       scorer's feedback on a Needs Revision, read-only, beside the answer it
+       is about. Tokens and rem only, so every contrast set and zoom level
+       reach it with no rule of their own; pre-line keeps the scorer's breaks. */
+    .revision-feedback {
+      margin: 8px 0 12px; padding: 10px 14px;
+      color: var(--ink); background: var(--panel);
+      border: 1px solid var(--panel-line); border-left: 4px solid var(--accent);
+      border-radius: 6px;
+    }
+    .revision-feedback-heading {
+      margin: 0 0 6px; font-family: var(--font-heading);
+      font-size: 0.9375rem; font-weight: 600;
+    }
+    .revision-feedback-list { margin: 0; padding: 0; list-style: none; }
+    .revision-feedback-row { margin: 0 0 8px; }
+    .revision-feedback-row:last-child { margin-bottom: 0; }
+    .revision-feedback-criterion { margin: 0; font-weight: 600; }
+    .revision-feedback-rationale,
+    .revision-feedback-note { margin: 2px 0 0; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+    .revision-feedback-note { margin-top: 8px; }
     /* E5 slice 2: the stimulus block above a set, and its questions indented under it. */
     .stimulus { margin: 24px 0 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--panel-line); border-left: 4px solid var(--accent); border-radius: 6px; }
     .stimulus-label { margin: 0 0 6px; font-family: var(--font-heading); font-size: 0.75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
@@ -859,6 +880,38 @@ public enum AssessmentPage {
         if (Array.isArray(c.locked)) {
           c.locked.forEach(function (id) { if (typeof id === 'string') LOCKED[id] = true; });
         }
+      })();
+      // Competency assessments (D-16, docs/competency-assessment-design.md): on
+      // an attempt passed back as Needs Revision, the scorer's feedback per
+      // item id — criterion names, level labels, rationale and a note, all
+      // teacher-typed text, never points or an answer. Only string fields are
+      // taken and only for an item on this page; anything else is ignored, so
+      // an absent or odd field is the page exactly as before. Read-only: the
+      // panel has no control, so nothing in it is ever posted.
+      var REVISION_FEEDBACK = {};
+      (function () {
+        var f = BUNDLE && BUNDLE.revision_feedback;
+        if (!f || typeof f !== 'object' || Array.isArray(f)) return;
+        var known = {};
+        (Array.isArray(BUNDLE.items) ? BUNDLE.items : []).forEach(function (item) {
+          if (item && typeof item.id === 'string') known[item.id] = true;
+        });
+        Object.keys(f).forEach(function (id) {
+          var entry = f[id];
+          if (known[id] !== true || !entry || typeof entry !== 'object') return;
+          var rows = [];
+          (Array.isArray(entry.criteria) ? entry.criteria : []).forEach(function (c) {
+            if (!c || typeof c.name !== 'string' || typeof c.level_label !== 'string') return;
+            if (!c.name || !c.level_label) return;
+            rows.push({
+              name: c.name,
+              level: c.level_label,
+              rationale: typeof c.rationale === 'string' && c.rationale ? c.rationale : null
+            });
+          });
+          var note = typeof entry.note === 'string' && entry.note ? entry.note : null;
+          if (rows.length > 0 || note) REVISION_FEEDBACK[id] = { rows: rows, note: note };
+        });
       })();
       // Finding 8.5: on the offline path the host ignores uploads and
       // hand-ins by design, so the "in flight" labels would never resolve.
@@ -6485,6 +6538,10 @@ public enum AssessmentPage {
         if (graph) wrap.appendChild(graph);
         var answer = fillBlank ? fillBlankField(item, stem) : answerFor(item);
         if (answer.__drawingSaved) BLOCKS[item.id] = answer;
+        // D-16: the scorer's feedback sits between the question and the
+        // answer being revised, so it is read before the answer.
+        var feedback = revisionFeedbackPanel(item.id);
+        if (feedback) wrap.appendChild(feedback);
         wrap.appendChild(answer);
         // Corrections mode: the note sits above the stem; a locked answer
         // (a fill-in-the-blank's lives in its stem) is made read-only.
@@ -6517,6 +6574,55 @@ public enum AssessmentPage {
         note.setAttribute('aria-label', words);
         note.textContent = glyph + ' ' + words;
         return note;
+      }
+
+      // D-16: the scorer's feedback for one question, as a labelled region —
+      // "Scorer feedback", then a list with a row per criterion (name and
+      // level, then the rationale) and the note last. Every value is the
+      // scorer's own text, so it goes in as text (textContent), never HTML.
+      function revisionFeedbackPanel(itemId) {
+        var fb = REVISION_FEEDBACK[itemId];
+        if (!fb) return null;
+        var panel = document.createElement('section');
+        panel.className = 'revision-feedback';
+        var headingId = 'revision-feedback-' + itemId;
+        panel.setAttribute('role', 'region');
+        panel.setAttribute('aria-labelledby', headingId);
+        var heading = document.createElement('h2');
+        heading.className = 'revision-feedback-heading';
+        heading.id = headingId;
+        heading.textContent = 'Scorer feedback';
+        panel.appendChild(heading);
+        if (fb.rows.length > 0) {
+          var list = document.createElement('ul');
+          list.className = 'revision-feedback-list';
+          // WebKit drops list semantics from a list-style: none list unless
+          // the role is explicit; VoiceOver should still say "list, N items".
+          list.setAttribute('role', 'list');
+          fb.rows.forEach(function (row) {
+            var li = document.createElement('li');
+            li.className = 'revision-feedback-row';
+            var criterion = document.createElement('p');
+            criterion.className = 'revision-feedback-criterion';
+            criterion.textContent = row.name + ': ' + row.level;
+            li.appendChild(criterion);
+            if (row.rationale) {
+              var rationale = document.createElement('p');
+              rationale.className = 'revision-feedback-rationale';
+              rationale.textContent = row.rationale;
+              li.appendChild(rationale);
+            }
+            list.appendChild(li);
+          });
+          panel.appendChild(list);
+        }
+        if (fb.note) {
+          var note = document.createElement('p');
+          note.className = 'revision-feedback-note';
+          note.textContent = 'Note: ' + fb.note;
+          panel.appendChild(note);
+        }
+        return panel;
       }
 
       // Read-only, but still readable: controls are disabled (out of the Tab

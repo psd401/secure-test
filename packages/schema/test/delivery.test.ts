@@ -553,3 +553,83 @@ describe("DeliveryBundleSchema calculator", () => {
     expect(DeliveryBundleSchema.safeParse({ ...base, calculator: { mode: "abacus", preset: "full" } }).success).toBe(false);
   });
 });
+
+// Competency assessments (docs/competency-assessment-design.md, D-16): the
+// scorer's per-row feedback on a Needs Revision pass back. Names, level
+// labels and prose only — never points, never an answer (ADR 0016).
+describe("DeliveryBundleSchema revision_feedback", () => {
+  const items = [
+    { type: "essay", id: "final", stem: "Write your argument." },
+    { type: "short_text", id: "other", stem: "s" },
+  ];
+  const base = { test_id: "t", title: "t", items };
+  const feedback = {
+    final: {
+      criteria: [
+        { name: "Claim", level_label: "Meets", rationale: "Clear and arguable." },
+        { name: "Evidence", level_label: "Approaching" },
+      ],
+      note: "Revise the second paragraph.",
+    },
+  };
+
+  test("accepts feedback keyed by an item on the bundle, and absence", () => {
+    const parsed = DeliveryBundleSchema.parse({ ...base, revision_feedback: feedback });
+    expect(parsed.revision_feedback).toEqual(feedback);
+    expect(DeliveryBundleSchema.parse(base).revision_feedback).toBeUndefined();
+    // Rationale and note are optional; an empty criteria list is allowed.
+    expect(
+      DeliveryBundleSchema.safeParse({ ...base, revision_feedback: { final: { criteria: [] } } }).success,
+    ).toBe(true);
+  });
+
+  test("refuses a key that names no item on the bundle", () => {
+    const r = DeliveryBundleSchema.safeParse({
+      ...base,
+      revision_feedback: { ...feedback, ghost: { criteria: [] } },
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.join(".") === "revision_feedback.ghost")).toBe(true);
+    }
+  });
+
+  test("cannot carry points or other fields beside the criteria and note", () => {
+    // The entry is strict: a builder that adds a score fails rather than ships it.
+    expect(
+      DeliveryBundleSchema.safeParse({
+        ...base,
+        revision_feedback: { final: { criteria: [], points: 3 } },
+      }).success,
+    ).toBe(false);
+    // So is each criterion: points beside a level label are refused too.
+    expect(
+      DeliveryBundleSchema.safeParse({
+        ...base,
+        revision_feedback: { final: { criteria: [{ name: "Claim", level_label: "Meets", points: 4 }] } },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("enforces the text bounds and the list bound", () => {
+    const one = (c: Record<string, unknown>) =>
+      DeliveryBundleSchema.safeParse({ ...base, revision_feedback: { final: { criteria: [c] } } }).success;
+    expect(one({ name: "", level_label: "Meets" })).toBe(false);
+    expect(one({ name: "Claim", level_label: "" })).toBe(false);
+    expect(one({ name: "x".repeat(201), level_label: "Meets" })).toBe(false);
+    expect(one({ name: "x".repeat(200), level_label: "y".repeat(120) })).toBe(true);
+    expect(one({ name: "Claim", level_label: "y".repeat(121) })).toBe(false);
+    expect(one({ name: "Claim", level_label: "Meets", rationale: "r".repeat(2000) })).toBe(true);
+    expect(one({ name: "Claim", level_label: "Meets", rationale: "r".repeat(2001) })).toBe(false);
+    expect(
+      DeliveryBundleSchema.safeParse({
+        ...base,
+        revision_feedback: { final: { criteria: [], note: "n".repeat(2001) } },
+      }).success,
+    ).toBe(false);
+    const many = Array.from({ length: 101 }, (_, i) => ({ name: `c${i}`, level_label: "Meets" }));
+    expect(
+      DeliveryBundleSchema.safeParse({ ...base, revision_feedback: { final: { criteria: many } } }).success,
+    ).toBe(false);
+  });
+});

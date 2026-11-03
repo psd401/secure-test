@@ -2744,3 +2744,31 @@ JavaScriptCore harness (`RendererCorrectionsTests`).
 | **VoiceOver.** Navigate to a marked and a locked question | VoiceOver reads the note's words ("Not correct last time", "Correct — locked") without the glyph name, then the stem; the locked answer is read as dimmed / unavailable, its text still read | NOT RUN |
 | **Older client.** A 1.x client (if one remains) on the same passed-back attempt | No notes, nothing locked, every answer saves (D-27) | NOT RUN |
 | **Paged layout.** The same test with the paged layout | Notes on each question page; the page strip and review page are unchanged (marks are not shown there) | NOT RUN |
+
+## Scorer feedback in the test page (competency assessments slice 7, client half, branch `feat/cba-feedback-panel`, 2026-11-02)
+
+`docs/competency-assessment-design.md` §Release and results, D-16. The page
+draws `revision_feedback` from the bundle: on the question being revised, a
+read-only "Scorer feedback" panel between the question and the answer — a
+row per rubric criterion ("Claim: Meets", then the scorer's rationale under
+it) and the scorer's note last ("Note: …"). It reaches a student only after
+the server slice emits the field behind a renderer floor and a renderer from
+this change is signed and current, so these rows run after that deploy.
+Real AAC sessions, v2.0+ client, James at the client, a demo competency
+assessment passed back as Needs Revision for `<demo-student-A>` with
+feedback typed on every criterion and an overall note. VoiceOver rows follow
+the VoiceOver testing method (quit or hide Claude first; steps written
+beforehand). None of these rows has been run: the build session drove the
+page only in the JavaScriptCore harness (`RendererRevisionFeedbackTests`).
+
+| Check | Expected | Result |
+|---|---|---|
+| **Panel shows.** `<demo-student-A>` rejoins the passed-back attempt | The final-response question shows "Scorer feedback" under its stem and above the answer: one row per criterion (name: level, rationale under it), the note last; the scorer's line breaks kept; nothing in the panel can be clicked into, typed in or reached with Tab | NOT RUN |
+| **Only that question.** Same attempt, any other question | No panel; the question looks as it did before the pass back | NOT RUN |
+| **Beside a rich-text essay.** The final response is an essay with "Let students format their answer" on | The panel sits above the formatting toolbar, not inside the box; typing, formatting and saving work as before; a long rationale wraps inside the panel rather than widening the page | NOT RUN |
+| **Paged layout.** The same assessment with the paged layout | The panel is on that question's page only; the page strip and review page are unchanged | NOT RUN |
+| **Zoom.** View › Zoom In to the ceiling (3×) and back to Actual Size | The panel's text scales with the page, stays inside the content column, and nothing overlaps the answer box | NOT RUN |
+| **Contrast sets.** Each contrast set (system default, dark, high contrast) | Panel text, heading and left border readable at 4.5:1 or better on the panel background; no hard-coded colour shows through | NOT RUN |
+| **VoiceOver.** Navigate into the question with VO-arrow and by the rotor's Landmarks / Headings | "Scorer feedback" is listed as a region and a heading; inside it VoiceOver reads "list, N items", then each row's "Name: level" and its rationale, then the note; markup typed by the scorer (e.g. `<b>`) is read as the characters typed | NOT RUN |
+| **Answer still saves.** Revise the essay and hand in | The revised answer saves and the hand-in goes through; the teacher side shows no new response for the panel | NOT RUN |
+| **Older renderer.** A served renderer from before this change (if the floor is not yet set) | No panel, the page exactly as before; the server should not have sent the field at all (renderer floor) | NOT RUN |
