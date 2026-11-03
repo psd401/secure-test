@@ -1,4 +1,10 @@
-import { correctionsDeliverable, requiredClientUpgrade } from "@/lib/items/clientSupport";
+import {
+  correctionsDeliverable,
+  requiredClientUpgrade,
+  revisionFeedbackDeliverable,
+} from "@/lib/items/clientSupport";
+import { loadRevisionFeedback } from "@/lib/competency/revisionFeedback";
+import { DeliveryBundleSchema } from "@secure-test/schema";
 import { loadCorrections } from "@/lib/feedback/correctionMarks";
 import { NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
@@ -222,6 +228,20 @@ export async function GET(req: Request, ctx: RouteContext) {
               ),
             );
         }
+      }
+    }
+    // CBA slice 7, server half (docs/competency-assessment-design.md, D-16):
+    // the scorer's per-row feedback on a passed-back Needs Revision, beside
+    // the option's final response — only past the renderer floor that draws
+    // the panel (null until the merge that lands it). Below it nothing is
+    // added and nothing is refused. Re-checked against the bundle schema so
+    // the field can never ride unvalidated.
+    if (onlyItemSetId && revisionFeedbackDeliverable(req.headers.get(CLIENT_VERSION_HEADER), bundle.renderer)) {
+      const feedback = await loadRevisionFeedback(db, assessment, attempt, onlyItemSetId);
+      if (feedback) {
+        const checked = DeliveryBundleSchema.safeParse({ ...bundle, revision_feedback: feedback });
+        if (checked.success) bundle.revision_feedback = feedback;
+        else console.error(`delivery: revision feedback refused by the schema (assessment ${assessment.id})`);
       }
     }
     return NextResponse.json(bundle, {

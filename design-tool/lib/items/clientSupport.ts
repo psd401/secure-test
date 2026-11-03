@@ -128,3 +128,36 @@ export function correctionsDeliverable(
   if (minRendererVersion === null || !renderer) return false;
   return clientSupportsHighlighting(clientVersion) && renderer.version >= minRendererVersion;
 }
+
+/**
+ * Revision feedback (docs/competency-assessment-design.md, D-16, slice 7):
+ * the oldest SERVED RENDERER version that draws the "Scorer feedback" panel.
+ * Null until the `main` merge commit that lands the panel exists — set it
+ * then to that commit's committer time, exactly as
+ * `MIN_RENDERER_VERSION_FOR_CORRECTIONS` was set (slice 3d), never to a
+ * branch commit's time. While null, no bundle carries the field and no
+ * client is refused.
+ */
+export const MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK: number | null = null;
+
+let revisionFeedbackRendererFloor: number | null = MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK;
+
+/** Test seam, as `setCorrectionsRendererFloor`; returns the previous floor. */
+export function setRevisionFeedbackRendererFloor(next: number | null): number | null {
+  const previous = revisionFeedbackRendererFloor;
+  revisionFeedbackRendererFloor = next;
+  return previous;
+}
+
+/**
+ * Whether a delivery may carry `revision_feedback`: the same two gates as
+ * corrections — a 2.0+ client and a named renderer at or above the floor.
+ * Below them nothing is added and nothing is refused.
+ */
+export function revisionFeedbackDeliverable(
+  clientVersion: string | null,
+  renderer: { version: number } | null | undefined,
+  minRendererVersion: number | null = revisionFeedbackRendererFloor,
+): boolean {
+  return correctionsDeliverable(clientVersion, renderer, minRendererVersion);
+}

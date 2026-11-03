@@ -373,4 +373,15 @@ None open.
   (`/dashboard/competency-results`, result only — no response), so it opens
   nothing else. Release stays manual (D-10's setting not built). Rows
   956–964 NOT RUN.
+- **Slice 7 server half BUILT 2026-11-02**: `loadRevisionFeedback`
+  (`lib/competency/revisionFeedback.ts`) builds `revision_feedback` for the
+  option's final response from its newest superseded score — only on a
+  district assessment, a passed-back attempt, a superseded Needs Revision,
+  and while no new final score exists — with the response's written
+  feedback as the note. Emitted by delivery only past
+  `MIN_RENDERER_VERSION_FOR_REVISION_FEEDBACK`, which ships **null** (off).
+  **At the merge:** set it to the committer time of the `main` merge commit
+  that lands the panel (as corrections' floor was, slice 3d) and re-sign the
+  renderer; until then no bundle carries the field and nothing is refused.
+  The client rows in `client/MANUAL-CHECKS.md` cover the panel.
 - Nothing committed here is pushed or deployed.
