@@ -90,6 +90,8 @@ export function AssignmentsPanel({
   const [proctor, setProctor] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // F-6 (CBA hand-run): a refused row action says so on its row.
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [showWithdrawn, setShowWithdrawn] = useState(false);
 
   async function load() {
@@ -153,13 +155,14 @@ export function AssignmentsPanel({
   async function patch(id: string, body: object) {
     setBusy(id);
     setError(null);
+    setRowError(null);
     try {
       const res = await fetch(`${base}/assignments/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) setError(assignmentErrorCopy(await errorCode(res)));
+      if (!res.ok) setRowError({ id, message: assignmentErrorCopy(await errorCode(res)) });
       await load();
     } finally {
       setBusy(null);
@@ -191,6 +194,7 @@ export function AssignmentsPanel({
     }
     setBusy(a.id);
     setError(null);
+    setRowError(null);
     try {
       const send = (extra: object) =>
         fetch(`${base}/assignments/${a.id}`, {
@@ -204,13 +208,13 @@ export function AssignmentsPanel({
         const day = window.prompt("This test has a deadline. Last day to work on the new option (YYYY-MM-DD)?");
         const end = day && /^\d{4}-\d{2}-\d{2}$/.test(day.trim()) ? new Date(`${day.trim()}T23:59:59`) : null;
         if (!end || Number.isNaN(end.getTime())) {
-          setError("Pick a day as YYYY-MM-DD to switch a test with a deadline.");
+          setRowError({ id: a.id, message: "Pick a day as YYYY-MM-DD to switch a test with a deadline." });
           return;
         }
         res = await send({ ends_at: end.toISOString() });
         code = res.ok ? null : await errorCode(res);
       }
-      if (code) setError(assignmentErrorCopy(code));
+      if (code) setRowError({ id: a.id, message: assignmentErrorCopy(code) });
       await load();
     } finally {
       setBusy(null);
@@ -356,6 +360,7 @@ export function AssignmentsPanel({
             onChangeProctor={changeProctor}
             options={options}
             onSwitch={(a, setId) => void switchOption(a, setId)}
+            rowError={rowError}
             onRelease={counselor ? undefined : release}
           />
         )}
@@ -386,6 +391,7 @@ function AssignmentTable({
   onRelease,
   options = [],
   onSwitch,
+  rowError = null,
 }: {
   assessmentId: string;
   rows: Assignment[];
@@ -395,6 +401,7 @@ function AssignmentTable({
   onRelease?: (a: Assignment) => void;
   options?: Option[];
   onSwitch?: (a: Assignment, itemSetId: string) => void;
+  rowError?: { id: string; message: string } | null;
 }) {
   const [switching, setSwitching] = useState<{ id: string; pick: string } | null>(null);
   return (
@@ -454,7 +461,14 @@ function AssignmentTable({
                   a.option_label
                 )}
               </td>
-              <td className="px-3 py-2">{a.proctor_email}</td>
+              <td className="px-3 py-2">
+                {a.proctor_email}
+                {rowError?.id === a.id ? (
+                  <span role="alert" className="block text-xs text-destructive">
+                    {rowError.message}
+                  </span>
+                ) : null}
+              </td>
               <td className="px-3 py-2">{STATUS_LABEL[a.status] ?? a.status}</td>
               <td className="px-3 py-2">
                 {a.result ? RESULT_LABEL[a.result] : "—"}

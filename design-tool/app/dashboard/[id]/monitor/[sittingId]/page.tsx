@@ -51,7 +51,7 @@ export default async function MonitorPage({ params, searchParams }: PageProps) {
       // SEC-04: a class row needs `own`; a practice sitting's one row is
       // deletable by the staff member who practised (the route's rule).
       {...(access.via === "proctor"
-        ? { backHref: "/dashboard/proctoring", backLabel: "Back to competency assessments" }
+        ? { backHref: "/dashboard/proctoring", backLabel: "Back to competency assessments", proctor: true }
         : {})}
       canDeleteAttempts={
         row.sitting.kind === "practice"

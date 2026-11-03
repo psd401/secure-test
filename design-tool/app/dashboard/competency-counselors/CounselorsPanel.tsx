@@ -71,6 +71,8 @@ export function CounselorsPanel() {
         return;
       }
       setEmail("");
+      // F-4 (CBA hand-run): never carry assigning over to the next counselor.
+      setCanAssign(false);
       await load();
     } finally {
       setBusy(null);
@@ -115,7 +117,7 @@ export function CounselorsPanel() {
             <option value="">Choose a school</option>
             {schools.map((s) => (
               <option key={s.school_id} value={s.school_id}>
-                School {s.school_id} ({s.students} students)
+                School {s.school_id} ({s.students} {s.students === 1 ? "student" : "students"})
               </option>
             ))}
           </NativeSelect>

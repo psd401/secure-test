@@ -7,6 +7,16 @@ import { AssignmentsPanel } from "./AssignmentsPanel";
 
 export const dynamic = "force-dynamic";
 
+// F-7 (CBA hand-run): a tab title that says which task. Only for someone the
+// page itself admits; anyone else gets the generic title, like the 404.
+export async function generateMetadata({ params }: PageProps) {
+  const session = await readStaffSessionFromCookies();
+  const { id } = await params;
+  if (!session || !UUID_RE.test(id)) return { title: "Assignments" };
+  const access = await authorizeCompetency(getDb(), session, id, "read");
+  return { title: access.ok ? `Assignments · ${access.assessment.name}` : "Assignments" };
+}
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
