@@ -121,3 +121,44 @@ export async function liveAssignmentFor(
     .limit(1);
   return row ?? null;
 }
+
+/**
+ * Roster ids of the students on this assessment whose live assignment names
+ * `proctorEmail` — the students a proctor may list in a sitting (slice 4).
+ */
+export async function proctoredStudentPsIds(
+  db: Db,
+  assessmentId: string,
+  proctorEmail: string | null,
+): Promise<Set<string>> {
+  if (!proctorEmail) return new Set();
+  const rows = await db
+    .select({ ps: competency_assignments.student_ps_id })
+    .from(competency_assignments)
+    .where(
+      and(
+        eq(competency_assignments.assessment_id, assessmentId),
+        eq(competency_assignments.proctor_email, proctorEmail),
+        ne(competency_assignments.status, "withdrawn"),
+      ),
+    );
+  return new Set(rows.map((r) => r.ps));
+}
+
+/**
+ * The first join moves a case from assigned to in progress (slice 4). Only
+ * from `assigned`, so a later join, or a case already further along, is
+ * untouched; a no-op on anything that is not a district assignment.
+ */
+export async function markAssignmentStarted(db: Db, assessmentId: string, studentPsId: string): Promise<void> {
+  await db
+    .update(competency_assignments)
+    .set({ status: "in_progress", updated_at: new Date() })
+    .where(
+      and(
+        eq(competency_assignments.assessment_id, assessmentId),
+        eq(competency_assignments.student_ps_id, studentPsId),
+        eq(competency_assignments.status, "assigned"),
+      ),
+    );
+}

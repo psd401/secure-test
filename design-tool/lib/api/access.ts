@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import {
   assessments,
   assets,
   attempts,
+  competency_assignments,
   rubrics,
   students,
   test_sessions,
@@ -20,6 +21,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import type { SessionPayload } from "@/lib/auth/session";
 import { UUID_RE } from "@/lib/uuid";
 import { effectiveLevel } from "@/lib/api/grants";
+import { normalizeEmail } from "@/lib/roster/queries";
 import { referencedAssetIds } from "@/lib/assets/assessmentAssets";
 import {
   levelSatisfies,
@@ -159,6 +161,67 @@ async function resolveAssessmentLevel(
 }
 
 /**
+ * The proctor path (docs/competency-assessment-design.md, slice 4, 4.1): a
+ * live competency assignment acts as `run` for that one student. It is NOT a
+ * level on the assessment — `authorizeAssessment` never returns it, so the
+ * results, review queue, editor and every assessment-wide list stay shut —
+ * and it reaches only:
+ *
+ *   - sitting creation (`authorizeProctorAssessment`, whose caller must still
+ *     check every listed student is the proctor's);
+ *   - a sitting the proctor started, while they still proctor someone on it
+ *     (`authorizeSitting`);
+ *   - an attempt whose student they currently proctor (`authorizeAttempt`).
+ *
+ * District assessments only. Tried only after the ordinary resolution fails,
+ * so a proctor who is also a co-teacher keeps their grant's level.
+ */
+const PROCTOR: Resolved = { level: "run", via: "proctor", scope: null };
+
+async function proctorsOnAssessment(
+  db: Db,
+  session: SessionPayload,
+  assessment: AssessmentRow,
+  studentPsId?: string | null,
+): Promise<boolean> {
+  if (assessment.assigned_scope !== "district") return false;
+  const email = normalizeEmail(session.email);
+  if (!email) return false;
+  if (studentPsId === null) return false;
+  const [row] = await db
+    .select({ id: competency_assignments.id })
+    .from(competency_assignments)
+    .where(
+      and(
+        eq(competency_assignments.assessment_id, assessment.id),
+        eq(competency_assignments.proctor_email, email),
+        ne(competency_assignments.status, "withdrawn"),
+        studentPsId === undefined ? undefined : eq(competency_assignments.student_ps_id, studentPsId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Sitting creation's door for a proctor: the assessment, at `run` via
+ * `"proctor"`, when the caller proctors anyone on it. Never a substitute for
+ * the student check — POST /api/test-sessions must still refuse any listed
+ * student who is not the caller's.
+ */
+export async function authorizeProctorAssessment(
+  db: Db,
+  session: SessionPayload,
+  assessmentId: string,
+): Promise<AssessmentAccess> {
+  if (!UUID_RE.test(assessmentId)) return denyInvalidId();
+  const assessment = await loadAssessment(db, assessmentId);
+  if (!assessment) return denyNotFound();
+  if (!(await proctorsOnAssessment(db, session, assessment))) return denyNotFound();
+  return { ok: true, assessment, ...PROCTOR };
+}
+
+/**
  * The per-teacher tables — the accommodations overlay (`students`), the rubric
  * library, uploaded assets. These are NOT per-assessment, so no assessment
  * grant reaches them: a co-teacher edits the shared assessment, not the other
@@ -233,8 +296,16 @@ export async function authorizeSitting(
   const assessment = await loadAssessment(db, sitting.assessment_id);
   if (!assessment) return denyNotFound();
   const resolved = await resolveAssessmentLevel(db, session, assessment);
-  if (!admitted(resolved, need, intent)) return denyNotFound();
-  return { ok: true, sitting, assessment, ...resolved };
+  if (admitted(resolved, need, intent)) return { ok: true, sitting, assessment, ...resolved };
+  // Slice 4: a proctor reaches only a sitting they started.
+  if (
+    sitting.owner_sub === session.sub &&
+    admitted(PROCTOR, need, intent) &&
+    (await proctorsOnAssessment(db, session, assessment))
+  ) {
+    return { ok: true, sitting, assessment, ...PROCTOR };
+  }
+  return denyNotFound();
 }
 
 /** Authorize a session against one attempt, through its assessment. */
@@ -255,8 +326,19 @@ export async function authorizeAttempt(
   const assessment = await loadAssessment(db, attempt.assessment_id);
   if (!assessment) return denyNotFound();
   const resolved = await resolveAssessmentLevel(db, session, assessment);
-  if (!admitted(resolved, need, intent)) return denyNotFound();
-  return { ok: true, attempt, assessment, ...resolved };
+  if (admitted(resolved, need, intent)) return { ok: true, attempt, assessment, ...resolved };
+  // Slice 4: a proctor reaches the attempt of a student they proctor now.
+  if (admitted(PROCTOR, need, intent) && assessment.assigned_scope === "district") {
+    const [student] = await db
+      .select({ roster_ps_id: students.roster_ps_id })
+      .from(students)
+      .where(eq(students.id, attempt.student_id))
+      .limit(1);
+    if (await proctorsOnAssessment(db, session, assessment, student?.roster_ps_id ?? null)) {
+      return { ok: true, attempt, assessment, ...PROCTOR };
+    }
+  }
+  return denyNotFound();
 }
 
 /**

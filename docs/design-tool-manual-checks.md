@@ -2277,3 +2277,20 @@ local roster fixture only. Row numbers may need renumbering at merge.
 | 945 | Delete Option 1's question set in the editor (draft) | Refused (409, `option_assigned`); the set stays | NOT RUN |
 | 946 | Open `/dashboard/<id>/assignments` as an unlisted staff account | 404 | NOT RUN |
 | 947 | Keyboard and screen reader through the form | Labels read Student, Option, Proctor email; the search results are reachable by Tab; Withdraw asks first | NOT RUN |
+
+## Competency proctor path (CBA slice 4, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 2 setup, assessment published, the local fixture student
+assigned with a second staff account as proctor. Sign in as the proctor for
+every row unless it says otherwise. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 948 | Open the home list as the proctor | A **Competency assessments** card: "1 student assigned to you as proctor", **Open**; no card for a staff account with no case | NOT RUN |
+| 949 | Open it | The assessment, the student with their option and "Assigned"; **Start session** disabled until a student is ticked | NOT RUN |
+| 950 | Tick the student, **Start session** | The Monitor opens on the code; the student is the one expected row | NOT RUN |
+| 951 | Press **Start session** again for the same student | The same open sitting opens, not a second one | NOT RUN |
+| 952 | Join with the code as the student in the client | Admitted; only their option shows; the Assignments page now reads "In progress" | NOT RUN |
+| 953 | From the Monitor: View screen, Extend time, Hand in, Close | Each works; **Back to competency assessments** returns to the list | NOT RUN |
+| 954 | As the proctor, open `/dashboard/<id>`, `/results`, `/scoring` | 404 each | NOT RUN |
+| 955 | As Assessment, change the proctor; reload the old proctor's Monitor | 404; the case is gone from the old proctor's list | NOT RUN |

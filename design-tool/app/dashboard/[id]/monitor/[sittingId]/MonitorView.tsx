@@ -118,6 +118,9 @@ interface Props {
    * gets no button, matching the route's 404. Optional so callers that
    * predate it (tests) render as before. */
     canDeleteAttempts?: boolean;
+  /** CBA slice 4: a proctor has no Test sessions tab to go back to. */
+  backHref?: string;
+  backLabel?: string;
 }
 
 async function readError(res: Response): Promise<ApiError> {
@@ -158,6 +161,8 @@ export function MonitorView({
   studentPsIds = null,
   openCodeOnLoad = false,
   canDeleteAttempts = true,
+  backHref,
+  backLabel = "Back to test sessions",
 }: Props) {
   // D-5: the Monitor's one row on a practice sitting — no "Hand in everyone"
   // or "Extend time" at the header level, same exclusions the Test sessions
@@ -634,10 +639,10 @@ export function MonitorView({
 
       <p className="text-sm text-muted-foreground">
         <Link
-          href={`/dashboard/${assessmentId}?tab=sessions`}
+          href={backHref ?? `/dashboard/${assessmentId}?tab=sessions`}
           className="hover:underline"
         >
-          Back to test sessions
+          {backLabel}
         </Link>
       </p>
 

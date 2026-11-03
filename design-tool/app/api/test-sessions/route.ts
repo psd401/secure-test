@@ -15,7 +15,8 @@ import {
   sweepExpired,
 } from "@/lib/api/testSessions";
 import { UUID_RE } from "@/lib/uuid";
-import { authorizeAssessment } from "@/lib/api/access";
+import { authorizeAssessment, authorizeProctorAssessment } from "@/lib/api/access";
+import { proctoredStudentPsIds } from "@/lib/competency/assignments";
 import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
 import {
   normalizeEmail,
@@ -107,8 +108,15 @@ export async function POST(req: Request) {
   const db = getDb();
   // A sitting may only be started on an assessment the caller may run; the
   // 404-for-not-yours posture is the helper's (access slice 1, D-3).
-  const access = await authorizeAssessment(db, auth.session, body.assessment_id, "run", "write");
-  if (!access.ok) return access.response;
+  let access = await authorizeAssessment(db, auth.session, body.assessment_id, "run", "write");
+  // CBA slice 4 (docs/competency-assessment-design.md): a proctor has no
+  // level on a district assessment, only the students assigned to them —
+  // checked below, where a proctor's sitting must list them and only them.
+  if (!access.ok) {
+    const proctor = await authorizeProctorAssessment(db, auth.session, body.assessment_id);
+    if (!proctor.ok) return access.response;
+    access = proctor;
+  }
   const assessment = access.assessment;
   // Slice 82: only a published assessment can be sat. A draft is still being
   // edited — items can change under a student mid-test — and publishing is
@@ -166,13 +174,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "section_not_taught" }, { status: 400 });
     }
   }
+  // CBA slice 4: on a district assessment a student list may also name the
+  // students whose live assignment names the caller as proctor (open
+  // question 3.6, widened for this one case). A proctor who reached here only
+  // through that assignment gets no section, no "all my sections" and no
+  // practice — a list of their own students is the whole of their scope.
+  const viaProctor = access.via === "proctor";
+  if (viaProctor && body.student_ps_ids === undefined) {
+    return NextResponse.json({ ok: false, error: "students_not_taught" }, { status: 400 });
+  }
   if (body.student_ps_ids !== undefined) {
+    const proctored =
+      assessment.assigned_scope === "district"
+        ? await proctoredStudentPsIds(db, assessment.id, ownerEmail)
+        : new Set<string>();
     const mine = new Set(
-      ownerEmail
+      ownerEmail && !viaProctor
         ? (await studentsInTeachersSections(db, ownerEmail)).map((r) => r.student.ps_id)
         : [],
     );
-    if (!body.student_ps_ids.every((id) => mine.has(id))) {
+    if (!body.student_ps_ids.every((id) => mine.has(id) || proctored.has(id))) {
       return NextResponse.json({ ok: false, error: "students_not_taught" }, { status: 400 });
     }
   }

@@ -351,4 +351,14 @@ None open.
   plus questions in no set (shared by every option); sources, assets and
   saved answers follow the filtered questions. A teacher assessment is
   unchanged. The answer write routes are not yet restricted to the option.
+- **Slice 4 BUILT 2026-11-02**: the proctor path (James 4.1: a proctor
+  level on the proctor's own sittings). `AccessVia "proctor"` — `run`, only
+  through `authorizeSitting` (sittings the proctor started, while they
+  proctor someone on the assessment) and `authorizeAttempt` (students they
+  proctor now), never `authorizeAssessment`, so results, scoring and the
+  editor stay shut. `POST /api/test-sessions` admits a proctor through
+  `authorizeProctorAssessment` with a student list of their own students
+  only; on a district assessment any caller's list may also name students
+  they proctor. The first join moves a case to in progress.
+  `/dashboard/proctoring` and a home-list card. Rows 948–955 NOT RUN.
 - Nothing committed here is pushed or deployed.

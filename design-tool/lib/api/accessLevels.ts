@@ -28,8 +28,12 @@ export type AccessLevel = "view" | "run" | "score" | "edit" | "own";
  * `"admin"` is `ADMIN_EMAILS` (D-1); `"grant"` is a row in `access_grants`
  * (D-2). The distinction is shown to the teacher — "Shared with you as
  * co-teacher" — and is what the sitting-creation branch keys on.
+ * `"proctor"` is a live competency assignment naming the caller
+ * (docs/competency-assessment-design.md, slice 4): `run`, and only through
+ * the sitting and attempt doors for the proctor's own sittings and students
+ * — never through `authorizeAssessment`, so results and scoring stay shut.
  */
-export type AccessVia = "owner" | "grant" | "admin";
+export type AccessVia = "owner" | "grant" | "admin" | "proctor";
 
 /**
  * What the caller is about to do with the row (security audit 2026-10-24,
