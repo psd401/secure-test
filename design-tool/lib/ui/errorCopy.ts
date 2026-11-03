@@ -449,6 +449,9 @@ export function coTeachErrorCopy(code: string): ErrorCopy {
       return { message: "That's you.", showCode: false };
     case "level_not_allowed":
       return { message: "That level isn't available here.", showCode: false };
+    // Competency D-12: a scorer's access needs an end date in the future.
+    case "ends_at_required":
+      return { message: "Pick a scoring end date that hasn't passed.", showCode: false };
     case "not_found":
     case "invalid_id":
       return {

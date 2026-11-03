@@ -398,12 +398,16 @@ export type GrantValidationError =
   | "invalid_email"
   | "grantee_not_staff"
   | "self_grant"
-  | "level_not_allowed";
+  | "level_not_allowed"
+  | "ends_at_required";
 
 export function validateGrantRequest(input: {
   granter: SessionPayload;
   grantee_email: string;
   level: AccessLevel;
+  /** ISO end of the grant, when the request carries one. */
+  ends_at?: string | null;
+  now?: Date;
 }): { ok: true; grantee_email: string } | { ok: false; error: GrantValidationError } {
   const grantee = normalizeEmail(input.grantee_email);
   if (!grantee) return { ok: false, error: "invalid_email" };
@@ -417,6 +421,15 @@ export function validateGrantRequest(input: {
   if (input.level === "own" && !isAdmin(input.granter)) {
     return { ok: false, error: "level_not_allowed" };
   }
+  // Competency D-12 (PR #178 review): a scorer's access is time-boxed by the
+  // server, not only by the Scorers form — a `score` grant needs an end in
+  // the future, or it would reach the review queue and scoring indefinitely.
+  if (input.level === "score") {
+    const end = input.ends_at ? Date.parse(input.ends_at) : NaN;
+    if (!Number.isFinite(end) || end <= (input.now ?? new Date()).getTime()) {
+      return { ok: false, error: "ends_at_required" };
+    }
+  }
   return { ok: true, grantee_email: grantee };
 }
 
@@ -427,6 +440,7 @@ export const GRANT_VALIDATION_STATUS: Record<GrantValidationError, 400> = {
   grantee_not_staff: 400,
   self_grant: 400,
   level_not_allowed: 400,
+  ends_at_required: 400,
 };
 
 export const GrantLevelSchema = z.enum(["view", "run", "score", "edit", "own"]);

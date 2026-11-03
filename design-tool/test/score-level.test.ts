@@ -362,6 +362,30 @@ describe("granting score", () => {
     expect(row!.ends_at?.toISOString()).toBe(endsAt);
   });
 
+  test("score without a future end is refused by the server, not only the form (PR #178 review)", async () => {
+    const [assessment] = await getDb()
+      .insert(assessments)
+      .values({ owner_sub: OWNER.sub, owner_email: OWNER.email, name: "Grant score, no end" })
+      .returning();
+    asUser(OWNER);
+    const { POST } = await import("../app/api/assessments/[id]/grants/route");
+    const post = (extra: Record<string, unknown>) =>
+      POST(
+        json("POST", `http://localhost/api/assessments/${assessment!.id}/grants`, {
+          grantee_email: SCORER.email,
+          level: "score",
+          ...extra,
+        }),
+        ctx({ id: assessment!.id }),
+      );
+    for (const extra of [{}, { ends_at: null }, { ends_at: new Date(Date.now() - HOUR).toISOString() }]) {
+      const res = await post(extra);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("ends_at_required");
+    }
+    expect(await getDb().select().from(access_grants)).toHaveLength(0);
+  });
+
   test("the DB CHECK accepts score and still refuses an unknown level", async () => {
     const db = getDb();
     const base = {

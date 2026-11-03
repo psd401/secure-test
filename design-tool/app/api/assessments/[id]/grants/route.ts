@@ -79,6 +79,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     granter: auth.session,
     grantee_email: body.grantee_email,
     level: body.level,
+    ends_at: body.ends_at ?? null,
   });
   if (!checked.ok) {
     return NextResponse.json(
