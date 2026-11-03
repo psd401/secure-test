@@ -266,4 +266,18 @@ describe("competency assignment routes", () => {
     await getDb().delete(assessments).where(eq(assessments.id, a.id));
     expect(await getDb().select().from(competency_assignments)).toHaveLength(0);
   });
+
+  test("F-9: an option only a withdrawn assignment uses is the student's record — option_in_record", async () => {
+    const { a, sets } = await newAssessment();
+    const created = (await (await call("POST", a.id, "assignments", assignBody(sets[0]!.id))).json()) as {
+      assignment: { id: string };
+    };
+    await call("PATCH", a.id, "x", { action: "withdraw" }, { assignmentId: created.assignment.id });
+    const { DELETE } = await import("../app/api/assessments/[id]/item-sets/[setId]/route");
+    const refused = await DELETE(new Request("http://local/x", { method: "DELETE" }), {
+      params: Promise.resolve({ id: a.id, setId: sets[0]!.id }),
+    });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: string }).error).toBe("option_in_record");
+  });
 });

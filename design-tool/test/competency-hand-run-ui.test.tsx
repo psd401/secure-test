@@ -45,5 +45,12 @@ describe("F-5: removing an assigned option says why, in plain words", () => {
     const copy = itemErrorCopy("option_assigned");
     expect(copy.showCode).toBe(false);
     expect(copy.message).toContain("A student is assigned this option");
+    expect(copy.message).toContain("Switch their assignment first");
+  });
+
+  test("F-9: option_in_record says the option is part of a record, with no advice that cannot work", () => {
+    const copy = itemErrorCopy("option_in_record");
+    expect(copy.showCode).toBe(false);
+    expect(copy.message).toBe("A student's record uses this option, so it can't be removed.");
   });
 });

@@ -225,6 +225,25 @@ describe("switch_option", () => {
     expect((await patch(a.id, assignment.id, { action: "switch_option", item_set_id: other.s2.id })).status).toBe(409);
   });
 
+  test("F-10: after a switch and a new hand-in, the scoring queue holds only the new option's work", async () => {
+    const { a, s2, assignment, attemptId } = await seed();
+    expect((await patch(a.id, assignment.id, { action: "switch_option", item_set_id: s2.id })).status).toBe(200);
+    const db = getDb();
+    const [final2] = await db
+      .insert(items)
+      .values({ assessment_id: a.id, item_set_id: s2.id, position: 2, type: "essay", stem: "Final 2" })
+      .returning();
+    await db.insert(responses).values({ attempt_id: attemptId!, item_id: final2!.id, response: { type: "essay", text: "new" } });
+    await db.update(attempts).set({ status: "submitted", submitted_at: new Date() }).where(eq(attempts.id, attemptId!));
+    const { GET } = await import("../app/api/assessments/[id]/review-queue/route");
+    const res = await GET(new Request(`http://local/api/assessments/${a.id}/review-queue`), {
+      params: Promise.resolve({ id: a.id }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: { item: { stem: string } }[] };
+    expect(body.entries.map((e) => e.item.stem)).toEqual(["Final 2"]);
+  });
+
   test("a counselor switches their school's student (reopening the test); another school's is 404", async () => {
     const { a, s2, assignment, attemptId } = await seed();
     const [me] = await getDb().select().from(roster_students).where(eq(roster_students.ps_id, STUDENT.ps_id));

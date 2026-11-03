@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -420,47 +420,13 @@ function AssignmentTable({
         </thead>
         <tbody className="divide-y">
           {rows.map((a) => (
-            <tr key={a.id}>
+            <Fragment key={a.id}>
+            <tr>
               <td className="px-3 py-2">
                 {a.student_name}
                 {a.grade ? <span className="text-muted-foreground"> · {a.grade}</span> : null}
               </td>
-              <td className="px-3 py-2">
-                {switching?.id === a.id && onSwitch ? (
-                  <span className="flex flex-wrap items-center gap-1">
-                    <NativeSelect
-                      aria-label={`New option for ${a.student_name}`}
-                      size="sm"
-                      value={switching.pick}
-                      onChange={(e) => setSwitching({ id: a.id, pick: e.target.value })}
-                    >
-                      <option value="">Choose</option>
-                      {options
-                        .filter((o) => o.item_set_id !== a.item_set_id)
-                        .map((o) => (
-                          <option key={o.item_set_id} value={o.item_set_id}>
-                            {o.label}
-                          </option>
-                        ))}
-                    </NativeSelect>
-                    <Button
-                      size="sm"
-                      disabled={!switching.pick || busy !== null}
-                      onClick={() => {
-                        onSwitch(a, switching.pick);
-                        setSwitching(null);
-                      }}
-                    >
-                      Switch
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setSwitching(null)}>
-                      Cancel
-                    </Button>
-                  </span>
-                ) : (
-                  a.option_label
-                )}
-              </td>
+              <td className="px-3 py-2">{a.option_label}</td>
               <td className="px-3 py-2">
                 {a.proctor_email}
                 {rowError?.id === a.id ? (
@@ -516,6 +482,48 @@ function AssignmentTable({
                 </td>
               ) : null}
             </tr>
+            {/* F-8 (CBA hand-run): the switch gets a full-width row of its
+                own — inside the Option cell it was cut to "Ch…" at 1024 px. */}
+            {switching?.id === a.id && onSwitch ? (
+              <tr className="bg-muted/30">
+                <td colSpan={onWithdraw ? 7 : 6} className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span>
+                      Switch {a.student_name} from {a.option_label} to
+                    </span>
+                    <NativeSelect
+                      aria-label={`New option for ${a.student_name}`}
+                      size="sm"
+                      value={switching.pick}
+                      onChange={(e) => setSwitching({ id: a.id, pick: e.target.value })}
+                    >
+                      <option value="">Choose an option</option>
+                      {options
+                        .filter((o) => o.item_set_id !== a.item_set_id)
+                        .map((o) => (
+                          <option key={o.item_set_id} value={o.item_set_id}>
+                            {o.label}
+                          </option>
+                        ))}
+                    </NativeSelect>
+                    <Button
+                      size="sm"
+                      disabled={!switching.pick || busy !== null}
+                      onClick={() => {
+                        onSwitch(a, switching.pick);
+                        setSwitching(null);
+                      }}
+                    >
+                      Switch
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSwitching(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
+            </Fragment>
           ))}
         </tbody>
       </table>

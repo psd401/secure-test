@@ -174,12 +174,17 @@ export function itemErrorCopy(code: string): ErrorCopy {
         message: "A question's type can't change. Add a new question instead.",
         showCode: false,
       };
-    // F-5 (CBA hand-run): deleting a question set that is a competency option
-    // some student is assigned to (item-set DELETE, 409).
+    // F-5 / F-9 (CBA hand-run): deleting a question set that is a competency
+    // option (item-set DELETE, 409). A live assignment can be switched away;
+    // a withdrawn one is the student's record and keeps the option.
     case "option_assigned":
       return {
-        message:
-          "A student is assigned this option, so it can't be removed. Switch or withdraw their assignment first.",
+        message: "A student is assigned this option. Switch their assignment first.",
+        showCode: false,
+      };
+    case "option_in_record":
+      return {
+        message: "A student's record uses this option, so it can't be removed.",
         showCode: false,
       };
     case "not_found":

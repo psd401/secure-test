@@ -86,16 +86,21 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
   if (lock) return lock;
 
   const db = getDb();
-  // CBA slice 2: an option a student has been assigned — even a withdrawn
-  // assignment, which is the record of that option — cannot be deleted
-  // (the FK would refuse it with a 500 otherwise).
-  const [assigned] = await db
-    .select({ id: competency_assignments.id })
+  // CBA slice 2: an option a student has been assigned cannot be deleted —
+  // the FK would refuse it with a 500 otherwise. F-9 (hand-run): two
+  // refusals, because the way out differs: a LIVE assignment can be switched
+  // (option_assigned); a withdrawn one is the record of what the student took
+  // and keeps the option for good (option_in_record).
+  const refs = await db
+    .select({ status: competency_assignments.status })
     .from(competency_assignments)
-    .where(eq(competency_assignments.item_set_id, setId))
-    .limit(1);
-  if (assigned) {
-    return NextResponse.json({ ok: false, error: "option_assigned" }, { status: 409 });
+    .where(eq(competency_assignments.item_set_id, setId));
+  if (refs.length > 0) {
+    const live = refs.some((r) => r.status !== "withdrawn");
+    return NextResponse.json(
+      { ok: false, error: live ? "option_assigned" : "option_in_record" },
+      { status: 409 },
+    );
   }
   await db.transaction(async (tx) => {
     await tx.delete(item_sets).where(eq(item_sets.id, setId));
