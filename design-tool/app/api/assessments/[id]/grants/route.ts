@@ -103,14 +103,16 @@ export async function POST(req: Request, ctx: RouteContext) {
     return NextResponse.json({ ok: false, error: created.error }, { status: 409 });
   }
   // Share notifications (docs/share-notifications-design.md): best effort,
-  // after the row exists; the 409 above sends nothing. Co-teach is the only
-  // grant this route writes, and it links straight to the editor.
+  // after the row exists; the 409 above sends nothing. A co-teach grant links
+  // to the editor; a scorer's (docs/competency-assessment-design.md, slice 5b)
+  // to the scoring page, since the editor needs `edit`.
+  const scorer = body.level === "score";
   await sendShareEmail({
-    kind: "co_teach",
+    kind: scorer ? "score" : "co_teach",
     to: created.grant.grantee_email,
     sharerEmail: created.grant.granted_by_email,
     assessmentName: access.assessment.name,
-    link: `${appOrigin(req)}/dashboard/${id}`,
+    link: `${appOrigin(req)}/dashboard/${id}${scorer ? "/scoring" : ""}`,
   });
   return NextResponse.json({ ok: true, grant: created.grant }, { status: 201 });
 }

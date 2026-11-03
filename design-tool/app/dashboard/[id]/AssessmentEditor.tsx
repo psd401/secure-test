@@ -2227,7 +2227,12 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
       </TabsContent>
       </Tabs>
 
-      <ShareDialog assessmentId={assessment.id} open={shareOpen} onOpenChange={setShareOpen} />
+      <ShareDialog
+        assessmentId={assessment.id}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        competency={assessment.assigned_scope === "district"}
+      />
 
       {(() => {
         const historyItem = historyFor ? items.find((i) => i.id === historyFor) : undefined;

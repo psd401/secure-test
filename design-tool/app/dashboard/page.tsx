@@ -337,6 +337,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 // grant does not offer a button whose route would 404 either.
                 const ownsRow = accessFor.get(a.id)?.via === "owner";
                 const rowAccess = accessFor.get(a.id);
+                // Slice 5b (docs/competency-assessment-design.md): a scorer's
+                // row opens the scoring page — the editor needs `edit`.
+                const scorerRow = rowAccess?.via === "grant" && rowAccess.level === "score";
                 return (
                   <TableRow key={a.id}>
                     {/* A-1: the name is the elastic column. Auto table layout
@@ -347,7 +350,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         card edge. */}
                     <TableCell className="w-full max-w-0">
                       <Link
-                        href={`/dashboard/${a.id}`}
+                        href={scorerRow ? `/dashboard/${a.id}/scoring` : `/dashboard/${a.id}`}
                         className="block truncate font-medium hover:underline"
                         title={a.name}
                       >
@@ -357,13 +360,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         <div className="truncate text-sm text-muted-foreground">{a.description}</div>
                       ) : null}
                       {/* Access slice 3 (docs/access-model-design.md, D-4 (b)):
-                          `via: "grant"` is a co-teacher's own row — the ONLY
-                          grant kind with UI so far, so the label doesn't need
-                          to say which level. */}
+                          `via: "grant"` is a co-teacher's own row, or since
+                          slice 5b a scorer's — the two grant kinds with UI. */}
                       {rowAccess?.via === "grant" ? (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <span className="truncate">
-                            Shared with you as co-teacher
+                            {scorerRow ? "Shared with you as scorer" : "Shared with you as co-teacher"}
                             {rowAccess.owner_email ? ` · by ${rowAccess.owner_email}` : ""}
                           </span>
                           {unseenGrants.has(a.id.toLowerCase()) ? <Badge variant="info">New</Badge> : null}

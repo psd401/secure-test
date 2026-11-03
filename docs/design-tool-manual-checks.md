@@ -2240,3 +2240,22 @@ hands in; a second demo student answers only Q1; a third answers nothing.
 - **WT-O1 — a "Question n" heading can end a page with its question on the next (2026-11-02, row 922; observation).** Drive's import gives the `<h2>` no "keep with next", so in a 10-question Doc Q3's and Q8's headings sat alone at the foot of a page. Cosmetic; the essay-only Doc has the same import.
 - **WT-O2 — a picture inside a choice sits on the ☐'s line (2026-11-02, row 925; observation).** The box ends up at the picture's lower left, and a stem picture sits at the end of the stem's line. Readable; a line break before an inline picture would tidy it.
 - **WT-F1 — the per-student page shows a picture choice as raw markdown (2026-11-02, found running row 928; not slice 4).** Q1's answer on the student's page reads `✓ ![an orange shape](asset:…)`; the page's answer lines print a choice's text unrendered. Pre-existing on `main`, out of this slice's scope.
+
+## Competency scorers (CBA slice 5b, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: local dev on the branch, `COMPETENCY_ADMIN_EMAILS` set to the
+signed-in owner's address, a made-up assessment with one essay item and an
+analytic rubric, marked district with `PUT /api/assessments/:id/competency`
+(`{ "pass_min_points_per_criterion": 3 }`), and one handed-in demo attempt.
+A second staff account is the scorer. Row numbers may need renumbering at
+merge if another branch adds rows.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | NOT RUN |
+| 933 | Open Share on an ordinary teacher assessment | No Scorers section | NOT RUN |
+| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | NOT RUN |
+| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | NOT RUN |
+| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | NOT RUN |
+| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | NOT RUN |
+| 938 | Keyboard and screen reader through the Scorers section | Labels read "Staff email" and "Scoring through"; the date input works by keyboard; Remove names nothing ambiguous (one per row) | NOT RUN |
