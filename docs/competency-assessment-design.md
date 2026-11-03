@@ -422,4 +422,8 @@ None open.
 - **Deploy wiring:** `COMPETENCY_ADMIN_EMAILS` comes from the CDK context key
   `competencyAdminEmails` (gitignored `cdk.context.json`), like
   `ADMIN_EMAILS`; empty = nobody, every competency page 404s.
-- Nothing committed here is pushed or deployed.
+- **Merged 2026-11-02** as `4f44cc09` (PR #178). The revision-feedback
+  renderer floor is set to its committer time, `1793687410`, on branch
+  `chore/revision-feedback-floor`; once that deploys and the renderer is
+  re-signed, the client "Scorer feedback" rows in `client/MANUAL-CHECKS.md`
+  are next.
