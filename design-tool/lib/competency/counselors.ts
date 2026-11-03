@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import {
   access_grants,
@@ -31,11 +31,12 @@ type Db = ReturnType<typeof getDb>;
  */
 const COUNSELOR_LEVELS = ["view", "run"];
 
-const live = (now: Date) =>
+/** Live now, by the database's clock (see lib/competency/schoolGrants.ts). */
+const live = () =>
   and(
     isNull(access_grants.revoked_at),
-    lte(access_grants.starts_at, now),
-    or(isNull(access_grants.ends_at), gt(access_grants.ends_at, now)),
+    sql`${access_grants.starts_at} <= now()`,
+    or(isNull(access_grants.ends_at), sql`${access_grants.ends_at} > now()`),
   );
 
 /** The schools whose released results this email may read now (any counselor grant). */
@@ -49,7 +50,7 @@ export async function listCounselorGrants(db: Db): Promise<AccessGrantRow[]> {
     .select()
     .from(access_grants)
     .where(
-      and(eq(access_grants.scope_kind, "school"), inArray(access_grants.level, COUNSELOR_LEVELS), live(new Date())),
+      and(eq(access_grants.scope_kind, "school"), inArray(access_grants.level, COUNSELOR_LEVELS), live()),
     )
     .orderBy(asc(access_grants.scope_id), asc(access_grants.grantee_email));
 }

@@ -41,7 +41,9 @@ interface StudentHit {
 export function assignmentErrorCopy(code: string): string {
   switch (code) {
     case "already_assigned":
-      return "This student already has an assignment on this assessment. Withdraw it first to switch options.";
+      return "This student already has an assignment on this assessment. Use Switch option on their row to change it.";
+    case "ends_at_required":
+      return "This test has a deadline. Pick the last day to work on the new option.";
     case "proctor_not_staff":
       return "The proctor must be a staff email.";
     case "unknown_student":
@@ -175,6 +177,46 @@ export function AssignmentsPanel({
     void patch(a.id, { action: "release" });
   }
 
+  // F-1 (D-18): withdraw + assign the new option + reopen a handed-in test,
+  // as one server action. A timed test needs a new end; asked only if the
+  // server says so.
+  async function switchOption(a: Assignment, itemSetId: string) {
+    const label = options.find((o) => o.item_set_id === itemSetId)?.label ?? "the new option";
+    if (
+      !window.confirm(
+        `Switch ${a.student_name} to ${label}? The current option is withdrawn and nothing carries over. If they have handed in, their test reopens for the new option.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(a.id);
+    setError(null);
+    try {
+      const send = (extra: object) =>
+        fetch(`${base}/assignments/${a.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "switch_option", item_set_id: itemSetId, ...extra }),
+        });
+      let res = await send({});
+      let code = res.ok ? null : await errorCode(res);
+      if (code === "ends_at_required") {
+        const day = window.prompt("This test has a deadline. Last day to work on the new option (YYYY-MM-DD)?");
+        const end = day && /^\d{4}-\d{2}-\d{2}$/.test(day.trim()) ? new Date(`${day.trim()}T23:59:59`) : null;
+        if (!end || Number.isNaN(end.getTime())) {
+          setError("Pick a day as YYYY-MM-DD to switch a test with a deadline.");
+          return;
+        }
+        res = await send({ ends_at: end.toISOString() });
+        code = res.ok ? null : await errorCode(res);
+      }
+      if (code) setError(assignmentErrorCopy(code));
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function changeProctor(a: Assignment) {
     const next = window.prompt(`New proctor for ${a.student_name}`, a.proctor_email);
     if (!next || next.trim().toLowerCase() === a.proctor_email) return;
@@ -205,8 +247,8 @@ export function AssignmentsPanel({
           <p className="text-sm text-muted-foreground">You see and assign students at your school only.</p>
         ) : null}
         <p className="text-sm text-muted-foreground">
-          Each student takes one option, with one proctor who runs their sittings. To switch options, withdraw the
-          assignment and make a new one; nothing carries over.
+          Each student takes one option, with one proctor who runs their sittings. To change a student's option, use
+          Switch option; nothing carries over.
         </p>
       </div>
 
@@ -312,6 +354,8 @@ export function AssignmentsPanel({
             busy={busy}
             onWithdraw={withdraw}
             onChangeProctor={changeProctor}
+            options={options}
+            onSwitch={(a, setId) => void switchOption(a, setId)}
             onRelease={counselor ? undefined : release}
           />
         )}
@@ -340,6 +384,8 @@ function AssignmentTable({
   onWithdraw,
   onChangeProctor,
   onRelease,
+  options = [],
+  onSwitch,
 }: {
   assessmentId: string;
   rows: Assignment[];
@@ -347,7 +393,10 @@ function AssignmentTable({
   onWithdraw?: (a: Assignment) => void;
   onChangeProctor?: (a: Assignment) => void;
   onRelease?: (a: Assignment) => void;
+  options?: Option[];
+  onSwitch?: (a: Assignment, itemSetId: string) => void;
 }) {
+  const [switching, setSwitching] = useState<{ id: string; pick: string } | null>(null);
   return (
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-sm">
@@ -369,7 +418,42 @@ function AssignmentTable({
                 {a.student_name}
                 {a.grade ? <span className="text-muted-foreground"> · {a.grade}</span> : null}
               </td>
-              <td className="px-3 py-2">{a.option_label}</td>
+              <td className="px-3 py-2">
+                {switching?.id === a.id && onSwitch ? (
+                  <span className="flex flex-wrap items-center gap-1">
+                    <NativeSelect
+                      aria-label={`New option for ${a.student_name}`}
+                      size="sm"
+                      value={switching.pick}
+                      onChange={(e) => setSwitching({ id: a.id, pick: e.target.value })}
+                    >
+                      <option value="">Choose</option>
+                      {options
+                        .filter((o) => o.item_set_id !== a.item_set_id)
+                        .map((o) => (
+                          <option key={o.item_set_id} value={o.item_set_id}>
+                            {o.label}
+                          </option>
+                        ))}
+                    </NativeSelect>
+                    <Button
+                      size="sm"
+                      disabled={!switching.pick || busy !== null}
+                      onClick={() => {
+                        onSwitch(a, switching.pick);
+                        setSwitching(null);
+                      }}
+                    >
+                      Switch
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSwitching(null)}>
+                      Cancel
+                    </Button>
+                  </span>
+                ) : (
+                  a.option_label
+                )}
+              </td>
               <td className="px-3 py-2">{a.proctor_email}</td>
               <td className="px-3 py-2">{STATUS_LABEL[a.status] ?? a.status}</td>
               <td className="px-3 py-2">
@@ -397,6 +481,16 @@ function AssignmentTable({
                   {a.status === "scored" && onRelease ? (
                     <Button size="sm" disabled={busy !== null} onClick={() => onRelease(a)}>
                       Release
+                    </Button>
+                  ) : null}
+                  {onSwitch && options.length > 1 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy !== null}
+                      onClick={() => setSwitching({ id: a.id, pick: "" })}
+                    >
+                      Switch option
                     </Button>
                   ) : null}
                   <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onChangeProctor(a)}>

@@ -40,9 +40,21 @@ export function caseStatusOf(input: {
   attempt_status: "in_progress" | "submitted" | null;
   result: CompetencyResult | null;
   scored_at: Date | null;
+  /** F-1 (hand-run 2026-11-02): when the attempt was last handed in, and when
+   * this assignment was made. A hand-in from BEFORE the assignment belongs to
+   * an earlier option (D-18) — this case has not been started yet. */
+  attempt_submitted_at?: Date | null;
+  assigned_at?: Date | null;
 }): CaseStatus {
   if (input.stored === "withdrawn") return "withdrawn";
-  if (input.attempt_status === null) return input.stored === "in_progress" ? "in_progress" : "assigned";
+  const staleHandIn =
+    input.attempt_status === "submitted" &&
+    input.attempt_submitted_at != null &&
+    input.assigned_at != null &&
+    input.attempt_submitted_at < input.assigned_at;
+  if (input.attempt_status === null || staleHandIn) {
+    return input.stored === "in_progress" ? "in_progress" : "assigned";
+  }
   // A passed-back attempt is in progress again, whatever was released before.
   if (input.attempt_status === "in_progress") return "in_progress";
   if (input.result === null || input.scored_at === null) return "handed_in";
@@ -85,7 +97,7 @@ export async function loadCaseStates(
   const finals = await finalItemBySet(db, assessment.id);
 
   const attemptRows = await db
-    .select({ id: attempts.id, status: attempts.status, ps: students.roster_ps_id })
+    .select({ id: attempts.id, status: attempts.status, submitted_at: attempts.submitted_at, ps: students.roster_ps_id })
     .from(attempts)
     .innerJoin(students, eq(students.id, attempts.student_id))
     .where(
@@ -144,6 +156,8 @@ export async function loadCaseStates(
         attempt_status: (attempt?.status as "in_progress" | "submitted" | undefined) ?? null,
         result,
         scored_at,
+        attempt_submitted_at: attempt?.submitted_at ?? null,
+        assigned_at: c.created_at,
       }),
       result,
       attempt_id: attempt?.id ?? null,
@@ -151,4 +165,28 @@ export async function loadCaseStates(
     });
   }
   return out;
+}
+
+/**
+ * The student's one attempt on this assessment (the overlay row lives under
+ * the assessment's owner, the tenant every join resolves into), or null.
+ */
+export async function attemptForStudent(
+  db: Db,
+  assessment: Pick<AssessmentRow, "id" | "owner_sub">,
+  studentPsId: string,
+) {
+  const [row] = await db
+    .select({ attempt: attempts })
+    .from(attempts)
+    .innerJoin(students, eq(students.id, attempts.student_id))
+    .where(
+      and(
+        eq(attempts.assessment_id, assessment.id),
+        eq(students.owner_sub, assessment.owner_sub),
+        eq(students.roster_ps_id, studentPsId),
+      ),
+    )
+    .limit(1);
+  return row?.attempt ?? null;
 }

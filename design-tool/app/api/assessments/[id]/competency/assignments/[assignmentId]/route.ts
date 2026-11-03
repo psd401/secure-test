@@ -7,8 +7,11 @@ import { requireStaff } from "@/lib/api/requireSession";
 import { UUID_RE } from "@/lib/uuid";
 import { notFoundResponse } from "@/lib/api/access";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
-import { authorizeCompetency, canTransition } from "@/lib/competency/assignments";
-import { loadCaseStates } from "@/lib/competency/caseState";
+import { authorizeCompetency, canTransition, isOptionOf } from "@/lib/competency/assignments";
+import { attemptForStudent, loadCaseStates } from "@/lib/competency/caseState";
+import { passBackAttempt } from "@/lib/api/passBackAttempt";
+import { attemptIsTimed } from "@/lib/api/attemptDeadline";
+import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { roleForEmail } from "@/lib/auth/roles";
 
@@ -19,6 +22,15 @@ interface RouteContext {
 const PatchAssignmentBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("withdraw") }).strict(),
   z.object({ action: z.literal("release") }).strict(),
+  // F-1 (hand-run 2026-11-02): one action for D-18's switch.
+  z
+    .object({
+      action: z.literal("switch_option"),
+      item_set_id: z.string().regex(UUID_RE),
+      proctor_email: z.string().trim().min(3).max(320).optional(),
+      ends_at: z.string().datetime().optional(),
+    })
+    .strict(),
   z
     .object({
       action: z.literal("change_proctor"),
@@ -35,7 +47,17 @@ const PatchAssignmentBody = z.discriminatedUnion("action", [
  * is Assessment's review — only a case that reads Scored now, and it stores
  * the result the counselor sees. Handed in and Scored are read, never set
  * here (lib/competency/caseState.ts). A withdrawn case cannot be changed.
+ *
+ * `switch_option` (F-1, D-18) withdraws this case and assigns the student
+ * another option in one transaction — same proctor unless a new one is
+ * given — and, when the student's one attempt is already handed in, passes
+ * it back through the ordinary pass back (old scores kept as superseded, a
+ * `passed_back` event), so the student can start the new option. A counselor
+ * may switch their school's students: this is the one pass back they can
+ * cause, and only as part of a switch (D-15 stands everywhere else). A timed
+ * attempt needs `ends_at`, as the pass-back route does.
  */
+class SwitchConflict extends Error {}
 export async function PATCH(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
   if (!auth.ok) return auth.response;
@@ -82,6 +104,68 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
 
   const now = new Date();
+  if (parsed.data.action === "switch_option") {
+    const body = parsed.data;
+    if (body.item_set_id === current.item_set_id || !(await isOptionOf(db, id, body.item_set_id))) {
+      return NextResponse.json({ ok: false, error: "unknown_option" }, { status: 400 });
+    }
+    let proctor = current.proctor_email;
+    if (body.proctor_email !== undefined) {
+      const next = normalizeEmail(body.proctor_email);
+      if (!next || roleForEmail(next, true) !== "staff") {
+        return NextResponse.json({ ok: false, error: "proctor_not_staff" }, { status: 400 });
+      }
+      proctor = next;
+    }
+    const attempt = await attemptForStudent(db, access.assessment, current.student_ps_id);
+    const reopen = attempt?.status === "submitted";
+    let endsAt: Date | null = null;
+    if (attempt && reopen && attemptIsTimed(attempt, access.assessment)) {
+      if (!body.ends_at) {
+        return NextResponse.json({ ok: false, error: "ends_at_required" }, { status: 400 });
+      }
+      endsAt = new Date(Date.parse(body.ends_at));
+      if (endsAt <= now) return NextResponse.json({ ok: false, error: "invalid_body" }, { status: 400 });
+    }
+    const switcher = normalizeEmail(auth.session.email);
+    if (!switcher) return notFoundResponse();
+    try {
+      const created = await db.transaction(async (tx) => {
+        const [old] = await tx
+          .update(competency_assignments)
+          .set({ status: "withdrawn", withdrawn_at: now, updated_at: now })
+          .where(and(eq(competency_assignments.id, current.id), eq(competency_assignments.status, current.status)))
+          .returning();
+        if (!old) throw new SwitchConflict();
+        const [row] = await tx
+          .insert(competency_assignments)
+          .values({
+            assessment_id: id,
+            student_ps_id: current.student_ps_id,
+            item_set_id: body.item_set_id,
+            proctor_email: proctor,
+            assigned_by_sub: auth.session.sub,
+            assigned_by_email: switcher,
+          })
+          .returning();
+        if (attempt && reopen) {
+          // The pass back's own transaction nests as a savepoint, so a
+          // failure there rolls the whole switch back.
+          await passBackAttempt(tx as unknown as typeof db, attempt, auth.session.sub, { endsAt, now });
+        }
+        return row!;
+      });
+      return NextResponse.json({ assignment: created, reopened: reopen });
+    } catch (err) {
+      if (err instanceof SwitchConflict) {
+        return NextResponse.json({ ok: false, error: "assignment_changed" }, { status: 409 });
+      }
+      if (isUniqueViolation(err)) {
+        return NextResponse.json({ ok: false, error: "already_assigned" }, { status: 409 });
+      }
+      throw err;
+    }
+  }
   let set: Partial<typeof competency_assignments.$inferInsert>;
   if (parsed.data.action === "withdraw") {
     if (!canTransition(current.status, "withdrawn")) {

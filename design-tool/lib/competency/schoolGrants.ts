@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { getDb } from "@/db/client";
 import { access_grants } from "@/db/schema";
 import { ACCESS_LEVELS, levelSatisfies, type AccessLevel } from "@/lib/api/accessLevels";
@@ -21,7 +21,6 @@ export async function schoolGrantSchools(
 ): Promise<string[]> {
   const grantee = normalizeEmail(email);
   if (!grantee) return [];
-  const now = new Date();
   const rows = await db
     .select({ school: access_grants.scope_id })
     .from(access_grants)
@@ -34,8 +33,11 @@ export async function schoolGrantSchools(
           ACCESS_LEVELS.filter((l) => levelSatisfies(l, min)),
         ),
         isNull(access_grants.revoked_at),
-        lte(access_grants.starts_at, now),
-        or(isNull(access_grants.ends_at), gt(access_grants.ends_at, now)),
+        // The database's clock, not this process's: starts_at is stamped by
+        // Postgres in microseconds, so a JS millisecond `now` can sit just
+        // before a grant made in the same millisecond.
+        sql`${access_grants.starts_at} <= now()`,
+        or(isNull(access_grants.ends_at), sql`${access_grants.ends_at} > now()`),
       ),
     );
   return [...new Set(rows.map((r) => r.school))];
