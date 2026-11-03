@@ -20,23 +20,27 @@ const PROCTOR = "cba-proctor@psd401.net";
 // --- the status machine -----------------------------------------------------
 
 describe("assignment status transitions", () => {
-  test("the case moves forward one step at a time", () => {
+  test("the stored milestones: assigned → in progress → released", () => {
     expect(canTransition("assigned", "in_progress")).toBe(true);
-    expect(canTransition("in_progress", "handed_in")).toBe(true);
-    expect(canTransition("handed_in", "scored")).toBe(true);
-    expect(canTransition("scored", "released")).toBe(true);
-    expect(canTransition("assigned", "scored")).toBe(false);
-    expect(canTransition("in_progress", "released")).toBe(false);
+    expect(canTransition("in_progress", "released")).toBe(true);
+    // A case joined before its assignment existed still releases.
+    expect(canTransition("assigned", "released")).toBe(true);
+    expect(canTransition("in_progress", "assigned")).toBe(false);
   });
 
-  test("pass back returns handed-in, scored or released work to in progress", () => {
-    for (const from of ["handed_in", "scored", "released"] as const) {
-      expect(canTransition(from, "in_progress")).toBe(true);
-    }
+  test("a rescored case is released again", () => {
+    expect(canTransition("released", "released")).toBe(true);
+  });
+
+  test("handed in and scored are read, never written", () => {
+    expect(ASSIGNMENT_TRANSITIONS.handed_in).toEqual([]);
+    expect(ASSIGNMENT_TRANSITIONS.scored).toEqual([]);
+    expect(canTransition("in_progress", "handed_in")).toBe(false);
+    expect(canTransition("in_progress", "scored")).toBe(false);
   });
 
   test("every live status can be withdrawn; withdrawn is final", () => {
-    for (const from of ["assigned", "in_progress", "handed_in", "scored", "released"] as const) {
+    for (const from of ["assigned", "in_progress", "released"] as const) {
       expect(canTransition(from, "withdrawn")).toBe(true);
     }
     expect(ASSIGNMENT_TRANSITIONS.withdrawn).toEqual([]);

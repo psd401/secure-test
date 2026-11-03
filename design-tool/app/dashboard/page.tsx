@@ -31,6 +31,7 @@ import {
 import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
 import { proctorCaseCount } from "@/lib/competency/proctoring";
+import { counselorSchoolIds } from "@/lib/competency/counselors";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { SessionCode } from "@/components/app/SessionCode";
 import { AssessmentStatusBadge } from "@/components/app/StatusBadge";
@@ -119,6 +120,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const visible = await visibleAssessmentScope(db, session, { all: showAll });
   // CBA slice 4: the proctor's cue to /dashboard/proctoring.
   const proctorCases = await proctorCaseCount(db, normalizeEmail(session.email));
+  // CBA slice 6: a counselor's cue to their school's released results.
+  const counselorSchools = await counselorSchoolIds(db, session.email);
   const [rows, archivedCount, openSessions, questionCounts, attemptCounts] = await Promise.all([
     db
       .select()
@@ -235,6 +238,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
             <Button asChild variant="outline">
               <Link href="/dashboard/proctoring">Open</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {counselorSchools.length > 0 ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-medium">Competency results</span>
+              <span className="text-muted-foreground"> · released results for your school</span>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/competency-results">Open</Link>
             </Button>
           </CardContent>
         </Card>

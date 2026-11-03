@@ -2294,3 +2294,21 @@ every row unless it says otherwise. Row numbers may need renumbering at merge.
 | 953 | From the Monitor: View screen, Extend time, Hand in, Close | Each works; **Back to competency assessments** returns to the list | NOT RUN |
 | 954 | As the proctor, open `/dashboard/<id>`, `/results`, `/scoring` | 404 each | NOT RUN |
 | 955 | As Assessment, change the proctor; reload the old proctor's Monitor | 404; the case is gone from the old proctor's list | NOT RUN |
+
+## Competency release + counselors (CBA slice 6, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
+
+Setup: the slice 4 setup through a handed-in attempt; the final response has
+an analytic rubric; the pass rule is 3. A third staff account is the
+counselor. Row numbers may need renumbering at merge.
+
+| # | Check | Expected | Result |
+|---|---|---|---|
+| 956 | Assignments after hand-in | Status **Handed in**, Result —, **Review** opens the student's results page | NOT RUN |
+| 957 | Score the final response 3 / 3 / 3, reload Assignments | **Scored**, Result **Pass**, a **Release** button | NOT RUN |
+| 958 | Release, confirm | **Released**, "Released <today>"; no Release button | NOT RUN |
+| 959 | Change score so one row is 2, reload | **Scored**, **Needs revision**, "Released … as Pass"; Release again → "Released <today>" | NOT RUN |
+| 960 | Assignments → **Counselors**: add the counselor to the student's school | Listed as "<email> · School <id>"; a student address is refused | NOT RUN |
+| 961 | Sign in as the counselor; open the home list | A **Competency results** card; Open lists the student, task, option, the released result and date | NOT RUN |
+| 962 | As the counselor, open `/dashboard/<id>`, `/results`, `/scoring`, `/assignments` | 404 each | NOT RUN |
+| 963 | As Assessment, Remove the counselor; reload as the counselor | No card; the results page reads "No released results yet." | NOT RUN |
+| 964 | Pass the attempt back; reload Assignments | **In progress**; no Release button until it is scored again | NOT RUN |

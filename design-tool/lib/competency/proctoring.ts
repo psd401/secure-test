@@ -3,6 +3,7 @@ import type { getDb } from "@/db/client";
 import { assessments, competency_assignments, roster_students, test_sessions } from "@/db/schema";
 import { studentDisplayName } from "@/lib/roster/teacherRoster";
 import { competencyOptions } from "@/lib/competency/assignments";
+import { loadCaseStates } from "@/lib/competency/caseState";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -65,6 +66,13 @@ export async function loadProctorCases(
     if (labels.has(asmt.id)) continue;
     labels.set(asmt.id, new Map((await competencyOptions(db, asmt.id)).map((o) => [o.item_set_id, o.label])));
   }
+  // Slice 6: the same status Assessment's page shows (handed in and scored
+  // are read from the attempt and score, not stored).
+  const states = new Map<string, string>();
+  for (const asmt of new Map(rows.map((r) => [r.asmt.id, r.asmt])).values()) {
+    const cases = rows.filter((r) => r.asmt.id === asmt.id).map((r) => r.a);
+    for (const [id, st] of await loadCaseStates(db, asmt, cases)) states.set(id, st.status);
+  }
   for (const { a, s, asmt } of rows) {
     const group = byAssessment.get(asmt.id) ?? {
       id: asmt.id,
@@ -79,7 +87,7 @@ export async function loadProctorCases(
       name: studentDisplayName(s),
       grade: s.grade,
       option_label: labels.get(asmt.id)?.get(a.item_set_id) ?? "Option",
-      status: a.status,
+      status: states.get(a.id) ?? a.status,
     });
     byAssessment.set(asmt.id, group);
   }

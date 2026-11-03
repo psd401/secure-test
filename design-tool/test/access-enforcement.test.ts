@@ -170,6 +170,17 @@ const NO_OWNED_ROW = new Map<string, string>([
     join("admin", "safeguarding-alerts"),
     "admin surface: district-wide list, gated by isAdmin with a 404 refusal",
   ],
+  // CBA slice 6 (docs/competency-assessment-design.md, 6.2): counselor
+  // grants address a SCHOOL, not an owned row, and carry the
+  // isCompetencyAdmin-with-a-404 gate.
+  [
+    join("competency", "counselors"),
+    "Assessment-staff surface: school-scoped grants, gated by isCompetencyAdmin with a 404",
+  ],
+  [
+    join("competency", "counselors", "[grantId]"),
+    "Assessment-staff surface: revokes a school-scoped view grant, gated by isCompetencyAdmin with a 404",
+  ],
   [
     join("admin", "impersonate", "stop"),
     "gated on the session's own actor_* with a 404 refusal; addresses no row",

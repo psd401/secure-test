@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ProctorAssessment } from "@/lib/competency/proctoring";
 import { formatDateTime } from "@/lib/ui/format";
-import { STATUS_LABEL } from "@/app/dashboard/[id]/assignments/AssignmentsPanel";
+import { STATUS_LABEL } from "@/lib/competency/labels";
 
 /** What each refusal from POST /api/test-sessions means to a proctor. */
 export function startErrorCopy(code: string): string {

@@ -12,6 +12,7 @@ import { normalizeEmail } from "@/lib/roster/queries";
 import { roleForEmail } from "@/lib/auth/roles";
 import { studentDisplayName } from "@/lib/roster/teacherRoster";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
+import { loadCaseStates } from "@/lib/competency/caseState";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -27,7 +28,7 @@ const CreateAssignmentBody = z
 
 /**
  * The cases on one competency assessment (docs/competency-assessment-design.md,
- * slice 2): every assignment, withdrawn ones included as the record, newest
+ * slices 2 and 6): every assignment, withdrawn ones included as the record, newest
  * first, with the options to assign. Assessment staff only (authorizeCompetency).
  */
 export async function GET(_req: Request, ctx: RouteContext) {
@@ -50,6 +51,11 @@ export async function GET(_req: Request, ctx: RouteContext) {
     .where(eq(competency_assignments.assessment_id, id))
     .orderBy(desc(competency_assignments.created_at));
 
+  const states = await loadCaseStates(
+    db,
+    access.assessment,
+    rows.map((r) => r.a),
+  );
   return NextResponse.json({
     options,
     assignments: rows.map(({ a, s }) => ({
@@ -60,8 +66,14 @@ export async function GET(_req: Request, ctx: RouteContext) {
       item_set_id: a.item_set_id,
       option_label: labelOf.get(a.item_set_id) ?? "Option",
       proctor_email: a.proctor_email,
-      status: a.status,
-      result: a.result,
+      // Slice 6: `status` is the case as it reads now (handed in and scored
+      // come from the attempt and score); `result` is what the final score
+      // yields now; `released_result` is what the counselor was shown.
+      status: states.get(a.id)?.status ?? a.status,
+      result: states.get(a.id)?.result ?? null,
+      released_result: a.result,
+      released_at: a.released_at,
+      attempt_id: states.get(a.id)?.attempt_id ?? null,
       created_at: a.created_at,
       withdrawn_at: a.withdrawn_at,
     })),

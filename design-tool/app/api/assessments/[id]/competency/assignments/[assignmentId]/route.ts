@@ -8,6 +8,7 @@ import { UUID_RE } from "@/lib/uuid";
 import { notFoundResponse } from "@/lib/api/access";
 import { JSON_BODY_LIMITS, readJsonBody } from "@/lib/api/jsonBody";
 import { authorizeCompetency, canTransition } from "@/lib/competency/assignments";
+import { loadCaseStates } from "@/lib/competency/caseState";
 import { normalizeEmail } from "@/lib/roster/queries";
 import { roleForEmail } from "@/lib/auth/roles";
 
@@ -17,6 +18,7 @@ interface RouteContext {
 
 const PatchAssignmentBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("withdraw") }).strict(),
+  z.object({ action: z.literal("release") }).strict(),
   z
     .object({
       action: z.literal("change_proctor"),
@@ -29,9 +31,10 @@ const PatchAssignmentBody = z.discriminatedUnion("action", [
  * Change one case (docs/competency-assessment-design.md, slice 2):
  * `withdraw` ends it (a switch of option is a withdrawal plus a new
  * assignment, D-18 — the old row stays as the record); `change_proctor`
- * hands the student's sittings to someone else. The other status moves
- * (sittings, hand-in, scoring, release) belong to the slices that own those
- * events, not to this route. A withdrawn case cannot be changed.
+ * hands the student's sittings to someone else; `release` (slice 6, D-10)
+ * is Assessment's review — only a case that reads Scored now, and it stores
+ * the result the counselor sees. Handed in and Scored are read, never set
+ * here (lib/competency/caseState.ts). A withdrawn case cannot be changed.
  */
 export async function PATCH(req: Request, ctx: RouteContext) {
   const auth = await requireStaff();
@@ -74,6 +77,14 @@ export async function PATCH(req: Request, ctx: RouteContext) {
       return NextResponse.json({ ok: false, error: "invalid_transition" }, { status: 409 });
     }
     set = { status: "withdrawn", withdrawn_at: now, updated_at: now };
+  } else if (parsed.data.action === "release") {
+    const state = (await loadCaseStates(db, access.assessment, [current])).get(current.id);
+    if (!state || state.status !== "scored" || !state.result || !canTransition(current.status, "released")) {
+      return NextResponse.json({ ok: false, error: "not_releasable" }, { status: 409 });
+    }
+    const releaser = normalizeEmail(auth.session.email);
+    if (!releaser) return notFoundResponse();
+    set = { status: "released", result: state.result, released_at: now, released_by_email: releaser, updated_at: now };
   } else {
     const proctor = normalizeEmail(parsed.data.proctor_email);
     if (!proctor || roleForEmail(proctor, true) !== "staff") {

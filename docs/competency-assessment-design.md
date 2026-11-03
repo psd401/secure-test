@@ -361,4 +361,16 @@ None open.
   only; on a district assessment any caller's list may also name students
   they proctor. The first join moves a case to in progress.
   `/dashboard/proctoring` and a home-list card. Rows 948–955 NOT RUN.
+- **Slice 6 BUILT 2026-11-02** (James 6.1–6.3): the stored status holds
+  only milestones (assigned, in progress, released, withdrawn); Handed in
+  and Scored are read from the attempt and the final score on the option's
+  final response (`lib/competency/caseState.ts`), so a Change score or pass
+  back cannot leave a stale status. Release stores the result the counselor
+  sees; a rescore after release reads Scored and is released again.
+  Counselors are school-scope `view` grants made by Assessment staff on
+  `/dashboard/competency-counselors` (`/api/competency/counselors`); the
+  school scope is read only by the counselor list
+  (`/dashboard/competency-results`, result only — no response), so it opens
+  nothing else. Release stays manual (D-10's setting not built). Rows
+  956–964 NOT RUN.
 - Nothing committed here is pushed or deployed.

@@ -170,8 +170,9 @@ describe("every API route reads JSON through readJsonBody", () => {
     // the PR #169 review; 53 with rescore-ai and accept-tide, which read
     // theirs with req.text() until the PR #169 re-review; 54 with the
     // competency pass rule (docs/competency-assessment-design.md), default;
-    // 56 with the competency assignment POST and PATCH (slice 2), default.
-    expect(Object.keys(seen).length).toBe(56);
+    // 56 with the competency assignment POST and PATCH (slice 2), default;
+    // 57 with the counselor POST (slice 6), default.
+    expect(Object.keys(seen).length).toBe(57);
     for (const [rel, tier] of Object.entries(seen)) {
       expect(`${rel}: ${tier}`).toBe(`${rel}: ${NON_DEFAULT[rel] ?? "default"}`);
     }

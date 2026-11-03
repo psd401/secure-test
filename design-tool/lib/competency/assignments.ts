@@ -20,18 +20,21 @@ type Db = ReturnType<typeof getDb>;
  */
 
 /**
- * Where each status may go next. Forward along the case — assigned → in
- * progress (first sitting, slice 4) → handed in → scored → released (slice 6)
- * — plus pass back, which returns a handed-in, scored or released case to
- * in progress (D-16), and withdrawal from anywhere live (a switch of option is
- * a withdrawal plus a new assignment, D-18). Withdrawn is final.
+ * Where each STORED status may go next. Slice 6 (James 6.1) settled what is
+ * stored: the milestones a person or a join writes — assigned, in progress
+ * (first join, slice 4), released (Assessment's review, slice 6) and
+ * withdrawn (a switch of option is a withdrawal plus a new assignment,
+ * D-18). Handed in and Scored are read from the attempt and the final score
+ * (lib/competency/caseState.ts) and never written, so they go nowhere here.
+ * Released may be released again: a passed-back case that is rescored is
+ * re-released with its new result. Withdrawn is final.
  */
 export const ASSIGNMENT_TRANSITIONS: Record<CompetencyAssignmentStatus, readonly CompetencyAssignmentStatus[]> = {
-  assigned: ["in_progress", "withdrawn"],
-  in_progress: ["handed_in", "withdrawn"],
-  handed_in: ["scored", "in_progress", "withdrawn"],
-  scored: ["released", "in_progress", "withdrawn"],
-  released: ["in_progress", "withdrawn"],
+  assigned: ["in_progress", "released", "withdrawn"],
+  in_progress: ["released", "withdrawn"],
+  handed_in: [],
+  scored: [],
+  released: ["released", "withdrawn"],
   withdrawn: [],
 };
 

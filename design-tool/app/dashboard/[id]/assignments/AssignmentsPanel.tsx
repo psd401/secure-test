@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { formatDate } from "@/lib/ui/format";
+import { RESULT_LABEL, STATUS_LABEL } from "@/lib/competency/labels";
 
 interface Option {
   item_set_id: string;
@@ -23,6 +24,9 @@ interface Assignment {
   proctor_email: string;
   status: string;
   result: string | null;
+  released_result: string | null;
+  released_at: string | null;
+  attempt_id: string | null;
   created_at: string;
   withdrawn_at: string | null;
 }
@@ -32,16 +36,6 @@ interface StudentHit {
   name: string;
   grade: string | null;
 }
-
-/** Plain words for each status; the stored values are the design note's. */
-export const STATUS_LABEL: Record<string, string> = {
-  assigned: "Assigned",
-  in_progress: "In progress",
-  handed_in: "Handed in",
-  scored: "Scored",
-  released: "Released",
-  withdrawn: "Withdrawn",
-};
 
 /** What each refusal from the assignment routes means to the person assigning. */
 export function assignmentErrorCopy(code: string): string {
@@ -54,6 +48,8 @@ export function assignmentErrorCopy(code: string): string {
       return "That student is not on the current roster.";
     case "unknown_option":
       return "That option is no longer on this assessment. Reload the page.";
+    case "not_releasable":
+      return "This case has no result to release. Check the final response's score.";
     case "assignment_withdrawn":
     case "assignment_changed":
       return "Someone else changed this assignment. Reload the page.";
@@ -164,6 +160,12 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
     void patch(a.id, { action: "withdraw" });
   }
 
+  function release(a: Assignment) {
+    const label = a.result ? RESULT_LABEL[a.result] : "";
+    if (!window.confirm(`Release ${a.student_name}'s result (${label})? Their school's counselors will see it.`)) return;
+    void patch(a.id, { action: "release" });
+  }
+
   function changeProctor(a: Assignment) {
     const next = window.prompt(`New proctor for ${a.student_name}`, a.proctor_email);
     if (!next || next.trim().toLowerCase() === a.proctor_email) return;
@@ -182,7 +184,12 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
             ← {assessmentName}
           </Link>
         </p>
-        <h1 className="text-2xl font-semibold">Assignments</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-semibold">Assignments</h1>
+          <Link href="/dashboard/competency-counselors" className="text-sm hover:underline">
+            Counselors
+          </Link>
+        </div>
         <p className="text-sm text-muted-foreground">
           Each student takes one option, with one proctor who runs their sittings. To switch options, withdraw the
           assignment and make a new one; nothing carries over.
@@ -285,7 +292,14 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
         {live.length === 0 ? (
           <p className="text-sm text-muted-foreground">{loaded ? "No students assigned yet." : "Loading…"}</p>
         ) : (
-          <AssignmentTable rows={live} busy={busy} onWithdraw={withdraw} onChangeProctor={changeProctor} />
+          <AssignmentTable
+            assessmentId={assessmentId}
+            rows={live}
+            busy={busy}
+            onWithdraw={withdraw}
+            onChangeProctor={changeProctor}
+            onRelease={release}
+          />
         )}
       </section>
 
@@ -298,7 +312,7 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
           >
             {showWithdrawn ? "Hide" : "Show"} withdrawn ({withdrawn.length})
           </button>
-          {showWithdrawn ? <AssignmentTable rows={withdrawn} busy={busy} /> : null}
+          {showWithdrawn ? <AssignmentTable assessmentId={assessmentId} rows={withdrawn} busy={busy} /> : null}
         </section>
       ) : null}
     </div>
@@ -306,15 +320,19 @@ export function AssignmentsPanel({ assessmentId, assessmentName }: { assessmentI
 }
 
 function AssignmentTable({
+  assessmentId,
   rows,
   busy,
   onWithdraw,
   onChangeProctor,
+  onRelease,
 }: {
+  assessmentId: string;
   rows: Assignment[];
   busy: string | null;
   onWithdraw?: (a: Assignment) => void;
   onChangeProctor?: (a: Assignment) => void;
+  onRelease?: (a: Assignment) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-md border">
@@ -325,6 +343,7 @@ function AssignmentTable({
             <th className="px-3 py-2 font-medium">Option</th>
             <th className="px-3 py-2 font-medium">Proctor</th>
             <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Result</th>
             <th className="px-3 py-2 font-medium">Assigned</th>
             {onWithdraw ? <th className="px-3 py-2" /> : null}
           </tr>
@@ -339,9 +358,33 @@ function AssignmentTable({
               <td className="px-3 py-2">{a.option_label}</td>
               <td className="px-3 py-2">{a.proctor_email}</td>
               <td className="px-3 py-2">{STATUS_LABEL[a.status] ?? a.status}</td>
+              <td className="px-3 py-2">
+                {a.result ? RESULT_LABEL[a.result] : "—"}
+                {a.released_at ? (
+                  <span className="block text-xs text-muted-foreground">
+                    Released {formatDate(a.released_at)}
+                    {a.released_result && a.released_result !== a.result
+                      ? ` as ${RESULT_LABEL[a.released_result]}`
+                      : ""}
+                  </span>
+                ) : null}
+                {a.attempt_id ? (
+                  <Link
+                    href={`/dashboard/${assessmentId}/results/${a.attempt_id}`}
+                    className="block text-xs hover:underline"
+                  >
+                    Review
+                  </Link>
+                ) : null}
+              </td>
               <td className="px-3 py-2">{formatDate(a.created_at)}</td>
               {onWithdraw && onChangeProctor ? (
                 <td className="space-x-2 whitespace-nowrap px-3 py-2 text-right">
+                  {a.status === "scored" && onRelease ? (
+                    <Button size="sm" disabled={busy !== null} onClick={() => onRelease(a)}>
+                      Release
+                    </Button>
+                  ) : null}
                   <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onChangeProctor(a)}>
                     Change proctor
                   </Button>
