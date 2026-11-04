@@ -1,8 +1,9 @@
 # Competency assessments in SecureTest (roadmap row CB)
 
-Design note, 2026-11-02. Slices 1–8 and the No Score write path are built
-and hand-run on `feat/competency-assessments` (not yet merged); slice 9 is
-content, authored in the app. The district's
+Design note, 2026-11-02. Slices 1–8 and the No Score write path are built,
+hand-run, merged (#178, `4f44cc09`; revision-feedback floor #181,
+`b650c18f`) and live since the 2026-11-02 night deploy; slice 9 is content,
+authored in the app. The district's
 competency-based assessments (CBAs) let a student earn course credit, or
 meet a graduation requirement, by passing a district performance task. This
 note moves the Social Studies CBAs from paper into SecureTest. Decisions
@@ -427,3 +428,8 @@ None open.
   `chore/revision-feedback-floor`; once that deploys and the renderer is
   re-signed, the client "Scorer feedback" rows in `client/MANUAL-CHECKS.md`
   are next.
+- **Deployed 2026-11-02 night** at `b650c18f` (floor PR #181 merged):
+  migrations 0070–0072 applied at boot, `COMPETENCY_ADMIN_EMAILS` set,
+  renderer re-signed as `v1793688298` (≥ the floor), so revision feedback is
+  on. Still open: slice 9 (content), the client "Scorer feedback" rows,
+  VoiceOver rows 947 and 968.
