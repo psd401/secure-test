@@ -429,7 +429,7 @@ function AssignmentTable({
                 {a.grade ? <span className="text-muted-foreground"> · {a.grade}</span> : null}
               </td>
               <td className="px-3 py-2">{a.option_label}</td>
-              <td className="px-3 py-2">
+              <td className="px-3 py-2 [overflow-wrap:anywhere]">
                 {a.proctor_email}
                 {rowError?.id === a.id ? (
                   <span role="alert" className="block text-xs text-destructive">
@@ -459,28 +459,32 @@ function AssignmentTable({
               </td>
               <td className="px-3 py-2">{formatDate(a.created_at)}</td>
               {onWithdraw && onChangeProctor ? (
-                <td className="space-x-2 whitespace-nowrap px-3 py-2 text-right">
-                  {a.status === "scored" && onRelease ? (
-                    <Button size="sm" disabled={busy !== null} onClick={() => onRelease(a)}>
-                      Release
+                <td className="px-3 py-2">
+                  {/* The row's buttons wrap rather than widen the table past
+                      its box (still 982 vs 846 px at 1024 px after F-8). */}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {a.status === "scored" && onRelease ? (
+                      <Button size="sm" disabled={busy !== null} onClick={() => onRelease(a)}>
+                        Release
+                      </Button>
+                    ) : null}
+                    {onSwitch && options.length > 1 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => setSwitching({ id: a.id, pick: "" })}
+                      >
+                        Switch option
+                      </Button>
+                    ) : null}
+                    <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onChangeProctor(a)}>
+                      Change proctor
                     </Button>
-                  ) : null}
-                  {onSwitch && options.length > 1 ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy !== null}
-                      onClick={() => setSwitching({ id: a.id, pick: "" })}
-                    >
-                      Switch option
+                    <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onWithdraw(a)}>
+                      {busy === a.id ? "Saving…" : "Withdraw"}
                     </Button>
-                  ) : null}
-                  <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onChangeProctor(a)}>
-                    Change proctor
-                  </Button>
-                  <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => onWithdraw(a)}>
-                    {busy === a.id ? "Saving…" : "Withdraw"}
-                  </Button>
+                  </div>
                 </td>
               ) : null}
             </tr>
