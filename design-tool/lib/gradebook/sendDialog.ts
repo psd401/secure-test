@@ -245,8 +245,9 @@ export function offersBasisChoice(
 
 /** The line under "Score to send". Pure for the tests. */
 export function basisHint(basis: GradebookBasis, attemptOneStudents: number): string {
-  const who = `${attemptOneStudents} student${attemptOneStudents === 1 ? "" : "s"}`;
+  const one = attemptOneStudents === 1;
+  const who = `${attemptOneStudents} student${one ? "" : "s"} passed back ${one ? "gets" : "get"}`;
   return basis === "attempt_one"
-    ? `${who} passed back get their score from before the pass back; everyone else gets their only score.`
-    : `${who} passed back get their newest handed-in score; anyone still working is held back.`;
+    ? `${who} their score from before the pass back; everyone else gets their only score.`
+    : `${who} their newest handed-in score; anyone still working is held back.`;
 }

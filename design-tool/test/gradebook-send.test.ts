@@ -32,6 +32,8 @@ import * as sessionMod from "../lib/auth/session";
 import { authorizeSend } from "../lib/gradebook/authorizeSend";
 import { candidateScore, loadSectionCandidates } from "../lib/gradebook/mapping";
 import { basisHint, offersBasisChoice } from "../lib/gradebook/sendDialog";
+import { loadSendDialogSections } from "../lib/gradebook/sendDialogData";
+import { buildResults } from "../lib/scoring/results";
 import { passBackAttempt } from "../lib/api/passBackAttempt";
 import { defaultMockCategories, mockPowerSchool } from "../lib/gradebook/powerschool";
 import { todayPacific } from "../lib/gradebook/sendPowerSchool";
@@ -932,7 +934,7 @@ describe("dialog basis copy", () => {
     expect(offersBasisChoice({ attempt_one_students: 0, basis: "attempt_one" })).toBe(true);
   });
   test("the hint names the count", () => {
-    expect(basisHint("attempt_one", 1)).toStartWith("1 student passed back get their score from before");
+    expect(basisHint("attempt_one", 1)).toStartWith("1 student passed back gets their score from before");
     expect(basisHint("latest", 3)).toStartWith("3 students passed back get their newest");
   });
 });
@@ -990,6 +992,17 @@ describe("gradebook-send basis (U-25 slice 2c)", () => {
     expect(latest.candidates).toEqual([]);
     const one = await loadSectionCandidates(getDb(), s.assessment.id, "5001", "attempt_one");
     expect(one.candidates.map((c) => [c.attempt_id, c.total_points, c.unscored_count])).toEqual([[ada.id, 2, 0]]);
+  });
+
+  test("a section whose only students are working again is still offered, for their attempt 1 (U-25 hand-run, row 918)", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await passBackAttempt(getDb(), ada, "teacher");
+    const results = await buildResults(s.assessment.id, { include_in_progress: true });
+    const sections = await loadSendDialogSections(getDb(), s.assessment.id, TEACHER_EMAIL, results);
+    expect(sections.map((x) => [x.ps_id, x.scored, x.awaiting, x.attempt_one_students])).toEqual([
+      ["5001", 0, 0, 1],
+    ]);
   });
 
   test("a teacher hand-in that was passed back is no attempt 1: attempt_one sends the latest (D-15)", async () => {
