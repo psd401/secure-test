@@ -58,11 +58,7 @@
       "type": "short_text",
       "id": "q3",
       "stem": "According to Source C, what percent of residents under 30 would use Sunday hours?",
-      "correct_answers": [
-        "71",
-        "71%",
-        "71 percent"
-      ]
+      "correct_answer": "71"
     },
     {
       "type": "essay",

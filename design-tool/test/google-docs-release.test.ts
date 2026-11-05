@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bu
 import { and, eq, sql } from "drizzle-orm";
 import type { Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
+import { PRODUCT_NAME } from "../lib/brand";
 import {
   assessments,
   assets,
@@ -545,7 +546,7 @@ describe("releaseToGoogleDocs", () => {
     });
     if (!r.ok) throw new Error(r.error);
     expect(r.outcomes.map((o) => o.status)).toEqual(["sent", "sent"]);
-    expect(drive.folders.map((f) => f.name)).toEqual(["SecureTest", "Unit 3 essay", s.section]);
+    expect(drive.folders.map((f) => f.name)).toEqual([PRODUCT_NAME, "Unit 3 essay", s.section]);
     expect(drive.folders[1]!.parent).toBe(drive.folders[0]!.id);
     expect(drive.docs.every((d) => d.parent === drive.folders[2]!.id)).toBe(true);
     expect(drive.shares.map((x) => x.email).sort()).toEqual([OTHER_STUDENT.email, STUDENT.email].sort());

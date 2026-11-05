@@ -14,6 +14,9 @@ concurrency:
 
 jobs:
   openwiki:
+    # Forks have neither the org's reusable-workflow access nor its secrets,
+    # so the run would fail there on every push. Comparison is case-insensitive.
+    if: github.repository == 'psd401/secure-test'
     permissions:
       contents: write # caller must grant; org default token is read-only
       pull-requests: write

@@ -11,7 +11,9 @@ jobs:
       id-token: write # caller must grant; org default token is read-only and reusables cannot elevate
     # Dependabot-triggered callers cannot grant id-token: write to the
     # reusable — startup_failure. The reusable also self-guards; both needed.
-    if: github.actor != 'dependabot[bot]'
+    # Forks have neither the org's reusable-workflow access nor its secrets,
+    # so it runs only in this repository (comparison is case-insensitive).
+    if: github.repository == 'psd401/secure-test' && github.actor != 'dependabot[bot]'
     uses: PSD401/.github/.github/workflows/reusable-claude-review.yml@8c4dbb4e6ae79345ec5f56a96de522e9528e3fb4 # v1.1.0
     secrets:
       BEDROCK_API_KEY: ${{ secrets.BEDROCK_API_KEY }}
