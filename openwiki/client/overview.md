@@ -24,11 +24,15 @@ openwiki:
     - client/SecureTestCore/Tests/SecureTestCoreTests/APIClientTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/DeliveryBundleTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/ResponseSpoolTests.swift
+    - client/SecureTestCore/Tests/SecureTestCoreTests/ResponseSpoolMidSendTests.swift
+    - client/SecureTestCore/Tests/SecureTestCoreTests/AnswerWriteTimeoutTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/AssessmentPageTests.swift
     - client/SecureTestCore/Tests/SecureTestCoreTests/OfflineBundleTests.swift
   invariants:
     - All decision logic lives in SecureTestCore so it is testable with swift test and no window server.
     - Answers are written to the local SQLite spool before they are sent.
+    - A sent spool row is deleted only if it still holds the payload that was sent; a newer answer written mid-send stays queued.
+    - Flushes run one at a time, and each reads the queue at its turn.
     - The Swift delivery model has no case or field that can hold an answer key.
   validation_commands:
     - cd client/SecureTestCore && swift test --filter DeliveryBundleTests
@@ -90,6 +94,23 @@ The session JWT lives only in memory (`InMemoryTokenStore`): every launch is sig
 
 `ResponseSpool` (an actor over the system SQLite C API, WAL mode) keys rows by (attempt, item) with latest-write-wins, mirroring the server's unique constraint; a `nil` payload is a withdrawal. Rows refused with 409 `sitting_closed` are **held** (`deferred_at` column) rather than dropped, because the same attempt resumes through the next sitting and the write is then accepted. Other permanent refusals are dropped. `UploadGate` and the drawing flow use registered upload slots (presigned to S3 where available, otherwise via an authenticated app route).
 
+Sending is serialized and mid-send safe. `flush(using:)` and `flushDeferred(using:)` each wait for the previous flush to finish (`serialized`) and read the queue only at their turn, so two flushes never race and the newest queued answer is the one sent. A row is deleted only if it still holds the payload that was sent (`removeIfUnchanged`, `payload IS ?`), so an answer the student changed while its previous version was on the wire stays queued. The loop stops at the first network or server failure; a permanent 4xx (not 408 or 429) is dropped, or held when it is `sitting_closed`. Answer PUT and DELETE calls carry a 20-second timeout (`APIClient.answerWriteTimeout`), so a stuck write cannot hold hand-in for the default minute.
+
+```mermaid
+flowchart TD
+  F[flush or flushDeferred] --> W[wait for the previous flush]
+  W --> Q[read the queue at this turn]
+  Q --> R{send next row}
+  R -->|2xx| D[delete row only if payload unchanged]
+  R -->|4xx except 408 and 429, sitting_closed| H[set deferred_at, keep row]
+  R -->|other 4xx| X[drop row]
+  R -->|network error, 408, 429, 5xx or timeout| S[stop, rows stay queued]
+```
+
+Caption: a flush sends one row at a time and keeps any row the server has not accepted.
+
+Rows of other attempts are purged at launch and whenever the app returns to the entry screen (`AppDelegate.purgeStaleSpooledResponses`, called from launch and `showEntry()`; the store call is `ResponseSpool.purge(keeping:olderThan:)`). Only rows older than `ResponseSpool.staleAfter` (24 hours) go, so a student's only copy of unsent work survives a day offline.
+
 Typed text is saved while the student types, not only on blur (v1.3.4, `docs/client-autosave-and-deferred-spool-design.md`). `AssessmentPage.swift` posts a free-text field through the same send path its `change` handler uses, five seconds after the last keystroke and within thirty seconds of the first unsaved one (`TEXT_AUTOSAVE_IDLE_MS`, `TEXT_AUTOSAVE_CEILING_MS`). Before teardown the page's `flushAllText` saves any dirty field that is not focused, so text typed just before the student switches apps during the timer is not lost. The spool and the server still see one latest-write-wins row per answer, so an autosave is an ordinary write.
 
 ## The page
@@ -125,6 +146,7 @@ The offline screen is a separate state from a server attempt. `OfflineBundle.can
 | New API call or error code | `APIClient.swift`, `JoinOutcome.swift`, `JoinErrorCopy.swift` | `APIClientTests`, `JoinOutcomeTests` |
 | Changed delivery field | `DeliveryBundle.swift` | `DeliveryBundleTests` plus the TypeScript `delivery.test.ts` |
 | Offline/durability behaviour | `ResponseSpool.swift`, `UploadGate.swift` | `ResponseSpoolTests`, `UploadGateTests` |
+| Answer sent while changed, flush order, answer write timeout | `ResponseSpool.swift` (`send`, `removeIfUnchanged`, `serialized`), `APIClient.swift` (`answerWriteTimeout`) | `ResponseSpoolMidSendTests` (a changed answer survives its own send), `AnswerWriteTimeoutTests` (writes use the 20 s timeout) |
 | One question at a time: pages, pager bar, answered marks | `AssessmentPage.swift` (`buildPaged`, `show`, `refreshMarks`), `DeliveryBundle.swift` (`Layout`) | `RendererPagingTests`, `DeliveryBundleTests` ([paged delivery](paged-delivery.md)) |
 | Time limit or closed-sitting UX | `TimeLimitCountdown.swift`, `AttemptEventReporter.swift` | `TimeLimitCountdownTests`, `RendererTimeLimitTests`, `AttemptEventReporterTests` |
 | Student's list of sittings (home screen, `/api/me/sittings`) | `MySittings.swift`, `APIClient.swift` | `MySittingsTests` |
