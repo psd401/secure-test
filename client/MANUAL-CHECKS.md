@@ -2772,3 +2772,25 @@ page only in the JavaScriptCore harness (`RendererRevisionFeedbackTests`).
 | **VoiceOver.** Navigate into the question with VO-arrow and by the rotor's Landmarks / Headings | "Scorer feedback" is listed as a region and a heading; inside it VoiceOver reads "list, N items", then each row's "Name: level" and its rationale, then the note; markup typed by the scorer (e.g. `<b>`) is read as the characters typed | NOT RUN |
 | **Answer still saves.** Revise the essay and hand in | The revised answer saves and the hand-in goes through; the teacher side shows no new response for the panel | NOT RUN |
 | **Older renderer.** A served renderer from before this change (if the floor is not yet set) | No panel, the page exactly as before; the server should not have sent the field at all (renderer floor) | NOT RUN |
+
+## Answer changed mid-send; answer-write timeout (next client release, branch `fix/spool-mid-send-change`, 2026-11-04)
+
+The answer spool now deletes a sent row only if it still holds the payload
+that was sent, and runs flushes one at a time, so an answer changed while
+the previous version is uploading is neither lost nor overwritten by the
+older one (`ResponseSpoolMidSendTests`). Answer PUT/DELETE give up after
+20 s without a byte instead of the system's 60 s, so one write stuck on a
+dead connection holds hand-in for at most that long; the write stays
+spooled and the next flush retries it (`AnswerWriteTimeoutTests`). The
+interleavings were reproduced only with a fake transport; these rows check
+them on a real network. Real AAC session, v2.0+ client from this branch,
+James at the client, Network Link Conditioner (Xcode Additional Tools) to
+throttle. None of these rows has been run.
+
+| Check | Expected | Result |
+|---|---|---|
+| **Change mid-send.** Throttle to "Very Bad Network"; type a short answer, wait for the autosave to start, change the answer, then remove the throttle | The teacher's view shows the CHANGED answer, not the first; the client log shows no answer dropped | NOT RUN |
+| **Rapid edits under throttle.** Same throttle; edit one answer several times over a minute, then remove the throttle and hand in | Hand-in goes through; the teacher's view shows the last version typed | NOT RUN |
+| **Stuck write at hand-in.** Throttle to 100% packet loss just after an autosave starts; click Hand in after ~5 s | Hand-in is refused ("answers still unsent") within about 40 s of the stuck write starting (its 20 s, then hand-in's own retry of it, 20 s), not two minutes; the answer is still on the Mac | NOT RUN |
+| **Recovers.** Remove the throttle and hand in again | Hand-in goes through; the teacher's view shows the latest answer | NOT RUN |
+| **Normal network.** No throttle; answer every question and hand in | Unchanged from before: autosave and hand-in feel as fast as they did | NOT RUN |
