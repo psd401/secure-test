@@ -220,6 +220,27 @@ public actor ResponseSpool {
         guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
     }
 
+    /// Delete a row only if it still holds the payload that was sent.
+    ///
+    /// The actor is re-entrant at `await`: while a send is on the wire the
+    /// student can type again, and `enqueue` replaces the row with the newer
+    /// answer. Deleting by key alone would then clear that newer answer, which
+    /// was never sent. `IS` (not `=`) so a withdrawal's NULL payload matches.
+    private func removeIfUnchanged(_ entry: Entry) throws {
+        let statement = try prepare(
+            "DELETE FROM pending_responses WHERE attempt_id = ? AND item_id = ? AND payload IS ?;"
+        )
+        defer { sqlite3_finalize(statement) }
+        bindText(statement, 1, entry.attemptID)
+        bindText(statement, 2, entry.itemID)
+        if let payload = entry.responseJSON {
+            bindText(statement, 3, payload)
+        } else {
+            sqlite3_bind_null(statement, 3)
+        }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
+    }
+
     /// Slice 73: drop everything queued for one attempt.
     ///
     /// Called after a successful submit, when the server has the answers and the
@@ -338,7 +359,29 @@ public actor ResponseSpool {
     /// DROPPED rather than retried forever. A permanently-rejected entry at the
     /// head of the queue would otherwise block every answer behind it.
     public func flush(using client: APIClient) async -> FlushResult {
-        await send((try? pending()) ?? [], using: client, isRetry: false)
+        await serialized { await $0.send((try? $0.pending()) ?? [], using: client, isRetry: false) }
+    }
+
+    /// The flush (or retry pass) currently running, if any.
+    private var lastFlush: Task<FlushResult, Never>?
+
+    /// Run flushes one at a time, in the order they were asked for.
+    ///
+    /// Two flushes overlapping can each send a version of the same answer, and
+    /// the network decides which lands last — so an older answer can overwrite
+    /// a newer one on the server. Each flush waits for the one before it and
+    /// reads the queue only when its turn comes, so it sends whatever is
+    /// newest at that point.
+    private func serialized(
+        _ work: @escaping @Sendable (ResponseSpool) async -> FlushResult
+    ) async -> FlushResult {
+        let previous = lastFlush
+        let task = Task {
+            _ = await previous?.value
+            return await work(self)
+        }
+        lastFlush = task
+        return await task.value
     }
 
     /// v1.3.4 (D-5): the retry pass, run once by the host after a join or a
@@ -351,7 +394,7 @@ public actor ResponseSpool {
     /// teacher captured is the one that counts. A row refused with
     /// `sitting_closed` a second time simply stays deferred.
     public func flushDeferred(using client: APIClient) async -> FlushResult {
-        await send((try? deferredEntries()) ?? [], using: client, isRetry: true)
+        await serialized { await $0.send((try? $0.deferredEntries()) ?? [], using: client, isRetry: true) }
     }
 
     private func send(_ queued: [Entry], using client: APIClient, isRetry: Bool) async -> FlushResult {
@@ -375,7 +418,7 @@ public actor ResponseSpool {
                         itemID: entry.itemID,
                     )
                 }
-                try? remove(attemptID: entry.attemptID, itemID: entry.itemID)
+                try? removeIfUnchanged(entry)
                 sent += 1
             } catch let error as APIError {
                 if case .refused(let status, _) = error, Self.isPermanent(status) {
@@ -393,7 +436,7 @@ public actor ResponseSpool {
                         if !isRetry { sittingClosed = true }
                         continue
                     }
-                    try? remove(attemptID: entry.attemptID, itemID: entry.itemID)
+                    try? removeIfUnchanged(entry)
                     dropped += 1
                     if error.isAttemptSubmitted { droppedAfterHandIn += 1 }
                     continue
