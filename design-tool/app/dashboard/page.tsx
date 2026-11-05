@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, count, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
-import { assessments, attempts, items, students, test_sessions } from "@/db/schema";
+import { assessments, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
 import { unseenAssessmentGrantIds } from "@/lib/api/grants";
 import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
@@ -61,7 +61,11 @@ import {
   type TeacherParams,
   type TeacherSortKey,
 } from "@/lib/ui/allTeachersList";
-import { teacherSummary, type TeacherSummaryRow } from "@/lib/api/teacherSummary";
+import {
+  attemptStatsByAssessment,
+  teacherSummary,
+  type TeacherSummaryRow,
+} from "@/lib/api/teacherSummary";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessments" };
@@ -205,23 +209,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     // D-1 / D-4 (docs/archive-and-delete-design.md): the row-level Delete
     // action needs this to disable itself and show "N attempts — archive
     // instead" without a round trip to the DELETE route first.
-    // The all view's Students / Submitted columns ride on the same query:
-    // distinct students with any attempt, and attempts handed in. Both leave
-    // out practice attempts (a staff overlay student, `practice_for_sub`) —
-    // a teacher trying the test is not a student taking it. `n` still counts
-    // every attempt, since Delete's gate is about any attempt existing.
-    db
-      .select({
-        assessment_id: attempts.assessment_id,
-        n: count(),
-        students: sql<number>`(count(distinct ${attempts.student_id}) filter (where ${students.practice_for_sub} is null))::int`,
-        submitted: sql<number>`(count(*) filter (where ${attempts.status} = 'submitted' and ${students.practice_for_sub} is null))::int`,
-      })
-      .from(attempts)
-      .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
-      .innerJoin(students, eq(students.id, attempts.student_id))
-      .where(visible.condition)
-      .groupBy(attempts.assessment_id),
+    // The all view's Students / Submitted columns ride on the same query
+    // (practice attempts excluded there; `n` counts every attempt).
+    attemptStatsByAssessment(db, visible.condition),
   ]);
   // Slice 3 renders the label; slice 2 makes the fact available on every row.
   const accessFor = new Map(rows.map((a) => [a.id, visible.annotate(a)]));
@@ -229,8 +219,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const attemptsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c.n]));
   const attemptStatsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c]));
   // The all view filters and sorts on the server from the URL params; the
-  // mine view keeps its updated-desc order untouched.
-  const shownRows = showAll
+  // mine view keeps its updated-desc order untouched, and the By teacher
+  // view never renders the list, so neither does the work.
+  const listView = showAll && !showTeachers;
+  const shownRows = listView
     ? filterAndSortAllList(
         rows.map((a) => ({
           ...a,
@@ -241,7 +233,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         listParams,
       )
     : rows;
-  const owners = showAll ? ownerOptions(rows) : [];
+  const owners = listView ? ownerOptions(rows) : [];
   const allTeachers = showTeachers ? await teacherSummary(db) : [];
   const teacherRows = filterAndSortTeachers(allTeachers, teacherParams);
   const listHref = (p: AllListParams) =>
