@@ -68,18 +68,20 @@ describe("extendStatusText", () => {
 });
 
 describe("defaultExtendValue", () => {
+  // Instants are absolute so the tests pass under any device zone; the
+  // default is the district's (Pacific) day.
   test("today at 23:59, in the datetime-local shape", () => {
-    const now = new Date(2026, 8, 17, 9, 0, 0); // Sep 17 2026, local
+    const now = new Date("2026-09-17T09:00:00-07:00"); // Sep 17 2026, Pacific
     expect(defaultExtendValue(now)).toBe("2026-09-17T23:59");
   });
 
   test("still today one minute before", () => {
-    const now = new Date(2026, 8, 17, 23, 58, 30);
+    const now = new Date("2026-09-17T23:58:30-07:00");
     expect(defaultExtendValue(now)).toBe("2026-09-17T23:59");
   });
 
   test("in the last minute of the day: tomorrow, crossing a month boundary", () => {
-    const now = new Date(2026, 8, 30, 23, 59, 20); // Sep 30 2026
+    const now = new Date("2026-09-30T23:59:20-07:00"); // Sep 30 2026, Pacific
     expect(defaultExtendValue(now)).toBe("2026-10-01T23:59");
   });
 });
@@ -98,7 +100,8 @@ describe("toIsoInstant", () => {
 
 // EX-1 (2026-09-23): an earlier time is allowed, with a hint saying so.
 describe("shortensHint", () => {
-  const current = new Date("2026-09-23T23:59:00").toISOString();
+  // Typed values are read in Pacific, so the deadlines are Pacific instants.
+  const current = new Date("2026-09-23T23:59:00-07:00").toISOString();
   test("earlier than the current deadline -> hint", () => {
     expect(shortensHint("2026-09-23T22:00", [current])).toContain("shortens their time");
   });
@@ -107,7 +110,7 @@ describe("shortensHint", () => {
     expect(shortensHint("2026-09-23T23:59", [current])).toBeNull();
   });
   test("a sitting compares against the LATEST current deadline", () => {
-    const earlier = new Date("2026-09-23T12:00:00").toISOString();
+    const earlier = new Date("2026-09-23T12:00:00-07:00").toISOString();
     expect(shortensHint("2026-09-23T18:00", [earlier, current])).not.toBeNull();
     expect(shortensHint("2026-09-23T18:00", [earlier, null])).toBeNull();
   });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ClaimCitations } from "@/components/app/ClaimCitations";
 import { ClassInsightsChat } from "@/components/app/ClassInsightsChat";
 import { Textarea } from "@/components/ui/textarea";
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import {
   INTRO_LINE,
   SECTION_HEADINGS,
@@ -188,7 +189,9 @@ function ReportView({
   action: React.ReactNode;
 }) {
   const [copied, setCopied] = useState<"idle" | "ok" | "failed">("idle");
-  const written = report.created_at ? new Date(report.created_at).toLocaleString() : "";
+  const written = report.created_at
+    ? new Date(report.created_at).toLocaleString("en-US", { timeZone: DISPLAY_TIME_ZONE })
+    : "";
 
   // A regenerate replaces the report; a copy confirmation about the old one
   // would be stale.

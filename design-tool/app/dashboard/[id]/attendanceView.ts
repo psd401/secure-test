@@ -2,6 +2,7 @@
 // attendance payload's shape as the browser sees it, the two cadence
 // constants, and the pure time helpers. No React here.
 import { formatWhen } from "@/lib/ui/format";
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 
 /** Attendance re-fetch cadence while a sitting is open and on screen. */
 export const LIVE_INTERVAL_MS = 5_000;
@@ -81,7 +82,8 @@ export interface AttendancePayload {
 }
 
 export function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "—";
+  // Same format as before, but in the district's zone, not the device's.
+  return iso ? new Date(iso).toLocaleString("en-US", { timeZone: DISPLAY_TIME_ZONE }) : "—";
 }
 
 export function ago(iso: string | null, now: number): string {
@@ -503,7 +505,7 @@ export const MAX_SESSION_MINUTES = 720;
  * Start session's "Rest of day" preset; shared with Continue in a new session. */
 export function restOfDayMinutes(now: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
+    timeZone: DISPLAY_TIME_ZONE,
     hour: "numeric",
     minute: "numeric",
     hour12: false,

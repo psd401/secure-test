@@ -21,6 +21,7 @@ import {
 import type { getDb } from "@/db/client";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { log } from "@/lib/log";
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import {
   loadSectionCandidates,
   missingPowerSchoolIds,
@@ -57,7 +58,7 @@ type Db = ReturnType<typeof getDb>;
 /** A first send's claim row older than this is taken to be a crashed send. */
 export const CLAIM_STALE_MS = 2 * 60_000;
 
-const TZ = "America/Los_Angeles";
+const TZ = DISPLAY_TIME_ZONE;
 
 /** Today's date in the district's time zone, `YYYY-MM-DD` (8.1's default). */
 export function todayPacific(now: Date = new Date()): string {

@@ -4,6 +4,8 @@
  * it; the repo has no DOM harness, so the words are asserted here.
  */
 
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
+
 export interface RescoreQuestionCount {
   position: number;
   changed: number;
@@ -53,7 +55,7 @@ export function dryRunSummary(dry: RescoreDryRun): string {
 }
 
 const TIME = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles",
+  timeZone: DISPLAY_TIME_ZONE,
   hour: "numeric",
   minute: "2-digit",
 });
