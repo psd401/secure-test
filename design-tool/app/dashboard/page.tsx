@@ -773,7 +773,10 @@ function AllListFilters({
   clearHref: string;
 }) {
   return (
-    <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+    // key: a Link (owner link, sort header, Clear) navigates client-side and
+    // keeps this form mounted, so defaultValue would show the OLD filters.
+    // Keying on the params remounts it with the current ones.
+    <form key={JSON.stringify(params)} method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="all" value="1" />
       {archived ? <input type="hidden" name="archived" value="1" /> : null}
       <input type="hidden" name="sort" value={params.sort} />
@@ -851,7 +854,8 @@ function TeacherSortHead({
 function TeacherSummary({ rows, params }: { rows: TeacherSummaryRow[]; params: TeacherParams }) {
   return (
     <div className="space-y-3">
-      <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+      {/* key: same client-side-navigation reason as AllListFilters. */}
+      <form key={JSON.stringify(params)} method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="all" value="1" />
         <input type="hidden" name="view" value="teachers" />
         <input type="hidden" name="sort" value={params.sort} />
