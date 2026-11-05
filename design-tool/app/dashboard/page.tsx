@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, count, countDistinct, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
-import { assessments, attempts, items, test_sessions } from "@/db/schema";
+import { assessments, attempts, items, students, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
 import { unseenAssessmentGrantIds } from "@/lib/api/grants";
 import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
@@ -53,7 +53,15 @@ import {
   parseAllListParams,
   type AllListParams,
   type AllListSortKey,
+  filterAndSortTeachers,
+  nextTeacherSort,
+  parseTeacherParams,
+  teachersHref,
+  DEFAULT_TEACHER_PARAMS,
+  type TeacherParams,
+  type TeacherSortKey,
 } from "@/lib/ui/allTeachersList";
+import { teacherSummary, type TeacherSummaryRow } from "@/lib/api/teacherSummary";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessments" };
@@ -127,6 +135,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const listMode = homeListMode({ all: allParam }, admin);
   const showAll = listMode === "all";
   const listParams = showAll ? parseAllListParams(sp) : DEFAULT_ALL_LIST_PARAMS;
+  // Slice 2: the all view's "By teacher" summary, one row per owner.
+  const showTeachers = showAll && sp.view === "teachers";
+  const teacherParams = parseTeacherParams(showTeachers ? sp : {});
 
   const db = getDb();
   const now = new Date();
@@ -195,16 +206,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     // action needs this to disable itself and show "N attempts — archive
     // instead" without a round trip to the DELETE route first.
     // The all view's Students / Submitted columns ride on the same query:
-    // distinct students with any attempt, and attempts handed in.
+    // distinct students with any attempt, and attempts handed in. Both leave
+    // out practice attempts (a staff overlay student, `practice_for_sub`) —
+    // a teacher trying the test is not a student taking it. `n` still counts
+    // every attempt, since Delete's gate is about any attempt existing.
     db
       .select({
         assessment_id: attempts.assessment_id,
         n: count(),
-        students: countDistinct(attempts.student_id),
-        submitted: sql<number>`(count(*) filter (where ${attempts.status} = 'submitted'))::int`,
+        students: sql<number>`(count(distinct ${attempts.student_id}) filter (where ${students.practice_for_sub} is null))::int`,
+        submitted: sql<number>`(count(*) filter (where ${attempts.status} = 'submitted' and ${students.practice_for_sub} is null))::int`,
       })
       .from(attempts)
       .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
+      .innerJoin(students, eq(students.id, attempts.student_id))
       .where(visible.condition)
       .groupBy(attempts.assessment_id),
   ]);
@@ -227,6 +242,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       )
     : rows;
   const owners = showAll ? ownerOptions(rows) : [];
+  const allTeachers = showTeachers ? await teacherSummary(db) : [];
+  const teacherRows = filterAndSortTeachers(allTeachers, teacherParams);
   const listHref = (p: AllListParams) =>
     dashboardHref({ archived: showArchived, all: showAll, list: p });
   // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): open
@@ -255,7 +272,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     <main className={`mx-auto ${showAll ? "max-w-7xl" : "max-w-4xl"} space-y-8 px-6 py-12`}>
       <PageHeader
         title={
-          showAll
+          showTeachers
+            ? `Teachers (${
+                teacherRows.length === allTeachers.length
+                  ? allTeachers.length
+                  : `${teacherRows.length} of ${allTeachers.length}`
+              })`
+            : showAll
             ? `All teachers' assessments (${
                 shownRows.length === rows.length ? rows.length : `${shownRows.length} of ${rows.length}`
               })`
@@ -386,7 +409,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      {startScreenHere ? (
+      {showTeachers ? (
+        <TeacherSummary rows={teacherRows} params={teacherParams} />
+      ) : startScreenHere ? (
         <StartScreen templates={startTemplates()} showCancel={false} />
       ) : rows.length === 0 ? (
         <EmptyState
@@ -631,7 +656,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           composable with `?archived=1` — flipping one param keeps the
           other. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        {showArchived ? (
+        {/* Slice 2: the summary already includes archived work, so the
+            archived toggle is not offered there. */}
+        {showTeachers ? null : showArchived ? (
           <p className="text-sm">
             <Link
               href={dashboardHref({ archived: false, all: showAll, list: listParams })}
@@ -657,6 +684,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               className="text-muted-foreground hover:underline"
             >
               {showAll ? "My assessments" : "All teachers"}
+            </Link>
+          </p>
+        ) : null}
+        {showAll ? (
+          <p className="text-sm">
+            <Link
+              href={
+                showTeachers
+                  ? dashboardHref({ archived: false, all: true })
+                  : teachersHref(DEFAULT_TEACHER_PARAMS)
+              }
+              className="text-muted-foreground hover:underline"
+            >
+              {showTeachers ? "By assessment" : "By teacher"}
             </Link>
           </p>
         ) : null}
@@ -772,5 +813,127 @@ function AllListFilters({
         </Link>
       ) : null}
     </form>
+  );
+}
+
+/** A sortable header for the By teacher summary. */
+function TeacherSortHead({
+  label,
+  k,
+  params,
+  right,
+}: {
+  label: string;
+  k: TeacherSortKey;
+  params: TeacherParams;
+  right?: boolean;
+}) {
+  const active = params.sort === k;
+  const arrow = active ? (params.dir === "asc" ? " ▲" : " ▼") : "";
+  return (
+    <TableHead
+      className={right ? "text-right" : undefined}
+      aria-sort={active ? (params.dir === "asc" ? "ascending" : "descending") : undefined}
+    >
+      <Link href={teachersHref(nextTeacherSort(params, k))} className="whitespace-nowrap hover:underline">
+        {label}
+        {arrow}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Slice 2: the "By teacher" summary — one row per owner, busiest first, for
+ * finding power users and who has the most students. A teacher's name links
+ * to the assessment list filtered to them. Counts only.
+ */
+function TeacherSummary({ rows, params }: { rows: TeacherSummaryRow[]; params: TeacherParams }) {
+  return (
+    <div className="space-y-3">
+      <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="all" value="1" />
+        <input type="hidden" name="view" value="teachers" />
+        <input type="hidden" name="sort" value={params.sort} />
+        <input type="hidden" name="dir" value={params.dir} />
+        <Input
+          type="search"
+          name="q"
+          defaultValue={params.q}
+          placeholder="Search teacher email"
+          aria-label="Search teacher email"
+          className="w-64"
+        />
+        <Button type="submit" variant="outline">
+          Apply
+        </Button>
+        {params.q ? (
+          <Link
+            href={teachersHref({ ...params, q: "" })}
+            className="self-center text-sm text-muted-foreground hover:underline"
+          >
+            Clear search
+          </Link>
+        ) : null}
+      </form>
+      {rows.length === 0 ? (
+        <p className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+          No teachers match.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TeacherSortHead label="Teacher" k="teacher" params={params} />
+                <TeacherSortHead label="Assessments" k="assessments" params={params} right />
+                <TeacherSortHead label="Published" k="published" params={params} right />
+                <TeacherSortHead label="Sittings" k="sittings" params={params} right />
+                <TeacherSortHead label="Students" k="students" params={params} right />
+                <TeacherSortHead label="Submitted" k="submitted" params={params} right />
+                <TeacherSortHead label="Last activity" k="last" params={params} />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((t) => (
+                <TableRow key={t.owner_sub}>
+                  <TableCell className="w-full max-w-0">
+                    {t.owner_email ? (
+                      <Link
+                        href={dashboardHref({
+                          archived: false,
+                          all: true,
+                          list: { ...DEFAULT_ALL_LIST_PARAMS, owner: t.owner_email.toLowerCase() },
+                        })}
+                        className="block truncate font-medium hover:underline"
+                        title={t.owner_email}
+                      >
+                        {t.owner_email}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">Unknown owner</span>
+                    )}
+                    {t.archived > 0 ? (
+                      <div className="text-xs text-muted-foreground">{t.archived} archived</div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{t.assessments}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.published}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.sittings}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.students}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.submitted}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {t.last_activity ? formatDate(t.last_activity) : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Includes archived assessments. Practice sittings and teachers&apos; own practice attempts are not counted.
+      </p>
+    </div>
   );
 }

@@ -10,6 +10,12 @@ import {
   ownerOptions,
   parseAllListParams,
   type AllListRow,
+  DEFAULT_TEACHER_PARAMS,
+  filterAndSortTeachers,
+  nextTeacherSort,
+  parseTeacherParams,
+  teachersHref,
+  type TeacherRowLike,
 } from "../lib/ui/allTeachersList";
 
 function row(over: Partial<AllListRow> & { id: string }): AllListRow {
@@ -118,5 +124,53 @@ describe("helpers", () => {
   test("hasActiveFilters ignores sort", () => {
     expect(hasActiveFilters({ ...DEFAULT_ALL_LIST_PARAMS, sort: "name" })).toBe(false);
     expect(hasActiveFilters({ ...DEFAULT_ALL_LIST_PARAMS, attempts: "no" })).toBe(true);
+  });
+});
+
+describe("By teacher summary helpers", () => {
+  const t = (over: Partial<TeacherRowLike> & { owner_sub: string }): TeacherRowLike => ({
+    owner_email: `${over.owner_sub}@example.org`,
+    assessments: 0,
+    published: 0,
+    sittings: 0,
+    students: 0,
+    submitted: 0,
+    last_activity: null,
+    ...over,
+  });
+  const teachers = [
+    t({ owner_sub: "bea", students: 40, sittings: 3, last_activity: new Date("2026-10-01T00:00:00Z") }),
+    t({ owner_sub: "al", students: 120, sittings: 1 }),
+    t({ owner_sub: "cy", students: 40, sittings: 9, owner_email: null }),
+  ];
+  const subs = (rs: TeacherRowLike[]) => rs.map((r) => r.owner_sub);
+
+  test("defaults to most students first, ties by email", () => {
+    expect(parseTeacherParams({})).toEqual(DEFAULT_TEACHER_PARAMS);
+    expect(subs(filterAndSortTeachers(teachers, DEFAULT_TEACHER_PARAMS))).toEqual(["al", "bea", "cy"]);
+  });
+
+  test("bad params fall back; a sort with no dir takes its default", () => {
+    expect(parseTeacherParams({ sort: "name", dir: "up" })).toEqual(DEFAULT_TEACHER_PARAMS);
+    expect(parseTeacherParams({ sort: "teacher" }).dir).toBe("asc");
+  });
+
+  test("sorts by teacher (null email falls back to sub), sittings and last activity", () => {
+    expect(subs(filterAndSortTeachers(teachers, { q: "", sort: "teacher", dir: "asc" }))).toEqual(["al", "bea", "cy"]);
+    expect(subs(filterAndSortTeachers(teachers, { q: "", sort: "sittings", dir: "desc" }))).toEqual(["cy", "bea", "al"]);
+    expect(subs(filterAndSortTeachers(teachers, { q: "", sort: "last", dir: "desc" }))[0]).toBe("bea");
+  });
+
+  test("search matches email", () => {
+    expect(subs(filterAndSortTeachers(teachers, { ...DEFAULT_TEACHER_PARAMS, q: "BEA@" }))).toEqual(["bea"]);
+  });
+
+  test("nextTeacherSort and teachersHref", () => {
+    expect(nextTeacherSort(DEFAULT_TEACHER_PARAMS, "students").dir).toBe("asc");
+    expect(nextTeacherSort(DEFAULT_TEACHER_PARAMS, "teacher")).toMatchObject({ sort: "teacher", dir: "asc" });
+    expect(teachersHref(DEFAULT_TEACHER_PARAMS)).toBe("/dashboard?all=1&view=teachers");
+    expect(teachersHref({ q: "bea", sort: "teacher", dir: "asc" })).toBe(
+      "/dashboard?all=1&view=teachers&q=bea&sort=teacher&dir=asc",
+    );
   });
 });
