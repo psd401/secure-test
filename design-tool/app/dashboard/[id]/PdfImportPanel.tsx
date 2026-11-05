@@ -14,10 +14,14 @@ import type { ItemType } from "@/db/schema";
 import type { CandidateRegion } from "@/lib/pdfImport/regions";
 import { proposedSetLayout } from "@/lib/pdfImport/setLayout";
 import {
+  addBlank,
   addChoice,
+  BLANK_LIMIT_TITLE,
+  canInsertBlank,
   editableKey,
   editedFields,
   editsChoices,
+  newBlank,
   removeChoice,
   setChoiceText,
   setStem,
@@ -1736,9 +1740,16 @@ export function PdfImportPanel({
                               c.type === "fill_blank"
                                 ? {
                                     ids: (c.blanks ?? []).map((b) => b.id),
-                                    canInsert: false,
-                                    limitTitle: "Add blanks in the editor after Accept",
-                                    onInsert: () => "",
+                                    canInsert: !(disabled || busy) && canInsertBlank(c),
+                                    limitTitle: BLANK_LIMIT_TITLE,
+                                    // As the editor: the blank (keyed by the
+                                    // selection) first, then the field's chip
+                                    // arrives through onChange → setStem.
+                                    onInsert: (key) => {
+                                      const blank = newBlank(c, key);
+                                      updateCandidate(i, (x) => addBlank(x, blank));
+                                      return blank.id;
+                                    },
                                   }
                                 : undefined
                             }

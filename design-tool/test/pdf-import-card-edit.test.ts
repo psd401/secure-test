@@ -3,12 +3,18 @@
 // lib/pdfImport/cardEdit.ts and the triage rule that an edited field's
 // "check" reasons are answered. No database.
 import { describe, expect, test } from "bun:test";
+import type { FillBlankBlank } from "@secure-test/schema";
 import { CreateItemBody } from "../lib/api/items";
+import { MAX_BLANKS, insertBlankAt } from "../lib/items/fillBlankEditor";
 import {
+  addBlank,
   addChoice,
+  BLANK_LIMIT_TITLE,
+  canInsertBlank,
   editableKey,
   editedFields,
   editsChoices,
+  newBlank,
   removeChoice,
   setChoiceText,
   setStem,
@@ -93,6 +99,51 @@ describe("setStem", () => {
 
   test("other types only change the stem", () => {
     expect(setStem(MC, "New?")).toEqual({ ...MC, stem: "New?" });
+  });
+});
+
+// Insert blank on an import card, as in the editor: onInsert adds the blank
+// (keyed by the selection), then the field's chip arrives through setStem.
+describe("Insert blank", () => {
+  const fb = {
+    type: "fill_blank",
+    stem: "The windward side is wet and the leeward side is dry.",
+    blanks: [] as FillBlankBlank[],
+  };
+
+  test("the selected text becomes the new blank's key; the chip keeps it through setStem", () => {
+    const blank = newBlank(fb, "leeward");
+    expect(blank).toEqual({ id: "b1", kind: "text", keys: ["leeward"] });
+    const withBlank = addBlank(fb, blank);
+    const stem = "The windward side is wet and the [[b1]] side is dry.";
+    const edited = setStem(withBlank, stem);
+    expect(edited.stem).toBe(stem);
+    expect(edited.blanks).toEqual([blank]);
+    expect(CreateItemBody.safeParse(edited).success).toBe(true);
+  });
+
+  test("no selection: a blank with no key yet; a second blank never reuses a number", () => {
+    expect(newBlank(fb, "")).toEqual({ id: "b1", kind: "text" });
+    const one = setStem(addBlank(fb, newBlank(fb, "windward")), "The [[b1]] side is wet.");
+    expect(newBlank(one, "").id).toBe("b2");
+    const two = setStem(addBlank(one, newBlank(one, "wet")), "The [[b1]] side is [[b2]].");
+    expect(two.blanks!.map((b) => b.id)).toEqual(["b1", "b2"]);
+    expect(CreateItemBody.safeParse(two).success).toBe(true);
+  });
+
+  test("matches the editor's insertBlankAt on the same selection", () => {
+    const start = fb.stem.indexOf("leeward");
+    const viaEditor = insertBlankAt(fb.stem, [], start, start + "leeward".length);
+    const viaCard = setStem(addBlank(fb, newBlank(fb, "leeward")), viaEditor.stem);
+    expect(viaCard.blanks).toEqual(viaEditor.blanks);
+  });
+
+  test("the editor's limit and title", () => {
+    const blanks = Array.from({ length: MAX_BLANKS }, (_, n) => ({ id: `b${n + 1}`, kind: "text" as const }));
+    expect(canInsertBlank({ blanks: blanks.slice(1) })).toBe(true);
+    expect(canInsertBlank({ blanks })).toBe(false);
+    expect(canInsertBlank({})).toBe(true);
+    expect(BLANK_LIMIT_TITLE).toBe(`A question allows at most ${MAX_BLANKS} blanks`);
   });
 });
 
