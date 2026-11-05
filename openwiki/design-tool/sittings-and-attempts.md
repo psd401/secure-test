@@ -70,7 +70,9 @@ Before inserting, the route sweeps the owner's expired sittings to free join cod
 
 Invariant: scope is checked when the sitting is created and again when a student redeems, because redemption re-reads current enrolment through `studentIsInTeachersSection` ([join and answer flow](#join-and-answer-flow)). A child who has left the section cannot join through an older code.
 
-Focused tests: `roster-queries.test.ts` (the picker queries and current-enrolment rules) and `test-sessions-api.test.ts` (codes, scope and the 409 guards). Both need the test database.
+On a district competency assessment the scope rule has one exception: a proctor (a staff member named as `proctor_email` on a live assignment) has no section and no "all my sections", and may list only the students whose assignment names them (`proctoredStudentPsIds`, `app/api/test-sessions/route.ts`). The rules are in [competency assessments](competency-assessments.md#proctored-sittings). A district delivery also carries only the student's assigned option, so a sitting's bundle is not the whole assessment there.
+
+Focused tests: `roster-queries.test.ts` (the picker queries and current-enrolment rules) and `test-sessions-api.test.ts` (codes, scope and the 409 guards). Both need the test database. Competency scope cases are in `competency-proctor.test.ts`.
 
 ## Join and answer flow
 
