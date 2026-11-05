@@ -5,11 +5,12 @@
 // answer key. Edits stay on the card until Accept, which posts the edited
 // question through the normal item route, so CreateItemBody still decides
 // what is valid. Match pairs, blank answers and table keys stay in the
-// editor. Pure — the panel holds the state and renders.
+// editor; a new blank's key comes from the selected text, as in the editor.
+// Pure — the panel holds the state and renders.
 
-import { fillBlankMarkerIds } from "@secure-test/schema";
+import { fillBlankMarkerIds, type FillBlankBlank } from "@secure-test/schema";
 import { nextChoiceId } from "@/lib/items/choiceIds";
-import { orderBlanksByStem } from "@/lib/items/fillBlankEditor";
+import { MAX_BLANKS, nextBlankId, orderBlanksByStem } from "@/lib/items/fillBlankEditor";
 import type { TriageField } from "./triage";
 
 export interface EditableCandidate {
@@ -45,6 +46,29 @@ export function setStem<C extends EditableCandidate & { blanks?: { id: string }[
   if (c.type !== "fill_blank") return { ...c, stem };
   const present = new Set(fillBlankMarkerIds(stem));
   return { ...c, stem, blanks: orderBlanksByStem(stem, c.blanks ?? []).filter((b) => present.has(b.id)) };
+}
+
+/** Whether the card's **Insert blank** is on: the editor's limit. */
+export function canInsertBlank(c: { blanks?: readonly unknown[] }): boolean {
+  return (c.blanks ?? []).length < MAX_BLANKS;
+}
+
+/** The disabled **Insert blank** button's title, as in the editor. */
+export const BLANK_LIMIT_TITLE = `A question allows at most ${MAX_BLANKS} blanks`;
+
+/**
+ * The blank **Insert blank** adds, as the editor's `onInsert` builds it: the
+ * next id (never a reused number) and, when text was selected, that text as
+ * its first accepted answer. The field then puts its chip in the stem and
+ * `setStem` puts it in stem order.
+ */
+export function newBlank(c: { stem: string; blanks?: readonly { id: string }[] }, key: string): FillBlankBlank {
+  const id = nextBlankId(c.stem, c.blanks ?? []);
+  return key ? { id, kind: "text", keys: [key] } : { id, kind: "text" };
+}
+
+export function addBlank<C extends EditableCandidate & { blanks?: FillBlankBlank[] }>(c: C, blank: FillBlankBlank): C {
+  return { ...c, blanks: [...(c.blanks ?? []), blank] };
 }
 
 export function setChoiceText<C extends EditableCandidate>(c: C, id: string, text: string): C {
