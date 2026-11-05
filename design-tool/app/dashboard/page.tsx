@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { and, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { FilePlus2 } from "lucide-react";
 import { getDb } from "@/db/client";
-import { assessments, attempts, items, test_sessions } from "@/db/schema";
+import { assessments, items, test_sessions } from "@/db/schema";
 import { listSharesForRecipient } from "@/lib/api/shares";
 import { unseenAssessmentGrantIds } from "@/lib/api/grants";
 import { visibleAssessmentScope } from "@/lib/api/visibleAssessments";
@@ -41,6 +41,31 @@ import { openAlertCountsByAssessment } from "@/lib/safeguarding/alertQueries";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { startTemplates } from "@/lib/authoring/templates";
 import { StartScreen } from "./new/StartScreen";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import {
+  DEFAULT_ALL_LIST_PARAMS,
+  allListQueryEntries,
+  filterAndSortAllList,
+  hasActiveFilters,
+  nextSort,
+  ownerOptions,
+  parseAllListParams,
+  type AllListParams,
+  type AllListSortKey,
+  filterAndSortTeachers,
+  nextTeacherSort,
+  parseTeacherParams,
+  teachersHref,
+  DEFAULT_TEACHER_PARAMS,
+  type TeacherParams,
+  type TeacherSortKey,
+} from "@/lib/ui/allTeachersList";
+import {
+  attemptStatsByAssessment,
+  teacherSummary,
+  type TeacherSummaryRow,
+} from "@/lib/api/teacherSummary";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessments" };
@@ -52,7 +77,9 @@ export const metadata: Metadata = { title: "Assessments" };
  * neither sessions nor the monitor were reachable from here at all.
  */
 interface PageProps {
-  searchParams: Promise<{ archived?: string; all?: string }>;
+  // q / owner / status / attempts / sort / dir: the admin all view's list
+  // controls (lib/ui/allTeachersList.ts); ignored in the "mine" view.
+  searchParams: Promise<Record<string, string | undefined>>;
 }
 
 /**
@@ -105,11 +132,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // D-4 (docs/archive-and-delete-design.md): a server component, so the
   // archived/live views are two page loads (`?archived=1`) rather than
   // client state — the same split as GET /api/assessments.
-  const { archived: archivedParam, all: allParam } = await searchParams;
+  const sp = await searchParams;
+  const { archived: archivedParam, all: allParam } = sp;
   const showArchived = archivedParam === "1";
   const admin = showAllTeachersToggle(session);
   const listMode = homeListMode({ all: allParam }, admin);
   const showAll = listMode === "all";
+  const listParams = showAll ? parseAllListParams(sp) : DEFAULT_ALL_LIST_PARAMS;
+  // Slice 2: the all view's "By teacher" summary, one row per owner.
+  const showTeachers = showAll && sp.view === "teachers";
+  const teacherParams = parseTeacherParams(showTeachers ? sp : {});
 
   const db = getDb();
   const now = new Date();
@@ -177,17 +209,35 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     // D-1 / D-4 (docs/archive-and-delete-design.md): the row-level Delete
     // action needs this to disable itself and show "N attempts — archive
     // instead" without a round trip to the DELETE route first.
-    db
-      .select({ assessment_id: attempts.assessment_id, n: count() })
-      .from(attempts)
-      .innerJoin(assessments, eq(assessments.id, attempts.assessment_id))
-      .where(visible.condition)
-      .groupBy(attempts.assessment_id),
+    // The all view's Students / Submitted columns ride on the same query
+    // (practice attempts excluded there; `n` counts every attempt).
+    attemptStatsByAssessment(db, visible.condition),
   ]);
   // Slice 3 renders the label; slice 2 makes the fact available on every row.
   const accessFor = new Map(rows.map((a) => [a.id, visible.annotate(a)]));
   const questionsFor = new Map(questionCounts.map((c) => [c.assessment_id, c.n]));
   const attemptsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c.n]));
+  const attemptStatsFor = new Map(attemptCounts.map((c) => [c.assessment_id, c]));
+  // The all view filters and sorts on the server from the URL params; the
+  // mine view keeps its updated-desc order untouched, and the By teacher
+  // view never renders the list, so neither does the work.
+  const listView = showAll && !showTeachers;
+  const shownRows = listView
+    ? filterAndSortAllList(
+        rows.map((a) => ({
+          ...a,
+          questions: questionsFor.get(a.id) ?? 0,
+          students: attemptStatsFor.get(a.id)?.students ?? 0,
+          submitted: attemptStatsFor.get(a.id)?.submitted ?? 0,
+        })),
+        listParams,
+      )
+    : rows;
+  const owners = listView ? ownerOptions(rows) : [];
+  const allTeachers = showTeachers ? await teacherSummary(db) : [];
+  const teacherRows = filterAndSortTeachers(allTeachers, teacherParams);
+  const listHref = (p: AllListParams) =>
+    dashboardHref({ archived: showArchived, all: showAll, list: p });
   // Safeguarding alerts slice 2 (docs/safeguarding-alerts-design.md): open
   // alerts per row, through the same scope fragment as the list itself.
   const openAlertsFor = await openAlertCountsByAssessment(db, visible.condition);
@@ -211,9 +261,21 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // A5-3: the all view carries an Owner column the 4xl card cannot fit
   // beside the actions, so it gets the wider container.
   return (
-    <main className={`mx-auto ${showAll ? "max-w-6xl" : "max-w-4xl"} space-y-8 px-6 py-12`}>
+    <main className={`mx-auto ${showAll ? "max-w-7xl" : "max-w-4xl"} space-y-8 px-6 py-12`}>
       <PageHeader
-        title={showAll ? `All teachers' assessments (${rows.length})` : "Assessments"}
+        title={
+          showTeachers
+            ? `Teachers (${
+                teacherRows.length === allTeachers.length
+                  ? allTeachers.length
+                  : `${teacherRows.length} of ${allTeachers.length}`
+              })`
+            : showAll
+            ? `All teachers' assessments (${
+                shownRows.length === rows.length ? rows.length : `${shownRows.length} of ${rows.length}`
+              })`
+            : "Assessments"
+        }
         actions={
           <>
             <Button asChild variant="outline">
@@ -339,7 +401,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      {startScreenHere ? (
+      {showTeachers ? (
+        <TeacherSummary rows={teacherRows} params={teacherParams} />
+      ) : startScreenHere ? (
         <StartScreen templates={startTemplates()} showCancel={false} />
       ) : rows.length === 0 ? (
         <EmptyState
@@ -359,22 +423,50 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           }
         />
       ) : (
+        <div className="space-y-3">
+        {showAll ? (
+          <AllListFilters
+            params={listParams}
+            owners={owners}
+            archived={showArchived}
+            clearHref={listHref({ ...DEFAULT_ALL_LIST_PARAMS, sort: listParams.sort, dir: listParams.dir })}
+          />
+        ) : null}
+        {shownRows.length === 0 ? (
+          <p className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+            No assessments match these filters.
+          </p>
+        ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Assessment</TableHead>
-                {showAll ? <TableHead>Owner</TableHead> : null}
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Questions</TableHead>
-                <TableHead>Updated</TableHead>
+                {showAll ? (
+                  <>
+                    <SortHead label="Assessment" k="name" params={listParams} href={listHref} />
+                    <SortHead label="Owner" k="owner" params={listParams} href={listHref} />
+                    <SortHead label="Status" k="status" params={listParams} href={listHref} />
+                    <SortHead label="Questions" k="questions" params={listParams} href={listHref} right />
+                    <SortHead label="Students" k="students" params={listParams} href={listHref} right />
+                    <SortHead label="Submitted" k="submitted" params={listParams} href={listHref} right />
+                    <SortHead label="Created" k="created" params={listParams} href={listHref} />
+                    <SortHead label="Updated" k="updated" params={listParams} href={listHref} />
+                  </>
+                ) : (
+                  <>
+                    <TableHead>Assessment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Questions</TableHead>
+                    <TableHead>Updated</TableHead>
+                  </>
+                )}
                 <TableHead className="text-right">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((a) => {
+              {shownRows.map((a) => {
                 const code = openCodeFor.get(a.id);
                 // Access slice 2/5a: Duplicate / Archive / Delete all need
                 // `own` (the note's ladder), but the gate here is the
@@ -435,7 +527,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         className="w-56 max-w-56 truncate text-muted-foreground"
                         title={rowAccess?.via === "owner" ? undefined : (a.owner_email ?? undefined)}
                       >
-                        {ownerCell(rowAccess, a.owner_email)}
+                        {/* Clicking an owner narrows the list to their work. */}
+                        {a.owner_email ? (
+                          <Link
+                            href={listHref({ ...listParams, owner: a.owner_email.toLowerCase() })}
+                            className="hover:underline"
+                          >
+                            {ownerCell(rowAccess, a.owner_email)}
+                          </Link>
+                        ) : (
+                          ownerCell(rowAccess, a.owner_email)
+                        )}
                       </TableCell>
                     ) : null}
                     <TableCell>
@@ -468,6 +570,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     <TableCell className="text-right tabular-nums">
                       {questionsFor.get(a.id) ?? 0}
                     </TableCell>
+                    {showAll ? (
+                      <>
+                        <TableCell className="text-right tabular-nums">
+                          {attemptStatsFor.get(a.id)?.students ?? 0}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {attemptStatsFor.get(a.id)?.submitted ?? 0}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {formatDate(a.created_at)}
+                        </TableCell>
+                      </>
+                    ) : null}
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {formatDate(a.updated_at)}
                     </TableCell>
@@ -499,7 +614,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         {rowAccess?.via === "admin" && a.owner_email ? (
                           <ActAsButton email={a.owner_email} />
                         ) : null}
-                        {ownsRow ? (
+                        {/* The all view is for surveying everyone's work: it
+                            shows Results and Act as only. An admin's own
+                            Duplicate / Archive / Delete stay in My
+                            assessments — four buttons here squeezed the name
+                            column to ~100px at 1440px and pushed Delete past
+                            the card edge (James, 2026-11-05). */}
+                        {ownsRow && !showAll ? (
                           <>
                             <DuplicateAssessmentButton id={a.id} />
                             <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
@@ -523,6 +644,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </TableBody>
           </Table>
         </div>
+        )}
+        </div>
       )}
 
       {/* D-4: the two lists partition the teacher's assessments; the count
@@ -531,10 +654,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           composable with `?archived=1` — flipping one param keeps the
           other. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        {showArchived ? (
+        {/* Slice 2: the summary already includes archived work, so the
+            archived toggle is not offered there. */}
+        {showTeachers ? null : showArchived ? (
           <p className="text-sm">
             <Link
-              href={dashboardHref({ archived: false, all: showAll })}
+              href={dashboardHref({ archived: false, all: showAll, list: listParams })}
               className="text-muted-foreground hover:underline"
             >
               Hide archived
@@ -543,7 +668,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         ) : archivedCount > 0 ? (
           <p className="text-sm">
             <Link
-              href={dashboardHref({ archived: true, all: showAll })}
+              href={dashboardHref({ archived: true, all: showAll, list: listParams })}
               className="text-muted-foreground hover:underline"
             >
               Show archived ({archivedCount})
@@ -560,6 +685,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </Link>
           </p>
         ) : null}
+        {showAll ? (
+          <p className="text-sm">
+            <Link
+              href={
+                showTeachers
+                  ? dashboardHref({ archived: false, all: true })
+                  : teachersHref(DEFAULT_TEACHER_PARAMS)
+              }
+              className="text-muted-foreground hover:underline"
+            >
+              {showTeachers ? "By assessment" : "By teacher"}
+            </Link>
+          </p>
+        ) : null}
       </div>
     </main>
   );
@@ -568,12 +707,235 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 /**
  * `/dashboard` with `?archived=1` / `?all=1` set from booleans, composable —
  * flipping one param (the archived toggle, the slice 5a admin toggle) never
- * drops the other. Pure so it is testable without a DOM.
+ * drops the other. The all view's list params (search, filters, sort) ride
+ * along only while `all` is on, so leaving the all view drops them. Pure so
+ * it is testable without a DOM.
  */
-export function dashboardHref(params: { archived: boolean; all: boolean }): string {
+export function dashboardHref(params: {
+  archived: boolean;
+  all: boolean;
+  list?: AllListParams;
+}): string {
   const qs = new URLSearchParams();
   if (params.archived) qs.set("archived", "1");
-  if (params.all) qs.set("all", "1");
+  if (params.all) {
+    qs.set("all", "1");
+    if (params.list) for (const [k, v] of allListQueryEntries(params.list)) qs.set(k, v);
+  }
   const s = qs.toString();
   return s ? `/dashboard?${s}` : "/dashboard";
+}
+
+/** A sortable header for the all view: a link to the same view, re-sorted. */
+function SortHead({
+  label,
+  k,
+  params,
+  href,
+  right,
+}: {
+  label: string;
+  k: AllListSortKey;
+  params: AllListParams;
+  href: (p: AllListParams) => string;
+  right?: boolean;
+}) {
+  const active = params.sort === k;
+  const arrow = active ? (params.dir === "asc" ? " ▲" : " ▼") : "";
+  return (
+    <TableHead
+      className={right ? "text-right" : undefined}
+      aria-sort={active ? (params.dir === "asc" ? "ascending" : "descending") : undefined}
+    >
+      <Link href={href(nextSort(params, k))} className="whitespace-nowrap hover:underline">
+        {label}
+        {arrow}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * The all view's filter bar: a plain GET form, so the filters land in the
+ * URL with no client JS. Sort and the archived toggle ride as hidden fields.
+ */
+function AllListFilters({
+  params,
+  owners,
+  archived,
+  clearHref,
+}: {
+  params: AllListParams;
+  owners: string[];
+  archived: boolean;
+  clearHref: string;
+}) {
+  return (
+    // key: a Link (owner link, sort header, Clear) navigates client-side and
+    // keeps this form mounted, so defaultValue would show the OLD filters.
+    // Keying on the params remounts it with the current ones.
+    <form key={JSON.stringify(params)} method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="all" value="1" />
+      {archived ? <input type="hidden" name="archived" value="1" /> : null}
+      <input type="hidden" name="sort" value={params.sort} />
+      <input type="hidden" name="dir" value={params.dir} />
+      <Input
+        type="search"
+        name="q"
+        defaultValue={params.q}
+        placeholder="Search name or owner"
+        aria-label="Search name or owner"
+        className="w-64"
+      />
+      <NativeSelect name="owner" defaultValue={params.owner} aria-label="Owner">
+        <option value="">All owners</option>
+        {owners.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </NativeSelect>
+      <NativeSelect name="status" defaultValue={params.status} aria-label="Status">
+        <option value="">Any status</option>
+        <option value="draft">Draft</option>
+        <option value="published">Published</option>
+      </NativeSelect>
+      <NativeSelect name="attempts" defaultValue={params.attempts} aria-label="Student attempts">
+        <option value="">With or without students</option>
+        <option value="yes">Has students</option>
+        <option value="no">No students yet</option>
+      </NativeSelect>
+      <Button type="submit" variant="outline">
+        Apply
+      </Button>
+      {hasActiveFilters(params) ? (
+        <Link href={clearHref} className="self-center text-sm text-muted-foreground hover:underline">
+          Clear filters
+        </Link>
+      ) : null}
+    </form>
+  );
+}
+
+/** A sortable header for the By teacher summary. */
+function TeacherSortHead({
+  label,
+  k,
+  params,
+  right,
+}: {
+  label: string;
+  k: TeacherSortKey;
+  params: TeacherParams;
+  right?: boolean;
+}) {
+  const active = params.sort === k;
+  const arrow = active ? (params.dir === "asc" ? " ▲" : " ▼") : "";
+  return (
+    <TableHead
+      className={right ? "text-right" : undefined}
+      aria-sort={active ? (params.dir === "asc" ? "ascending" : "descending") : undefined}
+    >
+      <Link href={teachersHref(nextTeacherSort(params, k))} className="whitespace-nowrap hover:underline">
+        {label}
+        {arrow}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Slice 2: the "By teacher" summary — one row per owner, busiest first, for
+ * finding power users and who has the most students. A teacher's name links
+ * to the assessment list filtered to them. Counts only.
+ */
+function TeacherSummary({ rows, params }: { rows: TeacherSummaryRow[]; params: TeacherParams }) {
+  return (
+    <div className="space-y-3">
+      {/* key: same client-side-navigation reason as AllListFilters. */}
+      <form key={JSON.stringify(params)} method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="all" value="1" />
+        <input type="hidden" name="view" value="teachers" />
+        <input type="hidden" name="sort" value={params.sort} />
+        <input type="hidden" name="dir" value={params.dir} />
+        <Input
+          type="search"
+          name="q"
+          defaultValue={params.q}
+          placeholder="Search teacher email"
+          aria-label="Search teacher email"
+          className="w-64"
+        />
+        <Button type="submit" variant="outline">
+          Apply
+        </Button>
+        {params.q ? (
+          <Link
+            href={teachersHref({ ...params, q: "" })}
+            className="self-center text-sm text-muted-foreground hover:underline"
+          >
+            Clear search
+          </Link>
+        ) : null}
+      </form>
+      {rows.length === 0 ? (
+        <p className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+          No teachers match.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TeacherSortHead label="Teacher" k="teacher" params={params} />
+                <TeacherSortHead label="Assessments" k="assessments" params={params} right />
+                <TeacherSortHead label="Published" k="published" params={params} right />
+                <TeacherSortHead label="Sittings" k="sittings" params={params} right />
+                <TeacherSortHead label="Students" k="students" params={params} right />
+                <TeacherSortHead label="Submitted" k="submitted" params={params} right />
+                <TeacherSortHead label="Last activity" k="last" params={params} />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((t) => (
+                <TableRow key={t.owner_sub}>
+                  <TableCell className="w-full max-w-0">
+                    {t.owner_email ? (
+                      <Link
+                        href={dashboardHref({
+                          archived: false,
+                          all: true,
+                          list: { ...DEFAULT_ALL_LIST_PARAMS, owner: t.owner_email.toLowerCase() },
+                        })}
+                        className="block truncate font-medium hover:underline"
+                        title={t.owner_email}
+                      >
+                        {t.owner_email}
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">Unknown owner</span>
+                    )}
+                    {t.archived > 0 ? (
+                      <div className="text-xs text-muted-foreground">{t.archived} archived</div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{t.assessments}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.published}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.sittings}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.students}</TableCell>
+                  <TableCell className="text-right tabular-nums">{t.submitted}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {t.last_activity ? formatDate(t.last_activity) : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Includes archived assessments. Practice sittings and teachers&apos; own practice attempts are not counted.
+      </p>
+    </div>
+  );
 }
