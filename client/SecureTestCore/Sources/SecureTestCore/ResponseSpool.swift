@@ -210,16 +210,6 @@ public actor ResponseSpool {
         guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
     }
 
-    public func remove(attemptID: String, itemID: String) throws {
-        let statement = try prepare(
-            "DELETE FROM pending_responses WHERE attempt_id = ? AND item_id = ?;"
-        )
-        defer { sqlite3_finalize(statement) }
-        bindText(statement, 1, attemptID)
-        bindText(statement, 2, itemID)
-        guard sqlite3_step(statement) == SQLITE_DONE else { throw lastError() }
-    }
-
     /// Delete a row only if it still holds the payload that was sent.
     ///
     /// The actor is re-entrant at `await`: while a send is on the wire the
@@ -372,6 +362,11 @@ public actor ResponseSpool {
     /// a newer one on the server. Each flush waits for the one before it and
     /// reads the queue only when its turn comes, so it sends whatever is
     /// newest at that point.
+    ///
+    /// The work runs in its own unstructured `Task`, so cancelling the caller
+    /// does not stop a flush already queued or running. That is deliberate:
+    /// a flush is best-effort delivery of work already safe on disk, and
+    /// stopping one half-way would gain nothing.
     private func serialized(
         _ work: @escaping @Sendable (ResponseSpool) async -> FlushResult
     ) async -> FlushResult {

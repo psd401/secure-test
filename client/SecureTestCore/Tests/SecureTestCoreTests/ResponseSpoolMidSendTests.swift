@@ -65,9 +65,12 @@ final class ResponseSpoolMidSendTests: XCTestCase {
         await transport.waitForRequests(1)
         try await spool.enqueue(attemptID: "at1", itemID: "i1", responseJSON: second)
         let flushB = Task { await spool.flush(using: api) }
-        // Unserialized, flush B sends the newer answer while A is still held.
-        // Serialized, B waits for A and this times out — both are fine here;
-        // what matters is the order the server sees.
+        // Unserialized, flush B sends the newer answer while A is still held,
+        // and the wait ends as soon as it arrives. Serialized, B cannot send
+        // until A finishes, so this wait always runs the full 0.5 s — on
+        // purpose: it gives an unserialized B the chance to overtake, which is
+        // what the test needs to catch. The assertion is the order the server
+        // finished the writes in.
         await transport.waitForRequests(2, timeout: 0.5)
         transport.releaseFirst()
         _ = await flushA.value
