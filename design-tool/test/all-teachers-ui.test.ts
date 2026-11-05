@@ -11,6 +11,7 @@ import {
   ownerCell,
   showAllTeachersToggle,
 } from "../app/dashboard/page";
+import { DEFAULT_ALL_LIST_PARAMS } from "../lib/ui/allTeachersList";
 
 describe("showAllTeachersToggle", () => {
   test("true only for a session isAdmin recognises", () => {
@@ -74,5 +75,14 @@ describe("dashboardHref", () => {
     expect(dashboardHref({ archived: true, all: false })).toBe("/dashboard?archived=1");
     expect(dashboardHref({ archived: false, all: true })).toBe("/dashboard?all=1");
     expect(dashboardHref({ archived: true, all: true })).toBe("/dashboard?archived=1&all=1");
+  });
+
+  test("list params ride along in the all view and drop when leaving it", () => {
+    const list = { ...DEFAULT_ALL_LIST_PARAMS, owner: "b@example.org", sort: "students" as const, dir: "desc" as const };
+    expect(dashboardHref({ archived: false, all: true, list })).toBe(
+      "/dashboard?all=1&owner=b%40example.org&sort=students&dir=desc",
+    );
+    expect(dashboardHref({ archived: false, all: false, list })).toBe("/dashboard");
+    expect(dashboardHref({ archived: false, all: true, list: DEFAULT_ALL_LIST_PARAMS })).toBe("/dashboard?all=1");
   });
 });
