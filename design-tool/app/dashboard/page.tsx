@@ -614,7 +614,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         {rowAccess?.via === "admin" && a.owner_email ? (
                           <ActAsButton email={a.owner_email} />
                         ) : null}
-                        {ownsRow ? (
+                        {/* The all view is for surveying everyone's work: it
+                            shows Results and Act as only. An admin's own
+                            Duplicate / Archive / Delete stay in My
+                            assessments — four buttons here squeezed the name
+                            column to ~100px at 1440px and pushed Delete past
+                            the card edge (James, 2026-11-05). */}
+                        {ownsRow && !showAll ? (
                           <>
                             <DuplicateAssessmentButton id={a.id} />
                             <ArchiveAssessmentButton id={a.id} archived={a.archived_at !== null} />
