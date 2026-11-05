@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ApiError, extendErrorCopy } from "@/lib/ui/errorCopy";
+import { addDays, todayInZone, zonedWallTimeToIso } from "@/lib/timeZone";
 
 export type ExtendTarget =
   | { kind: "sitting"; sessionId: string }
@@ -120,19 +121,19 @@ export function extendRequest(
 }
 
 /**
- * Today at 23:59, local time, in the `datetime-local` input's own string
- * shape ("YYYY-MM-DDTHH:mm") — pure and injectable with `now` so the default
+ * Today at 23:59 in the district's zone (lib/timeZone), in the
+ * `datetime-local` input's own string shape ("YYYY-MM-DDTHH:mm") — the same
+ * zone `toIsoInstant` reads it back in. Pure and injectable with `now` so the default
  * is testable without depending on the clock. Pilot teachers asked for today
  * (2026-09-24; it was tomorrow). In the last minute of the day today's 23:59
  * is no longer in the future and the server would refuse it, so the default
  * falls to tomorrow.
  */
 export function defaultExtendValue(now: Date = new Date()): string {
-  const d = new Date(now.getTime());
-  d.setHours(23, 59, 0, 0);
-  if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const today = todayInZone(now);
+  const tonight = zonedWallTimeToIso(`${today}T23:59`);
+  const day = tonight && Date.parse(tonight) > now.getTime() ? today : addDays(today, 1);
+  return `${day}T23:59`;
 }
 
 /**
@@ -193,15 +194,14 @@ export const ENDED_SITTING_NOTE =
   "Use Continue in a new session.";
 
 /**
- * A `datetime-local` value ("YYYY-MM-DDTHH:mm", read as local time by the
- * browser) turned into an ISO instant. `null` when the value is empty or
+ * A `datetime-local` value ("YYYY-MM-DDTHH:mm") turned into an ISO instant,
+ * read in the district's zone (lib/timeZone) rather than the device's — the
+ * zone every time on the page is shown in. `null` when the value is empty or
  * unparseable, which the caller treats as "nothing to submit" rather than
  * guessing a time.
  */
 export function toIsoInstant(localValue: string): string | null {
-  if (!localValue) return null;
-  const ms = new Date(localValue).getTime();
-  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  return zonedWallTimeToIso(localValue);
 }
 
 /**

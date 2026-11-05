@@ -7,6 +7,7 @@
 // short answer (FR D-5) is likewise the student's typed text, escaped — the
 // screen renders it as math (lib/reporting/shortTextView.ts), the Doc cannot.
 
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
 import { pictureKey, type DocAnswer, type DocPicture } from "@/lib/googleDocs/wholeTest";
 
@@ -86,7 +87,7 @@ export interface DocInput {
   pictures?: ReadonlyMap<string, string>;
 }
 
-const TZ = "America/Los_Angeles";
+const TZ = DISPLAY_TIME_ZONE;
 const STAMP_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: TZ,
   year: "numeric",

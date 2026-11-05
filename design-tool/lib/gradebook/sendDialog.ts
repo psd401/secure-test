@@ -6,6 +6,7 @@
 // destination picker would go where `SEND_TARGET` is read; nothing else here
 // names a target.
 import { levelSatisfies, type AccessLevel } from "@/lib/api/accessLevels";
+import { DISPLAY_TIME_ZONE, todayInZone } from "@/lib/timeZone";
 import { ASSIGNMENT_NAME_MAX, truncateAssignmentName } from "./powerschoolPayloads";
 import {
   HELD_BACK_REASONS,
@@ -63,7 +64,7 @@ export function sectionOptionLabel(s: Pick<SendDialogSection, "label" | "scored"
 }
 
 const DAY = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles",
+  timeZone: DISPLAY_TIME_ZONE,
   month: "short",
   day: "numeric",
   year: "numeric",
@@ -134,12 +135,12 @@ export function defaultAssignmentName(title: string): string {
 
 export { ASSIGNMENT_NAME_MAX };
 
-/** 8.1: today's LOCAL date as `YYYY-MM-DD` (the browser's clock). */
+/**
+ * 8.1: today's date as `YYYY-MM-DD` — in the district's zone, not the
+ * device's, so it is the same day the rest of the page shows.
+ */
 export function todayLocal(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return todayInZone(now);
 }
 
 const HELD_BACK_COPY: Record<HeldBackReason, (n: number) => string> = {

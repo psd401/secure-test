@@ -8,6 +8,7 @@
 // (teacher, section) (D-5), the publish option and Publish Scores are the category's own (8.2),
 // and a passed-back attempt's earlier score stays until the next send
 // overwrites it — the summary says so (8.3).
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   attempt_events,
@@ -57,7 +58,7 @@ type Db = ReturnType<typeof getDb>;
 /** A first send's claim row older than this is taken to be a crashed send. */
 export const CLAIM_STALE_MS = 2 * 60_000;
 
-const TZ = "America/Los_Angeles";
+const TZ = DISPLAY_TIME_ZONE;
 
 /** Today's date in the district's time zone, `YYYY-MM-DD` (8.1's default). */
 export function todayPacific(now: Date = new Date()): string {

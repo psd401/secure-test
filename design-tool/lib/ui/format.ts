@@ -4,7 +4,9 @@
  * shows seconds; nothing shows a date when "today" is enough.
  */
 
-const TZ = "America/Los_Angeles";
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
+
+const TZ = DISPLAY_TIME_ZONE;
 
 const DATE = new Intl.DateTimeFormat("en-US", { timeZone: TZ, dateStyle: "medium" });
 const TIME = new Intl.DateTimeFormat("en-US", { timeZone: TZ, timeStyle: "short" });

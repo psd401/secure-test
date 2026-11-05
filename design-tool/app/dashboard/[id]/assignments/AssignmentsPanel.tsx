@@ -5,6 +5,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { zonedWallTimeToIso } from "@/lib/timeZone";
 import { NativeSelect } from "@/components/ui/native-select";
 import { formatDate } from "@/lib/ui/format";
 import { RESULT_LABEL, STATUS_LABEL } from "@/lib/competency/labels";
@@ -206,12 +207,13 @@ export function AssignmentsPanel({
       let code = res.ok ? null : await errorCode(res);
       if (code === "ends_at_required") {
         const day = window.prompt("This test has a deadline. Last day to work on the new option (YYYY-MM-DD)?");
-        const end = day && /^\d{4}-\d{2}-\d{2}$/.test(day.trim()) ? new Date(`${day.trim()}T23:59:59`) : null;
-        if (!end || Number.isNaN(end.getTime())) {
+        // End of that day in the district's zone, not the device's.
+        const end = day && /^\d{4}-\d{2}-\d{2}$/.test(day.trim()) ? zonedWallTimeToIso(`${day.trim()}T23:59:59`) : null;
+        if (!end) {
           setRowError({ id: a.id, message: "Pick a day as YYYY-MM-DD to switch a test with a deadline." });
           return;
         }
-        res = await send({ ends_at: end.toISOString() });
+        res = await send({ ends_at: end });
         code = res.ok ? null : await errorCode(res);
       }
       if (code) setRowError({ id: a.id, message: assignmentErrorCopy(code) });

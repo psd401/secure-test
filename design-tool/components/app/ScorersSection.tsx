@@ -6,6 +6,7 @@ import { DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/ui/format";
+import { zonedWallTimeToIso } from "@/lib/timeZone";
 import { ApiError, coTeachErrorCopy } from "@/lib/ui/errorCopy";
 
 interface ScorerGrant {
@@ -16,14 +17,13 @@ interface ScorerGrant {
 }
 
 /**
- * The end of the chosen day in the browser's time zone, as an ISO instant —
+ * The end of the chosen day in the district's zone (lib/timeZone), as an ISO instant —
  * a scorer picked "through Friday" keeps access all of Friday. Null when the
  * input is empty or not a date. Exported for a direct pure-function test.
  */
 export function scoringEndsAt(day: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const end = new Date(`${day}T23:59:59`);
-  return Number.isNaN(end.getTime()) ? null : end.toISOString();
+  return zonedWallTimeToIso(`${day}T23:59:59`);
 }
 
 async function readError(res: Response): Promise<ApiError> {

@@ -87,8 +87,8 @@ describe("defaults", () => {
     expect(defaultAssignmentName("Unit 3 test")).toBe("Unit 3 test");
     expect([...defaultAssignmentName("x".repeat(80))]).toHaveLength(50);
   });
-  test("today is the local calendar date", () => {
-    expect(todayLocal(new Date(2026, 8, 5, 23, 59))).toBe("2026-09-05");
+  test("today is the district's calendar date, whatever the device zone", () => {
+    expect(todayLocal(new Date("2026-09-05T23:59:00-07:00"))).toBe("2026-09-05");
   });
 });
 
