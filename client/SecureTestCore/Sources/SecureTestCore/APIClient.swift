@@ -314,6 +314,16 @@ public actor APIClient {
         return (bundle, json)
     }
 
+    /// How long an answer write (PUT or DELETE) may go without a byte from the
+    /// server before it fails. The system default is 60 s. Answer writes go
+    /// one at a time (ResponseSpool serializes flushes), so one stuck on a
+    /// dead connection — common after the Mac changes Wi-Fi — would hold up
+    /// the flush that hand-in waits on for the full minute. A failed write
+    /// stays spooled and the next flush retries it; the write is idempotent.
+    /// 20 s matches hand-in's bound on drawing uploads, and an answer is a few
+    /// KB, so a working network never comes near it.
+    public static let answerWriteTimeout: TimeInterval = 20
+
     /// Upsert an answer. PUT because answering the same item twice is normal,
     /// and the server's (attempt, item) unique constraint makes it idempotent —
     /// which is what lets a retry after a flaky network be safe rather than a
@@ -327,6 +337,7 @@ public actor APIClient {
             path: "/api/attempts/\(attemptID)/responses/\(itemID)",
             method: "PUT",
             rawBody: Data("{\"response\":\(responseJSON)}".utf8),
+            timeout: Self.answerWriteTimeout,
         )
     }
 
@@ -338,6 +349,7 @@ public actor APIClient {
             path: "/api/attempts/\(attemptID)/responses/\(itemID)",
             method: "DELETE",
             rawBody: nil,
+            timeout: Self.answerWriteTimeout,
         )
     }
 
@@ -556,11 +568,13 @@ public actor APIClient {
         path: String,
         method: String,
         rawBody: Data?,
+        timeout: TimeInterval? = nil,
     ) async throws -> Data {
         guard let token = tokens.token() else { throw APIError.notAuthenticated }
 
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
+        if let timeout { request.timeoutInterval = timeout }
         // Bearer rather than a cookie: a native app has no cookie jar worth
         // emulating, and the server accepts either (slice 58).
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
