@@ -58,9 +58,9 @@ export const BLANK_LIMIT_TITLE = `A question allows at most ${MAX_BLANKS} blanks
 
 /**
  * The blank **Insert blank** adds, as the editor's `onInsert` builds it: the
- * next id (never a reused number) and, when text was selected, that text as
- * its first accepted answer. The field then puts its chip in the stem and
- * `setStem` puts it in stem order.
+ * id after the highest a blank or marker on the card holds and, when text was
+ * selected, that text as its first accepted answer. The field then puts its
+ * chip in the stem and `setStem` puts it in stem order.
  */
 export function newBlank(c: { stem: string; blanks?: readonly { id: string }[] }, key: string): FillBlankBlank {
   const id = nextBlankId(c.stem, c.blanks ?? []);
