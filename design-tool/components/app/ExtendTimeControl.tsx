@@ -122,9 +122,9 @@ export function extendRequest(
 
 /**
  * Today at 23:59 in the district's zone (lib/timeZone), in the
- * `datetime-local` input's own string shape ("YYYY-MM-DDTHH:mm") — the same
- * zone `toIsoInstant` reads it back in. Pure and injectable with `now` so the default
- * is testable without depending on the clock. Pilot teachers asked for today
+ * `datetime-local` input's own string shape ("YYYY-MM-DDTHH:mm") — the
+ * same zone `toIsoInstant` reads it back in. Pure and injectable with `now`
+ * so the default is testable without depending on the clock. Pilot teachers asked for today
  * (2026-09-24; it was tomorrow). In the last minute of the day today's 23:59
  * is no longer in the future and the server would refuse it, so the default
  * falls to tomorrow.

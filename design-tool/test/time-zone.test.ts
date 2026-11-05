@@ -39,6 +39,18 @@ describe("zonedWallTimeToIso", () => {
     expect(zonedWallTimeToIso("2026-03-08T02:30")).toBe("2026-03-08T10:30:00.000Z");
   });
 
+  test("the fall-back hour happens twice: the earlier (PDT) one", () => {
+    // 2026-11-01 01:30 occurs at 08:30Z (PDT) and again at 09:30Z (PST).
+    expect(zonedWallTimeToIso("2026-11-01T01:30")).toBe("2026-11-01T08:30:00.000Z");
+  });
+
+  test("a day the month does not have: null, not rolled forward", () => {
+    expect(zonedWallTimeToIso("2026-02-31T12:00")).toBeNull();
+    expect(zonedWallTimeToIso("2026-04-31T23:59:59")).toBeNull();
+    expect(zonedWallTimeToIso("2026-02-29T12:00")).toBeNull(); // not a leap year
+    expect(zonedWallTimeToIso("2028-02-29T12:00")).toBe("2028-02-29T20:00:00.000Z");
+  });
+
   test("empty or malformed: null", () => {
     expect(zonedWallTimeToIso("")).toBeNull();
     expect(zonedWallTimeToIso("2026-09-18")).toBeNull();
@@ -74,6 +86,20 @@ describe("the pickers read in the district's zone", () => {
   test("defaultExtendValue: in Pacific's last minute of the day, tomorrow", () => {
     // 23:59:20 PDT Sep 30 = 06:59:20 UTC Oct 1.
     expect(defaultExtendValue(new Date("2026-10-01T06:59:20Z"))).toBe("2026-10-01T23:59");
+  });
+
+  test("defaultExtendValue: on the day DST ends, today is still today", () => {
+    // 22:00 PST on 2026-11-01 (06:00Z Nov 2); 23:59 that night is still ahead.
+    expect(defaultExtendValue(new Date("2026-11-02T06:00:00Z"))).toBe("2026-11-01T23:59");
+  });
+
+  test("defaultExtendValue: on the day DST starts, likewise", () => {
+    // 22:00 PDT on 2026-03-08 (05:00Z Mar 9).
+    expect(defaultExtendValue(new Date("2026-03-09T05:00:00Z"))).toBe("2026-03-08T23:59");
+  });
+
+  test("scoringEndsAt: an impossible day is refused, not shifted", () => {
+    expect(scoringEndsAt("2026-02-31")).toBeNull();
   });
 
   test("scoringEndsAt: end of the chosen day in Pacific", () => {

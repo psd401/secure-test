@@ -8,7 +8,6 @@
 // (teacher, section) (D-5), the publish option and Publish Scores are the category's own (8.2),
 // and a passed-back attempt's earlier score stays until the next send
 // overwrites it — the summary says so (8.3).
-import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   attempt_events,
@@ -22,6 +21,7 @@ import {
 import type { getDb } from "@/db/client";
 import { isUniqueViolation } from "@/lib/db/isUniqueViolation";
 import { log } from "@/lib/log";
+import { DISPLAY_TIME_ZONE } from "@/lib/timeZone";
 import {
   loadSectionCandidates,
   missingPowerSchoolIds,

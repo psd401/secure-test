@@ -82,7 +82,8 @@ export interface AttendancePayload {
 }
 
 export function when(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : "—";
+  // Same format as before, but in the district's zone, not the device's.
+  return iso ? new Date(iso).toLocaleString("en-US", { timeZone: DISPLAY_TIME_ZONE }) : "—";
 }
 
 export function ago(iso: string | null, now: number): string {

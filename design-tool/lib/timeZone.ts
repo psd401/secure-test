@@ -42,12 +42,14 @@ const WALL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /**
  * A wall time typed in a `datetime-local` shape ("YYYY-MM-DDTHH:mm", seconds
- * optional), read in DISPLAY_TIME_ZONE, as an ISO instant. `null` when empty
- * or malformed — the caller treats that as "nothing to submit".
+ * optional), read in DISPLAY_TIME_ZONE, as an ISO instant. `null` when empty,
+ * malformed, or not a real calendar day (2026-02-31) — the caller treats that
+ * as "nothing to submit".
  *
  * Two passes because the offset can differ either side of a DST change. A
  * time that does not exist (the spring-forward gap) lands an hour later, as
- * a browser reading local time does.
+ * a browser reading local time does. A time that occurs twice (the
+ * fall-back hour) resolves to the earlier one, still on daylight time.
  */
 export function zonedWallTimeToIso(value: string): string | null {
   const m = WALL.exec(value.trim());
@@ -55,6 +57,8 @@ export function zonedWallTimeToIso(value: string): string | null {
   const [y, mo, d, h, mi, s] = m.slice(1).map((v) => (v === undefined ? 0 : Number(v))) as number[];
   if (mo! < 1 || mo! > 12 || d! < 1 || d! > 31 || h! > 23 || mi! > 59 || s! > 59) return null;
   const asUtc = Date.UTC(y!, mo! - 1, d!, h!, mi!, s!);
+  // Date.UTC rolls an impossible day forward (Feb 31 → Mar 3); refuse it.
+  if (new Date(asUtc).getUTCDate() !== d) return null;
   const first = asUtc - offsetAt(asUtc);
   const second = asUtc - offsetAt(first);
   const w = wallAt(new Date(second));
