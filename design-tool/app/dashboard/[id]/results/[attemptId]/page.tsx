@@ -691,7 +691,11 @@ export default async function AttemptResultPage({ params }: PageProps) {
                 assessmentUntimed={(assessment.time_limit_seconds ?? 0) <= 0}
               />
             ) : null}
-            {row.status === "submitted" ? (
+            {/* Pass back is `edit` (D-1, D-15), as the route requires and as
+                the results page's Pass back all already shows it: a scorer
+                (`score`) or a substitute (`run`) never sees a button the route
+                would refuse (U-25 hand-run, row 936). */}
+            {row.status === "submitted" && levelSatisfies(access.level, "edit") ? (
               <PassBackAndReload
                 attemptId={attemptId}
                 studentName={

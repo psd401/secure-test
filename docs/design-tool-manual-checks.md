@@ -2225,6 +2225,8 @@ student API (the calls the client makes), the gradebook was the mock. Rows
 - **U25-F2 — "1 student passed back get …" (rows 917–918).** The basis hint did not agree the verb with one student. **Fixed 2026-11-04** on the same branch ("1 student passed back gets …").
 - **U25-O1 — a sitting's "Pass back everyone" includes students who handed in through an earlier session (observation, row 904).** `passBackAllTargets` counts `submitted_earlier` rows as well as `submitted`, by design (its test pins it): such a student cannot rejoin today unless passed back. Row 904's wording ("who handed in during that session") was narrower than what is built. **Ruled 2026-11-04 (James): keep the behavior; row 904 reworded.**
 - **U25-O2 — row 907 says "tomorrow 23:59"; the picker uses today 23:59** (`defaultExtendValue`, changed for pilot teachers 2026-09-24). The row was stale, not the code. **Row 907 updated 2026-11-04** (James).
+- **U25-F3 — a scorer saw Pass back on the attempt page (row 936).** The per-attempt **Pass back** rendered for any reader of a handed-in attempt; the route (`edit`) refused it with 404, so nothing could be reopened, but a scorer (`score`) or substitute (`run`) was offered a button that could only fail. **Fixed 2026-11-04** on the same branch: shown only at `edit`, as **Pass back all** on the results page already was. Checked: substitute on an ordinary test sees no button; the owner still does.
+- **U25-O3 — "← Back to editor" for a scorer (row 936).** The scoring queue and results pages link every reader to `/dashboard/<id>`, which is not found below `edit`. Harmless (the page says so and offers Go to Assessments) and true for `run`/`view` readers before CBA too. Not changed; for James to rule.
 
 ## Whole test to Google Docs (U-25 slice 4, branch `claude/confident-lehmann-8fdd2d`, 2026-11-02; `docs/google-docs-whole-test-design.md`)
 
@@ -2268,12 +2270,12 @@ merge if another branch adds rows.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | NOT RUN |
-| 933 | Open Share on an ordinary teacher assessment | No Scorers section | NOT RUN |
-| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | NOT RUN |
-| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | NOT RUN |
-| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | NOT RUN |
-| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | NOT RUN |
+| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | PASS 2026-11-04 (local hand-run DB, made-up accounts): Scorers under Co-teach; **Add scorer** disabled with only the email, enabled with both |
+| 933 | Open Share on an ordinary teacher assessment | No Scorers section | PASS 2026-11-04 |
+| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | PASS 2026-11-04 except the email, not observed: listed "Through Nov 6, 2026", not under Co-teach. The mock sender holds mail in server memory, so the email part rests on `test/share-notifications-email.test.ts` ("asked you to score") |
+| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | PASS 2026-11-04: "Shared with you as scorer · by <owner>"; the name links to `/dashboard/<id>/scoring` (a **Results** button is also offered — `score` ≥ `view`, as designed) |
+| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | PASS 2026-11-04 after fix U25-F3: Proficient + Developing saved 5/8 `final`; the editor and Assignments pages show "There's nothing at this address"; no Share; `POST /api/attempts/:id/pass-back` 404. The attempt page still showed a **Pass back** button the route refused (U25-F3, fixed). Observation U25-O3: "← Back to editor" on the scoring and results pages leads a scorer to the not-found page |
+| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | PASS 2026-11-04: "No scorers yet."; as the scorer, `POST /api/responses/:id/score` 404 and the score stayed 5/8; review queue 404; scoring page not found; home list empty |
 | 938 | Keyboard and screen reader through the Scorers section | Labels read "Staff email" and "Scoring through"; the date input works by keyboard; Remove names nothing ambiguous (one per row) | NOT RUN |
 
 ## Competency assignments (CBA slice 2, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
