@@ -114,4 +114,8 @@ The co-teacher follow-ups from 2026-09-22 were tracked in `docs/coteacher-gaps-2
 - Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
 
 Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
+`OIDC_AUDIENCE`, `ADMIN_EMAILS`).
+- Role or ownership model changes warrant the broader `access-enforcement` and `auth-role-enforcement` suites, not just unit tests.
+
+Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
 /architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
