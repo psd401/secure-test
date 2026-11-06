@@ -33,7 +33,10 @@ export function withheldFilterLabels(findings: GuardrailFinding[]): string[] {
 }
 
 /** The result with every feedback string blanked; points, levels and
- * confidence kept. */
+ * confidence kept. `overall_rationale: ""` is below the model-output schema's
+ * `min(1)` (essayScorer/types.ts) on purpose: that schema checks the model's
+ * reply only (scoreCore's parse); stored rationale is never re-parsed with
+ * it, and readers treat empty feedback as none. */
 export function withholdFeedback(result: ScoreEssayResult): ScoreEssayResult {
   return {
     ...result,
