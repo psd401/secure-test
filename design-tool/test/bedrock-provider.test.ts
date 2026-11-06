@@ -716,6 +716,27 @@ describe("bedrockGuardrail.check (ApplyGuardrail)", () => {
     expect(serialized).not.toContain("banned");
   });
 
+  test("a managed word list hit carries the list type, never the match (2026-11-06)", async () => {
+    setNextResponse({
+      action: "GUARDRAIL_INTERVENED",
+      assessments: [
+        { wordPolicy: { managedWordLists: [{ match: "Nazi", type: "PROFANITY", action: "BLOCKED" }] } },
+      ],
+    });
+    const { bedrockGuardrail } = await import(
+      "../lib/safeguarding/bedrockGuardrail"
+    );
+    const r = await bedrockGuardrail.check("x", {
+      stage: "output",
+      surface: "essay-score",
+    });
+    expect(r).toEqual({
+      action: "block",
+      findings: [{ type: "managed_word", detail: "PROFANITY" }],
+    });
+    expect(JSON.stringify(r.findings)).not.toContain("Nazi");
+  });
+
   test("block with no parseable assessment → fallback finding", async () => {
     setNextResponse({ action: "GUARDRAIL_INTERVENED", assessments: [] });
     const { bedrockGuardrail } = await import(
