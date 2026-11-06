@@ -9,6 +9,8 @@ openwiki:
   source_paths:
     - design-tool/app/dashboard/layout.tsx
     - design-tool/app/dashboard/page.tsx
+    - design-tool/lib/ui/allTeachersList.ts
+    - design-tool/lib/api/teacherSummary.ts
     - design-tool/app/dashboard/[id]/page.tsx
     - design-tool/app/dashboard/[id]/AssessmentEditor.tsx
     - design-tool/app/dashboard/[id]/monitor/[sittingId]/page.tsx
@@ -24,11 +26,13 @@ openwiki:
     - design-tool/public/roadmap.html
     - design-tool/app/admin/page.tsx
     - design-tool/app/admin/safeguarding/page.tsx
-  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome, AppHeader, FeedbackDialog, AdminPage, AdminSafeguardingPage, adminAlertMode]
+  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome, AppHeader, FeedbackDialog, AdminPage, AdminSafeguardingPage, adminAlertMode, parseAllListParams, filterAndSortAllList, filterAndSortTeachers, teacherSummary]
   test_paths:
     - design-tool/test/admin.test.ts
     - design-tool/test/safeguarding-alerts-ui.test.tsx
     - design-tool/test/all-teachers-ui.test.ts
+    - design-tool/test/all-teachers-list.test.ts
+    - design-tool/test/teacher-summary.test.ts
     - design-tool/test/reporting-views.test.tsx
     - design-tool/test/co-teach-ui.test.tsx
     - design-tool/test/attendance-view.test.ts
@@ -100,10 +104,24 @@ Change guidance: when a UI label changes, update the matching help topic in the 
 
 - **Open now** lists sittings whose assessment is visible, whose status is `open`, and whose `expires_at` is still in the future. Each row links to the monitor.
 - **Shared with you** lists pending offers from colleagues. Accepting one creates your own copy.
-- **All teachers** is an admin-only view. `showAllTeachersToggle` gates the link, and `homeListMode` ignores a hand-typed `?all=1` for non-admins. `ownerCell` renders "you" for rows the caller owns.
+- **All teachers** is an admin-only view. `showAllTeachersToggle` gates the link, and `homeListMode` ignores a hand-typed `?all=1` for non-admins. `ownerCell` renders "you" for rows the caller owns. Its search, filters, sort and the By teacher summary are described in [the admin all-teachers section](#admin-all-teachers-list-and-by-teacher-summary).
 - A co-teacher grant that has not been opened yet shows a "New" mark, which is cleared when the editor is opened (`markAssessmentGrantSeen`).
 
 Row actions (`DuplicateAssessmentButton`, `ArchiveAssessmentButton`, `DeleteDraftButton`, `ActAsButton`) call existing API routes. Their rules are in [assessment lifecycle](assessment-lifecycle.md) and [auth and access](auth-and-access.md).
+
+## Admin: all-teachers list and By teacher summary
+
+The admin all view is `/dashboard?all=1`. Adding `view=teachers` switches it to the By teacher summary. `DashboardPage` derives `showAll` and `showTeachers` from the URL and reads both only for admins, so a non-admin never reaches the data.
+
+- **List and filters (`?all=1`).** `parseAllListParams` (`design-tool/lib/ui/allTeachersList.ts`) reads `q` (search over assessment name and owner email), `owner`, `status` (`draft` or `published`), `attempts` (`yes` or `no`, meaning at least one student attempt), `sort` and `dir`. Unknown or malformed values fall back to the defaults and never throw. `filterAndSortAllList` runs on the server, so a filtered view is a bookmarkable URL. The Students and Submitted columns come from `attemptStatsByAssessment` (`design-tool/lib/api/teacherSummary.ts`), which leaves out practice attempts (`students.practice_for_sub`). The Delete gate still counts every attempt on the same query.
+- **Row actions.** The all view shows only Results and Act as. `ActAsButton` appears only on rows the admin does not own. An admin's own Duplicate, Archive and Delete stay in My assessments, which is where those actions appear for owned rows.
+- **By teacher (`?all=1&view=teachers`).** `teacherSummary` returns one row per assessment owner: assessments, published and archived counts, class sittings (practice sittings excluded), distinct students and submitted attempts (practice excluded), and last activity, the newest of an assessment edit, a sitting opened or an attempt started. It returns counts and owner emails only, never student identity. `filterAndSortTeachers` searches by email and sorts. The default sort is students, most first. Archived assessments count, because they are part of a teacher's history.
+
+Invariants:
+- Practice exclusion for Students and Submitted uses the same `students.practice_for_sub` rule in the list and in the By teacher summary, so the two views agree.
+- The By teacher summary covers every owner, not only the visible scope, and its counts are a separate query from the list's. Change both together when the counting rule changes.
+
+Change guidance: sort and filter rules are pure functions in `allTeachersList.ts`, so most edits are checked without a database. Focused checks: `cd design-tool && bun test test/all-teachers-list.test.ts` (pure, no database) and `cd design-tool && bun test test/all-teachers-ui.test.ts`. `test/teacher-summary.test.ts` runs against the test database (`$TESTDB`, see [testing](../testing/testing-and-validation.md)).
 
 ## Assessment editor (`/dashboard/[id]`)
 
