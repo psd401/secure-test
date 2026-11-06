@@ -34,6 +34,7 @@ PSD macOS secure-testing browser + teacher-facing assessment-authoring "design-t
 
 ## Key working rules
 - Deploy = `design-tool/infra/scripts/deploy.sh` (James runs it if the classifier denies it); the container migrates at boot; read the `health stamp` line, not the exit code. `colima start` first.
+- Ledger = ONE `docs(ledger)` PR per deploy, covering everything merged since the last deploy plus the deploy record (health stamp, renderer, hand-checks). Not inside feature PRs (the entry needs the merge SHA, CI and review results, and parallel PRs appending to the file conflict) and not a PR per merge (each costs a CI run and an OpenWiki push, and the deploy entry soon supersedes it). Draft an entry after each merge and hold it until the deploy (James, 2026-11-05).
 - While `main` is held, ship an urgent fix as a hotfix: branch `hotfix/<name>` from the live commit (`/api/health`), push (ci runs on `hotfix/**` pushes), then `deploy.sh --hotfix` from that worktree; cherry-pick the commits onto `main` afterwards. No migrations, no renderer.
 - `packages/schema` is consumed through `dist` — `bun run build` there after editing `src`. `cd client && bun scripts/vendor-katex.mjs` after a katex bump or `macros.ts` edit.
 - If `bun run dev` shows more than a handful of `postcss.js` processes, stop and `bun run dev:clean`.
