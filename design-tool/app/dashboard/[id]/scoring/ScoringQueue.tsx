@@ -11,6 +11,7 @@ import Link from "next/link";
 import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/schema";
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
 import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import { describeWithheldFilters } from "@/lib/scoring/withheldFeedback";
 import { tableCellMatches } from "@/lib/scoring/auto";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
 import { alertHeading, openAlertCount } from "@/lib/safeguarding/alertView";
@@ -147,6 +148,8 @@ interface QueueEntry {
 
 interface QueueRationale {
   overall_rationale?: string;
+  /** 2026-11-06: the safety filter stopped the AI's written feedback. */
+  feedback_withheld?: { filters?: string[] };
   confidence?: number;
   criterion_scores?: Array<{
     criterion_id: string;
@@ -778,6 +781,20 @@ export function ScoringQueue({
   }
 
   function rationaleDetail(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
+    const withheld = rationale?.feedback_withheld;
+    if (!withheld) return rationaleTable(entry, rationale);
+    return (
+      <>
+        <p className="mt-2 text-xs font-medium">
+          The AI safety filter ({describeWithheldFilters(withheld.filters ?? [])}) stopped the
+          written feedback for this answer. Check the proposed score against the rubric.
+        </p>
+        {rationaleTable(entry, rationale)}
+      </>
+    );
+  }
+
+  function rationaleTable(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
     const noScore = noScoreLabel(rationale);
     if (noScore) return <p className="mt-2 text-xs font-medium">{noScore}</p>;
     const rows = rubricScoreRows(entry.item.rubric, rationale);
