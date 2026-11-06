@@ -23,9 +23,11 @@ function snippet(text: string): string {
  * `blocked_word` is here because Bedrock's word policy reports only `match` —
  * unlike PII entities, it exposes no category to substitute — so the provider
  * has nothing safe to put in `detail` and omits it. This set is the
- * belt-and-braces backstop for that.
+ * belt-and-braces backstop for that. `managed_word` (AWS-managed lists such as
+ * PROFANITY, 2026-11-06) carries the list type, but its source also reports
+ * `match`, so it gets the same backstop.
  */
-const MATCH_BEARING_FINDING_TYPES = new Set(["pii", "blocked_word"]);
+const MATCH_BEARING_FINDING_TYPES = new Set(["pii", "blocked_word", "managed_word"]);
 
 /**
  * Finding types where the CHECKED TEXT ITSELF is too sensitive to persist.

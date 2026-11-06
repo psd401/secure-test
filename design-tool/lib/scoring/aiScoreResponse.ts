@@ -29,6 +29,11 @@ import { AI_SCORED_TYPES } from "@/lib/scoring/aiBatch";
 import { runGuarded } from "@/lib/safeguarding/guard";
 import { hasInjectionAlert } from "@/lib/safeguarding/alerts";
 import { screenedForScoring } from "@/lib/safeguarding/screening/screen";
+import {
+  withheldFilterLabels,
+  withholdFeedback,
+  type WithheldFeedback,
+} from "@/lib/scoring/withheldFeedback";
 
 // Slice 39 refactor: the score-one-response core shared by the attempt-wide
 // score-ai route (slice 38) and the per-response re-run action (slice 39).
@@ -83,6 +88,9 @@ export type EssayScoreAttempt =
       view: Rubric;
       provider: EssayScorerProvider;
       method: ScoringMethod;
+      /** Set when the output check stopped the feedback and the caller asked
+       * for `withholdBlockedFeedback`: `result` then carries blank feedback. */
+      feedbackWithheld?: WithheldFeedback;
     }
   | { kind: "not_ai"; method: ScoringMethod }
   | { kind: "unscorable"; reason: UnscorableReason }
@@ -102,6 +110,12 @@ export async function runEssayScorer(opts: {
   allowedMethods?: readonly ScoringMethod[];
   /** Explicit provider (the runner's `--provider`/`--model`); env default otherwise. */
   provider?: EssayScorerProvider;
+  /**
+   * 2026-11-06: when the OUTPUT check blocks the feedback, return the score
+   * with the feedback blanked (`feedbackWithheld`) instead of `blocked`. The
+   * live path sets it; the corpus runner leaves it off and still counts a block.
+   */
+  withholdBlockedFeedback?: boolean;
 }): Promise<EssayScoreAttempt> {
   const { item, response, ownerSub } = opts;
   const allowed = opts.allowedMethods ?? (["ai", "hybrid"] as const);
@@ -134,6 +148,8 @@ export async function runEssayScorer(opts: {
   const provider = opts.provider ?? getEssayScorerProvider();
 
   try {
+    // Kept so a feedback-only block can still propose the score (2026-11-06).
+    let raw: ScoreEssayResult | undefined;
     const outcome = await runGuarded({
       surface: "essay-score",
       ownerSub,
@@ -142,8 +158,8 @@ export async function runEssayScorer(opts: {
       // the teacher reads anyway — record a content hit ("flag") instead of
       // refusing to score. Only the output check can block here now.
       inputMode: "record",
-      run: () =>
-        provider.scoreEssay(
+      run: async () =>
+        (raw = await provider.scoreEssay(
           {
             stem: item.stem,
             response_text: responseText,
@@ -151,21 +167,39 @@ export async function runEssayScorer(opts: {
             kind: item.type === "short_text" ? "short_answer" : "essay",
           },
           ownerSub,
-        ),
+        )),
       outputText: (r) =>
         [r.overall_rationale, ...r.criterion_scores.map((c) => c.rationale)].join(
           "\n",
         ),
     });
-    if (!outcome.ok) {
+    let result: ScoreEssayResult;
+    let feedbackWithheld: WithheldFeedback | undefined;
+    if (outcome.ok) {
+      result = outcome.result;
+    } else if (outcome.stage === "output" && raw && opts.withholdBlockedFeedback) {
+      // Beta report 2026-11-06: the guardrail stopped the AI's written
+      // feedback (a history answer; the PROFANITY list blocks "Nazi"). The
+      // points and levels never reach a student unreviewed (scoreClaimed
+      // keeps this a proposal), so they are kept; the blocked text is not.
+      result = withholdFeedback(raw);
+      feedbackWithheld = { filters: withheldFilterLabels(outcome.findings) };
+    } else {
       return { kind: "blocked" };
     }
-    const result = outcome.result;
     const bounds = validateAgainstRubric(result, view);
     if (!bounds.valid) {
       return { kind: "bounds", reason: bounds.reason };
     }
-    return { kind: "ok", result, rubric, view, provider, method };
+    return {
+      kind: "ok",
+      result,
+      rubric,
+      view,
+      provider,
+      method,
+      ...(feedbackWithheld ? { feedbackWithheld } : {}),
+    };
   } catch (err) {
     // 2026-09-15 (R-5): a structured error line, so the ServerErrors metric
     // filter ($.level = "error") sees a provider failure — the plain
@@ -257,18 +291,20 @@ async function scoreClaimed(opts: {
   ownerSub: string;
 }): Promise<AiScoreOutcome> {
   const { response } = opts;
-  const attempt = await runEssayScorer(opts);
+  const attempt = await runEssayScorer({ ...opts, withholdBlockedFeedback: true });
   if (attempt.kind !== "ok") {
     // A bounds failure was and stays a provider_error to this caller.
     return attempt.kind === "bounds" ? { kind: "provider_error" } : attempt;
   }
-  const { result, provider, method } = attempt;
+  const { result, provider, method, feedbackWithheld } = attempt;
   const db = getDb();
   // Hybrid transparency slice 3 (D-4, 6.1): an answer with a prompt-injection
   // alert — forced or not — always gets a proposal, never a final: the
   // answer most likely to have inflated its own confidence is the one a
   // teacher must review. Asked only when Hybrid would otherwise finalize.
   const finalize =
+    // Withheld feedback (2026-11-06) is always a proposal a teacher reads.
+    !feedbackWithheld &&
     method === "hybrid" &&
     result.confidence >= HYBRID_AUTO_FINALIZE_CONFIDENCE &&
     !(await hasInjectionAlert(db, response.id)) &&
@@ -290,6 +326,7 @@ async function scoreClaimed(opts: {
           criterion_scores: result.criterion_scores,
           overall_rationale: result.overall_rationale,
           confidence: result.confidence,
+          ...(feedbackWithheld ? { feedback_withheld: feedbackWithheld } : {}),
         },
         scorer: provider.id,
         status,

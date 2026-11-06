@@ -57,6 +57,14 @@ function extractFindings(out: ApplyGuardrailCommandOutput): GuardrailFinding[] {
       // type (see SNIPPET_SUPPRESSING_FINDING_TYPES in guard.ts).
       findings.push({ type: "blocked_word" });
     }
+    for (const m of a.wordPolicy?.managedWordLists ?? []) {
+      // AWS's managed lists (PROFANITY). Unlike customWords these carry the
+      // list's `type`, a category label safe for `detail`; `match` is never
+      // read. Unmapped before 2026-11-06, so an essay-score feedback block on
+      // "Nazi" (the PROFANITY list includes it) was logged only as
+      // `guardrail_intervened`.
+      findings.push({ type: "managed_word", detail: m.type ?? "unknown" });
+    }
   }
   return findings;
 }

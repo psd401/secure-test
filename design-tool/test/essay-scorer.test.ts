@@ -540,6 +540,57 @@ describe("POST /api/attempts/:id/score-ai", () => {
     expect(rows).toHaveLength(2);
   });
 
+  // 2026-11-06 beta report: the OUTPUT check stopping the AI's feedback no
+  // longer leaves the teacher with nothing — the score is proposed with the
+  // feedback blanked and the filter recorded; never auto-finalized.
+  test("output block → proposal with feedback withheld, never final; corpus path still blocked", async () => {
+    process.env.GUARDRAIL_PROVIDER = "mock";
+    const { db, itemRows } = await seedAiScenario();
+    // The mock scorer writes the criterion name into its rationale, so the
+    // sentinel trips only the output check (the answer text is clean).
+    const hybrid = itemRows[1]!;
+    const rubric = {
+      ...RUBRIC,
+      criteria: RUBRIC.criteria.map((c, i) => (i === 0 ? { ...c, name: "BLOCKME criterion" } : c)),
+    };
+    await db
+      .update(items)
+      .set({ config: { rubric, scoring_method: "hybrid" } })
+      .where(eq(items.id, hybrid.id));
+    const [item] = await db.select().from(items).where(eq(items.id, hybrid.id));
+    const [response] = await db.select().from(responses).where(eq(responses.item_id, hybrid.id));
+    const { aiScoreResponse, runEssayScorer } = await import("../lib/scoring/aiScoreResponse");
+
+    // Confidence 0.9 ≥ the Hybrid gate, yet a withheld proposal stays proposed.
+    const outcome = await aiScoreResponse({ item: item!, response: response!, ownerSub: OWNER });
+    expect(outcome).toEqual({ kind: "scored", status: "proposed" });
+
+    const [row] = await db.select().from(scores).where(eq(scores.response_id, response!.id));
+    expect(row!.status).toBe("proposed");
+    expect(row!.points).toBe(4);
+    const rationale = row!.rationale as {
+      overall_rationale: string;
+      criterion_scores: Array<{ rationale: string; level_id: string }>;
+      feedback_withheld: { filters: string[] };
+    };
+    expect(rationale.overall_rationale).toBe("");
+    expect(rationale.criterion_scores.every((c) => c.rationale === "")).toBe(true);
+    expect(rationale.criterion_scores.every((c) => c.level_id.length > 0)).toBe(true);
+    expect(rationale.feedback_withheld).toEqual({ filters: ["blockme"] });
+    expect(JSON.stringify(rationale)).not.toContain("BLOCKME");
+
+    const blocks = await db
+      .select()
+      .from(guardrail_events)
+      .where(eq(guardrail_events.action, "block"));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.stage).toBe("output");
+
+    // The corpus runner does not opt in: a block is still a block there.
+    const corpus = await runEssayScorer({ item: item!, response: response!, ownerSub: OWNER });
+    expect(corpus).toEqual({ kind: "blocked" });
+  });
+
   test("blank essay text is skipped, not sent to the model", async () => {
     const { db, attempt, itemRows } = await seedAiScenario();
     await db
