@@ -47,8 +47,8 @@ const COLUMNS: { sort: UsageSort; label: string; value: (r: TeacherUsageRow) => 
   { sort: "feedback_sent", label: "Feedback sent", value: (r) => r.feedbackSent },
 ];
 
-function href(sort: UsageSort, window: UsageWindow): string {
-  return `/admin/usage?sort=${sort}&window=${window}`;
+function href(sort: UsageSort, usageWindow: UsageWindow): string {
+  return `/admin/usage?sort=${sort}&window=${usageWindow}`;
 }
 
 /**
@@ -63,9 +63,9 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
   }
   if (!isAdmin(session)) notFound();
 
-  const { sort, window } = parseUsageParams(await searchParams);
+  const { sort, window: usageWindow } = parseUsageParams(await searchParams);
   const rows = sortUsage(
-    await teacherUsage(getDb(), { since: windowSince(window, new Date()) }),
+    await teacherUsage(getDb(), { since: windowSince(usageWindow, new Date()) }),
     sort,
   );
 
@@ -73,7 +73,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-12">
       <PageHeader
         title="Teacher usage"
-        description={`${rows.length} staff with activity · ${USAGE_WINDOW_LABELS[window].toLowerCase()}`}
+        description={`${rows.length} staff with activity · ${USAGE_WINDOW_LABELS[usageWindow].toLowerCase()}`}
       />
 
       <p className="text-sm">
@@ -84,7 +84,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
 
       <nav aria-label="Time window" className="flex flex-wrap gap-3 text-sm">
         {USAGE_WINDOWS.map((w) =>
-          w === window ? (
+          w === usageWindow ? (
             <span key={w} aria-current="page" className="font-semibold">
               {USAGE_WINDOW_LABELS[w]}
             </span>
@@ -120,7 +120,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
                     {c.sort === sort ? (
                       <span className="font-semibold">{c.label} ↓</span>
                     ) : (
-                      <Link href={href(c.sort, window)} className="underline">
+                      <Link href={href(c.sort, usageWindow)} className="underline">
                         {c.label}
                       </Link>
                     )}

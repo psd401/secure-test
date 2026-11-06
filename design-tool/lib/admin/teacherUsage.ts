@@ -278,7 +278,7 @@ export async function teacherUsage(
       r[key] = b.n;
       r.featuresUsed += 1;
       r.email ??= b.email;
-      r.lastActive = newer(r.lastActive, b.last ? new Date(b.last) : null);
+      r.lastActive = newer(r.lastActive, b.last);
     }
   }
   return [...bySub.values()];
