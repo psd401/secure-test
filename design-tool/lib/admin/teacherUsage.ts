@@ -15,12 +15,28 @@
  * - attempts submitted (same scope)
  * - last active (the newest of the timestamps behind the counts above)
  *
+ * Breadth columns (slice 2), each a count of rows the staff member created:
+ * gradebook pushes (`created_by_sub`, not the act-as `actor_sub`), shares
+ * sent, class insight reports, competency assignments, in-app feedback sent.
+ * `featuresUsed` is how many of those five are non-zero — a breadth measure
+ * to sort by, deliberately not a weighted score.
+ *
  * Credit goes to the sitting's OWNER, not `created_by_sub`: a substitute who
  * pressed the button for a teacher's class does not make the class theirs.
  */
-import { and, count, countDistinct, eq, gte, isNotNull, max } from "drizzle-orm";
+import { and, count, countDistinct, eq, gte, isNotNull, max, sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { getDb } from "@/db/client";
-import { assessments, attempts, test_sessions } from "@/db/schema";
+import {
+  assessment_shares,
+  assessments,
+  attempts,
+  class_insight_reports,
+  competency_assignments,
+  feedback,
+  gradebook_pushes,
+  test_sessions,
+} from "@/db/schema";
 import { DISPLAY_TIME_ZONE, zonedWallTimeToIso } from "@/lib/timeZone";
 
 type Db = ReturnType<typeof getDb>;
@@ -33,10 +49,29 @@ export interface TeacherUsageRow {
   sittings: number;
   students: number;
   attempts: number;
+  gradebookPushes: number;
+  sharesSent: number;
+  insightReports: number;
+  competencyAssignments: number;
+  feedbackSent: number;
+  /** How many of the five breadth features above are non-zero (0–5). */
+  featuresUsed: number;
   lastActive: Date | null;
 }
 
-export const USAGE_SORTS = ["students", "attempts", "sittings", "assessments", "last_active"] as const;
+export const USAGE_SORTS = [
+  "students",
+  "attempts",
+  "sittings",
+  "assessments",
+  "features_used",
+  "gradebook_pushes",
+  "shares_sent",
+  "insight_reports",
+  "competency_assignments",
+  "feedback_sent",
+  "last_active",
+] as const;
 export type UsageSort = (typeof USAGE_SORTS)[number];
 
 export const USAGE_WINDOWS = ["30d", "year", "all"] as const;
@@ -143,11 +178,69 @@ export async function teacherUsage(
     )
     .groupBy(test_sessions.owner_sub);
 
+  /** One count-per-actor query over a table that records who created the row. */
+  const perActor = (
+    table: PgTable,
+    actor: PgColumn,
+    createdAt: PgColumn,
+    email?: PgColumn,
+  ): Promise<{ sub: string; email: string | null; n: number; last: Date | null }[]> =>
+    // Generic PgColumn params lose drizzle's per-column result types; the
+    // shape is fixed by the select below, so assert it once here.
+    db
+      .select({
+        sub: actor,
+        email: email ? max(email) : sql<string | null>`null`,
+        n: count(),
+        last: max(createdAt),
+      })
+      .from(table)
+      .where(since ? gte(createdAt, since) : undefined)
+      .groupBy(actor) as unknown as Promise<
+      { sub: string; email: string | null; n: number; last: Date | null }[]
+    >;
+
+  const [pushRows, shareRows, insightRows, competencyRows, feedbackRows] = await Promise.all([
+    perActor(gradebook_pushes, gradebook_pushes.created_by_sub, gradebook_pushes.created_at),
+    perActor(
+      assessment_shares,
+      assessment_shares.shared_by_sub,
+      assessment_shares.created_at,
+      assessment_shares.shared_by_email,
+    ),
+    perActor(
+      class_insight_reports,
+      class_insight_reports.created_by_sub,
+      class_insight_reports.created_at,
+    ),
+    perActor(
+      competency_assignments,
+      competency_assignments.assigned_by_sub,
+      competency_assignments.created_at,
+      competency_assignments.assigned_by_email,
+    ),
+    perActor(feedback, feedback.sub, feedback.created_at, feedback.email),
+  ]);
+
   const bySub = new Map<string, TeacherUsageRow>();
   const row = (sub: string): TeacherUsageRow => {
     let r = bySub.get(sub);
     if (!r) {
-      r = { sub, email: null, assessments: 0, sittings: 0, students: 0, attempts: 0, lastActive: null };
+      r = {
+        sub,
+        email: null,
+        assessments: 0,
+        sittings: 0,
+        students: 0,
+        attempts: 0,
+        gradebookPushes: 0,
+        sharesSent: 0,
+        insightReports: 0,
+        competencyAssignments: 0,
+        feedbackSent: 0,
+        featuresUsed: 0,
+        lastActive: null,
+      };
       bySub.set(sub, r);
     }
     return r;
@@ -172,13 +265,49 @@ export async function teacherUsage(
     r.attempts = t.n;
     r.lastActive = newer(r.lastActive, t.last);
   }
+  const breadth: [typeof pushRows, BreadthKey][] = [
+    [pushRows, "gradebookPushes"],
+    [shareRows, "sharesSent"],
+    [insightRows, "insightReports"],
+    [competencyRows, "competencyAssignments"],
+    [feedbackRows, "feedbackSent"],
+  ];
+  for (const [rows, key] of breadth) {
+    for (const b of rows) {
+      const r = row(b.sub);
+      r[key] = b.n;
+      r.featuresUsed += 1;
+      r.email ??= b.email;
+      r.lastActive = newer(r.lastActive, b.last ? new Date(b.last) : null);
+    }
+  }
   return [...bySub.values()];
 }
+
+type BreadthKey =
+  | "gradebookPushes"
+  | "sharesSent"
+  | "insightReports"
+  | "competencyAssignments"
+  | "feedbackSent";
+
+const SORT_KEY: Record<Exclude<UsageSort, "last_active">, keyof TeacherUsageRow> = {
+  students: "students",
+  attempts: "attempts",
+  sittings: "sittings",
+  assessments: "assessments",
+  features_used: "featuresUsed",
+  gradebook_pushes: "gradebookPushes",
+  shares_sent: "sharesSent",
+  insight_reports: "insightReports",
+  competency_assignments: "competencyAssignments",
+  feedback_sent: "feedbackSent",
+};
 
 /** Descending on the chosen column; ties broken by email/sub so the order is stable. */
 export function sortUsage(rows: TeacherUsageRow[], sort: UsageSort): TeacherUsageRow[] {
   const key = (r: TeacherUsageRow): number =>
-    sort === "last_active" ? (r.lastActive?.getTime() ?? 0) : r[sort];
+    sort === "last_active" ? (r.lastActive?.getTime() ?? 0) : (r[SORT_KEY[sort]] as number);
   const label = (r: TeacherUsageRow) => r.email ?? r.sub;
   return [...rows].sort((a, b) => key(b) - key(a) || label(a).localeCompare(label(b)));
 }

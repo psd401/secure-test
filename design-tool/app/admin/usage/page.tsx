@@ -11,6 +11,7 @@ import {
   sortUsage,
   teacherUsage,
   windowSince,
+  type TeacherUsageRow,
   type UsageSort,
   type UsageWindow,
 } from "@/lib/admin/teacherUsage";
@@ -33,12 +34,17 @@ interface PageProps {
   searchParams: Promise<{ sort?: string; window?: string }>;
 }
 
-const COLUMNS: { sort: UsageSort; label: string }[] = [
-  { sort: "students", label: "Students tested" },
-  { sort: "attempts", label: "Attempts submitted" },
-  { sort: "sittings", label: "Sittings run" },
-  { sort: "assessments", label: "Assessments created" },
-  { sort: "last_active", label: "Last active" },
+const COLUMNS: { sort: UsageSort; label: string; value: (r: TeacherUsageRow) => number }[] = [
+  { sort: "students", label: "Students tested", value: (r) => r.students },
+  { sort: "attempts", label: "Attempts submitted", value: (r) => r.attempts },
+  { sort: "sittings", label: "Sittings run", value: (r) => r.sittings },
+  { sort: "assessments", label: "Assessments created", value: (r) => r.assessments },
+  { sort: "features_used", label: "Features used (of 5)", value: (r) => r.featuresUsed },
+  { sort: "gradebook_pushes", label: "Gradebook pushes", value: (r) => r.gradebookPushes },
+  { sort: "shares_sent", label: "Shares sent", value: (r) => r.sharesSent },
+  { sort: "insight_reports", label: "Class insights", value: (r) => r.insightReports },
+  { sort: "competency_assignments", label: "Competency assigned", value: (r) => r.competencyAssignments },
+  { sort: "feedback_sent", label: "Feedback sent", value: (r) => r.feedbackSent },
 ];
 
 function href(sort: UsageSort, window: UsageWindow): string {
@@ -92,7 +98,9 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
 
       <p className="text-xs text-muted-foreground">
         Counts class sittings only (practice excluded), credited to the sitting&apos;s owner.
-        Students tested counts distinct students with a submitted attempt.
+        Students tested counts distinct students with a submitted attempt. Features used counts
+        how many of gradebook pushes, shares, class insights, competency assignments and
+        feedback a teacher has used at least once.
       </p>
 
       {rows.length === 0 ? (
@@ -103,7 +111,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Teacher</TableHead>
-                {COLUMNS.map((c) => (
+                {[...COLUMNS, { sort: "last_active" as const, label: "Last active" }].map((c) => (
                   <TableHead
                     key={c.sort}
                     className="text-right"
@@ -126,10 +134,11 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
                   <TableCell className="w-full max-w-0 truncate" title={r.email ?? r.sub}>
                     {r.email ?? r.sub}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{r.students}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.attempts}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.sittings}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.assessments}</TableCell>
+                  {COLUMNS.map((c) => (
+                    <TableCell key={c.sort} className="text-right tabular-nums">
+                      {c.value(r)}
+                    </TableCell>
+                  ))}
                   <TableCell className="whitespace-nowrap text-right text-muted-foreground">
                     {r.lastActive ? formatDate(r.lastActive) : "—"}
                   </TableCell>

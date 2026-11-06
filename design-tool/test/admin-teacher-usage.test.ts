@@ -4,9 +4,21 @@
 // window cuts on the right timestamp, and the school year starts Sept 1
 // Pacific.
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
-import { assessments, attempts, students, test_sessions } from "../db/schema";
+import {
+  assessment_shares,
+  assessments,
+  attempts,
+  class_insight_reports,
+  competency_assignments,
+  feedback,
+  gradebook_pushes,
+  item_sets,
+  roster_students,
+  students,
+  test_sessions,
+} from "../db/schema";
 import {
   parseUsageParams,
   schoolYearStart,
@@ -19,6 +31,7 @@ import {
 const A = "usage-teacher-a";
 const B = "usage-teacher-b";
 const SUB = "usage-substitute";
+const PS_ID = "usage-roster-1";
 const LONG_AGO = new Date("2024-01-15T12:00:00Z");
 const RECENT = new Date("2026-10-15T12:00:00Z");
 
@@ -33,6 +46,8 @@ afterEach(async () => {
   const db = getDb();
   await db.execute(sql`truncate table assessments restart identity cascade`);
   await db.execute(sql`truncate table students restart identity cascade`);
+  await db.execute(sql`truncate table feedback restart identity cascade`);
+  await db.delete(roster_students).where(eq(roster_students.ps_id, PS_ID));
 });
 
 afterAll(async () => {
@@ -147,6 +162,94 @@ describe("teacherUsage", () => {
     expect(rows[B]).toMatchObject({ assessments: 1, sittings: 0, students: 0, attempts: 0 });
   });
 
+  test("breadth: each feature counted by its creator; featuresUsed counts non-zero features", async () => {
+    const db = getDb();
+    const [a] = await db
+      .insert(assessments)
+      .values({ owner_sub: A, name: "A1", created_at: RECENT })
+      .returning();
+    const [set] = await db.insert(item_sets).values({ assessment_id: a!.id }).returning();
+    await db.insert(roster_students).values({ ps_id: PS_ID, enroll_status: 0, last_seen_snapshot_id: "usage-test" });
+
+    // A: two pushes (one made while an admin acted as A), a share, an insight
+    // report, a competency assignment. Four features; feedback unused.
+    await db.insert(gradebook_pushes).values([
+      {
+        assessment_id: a!.id,
+        section_ps_id: "s1",
+        target: "powerschool",
+        name: "P1",
+        created_by_sub: A,
+        created_at: RECENT,
+      },
+      {
+        assessment_id: a!.id,
+        section_ps_id: "s2",
+        target: "powerschool",
+        name: "P2",
+        created_by_sub: A,
+        actor_sub: "usage-admin",
+        created_at: RECENT,
+      },
+    ]);
+    await db.insert(assessment_shares).values({
+      assessment_id: a!.id,
+      recipient_email: `${B}@example.org`,
+      shared_by_sub: A,
+      shared_by_email: `${A}@example.org`,
+      created_at: RECENT,
+    });
+    await db.insert(class_insight_reports).values({
+      assessment_id: a!.id,
+      section_key: "s1",
+      report: {},
+      pseudonyms: {},
+      item_ids: {},
+      pack_hash: "h",
+      model_id: "mock",
+      prompt_version: "v",
+      created_by_sub: A,
+      created_at: RECENT,
+    });
+    await db.insert(competency_assignments).values({
+      assessment_id: a!.id,
+      student_ps_id: PS_ID,
+      item_set_id: set!.id,
+      proctor_email: `${B}@example.org`,
+      assigned_by_sub: A,
+      assigned_by_email: `${A}@example.org`,
+      created_at: RECENT,
+    });
+    // B: only feedback, long ago. A row appears from feedback alone,
+    // labelled by the feedback's email.
+    await db.insert(feedback).values({
+      sub: B,
+      email: `${B}@example.org`,
+      role: "teacher",
+      path: "/",
+      message: "hi",
+      created_at: LONG_AGO,
+    });
+
+    const all = bySub(await teacherUsage(db, { since: null }));
+    expect(all[A]).toMatchObject({
+      email: `${A}@example.org`, // the share's email fills the assessment's null
+      gradebookPushes: 2,
+      sharesSent: 1,
+      insightReports: 1,
+      competencyAssignments: 1,
+      feedbackSent: 0,
+      featuresUsed: 4,
+    });
+    expect(all[B]).toMatchObject({ email: `${B}@example.org`, feedbackSent: 1, featuresUsed: 1 });
+    expect(all[B]!.lastActive).toEqual(LONG_AGO);
+    expect(all["usage-admin"]).toBeUndefined(); // act-as credits the teacher, not the admin
+
+    const recent = bySub(await teacherUsage(db, { since: new Date("2026-09-01T00:00:00Z") }));
+    expect(recent[B]).toBeUndefined();
+    expect(recent[A]!.featuresUsed).toBe(4);
+  });
+
   test("no activity returns no rows", async () => {
     expect(await teacherUsage(getDb(), { since: null })).toEqual([]);
   });
@@ -160,6 +263,12 @@ describe("sortUsage", () => {
     sittings: 0,
     students: 0,
     attempts: 0,
+    gradebookPushes: 0,
+    sharesSent: 0,
+    insightReports: 0,
+    competencyAssignments: 0,
+    feedbackSent: 0,
+    featuresUsed: 0,
     lastActive: null,
     ...over,
   });
@@ -172,6 +281,8 @@ describe("sortUsage", () => {
     ];
     expect(sortUsage(rows, "students").map((r) => r.sub)).toEqual(["b", "a", "c"]);
     expect(sortUsage(rows, "sittings").map((r) => r.sub)).toEqual(["a", "b", "c"]);
+    const broad = [row("x", { featuresUsed: 1 }), row("y", { featuresUsed: 4 })];
+    expect(sortUsage(broad, "features_used").map((r) => r.sub)).toEqual(["y", "x"]);
   });
 
   test("last active puts never-active last", () => {
