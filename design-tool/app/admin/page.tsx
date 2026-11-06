@@ -93,6 +93,10 @@ export default async function AdminPage() {
         <span className="text-muted-foreground">
           · {openAlerts === 0 ? "none open" : `${openAlerts} open`}
         </span>
+        <span className="text-muted-foreground"> · </span>
+        <Link href="/admin/usage" className="font-medium underline">
+          Teacher usage
+        </Link>
       </p>
 
       {rows.length === 0 ? (
