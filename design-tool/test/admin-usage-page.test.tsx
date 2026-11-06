@@ -49,11 +49,16 @@ afterAll(async () => {
   await closeDb();
 });
 
+// Next's redirect()/notFound() throw an error whose `digest` names the
+// outcome. In the full suite, other files (owner-email-heal, start-screen)
+// replace `redirect` process-wide with one that throws a plain Error whose
+// message is "redirect <url>" — so fall back to the message.
 async function digestOf(searchParams: Record<string, string> = {}): Promise<string> {
   try {
     await AdminUsagePage({ searchParams: Promise.resolve(searchParams) });
   } catch (err) {
-    return String((err as { digest?: string }).digest ?? "");
+    const e = err as { digest?: string; message?: string };
+    return String(e.digest || e.message || "");
   }
   return "";
 }
@@ -61,7 +66,7 @@ async function digestOf(searchParams: Record<string, string> = {}): Promise<stri
 describe("/admin/usage gate", () => {
   test("signed out redirects to login, back to this page", async () => {
     const digest = await digestOf();
-    expect(digest).toContain("NEXT_REDIRECT");
+    expect(digest).toMatch(/NEXT_REDIRECT|^redirect /);
     expect(digest).toContain("/login?next=/admin/usage");
   });
 
