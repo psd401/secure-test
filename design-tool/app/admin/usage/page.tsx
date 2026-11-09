@@ -78,7 +78,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
   const rows = sortUsage(filterUsage(allRows, q), sort);
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 px-6 py-12">
+    <main className="mx-auto max-w-7xl space-y-6 px-6 py-12">
       <PageHeader
         title="Teacher usage"
         description={`${q ? `${rows.length} of ${allRows.length}` : rows.length} staff with activity · ${USAGE_WINDOW_LABELS[usageWindow].toLowerCase()}`}
@@ -147,7 +147,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
                 {[...COLUMNS, { sort: "last_active" as const, label: "Last active" }].map((c) => (
                   <TableHead
                     key={c.sort}
-                    className="text-right"
+                    className="whitespace-normal text-right"
                     aria-sort={c.sort === sort ? "descending" : undefined}
                   >
                     {c.sort === sort ? (
@@ -164,7 +164,8 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.sub}>
-                  <TableCell className="w-full max-w-0 truncate" title={r.email ?? r.sub}>
+                  {/* Not truncated: the email sets this column's width, and the headers wrap to make room. */}
+                  <TableCell title={r.email ?? r.sub}>
                     {r.email ? (
                       <Link href={assessmentsHref(r.email)} className="font-medium hover:underline">
                         {r.email}
