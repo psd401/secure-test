@@ -31,8 +31,23 @@ function withRequestId(res: NextResponse, id: string): NextResponse {
   return res;
 }
 
+/**
+ * WordPress and PHP paths, which this app has none of. Automated scanners POST
+ * multipart bodies to them; in a production build Next answers a multipart
+ * POST to an unknown path with a 500, so each sweep tripped the error and ALB
+ * 5xx alarms. Answering here means they never reach the renderer.
+ */
+export function isScannerProbe(pathname: string): boolean {
+  return /^\/wp-(admin|content|includes|json)(\/|$)|\.php$/i.test(pathname);
+}
+
 export async function proxy(req: NextRequest) {
   const requestId = resolveRequestId(req.headers);
+
+  if (isScannerProbe(req.nextUrl.pathname)) {
+    return withRequestId(new NextResponse(null, { status: 404 }), requestId);
+  }
+
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set(REQUEST_ID_HEADER, requestId);
   const pass = () =>
