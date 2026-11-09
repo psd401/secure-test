@@ -84,9 +84,10 @@ export const USAGE_WINDOW_LABELS: Record<UsageWindow, string> = {
 };
 
 /** Unknown or missing values fall back to the defaults (students, school year). */
-export function parseUsageParams(params: { sort?: string; window?: string }): {
+export function parseUsageParams(params: { sort?: string; window?: string; q?: string }): {
   sort: UsageSort;
   window: UsageWindow;
+  q: string;
 } {
   const sort = (USAGE_SORTS as readonly string[]).includes(params.sort ?? "")
     ? (params.sort as UsageSort)
@@ -94,7 +95,7 @@ export function parseUsageParams(params: { sort?: string; window?: string }): {
   const window = (USAGE_WINDOWS as readonly string[]).includes(params.window ?? "")
     ? (params.window as UsageWindow)
     : "year";
-  return { sort, window };
+  return { sort, window, q: (params.q ?? "").trim().slice(0, 200) };
 }
 
 const YEAR_MONTH = new Intl.DateTimeFormat("en-US", {
@@ -310,4 +311,10 @@ export function sortUsage(rows: TeacherUsageRow[], sort: UsageSort): TeacherUsag
     sort === "last_active" ? (r.lastActive?.getTime() ?? 0) : (r[SORT_KEY[sort]] as number);
   const label = (r: TeacherUsageRow) => r.email ?? r.sub;
   return [...rows].sort((a, b) => key(b) - key(a) || label(a).localeCompare(label(b)));
+}
+
+/** Case-insensitive search over the teacher's email; an empty search keeps every row. */
+export function filterUsage(rows: TeacherUsageRow[], q: string): TeacherUsageRow[] {
+  const needle = q.toLowerCase();
+  return needle ? rows.filter((r) => (r.email ?? "").toLowerCase().includes(needle)) : rows;
 }

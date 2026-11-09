@@ -20,6 +20,7 @@ import {
   test_sessions,
 } from "../db/schema";
 import {
+  filterUsage,
   parseUsageParams,
   schoolYearStart,
   sortUsage,
@@ -291,17 +292,38 @@ describe("sortUsage", () => {
   });
 });
 
+describe("filterUsage", () => {
+  const row = (sub: string, email: string | null) => ({ sub, email }) as TeacherUsageRow;
+  const rows = [row("a", "Bea@example.org"), row("b", "al@example.org"), row("c", null)];
+
+  test("matches the email case-insensitively and drops rows with none", () => {
+    expect(filterUsage(rows, "bEA@").map((r) => r.sub)).toEqual(["a"]);
+    expect(filterUsage(rows, "example").map((r) => r.sub)).toEqual(["a", "b"]);
+  });
+
+  test("an empty search keeps every row", () => {
+    expect(filterUsage(rows, "")).toHaveLength(3);
+  });
+});
+
 describe("params and windows", () => {
   test("unknown params fall back to students / school year", () => {
-    expect(parseUsageParams({})).toEqual({ sort: "students", window: "year" });
+    expect(parseUsageParams({})).toEqual({ sort: "students", window: "year", q: "" });
     expect(parseUsageParams({ sort: "drop table", window: "x" })).toEqual({
       sort: "students",
       window: "year",
+      q: "",
     });
     expect(parseUsageParams({ sort: "sittings", window: "30d" })).toEqual({
       sort: "sittings",
       window: "30d",
+      q: "",
     });
+  });
+
+  test("the search is trimmed and capped", () => {
+    expect(parseUsageParams({ q: "  bea  " }).q).toBe("bea");
+    expect(parseUsageParams({ q: "x".repeat(300) }).q).toHaveLength(200);
   });
 
   test("school year starts Sept 1 Pacific", () => {

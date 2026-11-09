@@ -7,6 +7,7 @@ import { readStaffSessionFromCookies } from "@/lib/auth/session";
 import {
   USAGE_WINDOW_LABELS,
   USAGE_WINDOWS,
+  filterUsage,
   parseUsageParams,
   sortUsage,
   teacherUsage,
@@ -24,6 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
 
@@ -31,7 +34,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Teacher usage" };
 
 interface PageProps {
-  searchParams: Promise<{ sort?: string; window?: string }>;
+  searchParams: Promise<{ sort?: string; window?: string; q?: string }>;
 }
 
 const COLUMNS: { sort: UsageSort; label: string; value: (r: TeacherUsageRow) => number }[] = [
@@ -47,8 +50,15 @@ const COLUMNS: { sort: UsageSort; label: string; value: (r: TeacherUsageRow) => 
   { sort: "feedback_sent", label: "Feedback sent", value: (r) => r.feedbackSent },
 ];
 
-function href(sort: UsageSort, usageWindow: UsageWindow): string {
-  return `/admin/usage?sort=${sort}&window=${usageWindow}`;
+function href(sort: UsageSort, usageWindow: UsageWindow, q: string): string {
+  const qs = new URLSearchParams({ sort, window: usageWindow });
+  if (q) qs.set("q", q);
+  return `/admin/usage?${qs}`;
+}
+
+/** The admin all-assessments list, filtered to this teacher. */
+function assessmentsHref(email: string): string {
+  return `/dashboard?${new URLSearchParams({ all: "1", owner: email.toLowerCase() })}`;
 }
 
 /**
@@ -63,17 +73,15 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
   }
   if (!isAdmin(session)) notFound();
 
-  const { sort, window: usageWindow } = parseUsageParams(await searchParams);
-  const rows = sortUsage(
-    await teacherUsage(getDb(), { since: windowSince(usageWindow, new Date()) }),
-    sort,
-  );
+  const { sort, window: usageWindow, q } = parseUsageParams(await searchParams);
+  const allRows = await teacherUsage(getDb(), { since: windowSince(usageWindow, new Date()) });
+  const rows = sortUsage(filterUsage(allRows, q), sort);
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-6 py-12">
       <PageHeader
         title="Teacher usage"
-        description={`${rows.length} staff with activity · ${USAGE_WINDOW_LABELS[usageWindow].toLowerCase()}`}
+        description={`${q ? `${rows.length} of ${allRows.length}` : rows.length} staff with activity · ${USAGE_WINDOW_LABELS[usageWindow].toLowerCase()}`}
       />
 
       <p className="text-sm">
@@ -89,12 +97,37 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
               {USAGE_WINDOW_LABELS[w]}
             </span>
           ) : (
-            <Link key={w} href={href(sort, w)} className="underline">
+            <Link key={w} href={href(sort, w, q)} className="underline">
               {USAGE_WINDOW_LABELS[w]}
             </Link>
           ),
         )}
       </nav>
+
+      {/* key: remount on navigation so the box shows the URL's search. */}
+      <form key={q} method="get" action="/admin/usage" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="sort" value={sort} />
+        <input type="hidden" name="window" value={usageWindow} />
+        <Input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Search teacher email"
+          aria-label="Search teacher email"
+          className="w-64"
+        />
+        <Button type="submit" variant="outline">
+          Apply
+        </Button>
+        {q ? (
+          <Link
+            href={href(sort, usageWindow, "")}
+            className="self-center text-sm text-muted-foreground hover:underline"
+          >
+            Clear search
+          </Link>
+        ) : null}
+      </form>
 
       <p className="text-xs text-muted-foreground">
         Counts class sittings only (practice excluded), credited to the sitting&apos;s owner.
@@ -104,7 +137,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
       </p>
 
       {rows.length === 0 ? (
-        <EmptyState title="No activity in this window." />
+        <EmptyState title={q ? "No teachers match." : "No activity in this window."} />
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
@@ -120,7 +153,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
                     {c.sort === sort ? (
                       <span className="font-semibold">{c.label} ↓</span>
                     ) : (
-                      <Link href={href(c.sort, usageWindow)} className="underline">
+                      <Link href={href(c.sort, usageWindow, q)} className="underline">
                         {c.label}
                       </Link>
                     )}
@@ -132,7 +165,13 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
               {rows.map((r) => (
                 <TableRow key={r.sub}>
                   <TableCell className="w-full max-w-0 truncate" title={r.email ?? r.sub}>
-                    {r.email ?? r.sub}
+                    {r.email ? (
+                      <Link href={assessmentsHref(r.email)} className="font-medium hover:underline">
+                        {r.email}
+                      </Link>
+                    ) : (
+                      r.sub
+                    )}
                   </TableCell>
                   {COLUMNS.map((c) => (
                     <TableCell key={c.sort} className="text-right tabular-nums">

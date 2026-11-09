@@ -4,7 +4,9 @@
 // The counts themselves are covered in admin-teacher-usage.test.ts.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { closeDb } from "../db/client";
+import { inArray } from "drizzle-orm";
+import { closeDb, getDb } from "../db/client";
+import { assessments } from "../db/schema";
 import { SESSION_COOKIE_NAME } from "../lib/auth/session";
 import * as headersMod from "next/headers";
 import * as sessionMod from "../lib/auth/session";
@@ -93,5 +95,37 @@ describe("/admin/usage gate", () => {
     expect(html).toContain('<span aria-current="page" class="font-semibold">All time</span>');
     expect(html).toContain("/admin/usage?sort=sittings&amp;window=30d");
     expect(html).toContain("No activity in this window.");
+  });
+
+  describe("search", () => {
+    const SUBS = ["usage-page-champ", "usage-page-other"];
+
+    afterEach(async () => {
+      await getDb().delete(assessments).where(inArray(assessments.owner_sub, SUBS));
+    });
+
+    async function render(q: string): Promise<string> {
+      process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+      principal = staffPrincipal("usage-admin", ADMIN_EMAIL);
+      await getDb().insert(assessments).values([
+        { owner_sub: SUBS[0]!, owner_email: "Champ.Teacher@example.org", name: "A", status: "draft" },
+        { owner_sub: SUBS[1]!, owner_email: "other@example.org", name: "B", status: "draft" },
+      ]);
+      return renderToStaticMarkup(
+        await AdminUsagePage({ searchParams: Promise.resolve({ sort: "sittings", window: "all", q }) }),
+      );
+    }
+
+    test("narrows the table, keeps the search in the links, and links to the teacher's assessments", async () => {
+      const html = await render("champ");
+      expect(html).toContain("/dashboard?all=1&amp;owner=champ.teacher%40example.org");
+      expect(html).not.toContain("other@example.org");
+      expect(html).toContain("/admin/usage?sort=sittings&amp;window=30d&amp;q=champ");
+      expect(html).toContain("/admin/usage?sort=students&amp;window=all&amp;q=champ");
+    });
+
+    test("no match says so", async () => {
+      expect(await render("nobody-here")).toContain("No teachers match.");
+    });
   });
 });
