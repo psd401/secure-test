@@ -132,7 +132,7 @@ describe("/admin/usage gate", () => {
       expect(emailCell).not.toContain("truncate");
 
       // Every header but the first (Teacher): the ten counts and Last active.
-      const countHeaders = [...html.matchAll(/<th[^>]*>/g)].map((m) => m[0]).slice(1);
+      const countHeaders = [...html.matchAll(/<th\b[^>]*>/g)].map((m) => m[0]).slice(1);
       expect(countHeaders).toHaveLength(11);
       for (const header of countHeaders) expect(header).toContain("whitespace-normal");
     });
