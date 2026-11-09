@@ -124,11 +124,17 @@ describe("/admin/usage gate", () => {
       expect(html).toContain("/admin/usage?sort=students&amp;window=all&amp;q=champ");
     });
 
-    test("the email is not clipped, and the count headers wrap to make room for it", async () => {
+    test("the email cell has no clipping classes and every count header may wrap", async () => {
       const html = await render("champ");
-      expect(html).not.toContain("max-w-0");
-      expect(html).not.toContain("truncate");
-      expect(html).toContain("whitespace-normal");
+      const emailCell = html.match(/<td[^>]*title="Champ\.Teacher@example\.org"[^>]*>/)?.[0];
+      expect(emailCell).toBeDefined();
+      expect(emailCell).not.toContain("max-w-0");
+      expect(emailCell).not.toContain("truncate");
+
+      // Every header but the first (Teacher): the ten counts and Last active.
+      const countHeaders = [...html.matchAll(/<th[^>]*>/g)].map((m) => m[0]).slice(1);
+      expect(countHeaders).toHaveLength(11);
+      for (const header of countHeaders) expect(header).toContain("whitespace-normal");
     });
 
     test("no match says so", async () => {

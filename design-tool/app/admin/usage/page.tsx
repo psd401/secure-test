@@ -164,6 +164,7 @@ export default async function AdminUsagePage({ searchParams }: PageProps) {
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.sub}>
+                  {/* Not truncated: the email sets this column's width, and the headers wrap to make room. */}
                   <TableCell title={r.email ?? r.sub}>
                     {r.email ? (
                       <Link href={assessmentsHref(r.email)} className="font-medium hover:underline">
