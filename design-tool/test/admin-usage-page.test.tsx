@@ -124,6 +124,13 @@ describe("/admin/usage gate", () => {
       expect(html).toContain("/admin/usage?sort=students&amp;window=all&amp;q=champ");
     });
 
+    test("the email is not clipped, and the count headers wrap to make room for it", async () => {
+      const html = await render("champ");
+      expect(html).not.toContain("max-w-0");
+      expect(html).not.toContain("truncate");
+      expect(html).toContain("whitespace-normal");
+    });
+
     test("no match says so", async () => {
       expect(await render("nobody-here")).toContain("No teachers match.");
     });
