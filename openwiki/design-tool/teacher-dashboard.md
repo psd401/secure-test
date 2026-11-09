@@ -189,7 +189,9 @@ Admin status comes from `ADMIN_EMAILS` through `isAdmin` (`lib/auth/admin.ts`), 
 - **Breadth columns.** Gradebook pushes (`created_by_sub`, so an act-as push credits the teacher), shares sent, class insight reports, competency assignments and feedback sent. `featuresUsed` counts how many of these five are non-zero. It is a breadth measure to sort by, not a weighted score.
 - **Assessments link.** The email links to `/dashboard?all=1&owner=<email>`, the admin all-assessments list filtered to that teacher.
 
-Focused tests: `test/admin-teacher-usage.test.ts` (the per-teacher counts in the database) and `test/admin-usage-page.test.tsx` (the gate and the sort and window links). Browser checks of the page (for example the 11-column table scrolling inside its card) were not done when this was recorded; see the [backlog](../quickstart.md#backlog).
+Focused tests: `test/admin-teacher-usage.test.ts` (the per-teacher counts in the database) and `test/admin-usage-page.test.tsx` (the gate and the sort and window links).
+
+A signed-in browser check on 2026-11-09 found the windows, search, numeric sorts and the email link working as built. A layout fix (#201) then removed the email clipping at a 1470 px window, and the page is now `max-w-7xl`. Narrower windows still scroll inside the table, and the page is wider than the top navigation. Two findings remain open (recorded in `docs/ledger.md`): 18 of 41 rows have no recorded owner email, so they show the raw staff `sub`, cannot be searched and have no link; and "Assessments created" counts archived assessments too (`teacherUsage` does not filter `archived_at`), while the linked list shows live ones, so the two differ for 6 of 23 teachers. Both are listed in the [backlog](../quickstart.md#backlog).
 
 Focused tests for the admin pages in general: `test/admin.test.ts` (the admin and impersonation predicate) and `test/safeguarding-alerts-ui.test.tsx` (`adminAlertMode` and the admin alert page). The page itself needs the test database for the render test.
 
