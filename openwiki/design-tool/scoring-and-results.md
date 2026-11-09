@@ -10,6 +10,7 @@ openwiki:
     - design-tool/lib/scoring/auto.ts
     - design-tool/lib/scoring/runAutoScoring.ts
     - design-tool/lib/scoring/aiScoreResponse.ts
+    - design-tool/lib/scoring/withheldFeedback.ts
     - design-tool/lib/scoring/results.ts
     - design-tool/lib/scoring/rescore.ts
     - design-tool/lib/api/changeScore.ts
@@ -176,6 +177,16 @@ Caption: an AI score is final on its own only under Hybrid, and only when the an
 - **Editor copy.** Choosing Hybrid shows `HYBRID_HINT` in `app/dashboard/[id]/AssessmentEditor.tsx`. It says confident scores count at once and the teacher can still change any score. The copy is the only part of the choice that teachers read.
 
 Tests: `test/hybrid-labels.test.ts` (each label string), `test/results.test.ts` (the `ai_not_reviewed` count and CSV column), `test/review-queue.test.ts` (the unreviewed list and approval in place), `test/safeguarding-screening.test.ts` (the injection rule). Narrow check: `cd design-tool && bun test test/hybrid-labels.test.ts`.
+
+## Withheld feedback after an output block
+
+When the guardrail's output check stops the AI's written feedback, the live path still keeps the score. `runEssayScorer` (`lib/scoring/aiScoreResponse.ts`) is called with `withholdBlockedFeedback: true` from `scoreClaimed`, so an output-stage block returns the parsed result through `withholdFeedback` (`lib/scoring/withheldFeedback.ts`): every `overall_rationale` and criterion rationale is set to `""`, while points, levels and confidence are kept. The filter labels come from `withheldFilterLabels` and are stored on the row as `rationale.feedback_withheld.filters`, with category names only and never matched text. The corpus runner does not set the flag and still counts a block.
+
+- **Always a proposal.** A withheld result is never finalized, even under Hybrid, because `scoreClaimed` skips the auto-finalize check when `feedbackWithheld` is set. A teacher reads the score before it counts. The row is written as `proposed`.
+- **Labels.** `describeWithheldFilters` turns category names into teacher wording (for example `PROFANITY` becomes "profanity word list"); unknown categories are lower-cased. The queue names the filter for the teacher.
+- **Students see no feedback for that answer, and the proposal does not count** until a teacher approves it. A "Feedback unavailable" label and a results-page notice are not built (see the [backlog](../quickstart.md#backlog)).
+- **Tests.** `test/essay-scorer.test.ts`, case "output block → proposal with feedback withheld, never final; corpus path still blocked". It asserts the blanked rationale, `feedback_withheld: { filters: ["blockme"] }`, and that the stored JSON never contains the matched word.
+- **Change guidance.** Keep the never-final rule in `scoreClaimed` if the finalize logic changes. The filter categories are the only guardrail detail stored on the score; do not add matched text to `rationale`.
 
 ## Results and reporting
 

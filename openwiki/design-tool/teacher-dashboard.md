@@ -26,8 +26,12 @@ openwiki:
     - design-tool/public/roadmap.html
     - design-tool/app/admin/page.tsx
     - design-tool/app/admin/safeguarding/page.tsx
-  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome, AppHeader, FeedbackDialog, AdminPage, AdminSafeguardingPage, adminAlertMode, parseAllListParams, filterAndSortAllList, attemptStatsByAssessment]
+    - design-tool/app/admin/usage/page.tsx
+    - design-tool/lib/admin/teacherUsage.ts
+  symbols: [DashboardPage, AssessmentEditorPage, MonitorPage, showAllTeachersToggle, homeListMode, ownerCell, EDITOR_TABS, parseTab, MonitorView, LIVE_INTERVAL_MS, AppChrome, AppHeader, FeedbackDialog, AdminPage, AdminSafeguardingPage, adminAlertMode, parseAllListParams, filterAndSortAllList, attemptStatsByAssessment, AdminUsagePage, teacherUsage, parseUsageParams]
   test_paths:
+    - design-tool/test/admin-teacher-usage.test.ts
+    - design-tool/test/admin-usage-page.test.tsx
     - design-tool/test/admin.test.ts
     - design-tool/test/safeguarding-alerts-ui.test.tsx
     - design-tool/test/all-teachers-ui.test.ts
@@ -116,7 +120,7 @@ The admin all view is `/dashboard?all=1`. `DashboardPage` derives `showAll` from
 - **List and filters (`?all=1`).** `parseAllListParams` (`design-tool/lib/ui/allTeachersList.ts`) reads `q` (search over assessment name and owner email), `owner`, `status` (`draft` or `published`), `attempts` (`yes` or `no`, meaning at least one student attempt), `sort` and `dir`. Unknown or malformed values fall back to the defaults and never throw. `filterAndSortAllList` runs on the server, so a filtered view is a bookmarkable URL.
 - **Participation columns.** Students and Submitted come from `attemptStatsByAssessment` (`design-tool/lib/api/teacherSummary.ts`), which leaves out practice attempts (`students.practice_for_sub`). The Delete gate still counts every attempt on the same query.
 - **Row actions.** The all view shows only Results and Act as. `ActAsButton` appears only on rows the admin does not own. An admin's own Duplicate, Archive and Delete stay in My assessments, which is where those actions appear for owned rows.
-- **By teacher summary: not in this revision.** The 2026-11-05 ledger entry records a per-owner summary (`?all=1&view=teachers`). The current source has no `view=teachers` branch, no `teacherSummary` or `filterAndSortTeachers` export, and `test/teacher-summary.test.ts` covers only `attemptStatsByAssessment`. Treat the summary as unbuilt until it appears in source; it is tracked in the [backlog](../quickstart.md#backlog).
+- **Per-owner summary moved to `/admin/usage`.** The By teacher view that #188 added (`?all=1&view=teachers`) was removed on 2026-11-09 (#196). Its per-owner counts now live on [teacher usage](#teacher-usage-adminusage), and the old URL shows the all-assessments list. `attemptStatsByAssessment` is the only export left in `lib/api/teacherSummary.ts`.
 
 Invariant: the practice exclusion for Students and Submitted uses the `students.practice_for_sub` rule, so the list and the per-row counts agree.
 
@@ -172,9 +176,22 @@ On an ended class sitting, the header offers **Continue in a new session**, and 
 
 `/admin` is the one deliberately unscoped page in the staff UI. `AdminPage` lists every test session whose status is `open` and whose `expires_at` is in the future, across all teachers, newest first. Each row shows the code, assessment, owning teacher, section (or "Practice" for a practice sitting) and start time. Its actions are a **Monitor** link to the sitting's monitor and an **Act as** button for a sitting owned by someone else. Its header line counts open safeguarding alerts district-wide and links to `/admin/safeguarding`, where the list is open alerts by default (`adminAlertMode`, `?show=all` for every alert). Acknowledging an alert is a teacher action, not an admin one.
 
-Admin status comes from `ADMIN_EMAILS` through `isAdmin` (`lib/auth/admin.ts`), as described in [auth and access](auth-and-access.md). Both pages return 404 to a non-admin, and an impersonated session is never admin, so the act-as banner hides the admin surface until the session ends. The grants console is not on these pages; the page source records that the `/api/grants` route has no UI yet. Safeguarding alert rules are in [AI and safeguarding](ai-and-safeguarding.md#hand-in-screening-and-alerts).
+Admin status comes from `ADMIN_EMAILS` through `isAdmin` (`lib/auth/admin.ts`), as described in [auth and access](auth-and-access.md). All three admin pages return 404 to a non-admin, and an impersonated session is never admin, so the act-as banner hides the admin surface until the session ends. The grants console is not on these pages; the page source records that the `/api/grants` route has no UI yet. Safeguarding alert rules are in [AI and safeguarding](ai-and-safeguarding.md#hand-in-screening-and-alerts).
 
-Focused tests: `test/admin.test.ts` (the admin and impersonation predicate) and `test/safeguarding-alerts-ui.test.tsx` (`adminAlertMode` and the admin alert page). The page itself needs the test database for the render test.
+`/admin` links to **Teacher usage** (`/admin/usage`, `app/admin/usage/page.tsx`).
+
+### Teacher usage (`/admin/usage`)
+
+`AdminUsagePage` lists one row per staff member with activity, so an admin can spot who uses SecureTest most. It has the same gate as `/admin`: a signed-out visitor is sent to `/login?next=/admin/usage`, and a non-admin gets 404. The rows are built in `lib/admin/teacherUsage.ts` from existing tables, with no tracking table. Each row is keyed by the staff `sub`, and the email is only a label.
+
+- **Windows and sort.** `parseUsageParams` reads `window` (`30d`, `year` for the school year from September 1 in `DISPLAY_TIME_ZONE`, the default, or `all`), `sort` and `q` (a search over the teacher email). Unknown values fall back to the defaults. Sorting and windows are plain links, so the page needs no client JS.
+- **Volume columns.** Students tested (distinct students with a submitted attempt in a class sitting), attempts submitted, class sittings run, and assessments created. Practice sittings are excluded, and a sitting is credited to its `owner_sub`, not to `created_by_sub`, so a substitute who presses the button does not get the credit.
+- **Breadth columns.** Gradebook pushes (`created_by_sub`, so an act-as push credits the teacher), shares sent, class insight reports, competency assignments and feedback sent. `featuresUsed` counts how many of these five are non-zero. It is a breadth measure to sort by, not a weighted score.
+- **Assessments link.** The email links to `/dashboard?all=1&owner=<email>`, the admin all-assessments list filtered to that teacher.
+
+Focused tests: `test/admin-teacher-usage.test.ts` (the per-teacher counts in the database) and `test/admin-usage-page.test.tsx` (the gate and the sort and window links). Browser checks of the page (for example the 11-column table scrolling inside its card) were not done when this was recorded; see the [backlog](../quickstart.md#backlog).
+
+Focused tests for the admin pages in general: `test/admin.test.ts` (the admin and impersonation predicate) and `test/safeguarding-alerts-ui.test.tsx` (`adminAlertMode` and the admin alert page). The page itself needs the test database for the render test.
 
 ## Shared components
 

@@ -19,7 +19,7 @@ openwiki:
     - design-tool/lib/auth/admin.ts
     - design-tool/lib/api/impersonation.ts
     - design-tool/app/api/auth/exchange/route.ts
-  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, AccessIntent, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating, healAssessmentOwnerEmail]
+  symbols: [roleForEmail, mapRole, sessionFromIdTokenClaims, isScannerProbe, proxy, requireStaff, requireStudent, requireStudentOrPractice, authorizeAssessment, authorizeSitting, authorizeAttempt, levelSatisfies, AccessIntent, loadActiveGrants, effectiveLevel, isAdmin, isImpersonating, healAssessmentOwnerEmail]
   test_paths:
     - design-tool/test/auth-roles.test.ts
     - design-tool/test/auth-identity.test.ts
@@ -36,6 +36,7 @@ openwiki:
     - design-tool/test/assessment-assets.test.ts
     - design-tool/test/practice-sitting.test.ts
     - design-tool/test/owner-email-heal.test.ts
+    - design-tool/test/proxy-scanner-probe.test.ts
   invariants:
     - Role is derived from the verified email domain at login and read back from the signed session; no token role claim is trusted.
     - Every cross-owner refusal on an authorize* helper is a 404, never a 403.
@@ -64,7 +65,7 @@ The `ALLOW_TEST_ISSUER=1` escape hatch on `/api/auth/exchange` (caller names its
 
 ## Guards
 
-- `proxy.ts` (edge): every request gets an `x-request-id`; `/dashboard*` and `/admin*` additionally require a valid session whose role is staff — a student session is redirected to `/login?error=student_account`, no session to `/login?next=…`. Missing `DESIGN_TOOL_SESSION_SECRET` renders a hand-written 500 page (`misconfiguredPage`). API routes are **not** protected by the proxy; each route calls a guard itself.
+- `proxy.ts` (edge): every request gets an `x-request-id`. Before any auth check, `isScannerProbe` answers WordPress and PHP paths (`/wp-admin`, `/wp-content`, `/wp-includes`, `/wp-json`, any `*.php`) with an empty 404, so scanner multipart POSTs never reach Next's route handling, where production builds answered them with a 500 (2026-11-09, PR #197). Those paths have no route in this app, so the rule does not change any real request. `/dashboard*` and `/admin*` additionally require a valid session whose role is staff — a student session is redirected to `/login?error=student_account`, no session to `/login?next=…`. Missing `DESIGN_TOOL_SESSION_SECRET` renders a hand-written 500 page (`misconfiguredPage`). API routes are **not** protected by the proxy; each route calls a guard itself.
 - `requireStaff()` (teacher surfaces), `requireStudent()`, `requireStudentOrPractice()` (student plane; also admits staff, who can only ever reach a *practice* sitting naming themselves — see [sittings](sittings-and-attempts.md)), `requireSession()` (any principal; avoid). Wrong role → 403; no/invalid session → 401.
 - `mapRole` accepts only the exact strings `staff` / `student`; pre-slice-77 sessions carrying ClassLink titles are denied and must sign in again.
 
@@ -119,3 +120,4 @@ Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`)
 
 Related: [data model](data-model.md) (`access_grants`, `impersonation_sessions`), [architecture overview](../architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
 /architecture/overview.md), [deployment](../operations/deployment-and-observability.md) for secrets in ECS.
+ity.md) for secrets in ECS.
