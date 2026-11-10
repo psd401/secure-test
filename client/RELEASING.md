@@ -195,6 +195,23 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Released
 
+- **v2.0.3 — 2026-11-09** (built from `33cf8b5d3e44`, the #205 merge on
+  `main`; tag on that commit via `--target <full sha>`): the answer-spool
+  fix (#182). A sent row is deleted only if it still holds what was sent,
+  flushes run one at a time, and answer PUT/DELETE give up after 20 s. Also
+  the bundled fallback page, matching the signed renderer production has
+  served since 2026-11-02. psd-sign 0.6.1: pre-flight clean (HEAD =
+  `origin/main`; 2.0.3 > v2.0.2), archive-only Developer ID + hardened
+  runtime (no re-sign), all seven entitlements = `expected-entitlements.txt`,
+  profile `SecureTest Developer ID` to 2044, `PSDBuildCommit` = HEAD. App and
+  pkg notarized (Accepted) and stapled; `latest` resolves to v2.0.3. Before
+  publishing:
+  - "Answer changed mid-send" rows 1–4 on Debug behind a proxy (2026-11-09).
+  - Three real AAC sessions of this signed build against production with
+    `<demo-student-A>`, run from the expanded pkg payload: Normal network (in
+    part, speed not rated), Corrections Marks only and Locks only, all ✅.
+  - Not yet run: Scorer feedback "Panel shows" and "Answer still saves",
+    which need a production competency fixture.
 - **v2.0.2 — 2026-10-25** (built from `c7641e7dcbd1`, the #112 merge on
   `main`; tag on that commit via `--target <full sha>`): the bundle-fetch
   409s (#97) — a closed sitting (`sitting_closed`) or a handed-in attempt
@@ -464,7 +481,7 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
-- **Next release: v2.0.3** (`MARKETING_VERSION` = 2.0.3, from `main`). The
+- ~~**Next release: v2.0.3**~~ PUBLISHED 2026-11-09 (see Released). (`MARKETING_VERSION` = 2.0.3, from `main`). The
   native change since v2.0.2 is the answer spool (#182): a sent row is
   deleted only if it still holds what was sent, flushes run one at a time,
   and answer PUT/DELETE give up after 20 s (`APIClient.answerWriteTimeout`).
