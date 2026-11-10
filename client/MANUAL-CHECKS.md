@@ -2799,14 +2799,41 @@ older one (`ResponseSpoolMidSendTests`). Answer PUT/DELETE give up after
 dead connection holds hand-in for at most that long; the write stays
 spooled and the next flush retries it (`AnswerWriteTimeoutTests`). The
 interleavings were reproduced only with a fake transport; these rows check
-them on a real network. Real AAC session, v2.0+ client from this branch,
-James at the client, Network Link Conditioner (Xcode Additional Tools) to
-throttle. None of these rows has been run.
+them over real sockets.
+
+**Method (changed 2026-11-09).** The rows first called for Network Link
+Conditioner in a real AAC session. It needs installing on a Mac where the
+maintainer has no admin rights, and the rows change the throttle mid-test,
+which lockdown should prevent. So the first four rows run on a Debug build
+with simulated lockdown (`SECURE_TEST_SIMULATE_LOCKDOWN=1`,
+`SECURE_TEST_SERVER=http://localhost:3012`) against the local dev server,
+through a local TCP proxy on :3012 with these modes:
+
+- **normal:** passes bytes through, and closes any connection that lost
+  bytes in a stall.
+- **slow:** holds every chunk 5 s in each direction, in order.
+- **arm:** passes bytes through until the next HTTP PUT, then switches to
+  stall.
+- **stall:** discards every byte and answers nothing.
+
+This covers real sockets and the app's real timers, not a real Wi-Fi link
+or real lockdown. The last row runs in a real AAC session on the packaged
+build.
+
+**Run 2026-11-09** (Debug build of `origin/main` `fca1cef9`, the local
+`_demo` database, two fictional demo students launched with minted tokens,
+James at the client, Claude on the proxy and the server side). Rows 1–4
+pass. **Proxy artifact, fixed during the run:** at first the proxy closed a
+connection as soon as the server closed its keep-alive, cutting off replies
+still held by slow mode. The client logged 8 `-1017 cannot parse response`
+errors on event and peek requests, never on an answer write, and 2 events as
+`event_not_delivered`. After the fix (close only once both directions'
+queues drain) none recurred.
 
 | Check | Expected | Result |
 |---|---|---|
-| **Change mid-send.** Throttle to "Very Bad Network"; type a short answer, wait for the autosave to start, change the answer, then remove the throttle | The teacher's view shows the CHANGED answer, not the first; the client log shows no answer dropped | NOT RUN |
-| **Rapid edits under throttle.** Same throttle; edit one answer several times over a minute, then remove the throttle and hand in | Hand-in goes through; the teacher's view shows the last version typed | NOT RUN |
-| **Stuck write at hand-in.** Throttle to 100% packet loss just after an autosave starts; click Hand in after ~5 s | Hand-in is refused ("answers still unsent") within about 40 s of the stuck write starting (its 20 s, then hand-in's own retry of it, 20 s), not two minutes; the answer is still on the Mac | NOT RUN |
-| **Recovers.** Remove the throttle and hand in again | Hand-in goes through; the teacher's view shows the latest answer | NOT RUN |
-| **Normal network.** No throttle; answer every question and hand in | Unchanged from before: autosave and hand-in feel as fast as they did | NOT RUN |
+| **Change mid-send.** Proxy on slow; type a short answer, wait for the proxy to log the PUT, change the answer, then set the proxy to normal | The teacher's view shows the CHANGED answer, not the first; the client log shows no answer dropped | ✅ 2026-11-09: the server kept "second answer", and the revision history shows "first answer" before it; the second PUT went out after the first finished (flushes one at a time); no answer dropped |
+| **Rapid edits under throttle.** Proxy on slow; edit one answer several times over a minute, then set the proxy to normal and hand in | Hand-in goes through; the teacher's view shows the last version typed | ✅ 2026-11-09: three PUTs under slow; the server held the last version typed, with four earlier versions in its revision history; hand-in went through |
+| **Stuck write at hand-in.** Proxy on arm; type an answer so the autosave's PUT trips the stall; click Hand in after ~5 s | Hand-in is refused ("answers still unsent") within about 40 s of the stuck write starting (its 20 s, then hand-in's own retry of it, 20 s), not two minutes; the answer is still on the Mac | ✅ 2026-11-09: stuck write at 0 s; Hand in at +5 s sent its own write of the answer, which also stalled; `submit refused: 1 answers still unsent` at +25 s; the spool still held the answer and the server had none. Faster than the 40 s estimate, because hand-in's write did not wait for the stuck one |
+| **Recovers.** Set the proxy to normal and hand in again | Hand-in goes through; the teacher's view shows the latest answer | ✅ 2026-11-09: proxy back on normal; hand-in went through at once, and the attempt is submitted with the answer typed in row 3 |
+| **Normal network.** Real AAC session, packaged build, no proxy; answer every question and hand in | Unchanged from before: autosave and hand-in feel as fast as they did | NOT RUN |

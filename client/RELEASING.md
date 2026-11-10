@@ -464,6 +464,18 @@ line: `SECURE_TEST_SIMULATE_LOCKDOWN= SECURE_TEST_SERVER=<origin> bun
 
 ## Open
 
+- **Next release: v2.0.3** (`MARKETING_VERSION` = 2.0.3, from `main`). The
+  native change since v2.0.2 is the answer spool (#182): a sent row is
+  deleted only if it still holds what was sent, flushes run one at a time,
+  and answer PUT/DELETE give up after 20 s (`APIClient.answerWriteTimeout`).
+  It also compiles in the bundled (fallback) page code that production's
+  signed renderer has served since 2026-11-02: corrections mode, the scorer
+  feedback panel, choice pictures and the stimulus fixes. No server change,
+  no version gate. Before publishing: rows 1–4 of "Answer changed mid-send;
+  answer-write timeout" ✅ 2026-11-09 (Debug, proxy). The packaged build's
+  real AAC session also covers that section's "Normal network" row and the
+  core rows of "Corrections mode in the test page" (Marks only, Locks only)
+  and "Scorer feedback in the test page" (Panel shows, Answer still saves).
 - ~~**Next release: v2.0.2**~~ PUBLISHED 2026-10-25 (see Released). (`MARKETING_VERSION` = 2.0.2, from `main`) — the
   bundle-fetch 409s (#97): since SEC-01 (#94) the delivery route refuses a
   closed sitting (`sitting_closed`) and a handed-in attempt
