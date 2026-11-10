@@ -936,6 +936,8 @@ describe("dialog basis copy", () => {
   test("the hint names the count", () => {
     expect(basisHint("attempt_one", 1)).toStartWith("1 student passed back gets their score from before");
     expect(basisHint("latest", 3)).toStartWith("3 students passed back get their newest");
+    expect(basisHint("latest", 1)).toStartWith("1 student passed back gets their newest");
+    expect(basisHint("attempt_one", 3)).toStartWith("3 students passed back get their score from before");
   });
 });
 
@@ -1003,6 +1005,15 @@ describe("gradebook-send basis (U-25 slice 2c)", () => {
     expect(sections.map((x) => [x.ps_id, x.scored, x.awaiting, x.attempt_one_students])).toEqual([
       ["5001", 0, 0, 1],
     ]);
+  });
+
+  test("a section whose only student has never handed in stays hidden: no attempt 1, nothing to send", async () => {
+    const s = await scene();
+    const ada = await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    await getDb().update(attempts).set({ status: "in_progress", submitted_at: null }).where(eq(attempts.id, ada.id));
+    const results = await buildResults(s.assessment.id, { include_in_progress: true });
+    const sections = await loadSendDialogSections(getDb(), s.assessment.id, TEACHER_EMAIL, results);
+    expect(sections).toEqual([]);
   });
 
   test("a teacher hand-in that was passed back is no attempt 1: attempt_one sends the latest (D-15)", async () => {
