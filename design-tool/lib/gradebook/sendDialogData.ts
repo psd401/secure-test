@@ -125,8 +125,10 @@ export async function loadSendDialogSections(
       else awaiting++;
     }
     const sent = lastSent.get(section.ps_id) ?? null;
-    // A section with no handed-in work and no earlier send has nothing to offer.
-    if (scored + awaiting === 0 && !sent) continue;
+    // A section with no handed-in work and no earlier send has nothing to offer
+    // — unless someone in it has an attempt 1: a class passed back and still
+    // working can still be sent its attempt-1 scores (U-25 hand-run, row 918).
+    if (scored + awaiting === 0 && withAttemptOne === 0 && !sent) continue;
     out.push({
       ps_id: section.ps_id,
       label: sectionLabel(section),

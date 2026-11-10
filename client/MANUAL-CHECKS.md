@@ -2733,6 +2733,14 @@ testing method (quit or hide Claude first; steps written beforehand). None
 of these rows has been run: the build session drove the page only in the
 JavaScriptCore harness (`RendererCorrectionsTests`).
 
+
+**Still not run (2026-11-04).** The server sends these fields only to a
+named, signed served renderer at or above the floor. Production has one
+(`v1793688298`, deployed 2026-11-02) but serves it only to a signed-in
+student; a local dev server has none unless a renderer is signed with the
+Touch ID key, so a local Debug run would show the page without the panel and
+prove nothing. These rows need James: a real session on a second Mac
+against production with a demo student, or a locally signed renderer.
 | Check | Expected | Result |
 |---|---|---|
 | **Marks only.** A demo test with a multiple-choice, a short answer and an essay; `<demo-student-A>` hands in one right, one wrong, the essay scored partial; pass back with **Show right/wrong** | Each question shows its note above the stem, glyph and words; every answer can still be changed and saves | NOT RUN |
@@ -2761,6 +2769,14 @@ the VoiceOver testing method (quit or hide Claude first; steps written
 beforehand). None of these rows has been run: the build session drove the
 page only in the JavaScriptCore harness (`RendererRevisionFeedbackTests`).
 
+
+**Still not run (2026-11-04).** The server sends these fields only to a
+named, signed served renderer at or above the floor. Production has one
+(`v1793688298`, deployed 2026-11-02) but serves it only to a signed-in
+student; a local dev server has none unless a renderer is signed with the
+Touch ID key, so a local Debug run would show the page without the panel and
+prove nothing. These rows need James: a real session on a second Mac
+against production with a demo student, or a locally signed renderer.
 | Check | Expected | Result |
 |---|---|---|
 | **Panel shows.** `<demo-student-A>` rejoins the passed-back attempt | The final-response question shows "Scorer feedback" under its stem and above the answer: one row per criterion (name: level, rationale under it), the note last; the scorer's line breaks kept; nothing in the panel can be clicked into, typed in or reached with Tab | NOT RUN |

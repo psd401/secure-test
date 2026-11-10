@@ -2189,27 +2189,44 @@ second and does not hand in. A second made-up test with a 10-minute time limit
 for rows 907–908. None of these rows has been run: the build session drove the
 route and the controls only through tests.
 
+**Run 2026-11-04** (after the 2026-11-02 deploy of `b650c18f`), locally on a
+fresh synthetic DB rather than `_demo`: a teacher, a substitute with a `run`
+grant, three made-up students — A and C in section 1, B in section 2 — an
+untimed test U with two open sittings, a 3-minute timed test T and an
+ordinary essay test K; students joined, answered and handed in through the
+student API (the calls the client makes), the gradebook was the mock. Rows
+902–920 PASS (918 after U25-F1); findings below.
+
 | # | Do | Expect | Result |
 |---|---|---|---|
-| 902 | Results, no section chosen: **Pass back all handed in** | Dialog says "Pass back 2 students?" with no deadline picker; after **Pass back**, A and B show as not handed in and C is unchanged | NOT RUN |
-| 903 | Choose A's section, then **Pass back all handed in** | Dialog names the section; only that section's handed-in students are passed back | NOT RUN |
-| 904 | Monitor of the first session: **Pass back everyone** | Same as 902 for the students who handed in during that session; the per-row **Pass back** buttons disappear | NOT RUN |
-| 905 | Test sessions tab, Attendance collapsed, then expanded | Collapsed: **Pass back everyone** disabled, titled "Open Attendance to see who handed in."; expanded: enabled when someone handed in | NOT RUN |
-| 906 | Press **Pass back everyone** again after 904 | Disabled ("No handed-in tests to pass back.") once Attendance reloads | NOT RUN |
-| 907 | Timed test, two students handed in: **Pass back all handed in** | Deadline picker defaults to tomorrow 23:59; a past time is refused with "Pick a time in the future."; after passing back, both students can rejoin and type until the new deadline | NOT RUN |
-| 908 | A co-teacher at **run** level (a substitute) | The buttons show, and pressing one says "Not yours to pass back."; nothing changes | NOT RUN |
-| 909 | A passed-back student rejoins, changes an answer, hands in | New score on the changed answer; the per-student page shows the old score under "Earlier scores (before pass back)" | NOT RUN |
-| 910 | Test sessions tab: **Pass back a class…**, pick A's section | The picker lists each section with its handed-in count; the dialog names the section; after **Pass back** only that section's students are passed back, including any who handed in during another session | NOT RUN |
-| 911 | Same, on the timed test | The deadline picker appears for that section; a past time is refused | NOT RUN |
-| 912 | After 902, A rejoins, changes an answer, hands in; B stays working | Results shows **Attempt 1** and **Change** columns; A: old total, new total, signed change; B: "Working again — k of N answered" with B's attempt-1 score; C: "—" | NOT RUN |
-| 913 | A's page | "Attempt 1: x/10 · Change +n" under the handed-in line | NOT RUN |
-| 914 | Timed test: let C's time run out, **Hand in**, **Pass back**, C hands in | No attempt 1 for C (the first round was an extension, D-15); C shows "—" | NOT RUN |
-| 915 | An essay left unscored, then the student is passed back and hands in again | Attempt 1 reads "Not fully scored", no change shown | NOT RUN |
-| 916 | **Download CSV** with and without anyone passed back | `attempt_1` and `change` columns only when someone has an attempt 1 | NOT RUN |
-| 917 | After 912, **Send to gradebook** for A's section | **Score to send** appears, on **Latest score**; the hint names the passed-back count; sending writes A's new total | NOT RUN |
-| 918 | **Send again** with **Attempt 1** | A's PowerSchool score changes to the attempt-1 total (one update); B, still working, is sent with B's attempt-1 score | NOT RUN |
-| 919 | Reopen the dialog for that section | It starts on **Attempt 1** (remembered) | NOT RUN |
-| 920 | A section where nobody was passed back | No **Score to send** choice | NOT RUN |
+| 902 | Results, no section chosen: **Pass back all handed in** | Dialog says "Pass back 2 students?" with no deadline picker; after **Pass back**, A and B show as not handed in and C is unchanged | PASS 2026-11-04 (local, synthetic fixture DB `_u25_hand` at `b650c18f` + this branch, mock gradebook, students driven through the student API): dialog "Pass back 2 students?", no deadline picker; after **Pass back** A and B read "Working again — 3 of 3 answered", C unchanged ("Not handed in — 1 of 3") |
+| 903 | Choose A's section, then **Pass back all handed in** | Dialog names the section; only that section's handed-in students are passed back | PASS 2026-11-04 (same setup): the dialog reads "Pass back 1 student in U25 Handrun Science · 1(A)?"; only A was passed back, B (section 2) stayed handed in |
+| 904 | Monitor of the first session: **Pass back everyone** | Same as 902 for the students on that session's Attendance who are handed in — during that session or an earlier one ("Handed in (earlier session)": they cannot rejoin today unless passed back); the per-row **Pass back** buttons disappear | PASS 2026-11-04 (same setup): "Pass back 1 student in this test session?" passed back A; the row's **Pass back** button went with the hand-in. See U25-O1 for who a sitting's "everyone" includes |
+| 905 | Test sessions tab, Attendance collapsed, then expanded | Collapsed: **Pass back everyone** disabled, titled "Open Attendance to see who handed in."; expanded: enabled when someone handed in | PASS 2026-11-04 (same setup): collapsed, disabled with title "Open Attendance to see who handed in."; expanded on the sitting where two had handed in, enabled |
+| 906 | Press **Pass back everyone** again after 904 | Disabled ("No handed-in tests to pass back.") once Attendance reloads | PASS 2026-11-04 (same setup): straight after 904 the Monitor's button is disabled, "No handed-in tests to pass back." |
+| 907 | Timed test, two students handed in: **Pass back all handed in** | Deadline picker defaults to today 23:59 (tomorrow in the last minute of the day); a past time is refused with "Pick a time in the future."; after passing back, both students can rejoin and type until the new deadline | PASS 2026-11-04 (same setup, 3-minute test): picker defaults to **today** 23:59 — by design since 2026-09-24 (`defaultExtendValue`; pilot teachers asked for today), so "tomorrow" in this row is stale; 08:00 refused with "Pick a time in the future."; a time 30 min out wrote `deadline_override_at` for both, and A saved an answer at 08:37:15, after the original 08:37:00 limit |
+| 908 | A co-teacher at **run** level (a substitute) | The buttons show, and pressing one says "Not yours to pass back."; nothing changes | PASS 2026-11-04 (same setup, substitute with a `run` grant): on the Monitor the buttons show and **Pass back** says "Not yours to pass back."; A stayed handed in. On Results the substitute gets no pass-back button at all, and the Test sessions tab is not reachable at `run` — accepted as is (James, 2026-11-04) |
+| 909 | A passed-back student rejoins, changes an answer, hands in | New score on the changed answer; the per-student page shows the old score under "Earlier scores (before pass back)" | PASS 2026-11-04 (same setup): A's changed Q2 (41 → 42) scored 1/1; A's page lists the set-aside rows under **Earlier scores** ("Q2: 0 / 1 (auto-scored) · 8:27 AM · set aside by pass back"); the heading reads "Earlier scores", not "Earlier scores (before pass back)" |
+| 910 | Test sessions tab: **Pass back a class…**, pick A's section | The picker lists each section with its handed-in count; the dialog names the section; after **Pass back** only that section's students are passed back, including any who handed in during another session | PASS 2026-11-04 (same setup): the picker lists "U25 Handrun Science · 1(A) — 2 handed in" (sections with none handed in are not listed); after **Pass back** both A (handed in during session 1) and C (session 2) were passed back |
+| 911 | Same, on the timed test | The deadline picker appears for that section; a past time is refused | PASS 2026-11-04 (same setup, timed test): the picker shows **New deadline** for the section; 08:00 refused with "Pick a time in the future." |
+| 912 | After 902, A rejoins, changes an answer, hands in; B stays working | Results shows **Attempt 1** and **Change** columns; A: old total, new total, signed change; B: "Working again — k of N answered" with B's attempt-1 score; C: "—" | PASS 2026-11-04 (same setup): **Attempt 1** and **Change** columns; A 8/10, attempt 1 7/10, +1; B "Working again — 3 of 3 answered", attempt 1 5/10; C "—" |
+| 913 | A's page | "Attempt 1: x/10 · Change +n" under the handed-in line | PASS 2026-11-04 (same setup): "Attempt 1: 7/10 · Change +1" beside the handed-in line |
+| 914 | Timed test: let C's time run out, **Hand in**, **Pass back**, C hands in | No attempt 1 for C (the first round was an extension, D-15); C shows "—" | PASS 2026-11-04 (same setup): C's time ran out; Monitor **Hand in** (enabled once the grace passed), **Pass back** with a new deadline, C handed in; C's Attempt 1 reads "—" |
+| 915 | An essay left unscored, then the student is passed back and hands in again | Attempt 1 reads "Not fully scored", no change shown | PASS 2026-11-04 (same setup): C's essay never scored, passed back, handed in again: Attempt 1 "Not fully scored", no change shown |
+| 916 | **Download CSV** with and without anyone passed back | `attempt_1` and `change` columns only when someone has an attempt 1 | PASS 2026-11-04 (same setup): the untimed test's CSV ends `…,attempt_1,change`; a test with no pass back (K) has neither column |
+| 917 | After 912, **Send to gradebook** for A's section | **Score to send** appears, on **Latest score**; the hint names the passed-back count; sending writes A's new total | PASS 2026-11-04 (same setup, mock gradebook): **Score to send** on **Latest score**, hint "1 student passed back get their newest handed-in score…" (grammar fixed, see U25-F2); sent A's new total 8 (`gradebook_push_scores.points_sent`) |
+| 918 | **Send again** with **Attempt 1** | A's PowerSchool score changes to the attempt-1 total (one update); B, still working, is sent with B's attempt-1 score | PASS after fix U25-F1 2026-11-04 (same setup): **Send again** with **Attempt 1**: "1 updated", A's points 8 → 7. In this fixture B is alone in section 2, which the dialog did not list (U25-F1); with the fix it lists "2(A) — 0 scored · 0 awaiting scoring" and **Attempt 1** sent B's 5 while B was still working |
+| 919 | Reopen the dialog for that section | It starts on **Attempt 1** (remembered) | PASS 2026-11-04 (same setup): reopened for section 1, **Score to send** starts on **Attempt 1** |
+| 920 | A section where nobody was passed back | No **Score to send** choice | PASS 2026-11-04 (same setup): on test K (nobody passed back) the dialog has Section and Category but no **Score to send** |
+
+**Findings from the 2026-11-04 run:**
+
+- **U25-F1 — a section whose students are all passed back and still working is not offered in Send to gradebook (row 918).** `loadSendDialogSections` skipped a section with nothing scored or awaiting and no earlier send, so B's attempt-1 score could not be sent although the route sends it. **Fixed 2026-11-04** on `fix/cba-followups`: a section with an attempt 1 is listed too (`lib/gradebook/sendDialogData.ts`, test in `test/gradebook-send.test.ts`); re-run PASS.
+- **U25-F2 — "1 student passed back get …" (rows 917–918).** The basis hint did not agree the verb with one student. **Fixed 2026-11-04** on the same branch ("1 student passed back gets …").
+- **U25-O1 — a sitting's "Pass back everyone" includes students who handed in through an earlier session (observation, row 904).** `passBackAllTargets` counts `submitted_earlier` rows as well as `submitted`, by design (its test pins it): such a student cannot rejoin today unless passed back. Row 904's wording ("who handed in during that session") was narrower than what is built. **Ruled 2026-11-04 (James): keep the behavior; row 904 reworded.**
+- **U25-O2 — row 907 says "tomorrow 23:59"; the picker uses today 23:59** (`defaultExtendValue`, changed for pilot teachers 2026-09-24). The row was stale, not the code. **Row 907 updated 2026-11-04** (James).
+- **U25-F3 — a scorer saw Pass back on the attempt page (row 936).** The per-attempt **Pass back** rendered for any reader of a handed-in attempt; the route (`edit`) refused it with 404, so nothing could be reopened, but a scorer (`score`) or substitute (`run`) was offered a button that could only fail. **Fixed 2026-11-04** on the same branch: shown only at `edit`, as **Pass back all** on the results page already was. Checked: substitute on an ordinary test sees no button; the owner still does.
+- **U25-O3 — "← Back to editor" for a scorer (row 936).** The scoring queue and results pages link every reader to `/dashboard/<id>`, which is not found below `edit`. Harmless (the page says so and offers Go to Assessments) and true for `run`/`view` readers before CBA too. Not changed; for James to rule.
 
 ## Whole test to Google Docs (U-25 slice 4, branch `claude/confident-lehmann-8fdd2d`, 2026-11-02; `docs/google-docs-whole-test-design.md`)
 
@@ -2253,12 +2270,12 @@ merge if another branch adds rows.
 
 | # | Check | Expected | Result |
 |---|---|---|---|
-| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | NOT RUN |
-| 933 | Open Share on an ordinary teacher assessment | No Scorers section | NOT RUN |
-| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | NOT RUN |
-| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | NOT RUN |
-| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | NOT RUN |
-| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | NOT RUN |
+| 932 | Open Share on the district assessment | A third section, **Scorers**, under Co-teach: staff email, **Scoring through** date, **Add scorer** (disabled until both are filled) | PASS 2026-11-04 (local hand-run DB, made-up accounts): Scorers under Co-teach; **Add scorer** disabled with only the email, enabled with both |
+| 933 | Open Share on an ordinary teacher assessment | No Scorers section | PASS 2026-11-04 |
+| 934 | Add the second account as scorer through Friday | Listed as "Through <Friday>"; not listed under Co-teach; one email, "asked you to score", linking to `/dashboard/<id>/scoring` | PASS 2026-11-04 except the email, not observed: listed "Through Nov 6, 2026", not under Co-teach. The mock sender holds mail in server memory, so the email part rests on `test/share-notifications-email.test.ts` ("asked you to score") |
+| 935 | Sign in as the scorer; open the home list | The row reads "Shared with you as scorer"; its name opens the scoring page, not the editor | PASS 2026-11-04: "Shared with you as scorer · by <owner>"; the name links to `/dashboard/<id>/scoring` (a **Results** button is also offered — `score` ≥ `view`, as designed) |
+| 936 | As the scorer, score the essay row by row | The score saves; the editor (`/dashboard/<id>`), Pass back and Share are not reachable (404 / absent) | PASS 2026-11-04 after fix U25-F3: Proficient + Developing saved 5/8 `final`; the editor and Assignments pages show "There's nothing at this address"; no Share; `POST /api/attempts/:id/pass-back` 404. The attempt page still showed a **Pass back** button the route refused (U25-F3, fixed). Observation U25-O3: "← Back to editor" on the scoring and results pages leads a scorer to the not-found page |
+| 937 | As the owner, Remove the scorer | The row disappears; the scorer's next scoring action is refused and the home row is gone | PASS 2026-11-04: "No scorers yet."; as the scorer, `POST /api/responses/:id/score` 404 and the score stayed 5/8; review queue 404; scoring page not found; home list empty |
 | 938 | Keyboard and screen reader through the Scorers section | Labels read "Staff email" and "Scoring through"; the date input works by keyboard; Remove names nothing ambiguous (one per row) | NOT RUN |
 
 ## Competency assignments (CBA slice 2, branch `feat/competency-assessments`, 2026-11-02; `docs/competency-assessment-design.md`)
@@ -2322,7 +2339,7 @@ renumbering at merge.
 | # | Check | Expected | Result |
 |---|---|---|---|
 | 965 | Scoring queue on the district assessment | Under the rubric rows: **Or No Score:** with a reason list and **Save No Score** (disabled until a reason is chosen) | PASS: "Or No Score:" + five reasons; Save disabled until a reason |
-| 966 | Scoring queue on an ordinary teacher assessment | No No Score control | NOT RUN — needs a classroom assessment with a handed-in rubric essay |
+| 966 | Scoring queue on an ordinary teacher assessment | No No Score control | PASS 2026-11-04 (local `_u25_hand`, ordinary teacher assessment K with a handed-in rubric essay): the queue card shows the rubric rows and no "Or No Score" control |
 | 967 | Choose "Off topic", Save No Score, confirm | The card leaves the queue; the student's results page shows "No Score: Off topic" and 0 points; Assignments reads **Scored**, **No score** | PASS: confirm "Save a final No Score (Off topic)?"; card leaves the queue; results page "0 / 8 … No Score: Off topic"; Assignments Scored, No score. Finding F-2 again: the results page lists the other option's questions ("No answer", "Not scored yet") and totals 0 / 18 |
 | 968 | Keyboard and screen reader through the control | The select reads "Or No Score:"; Save No Score asks before saving | NOT RUN — VoiceOver (James) |
 
@@ -2408,3 +2425,9 @@ the assignments table is still wider than its box at 1024 px (982 vs 846 px)
 with four row buttons, so "Change proctor" / "Withdraw" sit past the edge
 until scrolled. F-9 and F-10 are covered by tests in that commit (not
 re-checked by hand).
+
+**F-8 residual fixed 2026-11-04** on `fix/cba-followups`: the row's buttons
+wrap inside their cell and the proctor email may break. Browser check at
+1024 px (local, synthetic district assessment, three assignments, a long
+proctor email): table 846 px in an 846 px box (970 px with the old no-wrap
+cell); the three buttons stack in the last column.
