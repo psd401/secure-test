@@ -1,9 +1,13 @@
 // The graph answer board (D-9, D-11): choose a tool, then place its points
-// on the grid — by clicking (each click snaps), by keyboard (arrow keys move
-// a cursor one snap step, Enter places), or by typing the coordinates. All
-// three make the same objects, so a student who can't drag or point loses
-// nothing. Every object is listed in words ("y = 2x + 1") with a Remove
-// button, and each change is announced.
+// on the grid — by clicking (each click snaps) or by keyboard (arrow keys
+// move a cursor one snap step, Shift + arrow one grid line, Enter places,
+// Escape cancels or leaves the board). Both make the same objects, so a
+// student who can't drag or point loses nothing. Every object is listed in
+// words ("y = 2x + 1") with a Remove button, and each change is announced.
+//
+// Typed coordinates are for the teacher's key board only (`typedEntry`):
+// a student who could type "(2, 3)" could answer without reading the grid
+// (docs/graph-keyboard-entry-design.md, James 2026-11-13).
 //
 // The same board serves the teacher drawing the key (design tool) and the
 // review of an answer against the key (read-only, key shown dashed).
@@ -30,6 +34,11 @@ export interface GraphAnswerOptions {
   key?: GraphKey;
   /** Label for the board, e.g. "Your answer" or "Answer key". */
   label?: string;
+  /**
+   * Show the typed-coordinates form. Only the teacher's key board turns it
+   * on; a student's board never does (docs/graph-keyboard-entry-design.md).
+   */
+  typedEntry?: boolean;
 }
 
 export interface GraphAnswerHandle {
@@ -67,7 +76,6 @@ function fmt(v: number): string {
 export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts: GraphAnswerOptions = {}): GraphAnswerHandle {
   installStyles(container.ownerDocument);
   const snap = parseSnap(board.snap) ?? [1, 1];
-  const step = snap[0] / snap[1];
   const readOnly = opts.readOnly === true;
   let objects: GraphObject[] = (opts.initial ?? []).map((o) => ({ tool: o.tool, points: o.points.map((p) => [p[0], p[1]] as [number, number]) }));
   let tool: GraphTool = board.tools[0] ?? "point";
@@ -143,7 +151,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
   area.setAttribute(
     "aria-label",
     `${opts.label ?? "Graph"}. ${
-      readOnly ? "" : "Arrow keys move the cursor one grid step; Enter places a point; Escape cancels. "
+      readOnly ? "" : `${BOARD_KEY_HELP} `
     }x from ${fmt(board.x[0])} to ${fmt(board.x[1])}, y from ${fmt(board.y[0])} to ${fmt(board.y[1])}.${
       given.length ? ` Given: ${given.join("; ")}.` : ""
     }`,
@@ -214,7 +222,7 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
     for (const i of [x1, y1, x2, y2]) i.value = "";
     changed(`${describeObject({ tool: t, points: pts }, board)} added.`);
   });
-  if (!readOnly) root.append(form);
+  if (!readOnly && opts.typedEntry === true) root.append(form);
   syncForm();
 
   // --- lists ---
@@ -526,28 +534,27 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
   area.addEventListener("blur", () => draw());
   area.addEventListener("keydown", (e) => {
     if (readOnly) return;
-    const moves: Record<string, [number, number]> = {
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-      ArrowUp: [0, step],
-      ArrowDown: [0, -step],
-    };
-    const mv = moves[e.key];
-    if (mv) {
+    const moved = moveCursor(cursor, e.key, e.shiftKey, board, snap);
+    if (moved) {
       e.preventDefault();
-      const nx = Math.min(board.x[1], Math.max(board.x[0], cursor[0] + mv[0]));
-      const ny = Math.min(board.y[1], Math.max(board.y[0], cursor[1] + mv[1]));
-      cursor = snapInside([nx, ny], board, snap);
+      cursor = moved;
       draw();
       say(`(${fmt(cursor[0])}, ${fmt(cursor[1])})`);
-    } else if (e.key === "Enter" || e.key === " ") {
+      return;
+    }
+    const action = boardKeyAction(e.key, pending !== null);
+    if (action === "place") {
       e.preventDefault();
       place(cursor);
-    } else if (e.key === "Escape" && pending) {
+    } else if (action === "cancel") {
       e.preventDefault();
       pending = null;
       refresh();
       say("Cancelled.");
+    } else if (action === "exit") {
+      // D-11's Esc exit (2.1.2): back to the selected tool, one Tab from the board.
+      e.preventDefault();
+      (toolButtons.get(tool) ?? bar.querySelector("button"))?.focus();
     }
   });
   const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => draw()) : null;
@@ -561,6 +568,55 @@ export function mountGraphAnswer(container: HTMLElement, board: GraphBoard, opts
       root.remove();
     },
   };
+}
+
+/** The board's keyboard help, read as part of its label. */
+export const BOARD_KEY_HELP =
+  "Arrow keys move the cursor one step; Shift with an arrow moves one grid line; Enter places a point; Escape cancels a point or leaves the graph.";
+
+/**
+ * Shift + arrow's step: one grid line, or 5 snap steps when the grid lines
+ * are no wider than a snap step. Plain arrows alone are slow on a fine snap:
+ * a −10…10 board at snap 1/2 is 40 presses edge to edge.
+ */
+export function bigStep(board: GraphBoard, snap: [number, number]): number {
+  const s = snap[0] / snap[1];
+  return board.grid > s + 1e-9 ? board.grid : 5 * s;
+}
+
+/**
+ * Where an arrow key moves the board's cursor: one snap step, or with Shift
+ * one `bigStep`, held on the board and snapped. Null for any other key.
+ */
+export function moveCursor(
+  cursor: [number, number],
+  key: string,
+  shift: boolean,
+  board: GraphBoard,
+  snap: [number, number],
+): [number, number] | null {
+  const dirs: Record<string, [number, number]> = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, 1],
+    ArrowDown: [0, -1],
+  };
+  const d = dirs[key];
+  if (!d) return null;
+  const step = shift ? bigStep(board, snap) : snap[0] / snap[1];
+  const nx = Math.min(board.x[1], Math.max(board.x[0], cursor[0] + d[0] * step));
+  const ny = Math.min(board.y[1], Math.max(board.y[0], cursor[1] + d[1] * step));
+  return snapInside([nx, ny], board, snap);
+}
+
+/**
+ * The board's other keys: Enter / Space place at the cursor; Escape cancels
+ * a first point when there is one, and otherwise leaves the board.
+ */
+export function boardKeyAction(key: string, pending: boolean): "place" | "cancel" | "exit" | null {
+  if (key === "Enter" || key === " ") return "place";
+  if (key === "Escape" || key === "Esc") return pending ? "cancel" : "exit";
+  return null;
 }
 
 /**

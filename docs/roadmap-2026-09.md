@@ -1357,6 +1357,18 @@ which calculator the accommodation would grant (the scientific is the
 candidate) and whether it overrides the per-question mark, likely with the
 TIDE accommodation mapping.
 
+## Row DC-R — Graph it: a setting to hide the answer-in-words list (James, 2026-11-13) — LATER, nothing built
+
+From the keyboard-only design (`docs/graph-keyboard-entry-design.md`, Q4):
+the list under a Graph it board reads each object back in words ("y = 2x +
+1"), visible to every student. On a "graph this equation" question a
+student can place points by trial and read the list until it shows the
+target equation — a route around slope and intercept. Candidate: a
+per-question "Show answers in words" setting; when off, the list names
+objects "Line 1", "Point 2" (still enough for Remove and for a screen
+reader). Needs a decision on what VoiceOver hears on placing in that mode
+(the coordinates per move stay, Q1).
+
 ## Row CB — competency-based assessments (CBAs) in SecureTest (James, 2026-11-02) — BUILT on `feat/competency-assessments` (slices 1–8 + No Score), hand-run, not merged — `docs/competency-assessment-design.md` is the record
 
 A new use case, not a teacher feature: the district's Social Studies

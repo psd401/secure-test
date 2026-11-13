@@ -2669,6 +2669,27 @@ Findings from the 2026-10-24 client hand-run (James, real AAC, Debug `25ae6386`,
 - **R-1 — a test opened under the previous test's ending session (not calculator code; `main`).** Hand in, press Back to your tests before DID END, open another sitting: `lockdown already up` → `page load gate: opened` → the old session's DID END throws the student out of the new test. Fixed separately on `main` (high priority).
 - Row 668 (a client older than 2.0 refused) is still to run, with a Debug build of `v1.6.3` (the installed Release 1.6.3 obeys this Mac's managed ServerURL).
 
+## Graph it: keyboard placement only, no typed coordinates (2026-11-13)
+
+`docs/graph-keyboard-entry-design.md` is the record (James, 2026-11-13:
+Option B). The student's board loses the typed-coordinate form; arrows,
+Shift + arrow and Escape-to-leave are the keyboard model. Page script only:
+it reaches 2.0+ clients with the next re-signed renderer, so run these on a
+build or renderer from the merge. The slice-7 row above ("typed
+coordinates") describes the board before this change.
+
+| Steps | Expected | Result |
+|---|---|---|
+| **No typed entry.** A Graph it question, every tool ticked; look below the grid | No coordinate fields, tool menu or Add button; the tool bar, hint and object list are as before | NOT RUN |
+| **Arrows + Enter.** Tab to the board; arrows to (2, 3); Point; Enter | The ring moves one snap step per press; a point at (2, 3); the list reads "point (2, 3)" | NOT RUN |
+| **Shift + arrow.** A board at snap ½, grid 1; Shift + → twice from (0, 0) | The ring jumps one grid line per press, to (2, 0) | NOT RUN |
+| **Two-point tool.** Line: Enter at one point, move, Enter at another | First Enter: the first point ringed and the hint asks for the second; second Enter: the line drawn and listed | NOT RUN |
+| **Escape twice.** Line: Enter, then Escape; Escape again | "Cancelled." and no first-point ring; the second Escape puts focus on the Line tool button (VoiceOver reads it) | NOT RUN |
+| **Edges.** Hold an arrow, and Shift + arrow, past each edge | The ring stops at the edge; the page doesn't scroll | NOT RUN |
+| **VoiceOver** (James, Claude quit — VoiceOver method). Tab to the board, move, place a circle, Remove it | The label is read (extent, keys incl. Shift and Escape); each move speaks "(x, y)"; placing speaks the object; Remove buttons are named | NOT RUN |
+| **Resume an old answer.** An attempt saved with a typed answer before the change | The objects are back on the board and can be removed | NOT RUN |
+| **Teacher key board** (design tool). A Graph it question's key | The coordinate fields are still there; a typed key point saves | NOT RUN |
+
 ## Ending-session race (next client release, 2026-10-24)
 
 Found on James's real-session hand-run 2026-10-24 (Debug, local server):

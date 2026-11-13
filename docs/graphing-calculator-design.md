@@ -298,6 +298,10 @@ practice material; their rules are not published):
   parabola (vertex + point, vertical axis). Click-in-order placement meets
   WCAG 2.5.7; typed coordinates `(x, y)` are an equal alternative for
   keyboard users (2.1.1).
+  **Amended 2026-11-13 (James): the student's board has no typed
+  coordinates** — typing `(2, 3)` answers without reading the grid. Arrow
+  keys on the grid are the keyboard alternative; typed entry stays on the
+  teacher's key board only. `docs/graph-keyboard-entry-design.md`.
 - Teacher config: board extent, grid, snap (rational), allowed tools,
   max objects, optional fixed objects. The key is drawn on the same board.
 - Scoring: canonicalise each object with **exact rational arithmetic**
@@ -342,7 +346,9 @@ presenting this as Desmos.
 
 **D-11 Accessibility baseline (v1, not later).** Recommended:
 - Keyboard: full operation with an Esc exit from the graph (2.1.1,
-  2.1.2); typed-coordinate equivalents for every placement.
+  2.1.2); ~~typed-coordinate equivalents for every placement~~ — since
+  2026-11-13 arrow keys (Shift = one grid line) and Enter on the grid,
+  Esc cancels then leaves (`docs/graph-keyboard-entry-design.md`).
 - Pointer: on-screen zoom in / out / reset and pan buttons for the graph
   and every stimulus, and a tap-to-step alternative for sliders (2.5.7
   dragging; 2.5.1 — pinch is a multipoint gesture).

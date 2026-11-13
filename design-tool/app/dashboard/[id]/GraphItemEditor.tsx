@@ -75,6 +75,9 @@ export function GraphItemEditor({
       handle.current = mountGraphAnswer(host.current, board, {
         initial: graphKey?.objects ?? [],
         label: "Answer key",
+        // Typing an exact key point is fine for a teacher; the student's
+        // board has no typed entry (docs/graph-keyboard-entry-design.md).
+        typedEntry: true,
         onChange: (objects) =>
           latest.current.onChange({
             graph_key: objects.length ? { objects, scoring: latest.current.graphKey?.scoring ?? "all" } : null,
