@@ -60,7 +60,11 @@ final class GraphAnswerShellTests: XCTestCase {
     // passes it.
     func testTheStudentsBoardHasNoTypedCoordinates() {
         XCTAssertFalse(AssessmentPage.calculatorFunctions.contains("typedEntry"))
-        XCTAssertTrue(AssessmentPage.graphingScript.contains("typedEntry === true") || AssessmentPage.graphingScript.contains("typedEntry===!0"), "the vendored board knows the option")
+        // The minified gate itself: `!readOnly && opts.typedEntry === true && root.append(form)`.
+        let gate = try! NSRegularExpression(pattern: #"![A-Za-z_$][\w$]*&&[A-Za-z_$][\w$]*\.typedEntry===!0(\)|&&)[A-Za-z_$][\w$]*\.append\("#)
+        let script = AssessmentPage.graphingScript
+        XCTAssertEqual(gate.numberOfMatches(in: script, range: NSRange(script.startIndex..., in: script)), 1,
+                       "the typed form is appended only behind typedEntry === true")
     }
 
     // D-5: the contrast tokens and the zoom-following font size reach the
