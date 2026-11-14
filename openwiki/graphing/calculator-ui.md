@@ -66,7 +66,7 @@ flowchart TD
 
 - `audio.ts` exports `Tones`, a Web Audio trace of a curve: short notes while the student traces it by keyboard, and the whole curve played left to right. It creates its `AudioContext` on the first request, falls back to `webkitAudioContext`, and goes silent (`available` becomes false) if Web Audio is missing or fails. The test is the `Tones` describe block in `summary.test.ts`.
 - `stimulus.ts` exports `mountStimulus`, the read-only graph shown with a question. The student can pan, zoom, reset and select a curve, but cannot edit it. The teacher's alt text becomes the accessible name, and the expression list is a legend rather than MathLive fields. No package test drives this DOM mount; `stimulus.test.ts` covers the engine-side description and SVG only.
-- `graphAnswer.ts` exports `mountGraphAnswer`, the answer board for graph items, with `snapInside` and `parseCoordinate`. Its scoring semantics are described in [graph items](graph-items.md) and tested in `graphAnswer.test.ts`.
+- `graphAnswer.ts` exports `mountGraphAnswer`, the answer board for graph items, with `snapInside`, `parseCoordinate`, the keyboard helpers `moveCursor`, `bigStep` and `boardKeyAction`, and `BOARD_KEY_HELP`. The board's `typedEntry` option turns on its typed-coordinate form, which only the teacher's key editor uses. Its scoring semantics and the keyboard rules for students are described in [graph items](graph-items.md#student-answer-on-the-client) and tested in `graphAnswer.test.ts`.
 
 ## Change guidance
 
