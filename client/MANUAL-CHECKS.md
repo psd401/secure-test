@@ -2804,8 +2804,8 @@ come from the staging roster seed. Findings from the run:
   accommodation mid-assessment needs unpublish → tick → publish. Open.
 - **Reverse Contrast ✗ note too pale** (see corrections Contrast sets) —
   queued for the next client release.
-- **Assign search** finds "Staging" but not "Staging Student A" (no
-  first-and-last match). Minor, open.
+- **Assign search** finds `<demo-student-A>` by first name alone but not
+  by first and last name together. Minor, open.
 
 ## Answer changed mid-send; answer-write timeout (next client release, branch `fix/spool-mid-send-change`, 2026-11-04)
 
