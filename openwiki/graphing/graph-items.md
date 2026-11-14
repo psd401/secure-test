@@ -3,12 +3,12 @@ type: Domain Concept
 title: Graph items and stimulus graphs - board, key, student objects and scoring
 description: The "graph it" item type (a snapped board the student places points, lines, circles and parabolas on), its shape-based auto-scoring with all and per_object modes, the stimulus graph attached to any item, and how each flows through authoring, export, delivery, scoring, review and preview.
 tags: [graph-item, stimulus-graph, scoring, graphing]
-timestamp: 2026-10-25T00:00:00.000Z
+timestamp: 2026-11-13T00:00:00.000Z
 openwiki:
   roles: [domain, integration]
-  change_kinds: [item-type, scoring, wire-format]
-  source_paths: [packages/schema/src/graph.ts, packages/schema/src/items.ts, packages/graphing/src/engine/graphAnswer.ts, packages/graphing/src/ui/graphAnswer.ts, packages/graphing/src/page.ts, design-tool/lib/api/items.ts, design-tool/lib/api/buildDeliveryBundle.ts, design-tool/lib/api/studentAttempt.ts, design-tool/lib/scoring/auto.ts, design-tool/lib/api/reviewActions.ts, design-tool/lib/api/importBundle.ts, client/SecureTestCore/Sources/SecureTestCore/AssessmentPageCalculator.swift, client/SecureTestCore/Sources/SecureTestCore/ItemResponse.swift]
-  symbols: [GraphBoardSchema, GraphKeySchema, GraphResponseSchema, StimulusGraphSchema, scoreGraph, canonical, parseSnap, graphIssues, graphMaxPoints, graphAnswerLines, mountGraphAnswer, mountGraphAnswers, ItemResponse]
+  change_kinds: [item-type, scoring, wire-format, keyboard-input]
+  source_paths: [packages/schema/src/graph.ts, packages/schema/src/items.ts, packages/graphing/src/engine/graphAnswer.ts, packages/graphing/src/ui/graphAnswer.ts, packages/graphing/src/page.ts, "design-tool/app/dashboard/[id]/GraphItemEditor.tsx", design-tool/lib/api/items.ts, design-tool/lib/api/buildDeliveryBundle.ts, design-tool/lib/api/studentAttempt.ts, design-tool/lib/scoring/auto.ts, design-tool/lib/api/reviewActions.ts, design-tool/lib/api/importBundle.ts, client/SecureTestCore/Sources/SecureTestCore/AssessmentPageCalculator.swift, client/SecureTestCore/Sources/SecureTestCore/ItemResponse.swift]
+  symbols: [GraphBoardSchema, GraphKeySchema, GraphResponseSchema, StimulusGraphSchema, scoreGraph, canonical, parseSnap, graphIssues, graphMaxPoints, graphAnswerLines, mountGraphAnswer, typedEntry, moveCursor, boardKeyAction, bigStep, mountGraphAnswers, ItemResponse]
   test_paths: [design-tool/test/graph-item.test.ts, design-tool/test/calculator-api.test.ts, design-tool/test/import-api.test.ts, design-tool/test/review-queue.test.ts, design-tool/test/preview-graph.test.ts, packages/graphing/test/graphAnswer.test.ts, client/SecureTestCore/Tests/SecureTestCoreTests/GraphAnswerShellTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/GenericAnswerChannelTests.swift, client/SecureTestCore/Tests/SecureTestCoreTests/GraphingScriptTests.swift]
   invariants:
     - A graph item needs a board; a key is optional, and a graph item without a key is hand-scored (scoring_method human), while one with a key is auto-scored.
@@ -16,6 +16,7 @@ openwiki:
     - A response is matched by canonical shape on snapped coordinates, so two lines through different point pairs on the same line are the same answer.
     - graph_key is an answer key, so it may change on a published test; graph_board is locked.
     - The delivery bundle carries board for a graph item and never the key.
+    - A student's board never shows the typed-coordinate form; only the teacher's key board turns on the typedEntry option.
   validation_commands: ["cd packages/graphing && bun test test/graphAnswer.test.ts", "cd design-tool && $TESTDB bun test test/graph-item.test.ts"]
 ---
 
@@ -85,3 +86,7 @@ Validation: the engine's `packages/graphing/test/graphAnswer.test.ts` covers the
 - Scope: the graphing engine's `analyze`, `poi`, and `implicit` modules serve the calculator and stimulus rendering, not graph-item scoring. Do not expect a graph-item change to need them.
 
 Validation: start with `cd packages/graphing && bun test test/graphAnswer.test.ts`. Use `cd design-tool && $TESTDB bun test test/graph-item.test.ts` for the server half. Run `import-api.test.ts` and `review-queue.test.ts` only when the import or queue shape changes.
+ Scope: the graphing engine's `analyze`, `poi`, and `implicit` modules serve the calculator and stimulus rendering, not graph-item scoring. Do not expect a graph-item change to need them.
+
+Validation: start with `cd packages/graphing && bun test test/graphAnswer.test.ts`. Use `cd design-tool && $TESTDB bun test test/graph-item.test.ts` for the server half. Run `import-api.test.ts` and `review-queue.test.ts` only when the import or queue shape changes.
+`review-queue.test.ts` only when the import or queue shape changes.
