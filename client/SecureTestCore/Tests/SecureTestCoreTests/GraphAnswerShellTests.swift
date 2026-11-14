@@ -53,6 +53,20 @@ final class GraphAnswerShellTests: XCTestCase {
         XCTAssertFalse(glue.contains("objects.length > 0)"), "no post that can carry an empty list")
     }
 
+    // docs/graph-keyboard-entry-design.md (James, 2026-11-13): a student's
+    // board has no typed-coordinate form — typing "(2, 3)" would answer
+    // without reading the grid. The board shows the form only for
+    // `typedEntry: true` (the teacher's key board), and the page glue never
+    // passes it.
+    func testTheStudentsBoardHasNoTypedCoordinates() {
+        XCTAssertFalse(AssessmentPage.calculatorFunctions.contains("typedEntry"))
+        // The minified gate itself: `!readOnly && opts.typedEntry === true && root.append(form)`.
+        let gate = try! NSRegularExpression(pattern: #"![A-Za-z_$][\w$]*&&[A-Za-z_$][\w$]*\.typedEntry===!0(\)|&&)[A-Za-z_$][\w$]*\.append\("#)
+        let script = AssessmentPage.graphingScript
+        XCTAssertEqual(gate.numberOfMatches(in: script, range: NSRange(script.startIndex..., in: script)), 1,
+                       "the typed form is appended only behind typedEntry === true")
+    }
+
     // D-5: the contrast tokens and the zoom-following font size reach the
     // boards drawn inside a question (`.graph-stimulus` holders and
     // `.graph-answer` fields), not only the calculator panel.

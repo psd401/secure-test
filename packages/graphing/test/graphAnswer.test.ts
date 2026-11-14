@@ -8,7 +8,7 @@ import {
   type GraphBoard,
   type GraphObject,
 } from "../src/engine/graphAnswer";
-import { snapInside } from "../src/ui/graphAnswer";
+import { bigStep, boardKeyAction, moveCursor, snapInside } from "../src/ui/graphAnswer";
 
 const BOARD: GraphBoard = {
   x: [-10, 10],
@@ -215,5 +215,85 @@ describe("snapInside (board cursor and clicks)", () => {
   test("bounds on the grid are unchanged", () => {
     expect(snapInside([10, -10], BOARD, [1, 1])).toEqual([10, -10]);
     expect(snapInside([0.4, 0.6], BOARD, [1, 1])).toEqual([0, 1]);
+  });
+});
+
+// docs/graph-keyboard-entry-design.md (James, 2026-11-13): the student's
+// board is placed by clicking or by the keyboard on the grid — never typed.
+describe("keyboard on the board", () => {
+  const one = parseSnap("1")!;
+  const half = parseSnap("1/2")!;
+  const third = parseSnap("1/3")!;
+
+  test("arrows move one snap step; up is +y", () => {
+    expect(moveCursor([0, 0], "ArrowRight", false, BOARD, one)).toEqual([1, 0]);
+    expect(moveCursor([0, 0], "ArrowLeft", false, BOARD, one)).toEqual([-1, 0]);
+    expect(moveCursor([0, 0], "ArrowUp", false, BOARD, one)).toEqual([0, 1]);
+    expect(moveCursor([0, 0], "ArrowDown", false, BOARD, one)).toEqual([0, -1]);
+    expect(moveCursor([0, 0], "ArrowRight", false, HALF, half)).toEqual([0.5, 0]);
+  });
+
+  test("other keys are not moves", () => {
+    for (const k of ["Enter", " ", "Escape", "Tab", "2", "Home"]) expect(moveCursor([0, 0], k, false, BOARD, one)).toBeNull();
+  });
+
+  test("Shift moves one grid line, or 5 steps when the grid is no wider than the snap", () => {
+    expect(bigStep(HALF, half)).toBe(1);
+    expect(moveCursor([0, 0], "ArrowRight", true, HALF, half)).toEqual([1, 0]);
+    expect(bigStep(BOARD, one)).toBe(5);
+    expect(moveCursor([0, 0], "ArrowUp", true, BOARD, one)).toEqual([0, 5]);
+    const coarse: GraphBoard = { ...BOARD, grid: 1, snap: "2" };
+    expect(bigStep(coarse, [2, 1])).toBe(10);
+  });
+
+  test("the cursor stops at every edge", () => {
+    expect(moveCursor([10, 10], "ArrowRight", false, BOARD, one)).toEqual([10, 10]);
+    expect(moveCursor([10, 10], "ArrowUp", true, BOARD, one)).toEqual([10, 10]);
+    expect(moveCursor([-8, -9], "ArrowLeft", true, BOARD, one)).toEqual([-10, -9]);
+    expect(moveCursor([-8, -9], "ArrowDown", true, BOARD, one)).toEqual([-8, -10]);
+    // Bounds that aren't snap multiples: never off the board.
+    const b: GraphBoard = { ...BOARD, x: [-5, 5], y: [-5, 5], snap: "2" };
+    expect(moveCursor([4, 4], "ArrowRight", false, b, [2, 1])).toEqual([4, 4]);
+    expect(moveCursor([4, 4], "ArrowUp", true, b, [2, 1])).toEqual([4, 4]);
+  });
+
+  test("a fractional snap doesn't drift: 30 steps of 1/3 land on 10", () => {
+    const b: GraphBoard = { ...BOARD, snap: "1/3" };
+    let c: [number, number] = [0, 0];
+    for (let i = 0; i < 30; i++) c = moveCursor(c, "ArrowRight", false, b, third)!;
+    expect(c).toEqual([10, 0]);
+    expect("key" in canonical(o("point", c), b)).toBe(true);
+  });
+
+  test("Enter / Space place; Escape cancels a first point, else leaves the board", () => {
+    expect(boardKeyAction("Enter", false)).toBe("place");
+    expect(boardKeyAction(" ", true)).toBe("place");
+    expect(boardKeyAction("Escape", true)).toBe("cancel");
+    expect(boardKeyAction("Escape", false)).toBe("exit");
+    expect(boardKeyAction("Tab", false)).toBeNull();
+    expect(boardKeyAction("a", true)).toBeNull();
+  });
+
+  test("a two-point tool from the keyboard: Enter, move, Enter makes the object", () => {
+    // The board's click order (TOOL_HINTS): first Enter keeps a point, the
+    // second completes the object at the moved cursor.
+    let c: [number, number] = [0, 1];
+    const pts: [number, number][] = [];
+    expect(boardKeyAction("Enter", false)).toBe("place");
+    pts.push(c);
+    c = moveCursor(c, "ArrowRight", false, BOARD, one)!;
+    c = moveCursor(c, "ArrowUp", false, BOARD, one)!;
+    c = moveCursor(c, "ArrowUp", false, BOARD, one)!;
+    expect(boardKeyAction("Enter", true)).toBe("place");
+    pts.push(c);
+    expect(describeObject(o("line", ...pts), BOARD)).toBe("y = 2x + 1");
+  });
+});
+
+describe("no typed coordinates on a student's board", () => {
+  test("the form is added only when typedEntry is true", async () => {
+    const src = await Bun.file(new URL("../src/ui/graphAnswer.ts", import.meta.url)).text();
+    expect(src).toContain("if (!readOnly && opts.typedEntry === true) root.append(form);");
+    expect(src.match(/root\.append\(form\)/g)).toHaveLength(1);
   });
 });

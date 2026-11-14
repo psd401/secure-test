@@ -601,7 +601,7 @@ function renderItem(
         `<figcaption><p class="graph-alt">${escapeHtml(
           printMode
             ? `Draw your answer on the grid (up to ${item.board.max_objects}).`
-            : `Students place ${tools} (up to ${item.board.max_objects}), by clicking, with the keyboard or by typing coordinates.`,
+            : `Students place ${tools} (up to ${item.board.max_objects}), by clicking or with the arrow keys on the grid.`,
         )}</p></figcaption></figure>`;
     }
   } else {
