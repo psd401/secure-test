@@ -68,7 +68,7 @@ Diagram: core relationships only. `students.roster_ps_id` is a plain text bridge
 | Accommodations overlay | `students`, `student_accommodations`, `assessment_student_overrides` | `students` is a **per-teacher** overlay (`owner_sub`), not the roster; unique on (`owner_sub`, `ssid`), (`owner_sub`, `roster_ps_id`) and practice (`owner_sub`, `practice_for_sub`). See [accommodations and roster](accommodations-and-roster.md). |
 | Sittings and attempts | `test_sessions`, `attempts`, `attempt_events`, `peek_requests`, `attempt_deletions` | `test_sessions` kinds `class`/`practice` (CHECK ties `practice_for_sub` to kind); status `open`/`closed`; partial unique index on `code` where open. `attempts` status `in_progress`/`submitted`, unique (assessment, student), `test_session_id` SET NULL, per-attempt `deadline_override_at`, `time_limit_removed`, `pass_back_count`, `practice`, and `corrections` (the current pass back's corrections-mode choice, migration `0069`, null when none was asked). See [sittings and attempts](sittings-and-attempts.md#attempt-lifecycle). |
 | Responses and scoring | `responses`, `response_revisions`, `response_uploads`, `scores`, `scoring_runs` | `responses.response` jsonb is the `ItemResponse` union; unique (attempt, item). `scores` statuses `proposed`/`final`/`research`/`superseded`, methods `auto`/`ai`/`human`, CHECK `0 <= points <= max_points`. `response_revisions` holds kept earlier text answers ([answer history](answer-history.md)). See [scoring and results](scoring-and-results.md). |
-| Roster mirror | `roster_students`, `roster_sections`, `roster_section_teachers`, `roster_enrollments`, `roster_sync_runs` | Written only by `lib/roster/importSnapshot.ts`; every row has `is_active`, `last_seen_snapshot_id`. Date columns decide "current", the importer does not. |
+| Roster mirror | `roster_students`, `roster_sections`, `roster_section_teachers`, `roster_enrollments`, `roster_sync_runs` | Written only by `lib/roster/importSnapshot.ts`; every row has `is_active`, `last_seen_snapshot_id`. Date columns decide "current", the importer does not. PowerSchool ids added by migration `0042_roster_dcids.sql`: `roster_students.dcid`, `roster_sections.dcid` and `year_id`, `roster_section_teachers.users_dcid`; the gradebook push reads them (see [integrations](integrations.md#gradebook-push-powerschool)). |
 | Access | `access_grants`, `assessment_shares`, `impersonation_sessions` | See [auth and access](auth-and-access.md). |
 | Safeguarding and ops | `guardrail_events`, `safeguarding_alerts`, `server_error_events`, `client_error_events`, `feedback` | `guardrail_events`, `server_error_events`, `client_error_events` are swept after 90 days; `feedback` never. See [AI and safeguarding](ai-and-safeguarding.md), [operations](../operations/deployment-and-observability.md). |
 | Integrations | `gradebook_pushes` (including `basis` `latest`/`attempt_one`, migration `0068`), `gradebook_push_scores`, `gradebook_section_prefs`, `class_insight_reports`/`threads`/`turns`, `google_doc_folders`, `google_doc_releases` | See [integrations](integrations.md#gradebook-push-powerschool). |
@@ -92,12 +92,4 @@ Diagram: core relationships only. `students.roster_ps_id` is a plain text bridge
 2. `bun run db:generate`; review the SQL for backfills/defaults (existing rows!).
 3. Update the owning `lib/api/*` module and route Zod schema; if it crosses to students or teachers' bundles, update [wire formats](../architecture/wire-formats.md).
 4. Add retention handling if it holds personal data (`lib/retention/sweep.ts`, `lib/api/deleteAttempt.ts`).
-5. Validate: `bun run typecheck` and the one API test file for the owning route.
-andling if it holds personal data (`lib/retention/sweep.ts`, `lib/api/deleteAttempt.ts`).
-5. Validate: `bun run typecheck` and the one API test file for the owning route.
-eteAttempt.ts`).
-5. Validate: `bun run typecheck` and the one API test file for the owning route.
-andling if it holds personal data (`lib/retention/sweep.ts`, `lib/api/deleteAttempt.ts`).
-5. Validate: `bun run typecheck` and the one API test file for the owning route.
-ep.ts`, `lib/api/deleteAttempt.ts`).
 5. Validate: `bun run typecheck` and the one API test file for the owning route.
