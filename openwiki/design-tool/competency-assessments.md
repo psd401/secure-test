@@ -42,8 +42,7 @@ Four kinds of principal touch a competency assessment. Each is refused with the 
 | Proctor | A live `competency_assignments` row naming them as `proctor_email` | Starting sittings for their own assigned students only; the Monitor for those sittings; their home list `/dashboard/proctoring`. Level `run`, via `"proctor"` | `lib/api/access.ts` (`authorizeProctorAssessment`, the sitting and attempt doors), `lib/competency/proctoring.ts` |
 | Scorer | A `score` grant (time-boxed: `ends_at` must be in the future, `ends_at_required` otherwise) given in the Share dialog's Scorers section | The review queue and every scoring action; not items, settings, Release or pass back | `lib/api/grants.ts`, `components/app/ScorersSection.tsx`, `lib/api/accessLevels.ts` |
 
-<!-- openwiki: broken internal link [auth-and-access.md#the-access-ladder-docs-access-model-design-md] heading anchor "the-access-ladder-docs-access-model-design-md" does not exist in "auth-and-access.md". Fix the href or restore the target, then delete this comment. -->
-The `score` level sits between `run` and `edit` on the ladder: `view < run < score < edit < own` (see [auth and access](auth-and-access.md#the-access-ladder-docs-access-model-design-md)).
+The `score` level sits between `run` and `edit` on the ladder: `view < run < score < edit < own` (see [auth and access](auth-and-access.md)).
 
 ## Lifecycle of one case
 
