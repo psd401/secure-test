@@ -46,6 +46,16 @@ import {
 } from "@/lib/pdfImport/triage";
 import { PdfSourcePane, type SourceRegion } from "./PdfSourcePane";
 import { DocxSourcePane } from "./DocxSourcePane";
+import {
+  IMPORT_STEPS,
+  NDJSON_CONTENT_TYPE,
+  createImportEventParser,
+  eventBody,
+  formatElapsed,
+  importStepLabel,
+  type ImportEvent,
+  type ImportStepEvent,
+} from "@/lib/pdfImport/progress";
 import type { WordBlock } from "@/lib/docxImport/document";
 
 // Slice 42: PDF item import. Upload a PDF → the server extracts text (or,
@@ -254,6 +264,48 @@ const TRIAGE_BADGE: Record<TriageStatus, string> = {
 /** The ring on a field a "check this" reason is about. */
 const CHECK_RING = "rounded ring-2 ring-warning-foreground/60 ring-offset-1";
 
+/** A1: one step's latest state, placed in the order the import runs them. */
+function withStep(rows: readonly ImportStepEvent[], event: ImportStepEvent): ImportStepEvent[] {
+  return [...rows.filter((r) => r.step !== event.step), event].sort(
+    (a, b) => IMPORT_STEPS.indexOf(a.step) - IMPORT_STEPS.indexOf(b.step),
+  );
+}
+
+/** A1: the import's steps as a checklist while it runs. The elapsed time
+ * on the AI step is hidden from screen readers so the live region does not
+ * announce it every second. */
+function ImportProgress({
+  steps,
+  aiStartedAt,
+  now,
+}: {
+  steps: readonly ImportStepEvent[];
+  aiStartedAt: number | null;
+  now: number;
+}) {
+  return (
+    <ol role="status" aria-live="polite" aria-label="Import progress" className="space-y-1 text-xs">
+      {steps
+        .filter((s) => s.state !== "skipped")
+        .map((s) => (
+          <li key={s.step} className="flex gap-2">
+            <span aria-hidden="true" className="w-3 shrink-0">
+              {s.state === "done" ? "✓" : "…"}
+            </span>
+            <span className={s.state === "done" ? "text-muted-foreground" : "font-medium"}>
+              {importStepLabel(s.step, s.state, s.detail)}
+              {s.step === "ai" && s.state === "active" && aiStartedAt !== null ? (
+                <span aria-hidden="true" className="ml-1 tabular-nums text-muted-foreground">
+                  {formatElapsed(now - aiStartedAt)}
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+    </ol>
+  );
+}
+
 export function PdfImportPanel({
   assessmentId,
   assessmentName,
@@ -264,6 +316,16 @@ export function PdfImportPanel({
 }: Props) {
   const [open, setOpen] = useState(initialOpen);
   const [busy, setBusy] = useState(false);
+  // A1: the import's steps while it runs (null when no import is running).
+  const [importSteps, setImportSteps] = useState<ImportStepEvent[] | null>(null);
+  const [aiStartedAt, setAiStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const aiRunning = importSteps?.some((s) => s.step === "ai" && s.state === "active") ?? false;
+  useEffect(() => {
+    if (!aiRunning) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [aiRunning]);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [added, setAdded] = useState<Set<number>>(new Set());
@@ -363,6 +425,8 @@ export function PdfImportPanel({
 
   async function extract(file: File) {
     setBusy(true);
+    setImportSteps([]);
+    setAiStartedAt(null);
     setError(null);
     setResult(null);
     setAdded(new Set());
@@ -385,17 +449,47 @@ export function PdfImportPanel({
     try {
       const form = new FormData();
       form.append("file", file);
+      // A1: ask for the streamed form, so each step shows as it happens.
       const res = await fetch(
         `/api/assessments/${assessmentId}/items/import-pdf`,
-        { method: "POST", body: form },
+        { method: "POST", body: form, headers: { Accept: NDJSON_CONTENT_TYPE } },
       );
-      // A non-JSON failure body (proxy/500) used to surface as a raw
-      // "Unexpected end of JSON input" TypeError (ERAS exam, 2026-09-01).
-      const body = (await res.json().catch(() => null)) as
-        | (ExtractResult & { ok: boolean; error?: string; hint?: string })
-        | null;
-      if (!res.ok || !body?.ok) {
-        throw new Error(body?.hint ?? body?.error ?? `HTTP ${res.status}`);
+      type Body = ExtractResult & { ok: boolean; error?: string; hint?: string };
+      const final: { status: number; body: Body | null } = { status: res.status, body: null };
+      if (res.ok && (res.headers.get("content-type") ?? "").includes(NDJSON_CONTENT_TYPE) && res.body) {
+        const parser = createImportEventParser();
+        const handle = (events: ImportEvent[]) => {
+          for (const e of events) {
+            if (e.type === "step") {
+              if (e.step === "ai" && e.state === "active") {
+                setAiStartedAt(Date.now());
+                setNow(Date.now());
+              }
+              setImportSteps((rows) => withStep(rows ?? [], e));
+            } else {
+              final.status = e.type === "error" ? e.status : 200;
+              final.body = eventBody(e) as unknown as Body;
+            }
+          }
+        };
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          handle(parser.push(value));
+        }
+        handle(parser.end());
+        if (!final.body) throw new Error("The import stopped before it finished. Try again.");
+      } else {
+        // The checks before the import starts (sign-in, file size, type)
+        // still answer as one JSON body. A non-JSON failure body (proxy/500)
+        // used to surface as a raw "Unexpected end of JSON input" TypeError
+        // (ERAS exam, 2026-09-01).
+        final.body = (await res.json().catch(() => null)) as Body | null;
+      }
+      const body = final.body;
+      if (final.status >= 400 || !body?.ok) {
+        throw new Error(body?.hint ?? body?.error ?? `HTTP ${final.status}`);
       }
       setResult(body);
       if (newAuthoring) {
@@ -424,6 +518,8 @@ export function PdfImportPanel({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      setImportSteps(null);
+      setAiStartedAt(null);
     }
   }
 
@@ -930,7 +1026,9 @@ export function PdfImportPanel({
               if (f) void extract(f);
             }}
           />
-          {busy ? (
+          {busy && importSteps && importSteps.length > 0 ? (
+            <ImportProgress steps={importSteps} aiStartedAt={aiStartedAt} now={now} />
+          ) : busy ? (
             <p className="text-xs text-muted-foreground">
               Working…
             </p>
