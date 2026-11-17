@@ -7,3 +7,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # init and analyze must be the same CodeQL version; one PR per action
+    # left each half failing CodeQL on its own (#208/#209, 2026-11-13).
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

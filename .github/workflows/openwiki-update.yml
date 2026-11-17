@@ -1,8 +1,9 @@
 name: OpenWiki Update
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
+  # No `push` trigger: since reusable-openwiki v1.2.2 a push run skips its
+  # job unless run_on_push is set, so the wiki rebuilds weekly (James,
+  # 2026-11-17: weekly accepted to save Actions minutes and bot PRs).
   schedule:
     - cron: "0 8 * * 1"
 
