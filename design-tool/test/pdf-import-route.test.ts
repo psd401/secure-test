@@ -1,7 +1,7 @@
 // Slice 42: PDF import route, driven by REAL text-layer extraction (unpdf)
 // via minimal generated PDFs. No module mocking of the extractor — that
 // leaks across files in bun — so the route runs its true extraction path.
-import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { guardrail_events, items } from "../db/schema";
@@ -1023,5 +1023,31 @@ describe("POST items/import-pdf: streamed progress (A1)", () => {
     expect(res.status).toBe(400);
     expect(res.headers.get("content-type")).toContain("application/json");
     expect(((await res.json()) as { error: string }).error).toBe("expected_multipart");
+  });
+
+  // #219 review: a throw nothing else catches (here the page render, which
+  // has no try of its own) ends the stream with an error line, not a cut.
+  test("an unexpected throw mid-import ends with an import_failed error line", async () => {
+    const figuresMod = await import("../lib/pdfImport/extractFigures");
+    const spy = spyOn(figuresMod, "renderPagesForModel").mockImplementation(async () => {
+      throw new Error("simulated render crash");
+    });
+    const quiet = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const id = await createAssessment("Streamed crash");
+      const res = await postStreamed(id, makeTextPdf(NUMBERED));
+      expect(res.status).toBe(200);
+      const events = await readEvents(res);
+      expect(stepsOf(events)).toContain("read:done");
+      expect(stepsOf(events)).not.toContain("ai:active");
+      const last = events.at(-1)! as ImportErrorEvent;
+      expect(last.type).toBe("error");
+      expect(last.status).toBe(500);
+      expect(last.error).toBe("import_failed");
+      expect(typeof last.hint).toBe("string");
+    } finally {
+      spy.mockRestore();
+      quiet.mockRestore();
+    }
   });
 });

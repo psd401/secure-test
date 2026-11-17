@@ -284,7 +284,10 @@ function ImportProgress({
   now: number;
 }) {
   return (
-    <ol role="status" aria-live="polite" aria-label="Import progress" className="space-y-1 text-xs">
+    // The live region wraps the list so the <ol> keeps its list semantics
+    // (#219 review).
+    <div role="status" aria-live="polite" aria-label="Import progress">
+    <ol className="space-y-1 text-xs">
       {steps
         .filter((s) => s.state !== "skipped")
         .map((s) => (
@@ -303,6 +306,7 @@ function ImportProgress({
           </li>
         ))}
     </ol>
+    </div>
   );
 }
 
