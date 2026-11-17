@@ -41,6 +41,16 @@ import { DocxReadError, readDocx } from "@/lib/docxImport/readDocx";
 import type { WordDocument } from "@/lib/docxImport/document";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { FORM_OVERHEAD_BYTES, readFormDataWithin } from "@/lib/api/jsonBody";
+import {
+  NDJSON_CONTENT_TYPE,
+  encodeImportEvent,
+  wantsImportStream,
+  type ImportEvent,
+  type ImportStepDetail,
+  type ImportStepEvent,
+  type ImportStepId,
+  type ImportStepState,
+} from "@/lib/pdfImport/progress";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -54,7 +64,7 @@ interface RouteContext {
 // every PDF hint as it was.
 function extractionFailure(err: unknown, noun = "PDF") {
   if (err instanceof PdfExtractError && err.code === "truncated") {
-    return NextResponse.json(
+    return outcome(
       {
         ok: false,
         error: "pdf_extract_truncated",
@@ -69,7 +79,7 @@ function extractionFailure(err: unknown, noun = "PDF") {
     );
   }
   if (err instanceof PdfExtractError && err.code === "refused") {
-    return NextResponse.json(
+    return outcome(
       {
         ok: false,
         error: "pdf_extract_refused",
@@ -82,7 +92,7 @@ function extractionFailure(err: unknown, noun = "PDF") {
     );
   }
   if (err instanceof PdfExtractError) {
-    return NextResponse.json(
+    return outcome(
       {
         ok: false,
         error: "pdf_extract_invalid_output",
@@ -95,7 +105,7 @@ function extractionFailure(err: unknown, noun = "PDF") {
     );
   }
   console.error("pdf-import: extraction failed", err);
-  return NextResponse.json(
+  return outcome(
     {
       ok: false,
       error: "pdf_extract_failed",
@@ -177,28 +187,130 @@ export async function POST(req: Request, ctx: RouteContext) {
   // before.
   const word =
     allowedUploadFor(file)?.ext === "docx" && (await isNewAuthoringEnabled(db, auth.session));
+  // The cap every other document upload has (rubric, batch generation).
+  if (word && file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "file_too_large",
+        limit: MAX_UPLOAD_BYTES,
+        hint:
+          "Word documents are limited to 5 MB here. Pictures make a document " +
+          "large: save a copy without them, or split the document.",
+      },
+      { status: 413 },
+    );
+  }
+
+  // A1 (2026-11-17): everything above answers at once, as before. From here
+  // the import runs in `runImport`; a request that sends
+  // `Accept: application/x-ndjson` (the import panel) gets each step as it
+  // happens and then the same body, and any other request gets the one JSON
+  // body it always did.
+  const job: ImportJob = { bytes, word, fileName: file.name, ownerSub: auth.session.sub };
+  if (!wantsImportStream(req.headers.get("accept"))) {
+    const result = await runImport(job, () => {});
+    return NextResponse.json(result.body, { status: result.status });
+  }
+  return streamImport(job);
+}
+
+interface ImportJob {
+  bytes: Uint8Array;
+  word: boolean;
+  fileName: string;
+  ownerSub: string;
+}
+
+/** A finished import: the status and body the JSON form answers with. */
+interface Outcome {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+/** The same call shape as `NextResponse.json`, so every answer below reads
+ * as it did before the import learned to stream. */
+function outcome(body: Record<string, unknown>, init?: { status: number }): Outcome {
+  return { status: init?.status ?? 200, body };
+}
+
+function step(
+  id: ImportStepId,
+  state: ImportStepState,
+  detail?: ImportStepDetail,
+): ImportStepEvent {
+  return { type: "step", step: id, state, ...(detail ? { detail } : {}) };
+}
+
+/** The streamed form: one NDJSON line per step, then the result or error. */
+function streamImport(job: ImportJob): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let open = true;
+      const send = (event: ImportEvent) => {
+        if (!open) return;
+        try {
+          controller.enqueue(encoder.encode(encodeImportEvent(event)));
+        } catch {
+          // The teacher closed the page; the import finishes unheard.
+          open = false;
+        }
+      };
+      try {
+        const result = await runImport(job, send);
+        send(
+          result.status < 400
+            ? { type: "result", ...result.body }
+            : { type: "error", status: result.status, ...result.body },
+        );
+      } catch (err) {
+        console.error("pdf-import: import failed", err);
+        send({
+          type: "error",
+          status: 500,
+          ok: false,
+          error: "import_failed",
+          hint: "The import stopped unexpectedly. Try again in a minute.",
+        });
+      } finally {
+        if (open) {
+          open = false;
+          try {
+            controller.close();
+          } catch {
+            // Already closed by the client.
+          }
+        }
+      }
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "content-type": `${NDJSON_CONTENT_TYPE}; charset=utf-8`,
+      // `no-transform` also keeps the server's gzip from holding the lines
+      // back until the end (it skips no-transform responses).
+      "cache-control": "no-store, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
+async function runImport(
+  job: ImportJob,
+  emit: (event: ImportStepEvent) => void,
+): Promise<Outcome> {
+  const { bytes, word, fileName, ownerSub } = job;
   let wordDoc: WordDocument | null = null;
   let extracted;
+  emit(step("read", "active"));
   if (word) {
-    // The cap every other document upload has (rubric, batch generation).
-    if (file.size > MAX_UPLOAD_BYTES) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "file_too_large",
-          limit: MAX_UPLOAD_BYTES,
-          hint:
-            "Word documents are limited to 5 MB here. Pictures make a document " +
-            "large: save a copy without them, or split the document.",
-        },
-        { status: 413 },
-      );
-    }
     try {
       wordDoc = readDocx(bytes);
     } catch (err) {
       if (!(err instanceof DocxReadError)) console.warn("pdf-import: docx read failed", err);
-      return NextResponse.json(
+      return outcome(
         {
           ok: false,
           error: "docx_parse_failed",
@@ -214,7 +326,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     try {
       extracted = await extractPdfText(bytes);
     } catch {
-      return NextResponse.json(
+      return outcome(
         { ok: false, error: "pdf_parse_failed" },
         { status: 400 },
       );
@@ -223,9 +335,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   const noun = word ? "Word document" : "PDF";
 
   const scanned = !word && looksScanned(extracted.text, extracted.pageCount);
+  emit(step("read", "done", word ? { word: true } : { pages: extracted.pageCount, scanned }));
   if (scanned) {
     if (extracted.pageCount > MAX_OCR_PAGES) {
-      return NextResponse.json(
+      return outcome(
         {
           ok: false,
           error: "pdf_too_many_pages",
@@ -238,7 +351,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       );
     }
     if (bytes.byteLength > MAX_OCR_BYTES) {
-      return NextResponse.json(
+      return outcome(
         {
           ok: false,
           error: "pdf_too_large_for_ocr",
@@ -269,6 +382,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     pages = wordDoc.pages;
     anchors = wordDoc.anchors;
   } else if (!scanned) {
+    emit(step("figures", "active"));
     try {
       const layout = await extractPdfLayout(bytes);
       figures = layout.figures;
@@ -287,14 +401,27 @@ export async function POST(req: Request, ctx: RouteContext) {
   // turns it off. A document over the page cap, or one that will not
   // render, goes as text alone.
   const pageImages = !word && pageImagesWanted(scanned) ? await renderPagesForModel(bytes) : null;
+  // A Word document's pictures are not imported and a scan has no figures
+  // to walk, so for those the step does not apply.
+  emit(
+    word || scanned
+      ? step("figures", "skipped")
+      : step("figures", "done", { figures: figures.length }),
+  );
+  // E8: the document's own numbering, counted before the model runs so the
+  // teacher sees what to expect. Counted on the text the model reads (after
+  // the figure walk), so it is the same number the check at the end uses.
+  // A scan has no text layer to count.
+  const numberedItems = scanned ? null : countNumberedItems(modelText);
+  emit(scanned ? step("numbering", "skipped") : step("numbering", "done", { expected: numberedItems }));
   const reqBody = PdfExtractRequest.safeParse({
     text: modelText,
     page_count: extracted.pageCount,
-    ...(scanned ? { scanned_pdf: bytes, file_name: file.name } : {}),
+    ...(scanned ? { scanned_pdf: bytes, file_name: fileName } : {}),
     ...(pageImages ? { page_images: pageImages } : {}),
   });
   if (!reqBody.success) {
-    return NextResponse.json(
+    return outcome(
       {
         ok: false,
         error: "text_too_large_or_empty",
@@ -305,11 +432,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   }
 
   const provider = getPdfExtractorProvider();
-  let outcome: GuardedOutcome<PdfExtractResult>;
+  let guarded: GuardedOutcome<PdfExtractResult>;
+  emit(step("ai", "active"));
   try {
-    outcome = await runGuarded({
+    guarded = await runGuarded({
     surface: "pdf-import",
-    ownerSub: auth.session.sub,
+    ownerSub,
     // Scanned branch: no pre-model text exists to screen, so the input
     // stage is skipped (ADR 0015); the output stage below still runs.
     ...(scanned ? {} : { inputText: reqBody.data.text }),
@@ -319,7 +447,13 @@ export async function POST(req: Request, ctx: RouteContext) {
     // hit is recorded as "flag"; the output check below still blocks, the
     // prompt fences the text as data, and the teacher reviews every proposal.
     inputMode: "record",
-    run: () => provider.extract(reqBody.data, auth.session.sub),
+    // A1: the model's part ends here; the output screen runs next.
+    run: async () => {
+      const r = await provider.extract(reqBody.data, ownerSub);
+      emit(step("ai", "done", { proposed: r.candidates.length }));
+      emit(step("safety", "active"));
+      return r;
+    },
     // Every string the model proposed — stems, choices, pairs, blank
     // options and keys, answers, table labels, stimuli and sources. With
     // the input check record-only (above), this is the one enforced gate,
@@ -330,12 +464,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   } catch (err) {
     return extractionFailure(err, noun);
   }
-  if (!outcome.ok) {
-    return NextResponse.json(
+  if (!guarded.ok) {
+    return outcome(
       {
         ok: false,
         error: "blocked_by_guardrail",
-        stage: outcome.stage,
+        stage: guarded.stage,
         // The panel shows `hint` in place of the code. The input check only
         // records on this surface, so it is the AI's proposed questions
         // that were stopped, not the teacher's PDF.
@@ -344,10 +478,12 @@ export async function POST(req: Request, ctx: RouteContext) {
       { status: 422 },
     );
   }
+  emit(step("safety", "done"));
+  emit(step("checks", "active"));
 
   // PDF-import fixes (2026-10-25): a form printed twice on one page comes
   // back twice; the repeat is dropped before anything else reads the list.
-  const printCopies = dropPrintCopies(outcome.result.candidates, outcome.result.proposed_sets ?? []);
+  const printCopies = dropPrintCopies(guarded.result.candidates, guarded.result.proposed_sets ?? []);
   // And a table's blank printed headings get a name (the write schema
   // refuses an empty label), reported on the card.
   const rawCandidates = fillBlankTableHeadings(printCopies.candidates);
@@ -364,8 +500,8 @@ export async function POST(req: Request, ctx: RouteContext) {
   // The list before print copies were dropped: a copy's printed numbers
   // were found, so they are not "missing".
   const numbering = numberingReport(
-    scanned ? null : countNumberedItems(modelText),
-    outcome.result.candidates,
+    numberedItems,
+    guarded.result.candidates,
   );
   // E5 slice 3: the model's sets, remapped from raw to validated candidate
   // indexes (a rejected candidate just leaves its set), then the adjacency
@@ -462,7 +598,17 @@ export async function POST(req: Request, ctx: RouteContext) {
     };
   });
 
-  return NextResponse.json({
+  emit(
+    step("checks", "done", {
+      expected: numbering.numbered_items,
+      found:
+        numbering.missing_numbers && numbering.numbered_items
+          ? numbering.numbered_items - numbering.missing_numbers.length
+          : candidates.length,
+      missing: numbering.missing_numbers,
+    }),
+  );
+  return outcome({
     ok: true,
     page_count: extracted.pageCount,
     extracted_chars: extracted.text.length,

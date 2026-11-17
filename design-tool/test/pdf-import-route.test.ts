@@ -1,7 +1,7 @@
 // Slice 42: PDF import route, driven by REAL text-layer extraction (unpdf)
 // via minimal generated PDFs. No module mocking of the extractor — that
 // leaks across files in bun — so the route runs its true extraction path.
-import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { closeDb, getDb } from "../db/client";
 import { guardrail_events, items } from "../db/schema";
@@ -12,6 +12,15 @@ import * as sessionMod from "../lib/auth/session";
 
 import { makeEmptyPagesPdf, makeTextAndImagePdf, makeTextPdf, makeVectorChartPdf } from "./helpers/pdf";
 import { oversizedMultipart } from "./helpers/oversizedMultipart";
+import {
+  NDJSON_CONTENT_TYPE,
+  createImportEventParser,
+  eventBody,
+  type ImportErrorEvent,
+  type ImportEvent,
+  type ImportResultEvent,
+  type ImportStepEvent,
+} from "../lib/pdfImport/progress";
 
 const expectTestDb = () => {
   const url = process.env.DATABASE_URL ?? "";
@@ -879,5 +888,166 @@ describe("POST items/import-pdf: review fields (R-8)", () => {
     expect(body.unconverted[0]!.errors.length).toBeGreaterThan(0);
     // Extraction still writes nothing.
     expect(await getDb().select().from(items).where(eq(items.assessment_id, id))).toHaveLength(0);
+  });
+});
+
+// A1 (2026-11-17): with `Accept: application/x-ndjson` the route streams
+// each step, then the same body the JSON form answers with. Without the
+// header nothing changed (every test above is the JSON form).
+describe("POST items/import-pdf: streamed progress (A1)", () => {
+  async function postStreamed(id: string, bytes: Uint8Array, fileName = "test.pdf") {
+    const { POST } = await import("../app/api/assessments/[id]/items/import-pdf/route");
+    const form = new FormData();
+    form.append("file", new File([bytes as BlobPart], fileName, { type: "application/pdf" }));
+    return POST(
+      new Request(`http://localhost/api/assessments/${id}/items/import-pdf`, {
+        method: "POST",
+        headers: { accept: NDJSON_CONTENT_TYPE },
+        body: form,
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+  }
+
+  async function readEvents(res: Response): Promise<ImportEvent[]> {
+    const parser = createImportEventParser();
+    return [...parser.push(await res.text()), ...parser.end()];
+  }
+
+  const stepsOf = (events: ImportEvent[]) =>
+    events.flatMap((e) => (e.type === "step" ? [`${e.step}:${e.state}`] : []));
+
+  const NUMBERED = [
+    "Unit test 1. 2. 3. 4. 5. 6.",
+    "MA: #1-2 Match the organelle to its job | mitochondria=ATP | ribosome=protein",
+    "ES: #3 Show your work: solve 2x = 4.",
+    "ST: #3 Final answer: solve 2x = 4 | 2",
+    "DR: #4 Graph the line y = 2x.",
+    "MC: #5 What is 2+2? | a:3 | b:4 | *b",
+  ];
+
+  test("text PDF: every step in order, then the JSON form's exact body", async () => {
+    const id = await createAssessment("Streamed steps");
+    const res = await postStreamed(id, makeTextPdf(NUMBERED));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain(NDJSON_CONTENT_TYPE);
+    expect(res.headers.get("cache-control")).toContain("no-transform");
+    const events = await readEvents(res);
+    expect(stepsOf(events)).toEqual([
+      "read:active",
+      "read:done",
+      "figures:active",
+      "figures:done",
+      "numbering:done",
+      "ai:active",
+      "ai:done",
+      "safety:active",
+      "safety:done",
+      "checks:active",
+      "checks:done",
+    ]);
+    const detail = (step: string) =>
+      events.find((e) => e.type === "step" && e.step === step && e.state === "done") as ImportStepEvent;
+    expect(detail("read").detail).toEqual({ pages: 1, scanned: false });
+    expect(detail("numbering").detail).toEqual({ expected: 6 });
+    expect(detail("ai").detail).toEqual({ proposed: 5 });
+    expect(detail("checks").detail).toEqual({ expected: 6, found: 5, missing: [6] });
+
+    const last = events.at(-1)!;
+    expect(last.type).toBe("result");
+    const json = await (await postPdf(id, makeTextPdf(NUMBERED))).json();
+    expect(eventBody(last as ImportResultEvent)).toEqual(json);
+  });
+
+  test("scanned PDF: figures and numbering skipped", async () => {
+    const id = await createAssessment("Streamed scan");
+    const events = await readEvents(await postStreamed(id, makeTextPdf([]), "scan.pdf"));
+    expect(stepsOf(events)).toEqual([
+      "read:active",
+      "read:done",
+      "figures:skipped",
+      "numbering:skipped",
+      "ai:active",
+      "ai:done",
+      "safety:active",
+      "safety:done",
+      "checks:active",
+      "checks:done",
+    ]);
+    const read = events.find((e) => e.type === "step" && e.step === "read" && e.state === "done") as ImportStepEvent;
+    expect(read.detail?.scanned).toBe(true);
+    expect(events.at(-1)!.type).toBe("result");
+  });
+
+  test("a failure after streaming starts ends in an error line with the JSON form's status and body", async () => {
+    const id = await createAssessment("Streamed outage");
+    const res = await postStreamed(id, makeTextPdf([`THROW_PROVIDER${PAD}`]));
+    expect(res.status).toBe(200);
+    const events = await readEvents(res);
+    expect(stepsOf(events)).toContain("ai:active");
+    expect(stepsOf(events)).not.toContain("ai:done");
+    const last = events.at(-1)! as ImportErrorEvent;
+    expect(last.type).toBe("error");
+    expect(last.status).toBe(502);
+    const json = await postPdf(id, makeTextPdf([`THROW_PROVIDER${PAD}`]));
+    expect(json.status).toBe(502);
+    expect(eventBody(last)).toEqual(await json.json());
+  });
+
+  test("a guardrail block stops at the safety check with the usual 422 body", async () => {
+    process.env.GUARDRAIL_PROVIDER = "mock";
+    const id = await createAssessment("Streamed block");
+    const events = await readEvents(
+      await postStreamed(id, makeTextPdf(["MC: Fine | a:1 | b:2 | *a", "MC: BLOCKME sensitive | a:1 | b:2 | *a"])),
+    );
+    expect(stepsOf(events)).toContain("safety:active");
+    expect(stepsOf(events)).not.toContain("safety:done");
+    const last = events.at(-1)! as ImportErrorEvent;
+    expect(last.type).toBe("error");
+    expect(last.status).toBe(422);
+    expect(last.error).toBe("blocked_by_guardrail");
+    expect(last.stage).toBe("output");
+  });
+
+  test("checks before the import starts still answer as plain JSON", async () => {
+    const id = await createAssessment("Streamed precheck");
+    const { POST } = await import("../app/api/assessments/[id]/items/import-pdf/route");
+    const res = await POST(
+      new Request(`http://localhost/api/assessments/${id}/items/import-pdf`, {
+        method: "POST",
+        headers: { accept: NDJSON_CONTENT_TYPE, "content-type": "application/json" },
+        body: "{}",
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(400);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(((await res.json()) as { error: string }).error).toBe("expected_multipart");
+  });
+
+  // #219 review: a throw nothing else catches (here the page render, which
+  // has no try of its own) ends the stream with an error line, not a cut.
+  test("an unexpected throw mid-import ends with an import_failed error line", async () => {
+    const figuresMod = await import("../lib/pdfImport/extractFigures");
+    const spy = spyOn(figuresMod, "renderPagesForModel").mockImplementation(async () => {
+      throw new Error("simulated render crash");
+    });
+    const quiet = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const id = await createAssessment("Streamed crash");
+      const res = await postStreamed(id, makeTextPdf(NUMBERED));
+      expect(res.status).toBe(200);
+      const events = await readEvents(res);
+      expect(stepsOf(events)).toContain("read:done");
+      expect(stepsOf(events)).not.toContain("ai:active");
+      const last = events.at(-1)! as ImportErrorEvent;
+      expect(last.type).toBe("error");
+      expect(last.status).toBe(500);
+      expect(last.error).toBe("import_failed");
+      expect(typeof last.hint).toBe("string");
+    } finally {
+      spy.mockRestore();
+      quiet.mockRestore();
+    }
   });
 });
