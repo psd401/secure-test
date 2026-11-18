@@ -175,7 +175,7 @@ Dated status entries moved out of `CLAUDE.md` on 2026-10-19 (verbatim, original 
     - A real session on this Mac drops Claude's connection only between join and `DID END`, so the teacher side runs between sessions.
 - **2026-11-13 — staging hand-run (Scorer feedback + Corrections mode); #213 merged (not deployed).**
   - **Hand-run** on staging, client v2.0.3, results in `client/MANUAL-CHECKS.md` (PR #214, merged as `59275e3a`).
-    - Staging redeployed at `e9f317ea` (task def rev 6); renderer re-signed `1794280796`. Roster seeded with `<demo-student-A>`–`-C` (`~/secure-test-seed-staging.sh`, outside the repo).
+    - Staging redeployed at `e9f317ea` (task def rev 6); renderer re-signed `1794280796`. Roster seeded with `<demo-student-A>`–`-C` (the staging seed script, kept outside the repo).
     - Fixtures imported through the import API: a competency test (district, pass minimum 3) and a corrections test, both switched to paged with Color Contrast allowed for the run.
     - **Corrections:** Both, Locked fill-in-the-blank/essay, Locked graph (Tab reaches the board), Contrast, VoiceOver, Paged ✅; Older client N/A.
     - **Scorer feedback:** all ✅ except Older renderer N/A. VoiceOver reached the heading with VO-Cmd-H; the trackpad rotor gesture doesn't open in a secure session.
