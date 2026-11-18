@@ -71,7 +71,8 @@ A rubric item scales as a whole: an essay with an 8-point rubric set to 4 points
 - Example: 1 of 3 cells on a 1-point table = 0.33.
 - Totals sum stored values; `percent` is already rounded in `buildResults`.
 - The client already formats decimals (`InstantFeedback.swift` `points()`: "1.5", "0.33"). No client change.
-- Manual entry step: `pointsStep` (`lib/scoring/changeScoreDialog.ts:47`) and `ScoringQueue.tsx:1037` use 1 or 0.5. Change to 0.01 or 0.5 when `max` is not a whole number.
+- Manual entry step: two copies use 1 or 0.5 — `pointsStep` (`lib/scoring/changeScoreDialog.ts:47`) and an inline `max > 1 ? 1 : 0.5` in `app/dashboard/[id]/scoring/ScoringQueue.tsx:1037`. Change both to 0.01 or 0.5 when `max` is not a whole number (or have the queue call `pointsStep`).
+- Rescale (D2): `round(points × new / old, 2)`, computed from the score's stored fraction of its old max each time, and full credit stays exactly the new max — so repeated points changes cannot drift.
 
 ## Authoring UI
 
@@ -108,7 +109,10 @@ These read `final.max_points` or `itemMaxPoints`. They follow with no logic chan
 - `buildFeedback` (`lib/feedback/buildFeedback.ts:321`)
 - class insights evidence pack (`lib/insights/evidencePack.ts:305, 709`)
 
-Check: the insights prompt describes items as "1 point each" anywhere. Grep before shipping.
+Wording that assumes 1 point per part goes stale once points are set; grep for "1 point each" before shipping. Known so far:
+
+- `lib/reporting/fillBlankView.ts:102, 106` — hand-scored blanks "(1 point each)"; becomes the per-blank share.
+- the insights prompt (`lib/insights/`), if it describes items as 1 point each.
 
 ## PowerSchool
 
