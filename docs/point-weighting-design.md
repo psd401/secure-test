@@ -91,7 +91,7 @@ A rubric item scales as a whole: an essay with an 8-point rubric set to 4 points
 
 ## Published tests
 
-- Recommended (not yet confirmed, see "Still open"): points editable while published, like keys and standards. They never reach the delivery bundle, so nothing mid-test changes.
+- Decided (D7): points editable while published, like keys and standards. They never reach the delivery bundle, so nothing mid-test changes.
 - `points` is its own column, so `isAnswerKeyOnlyPatch` (`lib/api/requireDraft.ts:61`) should pass it the same way it passes `standards`. Confirm with a test.
 - Update the lock banner (`AssessmentEditor.tsx:1451`): "Answer keys, points and standards can still be changed".
 
@@ -151,7 +151,4 @@ Wording that assumes 1 point per part goes stale once points are set; grep for "
 - **D4** Points are never shown to students during the test. No delivery or client change.
 - **D5** Allowed values: more than 0, at most 100, up to 2 decimals.
 - **D6** Points are blocked on competency assessments.
-
-## Still open
-
-- Points editable while a test is published (recommended in "Published tests"): not yet confirmed.
+- **D7** Points stay editable while a test is published, like answer keys and standards.
