@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { CreateItemBody } from "../lib/api/items";
 import { extractPdfLayout } from "../lib/pdfImport/extractFigures";
 import {
+  REGION_FOOT_PT,
   REGION_HEAD_PT,
   anchorsFromLines,
+  contentBounds,
   locateCandidates,
   type QuestionAnchor,
 } from "../lib/pdfImport/regions";
@@ -261,6 +263,112 @@ describe("locateCandidates", () => {
   });
 });
 
+// A2 (2026-11-18): the last question's box ends at the page's content, and a
+// question that runs over a page break gets a box on each page it covers.
+describe("contentBounds", () => {
+  const line = (y: number, text: string) => ({ y, text });
+
+  test("first and last line, with room for the line's height", () => {
+    expect(contentBounds([line(300, "Question text"), line(100, "1. Top")], [])).toEqual({
+      contentTop: 100 - REGION_HEAD_PT,
+      contentBottom: 300 + REGION_FOOT_PT,
+    });
+  });
+
+  test("a page-number footer or header is not content", () => {
+    for (const footer of ["3", "Page 3", "page 3 of 4", "3 / 4", "- 3 -", "**3**"]) {
+      expect(contentBounds([line(40, footer), line(100, "1. Q"), line(300, "Text"), line(760, footer)], [])).toEqual({
+        contentTop: 100 - REGION_HEAD_PT,
+        contentBottom: 300 + REGION_FOOT_PT,
+      });
+    }
+  });
+
+  test("a bare number inside the content still counts", () => {
+    expect(contentBounds([line(100, "1. Q"), line(200, "12"), line(300, "Text")], [])!.contentBottom).toBe(
+      300 + REGION_FOOT_PT,
+    );
+    // Only the last line is tested: "3." is a question, not a page number.
+    expect(contentBounds([line(100, "1. Q"), line(300, "3.")], [])!.contentBottom).toBe(300 + REGION_FOOT_PT);
+  });
+
+  test("a bare number as the page's last line is read as a page number (accepted trade-off)", () => {
+    // A table cell or answer that ends the page is indistinguishable from a
+    // footer by text alone; the box then stops above it. Cosmetic only.
+    expect(contentBounds([line(100, "1. Q"), line(300, "Text"), line(320, "12")], [])!.contentBottom).toBe(
+      300 + REGION_FOOT_PT,
+    );
+  });
+
+  test("a figure below the last line extends the content", () => {
+    expect(contentBounds([line(100, "1. Q")], [{ top: 120, bottom: 450 }])).toEqual({
+      contentTop: 100 - REGION_HEAD_PT,
+      contentBottom: 450,
+    });
+  });
+
+  test("an empty page has no bounds", () => {
+    expect(contentBounds([line(760, "4")], [])).toBeUndefined();
+    expect(contentBounds([], [])).toBeUndefined();
+  });
+});
+
+describe("locateCandidates with content bounds (A2)", () => {
+  const page = (contentTop?: number, contentBottom?: number) => ({
+    width: 612,
+    height: 792,
+    ...(contentTop === undefined ? {} : { contentTop, contentBottom }),
+  });
+  const a = (number: number, p: number, y: number): QuestionAnchor => ({ number, page: p, y });
+
+  test("the last question ends at the content, not the foot of the page", () => {
+    const r = locateCandidates([[1], [2]], [a(1, 1, 100), a(2, 1, 300)], [page(86, 420)]);
+    expect(r[1]!.bottom).toBe(420 / 792);
+    expect(r[1]!.continues).toBeUndefined();
+  });
+
+  test("a page without bounds keeps the old foot-of-page box", () => {
+    const r = locateCandidates([[1]], [a(1, 1, 100)], [page()]);
+    expect(r[0]!.bottom).toBe(1);
+  });
+
+  test("a question that runs over the page break gets a continuation box", () => {
+    const r = locateCandidates([[1], [2]], [a(1, 1, 600), a(2, 2, 300)], [page(86, 740), page(58, 500)]);
+    expect(r[0]).toEqual({
+      page: 1,
+      top: (600 - REGION_HEAD_PT) / 792,
+      bottom: 740 / 792,
+      how: "number",
+      continues: [{ page: 2, top: 58 / 792, bottom: (300 - REGION_HEAD_PT) / 792 }],
+    });
+    expect(r[1]!.page).toBe(2);
+    expect(r[1]!.bottom).toBe(500 / 792);
+  });
+
+  test("a question whose next starts at the top of the next page gets no continuation", () => {
+    const r = locateCandidates([[1], [2]], [a(1, 1, 600), a(2, 2, 72)], [page(86, 740), page(58, 500)]);
+    expect(r[0]!.continues).toBeUndefined();
+  });
+
+  test("a passage page between two questions is carried, a blank page skipped", () => {
+    const r = locateCandidates(
+      [[1], [2]],
+      [a(1, 1, 600), a(2, 4, 300)],
+      [page(86, 740), page(58, 700), page(), page(58, 500)],
+    );
+    expect(r[0]!.continues).toEqual([
+      { page: 2, top: 58 / 792, bottom: 700 / 792 },
+      { page: 4, top: 58 / 792, bottom: (300 - REGION_HEAD_PT) / 792 },
+    ]);
+  });
+
+  test("the last question in the document does not run past its own page", () => {
+    const r = locateCandidates([[1]], [a(1, 1, 600)], [page(86, 740), page(58, 700)]);
+    expect(r[0]!.bottom).toBe(740 / 792);
+    expect(r[0]!.continues).toBeUndefined();
+  });
+});
+
 describe("extractPdfLayout reports pages and numbered lines", () => {
   test("anchors carry page and top-left height", async () => {
     const pdf = makeMultiPageTextPdf([
@@ -268,9 +376,10 @@ describe("extractPdfLayout reports pages and numbered lines", () => {
       ["3. Explain your thinking."],
     ]);
     const layout = await extractPdfLayout(pdf);
+    // A2: and where each page's text starts and ends.
     expect(layout.pages).toEqual([
-      { width: 612, height: 792 },
-      { width: 612, height: 792 },
+      { width: 612, height: 792, contentTop: 72 - REGION_HEAD_PT, contentBottom: 120 + REGION_FOOT_PT },
+      { width: 612, height: 792, contentTop: 72 - REGION_HEAD_PT, contentBottom: 72 + REGION_FOOT_PT },
     ]);
     // Line j sits at 792 - (720 - 16j) points from the top.
     expect(layout.anchors).toEqual([
