@@ -2680,15 +2680,15 @@ coordinates") describes the board before this change.
 
 | Steps | Expected | Result |
 |---|---|---|
-| **No typed entry.** A Graph it question, every tool ticked; look below the grid | No coordinate fields, tool menu or Add button; the tool bar, hint and object list are as before | NOT RUN |
-| **Arrows + Enter.** Tab to the board; arrows to (2, 3); Point; Enter | The ring moves one snap step per press; a point at (2, 3); the list reads "point (2, 3)" | NOT RUN |
-| **Shift + arrow.** A board at snap ½, grid 1; Shift + → twice from (0, 0) | The ring jumps one grid line per press, to (2, 0) | NOT RUN |
-| **Two-point tool.** Line: Enter at one point, move, Enter at another | First Enter: the first point ringed and the hint asks for the second; second Enter: the line drawn and listed | NOT RUN |
-| **Escape twice.** Line: Enter, then Escape; Escape again | "Cancelled." and no first-point ring; the second Escape puts focus on the Line tool button (VoiceOver reads it) | NOT RUN |
-| **Edges.** Hold an arrow, and Shift + arrow, past each edge | The ring stops at the edge; the page doesn't scroll | NOT RUN |
-| **VoiceOver** (James, Claude quit — VoiceOver method). Tab to the board, move, place a circle, Remove it | The label is read (extent, keys incl. Shift and Escape); each move speaks "(x, y)"; placing speaks the object; Remove buttons are named | NOT RUN |
-| **Resume an old answer.** An attempt saved with a typed answer before the change | The objects are back on the board and can be removed | NOT RUN |
-| **Teacher key board** (design tool). A Graph it question's key | The coordinate fields are still there; a typed key point saves | NOT RUN |
+| **No typed entry.** A Graph it question, every tool ticked; look below the grid | No coordinate fields, tool menu or Add button; the tool bar, hint and object list are as before | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) |
+| **Arrows + Enter.** Tab to the board; arrows to (2, 3); Point; Enter | The ring moves one snap step per press; a point at (2, 3); the list reads "point (2, 3)" | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) |
+| **Shift + arrow.** A board at snap ½, grid 1; Shift + → twice from (0, 0) | The ring jumps one grid line per press, to (2, 0) | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) |
+| **Two-point tool.** Line: Enter at one point, move, Enter at another | First Enter: the first point ringed and the hint asks for the second; second Enter: the line drawn and listed | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) |
+| **Escape twice.** Line: Enter, then Escape; Escape again | No first-point ring and "Cancelled." announced to screen readers (it is not shown on screen); the second Escape puts focus on the Line tool button (VoiceOver reads it) | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974); "Cancelled." heard under VoiceOver in the VoiceOver row |
+| **Edges.** Hold an arrow, and Shift + arrow, past each edge | The ring stops at the edge; the page doesn't scroll | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) |
+| **VoiceOver** (James; if run on the Mac where Claude runs, quit Claude first — VoiceOver method). Tab to the board, move, place a circle, Remove it; Line, Enter, Escape | The label is read (extent, keys incl. Shift and Escape); each move speaks "(x, y)"; placing speaks the object; Remove buttons are named and "Cancelled." is spoken | ✅ 2026-11-17 staging, student test Mac (client v2.0.3, renderer v1794936974) (on a separate test Mac, so Claude stayed open) |
+| **Resume an old answer.** An attempt saved with a typed answer before the change | The objects are back on the board and can be removed | N/A 2026-11-17: no attempt with a typed answer from before the change exists on staging |
+| **Teacher key board** (design tool). A Graph it question's key | The coordinate fields are still there; a typed key point saves | ✅ 2026-11-17 staging design tool (Claude): (2, 3) typed into the key, still there after a reload |
 
 ## Ending-session race (next client release, 2026-10-24)
 
