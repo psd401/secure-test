@@ -27,6 +27,9 @@ export interface SourceRegion {
   region: CandidateRegion;
   /** A question the import could not convert: drawn dashed. */
   unconverted?: boolean;
+  /** A2: the import reworded something printed here (the card's "Changed
+   * from the PDF"): the box's label carries a mark. */
+  changed?: boolean;
 }
 
 interface Props {
@@ -139,7 +142,20 @@ export function PdfSourcePane({ file, regions, activeKey, onSelect, focusRequest
       {pages.map((pg, i) => {
         const p = i + 1;
         const here = regions.filter((r) => r.region.page === p);
-        const boxed = here.filter((r) => r.region.top !== null && r.region.bottom !== null);
+        // A2: a box on its own page, then the boxes of questions that carry
+        // on to this page from an earlier one.
+        const boxed: { r: SourceRegion; top: number; bottom: number; cont: boolean }[] = [
+          ...here.flatMap((r) =>
+            r.region.top !== null && r.region.bottom !== null
+              ? [{ r, top: r.region.top, bottom: r.region.bottom, cont: false }]
+              : [],
+          ),
+          ...regions.flatMap((r) =>
+            (r.region.continues ?? [])
+              .filter((c) => c.page === p)
+              .map((c) => ({ r, top: c.top, bottom: c.bottom, cont: true })),
+          ),
+        ];
         const loose = here.filter((r) => r.region.top === null || r.region.bottom === null);
         return (
           <section key={p} id={`pdf-page-${p}`} aria-label={`Page ${p}`} className="space-y-1">
@@ -147,26 +163,29 @@ export function PdfSourcePane({ file, regions, activeKey, onSelect, focusRequest
             <div className="relative overflow-hidden rounded border border-border bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={pg.url} alt={`Page ${p} of the PDF`} className="block w-full" />
-              {boxed.map((r) => {
+              {boxed.map(({ r, top, bottom, cont }) => {
                 const active = r.key === activeKey;
+                const label = cont ? `${r.label} (cont.)` : r.label;
                 return (
                   <button
-                    key={r.key}
-                    id={regionDomId(r.key)}
+                    key={cont ? `${r.key}-cont` : r.key}
+                    id={cont ? undefined : regionDomId(r.key)}
                     type="button"
                     onClick={() => onSelect(r.key)}
                     aria-pressed={active}
-                    aria-label={`${r.name}, page ${p} — show its proposal`}
+                    aria-label={`${r.name}${cont ? " continued" : ""}, page ${p}${
+                      r.changed ? ", changed from the PDF" : ""
+                    } — show its proposal`}
                     className={`absolute left-0 right-0 border-2 text-left transition-colors ${
-                      r.unconverted ? "border-dashed" : ""
+                      r.unconverted || cont ? "border-dashed" : ""
                     } ${
                       active
                         ? "border-primary bg-primary/10"
                         : "border-primary/30 bg-transparent hover:border-primary/70 hover:bg-primary/5"
                     }`}
                     style={{
-                      top: `${(r.region.top ?? 0) * 100}%`,
-                      height: `${Math.max(0.02, (r.region.bottom ?? 0) - (r.region.top ?? 0)) * 100}%`,
+                      top: `${top * 100}%`,
+                      height: `${Math.max(0.02, bottom - top) * 100}%`,
                     }}
                   >
                     <span
@@ -174,7 +193,16 @@ export function PdfSourcePane({ file, regions, activeKey, onSelect, focusRequest
                         active ? "bg-primary text-primary-foreground" : "bg-primary/70 text-primary-foreground"
                       }`}
                     >
-                      {r.label}
+                      {label}
+                      {r.changed ? (
+                        <span
+                          aria-hidden="true"
+                          title="Changed from the PDF"
+                          className="ml-1 rounded bg-info px-1 text-[10px] font-medium text-info-foreground"
+                        >
+                          changed
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );

@@ -851,7 +851,15 @@ export function PdfImportPanel({
         ...result.candidates.flatMap((_, i): SourceRegion[] => {
           const region = result.regions?.[i];
           return region && !hidden.has(i)
-            ? [{ key: cardKey(i), label: String(i + 1), name: `Question ${i + 1}`, region }]
+            ? [
+                {
+                  key: cardKey(i),
+                  label: String(i + 1),
+                  name: `Question ${i + 1}`,
+                  region,
+                  ...((result.changes?.[i]?.length ?? 0) > 0 ? { changed: true } : {}),
+                },
+              ]
             : [];
         }),
         ...openUnconverted.flatMap((u, k): SourceRegion[] =>

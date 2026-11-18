@@ -6,7 +6,7 @@ import {
   renderPageAsImage,
 } from "unpdf";
 import { encodePng } from "./png";
-import { anchorsFromLines, type PageSize, type QuestionAnchor } from "./regions";
+import { anchorsFromLines, contentBounds, type PageSize, type QuestionAnchor } from "./regions";
 
 // E5 slice 4 (docs/stimulus-design.md; spike S1 made this the plan): the
 // raster figures of a text-layer PDF, each with its page position, plus the
@@ -958,6 +958,13 @@ export async function extractPdfLayout(
             ),
           ];
     pageTexts.push(interleaveMarkers(kept, pageFigures));
+    // A2: where this page's content ends, so the last question's region
+    // stops there instead of at the foot of the page.
+    const bounds = contentBounds(
+      lines,
+      figures.filter((f) => f.page === p).map((f) => ({ top: f.bbox[1], bottom: f.bbox[3] })),
+    );
+    if (bounds) Object.assign(pages[pages.length - 1]!, bounds);
   }
 
   await (renderDoc as RenderDoc | null)?.destroy();

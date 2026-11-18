@@ -16,6 +16,12 @@ export interface PageSize {
   /** Points, the page as displayed (rotation applied). */
   width: number;
   height: number;
+  /** A2: where the page's text and figures start and end, points from the
+   * top (contentBounds). Absent on a page with no text or figures, on a
+   * Word document's pseudo-page and on results from before A2; a region
+   * then runs to the page edge, as it always did. */
+  contentTop?: number;
+  contentBottom?: number;
 }
 
 export interface QuestionAnchor {
@@ -36,6 +42,9 @@ export interface CandidateRegion {
   /** `number`: found by its printed number. `order`: no number matched,
    * so it is shown on the page of the question before it. */
   how: "number" | "order";
+  /** A2: the same question carried on to later pages, one box per page
+   * (fractions of that page's height), up to the next numbered line. */
+  continues?: { page: number; top: number; bottom: number }[];
 }
 
 // Only a number that starts a line counts, and it needs a space (or the end
@@ -61,6 +70,45 @@ export function anchorsFromLines(
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
+/** A2: a footer (or header) line that is only a page number ("3",
+ * "Page 3", "3 of 4", "- 3 -") is not content: the last question stops
+ * above it. Only the page's last or first line is tested, so a bare
+ * number inside a question (a table cell, an answer) still counts. */
+const PAGE_NUMBER_RE = /^[\s\-–—]*(page\s*)?\d{1,4}(\s*(of|\/)\s*\d{1,4})?[\s\-–—]*$/i;
+/** Below a line's baseline: its descenders, plus a little air. */
+export const REGION_FOOT_PT = 8;
+/** A continuation shorter than this (the next question starts right at the
+ * top of the page) is not drawn. */
+const MIN_CONTINUATION_PT = 10;
+
+/**
+ * A2: the top and bottom of one page's content, points from the top: the
+ * first and last text line (a page-number footer left out) and any figure
+ * box above or below them. Undefined on a page with neither.
+ */
+export function contentBounds(
+  lines: readonly { y: number; text: string }[],
+  figureBoxes: readonly { top: number; bottom: number }[],
+): { contentTop: number; contentBottom: number } | undefined {
+  const tops: number[] = [];
+  const bottoms: number[] = [];
+  const isPageNumber = (l: { text: string } | undefined) =>
+    l !== undefined && PAGE_NUMBER_RE.test(l.text.replace(/\*\*|_/g, ""));
+  const sorted = [...lines].sort((a, b) => a.y - b.y);
+  if (isPageNumber(sorted[sorted.length - 1])) sorted.pop();
+  if (isPageNumber(sorted[0])) sorted.shift();
+  for (const l of sorted) {
+    tops.push(l.y - REGION_HEAD_PT);
+    bottoms.push(l.y + REGION_FOOT_PT);
+  }
+  for (const f of figureBoxes) {
+    tops.push(f.top);
+    bottoms.push(f.bottom);
+  }
+  if (tops.length === 0) return undefined;
+  return { contentTop: Math.max(0, Math.min(...tops)), contentBottom: Math.max(...bottoms) };
+}
+
 /**
  * One region (or null) per candidate, aligned with `sourceNumbers` (the raw
  * candidate list, in the order the model returned it — document order).
@@ -70,6 +118,14 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
  * for again on the anchor just used (two items made from one printed
  * question share it), then anywhere.
  */
+/** Where a box that runs to the end of a page stops: the content's bottom
+ * when known, else the page edge. */
+function pageFoot(pages: readonly PageSize[], page: number): number {
+  const size = pages[page - 1];
+  const height = size?.height ?? 0;
+  return size?.contentBottom === undefined ? height : Math.min(height, size.contentBottom);
+}
+
 export function locateCandidates(
   sourceNumbers: readonly (readonly number[])[],
   anchors: readonly QuestionAnchor[],
@@ -100,26 +156,38 @@ export function locateCandidates(
     }
     const start = sorted[at]!;
     const height = pages[start.page - 1]?.height ?? 0;
-    // The region runs to the next numbered line on the same page, else to
-    // the foot of the page (a question that runs over is shown on its first
-    // page only).
+    // The question runs to the next numbered line. With none after it (the
+    // last question), it runs to the end of the content on the page of its
+    // last number. A2: a box ends at the content, not at the foot of the
+    // page, and a question that runs over a page break gets a box on each
+    // page it covers ("continues").
     const next = sorted[end + 1];
     const endAnchor = sorted[end]!;
-    const bottomPt =
-      endAnchor.page !== start.page
-        ? height
-        : next && next.page === start.page
-          ? next.y - REGION_HEAD_PT
-          : height;
-    const region: CandidateRegion =
-      height > 0
-        ? {
-            page: start.page,
-            top: clamp01((start.y - REGION_HEAD_PT) / height),
-            bottom: clamp01(bottomPt / height),
-            how: "number",
-          }
-        : { page: start.page, top: null, bottom: null, how: "number" };
+    const stop = next
+      ? { page: next.page, y: next.y - REGION_HEAD_PT }
+      : { page: endAnchor.page, y: pageFoot(pages, endAnchor.page) };
+    const bottomPt = stop.page === start.page ? stop.y : pageFoot(pages, start.page);
+    let region: CandidateRegion;
+    if (height > 0) {
+      region = {
+        page: start.page,
+        top: clamp01((start.y - REGION_HEAD_PT) / height),
+        bottom: clamp01(bottomPt / height),
+        how: "number",
+      };
+      const continues: NonNullable<CandidateRegion["continues"]> = [];
+      for (let pg = start.page + 1; pg <= stop.page; pg++) {
+        const size = pages[pg - 1];
+        if (!size || size.height <= 0 || size.contentTop === undefined) continue;
+        const top = size.contentTop;
+        const bottom = pg === stop.page ? stop.y : pageFoot(pages, pg);
+        if (bottom - top < MIN_CONTINUATION_PT) continue;
+        continues.push({ page: pg, top: clamp01(top / size.height), bottom: clamp01(bottom / size.height) });
+      }
+      if (continues.length > 0) region.continues = continues;
+    } else {
+      region = { page: start.page, top: null, bottom: null, how: "number" };
+    }
     cursor = Math.max(cursor, end + 1);
     prev = region;
     return region;
