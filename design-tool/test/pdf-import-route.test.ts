@@ -864,15 +864,16 @@ describe("POST items/import-pdf: review fields (R-8)", () => {
       source_numbers: number[][];
       regions: ({ page: number; top: number | null; bottom: number | null; how: string } | null)[];
       converted: ({ from: string; to: string } | null)[];
-      pages: { width: number; height: number }[];
+      pages: { width: number; height: number; contentTop?: number; contentBottom?: number }[];
       unconverted: { index: number; type: string; stem: string; choices: string[]; errors: string[]; region: { page: number } | null }[];
     };
     expect(body.candidates).toHaveLength(2);
     expect(body.source_numbers).toEqual([[1], [2]]);
-    expect(body.pages).toHaveLength(1);
-    expect(body.pages[0]).toMatchObject({ width: 612, height: 792 });
+    expect(body.pages).toEqual([
+      { width: 612, height: 792, contentTop: expect.any(Number), contentBottom: expect.any(Number) },
+    ]);
     // A2: the page's content ends above its foot, and so does the last box.
-    const { contentBottom } = body.pages[0] as { contentBottom?: number };
+    const { contentBottom } = body.pages[0]!;
     expect(contentBottom).toBeLessThan(792);
     expect(body.regions.map((r) => r && [r.page, r.how])).toEqual([
       [1, "number"],

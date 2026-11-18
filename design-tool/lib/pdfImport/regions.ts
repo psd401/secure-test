@@ -109,6 +109,14 @@ export function contentBounds(
   return { contentTop: Math.max(0, Math.min(...tops)), contentBottom: Math.max(...bottoms) };
 }
 
+/** Where a box that runs to the end of a page stops: the content's bottom
+ * when known, else the page edge. */
+function pageFoot(pages: readonly PageSize[], page: number): number {
+  const size = pages[page - 1];
+  const height = size?.height ?? 0;
+  return size?.contentBottom === undefined ? height : Math.min(height, size.contentBottom);
+}
+
 /**
  * One region (or null) per candidate, aligned with `sourceNumbers` (the raw
  * candidate list, in the order the model returned it — document order).
@@ -118,14 +126,6 @@ export function contentBounds(
  * for again on the anchor just used (two items made from one printed
  * question share it), then anywhere.
  */
-/** Where a box that runs to the end of a page stops: the content's bottom
- * when known, else the page edge. */
-function pageFoot(pages: readonly PageSize[], page: number): number {
-  const size = pages[page - 1];
-  const height = size?.height ?? 0;
-  return size?.contentBottom === undefined ? height : Math.min(height, size.contentBottom);
-}
-
 export function locateCandidates(
   sourceNumbers: readonly (readonly number[])[],
   anchors: readonly QuestionAnchor[],

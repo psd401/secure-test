@@ -292,6 +292,14 @@ describe("contentBounds", () => {
     expect(contentBounds([line(100, "1. Q"), line(300, "3.")], [])!.contentBottom).toBe(300 + REGION_FOOT_PT);
   });
 
+  test("a bare number as the page's last line is read as a page number (accepted trade-off)", () => {
+    // A table cell or answer that ends the page is indistinguishable from a
+    // footer by text alone; the box then stops above it. Cosmetic only.
+    expect(contentBounds([line(100, "1. Q"), line(300, "Text"), line(320, "12")], [])!.contentBottom).toBe(
+      300 + REGION_FOOT_PT,
+    );
+  });
+
   test("a figure below the last line extends the content", () => {
     expect(contentBounds([line(100, "1. Q")], [{ top: 120, bottom: 450 }])).toEqual({
       contentTop: 100 - REGION_HEAD_PT,
