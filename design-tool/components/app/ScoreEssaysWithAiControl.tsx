@@ -176,8 +176,8 @@ export function scoreEssaysSummary(t: ScoreAiTally): string[] {
   }
   if (t.provider_errors > 0) {
     lines.push(
-      `${t.provider_errors} couldn't be scored (the AI service didn't answer). ` +
-        "Press the button again to retry.",
+      `${t.provider_errors} couldn't be scored (the AI didn't return a usable score). ` +
+        `Press the button again to retry, or score ${t.provider_errors === 1 ? "it" : "them"} by hand.`,
     );
   }
   if (t.failed_students > 0) {

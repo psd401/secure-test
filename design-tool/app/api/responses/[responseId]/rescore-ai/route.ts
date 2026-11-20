@@ -108,7 +108,16 @@ export async function POST(req: Request, ctx: RouteContext) {
       );
     case "provider_error":
       return NextResponse.json(
-        { ok: false, error: "provider_error" },
+        {
+          ok: false,
+          error: "provider_error",
+          // Beta report 2026-11-20: without a detail the queue showed the raw
+          // code. The outcome also covers a score that failed the rubric
+          // check (the AI's own arithmetic) and a failed write, so the copy
+          // names no cause.
+          detail:
+            "The AI couldn't produce a usable score for this answer. Try again in a minute, or score it by hand with the rubric.",
+        },
         { status: 502 },
       );
     case "in_progress":

@@ -773,6 +773,29 @@ describe("POST /api/responses/:id/rescore-ai body", () => {
     expect(((await res.json()) as { error: string }).error).toBe("body_too_large");
     expect(await db.select().from(scores)).toHaveLength(0);
   });
+
+  test("a scorer failure is 502 provider_error with a detail the queue shows (beta report 2026-11-20)", async () => {
+    const spy = spyOn(mockEssayScorer, "scoreEssay").mockRejectedValue(
+      new Error("bedrock: model score failed rubric bounds: points 59 != criterion sum 58.5"),
+    );
+    try {
+      const { db, itemRows } = await seedAiScenario();
+      const [aiResponse] = await db
+        .select()
+        .from(responses)
+        .where(eq(responses.item_id, itemRows[0]!.id));
+      const res = await postRescoreAi(aiResponse!.id);
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { error: string; detail?: string };
+      expect(body.error).toBe("provider_error");
+      expect(body.detail).toBe(
+        "The AI couldn't produce a usable score for this answer. Try again in a minute, or score it by hand with the rubric.",
+      );
+      expect(await db.select().from(scores)).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 // docs/ai-score-concurrency-design.md: a short-lived claim per response so

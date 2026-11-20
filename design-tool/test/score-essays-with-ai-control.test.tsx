@@ -114,7 +114,7 @@ describe("tally and summary", () => {
       "1 not scored: the safety check didn't answer, so it was skipped. Run Score with AI again later.",
       "2 were already being scored from another press — check the scoring queue in a minute.",
       "1 stopped by the AI safety filter — score it by hand.",
-      "1 couldn't be scored (the AI service didn't answer). Press the button again to retry.",
+      "1 couldn't be scored (the AI didn't return a usable score). Press the button again to retry, or score it by hand.",
       "1 student's answers couldn't be sent. Press the button again to retry.",
       "3 have no rubric or are empty.",
     ]);
