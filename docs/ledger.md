@@ -191,3 +191,25 @@ Dated status entries moved out of `CLAUDE.md` on 2026-10-19 (verbatim, original 
     - **#213 rows** (James, on the student test Mac; session closed afterwards): all ✅ except Resume an old answer N/A; Teacher key board ✅ (Claude, design tool). The Escape row's Expected is reworded: "Cancelled." is announced to screen readers, not shown.
     - Draft/published test "A1 progress check (staging)" left on staging. `staging.sh down` (James).
   - **Deployed `48891e76` to production:** 2026-11-18 ~07:45 PT, attended, from the main checkout, before students arrived (scheduled late start). No migrations. Renderer re-signed (v1794940263, manifest `94e6d658…`). **Verified:** deploy.sh exit 0, health stamp = HEAD, rollout COMPLETED (task def rev 134, 1 running), `/api/health` = `48891e76`.
+- **2026-11-19 — #223, #224, #225 merged; A2 staging check; production alarm; deploy of `4158604c`.**
+  - **#223** (squash `859cf4dd`): the ledger PR for the 11-13 and 11-17 entries, the #213 rows and the deploy of `48891e76`. Review nits fixed in `302f7382`.
+  - **#224** (squash `b792de1b`): A2, PDF import review boxes.
+    - A box ends at the page's content, not the page foot (`contentBounds`); a page number on the first or last line is ignored.
+    - A question that runs onto the next page gets a dashed "N (cont.)" box there (`CandidateRegion.continues`).
+    - A question the import reworded gets a "changed" tag (screen readers hear ", changed from the PDF").
+    - 11 new unit tests; suite 4476 pass. Review: no important items; nits fixed in `897361d7`.
+  - **#225** (squash `4158604c`): `docs/point-weighting-design.md` (B1), decisions D1–D7. Nothing built.
+  - **Staging check of A2** (staging deployed `4158604c`, health stamp = HEAD; `staging.sh down` afterwards):
+    - A hand-built two-page PDF: question 2 runs onto page 2 and got a dashed "2 (cont.)" box there; boxes end above the page-number line.
+    - A second hand-built PDF with a "Circle the largest…" instruction: the import reworded it and the box got the "changed" tag.
+    - **Finding:** the model silently corrected a typo without reporting it in `changes`, so that question got no tag. Model behaviour, not A2; a teacher sees no tag for a silent fix.
+    - Draft "A2 pane check (staging)" left on staging.
+  - **Production alarm 15:08–15:27 PT** (old build `48891e76` live): AppServerErrors at 15:08, ALB 5xx 15:13–15:15, both OK by 15:27.
+    - One essay on a half-point rubric, re-scored with AI six times; each failed `essay_score_failed` ("points 59 != criterion sum 58.5 (after 2 attempts)") and answered 502.
+    - `reconcilePointsTotal` refused the total fix because the corrected result still failed the bounds check; the inferred second cause is a wrong `max_points` (the logs don't record model replies).
+    - Fix opened as #226 (not merged at this deploy, so not in it).
+  - **Deployed `4158604c` to production:** 2026-11-19 ~16:30 PT, attended, after school, from the main checkout. Before: `/api/health` read `48891e76`.
+    - No migrations; renderer unchanged (v1794940263, manifest `94e6d658…`).
+    - **Verified:** `deploy.sh` exited 0, health stamp = HEAD, rollout COMPLETED (task def rev 135), `/api/health` returned `4158604c`.
+    - The import pane was not re-checked on production; the staging check covered it.
+  - **Noticed:** `bun run lint` (`next lint`) no longer exists under Next 16. Not fixed.
