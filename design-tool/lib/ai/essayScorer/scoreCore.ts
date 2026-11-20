@@ -344,6 +344,8 @@ export function reconcileLevelIds<
   return { result: { ...result, criterion_scores }, repaired };
 }
 
+type Correction = { from: number; to: number };
+
 /**
  * 2026-10-05 (pilot alarm): the model chose a valid level for every
  * criterion — those levels summed to 33 — and reported `points: 34`. The
@@ -361,8 +363,6 @@ export function reconcileLevelIds<
  * failed on every retry. `max_points` is fixed by the rubric, not judged, so
  * it is set to the rubric max under the same rule.
  */
-type Correction = { from: number; to: number };
-
 export function reconcilePointsTotal<
   T extends {
     criterion_scores: Array<{ criterion_id: string; level_id: string; points: number }>;
