@@ -188,21 +188,70 @@ describe("scoreCore validators", () => {
     const off = { ...good, points: good.points + 1 };
     expect(validateAgainstRubric(off, RUBRIC).valid).toBe(false);
     const { result, corrected } = reconcilePointsTotal(off, RUBRIC);
-    expect(corrected).toEqual({ from: good.points + 1, to: good.points });
+    expect(corrected).toEqual({ points: { from: good.points + 1, to: good.points } });
     expect(result.points).toBe(good.points);
     expect(validateAgainstRubric(result, RUBRIC)).toEqual({ valid: true });
   });
 
-  test("reconcilePointsTotal leaves a correct total and other defects alone", () => {
+  test("reconcilePointsTotal sets max_points to the rubric max (2026-11-19)", () => {
+    // 2026-11-19 alarm: valid levels, a mis-added total AND a wrong
+    // max_points. Correcting the total alone still failed the bounds check,
+    // so the essay failed on every retry. max_points comes from the rubric.
+    const both = { ...good, points: good.points + 1, max_points: good.max_points + 1 };
+    expect(validateAgainstRubric(both, RUBRIC).valid).toBe(false);
+    const fixedBoth = reconcilePointsTotal(both, RUBRIC);
+    expect(fixedBoth.corrected).toEqual({
+      points: { from: good.points + 1, to: good.points },
+      max_points: { from: good.max_points + 1, to: good.max_points },
+    });
+    expect(validateAgainstRubric(fixedBoth.result, RUBRIC)).toEqual({ valid: true });
+
+    const maxOnly = { ...good, max_points: good.max_points + 1 };
+    const fixedMax = reconcilePointsTotal(maxOnly, RUBRIC);
+    expect(fixedMax.corrected).toEqual({
+      max_points: { from: good.max_points + 1, to: good.max_points },
+    });
+    expect(validateAgainstRubric(fixedMax.result, RUBRIC)).toEqual({ valid: true });
+  });
+
+  test("reconcilePointsTotal sets half-point totals (2026-11-19)", () => {
+    const half: Rubric = {
+      style: "analytic",
+      criteria: [
+        { id: "a", name: "A", levels: [{ id: "a1", label: "1", points: 0.5 }, { id: "a2", label: "2", points: 1.5 }] },
+        { id: "b", name: "B", levels: [{ id: "b1", label: "1", points: 1 }, { id: "b2", label: "2", points: 2.5 }] },
+      ],
+    };
+    const off = {
+      criterion_scores: [
+        { criterion_id: "a", level_id: "a2", points: 1.5, rationale: "r" },
+        { criterion_id: "b", level_id: "b1", points: 1, rationale: "r" },
+      ],
+      points: 3,
+      max_points: 4,
+      overall_rationale: "r",
+      confidence: 0.9,
+    };
+    const { result, corrected } = reconcilePointsTotal(off, half);
+    expect(corrected).toEqual({ points: { from: 3, to: 2.5 } });
+    expect(validateAgainstRubric(result, half)).toEqual({ valid: true });
+  });
+
+  test("reconcilePointsTotal leaves a correct result and level defects alone", () => {
     expect(reconcilePointsTotal(good, RUBRIC)).toEqual({ result: good, corrected: null });
     const badLevel = {
       ...good,
       points: good.points + 1,
+      max_points: good.max_points + 1,
       criterion_scores: [{ ...good.criterion_scores[0]!, level_id: "nope" }, good.criterion_scores[1]!],
     };
-    expect(reconcilePointsTotal(badLevel, RUBRIC).corrected).toBeNull();
-    const badMax = { ...good, points: good.points + 1, max_points: good.max_points + 1 };
-    expect(reconcilePointsTotal(badMax, RUBRIC).corrected).toBeNull();
+    expect(reconcilePointsTotal(badLevel, RUBRIC)).toEqual({ result: badLevel, corrected: null });
+    const badPoints = {
+      ...good,
+      points: good.points + 1,
+      criterion_scores: [{ ...good.criterion_scores[0]!, points: 3 }, good.criterion_scores[1]!],
+    };
+    expect(reconcilePointsTotal(badPoints, RUBRIC).corrected).toBeNull();
   });
 
   test("parseScoreResult takes the object out of prose wrapping (2026-09-15)", () => {

@@ -354,17 +354,34 @@ export function reconcileLevelIds<
  * the result is valid against the rubric once `points` is set to the sum of
  * the criterion points, that corrected result is returned. Any other defect
  * leaves the result untouched for validateAgainstRubric to report.
+ *
+ * 2026-11-19 (alarm): on a half-point rubric the model returned valid
+ * levels summing to 58.5, a total of 59 AND a wrong `max_points`. Fixing
+ * the total alone left the result invalid, so it was refused and the essay
+ * failed on every retry. `max_points` is fixed by the rubric, not judged, so
+ * it is set to the rubric max under the same rule.
  */
+type Correction = { from: number; to: number };
+
 export function reconcilePointsTotal<
   T extends {
     criterion_scores: Array<{ criterion_id: string; level_id: string; points: number }>;
     points: number;
     max_points: number;
   },
->(result: T, rubric: Rubric): { result: T; corrected: { from: number; to: number } | null } {
+>(
+  result: T,
+  rubric: Rubric,
+): { result: T; corrected: { points?: Correction; max_points?: Correction } | null } {
   const sum = result.criterion_scores.reduce((acc, cs) => acc + cs.points, 0);
-  if (Math.abs(result.points - sum) <= EPS) return { result, corrected: null };
-  const candidate = { ...result, points: sum };
+  const max = rubricMaxPoints(rubric);
+  const corrected: { points?: Correction; max_points?: Correction } = {};
+  if (Math.abs(result.points - sum) > EPS) corrected.points = { from: result.points, to: sum };
+  if (Math.abs(result.max_points - max) > EPS) {
+    corrected.max_points = { from: result.max_points, to: max };
+  }
+  if (!corrected.points && !corrected.max_points) return { result, corrected: null };
+  const candidate = { ...result, points: sum, max_points: max };
   if (!validateAgainstRubric(candidate, rubric).valid) return { result, corrected: null };
-  return { result: candidate, corrected: { from: result.points, to: sum } };
+  return { result: candidate, corrected };
 }
