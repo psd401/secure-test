@@ -1,14 +1,12 @@
 name: scan
 
-# Two gates on every push and pull request: gitleaks over the whole history
+# Two gates on every pull request (PR-only per the org standard): gitleaks over the whole history
 # with the repo's identifier-aware config, and a grep sweep for the patterns
 # gitleaks cannot shape (a hostname, a person's name). The sweep list lives in
 # .github/identifier-sweep.txt (shared with .githooks/pre-commit) and mirrors
-# CLAUDE.md's "Contributing / what stays out of this repo".
+# AGENTS.md's "Contributing / what stays out of this repo".
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
