@@ -61,8 +61,10 @@
 #      `requires` is the same, and its not_after is more than
 #      RENDERER_RESIGN_MARGIN_DAYS (14, James) away -> "renderer unchanged",
 #      nothing signed or uploaded, no Touch ID. Otherwise c-f.
-#   c. CI gate: HEAD must have a completed, successful `ci` run on GitHub
-#      (`gh run list`); in progress -> "wait for ci", failed -> refused. A HEAD
+#   c. CI gate: HEAD must have a completed, successful `ci` run on GitHub -
+#      its own run if one exists, otherwise the run on the head of the merged
+#      pull request that produced it (ci is PR-only since 2026-11-24, org
+#      standard 06 §4); in progress -> "wait for ci", failed -> refused. A HEAD
 #      that is only OpenWiki bot commits past the last person's commit may use
 #      that commit's green run (see ci_gate below).
 #   d. packages/renderer/scripts/check-extraction.sh: Swift itself confirms
@@ -94,9 +96,10 @@
 # origin/main, while main is held for a bigger release. The branch must be
 # built on what is live (the live commit is an ancestor of HEAD — a hotfix
 # never rolls back live work), carry NO new migration (refused, not merely
-# school-hours-gated), and have a green `ci` run on HEAD (ci runs on every
-# push to hotfix/** — a pull request from a branch that conflicts with main
-# never gets one). The renderer is never touched (implies
+# school-hours-gated), and pass ci's steps run locally on this Mac
+# (infra/scripts/ci-local.sh, 2026-11-24): ci is PR-only (org standard 06 §4)
+# and a pull request from a branch that conflicts with main never gets a run,
+# so GitHub has no green run to read. The renderer is never touched (implies
 # --no-renderer): the pointer keeps naming the renderer production serves.
 # The health stamp then reads the hotfix commit; cherry-pick it onto main
 # afterwards so the next main deploy carries it.
@@ -190,10 +193,10 @@ is_bot_openwiki_commit() {
   [ -z "$(git diff-tree --no-commit-id --name-only -r "$1" | grep -v '^openwiki/' || true)" ]
 }
 
-# The `ci` workflow's verdict on commit $1: success | pending | failed | none.
+# The `ci` workflow's runs on commit $1: success | pending | failed | none.
 # Several runs can exist for one commit (a re-run); any completed success wins,
 # then anything still queued / in progress, then a completed failure.
-ci_state() {
+ci_runs_state() {
   gh run list --repo psd401/secure-test --workflow ci --commit "$1" \
     --json status,conclusion --limit 20 \
     | jq -r 'if any(.[]; .status == "completed" and .conclusion == "success") then "success"
@@ -202,8 +205,25 @@ ci_state() {
              else "none" end'
 }
 
-# Renderer signing gate (2.a): only a commit with a green `ci` run on main is
-# signed. The OpenWiki fast-forward above can leave HEAD on a bot commit whose
+# The `ci` verdict for main's commit $1. ci runs on pull requests only (org
+# standard 06 §4, 2026-11-24), so a commit on main usually has no run of its
+# own: use the run on the head of the merged pull request into main that
+# produced it. The standard accepts that this run tested the PR as of its
+# last push, not the exact commit that landed. A commit with its own run
+# (one from before the change) still uses that run.
+ci_state() {
+  local own pr
+  own="$(ci_runs_state "$1")" || return 1
+  if [ "$own" != "none" ]; then echo "$own"; return 0; fi
+  pr="$(gh api "repos/psd401/secure-test/commits/$1/pulls" \
+    --jq '[.[] | select(.merged_at != null and .base.ref == "main")][0] // empty | "\(.number) \(.head.sha)"')" || return 1
+  if [ -z "$pr" ]; then echo none; return 0; fi
+  echo "ci: $1 has no run of its own; reading merged PR #${pr%% *} (head ${pr#* })" >&2
+  ci_runs_state "${pr#* }"
+}
+
+# Renderer signing gate (2.a): only a commit whose `ci` verdict (ci_state:
+# its own run or its merged PR's) is green is signed. The OpenWiki fast-forward above can leave HEAD on a bot commit whose
 # own `ci` run may never exist (a push by the bot does not necessarily trigger
 # workflows), or may still be running minutes after the person's push it
 # follows. Rule: when HEAD is a bot-only openwiki/ commit whose run is absent
@@ -230,7 +250,7 @@ ci_gate() {
     success) echo "ci: green on $sha" ;;
     pending) fail "ci is still running on $sha — wait for ci, then re-run" ;;
     failed) fail "ci failed on $sha — fix it on main before signing a renderer (or deploy with --no-renderer)" ;;
-    *) fail "no ci run found for $sha — push it to main and wait for ci (or deploy with --no-renderer)" ;;
+    *) fail "no ci run found for $sha or a merged pull request into main that produced it — land it through a PR (or deploy with --no-renderer)" ;;
   esac
 }
 
@@ -316,14 +336,10 @@ if [ "$HOTFIX" -eq 1 ]; then
   git -C "$REPO" merge-base --is-ancestor "$LIVE_SHA" "$HEAD_SHA" 2>/dev/null \
     || fail "--hotfix: the live commit $LIVE_SHA is not an ancestor of HEAD — branch from what is live"
   [ -z "$NEW_MIGRATIONS" ] || fail "--hotfix carries no migrations; this branch adds: $NEW_MIGRATIONS"
-  command -v gh >/dev/null 2>&1 || fail "gh (GitHub CLI) is required for the --hotfix ci gate — install it and run: gh auth login"
-  case "$(ci_state "$HEAD_SHA" || echo unreadable)" in
-    success) echo "ci: green on $HEAD_SHA (hotfix)" ;;
-    pending) fail "ci is still running on $HEAD_SHA — wait for ci, then re-run" ;;
-    failed) fail "ci failed on $HEAD_SHA — fix it on the branch first" ;;
-    unreadable) fail "could not read ci runs from GitHub (gh auth status?)" ;;
-    *) fail "no ci run found for $HEAD_SHA — push the branch (ci runs on pushes to hotfix/**) and wait" ;;
-  esac
+  say "hotfix: ci steps, run locally"
+  "$HERE/ci-local.sh" || fail "ci's steps failed locally on $HEAD_SHA — fix it on the branch first"
+  [ -z "$(git -C "$REPO" status --porcelain)" ] || fail "the local ci run left the tree dirty — commit or clean it, then re-run"
+  echo "ci: green locally on $HEAD_SHA (hotfix)"
 fi
 if [ -n "$NEW_MIGRATIONS" ]; then
   echo "new migrations (the new task applies them at boot):"

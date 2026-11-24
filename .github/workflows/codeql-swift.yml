@@ -8,14 +8,8 @@ name: CodeQL Swift
 # Autobuild picks what to compile; paths filters do not limit what a compiled
 # language analyzes, so a run may still include poc-* code.
 
+# No push trigger (org standard 06 §4); main's baseline is the weekly run.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**/*.swift"
-      - "**/Package.resolved"
-      - "**/*.xcodeproj/**"
-      - "!poc-*/**"
   pull_request:
     paths:
       - "**/*.swift"

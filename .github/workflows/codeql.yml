@@ -8,9 +8,9 @@ name: CodeQL
 #
 # Actions are pinned by commit SHA (the tag in the comment), like ci.yml.
 
+# No push trigger (org standard 06 §4): main's baseline comes from the weekly
+# run, so it is at most a week old when a pull request is compared with it.
 on:
-  push:
-    branches: [main]
   pull_request:
   schedule:
     - cron: "0 10 * * 1"

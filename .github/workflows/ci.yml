@@ -1,10 +1,12 @@
 name: ci
 
-# Typecheck + tests on every push to main and every pull request (renderer
-# slice 3, docs/server-delivered-renderer-design.md 2.a): a served renderer is
-# signed only from a commit whose `ci` run on main is green, so this workflow
-# is part of the signing gate, not just a convenience. Before it, the only
-# workflows on main were the scanners.
+# Typecheck + tests on every pull request (renderer slice 3,
+# docs/server-delivered-renderer-design.md 2.a): a served renderer is signed
+# only from a commit whose merged pull request had a green `ci` run, so this
+# workflow is part of the signing gate, not just a convenience. PR-only since
+# 2026-11-24 (org standard 06 §4): deploy.sh reads the merged PR's run, and
+# `deploy.sh --hotfix` runs these steps locally (infra/scripts/ci-local.sh,
+# which mirrors this file - change both together).
 #
 # Actions are pinned by commit SHA (the tag in the comment): a moved tag must
 # not change what decides whether a commit can be signed.
@@ -16,11 +18,6 @@ name: ci
 # (packages/renderer/scripts/check-extraction.sh) runs in deploy.sh on macOS.
 
 on:
-  push:
-    # hotfix/** (2026-10-19, row ES): `deploy.sh --hotfix` requires a green run
-    # on the branch head, and a hotfix branch off the live commit conflicts
-    # with main, so GitHub never runs its pull_request event.
-    branches: [main, "hotfix/**"]
   pull_request:
 
 permissions:
