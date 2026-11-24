@@ -9,7 +9,7 @@
 //                  HEAD commit's committer time in unix seconds). The shell
 //                  compares it to its compiled-in minimum version (D-2).
 // - `commit`     — the 40-hex commit SHA the files were built from; only a
-//                  commit with a green `ci` run on `main` is signed.
+//                  commit on `main` whose merged PR had a green `ci` run is signed.
 // - `issued_at` / `not_after` — the 60-day validity window (2.a): a
 //                  renderer nobody re-signs expires without an app release.
 // - `requires`   — sorted, de-duplicated terms from src/requires.ts (D-4).
