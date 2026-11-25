@@ -61,6 +61,10 @@ const baseItem = {
   stem: z.string(),
   scoring_method: ScoringMethodSchema.optional(),
   standards: z.array(z.string().min(1).max(80)).max(10).optional(),
+  // B1 (docs/point-weighting-design.md): what the question is worth, emitted
+  // only when the teacher set one. Any number on the wire; the import keeps
+  // it only inside the D5 range, so one bad value never fails a whole bundle.
+  points: z.number().optional(),
   // Graphing calculator (docs/graphing-calculator-design.md D-7): the test's
   // calculator is hidden on this question's page. Emitted only when true.
   no_calculator: z.literal(true).optional(),

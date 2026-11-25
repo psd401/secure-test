@@ -384,6 +384,11 @@ export const items = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // B1 (docs/point-weighting-design.md): what the teacher says this
+    // question is worth. NULL = its natural maximum (lib/scoring/weight.ts),
+    // so every item written before B1 keeps its numbers. D5: > 0, <= 100,
+    // up to 2 decimals (the 2-decimal rule is the API's).
+    points: doublePrecision("points"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -393,6 +398,10 @@ export const items = pgTable(
   },
   (t) => ({
     assessmentIdIdx: index("items_assessment_id_idx").on(t.assessment_id),
+    pointsRange: check(
+      "items_points_range",
+      sql`points IS NULL OR (points > 0 AND points <= 100)`,
+    ),
     positionUnq: unique("items_assessment_position_unq").on(
       t.assessment_id,
       t.position,

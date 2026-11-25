@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { assessments, items } from "@/db/schema";
 import { requireStaff } from "@/lib/api/requireSession";
 import { requireDraft } from "@/lib/api/requireDraft";
-import { itemConfigForWrite, parseItemBody, wantsEmptyStem } from "@/lib/api/items";
+import { itemConfigForWrite, parseItemBody, pointsNotAllowedResponse, wantsEmptyStem } from "@/lib/api/items";
 import { isNewAuthoringEnabled } from "@/lib/authoring/flag";
 import { rejectUnownedRubricId } from "@/lib/api/rubrics";
 import { UUID_RE } from "@/lib/uuid";
@@ -62,6 +62,10 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!access.ok) return access.response;
   const draftGuard = requireDraft(access.assessment);
   if (draftGuard) return draftGuard;
+  // B1 D6: no point weights on a competency assessment.
+  if (body.points != null && access.assessment.competency_pass_min_points != null) {
+    return pointsNotAllowedResponse();
+  }
   // Rubric library slice 3: an item may point at a rubric in the caller's
   // OWN library only.
   const rubricGuard = await rejectUnownedRubricId(
@@ -91,6 +95,7 @@ export async function POST(req: Request, ctx: RouteContext) {
         correct_answer: body.correct_answer ?? null,
         config: itemConfigForWrite(body),
         standards: body.standards ?? [],
+        points: body.points ?? null,
       })
       .returning();
     await tx

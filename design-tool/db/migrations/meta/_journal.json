@@ -512,6 +512,13 @@
       "when": 1793668725058,
       "tag": "0072_competency_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1795637198709,
+      "tag": "0073_item_points",
+      "breakpoints": true
     }
   ]
 }

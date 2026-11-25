@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { changeFinalScore } from "@/lib/api/changeScore";
+import { scaleEntry } from "@/lib/scoring/results";
 import {
   ChangeScoreBody,
   checkManualScore,
@@ -65,7 +66,8 @@ export async function POST(req: Request, ctx: RouteContext) {
       attempt_id: chain.response.attempt_id,
       item_id: chain.response.item_id,
     },
-    body,
+    // B1 (D1): a rubric total is stored on the item's weight.
+    { ...body, ...scaleEntry(chain.item, body.points, body.max_points) },
     auth.session.sub,
   );
   if (!result.ok) {
