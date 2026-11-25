@@ -2,7 +2,7 @@
 // state transitions, append-only retention, reviewed_by stamping, and
 // queue membership rules. Same harness as the other API tests.
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { GraphBoard, Rubric } from "@secure-test/schema";
 import { closeDb, getDb } from "../db/client";
 import {
@@ -1228,5 +1228,91 @@ describe("graph answers in the queue", () => {
     const { assessment } = await seedQueueScenario();
     const body = (await (await getQueue(assessment.id)).json()) as { entries: GraphEntry[] };
     expect(body.entries.every((e) => e.graph_lines === null)).toBe(true);
+  });
+});
+
+// B1 (docs/point-weighting-design.md, D1 + slice 3): a rubric question worth
+// 10 points with a 5-point rubric. Teachers and the AI score in rubric
+// points; the stored final is on the weight; criterion scores stay in rubric
+// points; a proposal made before a points change is approved on the new one.
+describe("B1 — weighted rubric items through the routes", () => {
+  async function weight(itemId: string, points: number | null) {
+    await getDb().update(items).set({ points }).where(eq(items.id, itemId));
+  }
+  const picks = [
+    { criterion_id: "ideas", level_id: "i3", points: 3 },
+    { criterion_id: "org", level_id: "o2", points: 2 },
+  ];
+
+  test("a hand score and a changed score are stored on the weight", async () => {
+    const { db, itemRows, responseRows } = await seedQueueScenario();
+    const humanEssay = responseRows[1]!;
+    await weight(itemRows[1]!.id, 10);
+    // The queue still asks for rubric points.
+    const queue = (await (await getQueue((await seededAssessmentId())!)).json()) as {
+      entries: Array<{ response_id: string; item: { max_points: number } }>;
+    };
+    expect(queue.entries.find((e) => e.response_id === humanEssay.id)!.item.max_points).toBe(5);
+
+    const res = await postManualScore(humanEssay.id, { points: 5, max_points: 5, criterion_scores: picks });
+    expect(res.status).toBe(201);
+    const [row] = await db.select().from(scores).where(eq(scores.response_id, humanEssay.id));
+    expect(row).toMatchObject({ points: 10, max_points: 10 });
+    // Criterion scores keep their rubric points (the schema adds an empty rationale).
+    expect((row!.rationale as { criterion_scores: unknown }).criterion_scores).toMatchObject(picks);
+
+    const { POST } = await import("../app/api/responses/[responseId]/change-score/route");
+    const changed = await POST(
+      new Request(`http://localhost/api/responses/${humanEssay.id}/change-score`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ points: 2, max_points: 5, reason: "recheck" }),
+      }),
+      { params: Promise.resolve({ responseId: humanEssay.id }) },
+    );
+    expect(changed.status).toBe(201);
+    const finalsNow = await db
+      .select()
+      .from(scores)
+      .where(and(eq(scores.response_id, humanEssay.id), eq(scores.status, "final")));
+    expect(finalsNow[0]).toMatchObject({ points: 4, max_points: 10 });
+  });
+
+  test("an AI proposal is stored on the weight; a stale one is approved on the new points", async () => {
+    const { db, attempt, itemRows, responseRows } = await seedQueueScenario();
+    const aiEssay = responseRows[2]!;
+    expect((await postAiScore(attempt.id)).status).toBe(200);
+    const [proposal] = await db
+      .select()
+      .from(scores)
+      .where(and(eq(scores.response_id, aiEssay.id), eq(scores.status, "proposed")));
+    expect(proposal!.max_points).toBe(5); // no weight yet: rubric max
+
+    await weight(itemRows[2]!.id, 10);
+    const res = await postApprove(proposal!.id);
+    expect(res.status).toBe(201);
+    const [final] = await db
+      .select()
+      .from(scores)
+      .where(and(eq(scores.response_id, aiEssay.id), eq(scores.status, "final")));
+    expect(final).toMatchObject({ method: "ai", max_points: 10, points: Math.round(proposal!.points * 200) / 100 });
+    expect(final!.rationale).toMatchObject({
+      rescaled_from: { score_id: proposal!.id, points: proposal!.points, max_points: 5 },
+    });
+  });
+
+  test("AI scoring on a weighted item writes the weighted total, criterion scores in rubric points", async () => {
+    const { db, attempt, itemRows, responseRows } = await seedQueueScenario();
+    await weight(itemRows[2]!.id, 10);
+    expect((await postAiScore(attempt.id)).status).toBe(200);
+    const [proposal] = await db
+      .select()
+      .from(scores)
+      .where(and(eq(scores.response_id, responseRows[2]!.id), eq(scores.status, "proposed")));
+    expect(proposal!.max_points).toBe(10);
+    const crit = (proposal!.rationale as { criterion_scores: Array<{ points: number }> }).criterion_scores;
+    const rubricTotal = crit.reduce((n, c) => n + c.points, 0);
+    expect(rubricTotal).toBeLessThanOrEqual(5);
+    expect(proposal!.points).toBe(Math.round(rubricTotal * 200) / 100);
   });
 });

@@ -19,6 +19,7 @@ function counts(plan: RescorePlan) {
     changed: plan.changed,
     unchanged: plan.unchanged,
     kept: plan.kept,
+    rescaled: plan.rescaled,
     newly_scored: plan.newly_scored,
     unscorable: plan.unscorable,
     students_changed: plan.students_changed,
@@ -75,6 +76,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     assessment_id: id,
     changed: result.written,
     kept: result.plan.kept,
+    rescaled: result.plan.rescaled,
     skipped_conflict: result.skipped_conflict,
     questions: result.plan.questions.length,
   });

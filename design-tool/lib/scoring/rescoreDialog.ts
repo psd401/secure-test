@@ -10,11 +10,14 @@ export interface RescoreQuestionCount {
   position: number;
   changed: number;
   kept: number;
+  /** B1 D2: teacher-set / AI scores put on the question's new points. */
+  rescaled?: number;
 }
 
 export interface RescoreDryRun {
   students_changed: number;
   kept: number;
+  rescaled?: number;
   questions: RescoreQuestionCount[];
 }
 
@@ -33,25 +36,36 @@ export function rescoreButtonLabel(studentsChanged: number): string {
 }
 
 /** Shown on hover over the disabled button. */
-export const RESCORE_NOTHING_TITLE = "Every handed-in answer matches the current keys";
+export const RESCORE_NOTHING_TITLE = "Every handed-in answer matches the current keys and points";
 
 /** The dialog's question list: "Q3 — 12 students change". */
 export function questionLine(q: RescoreQuestionCount): string {
   const changes = q.changed > 0 ? `${plural(q.changed, "answer changes", "answers change")}` : "";
   const kept =
     q.kept > 0 ? `${plural(q.kept, "score you set stays", "scores you set stay")}` : "";
-  return `Q${q.position + 1} — ${[changes, kept].filter(Boolean).join(" · ")}`;
+  const rescaledCount = q.rescaled ?? 0;
+  const rescaled =
+    rescaledCount > 0
+      ? `${plural(rescaledCount, "score you set moves", "scores you set move")} to the new points`
+      : "";
+  return `Q${q.position + 1} — ${[changes, rescaled, kept].filter(Boolean).join(" · ")}`;
 }
 
 /** The dialog's lead sentence. */
 export function dryRunSummary(dry: RescoreDryRun): string {
   if (dry.students_changed === 0) return RESCORE_NOTHING_TITLE + ".";
-  const lead = `Rescoring changes ${plural(dry.students_changed, "student's score", "students' scores")} with the current answer keys.`;
+  const lead = `Rescoring changes ${plural(dry.students_changed, "student's score", "students' scores")} with the current answer keys and points.`;
+  // B1 D2: a score a teacher (or an approved AI) set keeps its fraction.
+  const rescaledCount = dry.rescaled ?? 0;
+  const rescaled =
+    rescaledCount > 0
+      ? ` ${plural(rescaledCount, "score you set keeps", "scores you set keep")} the same share of the new points (3 of 4 becomes 6 of 8).`
+      : "";
   const kept =
     dry.kept > 0
       ? ` ${plural(dry.kept, "score you set yourself stays", "scores you set yourself stay")} as ${dry.kept === 1 ? "it is" : "they are"}.`
       : "";
-  return lead + kept + " The earlier scores are kept on each student's page.";
+  return lead + rescaled + kept + " The earlier scores are kept on each student's page.";
 }
 
 const TIME = new Intl.DateTimeFormat("en-US", {
@@ -103,6 +117,8 @@ const KEY_FIELDS = [
   "cell_keys",
   "blanks",
   "graph_key",
+  // B1 slice 3: a points change also leaves handed-in scores on the old scale.
+  "points",
 ] as const;
 
 export function answerKeyChanged(
@@ -117,4 +133,4 @@ export function answerKeyChanged(
 
 /** The editor line after a key fix on a Published test. */
 export const KEY_FIXED_POINTER =
-  "If students already handed this in, their scores used the old key.";
+  "If students already handed this in, their scores used the old key or points.";

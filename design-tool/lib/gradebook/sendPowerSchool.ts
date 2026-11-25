@@ -239,6 +239,16 @@ export async function sendToPowerSchool(
     notes: [],
   };
 
+  // B1 D3 (docs/point-weighting-design.md): the assignment's points are set
+  // only when it is created. If the test's maximum has changed since (points
+  // or a key changed the questions' worth), say so; nothing is updated in
+  // PowerSchool. A push created before this was recorded has no number, and
+  // gets no note.
+  const createdMax = assignmentMaxOf(push);
+  if (push?.external_assignment_id && createdMax !== null && max_points > 0 && createdMax !== max_points) {
+    summary.notes.push(maxChangedNote(createdMax, max_points));
+  }
+
   // 8.3: attempts sent before that are not being (re)sent now — passed back
   // and not yet handed in again, or handed in again but not yet fully scored.
   // Their earlier score stays in the gradebook until a later send.
@@ -301,7 +311,7 @@ export async function sendToPowerSchool(
         assessment_id: assessment.id,
         rows: summary.failed.length,
       });
-      await recordSend(db, push.id, input, summary);
+      await recordSend(db, push.id, input, summary, createdMax);
       return { ok: true, summary };
     }
     if (existing.isScoresPublish === false) {
@@ -311,7 +321,7 @@ export async function sendToPowerSchool(
 
   // Nothing to write: never create an empty assignment.
   if (plan.writes.length === 0) {
-    if (push) await recordSend(db, push.id, input, summary);
+    if (push) await recordSend(db, push.id, input, summary, createdMax);
     return { ok: true, summary };
   }
 
@@ -398,8 +408,21 @@ export async function sendToPowerSchool(
   }
 
   await writeScores(db, client, push, input, usersDcid, plan.writes, summary);
-  await recordSend(db, push.id, input, summary);
+  // B1 D3: a new assignment is created at this send's maximum.
+  await recordSend(db, push.id, input, summary, summary.assignment_created ? max_points : createdMax);
   return { ok: true, summary };
+}
+
+/** B1 D3: the points the push's assignment was created with, or null when unrecorded. */
+function assignmentMaxOf(push: { last_result: Record<string, unknown> | null } | null): number | null {
+  const v = push?.last_result?.assignment_max_points;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** B1 D3: the Send again note when the test's maximum moved since the assignment was created. */
+function maxChangedNote(createdMax: number, nowMax: number): string {
+  const fmt = (n: number) => String(Math.round(n * 100) / 100);
+  return `This test is now worth ${fmt(nowMax)} points, but the PowerTeacher Pro assignment was created out of ${fmt(createdMax)}. Change the assignment's points in PowerTeacher Pro to match.`;
 }
 
 const PUBLISH_SCORES_MANUAL_NOTE =
@@ -562,6 +585,8 @@ async function recordSend(
   pushId: string,
   input: PowerSchoolSendInput,
   summary: SendSummary,
+  /** B1 D3: the points the PowerSchool assignment was created with, kept across sends. */
+  assignmentMax: number | null,
 ): Promise<void> {
   const now = new Date();
   // At least one student's score is in the gradebook as of this send.
@@ -578,6 +603,7 @@ async function recordSend(
         skipped_unchanged: summary.skipped_unchanged,
         held_back: summary.held_back,
         failed: summary.failed,
+        ...(assignmentMax !== null ? { assignment_max_points: assignmentMax } : {}),
       },
     })
     .where(eq(gradebook_pushes.id, pushId));

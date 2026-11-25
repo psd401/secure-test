@@ -213,7 +213,7 @@ describe("loadRescorePlan", () => {
     expect(plan.changed).toBe(3);
     expect(plan.unchanged).toBe(0);
     expect(plan.students_changed).toBe(3);
-    expect(plan.questions).toEqual([{ item_id: s.mc.id, position: 0, changed: 3, kept: 0 }]);
+    expect(plan.questions).toEqual([{ item_id: s.mc.id, position: 0, changed: 3, kept: 0, rescaled: 0 }]);
   });
 
   test("a key edited and edited back counts nothing", async () => {
@@ -264,7 +264,7 @@ describe("loadRescorePlan", () => {
     const plan = await loadRescorePlan(getDb(), s.assessment.id);
     expect(plan.changed).toBe(1);
     expect(plan.kept).toBe(1);
-    expect(plan.questions).toEqual([{ item_id: s.mc.id, position: 0, changed: 1, kept: 1 }]);
+    expect(plan.questions).toEqual([{ item_id: s.mc.id, position: 0, changed: 1, kept: 1, rescaled: 0 }]);
   });
 });
 
@@ -485,5 +485,93 @@ describe("POST /api/assessments/[id]/rescore", () => {
     const result = await applyRescore(getDb(), s.assessment.id, OWNER);
     expect(result.written).toBe(0);
     expect(result.plan.kept).toBe(1);
+  });
+});
+
+// B1 slice 3 (docs/point-weighting-design.md, D2): a points change after
+// scoring. Auto finals are rescored against the new weight; teacher-set and
+// AI finals keep their fraction on the new maximum (rescaled), keeping their
+// method, scorer, reviewer and rationale.
+describe("B1 — rescale after a points change", () => {
+  async function weightMc(itemId: string, points: number | null) {
+    await getDb().update(items).set({ points }).where(eq(items.id, itemId));
+  }
+
+  test("auto finals rescore; human and AI finals rescale and keep their method", async () => {
+    const s = await scene();
+    const right = await s.student("W-1", "c1"); // auto 1 / 1
+    const wrong = await s.student("W-2", "c2"); // auto 0 / 1
+    const hand = await s.student("W-3", "c2", { score: false });
+    const ai = await s.student("W-4", "c2", { score: false });
+    await getDb().insert(scores).values([
+      {
+        response_id: hand.mcResponse.id,
+        method: "human",
+        points: 1,
+        max_points: 1,
+        scorer: OWNER,
+        status: "final",
+        reviewed_by_sub: OWNER,
+        rationale: { note: "gave credit" },
+      },
+      {
+        response_id: ai.mcResponse.id,
+        method: "ai",
+        points: 0.5,
+        max_points: 1,
+        scorer: "mock",
+        status: "final",
+        reviewed_by_sub: null,
+        rationale: { confidence: 0.9 },
+      },
+    ]);
+    await weightMc(s.mc.id, 4);
+
+    const plan = await loadRescorePlan(getDb(), s.assessment.id);
+    expect(plan.rescaled).toBe(2);
+    expect(plan.changed).toBe(2); // both auto finals: max 1 -> 4
+    expect(plan.students_changed).toBe(4);
+    expect(plan.questions).toEqual([{ item_id: s.mc.id, position: 0, changed: 2, kept: 0, rescaled: 2 }]);
+
+    const result = await applyRescore(getDb(), s.assessment.id, OWNER);
+    expect(result.written).toBe(4);
+    const [r] = await finals(right.mcResponse.id);
+    expect(r).toMatchObject({ method: "auto", points: 4, max_points: 4 });
+    const [w] = await finals(wrong.mcResponse.id);
+    expect(w).toMatchObject({ method: "auto", points: 0, max_points: 4 });
+    const [h] = await finals(hand.mcResponse.id);
+    expect(h).toMatchObject({ method: "human", points: 4, max_points: 4, scorer: OWNER, reviewed_by_sub: OWNER });
+    expect(h!.rationale).toMatchObject({ note: "gave credit", rescaled_from: { points: 1, max_points: 1 } });
+    const [a] = await finals(ai.mcResponse.id);
+    // An unreviewed AI final stays unreviewed.
+    expect(a).toMatchObject({ method: "ai", points: 2, max_points: 4, scorer: "mock", reviewed_by_sub: null });
+    expect(a!.rationale).toMatchObject({ confidence: 0.9, rescaled_from: { points: 0.5, max_points: 1 } });
+
+    // Nothing left to do, and a second points change rescales from the
+    // stored fraction (no drift): 4 -> 3 puts 2 / 4 at 1.5 / 3.
+    expect((await loadRescorePlan(getDb(), s.assessment.id)).changes).toHaveLength(0);
+    await weightMc(s.mc.id, 3);
+    await applyRescore(getDb(), s.assessment.id, OWNER);
+    expect((await finals(ai.mcResponse.id))[0]).toMatchObject({ points: 1.5, max_points: 3 });
+    expect((await finals(hand.mcResponse.id))[0]).toMatchObject({ points: 3, max_points: 3 });
+  });
+
+  test("clearing the weight rescales back to the natural maximum", async () => {
+    const s = await scene();
+    const hand = await s.student("W-5", "c2", { score: false });
+    await getDb().insert(scores).values({
+      response_id: hand.mcResponse.id,
+      method: "human",
+      points: 3,
+      max_points: 6,
+      scorer: OWNER,
+      status: "final",
+      reviewed_by_sub: OWNER,
+    });
+    // points NULL: the MC's natural max is 1, so 3 / 6 becomes 0.5 / 1.
+    const plan = await loadRescorePlan(getDb(), s.assessment.id);
+    expect(plan.rescaled).toBe(1);
+    await applyRescore(getDb(), s.assessment.id, OWNER);
+    expect((await finals(hand.mcResponse.id))[0]).toMatchObject({ method: "human", points: 0.5, max_points: 1 });
   });
 });

@@ -1,6 +1,6 @@
 # Point weighting — design note (2026-11-17, decided 2026-11-18)
 
-Status: decisions made (James, 2026-11-18; see "Decisions"). Nothing built.
+Status: decisions made (James, 2026-11-18; see "Decisions"). Slices 1–4 built 2026-11-25 (see "Progress"); not merged or deployed.
 
 ## Goal
 
@@ -152,3 +152,12 @@ Wording that assumes 1 point per part goes stale once points are set; grep for "
 - **D5** Allowed values: more than 0, at most 100, up to 2 decimals.
 - **D6** Points are blocked on competency assessments.
 - **D7** Points stay editable while a test is published, like answer keys and standards.
+
+## Progress
+
+- **2026-11-25, slice 1 + 4** (PR #235): column + migration 0073, `applyWeight` in `scoreResponse`, one max rule (`entryMaxPoints` for hand entry), rubric totals scaled on write (`scaleEntry`), AI-vs-human comparison on the rubric scale, API field (D5/D6/D7), teacher bundle carries `points` (so Duplicate / Share keep it). Review fix: the interactive preview scores on the weight; `points` is required on max-point inputs.
+- **2026-11-25, slice 2** (PR #236): Points field + hint, outline per-question points and total, published-lock door, `pointsStep` "any" above 1, "an equal share each" copy, help topic 2. The max rules moved to client-safe `lib/scoring/maxPoints.ts`.
+- **2026-11-25, slice 3** (stacked on #236): `planRescore` rescales any non-auto final whose `max_points` is not the question's current maximum (`rescaled`, kept fraction, `rationale.rescaled_from`, method / scorer / reviewer kept, event `source: "rescale"`); the Rescore dialog names them; approve puts a stale AI proposal on the current points; the editor pointer fires on a points change; PowerSchool Send again notes a changed maximum against `last_result.assignment_max_points` (recorded at create; pushes created earlier have none and get no note); help "Fixed an answer key or changed points".
+- **Rescale scope (measured 2026-11-25; kept as built):** the rescale fires on ANY non-auto final whose `max_points` is not the question's current maximum, not only after a points change, because nothing records why a maximum moved. Production before B1, two read-only aggregate queries (James): 0 of 251 questions with finals on mixed maxima, and 0 of 1091 teacher-set / AI finals off the question's current natural maximum (rubric, table, fill-in-the-blank rebuilt from config; 0 graph finals). So the rescale touches nothing from before B1. Later drift needs an unpublish: the publish lock refuses a rubric or table edit on a published test (`isAnswerKeyOnlyPatch` compares `config` apart from the key fields). If it happens, rescaling keeps the question's total on one scale; the alternative (leave the old maximum) is the mixed-scale totals D2 exists to prevent. A rescaled rubric total no longer equals its criterion sum, the same as any weighted rubric item (D1).
+- **Open:** the "Rubric 6 / 8 → 3 / 4" display on results and released feedback is not built. Turning an assessment into a competency test after its items have points is not blocked. Import drops an out-of-range weight silently.
+

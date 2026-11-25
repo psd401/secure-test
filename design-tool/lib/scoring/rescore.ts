@@ -24,6 +24,14 @@
  *
  * Only handed-in, non-practice attempts are in scope: an in-progress attempt
  * is scored at its own hand-in, against the current key already.
+ *
+ * B1 slice 3 (docs/point-weighting-design.md, D2): a teacher-set, AI or
+ * approved final whose `max_points` is no longer the question's maximum (its
+ * points were changed after scoring) is RESCALED, not rescored: the same
+ * fraction on the new maximum (`applyWeight`, full credit exactly the new
+ * max), keeping its method, scorer, reviewer and rationale, plus
+ * `rationale.rescaled_from`. The teacher's judgement stands; only its scale
+ * moves. Criterion scores are untouched.
  */
 
 import { attemptOneByAttempt } from "@/lib/scoring/attemptOne";
@@ -45,6 +53,8 @@ import {
 import { effectiveScoringMethod } from "@/lib/api/items";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
 import { scoreResponse } from "@/lib/scoring/auto";
+import { itemMaxPoints } from "@/lib/scoring/maxPoints";
+import { applyWeight } from "@/lib/scoring/weight";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -63,6 +73,8 @@ export interface RescoreFinalInput {
 }
 
 export interface RescoreChange {
+  /** B1 D2: "rescale" keeps a non-auto final's fraction on the new maximum. */
+  kind: "rescore" | "rescale";
   response_id: string;
   attempt_id: string;
   item_id: string;
@@ -79,6 +91,8 @@ export interface RescoreQuestion {
   changed: number;
   /** Teacher-set / AI finals that differ from the new key and stay (D-2). */
   kept: number;
+  /** B1 D2: teacher-set / AI finals put on the question's new points. */
+  rescaled: number;
 }
 
 export interface RescorePlan {
@@ -89,6 +103,8 @@ export interface RescorePlan {
   unchanged: number;
   /** Non-auto finals that differ from the current key — left alone (D-2). */
   kept: number;
+  /** B1 D2: non-auto finals whose maximum moved (points changed) — rescaled. */
+  rescaled: number;
   /** Answers with no final that the current key now scores (a key added after hand-in). */
   newly_scored: number;
   /** Answers with no final that are still unscorable. */
@@ -113,28 +129,52 @@ export function planRescore(
       .filter((i) => effectiveScoringMethod(i.type as ItemType, i.config) === "auto")
       .map((i) => [i.id, i]),
   );
+  const itemById = new Map(itemRows.map((i) => [i.id, i]));
   const plan: RescorePlan = {
     changes: [],
     changed: 0,
     unchanged: 0,
     kept: 0,
+    rescaled: 0,
     newly_scored: 0,
     unscorable: 0,
     students_changed: 0,
     questions: [],
   };
-  const perItem = new Map<string, { changed: number; kept: number }>();
-  const bump = (itemId: string, field: "changed" | "kept") => {
-    const entry = perItem.get(itemId) ?? { changed: 0, kept: 0 };
+  const perItem = new Map<string, { changed: number; kept: number; rescaled: number }>();
+  const bump = (itemId: string, field: "changed" | "kept" | "rescaled") => {
+    const entry = perItem.get(itemId) ?? { changed: 0, kept: 0, rescaled: 0 };
     entry[field]++;
     perItem.set(itemId, entry);
   };
   const studentsChanged = new Set<string>();
 
   for (const response of responseRows) {
+    const final = finalByResponse.get(response.id) ?? null;
+    // B1 D2: a non-auto final on a question whose maximum moved keeps its
+    // fraction on the new maximum, whatever the question's method.
+    const question = itemById.get(response.item_id);
+    if (question && final && final.method !== "auto" && final.max_points > 0) {
+      const max = itemMaxPoints(question);
+      if (final.max_points !== max) {
+        const scaled = applyWeight(final.points, final.max_points, max);
+        plan.rescaled++;
+        plan.changes.push({
+          kind: "rescale",
+          response_id: response.id,
+          attempt_id: response.attempt_id,
+          item_id: response.item_id,
+          from: final,
+          points: scaled.points,
+          max_points: scaled.max_points,
+        });
+        bump(question.id, "rescaled");
+        studentsChanged.add(response.attempt_id);
+        continue;
+      }
+    }
     const item = autoItems.get(response.item_id);
     if (!item) continue;
-    const final = finalByResponse.get(response.id) ?? null;
     const parsed = ItemResponseSchema.safeParse(response.response);
     const result = parsed.success ? scoreResponse(item, parsed.data) : null;
 
@@ -166,6 +206,7 @@ export function planRescore(
       plan.changed++;
     }
     plan.changes.push({
+      kind: "rescore",
       response_id: response.id,
       attempt_id: response.attempt_id,
       item_id: response.item_id,
@@ -270,6 +311,15 @@ export async function applyRescore(
     const writtenAttempts = new Set<string>();
 
     for (const change of plan.changes) {
+      if (change.kind === "rescale") {
+        if (await writeRescale(tx, change, now)) {
+          written++;
+          writtenAttempts.add(change.attempt_id);
+        } else {
+          skipped++;
+        }
+        continue;
+      }
       let replacedId: string | null = null;
       if (change.from) {
         const [replaced] = await tx
@@ -347,6 +397,61 @@ export async function applyRescore(
     skipped_conflict: outcome.skipped,
     sections_sent_before: await sectionsSentBefore(db, assessmentId, [...outcome.writtenAttempts]),
   };
+}
+
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * B1 D2: one rescale, with the rescore's flip-is-the-read guard (the id, still
+ * final, still the same method — a score changed in the meantime is skipped).
+ * The new final is the old one on the new maximum: same method, scorer,
+ * reviewer and rationale (criterion scores in rubric points untouched), plus
+ * `rescaled_from`. False when the guard found nothing to replace.
+ */
+async function writeRescale(tx: Tx, change: RescoreChange, now: Date): Promise<boolean> {
+  const from = change.from!;
+  const [replaced] = await tx
+    .update(scores)
+    .set({ status: "superseded" })
+    .where(and(eq(scores.id, from.id), eq(scores.status, "final"), eq(scores.method, from.method)))
+    .returning();
+  if (!replaced) return false;
+  const rationale =
+    replaced.rationale && typeof replaced.rationale === "object" ? (replaced.rationale as Record<string, unknown>) : {};
+  const inserted = await tx
+    .insert(scores)
+    .values({
+      response_id: change.response_id,
+      method: replaced.method,
+      points: change.points,
+      max_points: change.max_points,
+      rationale: {
+        ...rationale,
+        rescaled_from: { score_id: replaced.id, points: replaced.points, max_points: replaced.max_points },
+      },
+      scorer: replaced.scorer,
+      status: "final",
+      reviewed_by_sub: replaced.reviewed_by_sub,
+      prompt_version: replaced.prompt_version,
+      created_at: now,
+    })
+    .onConflictDoNothing()
+    .returning({ id: scores.id });
+  if (inserted.length === 0) return false;
+  await tx.insert(attempt_events).values({
+    attempt_id: change.attempt_id,
+    kind: "score_changed",
+    at: now,
+    detail: {
+      source: "rescale",
+      response_id: change.response_id,
+      item_id: change.item_id,
+      from: replaced.points,
+      to: change.points,
+      max: change.max_points,
+    },
+  });
+  return true;
 }
 
 /**

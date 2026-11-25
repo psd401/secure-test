@@ -482,6 +482,30 @@ describe("POST /api/assessments/[id]/gradebook-send", () => {
     expect(events.length).toBe(2);
   });
 
+  test("B1 D3: a Send again after the test's points changed notes the old assignment max", async () => {
+    const s = await scene();
+    await attempt(s, STUDENT, s.algebra.id, [1, 1]);
+    const first = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(first.assignment_created).toBe(true);
+    expect(first.notes.join(" ")).not.toContain("now worth");
+    const [push] = await getDb().select().from(gradebook_pushes);
+    expect(push!.last_result).toMatchObject({ assignment_max_points: 2 });
+
+    // Unchanged: no note.
+    let body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body.notes.join(" ")).not.toContain("now worth");
+
+    // Q1 is now worth 3: the test is worth 4, the assignment still says 2.
+    await getDb().update(items).set({ points: 3 }).where(eq(items.id, s.items[0]!.id));
+    body = await (await send(s.assessment.id, BASE_BODY)).json();
+    const note =
+      "This test is now worth 4 points, but the PowerTeacher Pro assignment was created out of 2. Change the assignment's points in PowerTeacher Pro to match.";
+    expect(body.notes).toContain(note);
+    // The created max is kept, so the note repeats until it matches again.
+    body = await (await send(s.assessment.id, BASE_BODY)).json();
+    expect(body.notes).toContain(note);
+  });
+
   test("a student with no DCID is held back no_dcid; the due date defaults to today (PT)", async () => {
     const s = await scene();
     await attempt(s, STUDENT, s.algebra.id, [1, 1]);
