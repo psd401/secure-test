@@ -255,6 +255,8 @@ function expected(c: FeedbackContents, sc: Scenario, teacher: string | null): Fe
           points: levels && showScore ? levels[name][1] : null,
           ai_feedback: ai ? `${ai} ${name.toLowerCase()} comment` : null,
         })),
+        // B1: the fixtures' rubric is on its own scale, so no scale line.
+        scale: null,
       });
     }
   }

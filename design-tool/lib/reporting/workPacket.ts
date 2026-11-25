@@ -8,7 +8,7 @@
 
 import { UUID_RE } from "@/lib/uuid";
 import { FILL_BLANK_MARKER_RE, type Rubric } from "@secure-test/schema";
-import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import { rubricScaleLine, rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 // Type only: feedbackRelease.ts imports this file's selectPacketScores.
 import type { FeedbackBlock, FeedbackContents } from "@/lib/reporting/feedbackRelease";
 
@@ -386,6 +386,9 @@ export interface PacketScoreBlock {
    * row only, D-3).
    */
   criteria: Array<{ criterion: string; level: string; points: number }>;
+  /** B1: "Rubric 6 of 8, scaled to 3 of 4 points" beside criteria on a
+   * weighted question; null otherwise (and whenever `criteria` is empty). */
+  scale?: string | null;
 }
 
 /**
@@ -419,18 +422,19 @@ export function packetScoreBlocks<T extends PacketScoreRow>(
   const mode = packetScoresMode(contents);
   if (mode === "none") return [];
   const picked = selectPacketScores(mode, rowsForResponse);
-  const block = (label: string, row: T | null): PacketScoreBlock => ({
-    label,
-    row,
-    criteria:
+  const block = (label: string, row: T | null): PacketScoreBlock => {
+    const criteria =
       contents.rubric_table && row
         ? rubricScoreRows(rubric, row.rationale).map((c) => ({
             criterion: c.criterion_name,
             level: c.level_label,
             points: c.points,
           }))
-        : [],
-  });
+        : [];
+    // Present only on a weighted question, so unweighted blocks are unchanged.
+    const scale = criteria.length > 0 && row ? rubricScaleLine(rubric, row, row.rationale) : null;
+    return { label, row, criteria, ...(scale ? { scale } : {}) };
+  };
   const out: PacketScoreBlock[] = [];
   if (mode !== "ai") out.push(block(packetScoreHeading("teacher", picked.teacher), picked.teacher));
   if (mode !== "teacher") out.push(block(packetScoreHeading("ai", picked.ai), picked.ai));

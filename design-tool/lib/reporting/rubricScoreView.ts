@@ -1,5 +1,5 @@
 import type { Rubric } from "@secure-test/schema";
-import { describeLevel } from "@/lib/ai/essayScorer/scoreCore";
+import { describeLevel, rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 
 // Slice 4 of docs/rubric-upload-design.md (D-5 / D-6): one reading of a
 // score row's `rationale` jsonb, shared by the per-student results page and
@@ -70,3 +70,33 @@ export function overallRationale(rationale: unknown): string | null {
   const overall = (rationale as { overall_rationale?: unknown }).overall_rationale;
   return typeof overall === "string" && overall.trim() ? overall : null;
 }
+
+const fmt = (n: number) => String(Math.round(n * 100) / 100);
+
+/**
+ * B1 (docs/point-weighting-design.md, D1): a rubric question worth a
+ * different number of points than its rubric stores its score on the
+ * question's points, while the criterion rows stay in rubric points. Where
+ * both show, this line joins them: "Rubric 6 of 8, scaled to 3 of 4 points".
+ * Null when the score is on the rubric's own scale (every unweighted rubric
+ * question), so nothing changes there.
+ *
+ * The rubric total is the criterion rows' sum; a bare-points score (no
+ * criterion rows) is put back on the rubric scale from its share.
+ */
+export function rubricScaleLine(
+  rubric: Rubric | null | undefined,
+  score: { points: number; max_points: number } | null | undefined,
+  rationale: unknown,
+): string | null {
+  if (!rubric || !score) return null;
+  const rubricMax = rubricMaxPoints(rubric);
+  if (!(rubricMax > 0) || !(score.max_points > 0) || score.max_points === rubricMax) return null;
+  const rows = rubricScoreRows(rubric, rationale);
+  const rubricTotal =
+    rows.length > 0
+      ? rows.reduce((n, r) => n + r.points, 0)
+      : (score.points * rubricMax) / score.max_points;
+  return `Rubric ${fmt(rubricTotal)} of ${fmt(rubricMax)}, scaled to ${fmt(score.points)} of ${fmt(score.max_points)} points`;
+}
+

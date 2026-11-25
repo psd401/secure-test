@@ -10,7 +10,7 @@
 // in, so short answers (slice 5) need no change here.
 
 import type { Rubric } from "@secure-test/schema";
-import { overallRationale, rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import { overallRationale, rubricScaleLine, rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 import { selectPacketScores, type PacketScoreRow } from "@/lib/reporting/workPacket";
 
 /** D-2 / R-2: the boxes this model reads; each output adds its own (prompt, answer…). */
@@ -77,6 +77,9 @@ export type FeedbackBlock =
       kind: "rubric_table";
       columns: { level: boolean; points: boolean; ai_feedback: boolean };
       rows: RubricTableRow[];
+      /** B1: "Rubric 6 of 8, scaled to 3 of 4 points" when the table shows
+       * points beside a score on a weighted question; else null. */
+      scale: string | null;
     }
   | {
       kind: "feedback";
@@ -213,6 +216,7 @@ function questionBlocks<T extends PacketScoreRow>(
         kind: "rubric_table",
         columns,
         rows: order.filter((id) => byId.has(id)).map((id) => byId.get(id)!),
+        scale: columns.points && shown ? rubricScaleLine(q.rubric, shown, shown.rationale) : null,
       });
     }
   }

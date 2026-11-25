@@ -26,6 +26,7 @@ import { renderShortTextAnswer } from "@/lib/reporting/shortTextView";
 import { renderEssayAnswerHtml } from "@/lib/richText/renderEssayAnswer";
 import {
   overallRationale,
+  rubricScaleLine,
   rubricScoreRows,
   type RubricScoreRow,
 } from "@/lib/reporting/rubricScoreView";
@@ -108,18 +109,26 @@ function splitScores(rows: ScoreRow[]): {
 function RubricScoreDetail({
   rows,
   overall,
+  scale = null,
 }: {
   rows: RubricScoreRow[];
   overall: string | null;
+  /** B1: "Rubric 6 of 8, scaled to 3 of 4 points" on a weighted question. */
+  scale?: string | null;
 }) {
+  const scaleLine = scale ? <p className="mt-1 text-xs text-muted-foreground">{scale}</p> : null;
   if (rows.length === 0) {
-    return overall ? (
-      <p className="mt-1 text-xs text-muted-foreground">{overall}</p>
+    return overall || scaleLine ? (
+      <>
+        {scaleLine}
+        {overall ? <p className="mt-1 text-xs text-muted-foreground">{overall}</p> : null}
+      </>
     ) : null;
   }
   const cell = "border border-border px-2 py-1 align-top text-xs";
   return (
     <div className="mt-2">
+      {scaleLine}
       <div className="overflow-x-auto">
         <table className="min-w-max border-collapse">
           <thead>
@@ -785,10 +794,12 @@ export default async function AttemptResultPage({ params }: PageProps) {
             // Competency assessments: a No Score carries its OSPI condition
             // and no rubric rows — say which, where the rows would be.
             overall: noScoreLabel(final?.rationale) ?? overallRationale(final?.rationale),
+            scale: rubricScaleLine(rubric, final, final?.rationale),
           };
           const proposedDetail = {
             rows: rubricScoreRows(rubric, proposed?.rationale),
             overall: overallRationale(proposed?.rationale),
+            scale: rubricScaleLine(rubric, proposed, proposed?.rationale),
           };
           return (
             <article
@@ -971,6 +982,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     <RubricScoreDetail
                       rows={finalDetail.rows}
                       overall={finalDetail.overall}
+                      scale={finalDetail.scale}
                     />
                   ) : null}
                   {proposed && !final ? (
@@ -985,6 +997,7 @@ export default async function AttemptResultPage({ params }: PageProps) {
                     <RubricScoreDetail
                       rows={proposedDetail.rows}
                       overall={proposedDetail.overall}
+                      scale={proposedDetail.scale}
                     />
                   ) : null}
                   {/* Teacher feedback (docs/feedback-release-design.md, D-4):
