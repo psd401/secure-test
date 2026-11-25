@@ -69,6 +69,10 @@ describe("the hint and the outline numbers run on an ItemView", () => {
     expect(pointsHint(model.viewMaxInput(view("multiple_choice_single", { points: 3 })))).toBeNull();
     expect(itemMaxPoints(model.viewMaxInput(view("multiple_choice_single")))).toBe(1);
   });
+  test("a graph with no key yet has no per-shape hint (it is worth 1)", () => {
+    const graph = view("graph", { board: { x: [-5, 5], y: [-5, 5] } as never, graph_key: null });
+    expect(pointsHint(model.viewMaxInput(graph))).toBeNull();
+  });
   test("pointsLabel", () => {
     expect(pointsLabel(1, true)).toBe("1 pt");
     expect(pointsLabel(2.5, true)).toBe("2.5 pts");

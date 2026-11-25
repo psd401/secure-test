@@ -21,7 +21,7 @@ import { DEFAULT_GRAPH_BOARD } from "./GraphItemEditor";
 import type { SectionAccommodations } from "@/lib/accommodations/sections";
 import type { ItemType } from "@/db/schema";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
-import type { itemMaxPoints } from "@/lib/scoring/maxPoints";
+import type { MaxPointsInput } from "@/lib/scoring/maxPoints";
 import type { OspiTier } from "@/lib/accommodations/catalog";
 import {
   blanksForSave,
@@ -875,7 +875,7 @@ export function itemPatchBody(item: ItemView): Record<string, unknown> {
  * (lib/scoring/maxPoints.ts), so the editor and the outline rail show the
  * numbers the server scores against.
  */
-export function viewMaxInput(item: ItemView) {
+export function viewMaxInput(item: ItemView): MaxPointsInput {
   return {
     type: item.type,
     points: item.points ?? null,
@@ -889,5 +889,5 @@ export function viewMaxInput(item: ItemView) {
       graph_board: item.board ?? undefined,
       graph_key: item.graph_key ?? undefined,
     },
-  } as Parameters<typeof itemMaxPoints>[0];
+  };
 }

@@ -17,6 +17,9 @@ import { applyWeight } from "@/lib/scoring/weight";
  * fill_blank, else 1.
  * Exported for R1: the item-analytics footer and the per-student page divide
  * by the same constant this file sums into `max_points`. */
+/** What the max-point rules read: a row's type and config, and its weight (required). */
+export type MaxPointsInput = Pick<ItemRow, "type" | "config"> & { points: number | null };
+
 export function itemMaxPoints(
   item: Pick<ItemRow, "type" | "config"> & { points: number | null },
 ): number {
@@ -100,7 +103,8 @@ function partName(item: Pick<ItemRow, "type" | "config">): string | null {
     return keyed ? "keyed cell" : "cell";
   }
   if (item.type === "fill_blank") return "blank";
-  if (item.type === "graph" && item.config.graph_board && item.config.graph_key?.scoring !== "all") {
+  // A keyless graph is worth 1 (naturalMaxPoints), so it has no parts yet.
+  if (item.type === "graph" && item.config.graph_board && item.config.graph_key && item.config.graph_key.scoring !== "all") {
     return "shape";
   }
   return null;
