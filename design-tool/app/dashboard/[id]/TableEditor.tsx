@@ -190,7 +190,7 @@ export function TableEditor({ columns, rows, corner, cellKeys, onChange, disable
           <span className="font-normal text-muted-foreground">
             (optional — leave a cell blank to accept anything there; {keyedCells === 0
               ? "no cells are checked yet, so this table is hand-scored until you fill some in"
-              : `${keyedCells} cell${keyedCells === 1 ? "" : "s"} checked, one point each`})
+              : `${keyedCells} cell${keyedCells === 1 ? "" : "s"} checked, an equal share each`})
           </span>
         </div>
         <div className="mt-2 overflow-x-auto">

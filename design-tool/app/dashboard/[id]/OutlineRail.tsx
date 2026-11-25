@@ -24,6 +24,13 @@ export function outlineExcerpt(stem: string, max = 48): string {
   return plain.length > max ? `${plain.slice(0, max - 1)}…` : plain;
 }
 
+/** B1 slice 2: "1 pt", "2.5 pts" (short) or "1 point", "12 points" (the total). */
+export function pointsLabel(n: number, short = false): string {
+  const v = String(Math.round(n * 100) / 100);
+  if (short) return `${v} ${n === 1 ? "pt" : "pts"}`;
+  return `${v} ${n === 1 ? "point" : "points"}`;
+}
+
 /**
  * R-6 / R-7 (docs/editor-redesign-design.md, Phase 4 slice B), new editor
  * only: the outline beside the question list. Each row is a block — one
@@ -40,6 +47,7 @@ export function OutlineRail<T extends RailItem>({
   onShow,
   announcement,
   pageGroupIds,
+  pointsFor,
 }: {
   items: T[];
   disabled: boolean;
@@ -52,8 +60,11 @@ export function OutlineRail<T extends RailItem>({
   announcement: string;
   /** 2026-10-28: sets that are page groups (`isPageGroup`), captioned "Same page". */
   pageGroupIds?: ReadonlySet<string>;
+  /** B1 slice 2: what a question is worth (the server's itemMaxPoints rule). */
+  pointsFor?: (item: T) => number;
 }) {
   const blocks = outlineBlocks(items);
+  const total = pointsFor ? items.reduce((sum, it) => sum + pointsFor(it), 0) : null;
   const [selected, setSelected] = useState<string | null>(null);
   const selectedIndex = blocks.findIndex((b) => b.key === selected);
   const describe = (key: string) => {
@@ -67,7 +78,12 @@ export function OutlineRail<T extends RailItem>({
   return (
     <nav aria-label="Question outline" className="rounded-lg border bg-card p-3 text-sm lg:sticky lg:top-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outline</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Outline
+          {total != null ? (
+            <span className="ml-1 font-normal normal-case tracking-normal">· {pointsLabel(total)}</span>
+          ) : null}
+        </h2>
         <div className="flex gap-1">
           <Button
             type="button"
@@ -130,8 +146,13 @@ export function OutlineRail<T extends RailItem>({
                     </span>
                   ) : null}
                   {block.items.map((it, i) => (
-                    <span key={it.id} className="block truncate">
-                      <span className="text-muted-foreground">{block.start + i + 1}.</span> {outlineExcerpt(it.stem)}
+                    <span key={it.id} className="flex gap-1">
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="text-muted-foreground">{block.start + i + 1}.</span> {outlineExcerpt(it.stem)}
+                      </span>
+                      {pointsFor ? (
+                        <span className="shrink-0 text-xs text-muted-foreground">· {pointsLabel(pointsFor(it), true)}</span>
+                      ) : null}
                     </span>
                   ))}
                 </button>

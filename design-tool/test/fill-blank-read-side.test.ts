@@ -191,7 +191,7 @@ describe("renderFilledSentenceHtml", () => {
       showKey: true,
       summary: true,
     });
-    expect(html).toContain("No blank has a key — score each blank by hand (1 point each).");
+    expect(html).toContain("No blank has a key — score each blank by hand (an equal share each).");
     expect(html).not.toContain("no key, not scored");
   });
 });
@@ -353,7 +353,7 @@ describe("FB-R3: a hand-scored, partly keyed item", () => {
         handScored,
       });
     expect(html(true)).toContain("no key, score by hand");
-    expect(html(true)).toContain("1 blank has no key — score it by hand (1 point each).");
+    expect(html(true)).toContain("1 blank has no key — score it by hand (an equal share each).");
     expect(html(true)).not.toContain("not scored");
     expect(html(false)).toContain("no key, not scored");
   });

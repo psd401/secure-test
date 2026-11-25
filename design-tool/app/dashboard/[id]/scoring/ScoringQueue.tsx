@@ -20,6 +20,7 @@ import { TeacherFeedbackBox } from "@/components/app/TeacherFeedbackBox";
 import { ScoreEssaysWithAiControl, scoreAllLabel } from "@/components/app/ScoreEssaysWithAiControl";
 import { NO_SECTION } from "@/lib/scoring/sectionFilter";
 import { reviewQueueUrl, unreviewedCardLine } from "@/lib/scoring/methodLabel";
+import { pointsStep } from "@/lib/scoring/changeScoreDialog";
 
 // Slice 39: client panel for the review queue. Two groups fall out of the
 // API's `proposed` field: AI proposals awaiting approve/override, and
@@ -1034,7 +1035,7 @@ export function ScoringQueue({
                     type="number"
                     min={0}
                     max={entry.item.max_points}
-                    step={entry.item.max_points > 1 ? 1 : 0.5}
+                    step={pointsStep(entry.item.max_points)}
                     value={rawPoints[entry.response_id] ?? ""}
                     onChange={(e) =>
                       setRawPoints((prev) => ({

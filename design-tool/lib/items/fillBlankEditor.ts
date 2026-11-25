@@ -254,15 +254,15 @@ export function hasKeyedBlank(blanks: readonly FillBlankBlank[] | null): boolean
 
 /** The live line under the blank list (the table's "n cells checked" pattern, E3-F1). */
 export function blankCountLine(blanks: readonly FillBlankBlank[], handScored = false): string {
-  // FB-R3: method Human — the teacher scores every blank, one point each.
+  // FB-R3: method Human — the teacher scores every blank, an equal share each.
   if (handScored) {
-    return `Scored by hand: ${blanks.length} blank${blanks.length === 1 ? "" : "s"}, one point each`;
+    return `Scored by hand: ${blanks.length} blank${blanks.length === 1 ? "" : "s"}, an equal share each`;
   }
   const keyed = blanks.filter(hasBlankKey).length;
   if (keyed === 0) {
     return "No blank has an answer yet, so this question is hand-scored until you add some";
   }
-  const head = `${keyed} blank${keyed === 1 ? "" : "s"} checked, one point each`;
+  const head = `${keyed} blank${keyed === 1 ? "" : "s"} checked, an equal share each`;
   return keyed < blanks.length ? `${head}; a blank with no answer is not scored` : head;
 }
 

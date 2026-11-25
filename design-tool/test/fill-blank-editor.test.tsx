@@ -168,7 +168,7 @@ describe("keys and the live line (E3-F1)", () => {
   });
   test("blankCountLine when the method is Human (FB-R3)", () => {
     expect(blankCountLine([{ id: "b1", kind: "text", keys: ["a"] }, { id: "b2", kind: "text" }], true)).toBe(
-      "Scored by hand: 2 blanks, one point each",
+      "Scored by hand: 2 blanks, an equal share each",
     );
   });
 
@@ -177,10 +177,10 @@ describe("keys and the live line (E3-F1)", () => {
       "No blank has an answer yet, so this question is hand-scored until you add some",
     );
     expect(blankCountLine([drop("b1", ["a", "b"], "o1"), { id: "b2", kind: "text", keys: ["x"] }])).toBe(
-      "2 blanks checked, one point each",
+      "2 blanks checked, an equal share each",
     );
     expect(blankCountLine([drop("b1", ["a", "b"], "o1"), { id: "b2", kind: "text" }])).toBe(
-      "1 blank checked, one point each; a blank with no answer is not scored",
+      "1 blank checked, an equal share each; a blank with no answer is not scored",
     );
   });
   test("blanksWithoutKeys: a key-only edit compares equal, an option edit does not", () => {
@@ -237,7 +237,7 @@ describe("FillBlankEditor markup", () => {
     const out = html(false);
     expect(out).toContain("Blank 1");
     expect(out).toContain("Blank 2");
-    expect(out).toContain("2 blanks checked, one point each");
+    expect(out).toContain("2 blanks checked, an equal share each");
     expect(out).toContain("Answer form matters (exact match only)");
     // "Same options as" is offered only when another dropdown exists
     expect(out).not.toContain("Same options as");
