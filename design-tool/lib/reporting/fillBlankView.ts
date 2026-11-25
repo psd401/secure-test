@@ -99,11 +99,11 @@ export function renderFilledSentenceHtml(
     const unkeyed = sentence.blanks.length - sentence.keyed_count;
     const line =
       sentence.keyed_count === 0
-        ? "No blank has a key — score each blank by hand (1 point each)."
+        ? "No blank has a key — score each blank by hand (an equal share each)."
         : `Keyed blanks matching the key: ${sentence.right_count} of ${sentence.keyed_count}.` +
           (unkeyed > 0
             ? options.handScored
-              ? ` ${unkeyed} blank${unkeyed === 1 ? " has" : "s have"} no key — score ${unkeyed === 1 ? "it" : "them"} by hand (1 point each).`
+              ? ` ${unkeyed} blank${unkeyed === 1 ? " has" : "s have"} no key — score ${unkeyed === 1 ? "it" : "them"} by hand (an equal share each).`
               : ` ${unkeyed} blank${unkeyed === 1 ? " has" : "s have"} no key and ${unkeyed === 1 ? "is" : "are"} not scored.`
             : "");
     html += `<p class="fb-summary">${escapeHtml(line)}</p>`;

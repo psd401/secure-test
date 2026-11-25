@@ -208,7 +208,7 @@ export function GraphItemEditor({
                 onChange={(e) => onChange({ graph_key: { ...graphKey, scoring: e.target.value as GraphKey["scoring"] } })}
                 className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
               >
-                <option value="all">All or nothing (1 point)</option>
+                <option value="all">All or nothing</option>
                 <option value="per_object">A point for each object in the key</option>
               </select>
             </label>

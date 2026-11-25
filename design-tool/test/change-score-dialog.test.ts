@@ -48,7 +48,9 @@ describe("nowLine", () => {
 describe("points rules", () => {
   test("the queue's step rule", () => {
     expect(pointsStep(1)).toBe(0.5);
-    expect(pointsStep(4)).toBe(1);
+    expect(pointsStep(4)).toBe("any");
+    // B1: a weighted max that is not a whole number.
+    expect(pointsStep(2.5)).toBe("any");
   });
   test("empty is no value, never 0; out of range refused", () => {
     expect(parsePoints("  ", 4).ok).toBe(false);

@@ -15,7 +15,6 @@ import {
   type ItemRow,
   type RosterSectionRow,
 } from "@/db/schema";
-import { rubricMaxPoints } from "@/lib/ai/essayScorer/scoreCore";
 import { deadlineFor, isPastDeadline } from "@/lib/api/attemptDeadline";
 import {
   normalizeEmail,
@@ -24,11 +23,8 @@ import {
   studentsInTeachersSections,
 } from "@/lib/roster/queries";
 import { sectionLabel } from "@/lib/roster/teacherRoster";
-import { fillBlankMaxPoints, tableMaxPoints } from "@/lib/scoring/auto";
 import { planRescore } from "@/lib/scoring/rescore";
 import { inStudentOption, optionByStudent } from "@/lib/competency/studentItems";
-import { graphMaxPoints } from "@secure-test/graphing/server";
-import { applyWeight } from "@/lib/scoring/weight";
 
 // Slice 40: the teacher results matrix — submitted attempts × items, with
 // FINAL scores only. Proposed AI scores are deliberately excluded from
@@ -174,61 +170,11 @@ export function sectionFilterOptions(results: Pick<AssessmentResults, "rows" | "
   return { labels, hasBlank: results.rows.some((r) => !r.student.section) };
 }
 
-/** D-R1: an item's constant maximum — the same rule the manual-score route
- * pins (`app/api/responses/[responseId]/score/route.ts`): the rubric max
- * when the item has a rubric, the keyed-cell count for a table, the keyed-blank count for a
- * fill_blank, else 1.
- * Exported for R1: the item-analytics footer and the per-student page divide
- * by the same constant this file sums into `max_points`. */
-export function itemMaxPoints(
-  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
-): number {
-  // B1 (docs/point-weighting-design.md): the teacher's weight wins; NULL =
-  // natural max. `points` is required so a caller that selects a narrow
-  // column set fails typecheck instead of silently disagreeing with the
-  // stored (weighted) scores.
-  return item.points ?? naturalMaxPoints(item);
-}
-
-/**
- * B1: the maximum a teacher ENTERS a hand score against — the rubric max on a
- * rubric item (criterion picks are in rubric points; the write scales them,
- * `scaleRubricTotal`), else the weighted item max. The manual-score check and
- * the review queue both read this, so they cannot drift apart again.
- */
-export function entryMaxPoints(
-  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
-): number {
-  return item.config.rubric ? rubricMaxPoints(item.config.rubric) : itemMaxPoints(item);
-}
-
-/**
- * B1 (D1): a score entered against `entryMaxPoints` as the score row to
- * store. A rubric total is scaled to the item's weight (criterion scores stay
- * in rubric points); anything else was already entered on the item's weight.
- */
-export function scaleEntry(
-  item: Pick<ItemRow, "config"> & { points: number | null },
-  points: number,
-  maxPoints: number,
-): { points: number; max_points: number } {
-  return item.config.rubric
-    ? applyWeight(points, maxPoints, item.points)
-    : { points, max_points: maxPoints };
-}
-
-/** B1: an item's maximum before any teacher weight — the D-R1 rule above. */
-export function naturalMaxPoints(item: Pick<ItemRow, "type" | "config">): number {
-  if (item.config.rubric) return rubricMaxPoints(item.config.rubric);
-  if (item.type === "table") return tableMaxPoints(item.config);
-  // FB slice 1: one point per keyed blank (D-2), every blank when keyless.
-  if (item.type === "fill_blank") return fillBlankMaxPoints(item.config);
-  // Graphing calculator D-9: per-object scoring has a point per key shape.
-  if (item.type === "graph" && item.config.graph_board && item.config.graph_key) {
-    return graphMaxPoints(item.config.graph_board, item.config.graph_key);
-  }
-  return 1;
-}
+// B1: the maximum rules live in a client-safe module (the editor and the
+// outline rail run them on an ItemView); re-exported here for the callers
+// that already import them from results.
+export { entryMaxPoints, itemMaxPoints, naturalMaxPoints, scaleEntry } from "@/lib/scoring/maxPoints";
+import { itemMaxPoints } from "@/lib/scoring/maxPoints";
 
 /**
  * The assessment owner's sub and email. `owner_email` is nullable (0038

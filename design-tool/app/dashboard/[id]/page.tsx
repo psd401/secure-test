@@ -118,6 +118,7 @@ export default async function AssessmentEditorPage({ params }: PageProps) {
             assigned_scope: assessment.assigned_scope,
             attempt_count: attemptCountRow?.n ?? 0,
             archived_at: assessment.archived_at ? assessment.archived_at.toISOString() : null,
+            competency: assessment.competency_pass_min_points != null,
           }}
           access={{
             level: access.level,

@@ -43,9 +43,14 @@ export function nowLine(score: {
   return `Now ${score.points} of ${score.max_points} · ${word}`;
 }
 
-/** The queue's step rule: whole points once an item is worth more than one. */
-export function pointsStep(max: number): number {
-  return max > 1 ? 1 : 0.5;
+/**
+ * The queue's step rule: half points on a one-point item; above that the
+ * arrows move by whole points but any value is valid ("any"). B1: a weighted
+ * item's share can be 1.5 or 0.33 on a whole-number max (6 points over 4
+ * cells), and a step of 1 would mark those invalid.
+ */
+export function pointsStep(max: number): number | "any" {
+  return max > 1 ? "any" : 0.5;
 }
 
 /**

@@ -10,8 +10,8 @@ import { graphMaxPoints, graphPoints } from "@secure-test/graphing/server";
 //   - short_text is normalized exact match — trim, collapse internal
 //     whitespace, case-fold. Nothing fuzzier: fuzzy belongs to the ai
 //     method, not auto.
-// Every scorable item is worth 1 point in this slice; per-item point
-// weights are a later feature and would live in items.config.
+// Each type scores its natural points (1, or 1 per keyed part); B1's
+// per-item weight (items.points) is applied on top in scoreResponse.
 //
 // Returns null when the (item, response) pair is not auto-scorable —
 // essay items, items missing an answer key, or a response whose type

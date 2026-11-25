@@ -1052,7 +1052,7 @@ describe("review queue: fill-in-the-blank items (FB slice 3)", () => {
     expect(html).not.toContain("<b>dusty</b>");
     expect(html).toContain("katex");
     expect(html).not.toContain("[[b1]]");
-    expect(html).toContain("Keyed blanks matching the key: 0 of 1. 1 blank has no key — score it by hand (1 point each).");
+    expect(html).toContain("Keyed blanks matching the key: 0 of 1. 1 blank has no key — score it by hand (an equal share each).");
     expect(e.answer_html).toBeNull();
   });
 
@@ -1061,7 +1061,7 @@ describe("review queue: fill-in-the-blank items (FB slice 3)", () => {
     const body = (await (await getQueue(s.assessment.id)).json()) as { entries: FbEntry[] };
     const e = body.entries[0]!;
     expect(e.item.max_points).toBe(2);
-    expect(e.fill_blank_html).toContain("No blank has a key — score each blank by hand (1 point each).");
+    expect(e.fill_blank_html).toContain("No blank has a key — score each blank by hand (an equal share each).");
     expect(e.fill_blank_html).not.toContain("✗");
     const right = await postManualScore(s.response.id, { points: 1, max_points: 2 });
     expect(right.status).toBe(201);

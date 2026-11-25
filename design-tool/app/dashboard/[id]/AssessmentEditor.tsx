@@ -88,6 +88,8 @@ import type { SuggestOutcome } from "@/components/app/SuggestStandardsDialog";
 import { StandardSuggestionChips } from "@/components/app/StandardSuggestionChips";
 import { removeSuggestion, type SuggestEntry, type SuggestionMap } from "@/lib/ai/suggestForm";
 import { addTag, normalizeStandards } from "@/lib/standards/tags";
+import { PointsField } from "./PointsField";
+import { itemMaxPoints } from "@/lib/scoring/maxPoints";
 import { KEY_FIXED_POINTER, answerKeyChanged } from "@/lib/scoring/rescoreDialog";
 import {
   EDITOR_TABS,
@@ -115,6 +117,7 @@ import {
   keyOnlyEdit,
   defaultItemFor,
   itemPatchBody,
+  viewMaxInput,
 } from "./editorModel";
 import { SettingsTab } from "./SettingsTab";
 import { AccommodationsTab } from "./AccommodationsTab";
@@ -1448,7 +1451,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
         <Alert variant="warning">
           <AlertTitle>Published — locked so a running test can&apos;t change.</AlertTitle>
           <AlertDescription>
-            Unpublish to edit. Answer keys and standards can still be changed
+            Unpublish to edit. Answer keys, points and standards can still be changed
             here; responses already scored keep their scores.
           </AlertDescription>
         </Alert>
@@ -1630,6 +1633,7 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
             onShow={(id) => document.getElementById(`question-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })}
             announcement={outlineMessage}
             pageGroupIds={pageGroupIds}
+            pointsFor={(i) => itemMaxPoints(viewMaxInput(i))}
           />
         ) : null}
         <div className="min-w-0">
@@ -2120,6 +2124,15 @@ export function AssessmentEditor({ assessment, access, initialItems, initialItem
                     </p>
                   ) : null}
                 </label>
+
+                {/* B1: hidden on a competency assessment (D6); editable while
+                    published (D7), so not tied to isLocked. */}
+                {assessment.competency ? null : (
+                  <PointsField
+                    item={item}
+                    onChange={(points) => updateItem(item.id, (i) => ({ ...i, points }))}
+                  />
+                )}
 
                 {itemError ? (
                   <Alert variant="destructive" className="mt-4">

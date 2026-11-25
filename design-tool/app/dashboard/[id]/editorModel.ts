@@ -21,6 +21,7 @@ import { DEFAULT_GRAPH_BOARD } from "./GraphItemEditor";
 import type { SectionAccommodations } from "@/lib/accommodations/sections";
 import type { ItemType } from "@/db/schema";
 import { ITEM_TYPE_LABEL } from "@/lib/items/typeLabel";
+import type { itemMaxPoints } from "@/lib/scoring/maxPoints";
 import type { OspiTier } from "@/lib/accommodations/catalog";
 import {
   blanksForSave,
@@ -163,6 +164,8 @@ export interface AssessmentView {
   attempt_count: number;
   /** D-2 / D-3: null = live. ISO string, or null. */
   archived_at: string | null;
+  /** B1 D6: a competency assessment takes no point weights (the editor hides the field). */
+  competency?: boolean;
 }
 
 // E5 slice 1: a stimulus (passage / figure / data) shared by the contiguous
@@ -433,7 +436,8 @@ export const OSPI_TIER_ORDER: OspiTier[] = ["universal", "designated", "accommod
 // for exactly those edits (the server is still the authority).
 // BG slice 2 (14.1): standards tags save through the same door — the server's
 // isAnswerKeyOnlyPatch admits them while published.
-export const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards", "graph_key"]);
+// B1 D7: points too — never delivered, editable while published.
+export const ANSWER_KEY_FIELDS = new Set(["correct_choice_ids", "correct_answer", "correct_region_ids", "standards", "graph_key", "points"]);
 export function answerKeyOnlyChange(before: ItemView | null, after: ItemView): boolean {
   if (!before) return false;
   const b = before as unknown as Record<string, unknown>;
@@ -861,5 +865,29 @@ export function itemPatchBody(item: ItemView): Record<string, unknown> {
   body.scoring_method = item.scoring_method;
   // BG slice 2: always sent whole — an empty list clears the tags.
   body.standards = item.standards;
+  // B1: always sent — null clears back to the natural maximum.
+  body.points = item.points ?? null;
   return body;
+}
+
+/**
+ * B1 slice 2: an ItemView in the shape the max-point rules read
+ * (lib/scoring/maxPoints.ts), so the editor and the outline rail show the
+ * numbers the server scores against.
+ */
+export function viewMaxInput(item: ItemView) {
+  return {
+    type: item.type,
+    points: item.points ?? null,
+    config: {
+      rubric: item.rubric ?? undefined,
+      cell_keys: item.cell_keys ?? undefined,
+      columns: item.columns ?? undefined,
+      rows: item.rows ?? undefined,
+      blanks: item.blanks ?? undefined,
+      scoring_method: item.scoring_method ?? undefined,
+      graph_board: item.board ?? undefined,
+      graph_key: item.graph_key ?? undefined,
+    },
+  } as Parameters<typeof itemMaxPoints>[0];
 }
