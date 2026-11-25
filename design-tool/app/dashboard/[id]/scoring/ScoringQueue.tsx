@@ -10,7 +10,7 @@ import {
 import Link from "next/link";
 import type { Rubric, TableCellKeys, TableColumn, TableRow } from "@secure-test/schema";
 import { scoringView } from "@/lib/ai/essayScorer/scoreCore";
-import { rubricScoreRows } from "@/lib/reporting/rubricScoreView";
+import { rubricScaleLine, rubricScoreRows } from "@/lib/reporting/rubricScoreView";
 import { describeWithheldFilters } from "@/lib/scoring/withheldFeedback";
 import { tableCellMatches } from "@/lib/scoring/auto";
 import { SafeguardingBadge } from "@/components/app/SafeguardingBadge";
@@ -778,31 +778,36 @@ export function ScoringQueue({
   // family will read. Same rows the results page (and slice 5's print page)
   // render, from lib/reporting/rubricScoreView.
   function proposalDetail(entry: QueueEntry) {
-    return rationaleDetail(entry, entry.proposed?.rationale);
+    return rationaleDetail(entry, entry.proposed?.rationale, entry.proposed);
   }
 
-  function rationaleDetail(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
+  type ScoreNumbers = { points: number; max_points: number } | null | undefined;
+
+  function rationaleDetail(entry: QueueEntry, rationale: QueueRationale | null | undefined, score: ScoreNumbers) {
     const withheld = rationale?.feedback_withheld;
-    if (!withheld) return rationaleTable(entry, rationale);
+    if (!withheld) return rationaleTable(entry, rationale, score);
     return (
       <>
         <p className="mt-2 text-xs font-medium">
           The AI safety filter ({describeWithheldFilters(withheld.filters ?? [])}) stopped the
           written feedback for this answer. Check the proposed score against the rubric.
         </p>
-        {rationaleTable(entry, rationale)}
+        {rationaleTable(entry, rationale, score)}
       </>
     );
   }
 
-  function rationaleTable(entry: QueueEntry, rationale: QueueRationale | null | undefined) {
+  function rationaleTable(entry: QueueEntry, rationale: QueueRationale | null | undefined, score: ScoreNumbers) {
     const noScore = noScoreLabel(rationale);
     if (noScore) return <p className="mt-2 text-xs font-medium">{noScore}</p>;
     const rows = rubricScoreRows(entry.item.rubric, rationale);
-    if (rows.length === 0) return null;
+    // B1: a weighted rubric question's score is on its points, the rows on the rubric.
+    const scale = rubricScaleLine(entry.item.rubric, score, rationale);
+    if (rows.length === 0) return scale ? <p className="mt-2 text-xs text-muted-foreground">{scale}</p> : null;
     const cell = "border border-border px-2 py-1 align-top text-xs";
     return (
       <div className="mt-2 overflow-x-auto">
+        {scale ? <p className="mb-1 text-xs text-muted-foreground">{scale}</p> : null}
         <table className="min-w-max border-collapse">
           <thead>
             <tr>
@@ -861,7 +866,7 @@ export function ScoringQueue({
             />
           </div>
         </div>
-        {rationaleDetail(entry, final.rationale)}
+        {rationaleDetail(entry, final.rationale, final)}
         {final.rationale?.overall_rationale ? (
           <p className="mt-2 text-xs text-muted-foreground">
             {final.rationale.overall_rationale}

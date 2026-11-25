@@ -358,6 +358,7 @@ function ScoreBlock({ block }: { block: PacketScoreBlock }) {
           </tbody>
         </table>
       ) : null}
+      {block.scale ? <p className="meta">{block.scale}</p> : null}
     </div>
   );
 }
@@ -372,6 +373,7 @@ function ReleaseBlock({ block }: { block: FeedbackBlock }) {
   if (block.kind === "rubric_table") {
     const { columns } = block;
     return (
+      <>
       <table>
         <thead>
           <tr>
@@ -392,6 +394,8 @@ function ReleaseBlock({ block }: { block: FeedbackBlock }) {
           ))}
         </tbody>
       </table>
+      {block.scale ? <p className="feedback-text">{block.scale}</p> : null}
+      </>
     );
   }
   return (

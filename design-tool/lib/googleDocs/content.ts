@@ -207,7 +207,8 @@ function blockHtml(block: FeedbackBlock): string {
       if (columns.ai_feedback) cells.push(`<td>${escapeHtml(r.ai_feedback ?? "")}</td>`);
       return `<tr>${cells.join("")}</tr>`;
     });
-    return `<table border="1">${head}${rows.join("")}</table>`;
+    const scale = block.scale ? `<p>${escapeHtml(block.scale)}</p>` : "";
+    return `<table border="1">${head}${rows.join("")}</table>${scale}`;
   }
   const out = [`<p><b>${escapeHtml(block.label)}:</b></p>`];
   if (block.text) out.push(paragraphs(block.text));

@@ -190,7 +190,12 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
     const finalScoreRows =
       responseRows.length > 0
         ? await db
-            .select({ response_id: scores.response_id, rationale: scores.rationale })
+            .select({
+              response_id: scores.response_id,
+              rationale: scores.rationale,
+              points: scores.points,
+              max_points: scores.max_points,
+            })
             .from(scores)
             .where(
               and(
@@ -204,13 +209,13 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
               ),
             )
         : [];
-    const rationaleByResponseId = new Map(finalScoreRows.map((s) => [s.response_id, s.rationale]));
+    const finalByResponseId = new Map(finalScoreRows.map((s) => [s.response_id, s]));
 
     for (const item of itemConfigRows) {
       if (!essayItemIds.includes(item.id)) continue;
       const responseId = responseIdByItem.get(item.id);
-      const rationale = responseId ? rationaleByResponseId.get(responseId) : undefined;
-      const feedback = selectPrintFeedback(item.config.rubric ?? null, rationale);
+      const final = responseId ? finalByResponseId.get(responseId) : undefined;
+      const feedback = selectPrintFeedback(item.config.rubric ?? null, final?.rationale, final);
       if (feedback) feedbackByPosition.push({ position: item.position, feedback });
     }
   }
@@ -383,6 +388,7 @@ export default async function ResultsPrintPage({ params, searchParams }: PagePro
                 {feedbackByPosition.map(({ position, feedback }) => (
                   <div key={position} className="feedback-block">
                     <h3>Feedback — Q{position + 1}</h3>
+                    {feedback.scale ? <p className="meta">{feedback.scale}</p> : null}
                     <table>
                       <caption className="sr-only">Rubric feedback for Q{position + 1}</caption>
                       <thead>
