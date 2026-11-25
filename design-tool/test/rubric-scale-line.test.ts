@@ -86,8 +86,8 @@ describe("the weighted line in the release table, the packet and the Doc", () =>
     ai_feedback: false,
     rubric_table: true,
   };
-  const releaseTable = (row: PacketScoreRow) =>
-    buildFeedbackRelease(contents, {
+  const releaseTable = (row: PacketScoreRow, boxes: PacketContents = contents) =>
+    buildFeedbackRelease(boxes, {
       questions: [{ rubric: RUBRIC, scores: [row], teacher_feedback: null, answer_updated_at: null }],
       overall_teacher_feedback: null,
     }).questions[0]!.find((b) => b.kind === "rubric_table") as Extract<FeedbackBlock, { kind: "rubric_table" }>;
@@ -98,11 +98,7 @@ describe("the weighted line in the release table, the packet and the Doc", () =>
   });
 
   test("release table without points beside a score: no line", () => {
-    const noScore = buildFeedbackRelease({ ...contents, teacher_score: false }, {
-      questions: [{ rubric: RUBRIC, scores: [final(2.5, 4, 4, 1)], teacher_feedback: null, answer_updated_at: null }],
-      overall_teacher_feedback: null,
-    }).questions[0]!.find((b) => b.kind === "rubric_table") as Extract<FeedbackBlock, { kind: "rubric_table" }>;
-    expect(noScore.scale).toBeNull();
+    expect(releaseTable(final(2.5, 4, 4, 1), { ...contents, teacher_score: false }).scale).toBeNull();
   });
 
   test("packet teacher copy: the line on a weighted question, no key otherwise", () => {
@@ -112,15 +108,26 @@ describe("the weighted line in the release table, the packet and the Doc", () =>
     expect("scale" in plain!).toBe(false);
   });
 
-  test("Doc HTML prints the line, escaped, under the table", () => {
-    const html = buildDocHtml({
+  const docHtml = (overall: FeedbackBlock) =>
+    buildDocHtml({
       studentName: "S",
       assessmentName: "T",
       draftAsOf: null,
-      overall: releaseTable(final(2.5, 4, 4, 1)),
+      overall,
       essays: [],
       contents: { ...contents, prompt: false, sources: false },
     });
-    expect(html).toContain("</table><p>Rubric 5 of 8, scaled to 2.5 of 4 points</p>");
+
+  test("Doc HTML prints the line under the table", () => {
+    expect(docHtml(releaseTable(final(2.5, 4, 4, 1)))).toContain(
+      "</table><p>Rubric 5 of 8, scaled to 2.5 of 4 points</p>",
+    );
+  });
+
+  test("Doc HTML escapes the line", () => {
+    // The real line is digits and words; a hand-built block proves the Doc
+    // escapes it anyway, as it does every other text it prints.
+    const block = { ...releaseTable(final(2.5, 4, 4, 1)), scale: "Rubric <b> & more" };
+    expect(docHtml(block)).toContain("</table><p>Rubric &lt;b&gt; &amp; more</p>");
   });
 });
