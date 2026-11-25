@@ -374,27 +374,27 @@ function ReleaseBlock({ block }: { block: FeedbackBlock }) {
     const { columns } = block;
     return (
       <>
-      <table>
-        <thead>
-          <tr>
-            <th>Criterion</th>
-            {columns.level ? <th>Level</th> : null}
-            {columns.points ? <th>Points</th> : null}
-            {columns.ai_feedback ? <th>AI feedback</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {block.rows.map((r, i) => (
-            <tr key={i}>
-              <td>{r.criterion}</td>
-              {columns.level ? <td>{r.level ?? ""}</td> : null}
-              {columns.points ? <td>{r.points ?? ""}</td> : null}
-              {columns.ai_feedback ? <td>{r.ai_feedback ?? ""}</td> : null}
+        <table>
+          <thead>
+            <tr>
+              <th>Criterion</th>
+              {columns.level ? <th>Level</th> : null}
+              {columns.points ? <th>Points</th> : null}
+              {columns.ai_feedback ? <th>AI feedback</th> : null}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {block.scale ? <p className="feedback-text">{block.scale}</p> : null}
+          </thead>
+          <tbody>
+            {block.rows.map((r, i) => (
+              <tr key={i}>
+                <td>{r.criterion}</td>
+                {columns.level ? <td>{r.level ?? ""}</td> : null}
+                {columns.points ? <td>{r.points ?? ""}</td> : null}
+                {columns.ai_feedback ? <td>{r.ai_feedback ?? ""}</td> : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {block.scale ? <p className="feedback-text">{block.scale}</p> : null}
       </>
     );
   }
