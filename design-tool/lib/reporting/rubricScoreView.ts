@@ -99,4 +99,3 @@ export function rubricScaleLine(
       : (score.points * rubricMax) / score.max_points;
   return `Rubric ${fmt(rubricTotal)} of ${fmt(rubricMax)}, scaled to ${fmt(score.points)} of ${fmt(score.max_points)} points`;
 }
-

@@ -5,6 +5,9 @@ import { describe, expect, test } from "bun:test";
 import type { Rubric } from "@secure-test/schema";
 import { rubricScaleLine } from "../lib/reporting/rubricScoreView";
 import { selectPrintFeedback } from "../lib/reporting/printFeedback";
+import { buildFeedbackRelease, type FeedbackBlock } from "../lib/reporting/feedbackRelease";
+import { packetScoreBlocks, type PacketContents, type PacketScoreRow } from "../lib/reporting/workPacket";
+import { buildDocHtml } from "../lib/googleDocs/content";
 
 // 4 + 4 = an 8-point analytic rubric, shown to families with feedback.
 const RUBRIC = {
@@ -61,5 +64,63 @@ describe("the family print page carries the line", () => {
     );
     expect(selectPrintFeedback(RUBRIC, picks(4, 2), { points: 6, max_points: 8 })?.scale).toBeNull();
     expect(selectPrintFeedback(RUBRIC, picks(4, 2))?.scale).toBeNull();
+  });
+});
+
+// #240 review nit 2: the weighted branch of the release table, the packet's
+// teacher copy and the Doc HTML, which #240 checked by reading only.
+describe("the weighted line in the release table, the packet and the Doc", () => {
+  const final = (points: number, max: number, a: number, b: number): PacketScoreRow => ({
+    method: "human",
+    status: "final",
+    reviewed_by_sub: "t1",
+    points,
+    max_points: max,
+    rationale: picks(a, b),
+    created_at: new Date("2026-11-01T00:00:00Z"),
+  });
+  const contents: PacketContents = {
+    teacher_score: true,
+    ai_score: false,
+    teacher_feedback: false,
+    ai_feedback: false,
+    rubric_table: true,
+  };
+  const releaseTable = (row: PacketScoreRow) =>
+    buildFeedbackRelease(contents, {
+      questions: [{ rubric: RUBRIC, scores: [row], teacher_feedback: null, answer_updated_at: null }],
+      overall_teacher_feedback: null,
+    }).questions[0]!.find((b) => b.kind === "rubric_table") as Extract<FeedbackBlock, { kind: "rubric_table" }>;
+
+  test("release table: the line on a weighted question, null on the rubric's own scale", () => {
+    expect(releaseTable(final(2.5, 4, 4, 1)).scale).toBe("Rubric 5 of 8, scaled to 2.5 of 4 points");
+    expect(releaseTable(final(5, 8, 4, 1)).scale).toBeNull();
+  });
+
+  test("release table without points beside a score: no line", () => {
+    const noScore = buildFeedbackRelease({ ...contents, teacher_score: false }, {
+      questions: [{ rubric: RUBRIC, scores: [final(2.5, 4, 4, 1)], teacher_feedback: null, answer_updated_at: null }],
+      overall_teacher_feedback: null,
+    }).questions[0]!.find((b) => b.kind === "rubric_table") as Extract<FeedbackBlock, { kind: "rubric_table" }>;
+    expect(noScore.scale).toBeNull();
+  });
+
+  test("packet teacher copy: the line on a weighted question, no key otherwise", () => {
+    const [weighted] = packetScoreBlocks(contents, true, [final(2.5, 4, 4, 1)], [], RUBRIC);
+    expect(weighted!.scale).toBe("Rubric 5 of 8, scaled to 2.5 of 4 points");
+    const [plain] = packetScoreBlocks(contents, true, [final(5, 8, 4, 1)], [], RUBRIC);
+    expect("scale" in plain!).toBe(false);
+  });
+
+  test("Doc HTML prints the line, escaped, under the table", () => {
+    const html = buildDocHtml({
+      studentName: "S",
+      assessmentName: "T",
+      draftAsOf: null,
+      overall: releaseTable(final(2.5, 4, 4, 1)),
+      essays: [],
+      contents: { ...contents, prompt: false, sources: false },
+    });
+    expect(html).toContain("</table><p>Rubric 5 of 8, scaled to 2.5 of 4 points</p>");
   });
 });
