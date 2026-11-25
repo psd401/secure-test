@@ -1,6 +1,6 @@
 # Point weighting — design note (2026-11-17, decided 2026-11-18)
 
-Status: decisions made (James, 2026-11-18; see "Decisions"). Nothing built.
+Status: decisions made (James, 2026-11-18; see "Decisions"). Slices 1–4 built 2026-11-25 (see "Progress"); not merged or deployed.
 
 ## Goal
 
@@ -152,3 +152,11 @@ Wording that assumes 1 point per part goes stale once points are set; grep for "
 - **D5** Allowed values: more than 0, at most 100, up to 2 decimals.
 - **D6** Points are blocked on competency assessments.
 - **D7** Points stay editable while a test is published, like answer keys and standards.
+
+## Progress
+
+- **2026-11-25, slice 1 + 4** (PR #235): column + migration 0073, `applyWeight` in `scoreResponse`, one max rule (`entryMaxPoints` for hand entry), rubric totals scaled on write (`scaleEntry`), AI-vs-human comparison on the rubric scale, API field (D5/D6/D7), teacher bundle carries `points` (so Duplicate / Share keep it). Review fix: the interactive preview scores on the weight; `points` is required on max-point inputs.
+- **2026-11-25, slice 2** (PR #236): Points field + hint, outline per-question points and total, published-lock door, `pointsStep` "any" above 1, "an equal share each" copy, help topic 2. The max rules moved to client-safe `lib/scoring/maxPoints.ts`.
+- **2026-11-25, slice 3** (stacked on #236): `planRescore` rescales any non-auto final whose `max_points` is not the question's current maximum (`rescaled`, kept fraction, `rationale.rescaled_from`, method / scorer / reviewer kept, event `source: "rescale"`); the Rescore dialog names them; approve puts a stale AI proposal on the current points; the editor pointer fires on a points change; PowerSchool Send again notes a changed maximum against `last_result.assignment_max_points` (recorded at create; pushes created earlier have none and get no note); help "Fixed an answer key or changed points".
+- **Open:** the rescale also catches maxima that moved before B1 (e.g. a rubric edited after scoring), since nothing records why a max moved — measure production first (aggregate query handed to James). The "Rubric 6 / 8 → 3 / 4" display on results and released feedback is not built. Turning an assessment into a competency test after its items have points is not blocked. Import drops an out-of-range weight silently.
+

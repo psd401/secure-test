@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { itemMaxPoints } from "@/lib/scoring/maxPoints";
+import { applyWeight } from "@/lib/scoring/weight";
 import { scores } from "@/db/schema";
 import { loadResponseChain } from "@/lib/api/reviewActions";
 import { requireStaff } from "@/lib/api/requireSession";
@@ -86,6 +88,21 @@ export async function POST(_req: Request, ctx: RouteContext) {
     );
   }
 
+  // B1 slice 3 (docs/point-weighting-design.md): a proposal made before the
+  // question's points changed is on the old scale. Approve it on the current
+  // one, with the same share, and record where it came from.
+  const max = itemMaxPoints(chain.item);
+  const stale = proposal.max_points > 0 && proposal.max_points !== max;
+  const numbers = stale
+    ? applyWeight(proposal.points, proposal.max_points, max)
+    : { points: proposal.points, max_points: proposal.max_points };
+  const rationale = stale
+    ? {
+        ...((proposal.rationale ?? {}) as Record<string, unknown>),
+        rescaled_from: { score_id: proposal.id, points: proposal.points, max_points: proposal.max_points },
+      }
+    : proposal.rationale;
+
   // Review fix (2026-08-14): onConflictDoNothing closes the race between
   // the hasFinal check above and this insert (concurrent approve/score
   // would otherwise 500 on the one-final partial unique index).
@@ -94,9 +111,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
     .values({
       response_id: proposal.response_id,
       method: "ai",
-      points: proposal.points,
-      max_points: proposal.max_points,
-      rationale: proposal.rationale,
+      points: numbers.points,
+      max_points: numbers.max_points,
+      rationale,
       scorer: proposal.scorer,
       status: "final",
       reviewed_by_sub: auth.session.sub,

@@ -21,10 +21,10 @@ describe("rescore dialog wording", () => {
 
   test("summary names students and kept scores", () => {
     expect(dryRunSummary({ students_changed: 12, kept: 3, questions: [] })).toBe(
-      "Rescoring changes 12 students' scores with the current answer keys. 3 scores you set yourself stay as they are. The earlier scores are kept on each student's page.",
+      "Rescoring changes 12 students' scores with the current answer keys and points. 3 scores you set yourself stay as they are. The earlier scores are kept on each student's page.",
     );
     expect(dryRunSummary({ students_changed: 1, kept: 1, questions: [] })).toBe(
-      "Rescoring changes 1 student's score with the current answer keys. 1 score you set yourself stays as it is. The earlier scores are kept on each student's page.",
+      "Rescoring changes 1 student's score with the current answer keys and points. 1 score you set yourself stays as it is. The earlier scores are kept on each student's page.",
     );
     expect(dryRunSummary({ students_changed: 0, kept: 0, questions: [] })).toBe(
       `${RESCORE_NOTHING_TITLE}.`,
@@ -37,6 +37,15 @@ describe("rescore dialog wording", () => {
       "Q1 — 1 answer changes · 2 scores you set stay",
     );
     expect(questionLine({ position: 6, changed: 0, kept: 1 })).toBe("Q7 — 1 score you set stays");
+  });
+
+  test("B1: rescaled scores are named in the line and the summary", () => {
+    expect(questionLine({ position: 1, changed: 2, kept: 0, rescaled: 3 })).toBe(
+      "Q2 — 2 answers change · 3 scores you set move to the new points",
+    );
+    expect(dryRunSummary({ students_changed: 4, kept: 0, rescaled: 1, questions: [] })).toBe(
+      "Rescoring changes 4 students' scores with the current answer keys and points. 1 score you set keeps the same share of the new points (3 of 4 becomes 6 of 8). The earlier scores are kept on each student's page.",
+    );
   });
 
   test("done line and the gradebook sections (D-3)", () => {
@@ -81,5 +90,7 @@ describe("answerKeyChanged (the editor's pointer)", () => {
   test("a standards-only save and a first save do not", () => {
     expect(answerKeyChanged(mc, { ...mc, standards: ["WA.MATH.1"] })).toBe(false);
     expect(answerKeyChanged(null, mc)).toBe(false);
+    // B1 slice 3: a points change points to Rescore too.
+    expect(answerKeyChanged({ ...mc, points: null }, { ...mc, points: 4 })).toBe(true);
   });
 });

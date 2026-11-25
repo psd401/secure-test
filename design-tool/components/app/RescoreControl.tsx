@@ -160,7 +160,7 @@ export function RescoreControl({
         ) : null}
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Rescore with the current answer keys?</AlertDialogTitle>
+            <AlertDialogTitle>Rescore with the current answer keys and points?</AlertDialogTitle>
             <AlertDialogDescription>
               {dry ? dryRunSummary(dry) : busy ? "Checking the handed-in answers…" : ""}
             </AlertDialogDescription>
