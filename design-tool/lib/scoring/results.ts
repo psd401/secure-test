@@ -181,10 +181,12 @@ export function sectionFilterOptions(results: Pick<AssessmentResults, "rows" | "
  * Exported for R1: the item-analytics footer and the per-student page divide
  * by the same constant this file sums into `max_points`. */
 export function itemMaxPoints(
-  item: Pick<ItemRow, "type" | "config"> & { points?: number | null },
+  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
 ): number {
-  // B1 (docs/point-weighting-design.md): the teacher's weight wins; NULL
-  // (and a caller without the column, e.g. an `ItemView`) = natural max.
+  // B1 (docs/point-weighting-design.md): the teacher's weight wins; NULL =
+  // natural max. `points` is required so a caller that selects a narrow
+  // column set fails typecheck instead of silently disagreeing with the
+  // stored (weighted) scores.
   return item.points ?? naturalMaxPoints(item);
 }
 
@@ -195,7 +197,7 @@ export function itemMaxPoints(
  * the review queue both read this, so they cannot drift apart again.
  */
 export function entryMaxPoints(
-  item: Pick<ItemRow, "type" | "config"> & { points?: number | null },
+  item: Pick<ItemRow, "type" | "config"> & { points: number | null },
 ): number {
   return item.config.rubric ? rubricMaxPoints(item.config.rubric) : itemMaxPoints(item);
 }
@@ -206,7 +208,7 @@ export function entryMaxPoints(
  * in rubric points); anything else was already entered on the item's weight.
  */
 export function scaleEntry(
-  item: Pick<ItemRow, "config"> & { points?: number | null },
+  item: Pick<ItemRow, "config"> & { points: number | null },
   points: number,
   maxPoints: number,
 ): { points: number; max_points: number } {

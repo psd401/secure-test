@@ -133,8 +133,9 @@ describe("item maximum", () => {
     expect(itemMaxPoints(table(null))).toBe(3);
     expect(itemMaxPoints(table(6))).toBe(6);
     expect(naturalMaxPoints(table(6))).toBe(3);
-    // A caller without the column (an ItemView) gets the natural max.
-    expect(itemMaxPoints({ type: "table", config: table(null).config })).toBe(3);
+    // NULL = the natural max (points is required on the input type, so a
+    // narrow select cannot silently drop it).
+    expect(itemMaxPoints({ type: "table", config: table(null).config, points: null })).toBe(3);
   });
   test("a rubric item: worth its weight, entered in rubric points", () => {
     const essay = fakeItem({ type: "essay", config: { rubric: RUBRIC }, points: 4 });

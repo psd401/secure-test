@@ -119,6 +119,9 @@ export interface ItemView {
   // BG slice 2: standards tags (`scheme:code` or the teacher's own text);
   // every type, [] when none.
   standards: string[];
+  // B1 slice 2 (docs/point-weighting-design.md): what the question is worth;
+  // null = its natural maximum. Optional so the draft factories need not name it.
+  points?: number | null;
   // Graphing calculator (D-7): hide the test's calculator on this question's
   // page; null = off. Optional so the per-type draft factories need not name it.
   no_calculator?: boolean | null;
@@ -270,6 +273,7 @@ export interface ItemRow {
     scoring_method?: ScoringMethod | null;
   } | null;
   standards?: string[] | null;
+  points?: number | null;
 }
 
 // Same flattening as app/dashboard/[id]/page.tsx, so a row the API hands
@@ -310,6 +314,7 @@ export function rowToView(r: ItemRow): ItemView {
     exact_form: r.config?.exact_form ?? null,
     scoring_method: r.config?.scoring_method ?? null,
     standards: r.standards ?? [],
+    points: r.points ?? null,
   };
 }
 

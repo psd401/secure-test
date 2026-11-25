@@ -460,10 +460,10 @@ export function fillBlankTextMatches(
  * Auto-score one response. B1 (docs/point-weighting-design.md): the natural
  * score (1 per keyed part, all-or-nothing 1) is put on the item's weight
  * here, once, so every caller (auto pass, rescore, preview) gets the weighted
- * number. `points` absent or NULL = the natural score, unchanged.
+ * number. `points` NULL = the natural score, unchanged.
  */
 export function scoreResponse(
-  item: Omit<ItemRow, "points"> & { points?: number | null },
+  item: ItemRow,
   response: ItemResponse,
 ): AutoScoreResult | null {
   const natural = naturalScore(item, response);
@@ -472,7 +472,7 @@ export function scoreResponse(
 }
 
 function naturalScore(
-  item: Omit<ItemRow, "points">,
+  item: ItemRow,
   response: ItemResponse,
 ): AutoScoreResult | null {
   if (response.type !== item.type) return null;
